@@ -1,0 +1,43 @@
+"""spot_contracts — shared Hit/Evidence vocabulary (Lane A <-> Lane B seam)."""
+
+from spot_contracts.models import (
+    SCHEMA_VERSION,
+    AgentType,
+    Check,
+    Direction,
+    DirectionAgreement,
+    Evidence,
+    EvidenceType,
+    Hit,
+    KnowledgeLevel,
+    MappingConfidence,
+    Measurement,
+    PerturbationType,
+    Program,
+    Provenance,
+    SourceTier,
+    Subject,
+    Term,
+    Verdict,
+)
+
+__all__ = [
+    "SCHEMA_VERSION",
+    "AgentType",
+    "Check",
+    "Direction",
+    "DirectionAgreement",
+    "Evidence",
+    "EvidenceType",
+    "Hit",
+    "KnowledgeLevel",
+    "MappingConfidence",
+    "Measurement",
+    "PerturbationType",
+    "Program",
+    "Provenance",
+    "SourceTier",
+    "Subject",
+    "Term",
+    "Verdict",
+]
