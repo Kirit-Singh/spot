@@ -16,11 +16,16 @@ Host names, paths, and ports live in **`infra.env`** (tracked, non-secret). Dev 
 - **`core/` is deterministic + importable** — no LLM, no network at import; never imports from `api`/`worker`/`agent`. Claude lives only in `agent/`, feature-flagged.
 - **Tests:** deterministic logic (scoring, verdicts, edge weighting, graph assembly, parsers, gene-ID/ontology harmonization) must have tests; thin IO/glue smoke-or-skip; every bugfix ships a regression test.
 - **Efficiency:** vectorize (no Python loops over cells/genes); never hold a full cohort in memory — lazy-load/stream; avoid array copies; cache deterministic results; measure before optimizing.
-- **Uniform env:** Python 3.12, Node 22, pinned everywhere. **The Docker image is the environment** (dev/CI/prod identical). Deps hash-locked via pip-tools (`requirements.in`→`requirements.lock`); frontend via `package-lock.json`.
+- **Uniform env:** Python 3.12, Node 22, pinned everywhere. **The Docker image is the environment** (dev/CI/prod identical). Deps hash-locked via pip-tools (`requirements/*.in` → `requirements/*.lock`); frontend via `package-lock.json`.
 - **Build small chunk by small chunk:** bite-sized TDD tasks, each green (`ruff`/`mypy`/`pytest`) before commit. **generator ≠ evaluator:** an independent verify gate on every change and every confirmation.
 
 ## Lanes
 **Lane A — Evidence Graph** (`core api frontend worker agent`) and **Lane B — Predictive Modeling** (`modeling`, training loops on the Sparks; Claude Science for reasoning) share a foundation and meet only at the **`contracts/`** package (`Hit` + `Evidence/Edge`). See spec §12–13.
+
+## File & folder hygiene
+- **Minimal files:** add a file only when working code absolutely requires it — never speculatively or "for later."
+- **Simple, clean folders:** keep the tree flat and obvious; avoid deep nesting and one-file folders without cause.
+- **Explain before reorganizing:** when adding, moving, splitting, or renaming files/folders, say what and why first and get a nod — don't restructure silently.
 
 ## Dev commands (`just`)
 `just up` / `just down` · `just lint` · `just fmt` · `just typecheck` · `just test` (add a service name to scope, e.g. `just test core`).
