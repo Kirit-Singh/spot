@@ -105,3 +105,10 @@ Loop fit: train -> eval on held-out metric -> adjust -> repeat until plateau. ge
 Constraints: Sparks are inference-busy (contention with DeepSeek serving — decide dedicate vs time-share); stage data; sort access. Placement: a `training/` concern (or worker mode), NOT in core; artifacts are external inputs to the engine like Census/Open Targets. Delivered as a later **Plan 6**; foundation plan unaffected.
 
 Open items (added): confirm ML/training modality scope (Plan 6 vs park); decide Spark contention (dedicate vs time-share with DeepSeek serving).
+
+## 13. Build lanes (two parallel tracks sharing a contract)
+- **Lane A - Evidence Graph** (deterministic discovery -> cross-dataset confirmation -> viz): `core/ api/ frontend/ worker/ agent/`. Output: a confirmed typed+weighted evidence/knowledge graph. Stands alone.
+- **Lane B - Predictive Modeling** (training loops on the DGX Sparks -> candidate perturbation hot spots / favorable transcription pathways; **Claude Science = human-in-the-loop research companion** for hypothesis/objective/interpretation): `modeling/`. Output: ranked candidate Hits with model provenance. (See §12.)
+- **Seam = producer/consumer via a shared `contracts/` package** (`Hit` + `Evidence/Edge` schema). Lane B *produces* Hits; Lane A *consumes* Hits (from Lane B OR its own deterministic discovery) and returns confirmed edges. generator!=evaluator at the science level. Neither lane imports the other's code - both depend only on `contracts/`.
+- **Sequencing:** build the shared foundation first (skeleton + `contracts/` + env + CI), then fork Lane A and Lane B into **separate git worktrees**, each with its own small-chunk roadmap and CI job group (`Backend`/`Frontend` for A, `Modeling` for B).
+- Distinction: Lane B's **Claude Science** (research workbench, human-driven) is NOT Lane A's optional Claude-**API** agent adapter (runtime long-tail ingest). Different tool, different job.
