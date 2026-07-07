@@ -90,7 +90,7 @@ Triggers: push + pull_request to `main`.
 6. Live GEO edge via the agent adapter. Then GBM cross-disease stretch edge.
 
 ## 11. Open items / decisions pending
-- **LICENSE:** repo currently ships **Apache-2.0**; design calls for **MIT**. Confirm swap.
+- ~~LICENSE: Apache-2.0 -> MIT~~ RESOLVED 2026-07-07: swapped to MIT (Copyright 2026 Kirit Singh).
 - Choose the exact localhost port for the frontend/api.
 - Decide when to mount the dataset on tcefold for GPU work.
 - Remove the stale inactive `SWOOPPMAIN` gh account from tcedirector? (optional cleanup)
