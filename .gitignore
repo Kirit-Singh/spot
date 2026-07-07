@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Data / scratch / outputs — NEVER commit data
+.scratch/
+data/
+outputs/
+*.h5ad
+*.h5mu
+
+# Secrets / local (infra.env is tracked and non-secret; .env is NOT)
+.env
+*.local
+
+# OS
+.DS_Store
