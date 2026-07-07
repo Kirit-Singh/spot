@@ -21,7 +21,7 @@ jobs:
       - name: Install (hash-locked)
         run: |
           python -m pip install --upgrade pip
-          pip install --require-hashes -r requirements-dev.lock
+          pip install --require-hashes -r requirements/dev.lock
           pip install -e ./core --no-deps
       - name: Ruff lint
         run: ruff check .
@@ -40,7 +40,7 @@ jobs:
       - name: Install (hash-locked)
         run: |
           python -m pip install --upgrade pip
-          pip install --require-hashes -r requirements-dev.lock
+          pip install --require-hashes -r requirements/dev.lock
           pip install -e ./core --no-deps
       - name: Mypy
         run: mypy core/src
@@ -56,7 +56,7 @@ jobs:
       - name: Install (hash-locked)
         run: |
           python -m pip install --upgrade pip
-          pip install --require-hashes -r requirements-dev.lock
+          pip install --require-hashes -r requirements/dev.lock
           pip install -e ./core --no-deps
       - name: Pytest
         run: pytest core scripts
