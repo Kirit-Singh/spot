@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-lint:
+    name: "Backend: Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (hash-locked)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements-dev.lock
+          pip install -e ./core --no-deps
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format check
+        run: ruff format --check .
+
+  backend-typecheck:
+    name: "Backend: Type Check"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (hash-locked)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements-dev.lock
+          pip install -e ./core --no-deps
+      - name: Mypy
+        run: mypy core/src
+
+  backend-test:
+    name: "Backend: Test"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (hash-locked)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements-dev.lock
+          pip install -e ./core --no-deps
+      - name: Pytest
+        run: pytest core scripts
+
+  file-size:
+    name: "File Size"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enforce <=500 lines/file
+        run: python scripts/check_file_size.py
+
+  shellcheck:
+    name: "ShellCheck"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck tracked shell scripts
+        run: |
+          mapfile -t files < <(git ls-files '*.sh')
+          if [ ${#files[@]} -eq 0 ]; then echo "no shell scripts to check"; exit 0; fi
+          shellcheck "${files[@]}"
