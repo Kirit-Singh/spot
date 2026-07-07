@@ -43,3 +43,17 @@ structure. Core fields now; richer fields are documented extension points.
 - `weight` bounded 0-1.
 - Closed enums for direction / evidence_type / verdict / agent_type so the two
   lanes cannot drift.
+
+## Revision 2 (post adversarial review, 2026-07-07)
+Hardened after a Fable adversarial review. Blocking fixes: (B1) precise subject
+identity (id_type, taxon_id, version-stripped join_key, unmapped=>symbol);
+(B2) controlled context axis keys (core enum + x_ extensions); (B3) direction
+reconciled to the measurement (single source of truth); (B4) controlled Metric
+vocab (+OTHER companion) so incomparable metrics aren't compared; (B5)
+corroborating_hit_ids linking replication evidence to what confirmed it. Plus:
+p-value provenance, n_type, verdict<->direction_agreement invariants, untested=>
+weight 0, dataset_id de-duplicated into provenance, upstream_accession, controlled
+CheckName, hit_content_hash. Two deliberate deviations from the review: require
+corroborating only for `replication` (consistency's counterpart is a query/stat
+in provenance), and no "all-checks-passed => not contradicted" rule (a genuine
+opposite-direction effect can pass all QC).
