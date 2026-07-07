@@ -94,3 +94,14 @@ Triggers: push + pull_request to `main`.
 - Choose the exact localhost port for the frontend/api.
 - Decide when to mount the dataset on tcefold for GPU work.
 - Remove the stale inactive `SWOOPPMAIN` gh account from tcedirector? (optional cleanup)
+
+## 12. Optional ML / training modality (Sparks) — future, NOT core
+Infra: **2× DGX Spark** (GB10 Grace-Blackwell, ~128 GB unified each; `tcespark` + `tcespark2`), currently tensor-parallel **serving DeepSeek-V4-Flash** (shared inference backend for other loops). Capable of LoRA/fine-tune/small-model training, not large-scale pretraining. No dataset NFS mount (stage data); SSH owned by SWOOPPMAIN.
+
+Training is **optional and never part of the deterministic core.** If used it powers a distinct `evidence_type = predictive/model`, clearly typed and **weighted below experimental replication, never presented as replication**; every model carries held-out validation provenance (seed, pinned splits, metrics -> outputs/, versioned artifact in /mnt/tcenas/models). Candidate uses: (a) sequence->regulatory-activity predictor (adds a modality edge); (b) learned context-matching recommender (suggests datasets to confirm in); (c) LoRA-fine-tuned small model to self-host the agent adapter vs Claude API.
+
+Loop fit: train -> eval on held-out metric -> adjust -> repeat until plateau. generator!=evaluator = trainer produces checkpoint; a SEPARATE eval/robustness harness gates it before it can back an edge.
+
+Constraints: Sparks are inference-busy (contention with DeepSeek serving — decide dedicate vs time-share); stage data; sort access. Placement: a `training/` concern (or worker mode), NOT in core; artifacts are external inputs to the engine like Census/Open Targets. Delivered as a later **Plan 6**; foundation plan unaffected.
+
+Open items (added): confirm ML/training modality scope (Plan 6 vs park); decide Spark contention (dedicate vs time-share with DeepSeek serving).
