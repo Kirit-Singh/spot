@@ -1,0 +1,18 @@
+# Repo-wide tooling config (not a package). Per-service packages have their own
+# pyproject.toml. Paths are passed on the command line so this needs no edits
+# as new services land.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
