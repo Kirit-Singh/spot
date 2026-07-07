@@ -1,5 +1,7 @@
+# Dev/CI dependencies (installed in CI with --require-hashes). pip-tools is NOT
+# listed here — it is a maintainer-only tool. To regenerate the locks, install
+# it into your venv:  pip install pip-tools  &&  pip-compile ...
 -r requirements.in
 ruff
 mypy
 pytest
-pip-tools
