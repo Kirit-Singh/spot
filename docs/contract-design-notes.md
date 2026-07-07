@@ -57,3 +57,28 @@ CheckName, hit_content_hash. Two deliberate deviations from the review: require
 corroborating only for `replication` (consistency's counterpart is a query/stat
 in provenance), and no "all-checks-passed => not contradicted" rule (a genuine
 opposite-direction effect can pass all QC).
+
+## Revision 3 (executed review by Claude Science + Fable adjudication, 2026-07-07)
+Claude Science EXECUTED forbidden-edge construction against the real package and
+validated against the real Marson CSV columns (via CLI: suppl_tables in
+`.scratch/`; the big h5ad/h5mu are truncated mid-download). It proved holes the
+read-throughs missed; Fable then adjudicated the fixes against the contract-vs-Lane-A
+boundary. Applied to the contract (all intra-object / intra-aggregate):
+- **Firewall by source, not label:** agent_type=computational_model OR
+  knowledge_level=prediction (OR evidence_type=predictive) cannot be replication/
+  consistency and cannot be verdict=confirmed (closes the relabel bypass).
+- **`confirmed` requires passed gate Checks** (metric_match + direction_reconciled;
+  + independence for replication) -> a confirmed edge is impossible without the
+  gates, without denormalizing the hit. Lane A computes the checks.
+- Self-corroboration guard (hit_id not in corroborating_hit_ids); absolute
+  predictive weight cap (<= 0.5); `extra="forbid"` everywhere; schema_version
+  check; `Evidence.context`; optional `Measurement.significant`; perturbation
+  subjects require perturbation_type; `CheckName.OFFTARGET/METRIC_MATCH/
+  DIRECTION_RECONCILED`; optional `Provenance.license`.
+Pushed to Lane A (documented, NOT contract): cross-hit dataset independence
+(needs other hits' datasets), relative predictive-vs-replication weight ordering,
+`ontarget_effect_size -> Metric.OTHER` ingestion mapping (real range -58.5..+7.09,
+median -6.3 -> NOT log2fc), context_match verdict. Rejected: dataset-independence
+on consistency (same-dataset by design; Science was wrong), required FDR check (no
+p-value column exists), hit_content_hash-required (redundant if Evidence stays
+under the hit aggregate). Full artifact: Claude Science `contract_review.md`.

@@ -1,6 +1,7 @@
 """spot_contracts — shared Hit/Evidence vocabulary (Lane A <-> Lane B seam)."""
 
 from spot_contracts.models import (
+    PREDICTIVE_WEIGHT_MAX,
     SCHEMA_VERSION,
     SIGNED_METRICS,
     AgentType,
@@ -29,6 +30,7 @@ from spot_contracts.models import (
 )
 
 __all__ = [
+    "PREDICTIVE_WEIGHT_MAX",
     "SCHEMA_VERSION",
     "SIGNED_METRICS",
     "AgentType",
