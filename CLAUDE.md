@@ -12,9 +12,9 @@ locked artifact between stages. Design:
 Five stage folders, each `inputs/ outputs/ analysis/ + README`:
 - `01_phenotypes/` — CD4 programs → interactive UMAP (single-cell immunology)
 - `02_geneskew/` — genes that skew toward/away a program + GO (perturbation genomics)
-- `03_druglink/` — genes → drugs via DepMap/PRISM + LINCS (cancer pharmacogenomics)
+- `03_druglink/` — genes → immune-perturbing drugs via target→drug + LINCS (drug repurposing)
 - `04_PKPD/` — brain-penetrance (CNS-MPO/NEBPI) + exposure + safety + synergy (neuro-onc)
-- `05_trial/` — trial-design synopsis (clinical decision-support)
+- `05_trial/` — trial-design synopsis (v1 placeholder; clinical decision-support)
 
 `_frontend/` the 5-tab shell (React+Vite+TS+Tailwind). `_requirements/` repo envs.
 `CLAUDE.md LICENSE README.md` at root. `outputs/` is gitignored (generated artifacts).

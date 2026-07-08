@@ -1,12 +1,14 @@
-# 03_druglink — link genes to drugs
+# 03_druglink — link immune-program genes to drugs
 
-Connect the locked genes to compounds. **Locks:** the drug.
+Find drugs that **perturb the immune program** — reduce the locked Treg module.
+Brain-penetrance + exposure are the filter (Stage 04), so this stage does NOT require
+glioma-cell activity. **Locks:** the drug.
 
-Runs as a Claude Science **specialist** (project `spot · 03 druglink`): cancer
-pharmacogenomics — DepMap/CCLE glioma-selective **expression** + **DEMETER2**
-dependency + **PRISM 19Q4** drug sensitivity (drug-drug matrix), cross-checked
-against **LINCS** signature mimicry (rank ↑ when a drug appears in both).
+Runs as a Claude Science **specialist** (project `spot · 03 druglink`): drug-repurposing —
+**target → drug** (DGIdb / Open Targets / ChEMBL) + **LINCS** signature mimicry of
+"Treg-down" (rank ↑ when both agree). DepMap/CCLE/PRISM glioma-selectivity is deferred as
+a later dual-mechanism bonus, never a filter.
 
 - `inputs/`  — the locked gene set from 02
-- `analysis/` — CS workbook: DepMap/PRISM/LINCS queries + matrix
-- `outputs/` — ranked candidate drugs (mimicry ∪ target) + provenance
+- `analysis/` — CS workbook: target→drug + LINCS queries
+- `outputs/` — ranked candidate drugs (immune-perturbation) + provenance

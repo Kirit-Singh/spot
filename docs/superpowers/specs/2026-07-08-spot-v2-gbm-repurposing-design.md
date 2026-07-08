@@ -48,21 +48,18 @@ provenance discipline + the "predictive/druggable can *suggest* but never
   heatmap + GO terms. The locked "genes/program of interest."
 
 ### 3 — Drug link (tab: drug matrix)
-- **Method — DepMap/CCLE glioma-selective + LINCS cross-check:**
-  - Glioma-selective **expression** diff (glioma CCLE vs other, t-test) [Ghandi 2019]
-  - Glioma-selective **dependency** — DEMETER2 combined RNAi (Broad/Novartis/
-    Marcotte), glioma vs other (t-test) [McFarland 2018]
-  - **Drug sensitivity** — PRISM Repurposing Primary Screen 19Q4: glioma-line
-    viability (log FC vs DMSO), Pearson -> drug-drug sensitivity matrix [Corsello 2020]
-  - **LINCS mimicry** (cross-validation): drugs whose L1000 signature reproduces
-    "Treg-down"; rank higher when a drug appears in both.
-- **The bridge (design decision + refine-point):** the target comes from the
-  *immune* analysis (Treg silencers in CD4); DepMap/PRISM supplies *glioma-context*
-  druggability + a direct anti-glioma bonus if the drug also hits glioma cells.
-  Primary mechanism = immune (Treg reduction in the TME); direct anti-tumor
-  activity is additive. OPEN: how strictly to require glioma-cell dependency for an
-  immune target.
-- **Output:** ranked **candidate drugs** with mimicry-union-target provenance.
+- **Goal:** find drugs that **perturb the immune program** (reduce the Treg module).
+  Brain-penetrance + exposure are the filter (Stage 4), so this stage does NOT require
+  glioma-cell activity.
+- **Method:**
+  - **Target -> drug** — DGIdb / Open Targets / ChEMBL: compounds that hit the locked
+    Treg-silencing genes.
+  - **LINCS mimicry** — drugs whose L1000 signature reproduces "Treg-down"; rank up when
+    a drug appears via both target and mimicry.
+- **Deferred (not v1):** DepMap/CCLE/PRISM glioma-selective dependency + drug sensitivity
+  (the direct anti-glioma axis) — a later dual-mechanism *bonus*, never a filter, so an
+  immune target is never dropped for lacking glioma-cell dependency.
+- **Output:** ranked candidate drugs (immune-perturbation) with target-union-mimicry provenance.
 
 ### 4 — PK/PD + brain penetrance (tab)
 - **Method — Grossman/ABTC-FDA neuro-oncology framework (Neuro-Oncology 2026):**
@@ -73,18 +70,18 @@ provenance discipline + the "predictive/druggable can *suggest* but never
     required unbound tumor conc) — high potency can offset low penetrance.
   - **NEBPI** 3-category output: sufficiently / insufficiently / impermeable.
   - **Exposure & half-life** from ChEMBL/DrugBank/labels.
-- **Safety & synergism:** FAERS/SIDER/DrugBank (adverse events, contraindications,
-  black-box) + DrugComb + synergy with GBM standard of care (temozolomide/RT/
-  checkpoint).
+- **Safety & synergism (sub-panel, traffic-light):** score each drug against GBM
+  standard-of-care concomitants — temozolomide (TMZ), radiation (XRT), dexamethasone,
+  levetiracetam (Keppra) — plus peri-operative bleeding risk. Sources FAERS/SIDER/
+  DrugBank/DrugComb. Output a traffic light: green = okay, amber = caution, red = hard
+  contraindication.
 - **Output:** per-drug NEBPI + exposure + half-life + safety + synergy score card.
 
 ### 5 — Trial design (tab)
-- **Method:** synthesize a **trial-rationale synopsis** — setting (adjuvant vs
-  neoadjuvant), population (newly-diagnosed vs recurrent; MGMT status), dosing (from
-  PK/PD), endpoints with **Treg-program reduction as the PD biomarker**, +
-  precedents from ClinicalTrials.gov. OPEN: adjuvant-vs-neoadjuvant logic depth.
-- **Honest boundary:** a decision-support synopsis for clinical/regulatory/safety
-  experts — NOT an actual trial design. No autonomous trial generation.
+- **v1: a light placeholder.** The tab exists and carries the locked drug + its scores;
+  the trial-synopsis logic (adjuvant vs neoadjuvant, population, endpoints) is deferred,
+  to be refined in a later pass.
+- **Honest boundary:** decision-support only — never an actual trial design.
 
 ## Frontend
 5 tabs (one per stage) + progressive header breadcrumb that fills as each stage
@@ -114,10 +111,13 @@ discovery (marker backbone now, data-driven factorization later as validation);
 actual PK simulation / tox prediction (score with published descriptors, do not
 simulate).
 
-## Open items to refine
-1. Stage-3 bridge: strictness of glioma-cell dependency for an immune target.
-2. Stage-5 trial-design depth (adjuvant vs neoadjuvant).
-3. Home for safety/synergy (stage-4 sub-panel vs own view).
+## Resolved (2026-07-08)
+1. Stage-3 bridge — no glioma-cell dependency in v1; the drug link finds immune-program
+   perturbers (Treg-down), gated by brain-penetrance/exposure in Stage 4. DepMap/PRISM
+   glioma-selectivity deferred as a later dual-mechanism bonus.
+2. Stage-5 depth — light placeholder for v1; refine later.
+3. Safety/synergy — Stage-4 sub-panel (keep 5 tabs): score vs GBM SOC (TMZ/XRT/
+   dexamethasone/Keppra) + peri-op bleeding, as a green/amber/red traffic light.
 
 ## Data sources
 Marson CD4 Perturb-seq; T-cell nomenclature (Masopust 2026); DepMap/CCLE

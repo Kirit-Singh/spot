@@ -17,14 +17,13 @@ Each stage locks a choice that feeds the next; the header breadcrumb builds as y
 2. **Skewing genes (heatmap + GO)** — the reproducible gene levers that push cells
    toward/away from a program (v1: knockdowns that *reduce* the Treg program),
    robustness-scored, with GO enrichment.
-3. **Drug link (sensitivity matrix)** — connect those genes to compounds via
-   DepMap/CCLE glioma-selective expression + dependency (DEMETER2) + PRISM drug
-   sensitivity, cross-checked against LINCS signature mimicry.
-4. **PK/PD & brain penetrance** — score each drug for CNS penetrance
-   (CNS-MPO / NEBPI, per the ABTC–FDA neuro-oncology framework), exposure,
-   half-life, safety (FAERS/SIDER) and synergy with standard of care.
-5. **Trial design** — a decision-support synopsis: adjuvant vs neoadjuvant,
-   newly-diagnosed vs recurrent, dosing, and Treg-reduction as the PD biomarker.
+3. **Drug link** — find drugs that perturb the immune program (reduce the Treg module)
+   via target→drug (DGIdb/Open Targets/ChEMBL) + LINCS signature mimicry. (Glioma-cell
+   dependency deferred; brain-penetrance/exposure is the filter, next stage.)
+4. **PK/PD & brain penetrance** — CNS-MPO / NEBPI (ABTC–FDA neuro-oncology framework)
+   + exposure + half-life, plus a **safety/synergy traffic light** vs GBM standard of
+   care (TMZ/XRT/dexamethasone/Keppra) and peri-operative bleeding (green/amber/red).
+5. **Trial design** — light placeholder for v1 (decision-support synopsis; to refine).
 
 ## What it is / isn't
 spot is **decision-support** — it prioritizes hypotheses and shows its provenance
