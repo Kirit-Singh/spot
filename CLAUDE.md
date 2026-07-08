@@ -47,6 +47,11 @@ skills). CS calls DBs where possible; heavy compute → tcefold via SSH. The pap
 *reference*, CS *complements* it (tag genes 'paper' vs 'CS-complement'). Each specialist
 writes its locked artifact + provenance to the stage `outputs/`.
 
+**Working method (token-efficient):** delegate the actual analytical work — data
+reads, DB calls, computation — to the CS specialists (their tokens are separate); the
+main session orchestrates, scaffolds `_frontend`, surfaces provenance, and reviews. Keep
+the main context lean.
+
 ## Engineering conventions
 - Small modules, one purpose each; **≤500 lines/file**.
 - **Tests** on deterministic logic (scoring, verdicts, parsers, gene-ID/ontology
