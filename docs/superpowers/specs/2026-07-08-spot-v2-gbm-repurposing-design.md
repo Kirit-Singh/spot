@@ -150,3 +150,14 @@ Claude Science runs on tcedirector and SSHes into **tcefold** for heavy per-stag
 (more cores/RAM, GPU/AVX2) — this relieves the tcedirector ceiling (~31 GB RAM, slow
 NAS reads) that bottlenecks cell-level phenotyping. NAS (`/mnt/tcenas/datasets`) is
 shared by both hosts but slow; iterative work copies/subsamples to local disk.
+
+## Pipeline + provenance (added 2026-07-08)
+spot is a **pipeline of provenance-tracked Claude Science specialists**, not just a set
+of tabs. Each stage's specialist: (1) runs its job, using CS's built-in **SSH connector**
+to offload heavy compute to tcefold (cores/RAM/GPU); (2) calls its databases; (3) emits a
+**locked artifact + a provenance record** into the stage `outputs/` — source, method,
+exact statistics, and tags ('paper' vs 'CS-complement'; suggestive-vs-confirmatory per the
+firewall). Stages chain: stage N's locked artifact feeds stage N+1. **Human-in-the-loop:**
+the user reviews + **locks** the selection at each stage (program → gene → drug → score →
+trial); the lock advances the pipeline and fills the header breadcrumb. The frontend
+surfaces each stage's result *and* its CS provenance (click-through to the real stat/method).
