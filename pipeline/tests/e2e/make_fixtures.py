@@ -37,7 +37,7 @@ def main() -> None:
         f.write(">chr_mini\n")
         for i in range(0, len(chrom), 60):
             f.write(chrom[i : i + 60] + "\n")
-    coords = {"GENE1": (1, 1200), "GENE2": (1601, 2800)}
+    coords = {"GENE1": (1, 1200), "GENE2": (1401, 2600)}
     with (ref / "mini.gtf").open("w") as f:
         for gid, (s, e) in coords.items():
             attr = f'gene_id "{gid}"; transcript_id "{gid}T"; gene_name "{gid}";'
@@ -72,7 +72,7 @@ def main() -> None:
     for ci, cb in enumerate(BARCODES):
         for _ in range(5):
             g1.append((f"g{gid}", cb + _seq(12)))
-            g2.append((f"g{gid}", protos[assign[ci]] + _seq(70)))
+            g2.append((f"g{gid}", protos[assign[ci]]))
             gid += 1
     _fastq(raw / "guide_R1.fastq.gz", g1)
     _fastq(raw / "guide_R2.fastq.gz", g2)
