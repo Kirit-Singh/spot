@@ -183,3 +183,13 @@ Masopust nomenclature (CC BY; marker facts usable regardless).
 license (CC BY 4.0?) to confirm from the portal (the data readme does not state it).
 
 Licenses per knowledge as of 2026-01; verify current terms for any commercial use.
+
+## Frame strategy (added 2026-07-08)
+How each tab hosts its CS specialist, in preference order:
+1. **Live iframe** — embed the CS workbook directly (if CS permits framing: login /
+   X-Frame-Options).
+2. **Headless-drive** — spot drives CS programmatically via the browser-automation
+   approach proven in this project (tunnel + login + evaluate), runs the specialist, and
+   pulls its output. Also enables the *automated pipeline* (spot triggers stage N).
+3. **Render-artifact** — the specialist writes its locked artifact to the stage
+   `outputs/`; the tab renders it + an "open in CS" link. Sub-project 1 uses this.
