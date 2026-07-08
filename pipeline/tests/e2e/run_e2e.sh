@@ -28,9 +28,9 @@ test -f "$work"/gex_Solo.out/Gene/raw/matrix.mtx && echo "  OK GEX matrix"
 echo "[3/5] kite guide index + count"
 kb=quay.io/biocontainers/kb-python:0.28.2--pyhdfd78af_1
 docker run --rm -v "$fix:/fix" -v "$work:/out" "$kb" \
-  kb ref --workflow kite -i /out/kite.idx -g /out/kite_t2g.txt -f1 /out/kite.fa /fix/guides/guides.fa
+  kb ref --workflow kite --tmp /out/ref_tmp -i /out/kite.idx -g /out/kite_t2g.txt -f1 /out/kite.fa /fix/guides/guides.fa
 docker run --rm -v "$fix:/fix" -v "$work:/out" "$kb" \
-  kb count --workflow kite -i /out/kite.idx -g /out/kite_t2g.txt -x 10xv3 \
+  kb count --workflow kite --tmp /out/count_tmp -i /out/kite.idx -g /out/kite_t2g.txt -x 10xv3 \
     -o /out/guide --h5ad -t 4 /fix/raw/guide_R1.fastq.gz /fix/raw/guide_R2.fastq.gz
 test -f "$work"/guide/counts_unfiltered/adata.h5ad && echo "  OK guide matrix"
 
