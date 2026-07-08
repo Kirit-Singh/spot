@@ -1,5 +1,20 @@
 """spot_contracts — shared Hit/Evidence vocabulary (Lane A <-> Lane B seam)."""
 
+from spot_contracts.manifest import (
+    ALLOWED_LICENSES,
+    MANIFEST_SCHEMA_VERSION,
+    Aligner,
+    Chemistry,
+    ChemistrySpec,
+    DatasetManifest,
+    DEParams,
+    GuideLibrary,
+    LibraryType,
+    MOIDesign,
+    Reference,
+    RunAccession,
+    StageImage,
+)
 from spot_contracts.models import (
     PREDICTIVE_WEIGHT_MAX,
     SCHEMA_VERSION,
@@ -30,6 +45,19 @@ from spot_contracts.models import (
 )
 
 __all__ = [
+    "ALLOWED_LICENSES",
+    "MANIFEST_SCHEMA_VERSION",
+    "Aligner",
+    "ChemistrySpec",
+    "Chemistry",
+    "DEParams",
+    "DatasetManifest",
+    "GuideLibrary",
+    "LibraryType",
+    "MOIDesign",
+    "Reference",
+    "RunAccession",
+    "StageImage",
     "PREDICTIVE_WEIGHT_MAX",
     "SCHEMA_VERSION",
     "SIGNED_METRICS",

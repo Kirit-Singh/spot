@@ -26,3 +26,6 @@ outputs/
 
 # OS
 .DS_Store
+
+# pipeline runtime data (re-fetchable via manifest)
+pipeline/datasets/
