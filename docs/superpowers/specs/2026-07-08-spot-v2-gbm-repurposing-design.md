@@ -144,3 +144,9 @@ decision-support.
 (repo environments). `CLAUDE.md`, `LICENSE`, `README.md` at root. Old evidence-graph
 code (api/contracts/core/pipeline) removed — recoverable via git history if a stage
 needs it.
+
+## Compute (added 2026-07-08)
+Claude Science runs on tcedirector and SSHes into **tcefold** for heavy per-stage jobs
+(more cores/RAM, GPU/AVX2) — this relieves the tcedirector ceiling (~31 GB RAM, slow
+NAS reads) that bottlenecks cell-level phenotyping. NAS (`/mnt/tcenas/datasets`) is
+shared by both hosts but slow; iterative work copies/subsamples to local disk.

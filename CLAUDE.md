@@ -1,34 +1,64 @@
 # CLAUDE.md
 
-**spot** — a cross-dataset evidence graph: take a hit found in one dataset, confirm or refute it in independent public datasets, rendered as an interactive **typed + weighted** graph where every edge is click-through to the real statistic and the code that made it. Full brief: `docs/brief.md`. Design: `docs/superpowers/specs/2026-07-07-spot-design.md`.
+**spot** — a five-stage workbench that turns a T-cell transcriptional program into a
+testable, brain-penetrant drug-repurposing hypothesis for glioblastoma:
+`Treg program › skewing genes › drug › brain-penetrance/exposure › trial design`.
+Each stage is a **Claude Science specialist** (a CS project with tailored agent-context
++ database access), embedded in its tab; spot is the funnel shell that carries the
+locked artifact between stages. Design:
+`docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md`.
 
-## Infra
-Host names, paths, and ports live in **`infra.env`** (tracked, non-secret). Dev happens on the dev host in tmux; the Mac is a thin SSH client. GPU work targets the GPU host; the DGX Sparks are an optional training modality (Lane B). The NAS dataset mount is never a live-run dependency.
+## Repo layout
+Five stage folders, each `inputs/ outputs/ analysis/ + README`:
+- `01_phenotypes/` — CD4 programs → interactive UMAP (single-cell immunology)
+- `02_geneskew/` — genes that skew toward/away a program + GO (perturbation genomics)
+- `03_druglink/` — genes → drugs via DepMap/PRISM + LINCS (cancer pharmacogenomics)
+- `04_PKPD/` — brain-penetrance (CNS-MPO/NEBPI) + exposure + safety + synergy (neuro-onc)
+- `05_trial/` — trial-design synopsis (clinical decision-support)
+
+`_frontend/` the 5-tab shell (React+Vite+TS+Tailwind). `_requirements/` repo envs.
+`CLAUDE.md LICENSE README.md` at root. `outputs/` is gitignored (generated artifacts).
+
+## Compute
+- **Claude Science** runs on **tcedirector** (dev host) and is the per-stage analytical
+  engine. It **SSHes into `tcefold`** for heavy jobs — more cores/RAM + GPU/AVX2 — when a
+  stage outgrows tcedirector (e.g. loading cell-level h5ad past ~31 GB RAM, GPU UMAP).
+- The **NAS** (`/mnt/tcenas/datasets`, NFS, shared by both hosts) is slow (~35 MB/s,
+  seek-bound) — copy/subsample to local disk for iterative work; never depend on a live
+  NFS stream. Big processed files live local on tcedirector (`~/datasets/…`); raw
+  cell-level on the NAS.
+- The Mac is a thin SSH client.
 
 ## Data rules
-- Copy the small precomputed files (`infra.env` → `SPOT_DATASET_DIR`) to local scratch; never depend on the NFS mount in a live/recorded run.
-- **Never invent a statistic** — every number comes from a deterministic tool (scanpy / pyDESeq2 / decoupler / Census).
-- **Type + weight every edge** (replication / consistency / genetic / predictive); never present consistency as replication.
-- **Adversarially falsify** a hit (donor consistency · context specificity · guide-efficiency · effect-vs-noise) before its edge lights up.
+- **Never invent a statistic** — every number comes from a real tool/DB (scanpy / DESeq2
+  / DepMap / LINCS / ChEMBL) with provenance (source + method + exact stat).
+- **Firewall:** predictive / druggable / brain-penetrance signals may *suggest* but never
+  *confirm* — keep them flagged as suggestive.
+- **Adversarially falsify** before trusting — cross-condition/donor/guide reproducibility
+  (the robustness composite).
+- **Public data only**; nothing bundled in the repo.
+- **Honest boundaries:** spot is decision-support — not a trial designer, a PK/tox oracle,
+  or a substitute for clinical/regulatory/safety expertise. BBB scoring is a screen, not
+  proof of CNS exposure. One in-vitro CD4 dataset needs cross-confirmation.
+
+## Claude Science specialists
+Each stage = one CS project with tailored agent-context (domain + permitted databases /
+skills). CS calls DBs where possible; heavy compute → tcefold via SSH. The paper is the
+*reference*, CS *complements* it (tag genes 'paper' vs 'CS-complement'). Each specialist
+writes its locked artifact + provenance to the stage `outputs/`.
 
 ## Engineering conventions
-- Small modules, one purpose each. **≤500 lines/file — CI-enforced** (per-file opt-out comment w/ reason; lockfiles/generated/migrations excluded).
-- **`core/` is deterministic + importable** — no LLM, no network at import; never imports from `api`/`worker`/`agent`. Claude lives only in `agent/`, feature-flagged.
-- **Tests:** deterministic logic (scoring, verdicts, edge weighting, graph assembly, parsers, gene-ID/ontology harmonization) must have tests; thin IO/glue smoke-or-skip; every bugfix ships a regression test.
-- **Efficiency:** vectorize (no Python loops over cells/genes); never hold a full cohort in memory — lazy-load/stream; avoid array copies; cache deterministic results; measure before optimizing.
-- **Uniform env:** Python 3.12, Node 22, pinned everywhere. **The Docker image is the environment** (dev/CI/prod identical). Deps hash-locked via pip-tools (`requirements/*.in` → `requirements/*.lock`); frontend via `package-lock.json`.
-- **Build small chunk by small chunk:** bite-sized TDD tasks, each green (`ruff`/`mypy`/`pytest`) before commit. **generator ≠ evaluator:** an independent verify gate on every change and every confirmation.
-
-## Lanes
-**Lane A — Evidence Graph** (`core api frontend worker agent`) and **Lane B — Predictive Modeling** (`modeling`, training loops on the Sparks; Claude Science for reasoning) share a foundation and meet only at the **`contracts/`** package (`Hit` + `Evidence/Edge`). See spec §12–13.
+- Small modules, one purpose each; **≤500 lines/file**.
+- **Tests** on deterministic logic (scoring, verdicts, parsers, gene-ID/ontology
+  harmonization); thin IO/glue smoke-or-skip; every bugfix ships a regression test.
+- **Efficiency:** vectorize (no Python loops over cells/genes); subsample/stream — never
+  hold a full cohort in memory (slow NAS + tight RAM).
+- **Small chunk by small chunk:** each with a clear success metric, green before commit.
+- **generator ≠ evaluator:** an independent verify gate on every change + every claim.
+- **Env:** `_frontend` deps via `package-lock.json`; repo envs pinned in `_requirements/`;
+  CS manages its own conda envs per specialist.
 
 ## File & folder hygiene
-- **Minimal files:** add a file only when working code absolutely requires it — never speculatively or "for later."
-- **Simple, clean folders:** keep the tree flat and obvious; avoid deep nesting and one-file folders without cause.
-- **Explain before reorganizing:** when adding, moving, splitting, or renaming files/folders, say what and why first and get a nod — don't restructure silently.
-
-## Dev commands (`just`)
-`just up` / `just down` · `just lint` · `just fmt` · `just typecheck` · `just test` (add a service name to scope, e.g. `just test core`).
-
-## Layout
-`core/` engine (`spot_core`: data·evidence·confirm·graph) · `api/` FastAPI · `worker/` GPU jobs · `agent/` Claude adapter (flagged) · `frontend/` React+Vite+TS+Tailwind+Cytoscape · `contracts/` shared Hit/Evidence schema · `modeling/` Lane B · `deploy/` compose+Dockerfiles · `loops/` + `skills/` loop recipes · `docs/` brief+specs.
+- **Minimal files** — add only when working code requires it, never speculatively.
+- **Simple, clean folders** — flat + obvious; avoid deep nesting / one-file folders.
+- **Explain before reorganizing** — say what and why first, get a nod; never silent.
