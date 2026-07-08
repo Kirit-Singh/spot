@@ -1,0 +1,13 @@
+dataset_id: fixture_ds
+title: Fixture Perturb-seq
+license: CC-BY-4.0
+schema_version: 0.1.0
+runs:
+  - {accession: SRR000001, sample: s1, library_type: gex,   md5: {R1.fastq.gz: d41d, R2.fastq.gz: d41e}}
+  - {accession: SRR000002, sample: s1, library_type: guide, md5: {R1.fastq.gz: d41f}}
+chemistry: {version: 10x_v3, whitelist_name: 3M-february-2018, whitelist_md5: w1, cb_len: 16, umi_len: 12}
+reference: {genome_build: GRCh38, annotation: GENCODE_v44, fasta_url: u, fasta_md5: a, gtf_url: u, gtf_md5: b, sjdb_overhang: 90}
+guide_library: {protospacer_fasta_url: u, protospacer_md5: p, guide_to_target_url: u, guide_to_target_md5: g, ntc_guide_ids: [NTC_1, NTC_2], moi: low}
+images:
+  - {stage: starsolo, image: "ghcr.io/spot/x:latest"}
+de: {model: deseq2, contrast: target_vs_ntc, min_cells_per_perturbation: 25, padj_threshold: 0.05}
