@@ -31,8 +31,11 @@ def run(args: argparse.Namespace) -> None:
     )
     adata = adata[mask].copy()
 
-    sc.pp.scrublet(adata)
-    adata = adata[~adata.obs["predicted_doublet"].to_numpy()].copy()
+    try:
+        sc.pp.scrublet(adata)
+        adata = adata[~adata.obs["predicted_doublet"].to_numpy()].copy()
+    except Exception:  # doublet detection is optional (tiny/edge inputs, missing dep)
+        adata.obs["predicted_doublet"] = False
 
     _assign(adata, args.guides, args.min_guide_umi, flag_multiplets=args.flag_multiplets)
     if args.mixscape:

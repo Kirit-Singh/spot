@@ -1,0 +1,3 @@
+gA	GENE1
+gB	GENE2
+NTC	NTC

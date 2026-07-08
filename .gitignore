@@ -29,3 +29,6 @@ outputs/
 
 # pipeline runtime data (re-fetchable via manifest)
 pipeline/datasets/
+
+# e2e run outputs
+pipeline/tests/e2e/work/

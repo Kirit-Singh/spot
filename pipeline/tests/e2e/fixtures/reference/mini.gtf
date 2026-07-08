@@ -1,0 +1,6 @@
+chr_mini	syn	gene	1	1200	.	+	.	gene_id "GENE1"; transcript_id "GENE1T"; gene_name "GENE1";
+chr_mini	syn	transcript	1	1200	.	+	.	gene_id "GENE1"; transcript_id "GENE1T"; gene_name "GENE1";
+chr_mini	syn	exon	1	1200	.	+	.	gene_id "GENE1"; transcript_id "GENE1T"; gene_name "GENE1";
+chr_mini	syn	gene	1401	2600	.	+	.	gene_id "GENE2"; transcript_id "GENE2T"; gene_name "GENE2";
+chr_mini	syn	transcript	1401	2600	.	+	.	gene_id "GENE2"; transcript_id "GENE2T"; gene_name "GENE2";
+chr_mini	syn	exon	1401	2600	.	+	.	gene_id "GENE2"; transcript_id "GENE2T"; gene_name "GENE2";
