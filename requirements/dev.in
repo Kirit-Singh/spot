@@ -5,3 +5,4 @@
 ruff
 mypy
 pytest
+httpx
