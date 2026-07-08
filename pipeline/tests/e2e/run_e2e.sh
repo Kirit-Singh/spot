@@ -24,6 +24,8 @@ docker run --rm -v "$fix:/fix" -v "$work:/out" \
     --soloFeatures Gene --soloCellFilter None --outSAMtype None \
     --runThreadN 4 --outFileNamePrefix /out/gex_
 test -f "$work"/gex_Solo.out/Gene/raw/matrix.mtx && echo "  OK GEX matrix"
+# scanpy read_10x_mtx wants gzipped inputs; STARsolo writes them uncompressed (and root-owned)
+docker run --rm -v "$work:/out" alpine:3.19 sh -c 'cd /out/gex_Solo.out/Gene/raw && gzip -f matrix.mtx barcodes.tsv features.tsv'
 
 echo "[3/5] kite guide index + count"
 kb=quay.io/biocontainers/kb-python:0.28.2--pyhdfd78af_1
