@@ -40,4 +40,4 @@ Public datasets only — Marson CD4 Perturb-seq, DepMap/CCLE (expression, DEMETE
 PRISM), LINCS, Open Targets/ChEMBL/DrugBank. No data bundled in this repo.
 
 ## License
-MIT
+Code: **MIT** (`LICENSE`). Third-party data & reference sources: **`DATA_LICENSES.md`**.
