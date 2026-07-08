@@ -108,3 +108,11 @@ def test_missing_ntc_rejected() -> None:
     )
     with pytest.raises(ValidationError):
         _manifest(guide_library=gl)
+
+
+def test_qc_defaults_and_bad_mito() -> None:
+    from spot_contracts import QCParams
+
+    assert QCParams().max_pct_mito == 15.0
+    with pytest.raises(ValidationError):
+        QCParams(max_pct_mito=150.0)

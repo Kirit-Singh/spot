@@ -1,4 +1,6 @@
-# spot pipeline stage: de  (built + pinned by @sha256 in the dataset manifest)
-# TODO: pin base image by digest; add entrypoint. Placeholder for the lane foundation.
-FROM python:3.12-slim
+# Pseudobulk differential expression (DESeq2), target vs NTC. Pinned by manifest.
+FROM bioconductor/bioconductor_docker:RELEASE_3_19
+RUN R -e "BiocManager::install(c('DESeq2','edgeR'), update=FALSE, ask=FALSE)"
 LABEL org.spot.stage="de"
+COPY de.R /opt/de.R
+ENTRYPOINT ["Rscript", "/opt/de.R"]
