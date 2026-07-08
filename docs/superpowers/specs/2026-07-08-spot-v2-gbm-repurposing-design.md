@@ -161,3 +161,25 @@ firewall). Stages chain: stage N's locked artifact feeds stage N+1. **Human-in-t
 the user reviews + **locks** the selection at each stage (program → gene → drug → score →
 trial); the lock advances the pipeline and fills the header breadcrumb. The frontend
 surfaces each stage's result *and* its CS provenance (click-through to the real stat/method).
+
+## Licensing (per data source) (added 2026-07-08)
+Track a license per source in provenance — "public" != "unrestricted". v1 is research/
+academic (all usable with attribution); flag the non-commercial sources before any
+commercial or redistributed use.
+
+**Open (permissive, incl. commercial, attribution):** DepMap/CCLE/DEMETER2/PRISM (CC BY
+4.0) · LINCS L1000 (CC BY 4.0) · Open Targets (CC0) · DGIdb (open) · FAERS/OpenFDA +
+ClinicalTrials.gov (US public domain) · RDKit (BSD) · Grossman NEBPI paper (CC BY 4.0) ·
+Masopust nomenclature (CC BY; marker facts usable regardless).
+
+**Share-alike (usable; copyleft on redistributed derivatives):** ChEMBL (CC BY-SA 3.0).
+
+**Non-commercial (⚠ flag; swap before commercial/redistribution):**
+- DrugBank — academic CC BY-NC; commercial = paid → prefer DGIdb + ChEMBL
+- SIDER — CC BY-NC-SA 4.0 → prefer OpenFDA/FAERS for safety
+- DrugComb — CC BY-NC-SA 4.0 → academic-only or find an open alternative
+
+**To confirm:** Marson CD4 Perturb-seq (CZI Virtual Cells Platform) — public; exact
+license (CC BY 4.0?) to confirm from the portal (the data readme does not state it).
+
+Licenses per knowledge as of 2026-01; verify current terms for any commercial use.
