@@ -1,0 +1,13 @@
+dataset_id: e2e_fixture
+title: Tiny synthetic Perturb-seq E2E fixture
+license: CC0
+schema_version: 0.1.0
+runs:
+  - {accession: FIXTURE_GEX,   sample: s1, library_type: gex,   md5: {gex_R1.fastq.gz: fix, gex_R2.fastq.gz: fix}}
+  - {accession: FIXTURE_GUIDE, sample: s1, library_type: guide, md5: {guide_R1.fastq.gz: fix, guide_R2.fastq.gz: fix}}
+chemistry: {version: 10x_v3, whitelist_name: fixture, whitelist_md5: w, cb_len: 16, umi_len: 12}
+reference: {genome_build: mini, annotation: syn, fasta_url: reference/mini.fa, fasta_md5: a, gtf_url: reference/mini.gtf, gtf_md5: b, sjdb_overhang: 89}
+guide_library: {protospacer_fasta_url: guides/guides.fa, protospacer_md5: p, guide_to_target_url: guides/t2g.txt, guide_to_target_md5: g, ntc_guide_ids: [NTC], moi: low}
+images:
+  - {stage: starsolo, image: "ghcr.io/spot/x@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+de: {model: deseq2, contrast: target_vs_ntc, min_cells_per_perturbation: 1, padj_threshold: 0.05}
