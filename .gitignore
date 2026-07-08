@@ -15,7 +15,7 @@ dist/
 
 # Data / scratch / outputs — NEVER commit data
 .scratch/
-data/
+/data/
 outputs/
 *.h5ad
 *.h5mu

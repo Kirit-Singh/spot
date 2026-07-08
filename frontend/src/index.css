@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold: #ffb020;
+}
+body {
+  margin: 0;
+  background: #faf9f7;
+  color: #1e1b16;
+  font-family: 'Inter Tight', system-ui, sans-serif;
+}
