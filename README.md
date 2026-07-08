@@ -1,31 +1,43 @@
 # spot
 
-Carry a scientific finding across datasets. **spot** takes a hit discovered in one dataset and confirms or refutes it in independent public datasets, then renders the result as an interactive evidence graph — every edge **typed** (replication / consistency / genetic / predictive), **weighted** by strength, and **click-through** to the real statistic and the code that produced it.
+**spot** turns a T-cell transcriptional program into a testable, brain-penetrant
+drug-repurposing hypothesis for glioblastoma — a five-stage workbench you walk end
+to end:
 
-Two ideas drive it:
+`Treg program › skewing genes › drug › brain-penetrance & exposure › trial design`
 
-- **Make the plumbing easier, to expedite discovery.** Carrying a finding across datasets is mostly plumbing — harmonizing gene IDs and ontologies, pulling the right statistics, matching context, tracking provenance. spot automates that plumbing so researchers spend their time on the science, not the glue. Biology's missing layer is cross-dataset replication; spot makes it visible.
-- **Loops that refine, not one-shot answers.** Every claim runs through a small generator ≠ evaluator loop: it is proposed, then adversarially tested before it earns an edge. The same pattern refines the tool itself — concepts are continually sharpened rather than asserted once.
+Each stage locks a choice that feeds the next; the header breadcrumb builds as you go.
 
-**Status:** early WIP · **MIT** licensed
+**Status:** re-orienting (WIP) · **MIT** licensed
 
-## Quickstart
-Requires Docker (+ Compose).
-```
-git clone https://github.com/Kirit-Singh/spot && cd spot
-just up      # postgres, redis, api, frontend on localhost
-just test    # run the suite
-```
+## The five stages
+1. **CD4 programs (UMAP)** — score CD4 cells into transcriptional programs (Treg,
+   Th1, …) from the Marson Perturb-seq screen, anchored on the T-cell nomenclature
+   guidelines and complemented by on-data analysis. Interactive phenotype UMAP.
+2. **Skewing genes (heatmap + GO)** — the reproducible gene levers that push cells
+   toward/away from a program (v1: knockdowns that *reduce* the Treg program),
+   robustness-scored, with GO enrichment.
+3. **Drug link** — find drugs that perturb the immune program (reduce the Treg module)
+   via target→drug (DGIdb/Open Targets/ChEMBL) + LINCS signature mimicry. (Glioma-cell
+   dependency deferred; brain-penetrance/exposure is the filter, next stage.)
+4. **PK/PD & brain penetrance** — CNS-MPO / NEBPI (ABTC–FDA neuro-oncology framework)
+   + exposure + half-life, plus a **safety/synergy traffic light** vs GBM standard of
+   care (TMZ/XRT/dexamethasone/Keppra) and peri-operative bleeding (green/amber/red).
+5. **Trial design** — light placeholder for v1 (decision-support synopsis; to refine).
 
-## Architecture
-Service-split monorepo, two lanes sharing a `contracts/` seam:
-- **Lane A — Evidence Graph:** `core/` deterministic engine · `api/` FastAPI · `frontend/` React + Cytoscape · `worker/` GPU jobs · `agent/` optional Claude adapter.
-- **Lane B — Predictive Modeling:** `modeling/` training loops (identify perturbation hot spots / favorable pathways).
+## What it is / isn't
+spot is **decision-support** — it prioritizes hypotheses and shows its provenance
+at every step. It is **not** a trial designer, a PK/tox oracle, or a substitute for
+clinical, regulatory, and safety expertise. Brain-penetrance scoring is a *screen*,
+not proof of CNS exposure.
 
-Conventions in `CLAUDE.md`; full design in `docs/superpowers/specs/`; frontend design in `docs/frontend-design.md`; origin brief in `docs/brief.md`.
+## Design
+Full design in `docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md`.
+Conventions in `CLAUDE.md`.
 
 ## Data
-Built on public datasets (Marson CD4+ T cell Perturb-seq, CZ CELLxGENE Census, Open Targets). No data is bundled in this repo.
+Public datasets only — Marson CD4 Perturb-seq, DepMap/CCLE (expression, DEMETER2,
+PRISM), LINCS, Open Targets/ChEMBL/DrugBank. No data bundled in this repo.
 
 ## License
-MIT
+Code: **MIT** (`LICENSE`). Third-party data & reference sources: **`DATA_LICENSES.md`**.
