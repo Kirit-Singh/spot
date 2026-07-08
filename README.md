@@ -10,6 +10,11 @@ Each stage locks a choice that feeds the next; the header breadcrumb builds as y
 
 **Status:** re-orienting (WIP) · **MIT** licensed
 
+## Three ideas
+- **Plumbing — simplifying science.** Carrying a finding across datasets is mostly glue: harmonizing gene IDs and ontologies, pulling the right statistics, calling the right databases, tracking context. spot automates that plumbing so researchers spend their time on the science, not the wiring.
+- **Provenance — reliability and validity.** Every number traces to its source, method, and exact statistic, and a firewall keeps *suggestive* signals (predictive, druggable, brain-penetrant) from ever posing as *confirmed*. Click through to the real stat and judge it yourself.
+- **Efficiency — using tokens effectively.** The heavy analytical work runs in Claude Science specialists, each with its own token budget; the orchestration loop stays lean — it coordinates, wires, and reviews. Do the science where it is cheap; spend context where it counts.
+
 ## The five stages
 1. **CD4 programs (UMAP)** — score CD4 cells into transcriptional programs (Treg,
    Th1, …) from the Marson Perturb-seq screen, anchored on the T-cell nomenclature
