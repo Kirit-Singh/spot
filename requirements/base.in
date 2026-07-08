@@ -2,3 +2,5 @@
 # are installed editable separately. Compile: pip-compile --generate-hashes.
 numpy>=2,<3
 pydantic>=2,<3
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
