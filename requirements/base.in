@@ -1,3 +1,4 @@
 # spot runtime dependencies (third-party only). Local packages (core, api, ...)
 # are installed editable separately. Compile: pip-compile --generate-hashes.
 numpy>=2,<3
+pydantic>=2,<3
