@@ -67,6 +67,10 @@ def main() -> None:
         for name, seq in protos.items():
             f.write(f">{name}\n{seq}\n")
     (gl / "t2g.txt").write_text("gA\tGENE1\ngB\tGENE2\nNTC\tNTC\n")
+    with (gl / "features.tsv").open("w") as f:
+        for name, seq in protos.items():
+            f.write(f"{seq}\t{name}\n")
+
     assign = {0: "gA", 1: "gA", 2: "gB", 3: "NTC"}
     g1, g2, gid = [], [], 0
     for ci, cb in enumerate(BARCODES):
