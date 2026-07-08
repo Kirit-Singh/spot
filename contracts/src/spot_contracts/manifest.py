@@ -37,6 +37,17 @@ class MOIDesign(StrEnum):
     HIGH = "high"
 
 
+class DoubletMethod(StrEnum):
+    SCDBLFINDER = "scdblfinder"
+    SCRUBLET = "scrublet"
+    NONE = "none"
+
+
+class GuideAssignMethod(StrEnum):
+    POISSON_GAUSSIAN = "poisson_gaussian"
+    UMI_THRESHOLD = "umi_threshold"
+
+
 class Aligner(StrEnum):
     STARSOLO = "starsolo"
     KB_PYTHON = "kb_python"
@@ -90,11 +101,41 @@ class StageImage(_M):
         return self
 
 
+class QCParams(_M):
+    """Cell-QC thresholds (MAD-adaptive primary cut, fixed floors as guards)."""
+
+    min_genes_per_cell: int = 200
+    min_counts_per_cell: int = 1000
+    max_pct_mito: float = 15.0
+    mad_nmads: float = 5.0
+    doublet_method: DoubletMethod = DoubletMethod.SCDBLFINDER
+    report_ambient: bool = True
+
+    @model_validator(mode="after")
+    def _bounds(self) -> QCParams:
+        if not 0 < self.max_pct_mito <= 100:
+            raise ValueError("max_pct_mito must be in (0, 100]")
+        if self.min_genes_per_cell < 0 or self.min_counts_per_cell < 0:
+            raise ValueError("min_genes/min_counts must be >= 0")
+        return self
+
+
+class GuideAssignParams(_M):
+    """Ambient-aware guide assignment; escapers labeled (never dropped)."""
+
+    method: GuideAssignMethod = GuideAssignMethod.POISSON_GAUSSIAN
+    min_guide_umi: int = 3
+    flag_multiplets: bool = True
+    mixscape: bool = True
+
+
 class DEParams(_M):
     model: str = "deseq2"  # deseq2 / edger_qlf
     contrast: str = "target_vs_ntc"
     min_cells_per_perturbation: int = 25  # below this -> "insufficient power", not a p-value
     padj_threshold: float = 0.05
+    min_abs_log2fc: float = 1.0
+    gene_min_count: int = 10  # low-expression gene filter (edgeR filterByExpr style)
 
 
 class DatasetManifest(_M):
@@ -110,6 +151,8 @@ class DatasetManifest(_M):
     doi: str | None = None
     geo_series: str | None = None
     aligner: Aligner = Aligner.STARSOLO
+    qc: QCParams = Field(default_factory=QCParams)
+    guide_assign: GuideAssignParams = Field(default_factory=GuideAssignParams)
     de: DEParams = Field(default_factory=DEParams)
     spot_commit: str | None = None
     seed: int = 0
