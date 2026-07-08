@@ -124,3 +124,23 @@ Marson CD4 Perturb-seq; T-cell nomenclature (Masopust 2026); DepMap/CCLE
 (expression, DEMETER2, PRISM 19Q4); LINCS L1000; ChEMBL/DrugBank/FAERS/SIDER/
 DrugComb; ClinicalTrials.gov; brain-penetrance per Grossman et al., Neuro-Oncology
 2026 (NEBPI/CNS-MPO). Public only.
+
+## Architecture — Claude Science specialists per tab (added 2026-07-08)
+Each stage runs as a dedicated **Claude Science specialist**: a CS project with a
+tailored agent-context (domain expertise + permitted databases/skills), embedded in
+that tab's frame. CS calls the databases (DepMap/LINCS/ChEMBL/FAERS/DrugComb/
+ClinicalTrials.gov) where possible; spot is the funnel shell that carries the locked
+artifact between specialists and renders their outputs. If CS cannot be iframed
+(login / X-Frame-Options), fallback: the specialist writes its artifact to the
+stage's `outputs/`, and the tab renders that + an "open in CS" link.
+
+Specialists (one per stage folder): 01 single-cell immunology · 02 perturbation
+genomics · 03 cancer pharmacogenomics · 04 neuro-oncology PK/PD · 05 clinical-trial
+decision-support.
+
+## Repo layout (v2)
+`01_phenotypes/ 02_geneskew/ 03_druglink/ 04_PKPD/ 05_trial/` — each with
+`inputs/ outputs/ analysis/ + README.md`. `_frontend/` (tab shell). `_requirements/`
+(repo environments). `CLAUDE.md`, `LICENSE`, `README.md` at root. Old evidence-graph
+code (api/contracts/core/pipeline) removed — recoverable via git history if a stage
+needs it.
