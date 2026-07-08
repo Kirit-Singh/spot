@@ -1,9 +1,8 @@
 """Cell QC + guide assignment + mixscape (cellqc stage).
 
-Cells are called once on GEX (STARsolo filtered matrix); guides are assigned
-ambient-aware; doublets flagged and removed; mixscape labels CRISPRi escapers
-(kept, not dropped). All thresholds come from CLI args (the manifest QC params) --
-never hardcoded.
+Cells are called once on GEX; guides assigned ambient-aware; doublets removed;
+mixscape labels CRISPRi escapers (kept, not dropped). Threshold logic is imported
+from spot_pipeline.qc (tested); values come from CLI args (the manifest QC params).
 """
 
 from __future__ import annotations
@@ -13,12 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import scanpy as sc
-
-
-def _mad_low(values: np.ndarray, nmads: float) -> float:
-    med = float(np.median(values))
-    mad = float(np.median(np.abs(values - med))) or 1.0
-    return med - nmads * mad
+from spot_pipeline.qc import assign_guides, cell_qc_mask
 
 
 def run(args: argparse.Namespace) -> None:
@@ -26,47 +20,42 @@ def run(args: argparse.Namespace) -> None:
     adata.var["mito"] = adata.var_names.str.upper().str.startswith("MT-")
     sc.pp.calculate_qc_metrics(adata, qc_vars=["mito"], percent_top=None, inplace=True)
 
-    counts = adata.obs["total_counts"].to_numpy()
-    genes = adata.obs["n_genes_by_counts"].to_numpy()
-    mito = adata.obs["pct_counts_mito"].to_numpy()
-    keep = (
-        (genes >= args.min_genes)
-        & (counts >= args.min_counts)
-        & (mito <= args.max_pct_mito)
-        & (np.log1p(counts) >= _mad_low(np.log1p(counts), args.mad_nmads))
+    mask = cell_qc_mask(
+        adata.obs["n_genes_by_counts"].to_numpy(),
+        adata.obs["total_counts"].to_numpy(),
+        adata.obs["pct_counts_mito"].to_numpy(),
+        min_genes=args.min_genes,
+        min_counts=args.min_counts,
+        max_pct_mito=args.max_pct_mito,
+        mad_nmads=args.mad_nmads,
     )
-    adata = adata[keep].copy()
+    adata = adata[mask].copy()
 
     sc.pp.scrublet(adata)
     adata = adata[~adata.obs["predicted_doublet"].to_numpy()].copy()
 
-    _assign_guides(adata, args.guides, args.min_guide_umi, flag_multiplets=args.flag_multiplets)
+    _assign(adata, args.guides, args.min_guide_umi, flag_multiplets=args.flag_multiplets)
     if args.mixscape:
-        _run_mixscape(adata)
+        _mixscape(adata)
 
     out = Path(args.outdir)
     out.mkdir(parents=True, exist_ok=True)
     adata.write_h5ad(out / "cells.h5ad")
 
 
-def _assign_guides(adata, guides_path, min_umi, *, flag_multiplets):
+def _assign(adata, guides_path, min_umi, *, flag_multiplets):
     guides = sc.read_h5ad(guides_path)
     guides = guides[guides.obs_names.isin(adata.obs_names)].copy()
     mat = guides.X.toarray() if hasattr(guides.X, "toarray") else np.asarray(guides.X)
-    over = mat >= min_umi
-    n_over = over.sum(axis=1)
-    top = np.asarray(guides.var_names)[mat.argmax(axis=1)]
-    assigned = {
-        bc: (t if n >= 1 else "unassigned")
-        for bc, t, n in zip(guides.obs_names, top, n_over, strict=False)
-    }
-    multiplet = {bc: bool(n >= 2) for bc, n in zip(guides.obs_names, n_over, strict=False)}
-    adata.obs["guide"] = [assigned.get(bc, "unassigned") for bc in adata.obs_names]
+    assigned, multiplet = assign_guides(mat, list(guides.var_names), min_umi)
+    by_bc = dict(zip(guides.obs_names, assigned, strict=True))
+    mult_bc = dict(zip(guides.obs_names, multiplet, strict=True))
+    adata.obs["guide"] = [by_bc.get(bc, "unassigned") for bc in adata.obs_names]
     if flag_multiplets:
-        adata.obs["guide_multiplet"] = [multiplet.get(bc, False) for bc in adata.obs_names]
+        adata.obs["guide_multiplet"] = [bool(mult_bc.get(bc, False)) for bc in adata.obs_names]
 
 
-def _run_mixscape(adata):
+def _mixscape(adata):
     # Label CRISPRi escapers (non-perturbed cells); keep them, do not drop.
     try:
         import pertpy as pt

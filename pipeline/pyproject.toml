@@ -7,7 +7,7 @@ name = "spot-pipeline"
 version = "0.0.0"
 description = "spot from-raw Perturb-seq ingest driver (manifest gate + run plan)"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2,<3", "pyyaml>=6,<7", "spot-contracts"]
+dependencies = ["pydantic>=2,<3", "pyyaml>=6,<7", "numpy>=1.26", "spot-contracts"]
 
 [project.scripts]
 spot-pipeline = "spot_pipeline.driver:main"
