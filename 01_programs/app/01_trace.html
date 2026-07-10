@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>spot · VCP reproducibility trace</title>
+<style>
+:root{--bg:#FAF9F7;--surface:#fff;--ink:#1E1B16;--ink2:#4A443B;--muted:#8A8172;--line:#E7E2D9;--sunken:#F0ECE4;--treg:#9A3E9C;--code:#F6F3EC;--ok:#3E7A5A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,-apple-system,Segoe UI,sans-serif;font-size:14px;line-height:1.55}
+.wrap{max-width:880px;margin:0 auto;padding:40px 24px 90px}
+.hd{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:10px}
+.hd h1{font-size:22px;margin:0 0 6px}
+.hd .sub{color:var(--muted);font-size:13px;line-height:1.55}.hd a{color:var(--treg);text-decoration:none}
+h2{font-size:15.5px;margin:26px 0 6px;padding-top:16px;border-top:1px solid var(--sunken)}
+p{margin:6px 0;color:var(--ink2)}
+b{color:var(--ink)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--sunken);border-radius:4px;padding:1px 5px}
+pre{background:var(--code);border:1px solid var(--line);border-left:3px solid var(--treg);border-radius:8px;padding:11px 14px;overflow-x:auto;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.5;color:#2B2620;white-space:pre}
+ul{margin:6px 0;padding-left:20px;color:var(--ink2)}li{margin:3px 0}
+table{border-collapse:collapse;font-size:12px;margin:8px 0;width:100%}
+th,td{text-align:left;padding:5px 10px;border-bottom:1px solid var(--sunken)}
+th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+td.mono{font-family:ui-monospace,Menlo,monospace}
+.ok{color:var(--ok);font-weight:600}.warn{color:#B45309}
+.note{background:var(--sunken);border-radius:8px;padding:10px 13px;font-size:12.5px;color:var(--ink2);margin:10px 0}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1714;--surface:#221e1a;--ink:#efe9df;--ink2:#c9c1b4;--muted:#8f8779;--line:#332d26;--sunken:#2a251f;--code:#201c18}pre{color:#d9d2c6}}
+</style></head><body><div class="wrap">
+<div class="hd">
+<h1>VCP reproducibility trace</h1>
+<div class="sub">A recorded, end-to-end test that the cells behind the <a href="/01_page.html">spot · Stage-1 CD4 map</a> come from the public <a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" target="_blank" rel="noopener">CZI Virtual Cell Platform</a> dataset via the <code>vcp</code> CLI, and that the scoring is deterministic and reproduces. Executed on a compute host through Claude Science, independently re-verified end-to-end (fresh vcp-cli install + S3 range-read + gate re-run). <b>Recorded verification run — 2026-07-10 10:49 EDT.</b></div>
+</div>
+
+<h2>1 · Install</h2>
+<p><code>pip install vcp-cli</code> then <code>pip install 'vcp-cli[data]'</code> → <b>vcp-cli 0.54.1</b>. <code>vcp --help</code> and <code>vcp version</code> run; the <code>data</code> command group activates with the <code>[data]</code> extra (boto3/s3transfer).</p>
+
+<h2>2 · Locate the dataset</h2>
+<p><code>vcp data search "Primary Human CD4+ T Cell Perturb-seq"</code> resolves it under namespace <code>billion-cell-project</code>, published as <b>12 per-donor × per-condition AnnData splits</b> (D1–D4 × Rest/Stim8hr/Stim48hr), each with its own dataset ID. <code>vcp data describe … --full</code> confirms provenance:</p>
+<pre>external_id : marson_D1_Rest.assigned_guide      (D1 Rest id 6946b5261d32b0e84ba87057)
+assay       : 10x Flex
+asset       : s3://genome-scale-tcell-perturb-seq/marson2025_data/D1_Rest.assigned_guide.h5ad</pre>
+<p>Two domains were allowlisted (both approved during the run): the data API <code>cosmic-shepherd.prod-vcp.prod.czi.team</code> and the public S3 bucket.</p>
+
+<h2>3 · Fetch</h2>
+<p class="note"><b>The full dataset is 1.84 TB across 32 files</b>; each per-split h5ad is <b>118–173 GB</b> (all 2.2M+ cells for that split — targeting + NTC, not NTC-only). Too large to download in full, so the smallest sufficient artifacts were fetched instead:</p>
+<ul>
+<li><b>Downloaded (real, with md5):</b> <code>data_sharing_readme.md</code>, the sample_metadata + sgRNA_library_metadata + DE_stats supplementary CSVs, and the D1 Rest <code>.jsonld</code> record → <code>vcp_dl/</code>. Checksums in the trace.</li>
+<li><b>Remote range-read (no full download):</b> opened the 142 GB <code>D1_Rest.assigned_guide.h5ad</code> over s3fs + h5py and read only <code>.obs/guide_type</code> (~73 s, a few MB of range requests): <b>3,074,496 total cells, of which 76,634 (2.5%) are non-targeting</b> — the public NTC pool the workbench draws from.</li>
+</ul>
+
+<h2>4 · Reproducibility</h2>
+<p><b>Provenance link.</b> The cached <code>ntc_clustered.h5ad</code> is a balanced NTC subsample — exactly <b>33,000 cells per donor×condition = 396,000</b>, all non-targeting; for D1/Rest that's 33k sampled from the 76,634 public NTC cells confirmed above. Barcodes carry the lane/donor tag.</p>
+<p><b>Determinism (byte-exact).</b> Run twice at <code>SEED=12345</code> → <code>max|diff| = 0.0</code>; the per-cell nomenclature calls hash identically (MD5 <code>a0a3f1a8ad62c9e5766c7c42acf9a67f</code>). A different seed (999) shifts scores as expected (control-gene draw).</p>
+<p><b>Reproduction at the committed <code>N_PERM=500</code>, seed 12345</b> matches the committed run on every class:</p>
+<table>
+<tr><th>class</th><th>re-run</th><th>committed</th><th></th></tr>
+<tr><td>no functional call</td><td class="mono">82.5%</td><td class="mono">82.5%</td><td class="ok">exact</td></tr>
+<tr><td>Th1</td><td class="mono">11.4%</td><td class="mono">~10–12%</td><td class="ok">match</td></tr>
+<tr><td>Treg</td><td class="mono">2.6%</td><td class="mono">2.6%</td><td class="ok">exact</td></tr>
+<tr><td>Th2</td><td class="mono">1.3%</td><td class="mono">~1.0%</td><td class="ok">match</td></tr>
+<tr><td>CD4-CTL</td><td class="mono">1.4%</td><td class="mono">1.4%</td><td class="ok">exact</td></tr>
+<tr><td>Tfh / Th9 / Th17</td><td class="mono">—</td><td class="mono">—</td><td class="ok">all match</td></tr>
+</table>
+<p class="warn"><b>N_PERM sensitivity.</b> A reduced <code>N_PERM=100</code> spot-check does <i>not</i> reproduce the fractions (no-call jumps to 96.6%) — the empirical-p floor <code>(1+0)/(1+N_PERM)</code> is larger with fewer permutations, so the FDR floor is <b>N_PERM-sensitive</b> and reproduction requires the committed 500. Determinism (byte-exact) holds at any N_PERM.</p>
+<p class="note"><b>Not run:</b> no scVI re-embedding (the embedding/Leiden are loaded from the cached object); no download of any full split matrix.</p>
+
+<h2>5 · Trace artifact</h2>
+<p>Claude Science emitted <code>vcp_repro_trace.md</code> — a self-contained record: every command with its real output, all 32 files with sizes, the 5 downloaded files with md5s, the remote-read NTC counts, the determinism proof, the N_PERM=500 reproduction table, and a replay recipe. Supporting artifacts: <code>describe_D1_Rest.json</code> (full dataset record), <code>repro_fractions.json</code>, and the dataset's own <code>data_sharing_readme.md</code>.</p>
+
+</div></body></html>

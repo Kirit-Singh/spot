@@ -1,0 +1,794 @@
+<!-- @dsCard group="Screens" -->
+<meta charset="utf-8">
+<title>spot · stage 01 — CD4 programs (real data)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#FAF9F7;--surface:#FFFFFF;--sunken:#F4F2EE;--line:#E7E3DC;--ink:#1E1B16;--ink2:#5C564C;--muted:#8A8172;--treg:#9A3E9C;--gold:#B98900;--serif:'Newsreader',serif;--mono:'IBM Plex Mono',monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;height:760px;display:flex;flex-direction:column;overflow:hidden}
+  /* top brand + progressive lock */
+  .top{height:50px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+  .brand{font-family:var(--serif);font-size:20px;font-weight:500}.brand b{color:var(--treg)}
+  .subhead{display:flex;align-items:baseline;gap:8px;padding-left:12px;margin-left:2px;border-left:1px solid var(--line)}
+  .subhead .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink)}
+  .subhead a{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none}
+  .subhead a:hover{text-decoration:underline}
+  /* unified pipeline nav (merges the old breadcrumb + tab bars into one) */
+  .nav{display:flex;align-items:center;gap:3px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px}
+  .nav .nstep{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:9px;color:var(--muted);font-weight:500;white-space:nowrap;cursor:pointer}
+  .nav .nstep:hover:not(.on){color:var(--ink2);background:var(--sunken)}
+  .nav .nstep .n{font-family:var(--mono);font-size:10.5px;opacity:.55}
+  .nav .nstep.on{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--treg)}
+  .nav .nstep.on .n{opacity:1;color:var(--treg)}
+  .nav .nsep{color:#D9D3C8;padding:0 1px}
+  /* body */
+  .body{flex:1;display:grid;grid-template-columns:1fr 320px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
+  .plot{position:relative;border-right:1px solid var(--line);min-height:0;overflow:hidden}
+  canvas{width:100%;height:100%;display:block}
+  .ttl{position:absolute;top:14px;left:20px;pointer-events:none}
+  .ttl b{font-family:var(--serif);font-size:19px;font-weight:500}
+  .ttl .s{font-size:11.5px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+  .real{display:inline-block;font-family:'Inter Tight';font-size:9px;font-weight:700;letter-spacing:.04em;color:#15803D;background:#E4F0E6;border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+  /* condition scrubber */
+  .cond{position:absolute;top:14px;right:16px;display:flex;gap:3px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px}
+  .cond button{font:inherit;font-size:11px;border:0;background:transparent;color:var(--ink2);padding:5px 10px;border-radius:6px;cursor:pointer}
+  .cond button.on{background:var(--ink);color:#fff}
+  /* skewing-hypothesis builder (rail) — "Show me [A] skews to/away [B]" */
+  .skq{background:var(--sunken);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:flex;align-items:center;flex-wrap:wrap;gap:8px 6px}
+  .skq .pk{flex:1 1 76px;min-width:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);background:transparent;border:0;border-bottom:1.5px solid var(--line);border-radius:0;padding:3px 15px 3px 1px;cursor:pointer;appearance:none;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;transition:border-color .12s;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3l3 3 3-3' stroke='%239A3E9C' fill='none' stroke-width='1.5'/></svg>");background-repeat:no-repeat;background-position:right 1px center}
+  .skq .pk:hover,.skq .pk:focus{border-bottom-color:var(--treg);outline:0}
+  .skq .conn{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--treg);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap;transition:border-color .12s}
+  .skq .conn:hover{border-color:var(--treg)}
+  .skq .conn .arw{font-size:13px;line-height:1;font-weight:400}
+  .skq .skqx{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 1px;opacity:0;pointer-events:none;transition:opacity .12s}
+  .skq.active .skqx{opacity:1;pointer-events:auto}
+  #skewcap{position:absolute;top:54px;left:50%;transform:translateX(-50%);display:none;background:var(--treg);color:#fff;font-family:'Inter Tight';font-size:12.5px;font-weight:600;padding:6px 15px;border-radius:20px;box-shadow:0 4px 16px rgba(154,62,156,.3);white-space:nowrap;z-index:6}
+  #lastrun{flex:0 0 auto;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.4;margin:9px 0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #lastrun b{color:var(--ink2);font-weight:500}
+  /* skewing hypothesis as a toolbar across the top of the plot (full width, no truncation) */
+  #skewbar{position:absolute;top:0;left:0;right:0;z-index:6;display:flex;align-items:center;flex-wrap:nowrap;gap:13px;padding:14px 20px 14px 32px;background:transparent}
+  #skewbar .sbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;flex:0 0 auto}
+  #skewbar .skq{background:transparent;padding:0;margin:0;border-radius:0;flex:0 0 auto;flex-wrap:nowrap;gap:9px}
+  #skewbar .skq .pk{flex:0 0 auto;width:auto;min-width:56px;max-width:120px;font-size:14px;padding:4px 17px 4px 2px}
+  #skewbar .conn{font-size:12px;padding:4px 12px;min-width:106px;justify-content:center}
+  #skewbar .conn .arw{font-size:14px}
+  #skewbar .skq .skqx{font-size:15px}
+  #skewbar .lock{width:auto;flex:0 0 auto;margin:0;padding:7px 13px;font-size:12px;border-radius:9px}
+  #lastrun b{color:var(--ink2);font-weight:600}
+  #rerunlog{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:12}
+  #rerunlog .rlh{display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  #rerunlog .rlspin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--treg);border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #rerunlog .rltw{display:flex;flex-direction:column;line-height:1.2;flex:1 1 auto;min-width:0}
+  #rerunlog .rlt{font-family:'Inter Tight';font-size:14px;font-weight:600}
+  #rerunlog .rlsub{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.02em}
+  #rerunlog #rlmeta{font-family:var(--mono);font-size:11px;white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:4px}
+  #rerunlog #rlphase{color:var(--treg);font-weight:600}
+  #rerunlog .rlpulse{color:var(--treg);font-size:8px;animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.15}}
+  #rerunlog #rleta{color:var(--muted);margin-left:4px}
+  #rerunlog .rlx{font-size:11.5px;color:var(--treg);cursor:pointer;flex:0 0 auto}
+  #rerunlog pre{flex:1;min-height:0;overflow:auto;margin:0;padding:14px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.55;color:var(--ink2);white-space:pre-wrap;word-break:break-word}
+  .pkinfo{display:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:10.5px;color:var(--ink2);font-family:var(--mono);line-height:1.5;margin-bottom:8px}
+  .pkinfo b{color:var(--ink);font-weight:600}
+  .pkinfo .warn{color:#B45309;font-weight:600}
+  /* legend */
+  /* plot colour key — transparent row across the top of the UMAP, under the skewing row */
+  .lgstate{position:absolute;top:56px;left:32px;right:20px;display:none;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13px;z-index:6}
+  .lgstate span{display:flex;align-items:center;gap:7px;color:var(--ink2)}
+  .lgstate i{width:11px;height:11px;border-radius:50%}
+  .lgstate .tpdot{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-family:var(--mono);font-size:8.5px;font-weight:600;line-height:1}
+  /* on-plot centroid labels for the picked groups — HTML overlay so they sit ABOVE the connector */
+  #pklabels{position:absolute;inset:0;z-index:5;pointer-events:none}
+  #pklabels .pklab{position:absolute;transform:translate(-50%,-50%);text-align:center;background:rgba(250,249,247,.9);border-radius:5px;padding:2px 7px;white-space:nowrap}
+  #pklabels .pkl-t{font:600 13px 'Inter Tight',sans-serif;line-height:1.2}
+  #pklabels .pkl-s{font:500 10px 'Inter Tight',sans-serif;color:#8A8172;line-height:1.2}
+  /* skew connector — a thick "belt" band with chevrons that flow along it in the travel direction */
+  #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
+  #skewline .skl{fill:none;stroke:rgba(50,44,36,.2);stroke-width:6;stroke-linecap:round}
+  #skewline .belt{animation:beltflow .9s linear infinite}
+  #skewline .belt polyline{fill:none;stroke:rgba(50,44,36,.72);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  @keyframes beltflow{from{transform:translate(0,0)}to{transform:translate(var(--mx,0),var(--my,0))}}
+  /* rail */
+  .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow:hidden}
+  .keywrap{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;margin-top:6px;display:flex;flex-direction:column}
+  .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:9px}
+  .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
+  .seg button:first-child{border-left:0}
+  .seg button.on{background:var(--treg);color:#fff}
+  .lock{width:100%;background:var(--treg);color:#fff;border:0;border-radius:10px;padding:11px;font-size:13.5px;font-weight:600;cursor:pointer;margin:2px 0 4px}
+  .lock:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
+  .cnt{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px}
+  .cnt b{color:var(--treg)}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2);margin:8px 0 4px;cursor:pointer}
+  .prov{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .prov .src{font-size:12px;color:var(--ink2);line-height:1.5}.prov .src b{color:var(--ink)}
+  .kv{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.7;overflow-wrap:anywhere;word-break:break-word}
+  .kv b{color:var(--ink2);font-weight:500}
+  .kv a,.prov a{color:var(--treg);overflow-wrap:anywhere;word-break:break-word}
+  .mk{display:flex;align-items:baseline;gap:8px;font-size:13px;padding:4.5px 0;border-top:1px solid var(--sunken)}
+  .mk .d{width:9px;height:9px;border-radius:50%;flex:0 0 9px;position:relative;top:1px}
+  .mk .nm{font-weight:600;width:78px;flex:0 0 78px}
+  .mk .gs{font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .klab{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:7px 0 5px}
+  .chips{display:flex;flex-direction:column;align-items:stretch;gap:5px;margin-bottom:1px}
+  .chip{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;line-height:1.4;padding:1px 0}
+  .chip i{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+  .chip u{font-family:var(--mono);font-size:11.5px;font-weight:400;color:var(--muted);text-decoration:none;margin-left:auto}
+  /* per-state Ahmed-function composition bar */
+  .compbar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:1px 0 3px;background:#EEEAE3}
+  .compbar i{display:block;height:100%}
+  .compsum{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin:0 0 9px;line-height:1.4}
+  /* on-map composition tooltip (hover a Marson state) */
+  #comppop{position:absolute;display:none;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 20px rgba(30,27,22,.16);padding:8px 11px;width:182px;z-index:8;pointer-events:none}
+  #comppop .cph{font-size:12px;font-weight:600;margin-bottom:5px}
+  #comppop .compbar{margin:0 0 4px}#comppop .compsum{margin:0;line-height:1.35}
+  /* popover */
+  #pop{position:absolute;display:none;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:0 8px 28px rgba(30,27,22,.16);padding:12px 14px;width:258px;font-size:12px;z-index:9}
+  #pop .pph{font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:9px 0 3px;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--sunken);padding-top:7px}
+  #pop .pph span{font-weight:500;text-transform:none;letter-spacing:0;font-size:9.5px}
+  #pop .row i{font-style:normal;color:var(--muted);font-size:10px}
+  #pop a{color:var(--treg);text-decoration:none}#pop a:hover{text-decoration:underline}
+  #pop .bc{font-family:var(--mono);font-size:10.5px;color:var(--treg);word-break:break-all;margin-bottom:8px}
+  #pop .row{display:flex;justify-content:space-between;padding:3px 0;color:var(--ink2)}
+  #pop .row b{color:var(--ink);font-weight:600}
+  #pop .bar{height:6px;background:var(--sunken);border-radius:3px;overflow:hidden;margin:3px 0 8px}
+  #pop .bar i{display:block;height:100%;background:var(--treg)}
+  #pop .ref{font-size:10px;color:var(--muted);border-top:1px solid var(--sunken);padding-top:7px;margin-top:4px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word}
+  #pop .ref code{font-family:var(--mono);font-size:9.5px;color:var(--ink2);overflow-wrap:anywhere;word-break:break-all}
+  #pop a,#modal a{color:var(--treg);overflow-wrap:anywhere;word-break:break-all}
+  /* ── cell-detail modal card ── */
+  #scrim{position:fixed;inset:0;background:rgba(30,27,22,.34);display:none;z-index:40}
+  #modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:648px;max-width:94vw;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:41;overflow:hidden}
+  #modal .hd{padding:16px 18px 14px;border-bottom:1px solid var(--line)}
+  #modal .hdtop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  #modal .chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600}
+  #modal .chip i{width:10px;height:10px;border-radius:50%}
+  #modal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
+  #modal .bc{font-family:var(--mono);font-size:12px;color:var(--treg);margin:9px 0 3px;word-break:break-all}
+  #modal .mmeta{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  #modal .score{margin-top:11px;display:flex;align-items:center;gap:10px}
+  #modal .score .lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  #modal .score .v{font-family:var(--mono);font-size:13px;color:var(--ink)}
+  #modal .score .bar{flex:1;height:7px;background:var(--sunken);border-radius:4px;overflow:hidden}
+  #modal .score .bar i{display:block;height:100%;background:linear-gradient(90deg,#C79BC8,var(--treg))}
+  #modal .maps{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+  #modal .pane{background:var(--surface);padding:12px 14px}
+  #modal .pane .h{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
+  #modal .pane .h span{color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:10px}
+  #modal canvas{width:100%;height:148px;display:block;margin-top:8px;border-radius:8px;background:var(--bg)}
+  #modal .rec{padding:13px 18px 16px;border-top:1px solid var(--line)}
+  #modal .rec .h{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+  #modal .rec .h b{color:var(--ink2);font-family:var(--mono);font-weight:500;text-transform:none;letter-spacing:0}
+  #modal #mhp{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-bottom:12px}
+  #modal .rec .t{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px}
+  #modal .mrow{display:grid;grid-template-columns:74px 1fr 74px 62px;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;margin:5px 0}
+  #modal .mrow .mg{font-weight:600;color:var(--ink)}
+  #modal .mrow .mb{height:6px;background:var(--sunken);border-radius:3px;overflow:hidden}
+  #modal .mrow .mb i{display:block;height:100%;opacity:.92;border-radius:3px}
+  #modal .mrow .ml{text-align:right;font-family:'Inter Tight';font-size:10.5px;font-weight:600;letter-spacing:.02em}
+  #modal .mrow .md{text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  #modal .mrow.det.high .ml{color:var(--ink)}
+  #modal .mrow.det.mid .ml{color:var(--ink2)}
+  #modal .mrow.det.low .ml{color:var(--muted)}
+  #modal .mrow.nodet .mg{color:var(--muted);font-weight:500}
+  #modal .mrow.nodet .ml,#modal .mrow.nm .ml{color:var(--muted);font-weight:400;font-style:italic}
+  #modal .kv{font-family:var(--mono);font-size:11px;color:var(--ink2);line-height:1.85}
+  #modal .kv .k{color:var(--muted)}
+  #modal .ntc{display:inline-block;font-family:'Inter Tight';font-size:9px;font-weight:700;letter-spacing:.03em;color:#15803D;background:#E4F0E6;border-radius:5px;padding:2px 6px;margin-top:5px}
+  #modal .mcap{font-family:'Inter Tight';font-size:9.5px;line-height:1.5;color:var(--muted);margin:9px 2px 0}
+  #modal .src{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:12px;border-top:1px solid var(--sunken);padding-top:9px;word-break:break-all}
+  /* ── provenance / method popup ── */
+  .provbtn{flex:0 0 auto;width:100%;margin-top:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;text-align:left;cursor:pointer;display:flex;align-items:center;gap:7px;white-space:nowrap}
+  .provbtn:hover{border-color:var(--treg);color:var(--treg)}
+  .provbtn .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
+  #provmodal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;max-width:94vw;max-height:84vh;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:42;flex-direction:column;overflow:hidden}
+  #provmodal .phd{padding:16px 20px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex:0 0 auto}
+  #provmodal .ptitle{font-family:'Inter Tight';font-size:16px;font-weight:600;line-height:1.2}
+  #provmodal .psub{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
+  #provmodal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
+  #provmodal .pbody{padding:2px 20px 20px;overflow-y:auto}
+  #provmodal .pstep{display:grid;grid-template-columns:26px 1fr;gap:13px;padding:14px 0;border-bottom:1px solid var(--sunken)}
+  #provmodal .pn{width:24px;height:24px;border-radius:50%;background:var(--treg);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  #provmodal .pc h4{font-size:13px;font-weight:600;margin:2px 0 5px}
+  #provmodal .pc p{font-size:12px;line-height:1.55;color:var(--ink2);margin:0}
+  #provmodal .pc p b{color:var(--ink);font-weight:600}
+  #provmodal .pc .pval{font-size:11.5px;line-height:1.5;color:var(--ink2);margin:8px 0 0;padding-left:11px;border-left:2px solid var(--treg)}
+  #provmodal .pc .mono{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  #provmodal code{font-family:var(--mono);font-size:11px;background:var(--sunken);border-radius:4px;padding:1px 5px}
+  #provmodal .rerunbtn{font-family:'Inter Tight';font-size:11.5px;font-weight:600;color:#fff;background:var(--treg);border:0;border-radius:8px;padding:6px 13px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
+  #provmodal .rerunbtn:disabled{opacity:.6;cursor:default}
+  #provmodal .ppapers{padding-top:15px}
+  #provmodal .pph2{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+  #provmodal .ppaper{margin-bottom:11px}
+  #provmodal .ppaper a{font-size:12px;color:var(--treg);text-decoration:none;font-weight:600}
+  #provmodal .ppaper a:hover{text-decoration:underline}
+  #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+</style>
+
+<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a id="dsSrc" target="_blank" rel="noopener"></a></span></div>
+<div class="nav">
+  <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
+  <div class="nstep"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
+  <div class="nstep"><span class="n">03</span>Drug link</div><span class="nsep">›</span>
+  <div class="nstep"><span class="n">04</span>PK / PD · brain</div><span class="nsep">›</span>
+  <div class="nstep"><span class="n">05</span>Trial</div>
+</div>
+
+<div class="body">
+  <div class="plot">
+    <div id="skewbar">
+      <span class="sbl">Skewing</span>
+      <div class="skq" id="skq">
+        <select id="pkA" class="pk"></select>
+        <button class="conn" id="dir" data-dir="to" title="click to flip direction"><span class="arw">⇄</span><span class="cw">toward</span></button>
+        <select id="pkB" class="pk"></select>
+        <button class="skqx" id="pkClr" title="clear">✕</button>
+      </div>
+      <button class="lock" id="idgenes" disabled>Identify genes →</button>
+    </div>
+    <canvas id="c"></canvas>
+    <svg id="skewline"><line class="skl"/><g class="belt"></g></svg>
+    <div id="pklabels"></div>
+    <div class="lgstate" id="lgstate"></div>
+    <div id="pop"></div>
+    <div id="comppop"></div>
+    <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless · Claude Science pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
+  </div>
+  <div class="rail">
+    <div class="lab">Show cells · condition</div>
+    <div class="seg" id="cond"></div>
+    <div class="lab">Donor</div>
+    <div class="seg" id="donorSel"></div>
+    <div class="lab" style="margin-top:7px;display:flex;align-items:baseline;gap:7px">Nomenclature <a id="nomsrc" target="_blank" rel="noopener" style="font-weight:500;letter-spacing:0;text-transform:none;font-size:10px;color:var(--treg);text-decoration:none"></a></div>
+    <div class="seg" id="scheme"><button data-s="marson" class="on">Coarse · Clusters</button><button data-s="ahmed">Fine · Per-Cell</button></div>
+    <div class="keywrap">
+      <div class="lab" id="markslab">States &amp; markers · Leiden on the UMAP graph</div>
+      <div id="marks"></div>
+    </div>
+    <div id="lastrun"></div>
+    <button id="provbtn" class="provbtn"><span class="ic">i</span>How this map was built · provenance</button>
+  </div>
+</div>
+
+<div id="scrim"></div>
+<div id="modal">
+  <div class="hd">
+    <div class="hdtop"><span class="chip" id="mchip"><i></i><b></b></span><button class="x" id="mx">✕</button></div>
+    <div class="bc" id="mbc"></div>
+    <div class="mmeta" id="mmeta"></div>
+  </div>
+  <div class="rec">
+    <div id="mhp"></div>
+    <div class="t">Marker expression in this cell <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)">· relative to cells expressing each gene</span></div>
+    <div id="mgenes"></div>
+    <div class="mcap" id="mcap"></div>
+    <div class="src" id="msrc"></div>
+  </div>
+</div>
+
+<div id="provmodal">
+  <div class="phd">
+    <div><div class="ptitle">How this map was built</div></div>
+    <button class="x" id="provx">✕</button>
+  </div>
+  <div class="pbody">
+    <div class="pstep"><div class="pn">1</div><div class="pc">
+      <h4>Data source</h4>
+      <p>≈396,000 non-targeting-control CD4 T cells from the <b>Marson GWCD4i</b> CRISPRi perturb-seq; 4 donors × Rest / Stim&nbsp;8&nbsp;hr / Stim&nbsp;48&nbsp;hr. Public on the <b>CZI Virtual Cell Platform</b>, pulled via the <code>vcp</code> CLI. 40,000-cell subsample of the scVI embedding shown.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">2</div><div class="pc">
+      <h4>Clustering &amp; annotation</h4>
+      <p>scVI (paper parameters) → <b>Leiden-0.8</b> → 13 clusters, annotated into 5 state programs (Naïve / Activated / Cycling / Resting / Treg). Marson defines no cell-state taxonomy (it clusters the 3,341 <i>perturbations</i>, not cells), so these labels are the workbench's own — assigned by a fixed, confound-aware marker rule (<code>label_clusters.py</code>), reproducible from the raw object.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">3</div><div class="pc">
+      <h4>State labels</h4>
+      <p>Naïve and Resting are quiescent, naïve-derived; <b>Cycling is bimodal</b> — naïve/resting-like at rest, activated at 48&nbsp;hr (cell cycle is orthogonal to lineage). The former "Memory" cluster is labelled <b>Resting</b>: 3′ scRNA-seq cannot resolve the CD45RA/CD45RO switch, and the Ahmed "M" call rests on non-specific adhesion markers (CD11a/CD95/CD58). It is not Tscm — SELL/TCF7/LEF1 sit at ~half the naïve level and CD95 is not elevated (a downshift out of naïve, not a stem-memory gain; memory can't form in ≤48&nbsp;hr in vitro). Activated splits by timepoint (8&nbsp;hr Th1-skew, 48&nbsp;hr no skew); Treg is a discrete cluster.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">4</div><div class="pc">
+      <h4>Function calls</h4>
+      <p>Per-cell scoring against the Masopust/Ahmed helper-lineage signatures behind a <b>permutation-FDR floor</b> (500 shuffled-gene nulls, BH q&lt;0.05). Activation confounds are handled per lineage: CD25/IL2RA dropped from Treg; CD4-CTL keeps its full cytotoxic panel (GNLY/PRF1/GZMH/KLRD1/GZMB/NKG7) with the activation score regressed out. 82% of cells return no call (polyclonal Th0 stimulation); coherent skews appear at 8&nbsp;hr (Th1) and in the Treg cluster.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">5</div><div class="pc">
+      <h4>Review &amp; validation</h4>
+      <p>Reviewed with <b>Claude Science</b> against the raw data and both papers. Two labelling decisions tested against the numbers:</p>
+      <p class="pval"><b>"Resting", not Tscm.</b> Stemness markers are lower than naïve (SELL 37% vs 76%, TCF7 20% vs 44%, LEF1 51% vs 79%) and CD95/FAS is not elevated — a downshift out of naïve, not a stem-memory gain.</p>
+      <p class="pval"><b>How activation confounds are handled.</b> Treg and CD4-CTL both carry markers that switch on with <i>any</i> activation (CD25 for Treg; GZMB/NKG7 for CD4-CTL), which would tag ordinary activated cells. They resolve oppositely: re-including CD25 collapses Treg call coherence (55→30%) with no gain, so it's <b>dropped</b>. For CD4-CTL, GZMB/PRF1/NKG7 are core cytotoxic effectors, so rather than discard them we <b>regress out the activation component</b> — roughly doubling real CTL calls (11→24%) at comparable coherence. (This adds ~1% spurious CD4-CTL calls in resting cells — a non-target lineage.)</p>
+      <p class="pval"><b>Treg = cluster, not the FDR call.</b> The per-cell FDR function-Treg (2.7%) and the Leiden Treg cluster (6.3%) overlap by only Jaccard 0.08. FOXP3 is captured in just 28% of cluster-Tregs (3′ dropout of a low-abundance TF), so the FDR gate rejects real Tregs for a missing FOXP3 read, not for being less Treg — it's detection-biased, not purer. The whole-transcriptome cluster is the primary Treg definition; the FDR call is kept only as a caveated secondary.</p>
+      <p style="margin-top:12px"><a href="/01_notebook.html" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none;font-weight:600">↗ Open the full executable notebook</a> <span style="color:var(--muted);font-size:11px">— every code cell and output from the Claude Science session that built and validated this map.</span></p>
+      <p style="margin-top:9px"><b>Reproduce:</b> <code>./reproduce.sh</code> <span style="color:var(--muted);font-size:11px">pulls the CZI dataset via <code>vcp</code>, regenerates the cluster labels (<code>cluster_scores.py</code> → <code>label_clusters.py</code>), re-runs the fixed-seed per-cell scoring and emits the overlay — the whole chain, front to back. <a href="/reproduce.sh" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none">script ↗</a> · <a href="/01_trace.html" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none">recorded vcp run ↗</a></span></p>
+      <p style="margin-top:6px;color:var(--muted);font-size:11px">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b> · <b id="matchPct" style="color:var(--ink2)">—</b> to the reference reproduction.</p>
+      <p style="margin-top:9px;display:flex;align-items:center;gap:10px"><button id="rerunBtn" class="rerunbtn">⟳ Re-run analysis</button> <span id="rerunStatus" style="font-size:11px;color:var(--muted)">runs the pipeline on the compute host and re-verifies (~2–3 min).</span></p>
+    </div></div>
+    <div class="ppapers">
+      <div class="pph2">Papers</div>
+      <div class="ppaper"><a href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">Marson GWCD4i perturb-seq · bioRxiv ↗</a><span>Source of the cells and experimental design — a genome-scale CRISPRi screen in primary human CD4.</span></div>
+      <div class="ppaper"><a href="https://www.nature.com/articles/s41577-025-01238-2" target="_blank" rel="noopener">Masopust / Ahmed · Guidelines for T cell nomenclature · Nat Rev Immunol 2026 ↗</a><span>Naming framework — marker-based consensus definitions for CD4 differentiation states and helper functions; cells are scored against these directly.</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const HUES=[[14,124,134],[176,64,110],[176,120,30],[76,86,192],[150,60,40],[20,120,80],[120,110,140],[70,120,160],[190,90,60],[110,90,170],[150,100,40],[90,130,110]];
+// Masopust/Ahmed modular nomenclature (Guidelines for T cell nomenclature, Nat Rev Immunol 2026;26:298-313)
+// two orthogonal axes: differentiation state (N/A/M/X) × function (Th subsets); each viewable per-cell or by-cluster
+const PAL={
+  ds:{order:['N','A','M','checkpoint-high activated'],
+    N:{label:'Naïve',hue:[150,160,178],mk:['CCR7','SELL','TCF7','LEF1']},
+    A:{label:'Activated',hue:[214,120,40],mk:['CD69','CD38','MKI67','HLA-DRA']},
+    M:{label:'Memory',hue:[54,150,92],mk:['ITGAL','CD58','ITGA4','S100A4']},
+    'checkpoint-high activated':{label:'Chkpt-hi',hue:[124,50,92],mk:['PDCD1','TOX','HAVCR2','LAG3']}},
+  func:{order:['Th1','Th2','Th17','Tfh','Treg','CD4-CTL','Th9','—'],
+    Th1:{label:'Th1',hue:[201,102,33],mk:['CXCR3','TBX21','IFNG']},
+    Th2:{label:'Th2',hue:[20,148,136],mk:['PTGDR2','IL4','IL13']},
+    Th17:{label:'Th17',hue:[214,158,20],mk:['CCR6','RORC','IL17A']},
+    Tfh:{label:'Tfh',hue:[60,104,196],mk:['CXCR5','BCL6','IL21']},
+    Treg:{label:'Treg',hue:[213,43,71],mk:['FOXP3','IKZF2','CTLA4','CCR8']},
+    'CD4-CTL':{label:'CD4-CTL',hue:[130,52,50],mk:['GNLY','GZMB','PRF1','NKG7','GZMH','KLRD1']},
+    Th9:{label:'Th9',hue:[150,96,178],mk:['IL9','SPI1']},
+    '—':{label:'no functional signal',hue:[210,205,196],mk:['—']}}
+};
+const MUTED={'N':1,'—':1};
+// Marson state programs — merged by top_program (condition suffix dropped; use the rail timepoint toggle)
+const PROG=[
+ {k:'Naive',label:'Naïve',hue:[110,135,182],mk:['CCR7','SELL','TCF7','LEF1']},
+ {k:'Activated',label:'Activated',hue:[214,120,40],mk:['CD69','IL2RA','CD38','TNFRSF9']},
+ {k:'Cycling',label:'Cycling',hue:[150,92,172],mk:['MKI67','TOP2A','PCNA','MCM7']},
+ {k:'Memory',label:'Resting',hue:[54,150,92],mk:['FAS','ITGAL','ITGA4','CD58']},
+ {k:'Treg',label:'Treg',hue:[213,43,71],mk:['FOXP3','IL2RA','CTLA4','IKZF2','CCR8']},
+];
+const progmap={};PROG.forEach(p=>progmap[p.k]=p);
+// muted differentiation base colours for the Ahmed merged view (cells with no function call)
+const DS_MUTED={N:{label:'Naïve',hue:[176,184,200]},A:{label:'Activated',hue:[214,198,176]},M:{label:'Resting',hue:[184,206,190]},'checkpoint-high activated':{label:'Chkpt-hi',hue:[200,182,198]}};
+const DS_MUTED_ORDER=['N','A','M','checkpoint-high activated'];
+// timepoint shading: Rest lighter → Stim8hr base → Stim48hr darker (within each program hue)
+const TP_SHADE={Rest:0.34,Stim8hr:0.02,Stim48hr:-0.17};
+function shadeHue(hue,cond){const f=TP_SHADE[cond]||0;return f>0?hue.map(v=>Math.round(v+(255-v)*f)):hue.map(v=>Math.round(v*(1+f)));}
+// per-cell category + colour for the current scheme (Marson = program shaded by timepoint; Ahmed = function-else-differentiation)
+function catInfo(c0){
+  if(scheme==='marson'){const prog=cmap[c0.cluster]?cmap[c0.cluster].top_program:'?';const p=progmap[prog];const base=p?p.hue:[150,150,150];return{key:prog,label:p?p.label:prog,hue:shadeHue(base,c0.condition),muted:false};}
+  if(c0.func&&c0.func!=='—'){const f=PAL.func[c0.func];return{key:c0.func,label:c0.func,hue:f?f.hue:[150,150,150],muted:false};}
+  const d=DS_MUTED[c0.ds];return{key:c0.ds,label:d?d.label:c0.ds,hue:d?d.hue:[205,205,200],muted:true};
+}
+const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
+let DATA=null,cells=[],clusters=[],cmap={},scheme='marson',cond='All',donorSel='All',dir='to',hover=-1;
+// sentence-picker populations — "Show me [A] → [B]" highlights matching cells
+// activated-lineage test (used by the umbrella "all" rows): activated / cycling / Treg clusters
+const isAct=c=>{const k=cmap[c.cluster];return k&&(k.top_program==='Activated'||k.top_program==='Cycling'||k.is_treg_cluster);};
+const POPS=[
+ // Integrated hybrid taxonomy: umbrella groups (each with a clickable "all …" row) + subtypes underneath.
+ // ── Quiescent umbrella (naïve + resting memory) — renamed from "Naïve" since it isn't naïve-pure
+ {k:'um:Naive',label:'all quiescent',um:'Quiescent',umbrella:true,test:c=>{var k=cmap[c.cluster];return k&&(k.top_program==='Naive'||k.top_program==='Memory'||(k.top_program==='Cycling'&&c.condition==='Rest'));}},
+ {k:'naive',label:'naïve',um:'Quiescent',test:c=>cmap[c.cluster]&&cmap[c.cluster].top_program==='Naive'},
+ {k:'cycling_naive',label:'naïve-cycling',um:'Quiescent',test:c=>cmap[c.cluster]&&cmap[c.cluster].top_program==='Cycling'&&c.condition==='Rest'},
+ {k:'memory',label:'resting',um:'Quiescent',test:c=>cmap[c.cluster]&&cmap[c.cluster].top_program==='Memory'},
+ // ── Activated · 8h (umbrella includes cycling); functional subtypes underneath
+ {k:'um:Act8',label:'all activated · 8h',um:'Activated · 8h',umbrella:true,test:c=>c.condition==='Stim8hr'&&isAct(c)},
+ {k:'Treg_func_8h',label:'Treg · func-call (8h)',um:'Activated · 8h',test:c=>c.func==='Treg'&&c.condition==='Stim8hr'},
+ {k:'Th1_8h',label:'Th1 (8h)',um:'Activated · 8h',test:c=>c.func==='Th1'&&c.condition==='Stim8hr'},
+ {k:'Th2_8h',label:'Th2 (8h)',um:'Activated · 8h',test:c=>c.func==='Th2'&&c.condition==='Stim8hr'},
+ {k:'Tfh_8h',label:'Tfh (8h)',um:'Activated · 8h',test:c=>c.func==='Tfh'&&c.condition==='Stim8hr'},
+ {k:'CD4-CTL_8h',label:'CD4-CTL (8h)',um:'Activated · 8h',test:c=>c.func==='CD4-CTL'&&c.condition==='Stim8hr'},
+ // ── Activated · 48h (umbrella includes cycling + Treg)
+ {k:'um:Act48',label:'all activated · 48h',um:'Activated · 48h',umbrella:true,test:c=>c.condition==='Stim48hr'&&isAct(c)},
+ // Treg reverted to cluster-backed (whole-transcriptome, less circular for Stage-2 DE); FDR func-call kept as a caveated secondary
+ {k:'Treg',label:'Treg',um:'Activated · 48h',test:c=>cmap[c.cluster]&&cmap[c.cluster].is_treg_cluster},
+ {k:'Treg_func_48h',label:'Treg · func-call (48h)',um:'Activated · 48h',test:c=>c.func==='Treg'&&c.condition==='Stim48hr'},
+ {k:'Th1_48h',label:'Th1 (48h)',um:'Activated · 48h',test:c=>c.func==='Th1'&&c.condition==='Stim48hr'},
+ {k:'Th2_48h',label:'Th2 (48h)',um:'Activated · 48h',test:c=>c.func==='Th2'&&c.condition==='Stim48hr'},
+ {k:'Tfh_48h',label:'Tfh (48h)',um:'Activated · 48h',test:c=>c.func==='Tfh'&&c.condition==='Stim48hr'},
+ {k:'CD4-CTL_48h',label:'CD4-CTL (48h)',um:'Activated · 48h',test:c=>c.func==='CD4-CTL'&&c.condition==='Stim48hr'},
+];
+const pmap={};POPS.forEach(p=>pmap[p.k]=p);
+const HLA=[36,132,196],HLB=[196,52,132];
+let pickA=null,pickB=null;
+// ── per-paper lineage-calling spec (verified by Claude Science) ──
+const PAPERS={
+  marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1',cite:'Marson GWCD4i perturb-seq · bioRxiv 2025 (10.64898/2025.12.23.696273)'},
+  ahmed:{url:'https://www.nature.com/articles/s41577-025-01238-2',cite:'Masopust…Ahmed · Guidelines for T cell nomenclature · Nat Rev Immunol 2026;26:298–313'}
+};
+function ahmedTable(n){return PAPERS.ahmed.url+'/tables/'+n;}
+// STATE layer = workbench Leiden clustering of Marson NTC cells (NOT a Marson-defined taxonomy)
+const STATE_SPEC={
+ Naive:{ahmed:'Naïve (Diff N): CCR7hi, CD45RA+, CD95−',link:ahmedTable(1),tab:'Table 1'},
+ Activated:{ahmed:'Activated (Diff A): CD69+, CD25hi, ±Ki67/HLA-DR/CD38',link:ahmedTable(1),tab:'Table 1'},
+ Cycling:{ahmed:'no Ahmed state — proliferation is folded into "Activated"',link:null,tab:''},
+ Memory:{ahmed:'Memory (Diff M): CD11ahi, CD95+, CD58+ (hard to discriminate on 3′ Flex)',link:ahmedTable(1),tab:'Table 1'},
+ Treg:{ahmed:'Treg (Fn): FOXP3+, CD25hi, CD127low, CTLA4+, GITR+',link:ahmedTable(3),tab:'Table 3'}
+};
+// FUNCTION layer = Ahmed per-cell FDR-gated signature
+const FUNC_SPEC={
+ Th1:{ahmed:'CXCR3+, T-bet+, IFNG+; CCR4/6−, CXCR5−',link:ahmedTable(3),tab:'Table 3'},
+ Th2:{ahmed:'CRTh2+, CCR4+, GATA3+, IL4/5/13+; IFNG−',link:ahmedTable(3),tab:'Table 3'},
+ Th17:{ahmed:'CCR6+, RORγt+, IL17+',link:ahmedTable(3),tab:'Table 3'},
+ Tfh:{ahmed:'CXCR5+, BCL6+',link:ahmedTable(3),tab:'Table 3'},
+ 'CD4-CTL':{ahmed:'granzyme B+, CCR7−, CD27−, ±CD95',link:ahmedTable(3),tab:'Table 3'},
+ Treg:{ahmed:'FOXP3+, CD25hi, CD127low, CTLA4+, GITR+',link:ahmedTable(3),tab:'Table 3'}
+};
+const DS_SPEC={
+ N:{lab:'Naïve',ahmed:'CCR7hi, CD45RA+, CD95−',link:ahmedTable(1),tab:'Table 1'},
+ A:{lab:'Activated',ahmed:'CD69+, CD25hi, ±Ki67/HLA-DR',link:ahmedTable(1),tab:'Table 1'},
+ M:{lab:'Resting (adh-hi)',ahmed:'Ahmed "memory" markers (CD11ahi, CD95+, CD58+) — but here these are ubiquitous adhesion transcripts on cultured naïve-derived cells, not true CD45RO+ memory',link:ahmedTable(1),tab:'Table 1'},
+ 'checkpoint-high activated':{lab:'Chkpt-hi',ahmed:'Highest acute-activation intensity — PD-1/CTLA4/LAG3 induced by strong TCR signal at 8–48 hr, NOT chronic exhaustion. Not a discrete state: a ~5% tail spread across the activated/cycling/Treg clusters (≤19% of any one).',link:ahmedTable(5),tab:'Table 5'}
+};
+let FULL=null,REC=null;
+let mLabels=[],mComp={},clDom={};  // Marson label positions + per-subtype Ahmed composition + each cluster's location-defined dominant timepoint
+let sx,sy,ox,oy,dom=[-0.2,0.6];
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+function modTag(c0){const f=c0.func&&c0.func!=='—';return `${f?c0.func+' · ':''}${(DS_MUTED[c0.ds]||{}).label||c0.ds}`;}
+// Marson labels: one label per distinct program×timepoint region (a program split across two masses gets labelled at both), collision-nudged
+// honest map labels (Science 2026-07-09): Marson names no cell clusters — these are our Leiden annotation.
+// Activated splits by timepoint into its real character; Memory is renamed Resting (no memory in a naive-isolated culture).
+function refLabel(prog,cond){
+  if(prog==='Activated')return cond==='Stim8hr'?'Activated · Th1-skew':cond==='Stim48hr'?'Activated · late':'Activated';
+  return (progmap[prog]||{}).label||prog;
+}
+function drawMarsonLabels(){
+  const cc={};
+  for(const c0 of cells){if(!vis(c0))continue;const id=c0.cluster;if(!cc[id])cc[id]={sx:0,sy:0,n:0,cond:{}};const[X,Y]=px(c0);cc[id].sx+=X;cc[id].sy+=Y;cc[id].n++;cc[id].cond[c0.condition]=(cc[id].cond[c0.condition]||0)+1;}
+  // group clusters by program + dominant condition; keep the largest cluster's centroid per group
+  const groups={};
+  clusters.forEach(k=>{const g=cc[k.id];if(!g||g.n<250)return;const p=progmap[k.top_program];if(!p)return;
+    const dc=Object.entries(g.cond).sort((a,b)=>b[1]-a[1])[0][0];const key=k.top_program+'|'+dc;
+    if(!groups[key]||g.n>groups[key].n)groups[key]={p,cond:dc,X:g.sx/g.n,Y:g.sy/g.n,n:g.n};});
+  // drop same-program labels that landed close together (adjacent same-timepoint sub-clusters)
+  const pts=[];
+  Object.values(groups).sort((a,b)=>b.n-a.n).forEach(o=>{if(pts.some(q=>q.p.k===o.p.k&&Math.hypot(q.X-o.X,q.Y-o.Y)<120))return;o.txt=refLabel(o.p.k,o.cond);x.font=`600 ${o.p.k==='Treg'?12.5:11}px 'Inter Tight'`;o.tw=x.measureText(o.txt).width;pts.push(o);});
+  const placed=[];
+  pts.forEach(o=>{for(let it=0;it<10;it++){let clash=false;for(const q of placed){if(Math.abs(q.X-o.X)<(o.tw+q.tw)/2+6&&Math.abs(q.Y-o.Y)<19){o.Y=q.Y+19;clash=true;}}if(!clash)break;}placed.push(o);});
+  mLabels=pts.map(o=>({prog:o.p.k,label:o.txt,X:o.X,Y:o.Y,tw:o.tw,cond:o.cond}));
+  pts.forEach(o=>{const treg=o.p.k==='Treg';x.font=`600 ${treg?12.5:11}px 'Inter Tight'`;x.textAlign='center';
+    x.fillStyle='rgba(250,249,247,.86)';x.fillRect(o.X-o.tw/2-5,o.Y-9,o.tw+10,17);
+    x.fillStyle=`rgb(${o.p.hue})`;x.fillText(o.txt,o.X,o.Y+3.5);});
+}
+// label the centroids of each category present (≥180 cells), coloured by the palette
+function labelCentroids(catFn,palObj,order,forceDark){
+  const cen={};order.forEach(k=>cen[k]={sx:0,sy:0,n:0});
+  cells.forEach(c0=>{if(!vis(c0))return;const k=catFn(c0);const g=cen[k];if(g){const[X,Y]=px(c0);g.sx+=X;g.sy+=Y;g.n++;}});
+  const pts=[];
+  order.forEach(k=>{const g=cen[k];if(!g||g.n<200)return;const o=palObj[k]||{};const lab=o.label||k;const treg=k==='Treg';
+    x.font=`600 ${treg?12.5:11}px 'Inter Tight'`;pts.push({X:g.sx/g.n,Y:g.sy/g.n,lab,hue:o.hue,treg,n:g.n,tw:x.measureText(lab).width});});
+  const placed=[];
+  pts.sort((a,b)=>b.n-a.n).forEach(o=>{for(let it=0;it<12;it++){let clash=false;for(const q of placed){if(Math.abs(q.X-o.X)<(o.tw+q.tw)/2+6&&Math.abs(q.Y-o.Y)<19){o.Y=q.Y+19;clash=true;}}if(!clash)break;}placed.push(o);});
+  pts.forEach(o=>{x.font=`600 ${o.treg?12.5:11}px 'Inter Tight'`;x.textAlign='center';
+    x.fillStyle='rgba(250,249,247,.84)';x.fillRect(o.X-o.tw/2-5,o.Y-9,o.tw+10,17);
+    x.fillStyle=forceDark?'#3A342B':`rgb(${o.hue||[58,52,43]})`;x.fillText(o.lab,o.X,o.Y+3.5);});
+}
+
+fetch('./data/stage01_umap_seed.json').then(r=>r.json()).then(d=>{
+  DATA=d;cells=d.cells;clusters=d.meta.clusters;
+  clusters.forEach((k,i)=>cmap[k.id]=k);
+  // colour each cluster by its Marson program (merges sub-clusters; drops the condition suffix)
+  clusters.forEach(k=>{k.hue=(progmap[k.top_program]||{}).hue||[150,150,150];});
+  // treg-score robust domain
+  const ss=cells.map(c=>c.treg_score).sort((a,b)=>a-b);
+  dom=[ss[Math.floor(ss.length*0.02)],ss[Math.floor(ss.length*0.98)]];
+  // condition buttons (short labels in the rail; data-c keeps the full value) — ordered Rest→8hr→48hr
+  const cOrd={Rest:0,Stim8hr:1,Stim48hr:2};
+  const conds=['All',...d.meta.condition.slice().sort((a,b)=>(cOrd[a]??9)-(cOrd[b]??9))];
+  const condLab={All:'All',Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
+  document.getElementById('cond').innerHTML=conds.map(k=>`<button data-c="${k}"${k==='All'?' class="on"':''}>${condLab[k]||k}</button>`).join('');
+  document.getElementById('cond').onclick=e=>{if(e.target.dataset.c){cond=e.target.dataset.c;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.c===cond));updatePkInfo();applyScheme();}};
+  // donor buttons
+  const donors=['All',...[...new Set(cells.map(c=>c.donor))].sort()];
+  document.getElementById('donorSel').innerHTML=donors.map(k=>`<button data-d="${k}"${k==='All'?' class="on"':''}>${k}</button>`).join('');
+  document.getElementById('donorSel').onclick=e=>{if(e.target.dataset.d){donorSel=e.target.dataset.d;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));updatePkInfo();applyScheme();}};
+  // sentence picker — options grouped + badged by source (Marson cluster vs Ahmed signature)
+  const optsFor=um=>POPS.filter(p=>p.um===um).sort((a,b)=>(a.umbrella?0:1)-(b.umbrella?0:1)).map(p=>`<option value="${p.k}">${p.label}</option>`).join('');
+  const grp=['Quiescent','Activated · 8h','Activated · 48h'].map(u=>`<optgroup label="${u}">${optsFor(u)}</optgroup>`).join('');
+  document.getElementById('pkA').innerHTML=`<option value="">cells…</option>`+grp;
+  document.getElementById('pkB').innerHTML=`<option value="">state…</option>`+grp;
+  document.getElementById('pkA').onchange=e=>{pickA=pmap[e.target.value]||null;syncPicker();};
+  document.getElementById('pkB').onchange=e=>{pickB=pmap[e.target.value]||null;syncPicker();};
+  document.getElementById('pkClr').onclick=()=>{pickA=pickB=null;document.getElementById('pkA').value='';document.getElementById('pkB').value='';syncPicker();};
+  const _t=d.meta.title||'CD4 transcriptional programs',_sn=d.meta.source_name||'Marson GWCD4i',_su=d.meta.source_url||'https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq';
+  document.getElementById('dsTitle').textContent=_t;
+  const _a=document.getElementById('dsSrc');_a.textContent=`(${_sn} ↗)`;_a.href=_su;
+  document.getElementById('emittedAt').textContent=d.meta.emitted_at||'—';
+  document.getElementById('matchPct').textContent=(d.meta.match_pct!=null)?(d.meta.match_pct+'% match'):'—';
+  document.getElementById('lastrun').innerHTML=d.meta.emitted_at?('analysis last run · <b>'+d.meta.emitted_at+'</b>'):'';
+  applyScheme();
+  resize();
+  // lazy-load the two card datasets (needed only on click)
+  fetch('./data/stage01_cell_records.json',{cache:'no-store'}).then(r=>r.json()).then(d=>REC=d);
+});
+
+function pct(arr,p){const a=arr.slice().sort((x,y)=>x-y);return a[cl(Math.floor(a.length*p),0,a.length-1)];}
+function resize(){const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;x.setTransform(2,0,0,2,0,0);
+  const W=r.width,H=r.height,pad=58,top=118,bot=44;
+  const xs=cells.map(c=>c.x),ys=cells.map(c=>c.y);
+  // robust extents: 1.5-98.5 pct so a few UMAP outliers don't squash the dense cloud
+  const xmn=pct(xs,.015),xmx=pct(xs,.985),ymn=pct(ys,.015),ymx=pct(ys,.985);
+  const s=Math.min((W-2*pad)/(xmx-xmn),(H-top-bot)/(ymx-ymn))*0.92;
+  sx=s;sy=s;ox=(W-(xmx-xmn)*s)/2-xmn*s;oy=top+((H-top-bot)-(ymx-ymn)*s)/2-ymn*s;
+  draw();}
+window.addEventListener('resize',resize);
+
+function px(c){return[c.x*sx+ox,c.y*sy+oy];}
+function ramp(t){t=cl((t-dom[0])/(dom[1]-dom[0]),0,1);
+  const a=[237,231,238],b=[154,62,156];return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;}
+function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
+
+const HELPER_POPS={Th1:1,Th2:1,Th17:1,Tfh:1,'CD4-CTL':1};
+const STATE_POPS={naive:1,activated:1,cycling:1,memory:1,Treg:1};
+function pkStats(p){let n=0,stim=0;for(const c0 of cells){if(!vis(c0)||!p.test(c0))continue;n++;if(c0.condition!=='Rest')stim++;}return{n,stim};}
+function updatePkInfo(){/* hypothesis now shown in the plot-top toolbar + on-canvas connector */}
+function setConn(){const b=document.getElementById('dir');b.dataset.dir=dir;b.querySelector('.cw').textContent=dir==='to'?'toward':'away from';}
+function updateSkewLine(a,b){const svg=document.getElementById('skewline');
+  const ang=Math.atan2(b.Y-a.Y,b.X-a.X),ux=Math.cos(ang),uy=Math.sin(ang);
+  const ax=a.X+ux*18,ay=a.Y+uy*18,bx=b.X-ux*18,by=b.Y-uy*18,L=Math.hypot(bx-ax,by-ay);
+  const ln=svg.querySelector('.skl');ln.setAttribute('x1',ax);ln.setAttribute('y1',ay);ln.setAttribute('x2',bx);ln.setAttribute('y2',by);
+  // chevrons tiled along the belt, all pointing in the travel direction (conveyor)
+  const to=dir==='to',ca=to?ang:ang+Math.PI,cx=Math.cos(ca),cy=Math.sin(ca),s=6,gap=18;
+  // trim one step off the leading (arrow-point) end so the arrowhead stops short of the
+  // target label instead of poking past it; keep the trailing overshoot for seamless flow-in
+  const dLo=to?-gap:0, dHi=to?L:L+gap;
+  let chev='';
+  for(let d=dLo; d<=dHi; d+=gap){const px=ax+ux*d,py=ay+uy*d;
+    const tx=px+cx*s,ty=py+cy*s,w1x=px+Math.cos(ca+2.4)*s,w1y=py+Math.sin(ca+2.4)*s,w2x=px+Math.cos(ca-2.4)*s,w2y=py+Math.sin(ca-2.4)*s;
+    chev+=`<polyline points="${w1x.toFixed(1)},${w1y.toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)} ${w2x.toFixed(1)},${w2y.toFixed(1)}"/>`;}
+  const belt=svg.querySelector('.belt');belt.innerHTML=chev;
+  const tsign=to?1:-1;  // belt flows toward the target (to) or away from it
+  belt.style.setProperty('--mx',(ux*gap*tsign).toFixed(2)+'px');belt.style.setProperty('--my',(uy*gap*tsign).toFixed(2)+'px');
+  svg.style.display='block';}
+function hideSkewLine(){document.getElementById('skewline').style.display='none';}
+function syncPicker(){document.getElementById('idgenes').disabled=!(pickA&&pickB);document.getElementById('skq').classList.toggle('active',!!(pickA||pickB));updatePkInfo();draw();}
+function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const ah=scheme==='ahmed';const pk=pickA||pickB;
+  const lgs=document.getElementById('lgstate');lgs.style.display='flex';
+  // legend
+  if(pk){lgs.innerHTML=[[pickA,HLA],[pickB,HLB]].filter(([p])=>p).map(([p,h])=>`<span><i style="background:rgb(${h})"></i>${p.label} · ${cells.filter(c0=>vis(c0)&&p.test(c0)).length.toLocaleString()}</span>`).join('');}
+  else if(ah){
+    const dsP=DS_MUTED_ORDER.filter(k=>cells.some(c0=>vis(c0)&&c0.func==='—'&&c0.ds===k));
+    const fnP=PAL.func.order.filter(k=>k!=='—'&&cells.some(c0=>vis(c0)&&c0.func===k));
+    lgs.innerHTML=dsP.map(k=>`<span><i style="background:rgb(${DS_MUTED[k].hue})"></i>${DS_MUTED[k].label}</span>`).join('')+fnP.map(k=>`<span><i style="background:rgb(${PAL.func[k].hue})"></i>${PAL.func[k].label}</span>`).join('');
+  } else {
+    const tps=[['Rest','0'],['Stim8hr','8'],['Stim48hr','48']],idx={Rest:0,Stim8hr:1,Stim48hr:2};
+    const txtOn=rgb=>((0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255>0.62?'#1E1B16':'#fff');
+    const inProg=p=>c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].top_program===p.k;
+    let anyMulti=false;
+    const rows=PROG.filter(p=>cells.some(inProg(p))).map(p=>{
+      const test=inProg(p),counts=tps.map(([cd,num])=>({cd,num,n:0,sh:shadeHue(p.hue,cd)}));
+      for(const c0 of cells){if(!test(c0))continue;const i=idx[c0.condition];if(i!=null)counts[i].n++;}
+      const tot=counts.reduce((a,b)=>a+b.n,0)||1;
+      // a timepoint earns its own dot only if it holds a meaningful share of the state (≥8%)
+      const present=counts.filter(c=>c.n/tot>=0.08);
+      let dots;
+      if(present.length>1){anyMulti=true;
+        dots=`<span style="display:inline-flex;gap:3px">`+present.map(c=>`<span class="tpdot" style="background:rgb(${c.sh});color:${txtOn(c.sh)}">${c.num}</span>`).join('')+`</span>`;
+      } else {const d=counts.slice().sort((a,b)=>b.n-a.n)[0];dots=`<i style="background:rgb(${d.sh})"></i>`;}
+      return `<span>${dots}${p.label}</span>`;
+    }).join('');
+    lgs.innerHTML=rows+(anyMulti?`<span style="color:var(--muted);font-size:10.5px">0 / 8 / 48 = hr post-stim</span>`:'');
+  }
+  // dots
+  for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);let rad=i===hover?4.4:2.5;
+    if(pk){let hl=null;if(pickA&&pickA.test(c0))hl=HLA;else if(pickB&&pickB.test(c0))hl=HLB;
+      if(hl){x.fillStyle=`rgb(${hl})`;x.globalAlpha=.92;rad=i===hover?4.6:2.9;}else{x.fillStyle='rgb(188,184,176)';x.globalAlpha=.10;}}
+    else{const ci=catInfo(c0);x.fillStyle=`rgb(${ci.hue})`;x.globalAlpha=ci.muted?.48:.88;}
+    x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
+    if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
+  }
+  x.globalAlpha=1;
+  // centroid labels
+  if(pk){
+    const cn={};
+    [['A',pickA,HLA],['B',pickB,HLB]].forEach(([id,p,hue])=>{if(!p)return;let mx=0,my=0,n=0;for(const c0 of cells){if(!vis(c0)||!p.test(c0))continue;const[X,Y]=px(c0);mx+=X;my+=Y;n++;}if(n)cn[id]={X:mx/n,Y:my/n,p,hue};});
+    // directional connector A→B as an animated SVG overlay (flowing dashes + midpoint arrow)
+    if(cn.A&&cn.B&&Math.hypot(cn.B.X-cn.A.X,cn.B.Y-cn.A.Y)>50)updateSkewLine(cn.A,cn.B);else hideSkewLine();
+    const tot=cells.filter(vis).length||1;let lblHTML='';
+    ['A','B'].forEach(id=>{const o=cn[id];if(!o)return;
+      const s=pkStats(o.p);const pc=100*s.n/tot;const pcs=s.n===0?'0%':(pc<0.1?'<0.1%':pc.toFixed(1)+'%');
+      const dom=s.n?(s.stim/s.n>=.5?Math.round(100*s.stim/s.n)+'% Stim':Math.round(100*(s.n-s.stim)/s.n)+'% Rest'):'—';
+      const sub=`${s.n.toLocaleString()} · ${pcs} of shown · ${dom}`;
+      lblHTML+=`<div class="pklab" style="left:${o.X.toFixed(1)}px;top:${o.Y.toFixed(1)}px"><div class="pkl-t" style="color:rgb(${o.hue})">${o.p.label}</div><div class="pkl-s">${sub}</div></div>`;});
+    document.getElementById('pklabels').innerHTML=lblHTML;
+  } else if(ah){
+    hideSkewLine();document.getElementById('pklabels').innerHTML='';
+    labelCentroids(c0=>c0.ds, DS_MUTED, DS_MUTED_ORDER, true);
+  } else {
+    hideSkewLine();document.getElementById('pklabels').innerHTML='';
+    drawMarsonLabels();
+  }
+}
+
+document.getElementById('scheme').onclick=e=>{if(e.target.dataset.s){scheme=e.target.dataset.s;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.s===scheme));applyScheme();}};
+document.getElementById('dir').onclick=e=>{dir=dir==='to'?'away':'to';setConn();updatePkInfo();draw();};
+function selectStage(i){document.querySelectorAll('.nav .nstep').forEach((s,j)=>s.classList.toggle('on',j===i));}
+// click any pipeline step to make it the active tab/pane
+document.querySelector('.nav').onclick=e=>{const s=e.target.closest('.nstep');if(!s)return;
+  selectStage([...document.querySelectorAll('.nav .nstep')].indexOf(s));};
+document.getElementById('idgenes').onclick=()=>{if(!(pickA&&pickB))return;
+  selectStage(1);  // no locked state — jump straight to stage 02 (skewing genes)
+};
+
+function nPct(fn){return 100*cells.filter(fn).length/cells.length;}
+const SUB='color:var(--muted);font-size:9px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;border:0;padding:4px 0 2px';
+function applyScheme(){
+  const ah=scheme==='ahmed';
+  const ns=document.getElementById('nomsrc');
+  if(ah){ns.textContent='based on Masopust / Ahmed ↗';ns.href=PAPERS.ahmed.url;}
+  else{ns.textContent='based on scVI/Leiden · Marson data ↗';ns.href=PAPERS.marson.url;}
+  if(ah){
+    document.getElementById('markslab').textContent='Per-cell differentiation + function';
+    const dsRows=DS_MUTED_ORDER.map(k=>({k,n:cells.filter(c0=>c0.ds===k).length})).filter(r=>r.n>0);
+    const fnRows=PAL.func.order.filter(k=>k!=='—').map(k=>({k,n:cells.filter(c0=>c0.func===k).length})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+    document.getElementById('marks').innerHTML=
+      `<div class="klab">Differentiation · base colour</div>`+
+      dsRows.map(({k})=>`<div class="mk"><span class="d" style="background:rgb(${DS_MUTED[k].hue})"></span><span class="nm">${DS_MUTED[k].label}</span><span class="gs">${((PAL.ds[k]||{}).mk||[]).slice(0,4).join(', ')}</span></div>`).join('')+
+      `<div class="klab" style="margin-top:10px">Function · FDR overlay</div>`+
+      fnRows.map(({k})=>`<div class="mk"><span class="d" style="background:rgb(${PAL.func[k].hue})"></span><span class="nm">${PAL.func[k].label}</span><span class="gs">${(PAL.func[k].mk||[]).slice(0,4).join(', ')}</span></div>`).join('');
+  } else {
+    const filtNote=(cond==='All'&&donorSel==='All')?'all cells':[cond!=='All'?({Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'}[cond]||cond):'',donorSel!=='All'?donorSel:''].filter(Boolean).join(' · ');
+    document.getElementById('markslab').textContent='Marker genes';
+    const tot=cells.filter(vis).length||1;
+    mComp={};clDom={};
+    const CNL={Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
+    // Ahmed FUNCTION axis (effector polarization) — FDR-gated, honestly sparse
+    const compOf=list=>{const n=list.length||1;const fc={};list.forEach(c0=>fc[c0.func]=(fc[c0.func]||0)+1);
+      const top=PAL.func.order.filter(fk=>fk!=='—').map(fk=>({fk,c:fc[fk]||0})).filter(s=>s.c>0).sort((a,b)=>b.c-a.c);
+      // coherent = a real lineage winner (top func ≥8%); below that it's the generic-activation floor (Science: smeared argmax), not polarization
+      return {n:list.length,coh:top.length?top[0].c/n>=0.08:false,topfk:top.length?top[0].fk:null};};
+    // location-defined subtype: each cluster is pushed to its single dominant timepoint (over ALL cells, filter-independent)
+    {const cc={};cells.forEach(c0=>{const id=c0.cluster;(cc[id]=cc[id]||{})[c0.condition]=((cc[id]||{})[c0.condition]||0)+1;});
+     Object.entries(cc).forEach(([id,o])=>{clDom[id]=Object.entries(o).sort((a,b)=>b[1]-a[1])[0][0];});}
+    const subOf=c0=>{const k=cmap[c0.cluster];return k?k.top_program+'|'+clDom[c0.cluster]:null;};
+    const bySub={};cells.forEach(c0=>{if(!vis(c0))return;const s=subOf(c0);if(s)(bySub[s]=bySub[s]||[]).push(c0);});
+    Object.entries(bySub).forEach(([s,list])=>{const[pk,cn]=s.split('|');const p=progmap[pk]||{hue:[150,150,150],label:pk};mComp[s]={...compOf(list),hue:p.hue,label:p.label,cn:CNL[cn]||cn,rest:cn==='Rest'};});
+    const rows=PROG.map(p=>{const pc=cells.filter(c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].top_program===p.k);return{p,pc,n:pc.length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+    rows.forEach(({p,pc})=>{mComp[p.k+'|All']={...compOf(pc),hue:p.hue,label:p.label,cn:'',rest:false};});
+    document.getElementById('marks').innerHTML=rows.map(({p,n})=>
+      `<div class="mk${p.k==='Treg'?' treg':''}"><span class="d" style="background:rgb(${p.hue})"></span><span class="nm">${p.label}</span><span class="gs">${(p.mk||[]).slice(0,4).join(', ')}</span></div>`
+    ).join('');
+  }
+  draw();
+}
+
+c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  let best=-1,bd=64;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const d=(X-mx)**2+(Y-my)**2;if(d<bd){bd=d;best=i;}}
+  // with a skewing hypothesis active, only the selected groups respond to hover
+  if((pickA||pickB)&&best>=0&&!((pickA&&pickA.test(cells[best]))||(pickB&&pickB.test(cells[best]))))best=-1;
+  if(best!==hover){hover=best;draw();}
+  const comppop=document.getElementById('comppop');
+  if(best>=0&&scheme==='marson'){
+    const c0=cells[best];const k=cmap[c0.cluster];const prog=k?k.top_program:null;
+    const dc=prog?clDom[c0.cluster]:null;
+    const comp=dc?(mComp[prog+'|'+dc]||mComp[prog+'|All']):null;
+    let labs=prog?mLabels.filter(l=>l.prog===prog):[];const sl=labs.filter(l=>l.cond===dc);if(sl.length)labs=sl;
+    if(comp&&labs.length){const[cx,cy]=px(c0);let lab=labs[0],bdl=1e18;labs.forEach(l=>{const d=(l.X-cx)**2+(l.Y-cy)**2;if(d<bdl){bdl=d;lab=l;}});
+      let body;
+      if(comp.coh){const fp=PAL.func[comp.topfk]||{};const g=(fp.mk||[]).slice(0,3).join(', ');
+        body=`<div class="compsum"><b>${fp.label||comp.topfk}-hi</b>${g?` <span style="color:var(--muted)">· ${g}</span>`:''}</div>`;
+      } else if(comp.rest){body=`<div class="compsum">resting</div>`;
+      } else {body=`<div class="compsum">no skew</div>`;}
+      comppop.innerHTML=`<div class="cph" style="color:rgb(${comp.hue})">${comp.label}${comp.cn?' · '+comp.cn:''} · ${comp.n.toLocaleString()} cells</div>`+body;
+      let lx=lab.X-91,ly=lab.Y+13;lx=Math.max(6,Math.min(lx,r.width-188));ly=Math.min(ly,r.height-70);
+      comppop.style.left=lx+'px';comppop.style.top=ly+'px';comppop.style.display='block';
+    } else comppop.style.display='none';
+    pop.style.display='none';return;
+  }
+  comppop.style.display='none';
+  if(best>=0){const c0=cells[best];const k=cmap[c0.cluster];const[X,Y]=px(c0);
+    const hasFunc=c0.func&&c0.func!=='—';
+    const dsH={N:'resting · naïve-like',M:'resting',A:'activated','checkpoint-high activated':'checkpoint-hi'}[c0.ds]||c0.ds;
+    const bc=(c0.barcode.split('_').find(t=>/^[ACGT]{8,}/.test(t))||c0.barcode).slice(0,26);
+    pop.innerHTML=`<div class="bc">${bc}</div>
+      <div class="row"><span>Donor · condition</span><b>${c0.donor} · ${c0.condition}</b></div>
+      <div class="row"><span>State <i>· our Leiden</i></span><b>${k?((progmap[k.top_program]||{}).label||k.top_program):c0.cluster}</b></div>
+      <div class="row"><span>Ahmed state <i>· diff.</i></span><b>${dsH}</b></div>
+      <div class="row"><span>Function <i>· FDR</i></span><b>${hasFunc?c0.func:'no polarization'}</b></div>`;
+    pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-272)lx=X-272;lx=Math.max(6,Math.min(lx,r.width-266));ly=Math.max(6,Math.min(ly,r.height-150));
+    pop.style.left=lx+'px';pop.style.top=ly+'px';}
+  else pop.style.display='none';
+});
+c.addEventListener('mouseleave',()=>{hover=-1;pop.style.display='none';document.getElementById('comppop').style.display='none';draw();});
+
+// ── click a dot → open the cell-detail card ──
+function nearestCell(mx,my){let best=-1,bd=400;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const d=(X-mx)**2+(Y-my)**2;if(d<bd){bd=d;best=i;}}return best;}
+c.addEventListener('click',e=>{if(pickA&&pickB)return;/* a two-state hypothesis is active — dots aren't individually inspectable */
+  const r=c.getBoundingClientRect();const i=nearestCell(e.clientX-r.left,e.clientY-r.top);if(i>=0)openCard(i);});
+
+function hidpi(cv){const r=cv.getBoundingClientRect();cv.width=r.width*2;cv.height=r.height*2;const g=cv.getContext('2d');g.setTransform(2,0,0,2,0,0);return[g,r.width,r.height];}
+function tregRamp(t){t=cl((t-dom[0])/(dom[1]-dom[0]),0,1);const a=[237,231,238],b=[154,62,156];return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;}
+
+function drawLoc(c0){const[g,W,H]=hidpi(document.getElementById('mLoc'));if(!FULL)return;const B=FULL.meta.bounds,pad=12;
+  const mapx=v=>pad+(v-B.xmin)/(B.xmax-B.xmin)*(W-2*pad), mapy=v=>pad+(v-B.ymin)/(B.ymax-B.ymin)*(H-2*pad);
+  for(let i=0;i<FULL.x.length;i+=1){g.fillStyle=tregRamp(FULL.treg[i]);g.globalAlpha=.32;g.beginPath();g.arc(mapx(FULL.x[i]),mapy(FULL.y[i]),.8,0,6.283);g.fill();}
+  g.globalAlpha=1;const PX=mapx(c0.x),PY=mapy(c0.y);
+  // white halo for contrast against the dense cloud
+  g.fillStyle='rgba(255,255,255,.9)';g.beginPath();g.arc(PX,PY,6,0,6.283);g.fill();
+  g.strokeStyle='#1E1B16';g.lineWidth=1;g.beginPath();g.moveTo(PX-14,PY);g.lineTo(PX-7,PY);g.moveTo(PX+7,PY);g.lineTo(PX+14,PY);g.moveTo(PX,PY-14);g.lineTo(PX,PY-7);g.moveTo(PX,PY+7);g.lineTo(PX,PY+14);g.stroke();
+  g.fillStyle='#9A3E9C';g.beginPath();g.arc(PX,PY,3.6,0,6.283);g.fill();
+  g.strokeStyle='#1E1B16';g.lineWidth=1.4;g.beginPath();g.arc(PX,PY,3.6,0,6.283);g.stroke();}
+
+function drawNbr(c0,N){const[g,W,H]=hidpi(document.getElementById('mNbr'));if(!FULL)return;
+  const d=[];for(let i=0;i<FULL.x.length;i++){d.push([i,(FULL.x[i]-c0.x)**2+(FULL.y[i]-c0.y)**2]);}
+  d.sort((a,b)=>a[1]-b[1]);const near=d.slice(0,N).map(o=>o[0]);
+  let xmn=1e9,xmx=-1e9,ymn=1e9,ymx=-1e9;near.forEach(i=>{xmn=Math.min(xmn,FULL.x[i]);xmx=Math.max(xmx,FULL.x[i]);ymn=Math.min(ymn,FULL.y[i]);ymx=Math.max(ymx,FULL.y[i]);});
+  const padd=(xmx-xmn)*.12+.4;xmn-=padd;xmx+=padd;ymn-=padd;ymx+=padd;const pad=12;
+  const mapx=v=>pad+(v-xmn)/(xmx-xmn)*(W-2*pad), mapy=v=>pad+(v-ymn)/(ymx-ymn)*(H-2*pad);
+  const CX=mapx(c0.x),CY=mapy(c0.y);
+  g.strokeStyle='rgba(154,62,156,.20)';g.lineWidth=1;near.slice(1,16).forEach(i=>{g.beginPath();g.moveTo(CX,CY);g.lineTo(mapx(FULL.x[i]),mapy(FULL.y[i]));g.stroke();});
+  near.forEach(i=>{g.fillStyle=tregRamp(FULL.treg[i]);g.globalAlpha=.92;g.beginPath();g.arc(mapx(FULL.x[i]),mapy(FULL.y[i]),2.7,0,6.283);g.fill();});
+  g.globalAlpha=1;g.fillStyle='#9A3E9C';g.beginPath();g.arc(CX,CY,4.4,0,6.283);g.fill();g.strokeStyle='#1E1B16';g.lineWidth=1.3;g.stroke();}
+
+function openCard(i){const c0=cells[i],k=cmap[c0.cluster];const rec=REC?REC[c0.barcode]:null;const ah=scheme==='ahmed';
+  const ci=catInfo(c0);
+  const chip=document.getElementById('mchip');
+  chip.querySelector('i').style.background=`rgb(${ci.hue})`;
+  chip.querySelector('b').textContent=ah?modTag(c0):ci.label;
+  document.getElementById('mbc').textContent=c0.barcode;
+  const clab=k?((progmap[k.top_program]||{}).label||k.top_program):'—';
+  document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · ${clab} (coarse) · ${modTag(c0)} (fine)`;
+  // home program (Marson Leiden state) + this cell's expression of its canonical markers
+  const prog=k?k.top_program:null,hp=prog?(progmap[prog]||{}):{},hpMk=hp.mk||[],hpHue=(hp.hue||[120,120,120]).join(',');
+  document.getElementById('mhp').innerHTML=prog?`Home program · <b style="color:rgb(${hpHue})">${hp.label||prog}</b>`:'';
+  const srcfile=`${c0.donor}_${c0.condition}.assigned_guide.h5ad`;
+  const dsSp=DS_SPEC[c0.ds]||{}, fnSp=(c0.func&&c0.func!=='—')?(FUNC_SPEC[c0.func]||{}):null;
+  const plinks=`<a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`+
+    (dsSp.link?` · <a href="${dsSp.link}" target="_blank" rel="noopener">Ahmed diff ↗</a>`:'')+
+    (fnSp&&fnSp.link?` · <a href="${fnSp.link}" target="_blank" rel="noopener">function ↗</a>`:'');
+  if(rec){const ref=(REC&&REC.__marker_ref__)||{},me=rec.marker_expr||{},det=(REC&&REC.__marker_det__&&REC.__marker_det__[prog])||{};
+    document.getElementById('mgenes').innerHTML=hpMk.map(g=>{const r=ref[g],dr=(det[g]!=null)?det[g]+'%':'';
+      if(!r)return `<div class="mrow nm"><span class="mg">${g}</span><span class="mb"></span><span class="ml">not in panel</span><span class="md"></span></div>`;
+      const v=me[g]||0,p95=r[2]||v||1;let lab,cls,w;
+      if(v<=0){lab='not detected';cls='nodet';w=0;}else{w=Math.min(v/p95,1)*100;lab=v<r[0]?'low':v<r[1]?'mid':'high';cls='det '+lab;}
+      return `<div class="mrow ${cls}"><span class="mg">${g}</span><span class="mb"><i style="width:${w.toFixed(0)}%;background:rgb(${hpHue})"></i></span><span class="ml">${lab}</span><span class="md">${dr}</span></div>`;}).join('');
+    document.getElementById('mcap').innerHTML=prog?`Right column · % of ${hp.label||prog} cells expressing each gene · 3′ dropout, so a low % is expected.`:'';
+    const ntc=/non-?targeting|NTC/i.test((rec.guide_type||'')+(rec.perturbed_gene_name||''));
+    document.getElementById('msrc').innerHTML=`<div>record · <b>${srcfile}</b> · guide ${ntc?'<span class="ntc">non-targeting control</span>':'<b style="color:var(--ink2)">'+rec.perturbed_gene_name+'</b>'}</div>`+
+      `<div style="margin-top:7px;color:var(--muted)">Lineage calls — how each paper names this cell: ${plinks}</div>`;
+  } else {document.getElementById('mgenes').innerHTML='<span style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">loading…</span>';document.getElementById('mcap').innerHTML='';document.getElementById('msrc').innerHTML='';}
+  document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='block';}
+function closeCard(){document.getElementById('scrim').style.display='none';document.getElementById('modal').style.display='none';document.getElementById('provmodal').style.display='none';}
+function openProv(){document.getElementById('scrim').style.display='block';document.getElementById('provmodal').style.display='flex';}
+document.getElementById('mx').onclick=closeCard;document.getElementById('scrim').onclick=closeCard;
+document.getElementById('provx').onclick=closeCard;document.getElementById('provbtn').onclick=openProv;
+// --- re-run: poll-based + refresh-resilient (server runs it in a background thread) ---
+(function(){
+  const logEl=document.getElementById('rerunlog'),pre=document.getElementById('rlpre'),closeBtn=document.getElementById('rlClose');
+  let polling=false;
+  const rlphase=document.getElementById('rlphase'),rlpulse=document.getElementById('rlpulse'),rleta=document.getElementById('rleta');
+  function phaseOf(txt){
+    if(/\[4\/4\]/.test(txt))return 'rendering notebook';
+    if(/\[3\/4\]/.test(txt))return 'verifying';
+    if(/\[2\/4\]|emitted \d+ cells/.test(txt))return 'writing overlay';
+    if(/validation-2 null|validation 2/.test(txt))return 'validating';
+    if(/per-cell function calls/.test(txt))return 'validating';
+    if(/permutation \d+\/\d+/.test(txt))return 'scoring';
+    if(/cells: |panel genes|state programs/.test(txt))return 'loading data';
+    return 'starting';
+  }
+  var STAGES=['loading data','scoring','validating','writing overlay','verifying','rendering notebook'];
+  function stageLabel(ph){var i=STAGES.indexOf(ph);return i<0?ph:'stage '+(i+1)+'/'+STAGES.length+' · '+ph;}
+  function roughEta(s){if(s<=15)return 'finishing';var r=Math.ceil(s/30)*30;if(r<60)return '~'+r+'s';var mn=Math.floor(r/60),sc=r%60;return '~'+mn+(sc?':'+String(sc).padStart(2,'0'):' min');}
+  function setMeta(phase,eta){rlphase.textContent=phase;rleta.textContent=eta?'· '+eta:'';}
+  function showClose(){closeBtn.style.display='inline';closeBtn.onclick=function(){logEl.style.display='none';};}
+  function openLog(){closeCard();closeBtn.style.display='none';rlpulse.style.display='inline';setMeta('starting','');logEl.style.display='flex';}
+  function poll(){
+    if(!polling)return;
+    fetch('/rerun/log').then(function(r){return r.json();}).then(function(j){
+      if(!polling)return;
+      if(j.lines&&j.lines.length){pre.textContent=j.lines.join('\n');pre.scrollTop=pre.scrollHeight;}
+      if(j.running&&j.started_epoch&&j.now_epoch){
+        var el=j.now_epoch-j.started_epoch,ph=phaseOf(pre.textContent);
+        rlpulse.style.display='inline';
+        setMeta(stageLabel(ph), (ph==='verifying'||ph==='writing overlay'||ph==='rendering notebook')?'finishing':roughEta(Math.max(0,105-el)));
+      }
+      if(j.result){polling=false;rlpulse.style.display='none';setMeta(j.result.ok?'complete':'failed','');
+        if(j.result.ok){pre.textContent+='\n↻ reloading with the regenerated map…';pre.scrollTop=pre.scrollHeight;setTimeout(function(){location.reload();},1500);}
+        else{pre.textContent+='\n✕ '+(j.result.error||'run failed');showClose();}
+      }else if(j.running){setTimeout(poll,1200);}
+      else{polling=false;showClose();}
+    }).catch(function(){if(polling)setTimeout(poll,2000);});
+  }
+  document.getElementById('rerunBtn').onclick=function(){
+    openLog();pre.textContent='starting…';polling=true;
+    fetch('/rerun',{method:'POST'}).then(function(r){return r.json();}).then(function(){poll();}).catch(function(e){pre.textContent='✕ '+e;showClose();polling=false;});
+  };
+  // refresh-resilient: on load, re-attach to any in-progress run
+  fetch('/rerun/log').then(function(r){return r.json();}).then(function(j){if(j.running){openLog();polling=true;poll();}}).catch(function(){});
+})();
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCard();});
+window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),ready:()=>!!REC,cmap:()=>cmap};
+</script>
