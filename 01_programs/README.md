@@ -38,12 +38,12 @@ A standard scanpy environment (CPU is fine for the steps below):
 2. **Nomenclature tier** (`ntc_clustered.h5ad` → labels → per-cell calls → overlay):
    deterministic, CPU, ~3 min, and **byte-reproducible** — this is what runs here.
 
-### Get access to the embedded object
-The embedded object (`ntc_clustered.h5ad`, 3.86 GB) + the UMAP positions template live in a
-**gated** Hugging Face dataset:
-[**KiritSingh/spot-01-programs**](https://huggingface.co/datasets/KiritSingh/spot-01-programs).
-Request access there (owner-approved), then `hf auth login`. `reproduce.sh` fetches both
-files into `$SPOT_DATA` automatically — or pull them manually:
+### Fetch the embedded object
+The embedded object (`ntc_clustered.h5ad`, 3.86 GB) + the UMAP positions template are
+published (**public, MIT**) in the Hugging Face dataset
+[**KiritSingh/spot-01-programs**](https://huggingface.co/datasets/KiritSingh/spot-01-programs)
+— no account needed. `reproduce.sh` fetches both into `$SPOT_DATA` automatically, or pull
+them manually:
 
 ```bash
 export SPOT_DATA=./spot_scvi

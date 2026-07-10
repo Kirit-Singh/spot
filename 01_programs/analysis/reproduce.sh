@@ -32,11 +32,10 @@ echo "using SPOT_DATA=$SPOT_DATA"
 echo "[1/5] Ensure the embedded Step-2 object is present in $SPOT_DATA ..."
 HF_REPO="${SPOT_HF_REPO:-KiritSingh/spot-01-programs}"
 if [ ! -f "$SPOT_DATA/ntc_clustered.h5ad" ]; then
-  echo "  fetching ntc_clustered.h5ad + stage01_umap_seed.json from HF dataset $HF_REPO ..."
+  echo "  fetching ntc_clustered.h5ad + stage01_umap_seed.json from HF dataset $HF_REPO (public, MIT) ..."
   hf download "$HF_REPO" ntc_clustered.h5ad stage01_umap_seed.json \
       --repo-type dataset --local-dir "$SPOT_DATA" \
-    || { echo "  x fetch failed — this dataset is GATED. Run 'hf auth login', request access at"; \
-         echo "    https://huggingface.co/datasets/$HF_REPO , then re-run."; exit 1; }
+    || { echo "  x fetch failed — install the HF client: pip install -U huggingface_hub"; exit 1; }
 fi
 # (The upstream 'embedding tier' that PRODUCES ntc_clustered.h5ad -- raw CZI download via
 #  the vcp CLI + scVI/Leiden, GPU-scale / ~1.84 TB -- is documented in the README; not here.)

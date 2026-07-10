@@ -21,6 +21,7 @@ commercial or data-redistribution use (swaps noted).
 | RDKit (CNS-MPO descriptors) | BSD-3-Clause | RDKit |
 | Grossman et al., Neuro-Oncology 2026 (NEBPI) | CC BY 4.0 | doi:10.1093/neuonc/noag051 |
 | Masopust et al., Nat Rev Immunol 2026 (nomenclature) | CC BY 4.0 | doi:10.1038/s41577-025-01238-2 |
+| Marson CD4 Perturb-seq (CZI Virtual Cells Platform) | MIT | Zhu, Dann, … Marson 2025; cite bioRxiv doi:10.64898/2025.12.23.696273; CZI Acceptable Use Policy applies |
 
 ## Share-alike — usable; copyleft on redistributed derivatives
 | Source | License | Note |
@@ -35,7 +36,9 @@ commercial or data-redistribution use (swaps noted).
 | DrugComb | CC BY-NC-SA 4.0 | academic-only / open alternative |
 
 ## To confirm
-- Marson CD4 Perturb-seq (CZI Virtual Cells Platform) — public; exact license (CC BY 4.0?)
-  to confirm from the CZI portal (the dataset readme does not state it).
+- _(none outstanding — the Marson CZI Perturb-seq license was confirmed **MIT** from the
+  dataset's Croissant metadata across all 12 splits; listed above. The derived NTC-subset
+  embedding is redistributed on HF ([KiritSingh/spot-01-programs](https://huggingface.co/datasets/KiritSingh/spot-01-programs))
+  under MIT with attribution.)_
 
 _Licenses per knowledge as of 2026-01; verify current terms for any commercial use._
