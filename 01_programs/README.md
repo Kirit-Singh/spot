@@ -41,13 +41,13 @@ A standard scanpy environment (CPU is fine for the steps below):
 ### Fetch the embedded object
 The embedded object (`ntc_clustered.h5ad`, 3.86 GB) + the UMAP positions template are
 published (**public, MIT**) in the Hugging Face dataset
-[**KiritSingh/spot-01-programs**](https://huggingface.co/datasets/KiritSingh/spot-01-programs)
+[**KiritSingh/spot-CD4-Marson**](https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson)
 — no account needed. `reproduce.sh` fetches both into `$SPOT_DATA` automatically, or pull
 them manually:
 
 ```bash
 export SPOT_DATA=./spot_scvi
-hf download KiritSingh/spot-01-programs ntc_clustered.h5ad stage01_umap_seed.json \
+hf download KiritSingh/spot-CD4-Marson ntc_clustered.h5ad stage01_umap_seed.json \
     --repo-type dataset --local-dir "$SPOT_DATA"
 ```
 

@@ -22,15 +22,15 @@
 #                 (stage1_pipeline.py); we then stage that to data/stage01_umap_seed.json.
 #   5. Verify     the staged overlay must match the committed reference.
 #
-# Requires: a scanpy env + the `hf` CLI (huggingface_hub) with access to the gated
-# dataset holding the embedded object (run `hf auth login` + request access).
+# Requires: a scanpy env + the `hf` CLI (huggingface_hub) — pip install -U huggingface_hub.
+# The embedded object is fetched from the public HF dataset (step 1); no account needed.
 set -euo pipefail
 # Dir holding ntc_clustered.h5ad + stage01_umap_seed.json. Set SPOT_DATA to override.
 export SPOT_DATA="${SPOT_DATA:-./spot_scvi/}"
 echo "using SPOT_DATA=$SPOT_DATA"
 
 echo "[1/5] Ensure the embedded Step-2 object is present in $SPOT_DATA ..."
-HF_REPO="${SPOT_HF_REPO:-KiritSingh/spot-01-programs}"
+HF_REPO="${SPOT_HF_REPO:-KiritSingh/spot-CD4-Marson}"
 if [ ! -f "$SPOT_DATA/ntc_clustered.h5ad" ]; then
   echo "  fetching ntc_clustered.h5ad + stage01_umap_seed.json from HF dataset $HF_REPO (public, MIT) ..."
   hf download "$HF_REPO" ntc_clustered.h5ad stage01_umap_seed.json \

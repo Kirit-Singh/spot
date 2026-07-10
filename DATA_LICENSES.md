@@ -38,7 +38,7 @@ commercial or data-redistribution use (swaps noted).
 ## To confirm
 - _(none outstanding — the Marson CZI Perturb-seq license was confirmed **MIT** from the
   dataset's Croissant metadata across all 12 splits; listed above. The derived NTC-subset
-  embedding is redistributed on HF ([KiritSingh/spot-01-programs](https://huggingface.co/datasets/KiritSingh/spot-01-programs))
+  embedding is redistributed on HF ([KiritSingh/spot-CD4-Marson](https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson))
   under MIT with attribution.)_
 
 _Licenses per knowledge as of 2026-01; verify current terms for any commercial use._
