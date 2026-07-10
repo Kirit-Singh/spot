@@ -27,23 +27,32 @@ component regressed out.
 A standard scanpy environment (CPU is fine for the steps below):
 - Python 3.11
 - `anndata==0.12` · `scanpy==1.11` · `numpy==2.3` · `scipy==1.15` · `pandas==2.2`
-- For the data-fetch tier only: the CZI `vcp` CLI — `pip install 'vcp-cli[data]'`
+- `huggingface_hub` (the `hf` CLI) to fetch the embedded object — `pip install -U huggingface_hub`
 
 ### Two reproducibility tiers — know the boundary
 1. **Embedding tier** (raw public data → `ntc_clustered.h5ad`): fetch the NTC CD4 cells
    from the CZI *"Primary Human CD4+ T Cell Perturb-seq"* dataset and run scVI + Leiden.
-   This is **GPU-scale and large** — the full dataset is ~1.84 TB; you need the NTC subset
-   embedded (18,130 genes × 396k cells, with `obs['L0.8']` Leiden clusters + UMAP coords).
-   Run **once**, cached as `ntc_clustered.h5ad`. The scripts below do **not** re-run it.
+   This is **GPU-scale and large** — the full dataset is ~1.84 TB. Run **once**, cached as
+   `ntc_clustered.h5ad` (18,130 genes × 396k cells, `obs['L0.8']` Leiden clusters). You do
+   **not** need to re-run it: the embedded object is published (below).
 2. **Nomenclature tier** (`ntc_clustered.h5ad` → labels → per-cell calls → overlay):
    deterministic, CPU, ~3 min, and **byte-reproducible** — this is what runs here.
 
-### Run the nomenclature tier
-Point `SPOT_DATA` at a directory holding `ntc_clustered.h5ad` and `stage01_umap_seed.json`
-(the cell-position template), then:
+### Get access to the embedded object
+The embedded object (`ntc_clustered.h5ad`, 3.86 GB) + the UMAP positions template live in a
+**gated** Hugging Face dataset:
+[**KiritSingh/spot-01-programs**](https://huggingface.co/datasets/KiritSingh/spot-01-programs).
+Request access there (owner-approved), then `hf auth login`. `reproduce.sh` fetches both
+files into `$SPOT_DATA` automatically — or pull them manually:
 
 ```bash
-export SPOT_DATA=/path/to/data     # dir with ntc_clustered.h5ad + stage01_umap_seed.json
+export SPOT_DATA=./spot_scvi
+hf download KiritSingh/spot-01-programs ntc_clustered.h5ad stage01_umap_seed.json \
+    --repo-type dataset --local-dir "$SPOT_DATA"
+```
+
+### Run the nomenclature tier
+```bash
 cd analysis
 python cluster_scores.py           # per-cluster confound-aware z-scores -> $SPOT_DATA/cluster_scores.json
 python label_clusters.py           # fixed rule                          -> $SPOT_DATA/cluster_labels.json
@@ -51,8 +60,9 @@ python stage1_pipeline.py          # per-cell scoring + emit stage01_umap_seed.e
 python verify_reproduce.py         # asserts emitted counts == committed REFERENCE (100% match or exit 1)
 ```
 
-Or `./reproduce.sh`, which wraps the same chain (and re-fetches via `vcp` + re-renders the
-notebook). All paths are env-configurable via `SPOT_DATA`; no machine-specific paths.
+Or just `./reproduce.sh`, which fetches the object (step above), runs the whole chain, and
+re-renders the notebook. All paths are env-configurable via `SPOT_DATA`; no machine-specific
+paths.
 
 ### Verified reproducible
 A **blind clean-room run** — fresh working dir, only these scripts + the cached

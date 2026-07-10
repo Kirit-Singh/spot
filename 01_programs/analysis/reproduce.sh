@@ -22,15 +22,24 @@
 #                 (stage1_pipeline.py); we then stage that to data/stage01_umap_seed.json.
 #   5. Verify     the staged overlay must match the committed reference.
 #
-# Requires: the `vcp` CLI (CZI Virtual Cell Platform) + a scanpy/scvi env.
+# Requires: a scanpy env + the `hf` CLI (huggingface_hub) with access to the gated
+# dataset holding the embedded object (run `hf auth login` + request access).
 set -euo pipefail
-CACHE="${CACHE:-./czi_cache}"
 # Dir holding ntc_clustered.h5ad + stage01_umap_seed.json. Set SPOT_DATA to override.
 export SPOT_DATA="${SPOT_DATA:-./spot_scvi/}"
 echo "using SPOT_DATA=$SPOT_DATA"
 
-echo "[1/5] Fetch dataset from the CZI Virtual Cell Platform (cached in $CACHE) ..."
-vcp data download --query '"Primary Human CD4+ T Cell Perturb-seq"' -o "$CACHE"
+echo "[1/5] Ensure the embedded Step-2 object is present in $SPOT_DATA ..."
+HF_REPO="${SPOT_HF_REPO:-KiritSingh/spot-01-programs}"
+if [ ! -f "$SPOT_DATA/ntc_clustered.h5ad" ]; then
+  echo "  fetching ntc_clustered.h5ad + stage01_umap_seed.json from HF dataset $HF_REPO ..."
+  hf download "$HF_REPO" ntc_clustered.h5ad stage01_umap_seed.json \
+      --repo-type dataset --local-dir "$SPOT_DATA" \
+    || { echo "  x fetch failed — this dataset is GATED. Run 'hf auth login', request access at"; \
+         echo "    https://huggingface.co/datasets/$HF_REPO , then re-run."; exit 1; }
+fi
+# (The upstream 'embedding tier' that PRODUCES ntc_clustered.h5ad -- raw CZI download via
+#  the vcp CLI + scVI/Leiden, GPU-scale / ~1.84 TB -- is documented in the README; not here.)
 
 echo "[2/5] Label clusters (confound-aware marker rule -> cluster_labels.json) ..."
 python3 cluster_scores.py       # per-cluster panel z-scores (one object load)
