@@ -40,11 +40,11 @@ rng = np.random.default_rng(SEED)
 # %% [markdown]
 # From that raw release we take the non-targeting-control (NTC) cells, balance
 # them across the three stimulation conditions, and embed + cluster (§2) to
-# produce `ntc_clustered.h5ad`. `.X` is log1p of CP10k-normalized counts
-# (target_sum=1e4 — spot's choice; the authors use the default median total;
-# scVI trains on raw counts, so this scales only the scoring matrix, not the
-# embedding). 18,130 genes; var_names = gene symbols; loaded backed to keep RAM
-# low until the full matrix is needed.
+# produce `ntc_clustered.h5ad`. `.X` follows the authors' preprocessing exactly:
+# `sc.pp.normalize_total()` at its default (per-cell total set to the median,
+# ~9819) then `log1p`, on raw counts (scVI itself trains on raw counts, so `.X`
+# is only the scoring matrix). 18,130 genes; var_names = gene symbols; loaded
+# backed to keep RAM low until the full matrix is needed.
 
 # %%
 a = ad.read_h5ad(D + "ntc_clustered.h5ad", backed="r")
