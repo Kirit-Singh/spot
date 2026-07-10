@@ -13,8 +13,9 @@
 #
 # **This notebook emits the deployed overlay** (§8). `SEED` fixes the
 # permutation null so the run is deterministic, and `verify_reproduce.py` gates
-# the emitted counts. The numbers below are the deployed map's: ~82.2% no
-# functional call, Activated.8hr Th1 30.8% (called), Treg cluster 10.8%.
+# the emitted counts. The 40k deployed map: ~82.5% no functional call,
+# Activated.8hr Th1 30.8% (of that compartment), Treg **cluster** 6.3% (of which
+# 10.8% are Treg-called). (Full-population 396k no-call is ~82.2%.)
 #
 
 # %%
