@@ -173,7 +173,7 @@ header = (
     '<a href="/01_page.html">spot · Stage-1 CD4 workbench</a> overlay end to end — '
     'data fetched from the <a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" '
     'target="_blank" rel="noopener">CZI Virtual Cell Platform</a> via the <code>vcp</code> CLI, then scVI/Leiden '
-    'clusters → a reproducible label rule → Masopust/Ahmed per-cell calls → the permutation-FDR floor → two '
+    'clusters → a reproducible label rule → Masopust et al. per-cell calls → the permutation-FDR floor → two '
     'validation checks. Deterministic (fixed seed): a re-run reproduces every value below.</div>'
     f'<div class="sub" style="margin-top:9px;font-size:11.5px">Analysis built &amp; validated with '
     f'<b style="color:var(--treg)">Claude Science</b> (Anthropic\'s science workbench, on the compute host) · '

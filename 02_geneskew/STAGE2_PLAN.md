@@ -56,7 +56,7 @@ project onto the intersection of gene universes.
 **The central design question is how to define the induced-Treg → Th1 axis.** Four
 primitives are on the table; the tradeoffs matter:
 
-1. **Marker panels (Ahmed/Masopust), Stage-1 style.** *Interpretable, cross-stage
+1. **Marker panels (Masopust et al.), Stage-1 style.** *Interpretable, cross-stage
    stable, tiny.* But sparse and 3′-dropout-sensitive (FOXP3 detected in only 27.5%
    of cluster-Tregs). Good as an **anchor / sanity readout**, too thin to be the sole
    directional axis.

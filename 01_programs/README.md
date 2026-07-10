@@ -1,7 +1,7 @@
 # 01_programs — CD4 transcriptional programs
 
 Interactive UMAP of CD4 transcriptional **state programs** (Naïve / Activated / Cycling /
-Resting / Treg) plus per-cell **Masopust/Ahmed** differentiation + function calls, scored
+Resting / Treg) plus per-cell **Masopust et al.** differentiation + function calls, scored
 from the Marson genome-scale CD4 perturb-seq non-targeting-control (NTC) cells.
 **Locks:** the Treg program — the Stage-2 target.
 
@@ -76,7 +76,7 @@ artifact*, not a hand-placed file.
 - `label_clusters.py` → the fixed, confound-aware rule → `cluster_labels.json`
   (Cycling if proliferation clear; Treg = the one Treg-high, not-strongly-activated
   cluster; rest → Naïve/Memory if resting else Activated).
-- `stage1_pipeline.py` → per-cell Masopust/Ahmed calls behind a 500-permutation FDR floor
+- `stage1_pipeline.py` → per-cell Masopust et al. calls behind a 500-permutation FDR floor
   (`SEED=12345`); CD25/IL2RA dropped from Treg, CD4-CTL activation-conditioned; emits the
   overlay. Confound handling and the two validation checks are documented inline and
   rendered in `01_notebook.html`.
@@ -92,5 +92,5 @@ artifact*, not a hand-placed file.
 ## Data source
 Marson GWCD4i genome-scale CRISPRi perturb-seq (bioRxiv 2025.12.23.696273) — NTC CD4
 cells, 4 donors × Rest/Stim8hr/Stim48hr — public on the CZI Virtual Cell Platform.
-Nomenclature: Masopust/Ahmed, *Guidelines for T cell nomenclature*, Nat Rev Immunol
+Nomenclature: Masopust et al., *Guidelines for T cell nomenclature*, Nat Rev Immunol
 2026;26:298-313.

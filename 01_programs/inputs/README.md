@@ -12,5 +12,5 @@ No data is bundled here (repo policy: public data only). This stage's inputs are
   (the "embedding tier"; see the stage README). This is the starting point for the
   reproducible nomenclature chain and is *not* committed (14 GB). Point `SPOT_DATA` at the
   directory holding it.
-- **Marker panels:** the differentiation + function panels (Masopust/Ahmed, Tables 1 & 3)
+- **Marker panels:** the differentiation + function panels (Masopust et al., Tables 1 & 3)
   live in the code (`../analysis/stage1_pipeline.py`), not as separate files.

@@ -116,7 +116,7 @@
   .chip{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;line-height:1.4;padding:1px 0}
   .chip i{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
   .chip u{font-family:var(--mono);font-size:11.5px;font-weight:400;color:var(--muted);text-decoration:none;margin-left:auto}
-  /* per-state Ahmed-function composition bar */
+  /* per-state Masopust-function composition bar */
   .compbar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:1px 0 3px;background:#EEEAE3}
   .compbar i{display:block;height:100%}
   .compsum{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin:0 0 9px;line-height:1.4}
@@ -280,15 +280,15 @@
     </div></div>
     <div class="pstep"><div class="pn">2</div><div class="pc">
       <h4>Clustering &amp; annotation</h4>
-      <p>scVI (paper parameters) → <b>Leiden-0.8</b> → 13 clusters, annotated into 5 state programs (Naïve / Activated / Cycling / Resting / Treg). Marson defines no cell-state taxonomy (it clusters the 3,341 <i>perturbations</i>, not cells), so these labels are the workbench's own — assigned by a fixed, confound-aware marker rule (<code>label_clusters.py</code>), reproducible from the raw object.</p>
+      <p>scVI at the authors' parameters (on raw counts) → <b>Leiden-0.8</b> → 13 clusters. The clustering and the 5 state-program names (Naïve / Activated / Cycling / Resting / Treg) are the workbench's own — the authors' NTC notebook embeds but doesn't cluster the cells, and Marson defines no cell-state taxonomy (it clusters the 3,341 <i>perturbations</i>, not cells). Labels are assigned by a fixed, confound-aware marker rule (<code>label_clusters.py</code>), reproducible from the raw object.</p>
     </div></div>
     <div class="pstep"><div class="pn">3</div><div class="pc">
       <h4>State labels</h4>
-      <p>Naïve and Resting are quiescent, naïve-derived; <b>Cycling is bimodal</b> — naïve/resting-like at rest, activated at 48&nbsp;hr (cell cycle is orthogonal to lineage). The former "Memory" cluster is labelled <b>Resting</b>: 3′ scRNA-seq cannot resolve the CD45RA/CD45RO switch, and the Ahmed "M" call rests on non-specific adhesion markers (CD11a/CD95/CD58). It is not Tscm — SELL/TCF7/LEF1 sit at ~half the naïve level and CD95 is not elevated (a downshift out of naïve, not a stem-memory gain; memory can't form in ≤48&nbsp;hr in vitro). Activated splits by timepoint (8&nbsp;hr Th1-skew, 48&nbsp;hr no skew); Treg is a discrete cluster.</p>
+      <p>Naïve and Resting are quiescent, naïve-derived; <b>Cycling is bimodal</b> — naïve/resting-like at rest, activated at 48&nbsp;hr (cell cycle is orthogonal to lineage). The former "Memory" cluster is labelled <b>Resting</b>: 3′ scRNA-seq cannot resolve the CD45RA/CD45RO switch, and the Masopust "M" call rests on non-specific adhesion markers (CD11a/CD95/CD58). It is not Tscm — SELL/TCF7/LEF1 sit at ~half the naïve level and CD95 is not elevated (a downshift out of naïve, not a stem-memory gain; memory can't form in ≤48&nbsp;hr in vitro). Activated splits by timepoint (8&nbsp;hr Th1-skew, 48&nbsp;hr no skew); Treg is a discrete cluster.</p>
     </div></div>
     <div class="pstep"><div class="pn">4</div><div class="pc">
       <h4>Function calls</h4>
-      <p>Per-cell scoring against the Masopust/Ahmed helper-lineage signatures behind a <b>permutation-FDR floor</b> (500 shuffled-gene nulls, BH q&lt;0.05). Activation confounds are handled per lineage: CD25/IL2RA dropped from Treg; CD4-CTL keeps its full cytotoxic panel (GNLY/PRF1/GZMH/KLRD1/GZMB/NKG7) with the activation score regressed out. 82% of cells return no call (polyclonal Th0 stimulation); coherent skews appear at 8&nbsp;hr (Th1) and in the Treg cluster.</p>
+      <p>Per-cell scoring against the Masopust et al. helper-lineage signatures behind a <b>permutation-FDR floor</b> (500 shuffled-gene nulls, BH q&lt;0.05). Activation confounds are handled per lineage: CD25/IL2RA dropped from Treg; CD4-CTL keeps its full cytotoxic panel (GNLY/PRF1/GZMH/KLRD1/GZMB/NKG7) with the activation score regressed out. 82% of cells return no call (polyclonal Th0 stimulation); coherent skews appear at 8&nbsp;hr (Th1) and in the Treg cluster.</p>
     </div></div>
     <div class="pstep"><div class="pn">5</div><div class="pc">
       <h4>Review &amp; validation</h4>
@@ -304,14 +304,14 @@
     <div class="ppapers">
       <div class="pph2">Papers</div>
       <div class="ppaper"><a href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">Marson GWCD4i perturb-seq · bioRxiv ↗</a><span>Source of the cells and experimental design — a genome-scale CRISPRi screen in primary human CD4.</span></div>
-      <div class="ppaper"><a href="https://www.nature.com/articles/s41577-025-01238-2" target="_blank" rel="noopener">Masopust / Ahmed · Guidelines for T cell nomenclature · Nat Rev Immunol 2026 ↗</a><span>Naming framework — marker-based consensus definitions for CD4 differentiation states and helper functions; cells are scored against these directly.</span></div>
+      <div class="ppaper"><a href="https://www.nature.com/articles/s41577-025-01238-2" target="_blank" rel="noopener">Masopust et al. · Guidelines for T cell nomenclature · Nat Rev Immunol 2026 ↗</a><span>Naming framework — marker-based consensus definitions for CD4 differentiation states and helper functions; cells are scored against these directly.</span></div>
     </div>
   </div>
 </div>
 
 <script>
 const HUES=[[14,124,134],[176,64,110],[176,120,30],[76,86,192],[150,60,40],[20,120,80],[120,110,140],[70,120,160],[190,90,60],[110,90,170],[150,100,40],[90,130,110]];
-// Masopust/Ahmed modular nomenclature (Guidelines for T cell nomenclature, Nat Rev Immunol 2026;26:298-313)
+// Masopust et al. modular nomenclature (Guidelines for T cell nomenclature, Nat Rev Immunol 2026;26:298-313)
 // two orthogonal axes: differentiation state (N/A/M/X) × function (Th subsets); each viewable per-cell or by-cluster
 const PAL={
   ds:{order:['N','A','M','checkpoint-high activated'],
@@ -339,13 +339,13 @@ const PROG=[
  {k:'Treg',label:'Treg',hue:[213,43,71],mk:['FOXP3','IL2RA','CTLA4','IKZF2','CCR8']},
 ];
 const progmap={};PROG.forEach(p=>progmap[p.k]=p);
-// muted differentiation base colours for the Ahmed merged view (cells with no function call)
+// muted differentiation base colours for the Masopust merged view (cells with no function call)
 const DS_MUTED={N:{label:'Naïve',hue:[176,184,200]},A:{label:'Activated',hue:[214,198,176]},M:{label:'Resting',hue:[184,206,190]},'checkpoint-high activated':{label:'Chkpt-hi',hue:[200,182,198]}};
 const DS_MUTED_ORDER=['N','A','M','checkpoint-high activated'];
 // timepoint shading: Rest lighter → Stim8hr base → Stim48hr darker (within each program hue)
 const TP_SHADE={Rest:0.34,Stim8hr:0.02,Stim48hr:-0.17};
 function shadeHue(hue,cond){const f=TP_SHADE[cond]||0;return f>0?hue.map(v=>Math.round(v+(255-v)*f)):hue.map(v=>Math.round(v*(1+f)));}
-// per-cell category + colour for the current scheme (Marson = program shaded by timepoint; Ahmed = function-else-differentiation)
+// per-cell category + colour for the current scheme (Marson = program shaded by timepoint; Masopust = function-else-differentiation)
 function catInfo(c0){
   if(scheme==='marson'){const prog=cmap[c0.cluster]?cmap[c0.cluster].top_program:'?';const p=progmap[prog];const base=p?p.hue:[150,150,150];return{key:prog,label:p?p.label:prog,hue:shadeHue(base,c0.condition),muted:false};}
   if(c0.func&&c0.func!=='—'){const f=PAL.func[c0.func];return{key:c0.func,label:c0.func,hue:f?f.hue:[150,150,150],muted:false};}
@@ -386,18 +386,18 @@ let pickA=null,pickB=null;
 // ── per-paper lineage-calling spec (verified by Claude Science) ──
 const PAPERS={
   marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1',cite:'Marson GWCD4i perturb-seq · bioRxiv 2025 (10.64898/2025.12.23.696273)'},
-  ahmed:{url:'https://www.nature.com/articles/s41577-025-01238-2',cite:'Masopust…Ahmed · Guidelines for T cell nomenclature · Nat Rev Immunol 2026;26:298–313'}
+  ahmed:{url:'https://www.nature.com/articles/s41577-025-01238-2',cite:'Masopust…Masopust · Guidelines for T cell nomenclature · Nat Rev Immunol 2026;26:298–313'}
 };
 function ahmedTable(n){return PAPERS.ahmed.url+'/tables/'+n;}
 // STATE layer = workbench Leiden clustering of Marson NTC cells (NOT a Marson-defined taxonomy)
 const STATE_SPEC={
  Naive:{ahmed:'Naïve (Diff N): CCR7hi, CD45RA+, CD95−',link:ahmedTable(1),tab:'Table 1'},
  Activated:{ahmed:'Activated (Diff A): CD69+, CD25hi, ±Ki67/HLA-DR/CD38',link:ahmedTable(1),tab:'Table 1'},
- Cycling:{ahmed:'no Ahmed state — proliferation is folded into "Activated"',link:null,tab:''},
+ Cycling:{ahmed:'no Masopust state — proliferation is folded into "Activated"',link:null,tab:''},
  Memory:{ahmed:'Memory (Diff M): CD11ahi, CD95+, CD58+ (hard to discriminate on 3′ Flex)',link:ahmedTable(1),tab:'Table 1'},
  Treg:{ahmed:'Treg (Fn): FOXP3+, CD25hi, CD127low, CTLA4+, GITR+',link:ahmedTable(3),tab:'Table 3'}
 };
-// FUNCTION layer = Ahmed per-cell FDR-gated signature
+// FUNCTION layer = Masopust per-cell FDR-gated signature
 const FUNC_SPEC={
  Th1:{ahmed:'CXCR3+, T-bet+, IFNG+; CCR4/6−, CXCR5−',link:ahmedTable(3),tab:'Table 3'},
  Th2:{ahmed:'CRTh2+, CCR4+, GATA3+, IL4/5/13+; IFNG−',link:ahmedTable(3),tab:'Table 3'},
@@ -409,11 +409,11 @@ const FUNC_SPEC={
 const DS_SPEC={
  N:{lab:'Naïve',ahmed:'CCR7hi, CD45RA+, CD95−',link:ahmedTable(1),tab:'Table 1'},
  A:{lab:'Activated',ahmed:'CD69+, CD25hi, ±Ki67/HLA-DR',link:ahmedTable(1),tab:'Table 1'},
- M:{lab:'Resting (adh-hi)',ahmed:'Ahmed "memory" markers (CD11ahi, CD95+, CD58+) — but here these are ubiquitous adhesion transcripts on cultured naïve-derived cells, not true CD45RO+ memory',link:ahmedTable(1),tab:'Table 1'},
+ M:{lab:'Resting (adh-hi)',ahmed:'Masopust "memory" markers (CD11ahi, CD95+, CD58+) — but here these are ubiquitous adhesion transcripts on cultured naïve-derived cells, not true CD45RO+ memory',link:ahmedTable(1),tab:'Table 1'},
  'checkpoint-high activated':{lab:'Chkpt-hi',ahmed:'Highest acute-activation intensity — PD-1/CTLA4/LAG3 induced by strong TCR signal at 8–48 hr, NOT chronic exhaustion. Not a discrete state: a ~5% tail spread across the activated/cycling/Treg clusters (≤19% of any one).',link:ahmedTable(5),tab:'Table 5'}
 };
 let FULL=null,REC=null;
-let mLabels=[],mComp={},clDom={};  // Marson label positions + per-subtype Ahmed composition + each cluster's location-defined dominant timepoint
+let mLabels=[],mComp={},clDom={};  // Marson label positions + per-subtype Masopust composition + each cluster's location-defined dominant timepoint
 let sx,sy,ox,oy,dom=[-0.2,0.6];
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
 function modTag(c0){const f=c0.func&&c0.func!=='—';return `${f?c0.func+' · ':''}${(DS_MUTED[c0.ds]||{}).label||c0.ds}`;}
@@ -474,7 +474,7 @@ fetch('./data/stage01_umap_seed.json').then(r=>r.json()).then(d=>{
   const donors=['All',...[...new Set(cells.map(c=>c.donor))].sort()];
   document.getElementById('donorSel').innerHTML=donors.map(k=>`<button data-d="${k}"${k==='All'?' class="on"':''}>${k}</button>`).join('');
   document.getElementById('donorSel').onclick=e=>{if(e.target.dataset.d){donorSel=e.target.dataset.d;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));updatePkInfo();applyScheme();}};
-  // sentence picker — options grouped + badged by source (Marson cluster vs Ahmed signature)
+  // sentence picker — options grouped + badged by source (Marson cluster vs Masopust signature)
   const optsFor=um=>POPS.filter(p=>p.um===um).sort((a,b)=>(a.umbrella?0:1)-(b.umbrella?0:1)).map(p=>`<option value="${p.k}">${p.label}</option>`).join('');
   const grp=['Quiescent','Activated · 8h','Activated · 48h'].map(u=>`<optgroup label="${u}">${optsFor(u)}</optgroup>`).join('');
   document.getElementById('pkA').innerHTML=`<option value="">cells…</option>`+grp;
@@ -607,7 +607,7 @@ const SUB='color:var(--muted);font-size:9px;letter-spacing:.06em;text-transform:
 function applyScheme(){
   const ah=scheme==='ahmed';
   const ns=document.getElementById('nomsrc');
-  if(ah){ns.textContent='based on Masopust / Ahmed ↗';ns.href=PAPERS.ahmed.url;}
+  if(ah){ns.textContent='based on Masopust et al. ↗';ns.href=PAPERS.ahmed.url;}
   else{ns.textContent='based on scVI/Leiden · Marson data ↗';ns.href=PAPERS.marson.url;}
   if(ah){
     document.getElementById('markslab').textContent='Per-cell differentiation + function';
@@ -624,7 +624,7 @@ function applyScheme(){
     const tot=cells.filter(vis).length||1;
     mComp={};clDom={};
     const CNL={Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
-    // Ahmed FUNCTION axis (effector polarization) — FDR-gated, honestly sparse
+    // Masopust FUNCTION axis (effector polarization) — FDR-gated, honestly sparse
     const compOf=list=>{const n=list.length||1;const fc={};list.forEach(c0=>fc[c0.func]=(fc[c0.func]||0)+1);
       const top=PAL.func.order.filter(fk=>fk!=='—').map(fk=>({fk,c:fc[fk]||0})).filter(s=>s.c>0).sort((a,b)=>b.c-a.c);
       // coherent = a real lineage winner (top func ≥8%); below that it's the generic-activation floor (Science: smeared argmax), not polarization
@@ -675,7 +675,7 @@ c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.
     pop.innerHTML=`<div class="bc">${bc}</div>
       <div class="row"><span>Donor · condition</span><b>${c0.donor} · ${c0.condition}</b></div>
       <div class="row"><span>State <i>· our Leiden</i></span><b>${k?((progmap[k.top_program]||{}).label||k.top_program):c0.cluster}</b></div>
-      <div class="row"><span>Ahmed state <i>· diff.</i></span><b>${dsH}</b></div>
+      <div class="row"><span>Masopust state <i>· diff.</i></span><b>${dsH}</b></div>
       <div class="row"><span>Function <i>· FDR</i></span><b>${hasFunc?c0.func:'no polarization'}</b></div>`;
     pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-272)lx=X-272;lx=Math.max(6,Math.min(lx,r.width-266));ly=Math.max(6,Math.min(ly,r.height-150));
     pop.style.left=lx+'px';pop.style.top=ly+'px';}
@@ -726,7 +726,7 @@ function openCard(i){const c0=cells[i],k=cmap[c0.cluster];const rec=REC?REC[c0.b
   const srcfile=`${c0.donor}_${c0.condition}.assigned_guide.h5ad`;
   const dsSp=DS_SPEC[c0.ds]||{}, fnSp=(c0.func&&c0.func!=='—')?(FUNC_SPEC[c0.func]||{}):null;
   const plinks=`<a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`+
-    (dsSp.link?` · <a href="${dsSp.link}" target="_blank" rel="noopener">Ahmed diff ↗</a>`:'')+
+    (dsSp.link?` · <a href="${dsSp.link}" target="_blank" rel="noopener">Masopust diff ↗</a>`:'')+
     (fnSp&&fnSp.link?` · <a href="${fnSp.link}" target="_blank" rel="noopener">function ↗</a>`:'');
   if(rec){const ref=(REC&&REC.__marker_ref__)||{},me=rec.marker_expr||{},det=(REC&&REC.__marker_det__&&REC.__marker_det__[prog])||{};
     document.getElementById('mgenes').innerHTML=hpMk.map(g=>{const r=ref[g],dr=(det[g]!=null)?det[g]+'%':'';

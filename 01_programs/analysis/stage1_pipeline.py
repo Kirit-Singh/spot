@@ -2,14 +2,14 @@
 # # spot Stage-1 CD4 nomenclature map — reproducible pipeline
 #
 # Single-pass reproduction of the Stage-1 workbench overlay: from the Marson
-# non-targeting-control (NTC) CD4 T cells to the Ahmed/Masopust per-cell
+# non-targeting-control (NTC) CD4 T cells to the Masopust et al. per-cell
 # differentiation + function calls, with the two validation checks that decide
 # the contested labels.
 #
 # **Sources**
 # - Cells & design: Marson *Genome-scale perturb-seq in primary human CD4+ T cells*, bioRxiv 2025.12.23.696273 (CRISPRi; 4 donors; Rest/Stim8hr/Stim48hr; bead-isolated naive CD4).
 # - Data access: **CZI Virtual Cell Platform** — pulled with the `vcp` CLI (cell below), not a private file.
-# - Nomenclature: Masopust/Ahmed *Guidelines for T cell nomenclature*, Nat Rev Immunol 2026;26:298-313 (Tables 1 & 3).
+# - Nomenclature: Masopust et al. *Guidelines for T cell nomenclature*, Nat Rev Immunol 2026;26:298-313 (Tables 1 & 3).
 #
 # **This notebook emits the deployed overlay** (§8). `SEED` fixes the
 # permutation null so the run is deterministic, and `verify_reproduce.py` gates
@@ -39,10 +39,12 @@ rng = np.random.default_rng(SEED)
 
 # %% [markdown]
 # From that raw release we take the non-targeting-control (NTC) cells, balance
-# them across the three stimulation conditions, and apply the paper-parameter
-# scVI + Leiden embedding (§2) to produce `ntc_clustered.h5ad`. `.X` is
-# log1p-normalized counts (18,130 genes; var_names = gene symbols); we load it
-# backed to keep RAM low until the full matrix is needed.
+# them across the three stimulation conditions, and embed + cluster (§2) to
+# produce `ntc_clustered.h5ad`. `.X` is log1p of CP10k-normalized counts
+# (target_sum=1e4 — spot's choice; the authors use the default median total;
+# scVI trains on raw counts, so this scales only the scoring matrix, not the
+# embedding). 18,130 genes; var_names = gene symbols; loaded backed to keep RAM
+# low until the full matrix is needed.
 
 # %%
 a = ad.read_h5ad(D + "ntc_clustered.h5ad", backed="r")
@@ -60,12 +62,13 @@ print(f"donors: {sorted(obs['donor'].unique())}")
 # %% [markdown]
 # ## 2. Embedding & clustering
 #
-# The embedding is paper-parameter scVI (5000 HVG, n_latent=30, batch=donor)
-# with a 100-NN UMAP; Leiden-0.8 gives 13 Leiden clusters that we annotate into
-# **5 state programs** (Naive / Activated / Cycling / Memory / Treg) by marker
-# enrichment. These state names are **ours** — the Marson paper defines no
-# cell-state taxonomy; its only clustering is of the 3,341 perturbations, not
-# the cells. We load the precomputed Leiden labels (obs `L0.8`); the
+# The embedding uses the authors' scVI configuration (5000 HVG seurat_v3,
+# n_latent=30, n_layers=2, dropout=0.2, NB, batch=donor) on raw counts, then a
+# 100-NN UMAP. The **Leiden-0.8 clustering (13 clusters) is spot's own** — the
+# authors' NTC notebook embeds but does not cluster the cells — as are the 5
+# state-program names (Naive / Activated / Cycling / Memory / Treg); the Marson
+# paper defines no cell-state taxonomy (it clusters the 3,341 perturbations, not
+# the cells). We load the precomputed Leiden labels (obs `L0.8`); the
 # cluster->program annotation is the reproducible output of `label_clusters.py`
 # (cluster_labels.json), a fixed confound-aware marker-argmax rule. See
 # `cluster_scores.py` for the per-cluster panel scoring it consumes.
@@ -95,7 +98,7 @@ for p, n in Counter(prog).most_common():
 # Treg 25,125 (6.3) | Memory 3,383 (0.9)
 
 # %% [markdown]
-# ## 3. Ahmed nomenclature panels
+# ## 3. Masopust nomenclature panels
 #
 # Differentiation axis (argmax, always assigned) and function axis (kept only
 # if it clears the FDR floor in §4). Human marker panels from Tables 1 & 3,

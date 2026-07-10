@@ -16,7 +16,7 @@
 #                  not-strongly-activated cluster; rest -> Naive/Memory if resting,
 #                  else Activated. IL2RA/CD25, GZMB, FAS, MKI67 dropped as
 #                  activation-confounded.) Reproduces the deployed labels exactly.
-#   4. Per-cell   score each cell on the Masopust/Ahmed differentiation + function
+#   4. Per-cell   score each cell on the Masopust et al. differentiation + function
 #                 panels behind a permutation-FDR floor, read the labels from
 #                 cluster_labels.json, and EMIT stage01_umap_seed.emitted.json
 #                 (stage1_pipeline.py); we then stage that to data/stage01_umap_seed.json.
