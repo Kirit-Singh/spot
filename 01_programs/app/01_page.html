@@ -13,6 +13,16 @@
   .subhead .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink)}
   .subhead a{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none}
   .subhead a:hover{text-decoration:underline}
+  /* dataset switcher + Hugging Face source link (right side of the top bar) */
+  .dstools{margin-left:auto;display:flex;align-items:center;gap:11px}
+  .dstools .dslab{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .dssel{font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:7px;padding:4px 23px 4px 9px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+  .dssel:hover{border-color:var(--treg)}
+  .srclink{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none;white-space:nowrap}
+  .srclink:hover{text-decoration:underline}
+  .dstools .dssep{color:#D9D3C8;font-size:11px}
+  .hflink{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .hflink:hover{text-decoration:underline}
   /* unified pipeline nav (merges the old breadcrumb + tab bars into one) */
   .nav{display:flex;align-items:center;gap:3px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px}
   .nav .nstep{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:9px;color:var(--muted);font-weight:500;white-space:nowrap;cursor:pointer}
@@ -207,7 +217,7 @@
   #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
 </style>
 
-<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a id="dsSrc" target="_blank" rel="noopener"></a></span></div>
+<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><label class="dslab" for="dsPick">dataset</label><select id="dsPick" class="dssel" title="Select dataset — sourced from Hugging Face"></select><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></span></div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
   <div class="nstep"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
@@ -353,6 +363,14 @@ function catInfo(c0){
 }
 const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
 let DATA=null,cells=[],clusters=[],cmap={},scheme='marson',cond='All',donorSel='All',dir='to',hover=-1;
+// Hugging Face-sourced dataset manifest. Add an entry per published spot dataset;
+// each carries its overlay + records (local for the default; an HF resolve URL for
+// remote ones) and a link to its Hugging Face page. The header dropdown reads this.
+const DATASETS=[
+  {id:'cd4-marson',label:'CD4 · Marson NTC',overlay:'./data/stage01_umap_seed.json',records:'./data/stage01_cell_records.json',
+   src:'https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq',srcName:'CZ Biohub',srcTip:'Marson GWCD4i — Billion Cell Project, CZ Biohub · CZI Virtual Cell Platform',
+   hf:'https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson'}
+];
 // sentence-picker populations — "Show me [A] → [B]" highlights matching cells
 // activated-lineage test (used by the umbrella "all" rows): activated / cycling / Treg clusters
 const isAct=c=>{const k=cmap[c.cluster];return k&&(k.top_program==='Activated'||k.top_program==='Cycling'||k.is_treg_cluster);};
@@ -456,7 +474,13 @@ function labelCentroids(catFn,palObj,order,forceDark){
     x.fillStyle=forceDark?'#3A342B':`rgb(${o.hue||[58,52,43]})`;x.fillText(o.lab,o.X,o.Y+3.5);});
 }
 
-fetch('./data/stage01_umap_seed.json').then(r=>r.json()).then(d=>{
+function loadDataset(ds){
+  // reset per-dataset view state so switching datasets starts clean
+  REC=null;cmap={};cond='All';donorSel='All';pickA=pickB=null;hover=-1;
+  const _hf=document.getElementById('dsHf');if(_hf)_hf.href=ds.hf;
+  // NOTE: remote (HF-hosted) overlays are untested — CORS to huggingface.co and
+  // re-entrancy on rapid A→B→A switches need verifying when a 2nd dataset is added.
+  fetch(ds.overlay).then(r=>{if(!r.ok)throw new Error('overlay HTTP '+r.status);return r.json();}).then(d=>{
   DATA=d;cells=d.cells;clusters=d.meta.clusters;
   clusters.forEach((k,i)=>cmap[k.id]=k);
   // colour each cluster by its Marson program (merges sub-clusters; drops the condition suffix)
@@ -482,17 +506,25 @@ fetch('./data/stage01_umap_seed.json').then(r=>r.json()).then(d=>{
   document.getElementById('pkA').onchange=e=>{pickA=pmap[e.target.value]||null;syncPicker();};
   document.getElementById('pkB').onchange=e=>{pickB=pmap[e.target.value]||null;syncPicker();};
   document.getElementById('pkClr').onclick=()=>{pickA=pickB=null;document.getElementById('pkA').value='';document.getElementById('pkB').value='';syncPicker();};
-  const _t=d.meta.title||'CD4 transcriptional programs',_sn=d.meta.source_name||'Marson GWCD4i',_su=d.meta.source_url||'https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq';
-  document.getElementById('dsTitle').textContent=_t;
-  const _a=document.getElementById('dsSrc');_a.textContent=`(${_sn} ↗)`;_a.href=_su;
+  document.getElementById('dsTitle').textContent=d.meta.title||'CD4 transcriptional programs';
+  // upstream source link — driven by the manifest (credits the data source: CZ Biohub)
+  const _a=document.getElementById('dsSrc');_a.textContent=`${ds.srcName} ↗`;_a.href=ds.src;_a.title=ds.srcTip||ds.srcName;
   document.getElementById('emittedAt').textContent=d.meta.emitted_at||'—';
   document.getElementById('matchPct').textContent=(d.meta.match_pct!=null)?(d.meta.match_pct+'% match'):'—';
   document.getElementById('lastrun').innerHTML=d.meta.emitted_at?('analysis last run · <b>'+d.meta.emitted_at+'</b>'):'';
   applyScheme();
   resize();
+  syncPicker(); // refresh idgenes/skq state to match the reset pickers
   // lazy-load the two card datasets (needed only on click)
-  fetch('./data/stage01_cell_records.json',{cache:'no-store'}).then(r=>r.json()).then(d=>REC=d);
-});
+  fetch(ds.records,{cache:'no-store'}).then(r=>r.json()).then(d=>REC=d).catch(e=>console.error('records load failed',e));
+  }).catch(e=>{console.error('dataset load failed',e);var ln=document.getElementById('lastrun');if(ln)ln.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
+}
+// populate the dataset picker from the HF-sourced manifest, then load the first entry
+(function(){const sel=document.getElementById('dsPick');if(!sel)return;
+  sel.innerHTML=DATASETS.map(x=>`<option value="${x.id}">${x.label}</option>`).join('');
+  sel.onchange=e=>{const ds=DATASETS.find(x=>x.id===e.target.value)||DATASETS[0];loadDataset(ds);};
+})();
+loadDataset(DATASETS[0]);
 
 function pct(arr,p){const a=arr.slice().sort((x,y)=>x-y);return a[cl(Math.floor(a.length*p),0,a.length-1)];}
 function resize(){const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;x.setTransform(2,0,0,2,0,0);
