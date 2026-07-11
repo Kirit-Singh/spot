@@ -219,7 +219,7 @@
 </style>
 
 <div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></span></div>
-<div class="disclaimer">⚠ Exploratory continuous transcriptional-program scores — not validated cell-type calls. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. One in-vitro 4-donor dataset; requires external validation.</div>
+<div class="disclaimer">⚠ Exploratory continuous transcriptional-program scores — not validated cell-type calls. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. One in-vitro 4-donor dataset; requires external validation. <b>Map colour = display-only top program, gated to "mixed" when the top scores are close — the continuous scores in the cell cards are primary.</b></div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
   <div class="nstep"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
@@ -349,10 +349,18 @@ const DIFF_ROWS=[['diff_naive_score','Naïve'],['diff_activated_score','Activate
 // timepoint shading: Rest lighter → Stim8hr base → Stim48hr darker (within each program hue)
 const TP_SHADE={Rest:0.34,Stim8hr:0.02,Stim48hr:-0.17};
 function shadeHue(hue,cond){const f=TP_SHADE[cond]||0;return f>0?hue.map(v=>Math.round(v+(255-v)*f)):hue.map(v=>Math.round(v*(1+f)));}
-// per-cell colour: Coarse = cluster STATE program (shaded by timepoint); Fine = cell FUNCTIONAL program (display-only argmax of continuous scores)
+// Display-only "top program" is a forced argmax of weakly-separated, relative-within-dataset
+// scores. It is MARGIN-GATED: when the top-two scores are close (ambiguous), the cell/cluster is
+// shown as "mixed / no clear top" instead of asserting a misleading label. The continuous scores
+// in the cell cards are the primary evidence.
+const CLUSTER_MARGIN=0.4, CELL_MARGIN=0.05, MIX_HUE=[178,178,172];
+function topMargin(obj,keys){const v=keys.map(k=>obj[k]).filter(n=>typeof n==='number').sort((a,b)=>b-a);return v.length>1?v[0]-v[1]:Infinity;}
+function gatedState(c0){const k=cmap[c0.cluster];if(!k)return null;const z=k.program_scores_within_dataset_z;if(z&&topMargin(z,Object.keys(z))<CLUSTER_MARGIN)return 'mixed';return k.dominant_program_for_display_only;}
+function gatedFunc(c0){return topMargin(c0,FUNC_ORDER)<CELL_MARGIN?'mixed':c0.dominant_program_for_display_only;}
+// per-cell colour: Coarse = cluster STATE program (shaded by timepoint); Fine = cell FUNCTIONAL program — both margin-gated
 function catInfo(c0){
-  if(scheme==='marson'){const k=cmap[c0.cluster];const key=k?k.dominant_program_for_display_only:'?';const p=stateMap[key];const base=p?p.hue:[150,150,150];return{key,label:p?p.label:key,hue:shadeHue(base,c0.condition),muted:false};}
-  const key=c0.dominant_program_for_display_only;const f=FUNC_PROG[key];return{key,label:f?f.label:(key||'—'),hue:f?f.hue:[150,150,150],muted:!f};
+  if(scheme==='marson'){const key=gatedState(c0);if(key==='mixed'||!key)return{key:'mixed',label:'mixed / no clear top',hue:MIX_HUE,muted:true};const p=stateMap[key];const base=p?p.hue:[150,150,150];return{key,label:p?p.label:key,hue:shadeHue(base,c0.condition),muted:false};}
+  const key=gatedFunc(c0);if(key==='mixed')return{key:'mixed',label:'mixed / no clear top',hue:MIX_HUE,muted:true};const f=FUNC_PROG[key];return{key,label:f?f.label:(key||'—'),hue:f?f.hue:[150,150,150],muted:!f};
 }
 const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
 let DATA=null,cells=[],clusters=[],cmap={},scheme='marson',cond='All',donorSel='All',dir='to',hover=-1;
@@ -380,12 +388,20 @@ const POPS=[
  {k:'treg_prog_8h',label:'Treg-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='treg_like_score'&&c.condition==='Stim8hr'},
  {k:'th1_8h',label:'Th1-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th1_like_score'&&c.condition==='Stim8hr'},
  {k:'ctl_8h',label:'CD4 CTL-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='cd4_ctl_like_score'&&c.condition==='Stim8hr'},
+ {k:'th2_8h',label:'Th2-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th2_like_score'&&c.condition==='Stim8hr'},
+ {k:'th17_8h',label:'Th17-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th17_like_score'&&c.condition==='Stim8hr'},
+ {k:'tfh_8h',label:'Tfh-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='tfh_like_score'&&c.condition==='Stim8hr'},
+ {k:'th9_8h',label:'Th9-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th9_like_score'&&c.condition==='Stim8hr'},
  // ── Activated · 48h (umbrella = activated/cycling/treg-like clusters at 48 hr)
  {k:'um:Act48',label:'all activated · 48h',um:'Activated · 48h',umbrella:true,test:c=>c.condition==='Stim48hr'&&isActCluster(c)},
  {k:'treg_clust',label:'Treg-like cluster',um:'Activated · 48h',test:c=>inState(c,'treg_like')},
  {k:'treg_prog_48h',label:'Treg-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='treg_like_score'&&c.condition==='Stim48hr'},
  {k:'th1_48h',label:'Th1-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th1_like_score'&&c.condition==='Stim48hr'},
  {k:'ctl_48h',label:'CD4 CTL-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='cd4_ctl_like_score'&&c.condition==='Stim48hr'},
+ {k:'th2_48h',label:'Th2-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th2_like_score'&&c.condition==='Stim48hr'},
+ {k:'th17_48h',label:'Th17-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th17_like_score'&&c.condition==='Stim48hr'},
+ {k:'tfh_48h',label:'Tfh-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='tfh_like_score'&&c.condition==='Stim48hr'},
+ {k:'th9_48h',label:'Th9-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th9_like_score'&&c.condition==='Stim48hr'},
 ];
 const pmap={};POPS.forEach(p=>pmap[p.k]=p);
 const HLA=[36,132,196],HLB=[196,52,132];
@@ -528,12 +544,12 @@ function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const ah=sch
   if(pk){lgs.innerHTML=[[pickA,HLA],[pickB,HLB]].filter(([p])=>p).map(([p,h])=>`<span><i style="background:rgb(${h})"></i>${p.label} · ${cells.filter(c0=>vis(c0)&&p.test(c0)).length.toLocaleString()}</span>`).join('');}
   else if(ah){
     // Fine · per-cell dominant functional program (display-only argmax of continuous scores)
-    const fnP=FUNC_ORDER.filter(k=>cells.some(c0=>vis(c0)&&c0.dominant_program_for_display_only===k));
+    const fnP=FUNC_ORDER.filter(k=>cells.some(c0=>vis(c0)&&gatedFunc(c0)===k));
     lgs.innerHTML=fnP.map(k=>`<span><i style="background:rgb(${FUNC_PROG[k].hue})"></i>${FUNC_PROG[k].label}</span>`).join('');
   } else {
     const tps=[['Rest','0'],['Stim8hr','8'],['Stim48hr','48']],idx={Rest:0,Stim8hr:1,Stim48hr:2};
     const txtOn=rgb=>((0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255>0.62?'#1E1B16':'#fff');
-    const inProg=p=>c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].dominant_program_for_display_only===p.k;
+    const inProg=p=>c0=>vis(c0)&&gatedState(c0)===p.k;
     let anyMulti=false;
     const rows=STATE_PROG.filter(p=>cells.some(inProg(p))).map(p=>{
       const test=inProg(p),counts=tps.map(([cd,num])=>({cd,num,n:0,sh:shadeHue(p.hue,cd)}));
@@ -599,7 +615,7 @@ function applyScheme(){
   else{ns.textContent='based on scVI/Leiden · Marson data ↗';ns.href=PAPERS.marson.url;}
   if(ah){
     document.getElementById('markslab').textContent='Per-cell functional programs · continuous scores';
-    const fnRows=FUNC_ORDER.map(k=>({k,n:cells.filter(c0=>vis(c0)&&c0.dominant_program_for_display_only===k).length})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+    const fnRows=FUNC_ORDER.map(k=>({k,n:cells.filter(c0=>vis(c0)&&gatedFunc(c0)===k).length})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
     document.getElementById('marks').innerHTML=
       `<div class="klab">Dominant program · display-only argmax</div>`+
       fnRows.map(({k,n})=>`<div class="mk"><span class="d" style="background:rgb(${FUNC_PROG[k].hue})"></span><span class="nm">${FUNC_PROG[k].label}</span><span class="gs">${n.toLocaleString()} cells</span></div>`).join('')+
@@ -617,7 +633,7 @@ function applyScheme(){
     clusters.forEach(k=>{const fc=funcByCluster[k.id];const p=stateMap[k.dominant_program_for_display_only]||{hue:[150,150,150],label:k.dominant_program_for_display_only};
       let topfk=null,topn=0,tot=0;if(fc){Object.entries(fc).forEach(([f,n])=>{tot+=n;if(n>topn){topn=n;topfk=f;}});}
       mComp[k.id]={hue:p.hue,label:p.label,n:tot,topfk,cn:CNL[clDom[k.id]]||clDom[k.id]};});
-    const rows=STATE_PROG.map(p=>{const pc=cells.filter(c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].dominant_program_for_display_only===p.k);return{p,pc,n:pc.length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+    const rows=STATE_PROG.map(p=>{const pc=cells.filter(c0=>vis(c0)&&gatedState(c0)===p.k);return{p,pc,n:pc.length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
     document.getElementById('marks').innerHTML=rows.map(({p,n})=>
       `<div class="mk${p.k==='treg_like'?' treg':''}"><span class="d" style="background:rgb(${p.hue})"></span><span class="nm">${p.label}</span><span class="gs">${(p.mk||[]).slice(0,4).join(', ')}</span></div>`
     ).join('');
