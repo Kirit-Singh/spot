@@ -66,21 +66,21 @@
   #pop .srow.em{color:var(--ink);font-weight:600}
   #pop .srow .sv{font-family:var(--mono)}
   /* rail */
-  .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+  .rail{background:var(--surface);padding:11px 16px 10px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
   /* rail children keep their natural height and the rail scrolls — never let the segmented controls squish to a line */
   .rail>*{flex-shrink:0}
   /* all sidebar section titles share ONE style — the MARKER GENES look (.pcard .pn) */
   .lab{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin:0 0 5px}
   /* section labels sit under a single hairline that separates rail sections — no boxes */
-  .lab.mt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .lab.mt{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
   /* the separator goes on the CONTAINER (both singleProg and contrastPanel) so a first-child
      margin can't escape upward and cut through the donor tabs; reset the inner Color-by label's own line */
-  #singleProg,#contrastPanel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  #singleProg,#contrastPanel{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
   #singleProg>.lab.mt{margin-top:0;padding-top:0;border-top:0}
   .colorsel{width:100%;font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:9px 30px 9px 11px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 5.5L9 0z' fill='%233E7D8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
   .colorsel:hover{border-color:var(--accent)}
   /* selected-program metadata card */
-  .pcard{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .pcard{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
   .pcard .pn{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--ink2);line-height:1.2}
   .pcard .pf{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:3px}
   .pcard .psrc{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--accent);text-decoration:none;margin-top:9px}
@@ -231,20 +231,21 @@
   .crtag{font-family:var(--mono);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#fff;border-radius:4px;padding:2px 6px;min-width:34px;text-align:center;flex:0 0 auto}
   .crlab{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
   .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:7px;letter-spacing:.02em;white-space:nowrap}
-  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
-  #prevSection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:center}
+  /* a right spacer column mirrors the label column (--labw) so the Rest/8h/48h columns sit dead-centre */
+  #prevSection{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:center;--labw:96px}
   .prevbody{width:max-content;max-width:100%;margin:0 auto}
-  .prevgrid{display:grid;grid-template-columns:max-content repeat(3,32px);gap:3px;align-items:center;margin-top:8px}
+  .prevgrid{display:grid;grid-template-columns:var(--labw) repeat(3,32px) var(--labw);gap:3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
-  /* population labels are clickable chips — faint outline, accent on hover */
-  .prevgrid .plbl{display:flex;align-items:center;justify-self:end;height:19px;padding:0 7px;border:1px solid var(--line);border-radius:4px;font-size:10px;color:var(--ink2);white-space:nowrap;cursor:pointer}
+  /* population labels are equal-width clickable chips — faint outline, accent on hover */
+  .prevgrid .plbl{height:19px;line-height:17px;padding:0 5px;text-align:right;border:1px solid var(--line);border-radius:4px;font-size:8.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
   .prevgrid .plbl:hover{border-color:var(--accent);color:var(--accent)}
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
-  .prevgrid .ndkey{grid-column:2/-1;justify-self:end;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
+  .prevgrid .ndkey{grid-column:2/5;justify-self:end;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   /* too-sparse (Th9): hide the gradient/ticks, show a centred 'Too sparse to shade' at the same height */
   .cbar.degen{display:flex;align-items:center;justify-content:center}
@@ -520,7 +521,8 @@ function buildPrevalence(){
   let maxf=0;const prev={},degen={};
   progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
     prev[p.score_field]={};conds.forEach(([k])=>{const f=tot[k]?cnt[p.score_field][k]/tot[k]:0;prev[p.score_field][k]=f;if(!degen[p.score_field]&&f>maxf)maxf=f;});});
-  let html='<div class="ph"></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join(''),anyND=false;
+  const sp='<div></div>';   // right spacer cell (mirrors the label column so values sit centred)
+  let html='<div></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('')+sp,anyND=false;
   progs.forEach(p=>{
     const nd=degen[p.score_field]; if(nd)anyND=true;
     html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${p.display_label}</div>`;
@@ -528,6 +530,7 @@ function buildPrevalence(){
       if(nd){html+='<div class="pc nd">ND</div>';return;}
       const f=prev[p.score_field][k],i=maxf?f/maxf:0;
       html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${Math.round(f*100)}%</div>`;});
+    html+=sp;
   });
   if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
   grid.innerHTML=html;
