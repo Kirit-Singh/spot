@@ -227,8 +227,10 @@
   .crrow:first-of-type{border-top:0}
   .crsw{width:14px;height:14px;border-radius:4px;flex:0 0 14px;border:1px solid rgba(0,0,0,.14)}
   .crmeta{min-width:0}
+  .crtag{font-family:var(--mono);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#fff;border-radius:4px;padding:2px 5px;flex:0 0 auto}
+  .crtag.a{background:rgb(38,150,190)}.crtag.b{background:rgb(201,74,120)}
   .crlab{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
-  .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.02em}
+  .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:7px;letter-spacing:.02em;white-space:nowrap}
   .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
@@ -309,7 +311,7 @@
       </div>
     </div>
     <div id="prevSection">
-      <div class="lab">Program prevalence over time</div>
+      <div class="lab">Programs over time</div>
       <div class="prevbody">
         <div class="prevgrid" id="prevGrid"></div>
       </div>
@@ -830,18 +832,18 @@ function drawContrast(){
     if(Math.hypot(B.X-A.X,B.Y-A.Y)>22)updateSkewLine(A,B);else hideSkewLine();
     placeAnchorLabel('lblA',A,ABHUE_A,lblText(axisA));
     placeAnchorLabel('lblB',B,ABHUE_B,lblText(axisB));
+    deCollideLabels('lblA','lblB');
   } else {hideSkewLine();hideAnchorLabels();}
 }
 // right-rail contrast panel: the active A and B fields with swatch, direction and scope, plus the blend key
 function updateContrastRail(){
-  const rowHTML=(ax,hue)=>{
+  const rowHTML=(ax,hue,tag,cls)=>{
     const p=progByField[ax.field],degen=transformFor(ax.field).status==='degenerate';
-    return `<span class="crsw" style="background:rgb(${hue})"></span>
-      <div class="crmeta"><div class="crlab">${p.display_label}</div>
-      <div class="crsub">${ax.direction} · ${scopeLabel(ax)}${degen?' · too sparse to shade':''}</div></div>`;
+    return `<span class="crtag ${cls}">${tag}</span><span class="crsw" style="background:rgb(${hue})"></span>
+      <div class="crmeta"><span class="crlab">${p.display_label}</span><span class="crsub">${ax.direction} · ${scopeLabel(ax)}${degen?' · too sparse':''}</span></div>`;
   };
-  document.getElementById('crA').innerHTML=rowHTML(axisA,ABHUE_A);
-  document.getElementById('crB').innerHTML=rowHTML(axisB,ABHUE_B);
+  document.getElementById('crA').innerHTML=rowHTML(axisA,ABHUE_A,'From','a');
+  document.getElementById('crB').innerHTML=rowHTML(axisB,ABHUE_B,'To','b');
   document.getElementById('crGrad').style.background=`linear-gradient(90deg,rgb(${ABHUE_A}),${blendAB(1,1).css},rgb(${ABHUE_B}))`;
 }
 // hover/cell-detail selection block: one row per program in contrast (both A and B + blended swatch), else the single field
@@ -859,6 +861,19 @@ function selBlockHTML(c0){
   return `<div class="psel" title="${p.score_field} · ${p.scoring_method}"><span class="dot" style="background:${swatchFor(field,c0[field])}"></span><span class="pl">${p.display_label}</span><b class="pv">${sv(c0[field])}</b></div>`;
 }
 function placeAnchorLabel(id,P,hue,text){const el=document.getElementById(id);el.textContent=text;el.style.color=`rgb(${hue})`;el.style.borderColor=`rgb(${hue})`;el.style.left=P.X+'px';el.style.top=P.Y+'px';el.style.display='block';}
+// when the two program peaks are close, their on-plot labels overlap — push them apart vertically to clear
+function deCollideLabels(idA,idB){
+  const a=document.getElementById(idA),b=document.getElementById(idB);
+  if(a.style.display==='none'||b.style.display==='none')return;
+  const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+  const ox=Math.min(ra.right,rb.right)-Math.max(ra.left,rb.left);
+  const oy=Math.min(ra.bottom,rb.bottom)-Math.max(ra.top,rb.top);
+  if(ox>0&&oy>0){                              // boxes overlap → separate vertically with a small gap
+    const shift=oy/2+5, aTop=parseFloat(a.style.top), bTop=parseFloat(b.style.top);
+    if(aTop<=bTop){a.style.top=(aTop-shift)+'px';b.style.top=(bTop+shift)+'px';}
+    else{a.style.top=(aTop+shift)+'px';b.style.top=(bTop-shift)+'px';}
+  }
+}
 function hideAnchorLabels(){document.getElementById('lblA').style.display='none';document.getElementById('lblB').style.display='none';}
 // animated conveyor belt of chevrons from anchor a to anchor b (screen px), flowing a→b
 function updateSkewLine(a,b){const svg=document.getElementById('skewline');
