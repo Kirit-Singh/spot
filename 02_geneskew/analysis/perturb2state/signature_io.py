@@ -117,10 +117,13 @@ def build_all_signatures(ntc_path: str, condition: str, programs: dict,
     z_act = signature.within_donor_z(score_act, donors)
 
     # Expression restricted to the readout universe, ordered as universe gene_ids.
+    # Keep float32 and free the full matrix immediately (peak-memory control: a
+    # float64 copy here doubled RAM and previously thrashed the 31 GB host).
     uni_cols = [sym_to_col[s] for s in universe_syms if s in sym_to_col]
     kept_gene_ids = [g for g, s in zip(universe["gene_ids"], universe_syms)
                      if s in sym_to_col]
-    expr_uni = expr[:, uni_cols].astype(np.float64)
+    expr_uni = np.ascontiguousarray(expr[:, uni_cols], dtype=np.float32)
+    del expr
 
     scopes = {"all_donor": None}
     for d in config.DONORS:
@@ -128,7 +131,10 @@ def build_all_signatures(ntc_path: str, condition: str, programs: dict,
 
     out_signatures: dict[str, dict] = {}
     for scope, drop in scopes.items():
-        m = np.ones(donors.shape[0], dtype=bool) if drop is None else donors != drop
+        if drop is None:
+            m = slice(None)                      # all-donor: no copy
+        else:
+            m = donors != drop
         pb = signature.build_pseudobulk(z_a[m], z_b[m], z_act[m], donors[m],
                                         expr_uni[m], config.N_SCORE_BINS)
         sig = signature.build_signature_frame(pb, kept_gene_ids)

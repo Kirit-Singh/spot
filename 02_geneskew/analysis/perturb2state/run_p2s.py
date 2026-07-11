@@ -38,6 +38,17 @@ def _ntc_symbols(ntc_path: str) -> list[str]:
                 for x in f["var/_index"][:]]
 
 
+def _de_var(de_main_path: str) -> tuple[list[str], list[str]]:
+    """Cheap read of the DE gene axis (Ensembl + symbol) without any layer."""
+    import h5py
+    with h5py.File(de_main_path, "r") as f:
+        ids = [x.decode() if isinstance(x, (bytes, bytearray)) else str(x)
+               for x in f["var/gene_ids"][:]]
+        names = [x.decode() if isinstance(x, (bytes, bytearray)) else str(x)
+                 for x in f["var/gene_name"][:]]
+    return ids, names
+
+
 def _build_or_load_signatures(args, programs, axis, uni, log):
     cache = args.sig_cache
     if cache and os.path.exists(cache) and args.use_cache:
@@ -171,17 +182,24 @@ def build(args):
     provenance = json.load(open(os.path.join(src_dir, "provenance.json")))
     mask_sha = provenance["mask_sha256"]
 
-    main = io_data.load_main(args.de_main, cfg.ANALYSIS_CONDITION)
-    log(f"DE main loaded: {main['n_targets']} targets, {len(main['gene_ids'])} genes")
-
+    # Universe from the cheap DE gene axis (no layers) so the memory-heavy
+    # signature build runs BEFORE the DE effect layers are loaded.
+    de_ids, de_names = _de_var(args.de_main)
     excluded = U.excluded_panel_control(axis)
-    uni = U.build_universe(main["gene_ids"], main["gene_names"],
-                           _ntc_symbols(args.ntc), excluded)
+    uni = U.build_universe(de_ids, de_names, _ntc_symbols(args.ntc), excluded)
     log(f"universe: {uni['n_genes']} genes; excluded {uni['exclusion_counts']}")
 
     built, _ = _build_or_load_signatures(args, programs, axis, uni, log)
     gene_ids = built["gene_ids"]
     hashes = sio.signature_hashes({"signatures": built["signatures"], "gene_ids": gene_ids})
+    if args.stop_after_signatures:
+        log(f"signatures cached ({len(gene_ids)} genes); stopping before modeling")
+        print(json.dumps({"signatures_cached": True, "n_genes": len(gene_ids),
+                          "signature_hashes": hashes}, indent=2))
+        return {"signatures_cached": True, "n_genes": len(gene_ids)}
+
+    main = io_data.load_main(args.de_main, cfg.ANALYSIS_CONDITION)
+    log(f"DE main loaded: {main['n_targets']} targets, {len(main['gene_ids'])} genes")
 
     # eligible perturbation columns (direct-screen eligible only, §6.3)
     screen = pd.read_parquet(os.path.join(src_dir, "screen.parquet"))
@@ -394,6 +412,7 @@ def main(argv=None):
     ap.add_argument("--sig-cache", default=None)
     ap.add_argument("--use-cache", action="store_true")
     ap.add_argument("--skip-sensitivity", action="store_true")
+    ap.add_argument("--stop-after-signatures", action="store_true")
     args = ap.parse_args(argv)
     result = build(args)
     print(json.dumps(result, indent=2))

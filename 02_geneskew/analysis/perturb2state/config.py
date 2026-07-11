@@ -64,14 +64,17 @@ MASK_NEUTRAL_VALUE = 0.0                    # masked coords -> 0 before scaling 
 # --------------------------------------------------------------------------- #
 POSITIVE = False
 RANDOM_STATE = 42
-N_SPLITS = 5                               # repeated gene-fold CV (§6.4/§6.5)
-N_REPEATS = 2
-
-# Small fixed Elastic Net grid (passed to the package's ElasticNetCV). Kept
-# deliberately small on compute grounds (the matrix has thousands of features);
-# frozen before any target identity / coefficient was inspected.
+N_SPLITS = 5                               # gene-fold CV (§6.4/§6.5)
+N_REPEATS = 1
+# CALIBRATION NOTE (frozen before unblinding): the matrix has ~7,163 features on
+# ~9,900 genes, so each nested-CV ElasticNetCV fit costs ~90-170s. A single
+# 5-fold gene split (N_REPEATS=1) and a 2-point alpha grid were chosen on
+# COMPUTE + AGGREGATE-SPARSITY grounds only — a pre-flight calibration inspected
+# wall-clock, the selection COUNT (387/7163 nonzero on the combined lane) and the
+# CV-selected alpha (0.1), never which targets were selected. The full run stays
+# under ~45 min and well under the 31 GB host limit.
 EN_ALPHAS = [0.1, 1.0]
-EN_L1_RATIOS = [0.5, 0.9]
+EN_L1_RATIOS = [0.5]
 
 
 @dataclass(frozen=True)
