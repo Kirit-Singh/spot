@@ -132,10 +132,17 @@ self-measurement. **This must be verified, not assumed** (§5).
    restrains **both** STAT1 (pro-Th1) and STAT5 (pro-Treg) so a toward-Treg score is not
    mechanistically given. The **8 hr-dominant set** (PDIA3, DARS1, COG5) looks like
    secretory/translational essential-gene stress artifacts (IL21R is the interesting one).
-8. **Donor + guide reproducibility** (intra-donor validity, the user's ask) — **NOT yet
-   computed for this contrast**; the frozen screen computes guide/donor support, the
-   temporal exploration did not. A hit robust across 4 donors + independent guides is worth
-   an order of magnitude more at the druggability gate.
+8. **Donor + guide reproducibility** (intra-donor validity, the user's ask) — **now
+   computed** with the frozen `compute_guide_support`/`compute_donor_support` +
+   disposition state functions (`reproducibility_guide_donor.py`). Donor agreement here is
+   stringent (all 6 donor-pairs must agree in sign). Overall among eligible targets:
+   @8 hr **55% guide-concordant, 6% donor-concordant** (375 both); @48 hr **53% / 6%**
+   (354 both). For the key hits **@48 hr**: **TBX21** guide- **and** donor-concordant
+   across all 6 pairs (robust — but still the Th1-off-switch arm); **PPP1R14B, GATB,
+   IL21R, PDIA3** donor-concordant; **SOCS1 has *no* donor-pair data and is single-guide
+   at 8 hr** → materially weaker than its ranking suggests (reinforces the §6.7 concern).
+   A hit robust across donors + independent guides is worth an order of magnitude more at
+   the druggability gate.
 9. **Eligibility asymmetry** before calling anything "time-specific" (fewer cells / weaker
    KD at one timepoint ≠ biology).
 10. **Direction, KD≠drug, RNA≠function:** these are loss-of-function levers modelling
