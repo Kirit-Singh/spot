@@ -73,7 +73,6 @@
   .lab{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin:0 0 5px}
   /* section labels sit under a single hairline that separates rail sections — no boxes */
   .lab.mt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-  #donorSel{margin-bottom:5px}
   /* the separator goes on the CONTAINER (both singleProg and contrastPanel) so a first-child
      margin can't escape upward and cut through the donor tabs; reset the inner Color-by label's own line */
   #singleProg,#contrastPanel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
@@ -230,7 +229,7 @@
   .crmeta{min-width:0}
   .crlab{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
   .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.02em}
-  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
@@ -242,8 +241,7 @@
   .prevgrid .plbl:hover{color:var(--accent)}
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
-  .prevkey{font-size:8.5px;color:var(--muted);margin-top:7px;line-height:1.4;text-align:center}
-  .prevkey:empty{display:none}
+  .prevgrid .ndkey{grid-column:2/-1;justify-self:center;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   .cbar.degen .cbg{background:rgb(176,172,164)}
   .cbar.degen .clip{display:none}
@@ -314,7 +312,6 @@
       <div class="lab">Program prevalence over time</div>
       <div class="prevbody">
         <div class="prevgrid" id="prevGrid"></div>
-        <div class="prevkey" id="prevKey"></div>
       </div>
     </div>
   </div>
@@ -527,8 +524,8 @@ function buildPrevalence(){
       const f=prev[p.score_field][k],i=maxf?f/maxf:0;
       html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${Math.round(f*100)}%</div>`;});
   });
+  if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
   grid.innerHTML=html;
-  const key=document.getElementById('prevKey'); if(key)key.textContent=anyND?'ND — not detected in this dataset':'';
   grid.querySelectorAll('.plbl').forEach(el=>el.onclick=()=>{field=el.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
 }
 function buildAxis(){
