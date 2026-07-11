@@ -44,7 +44,7 @@
   canvas.grabbing{cursor:grabbing}
   /* plot title now lives inline in the top-of-plot contrast toolbar (.ctbar) */
   /* on-plot continuous colour key */
-  .cbar{margin-top:9px}
+  .cbar{margin-top:9px;height:29px}
   .cbar .cbt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
   .cbar .cbg{position:relative;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.08)}
   .cbar .clip{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted);line-height:1}
@@ -85,7 +85,7 @@
   .pcard .pf{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:3px}
   .pcard .psrc{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--accent);text-decoration:none;margin-top:9px}
   .pcard .psrc:hover{text-decoration:underline}
-  .pcard .pg{white-space:nowrap;overflow:hidden;font-family:var(--mono);font-size:11px;color:var(--ink2);line-height:1.55;margin-top:8px}
+  .pcard .pg{white-space:nowrap;overflow:hidden;font-family:var(--mono);font-size:11px;color:var(--ink2);height:18px;line-height:18px;margin-top:8px}
   .pcard .pm{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:7px}
   /* segmented filters */
   .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
@@ -235,18 +235,21 @@
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
-  #prevSection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-  .prevbody{width:max-content;max-width:100%}
-  .prevgrid{display:grid;grid-template-columns:max-content repeat(3,32px);gap:2px 3px;align-items:center;margin-top:8px}
+  #prevSection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:center}
+  .prevbody{width:max-content;max-width:100%;margin:0 auto}
+  .prevgrid{display:grid;grid-template-columns:max-content repeat(3,32px);gap:3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
-  .prevgrid .plbl{font-size:10px;color:var(--ink2);text-align:right;padding-right:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-  .prevgrid .plbl:hover{color:var(--accent)}
+  /* population labels are clickable chips — faint outline, accent on hover */
+  .prevgrid .plbl{display:flex;align-items:center;justify-self:end;height:19px;padding:0 7px;border:1px solid var(--line);border-radius:4px;font-size:10px;color:var(--ink2);white-space:nowrap;cursor:pointer}
+  .prevgrid .plbl:hover{border-color:var(--accent);color:var(--accent)}
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
-  .prevgrid .ndkey{grid-column:2/-1;justify-self:center;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
+  .prevgrid .ndkey{grid-column:2/-1;justify-self:end;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
-  .cbar.degen .cbg{background:rgb(176,172,164)}
-  .cbar.degen .clip{display:none}
+  /* too-sparse (Th9): hide the gradient/ticks, show a centred 'Too sparse to shade' at the same height */
+  .cbar.degen{display:flex;align-items:center;justify-content:center}
+  .cbar.degen .cbg,.cbar.degen .cbtk{display:none}
+  .cbar.degen .cbn{margin:0}
 </style>
 </head>
 <body>
@@ -724,7 +727,7 @@ function applyProgram(){
   // "grey = no data" only when the field actually has no shadeable data (degenerate, e.g. Th9);
   // for normal fully-scored programs there is no grey, so the note is hidden.
   const cbNote=document.getElementById('cbNote');
-  cbNote.textContent=degen?'Too sparse to shade — present cells shown flat. grey = no data':'';
+  cbNote.textContent=degen?'Too sparse to shade':'';
   cbNote.style.display=degen?'':'none';
   const src=document.getElementById('pcSrc');
   const n=p.family==='differentiation'?1:3;
