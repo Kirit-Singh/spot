@@ -238,7 +238,6 @@
     <div class="ctbar" role="group" aria-label="Contrast two programs on the map">
       <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" aria-label="From condition"></select></div>
       <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" aria-label="To condition"></select></div>
-      <div class="ctgrp ctobj"><span class="ctlbl">Objective</span><select class="axsel obj" id="objectiveSel" aria-label="Contrast objective — how gene knockdowns are ranked"></select></div>
       <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify gene skews →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">Clear</button></div>
       <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
       <div id="lastrun"></div>
@@ -477,10 +476,8 @@ function buildAxis(){
   const condOpts=conds.map(k=>`<option value="${k}">${CONDLAB[k]||k}</option>`).join('');
   document.querySelectorAll('.axsel.prog').forEach(s=>s.innerHTML=progOpts);
   document.querySelectorAll('.axsel.cond').forEach(s=>s.innerHTML=condOpts);
-  const ob=document.getElementById('objectiveSel');
-  ob.innerHTML='<option value="balanced_a_to_b" title="Ranks gene knockdowns that move cells away from the From program AND toward the To program.">From → To (balanced)</option>'
-             +'<option value="away_from_a" title="Ranks knockdowns that reduce the From program (To used as context).">Away from From</option>';
-  ob.onchange=e=>{objective=e.target.value;syncObjTitle();updateAxisMeta();};
+  // Objective is fixed to balanced_a_to_b at selection time (pre-committed before results); the
+  // away-from-A decomposition + Perturb2State knockdown-informed support are presented on Stage 2.
   document.querySelectorAll('.axsel.prog').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.field=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axsel.cond').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.condition=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';e.target.textContent=ax.direction;updateAxisMeta();});
