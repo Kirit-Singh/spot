@@ -1,10 +1,17 @@
+<!doctype html>
 <!-- @dsCard group="Screens" -->
+<html lang="en">
+<head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>spot · stage 01 — CD4 transcriptional programs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23FAF9F7'/%3E%3Ccircle cx='8' cy='8' r='4.6' fill='%233E7D8C'/%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#FAF9F7;--surface:#FFFFFF;--sunken:#F4F2EE;--line:#E7E3DC;--ink:#1E1B16;--ink2:#5C564C;--muted:#8A8172;--accent:#3E7D8C;--treg:#9A3E9C;--serif:'Newsreader',serif;--mono:'IBM Plex Mono',monospace}
   *{box-sizing:border-box}
+  /* visible keyboard focus on every interactive control (mouse clicks stay ring-free) */
+  a:focus-visible,button:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
   /* top brand + source links */
@@ -50,6 +57,7 @@
   #pop .psel .dot{width:11px;height:11px;border-radius:50%;flex:0 0 11px;border:1px solid rgba(0,0,0,.12)}
   #pop .psel .pl{font-weight:600;font-size:12.5px}
   #pop .psel .pv{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  #pop .pscope{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin:-6px 0 8px 3px}
   #pop .grp{margin-top:7px}
   #pop .grph{font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;border-top:1px solid var(--sunken);padding-top:6px;margin-bottom:2px}
   #pop .srow{display:flex;justify-content:space-between;padding:2px 0;color:var(--ink2)}
@@ -119,21 +127,6 @@
   .methodstab{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
   .methodstab:hover{border-color:var(--accent);color:var(--accent)}
   .methodstab .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
-  /* re-run log overlay (revealed only when the host exposes /rerun) */
-  #rerunlog{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:12}
-  #rerunlog .rlh{display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);flex:0 0 auto}
-  #rerunlog .rlspin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  #rerunlog .rltw{display:flex;flex-direction:column;line-height:1.2;flex:1 1 auto;min-width:0}
-  #rerunlog .rlt{font-family:'Inter Tight';font-size:14px;font-weight:600}
-  #rerunlog .rlsub{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.02em}
-  #rerunlog #rlmeta{font-family:var(--mono);font-size:11px;white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:4px}
-  #rerunlog #rlphase{color:var(--accent);font-weight:600}
-  #rerunlog .rlpulse{color:var(--accent);font-size:8px;animation:pulse 1s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.15}}
-  #rerunlog #rleta{color:var(--muted);margin-left:4px}
-  #rerunlog .rlx{font-size:11.5px;color:var(--accent);cursor:pointer;flex:0 0 auto}
-  #rerunlog pre{flex:1;min-height:0;overflow:auto;margin:0;padding:14px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.55;color:var(--ink2);white-space:pre-wrap;word-break:break-word}
   /* ── cell-detail modal card ── */
   #scrim{position:fixed;inset:0;background:rgba(30,27,22,.34);display:none;z-index:40}
   #modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;max-height:88vh;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:41;overflow:hidden;flex-direction:column}
@@ -160,6 +153,12 @@
   #modal .src{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--sunken);padding-top:9px;line-height:1.6;word-break:break-word}
   #modal .src a{color:var(--accent);text-decoration:none}#modal .src a:hover{text-decoration:underline}
   #modal .src code{font-size:9.5px;color:var(--ink2)}
+  #modal .abrow{display:grid;grid-template-columns:15px 1fr auto 46px;align-items:center;gap:8px;font-size:11.5px;margin:5px 0}
+  #modal .abrow .crsw{width:13px;height:13px}
+  #modal .abn{font-weight:600;color:var(--ink)}
+  #modal .abs{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right}
+  #modal .abv{font-family:var(--mono);text-align:right;color:var(--ink)}
+  #modal .abchip{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;border:1px solid rgba(0,0,0,.15)}
   /* ── provenance / method popup ── */
   #provmodal{position:fixed;top:0;right:0;height:100vh;width:600px;max-width:94vw;background:var(--surface);border-radius:16px 0 0 16px;box-shadow:-24px 0 64px rgba(30,27,22,.28);display:flex;z-index:42;flex-direction:column;overflow:hidden;transform:translateX(102%);transition:transform .34s cubic-bezier(.4,0,.2,1);will-change:transform}
   #provmodal.open{transform:translateX(0)}
@@ -173,8 +172,6 @@
   #provmodal .pc p{font-size:12px;line-height:1.55;color:var(--ink2);margin:0}
   #provmodal .pc p b{color:var(--ink);font-weight:600}
   #provmodal code{font-family:var(--mono);font-size:11px;background:var(--sunken);border-radius:4px;padding:1px 5px}
-  #provmodal .rerunbtn{font-family:'Inter Tight';font-size:11.5px;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:6px 13px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
-  #provmodal .rerunbtn:disabled{opacity:.6;cursor:default}
   #provmodal .ppapers{padding-top:15px}
   #provmodal .pph2{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
   #provmodal .ppaper{margin-bottom:11px}
@@ -189,7 +186,31 @@
     /* reclaim top-bar space: keep brand + Methods tab; source links live on in the provenance panel */
     .dstools .srclink,.dstools .hflink,.dstools .dssep{display:none}
   }
+  /* usable at 390 CSS px: shrink the on-plot bar + rail so nothing overflows the body (body itself never scrolls) */
+  @media (max-width:430px){
+    .top{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}
+    .nav{overflow-x:auto;white-space:nowrap;padding:8px 12px}
+    .ctbar{left:8px;top:8px;--chipw:36px}
+    .axsel.prog{max-width:98px}.axsel.cond{max-width:74px}
+    .rail{padding:12px 14px}
+  }
+  /* contrast rail: active A and B fields, their swatches/scopes, and the encoding legend */
+  .crail .lab{margin-top:0}
+  .crrow{display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid var(--sunken)}
+  .crrow:first-of-type{border-top:0}
+  .crsw{width:14px;height:14px;border-radius:4px;flex:0 0 14px;border:1px solid rgba(0,0,0,.14)}
+  .crmeta{min-width:0}
+  .crlab{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
+  .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.02em}
+  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:11px;background:var(--sunken);border-radius:9px;padding:9px 11px}
+  .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
+  .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
+  /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
+  .cbar.degen .cbg{background:rgb(176,172,164)}
+  .cbar.degen .clip{display:none}
 </style>
+</head>
+<body>
 
 <div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2026)</a></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a><span class="dssep">·</span><button id="provbtn" class="methodstab"><span class="ic">i</span>Methods &amp; provenance</button></span></div>
 <div class="nav">
@@ -202,14 +223,14 @@
 
 <div class="body">
   <div class="plot">
-    <div class="ctbar">
-      <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field"></select><button class="axdir" data-ax="A">high</button><select class="axsel cond" data-ax="A" data-k="condition"></select></div>
-      <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field"></select><button class="axdir" data-ax="B">high</button><select class="axsel cond" data-ax="B" data-k="condition"></select></div>
+    <div class="ctbar" role="group" aria-label="Contrast two programs on the map">
+      <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" data-k="condition" aria-label="From condition"></select></div>
+      <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" data-k="condition" aria-label="To condition"></select></div>
       <div class="ctactions"><button class="idbtn" id="idgenes" disabled title="Stage 2 (skewing genes) is not built yet">Identify genes →</button><button class="ctclear" id="ctclear">✕ Clear</button></div>
       <div id="lastrun"></div>
     </div>
     <canvas id="c"></canvas>
-    <svg id="skewline"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
+    <svg id="skewline" width="100%" height="100%" aria-hidden="true"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
     <div id="lblA" class="anchlbl"></div><div id="lblB" class="anchlbl"></div>
     <div class="viewctl" role="group" aria-label="Zoom and pan the map">
       <button id="vzin" type="button" aria-label="Zoom in" title="Zoom in">+</button>
@@ -217,25 +238,37 @@
       <button id="vzout" type="button" aria-label="Zoom out" title="Zoom out">−</button>
     </div>
     <div id="pop"></div>
-    <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
   </div>
   <div class="rail">
-    <div class="lab">Show cells · condition</div>
-    <div class="seg" id="cond"></div>
-    <div class="lab mt">Donor</div>
-    <div class="seg" id="donorSel"></div>
+    <div class="lab" id="condLab">Show cells · condition</div>
+    <div class="seg" id="cond" role="group" aria-labelledby="condLab"></div>
+    <div class="lab mt" id="donorLab">Donor</div>
+    <div class="seg" id="donorSel" role="group" aria-labelledby="donorLab"></div>
 
-    <div class="lab mt">Color by program score</div>
-    <select id="colorby" class="colorsel"></select>
-    <div class="cbar">
-      <div class="cbg" id="cbGrad"><span class="clip lo" title="low values clipped">◄</span><span class="clip hi" title="high values clipped">►</span></div>
-      <div class="cbtk"><span>low</span><span>mid</span><span>high</span></div>
-      <div class="cbn">grey = no data</div>
+    <div id="singleProg">
+      <label class="lab mt" for="colorby">Color by program score</label>
+      <select id="colorby" class="colorsel" aria-label="Color the map by program score"></select>
+      <div class="cbar">
+        <div class="cbg" id="cbGrad"><span class="clip lo" title="low values clipped">◄</span><span class="clip hi" title="high values clipped">►</span></div>
+        <div class="cbtk"><span>low</span><span>mid</span><span>high</span></div>
+        <div class="cbn" id="cbNote">grey = no data</div>
+      </div>
+      <div class="pcard">
+        <div class="pn" id="pcName">Marker genes</div>
+        <div class="pg" id="pcGenes"></div>
+        <a class="psrc" id="pcSrc" target="_blank" rel="noopener"></a>
+      </div>
     </div>
-    <div class="pcard">
-      <div class="pn" id="pcName">Marker genes</div>
-      <div class="pg" id="pcGenes"></div>
-      <a class="psrc" id="pcSrc" target="_blank" rel="noopener"></a>
+
+    <div id="contrastPanel" class="crail" style="display:none">
+      <div class="lab">Contrast · From ↔ To</div>
+      <div class="crrow" id="crA"></div>
+      <div class="crrow" id="crB"></div>
+      <div class="crleg">
+        Hue blends the two programs by score — a cell high on both shows a mixed colour. Opacity tracks the stronger score.
+        <div class="crgrad" id="crGrad"></div>
+        <div class="crends"><span id="crEndA">From</span><span>mixed</span><span id="crEndB">To</span></div>
+      </div>
     </div>
   </div>
 </div>
@@ -282,7 +315,6 @@
       <p style="margin-top:12px"><a href="/01_notebook.html" target="_blank" rel="noopener" style="text-decoration:none;font-weight:600">↗ Open methods and reproducibility</a> <span style="color:var(--muted);font-size:11px">— the pipeline sources and provenance behind this map.</span></p>
       <p style="margin-top:9px"><b>Reproduce:</b> <code>reproduce.sh</code> <span style="color:var(--muted);font-size:11px">fetches the pinned Hugging Face h5ad and verifies its SHA-256, then re-runs the fixed-seed scoring and emits the overlay. <a id="reproLink" href="https://github.com/Kirit-Singh/spot/blob/stage1-remediation/01_programs/analysis/reproduce.sh" target="_blank" rel="noopener" style="text-decoration:none">script ↗</a></span></p>
       <p style="margin-top:6px;color:var(--muted);font-size:11px">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b>.</p>
-      <p id="rerunWrap" style="margin-top:9px;display:none;align-items:center;gap:10px"><button id="rerunBtn" class="rerunbtn">⟳ Re-run analysis</button> <span id="rerunStatus" style="font-size:11px;color:var(--muted)">runs the pipeline on the compute host and re-verifies (~2–3 min).</span></p>
     </div></div>
     <div class="ppapers">
       <div class="pph2">References</div>
@@ -333,23 +365,48 @@ function fmtLocal(s){
   return out;
 }
 function domainFor(f){return (meta.score_display_domains&&meta.score_display_domains[f])||progByField[f].display_domain;}
-// map a raw score through its FROZEN display domain → [0,1]; p50 as midpoint. null = missing data.
-function normScore(v,d){
+// flat neutral fill for a degenerate (too-sparse-to-shade) field's PRESENT cells — distinct from
+// the paler "no data" grey; grey stays reserved for missing values only.
+const DEGEN_CSS='rgb(176,172,164)';
+// ── sparse-aware display transform (built once per field from the FROZEN quantiles) ──
+// p50 → 0.5 always; monotonic. Upper anchor = first stored quantile STRICTLY > p50 (scan
+// p75,p90,p95,p98,p99) → 1.0; lower anchor = first quantile STRICTLY < p50 (scan p25,p10,p02) → 0.0.
+// If nothing exceeds p50 the field is degenerate: it carries no shadeable signal and renders flat.
+const _tf={};
+function transformFor(f){
+  if(_tf[f])return _tf[f];
+  const d=domainFor(f),p50=d.p50;
+  const hi=[d.p75,d.p90,d.p95,d.p98,d.p99].find(q=>q!=null&&q>p50);
+  const lo=[d.p25,d.p10,d.p02].find(q=>q!=null&&q<p50);
+  const t=(hi==null)?{status:'degenerate',p50:p50,anchors:{lo:lo??null,hi:null}}
+                    :{status:'ok',p50:p50,lo:(lo==null?p50:lo),hi:hi,anchors:{lo:lo??p50,hi:hi}};
+  return _tf[f]=t;
+}
+// raw score → [0,1] through the sparse-aware transform. null = missing OR degenerate (no signal).
+// Callers distinguish the two via transformFor(f).status before choosing a fill.
+function normScore(v,tf){
   if(v==null||isNaN(v))return null;
-  const p02=d.p02,p50=d.p50,p98=d.p98;let t;
-  if(p50>p02&&p98>p50){t=v<=p50?0.5*(v-p02)/(p50-p02):0.5+0.5*(v-p50)/(p98-p50);}
-  else{const span=(p98-p02)||1;t=(v-p02)/span;}
+  if(tf.status==='degenerate')return null;
+  const lo=tf.lo,p50=tf.p50,hi=tf.hi;let t;
+  t=v<=p50?(lo===p50?0.5:0.5*(v-lo)/(p50-lo)):0.5+0.5*(v-p50)/(hi-p50);
   return Math.max(0,Math.min(1,t));
+}
+// fill for a cell's value under field f: missing → grey; degenerate field → flat neutral; else viridis.
+function swatchFor(f,v){
+  if(v==null||isNaN(v))return 'rgb(200,197,190)';
+  const tf=transformFor(f);
+  if(tf.status==='degenerate')return DEGEN_CSS;
+  return ramp(normScore(v,tf));
 }
 
 fetch('./data/stage01_umap_seed.json').then(r=>{if(!r.ok)throw new Error('overlay HTTP '+r.status);return r.json();}).then(d=>{
   DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
   programs.forEach(p=>progByField[p.score_field]=p);
+  programs.forEach(p=>transformFor(p.score_field));   // build + record each field's frozen display transform
   axisA.field=axisB.field='diff_naive_score';
   buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();
   applyProgram();
   resize();
-  probeRerun();
 }).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
 
 function buildHeader(){
@@ -437,7 +494,14 @@ function buildMethods(){
 // selected-program → legend, colour key, rail card, title
 function applyProgram(){
   const p=progByField[field];
-  document.getElementById('cbGrad').style.background=VIR_CSS;
+  // colour key: a viridis gradient normally; a flat neutral + note when the field is too sparse to shade
+  const degen=transformFor(field).status==='degenerate';
+  const cbar=document.querySelector('.cbar'),grad=document.getElementById('cbGrad');
+  cbar.classList.toggle('degen',degen);
+  grad.style.background=degen?DEGEN_CSS:VIR_CSS;
+  document.getElementById('cbNote').textContent=degen
+    ?'Too sparse to shade — present cells shown flat. grey = no data'
+    :'grey = no data';
   const src=document.getElementById('pcSrc');
   const n=p.family==='differentiation'?1:3;
   src.href=PAPERS.masopust.url+'/tables/'+n;
@@ -480,37 +544,51 @@ function contrastActive(){
 function pole(c0,ax){
   if(ax.condition!=='All'&&c0.condition!==ax.condition)return 0;
   if(ax.donor!=='All'&&c0.donor!==ax.donor)return 0;
-  const t=normScore(c0[ax.field],domainFor(ax.field));
+  const tf=transformFor(ax.field);
+  if(tf.status==='degenerate')return 0;        // a too-sparse axis carries no signal → contributes nothing
+  const t=normScore(c0[ax.field],tf);
   if(t==null)return 0;
   return ax.direction==='low'?1-t:t;
 }
+// continuous bivariate blend: hue mixes A↔B by relative score (co-high → visibly mixed), opacity ∝ max score
+function blendAB(pa,pb){
+  const pm=Math.max(pa,pb);
+  if(pm<0.15)return {css:'rgb(196,192,184)',al:.06};              // low on both → neutral fade
+  const tot=(pa+pb)||1,wa=pa/tot,wb=pb/tot;
+  const r=Math.round(ABHUE_A[0]*wa+ABHUE_B[0]*wb),
+        g=Math.round(ABHUE_A[1]*wa+ABHUE_B[1]*wb),
+        b=Math.round(ABHUE_A[2]*wa+ABHUE_B[2]*wb);
+  return {css:`rgb(${r},${g},${b})`,al:.14+.72*pm};
+}
 function draw(){if(sx==null)return;const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);
   const contrast=contrastActive();
-  document.querySelector('.cbar').style.display=contrast?'none':'block';
-  if(contrast){drawContrast();return;}
+  // rail swaps between the single-program key and the A/B contrast panel (Color-by hidden in contrast)
+  document.getElementById('singleProg').style.display=contrast?'none':'block';
+  document.getElementById('contrastPanel').style.display=contrast?'block':'none';
+  if(contrast){updateContrastRail();drawContrast();return;}
   hideSkewLine();hideAnchorLabels();
-  const d=domainFor(field);
+  const tf=transformFor(field),degen=tf.status==='degenerate';
   for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);
-    const t=normScore(c0[field],d);
-    if(t==null){x.fillStyle='rgb(200,197,190)';x.globalAlpha=.35;}
-    else{x.fillStyle=ramp(t);x.globalAlpha=.82;}
+    const v=c0[field],missing=v==null||isNaN(v);
+    if(missing){x.fillStyle='rgb(200,197,190)';x.globalAlpha=.35;}
+    else if(degen){x.fillStyle=DEGEN_CSS;x.globalAlpha=.5;}   // too sparse to shade → flat neutral, never max-intensity
+    else{x.fillStyle=ramp(normScore(v,tf));x.globalAlpha=.82;}
     const rad=i===hover?4.4:2.5;
     x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
     if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
   }
   x.globalAlpha=1;
 }
-// contrast render: high-A cells in A-hue, high-B in B-hue, low-on-both faded; opacity ∝ score.
+// contrast render: every cell's hue is a continuous A↔B blend weighted by its two scores
+// (co-high cells mix both colours); opacity ∝ max score; low-on-both faded. No A-or-B pick.
 function drawContrast(){
   let axmx=0,axmy=0,awa=0,bxmx=0,bxmy=0,bwa=0;
   for(let pass=0;pass<2;pass++){                              // faded first, prominent on top
     for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;
       const pa=pole(c0,axisA),pb=pole(c0,axisB),pm=Math.max(pa,pb),prominent=pm>=0.5;
       if((pass===0)===prominent)continue;
-      const[X,Y]=px(c0);let hue,al;
-      if(pm<0.15){hue=[196,192,184];al=.06;}                  // low on both → fade out
-      else{hue=pa>=pb?ABHUE_A:ABHUE_B;al=.14+.72*pm;}
-      x.fillStyle=`rgb(${hue[0]},${hue[1]},${hue[2]})`;x.globalAlpha=al;
+      const[X,Y]=px(c0);const mix=blendAB(pa,pb);
+      x.fillStyle=mix.css;x.globalAlpha=mix.al;
       const rad=i===hover?4.6:(prominent?2.9:2.3);
       x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
       if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
@@ -527,6 +605,32 @@ function drawContrast(){
     placeAnchorLabel('lblA',A,ABHUE_A,lblText(axisA));
     placeAnchorLabel('lblB',B,ABHUE_B,lblText(axisB));
   } else {hideSkewLine();hideAnchorLabels();}
+}
+// right-rail contrast panel: the active A and B fields with swatch, direction and scope, plus the blend key
+function updateContrastRail(){
+  const rowHTML=(ax,hue)=>{
+    const p=progByField[ax.field],degen=transformFor(ax.field).status==='degenerate';
+    return `<span class="crsw" style="background:rgb(${hue})"></span>
+      <div class="crmeta"><div class="crlab">${p.display_label}</div>
+      <div class="crsub">${ax.direction} · ${scopeLabel(ax)}${degen?' · too sparse to shade':''}</div></div>`;
+  };
+  document.getElementById('crA').innerHTML=rowHTML(axisA,ABHUE_A);
+  document.getElementById('crB').innerHTML=rowHTML(axisB,ABHUE_B);
+  document.getElementById('crGrad').style.background=`linear-gradient(90deg,rgb(${ABHUE_A}),${blendAB(1,1).css},rgb(${ABHUE_B}))`;
+}
+// hover/cell-detail selection block: one row per program in contrast (both A and B + blended swatch), else the single field
+function abBlendSwatch(c0){return blendAB(pole(c0,axisA),pole(c0,axisB)).css;}
+function axValRow(c0,ax,tag){
+  const p=progByField[ax.field];
+  return `<div class="psel" title="${ax.field} · ${ax.direction}"><span class="dot" style="background:${swatchFor(ax.field,c0[ax.field])}"></span><span class="pl">${tag} · ${p.display_label}</span><b class="pv">${sv(c0[ax.field])}</b></div>
+    <div class="pscope">${ax.direction} · ${scopeLabel(ax)}</div>`;
+}
+function selBlockHTML(c0){
+  if(contrastActive())
+    return `<div class="psel"><span class="dot" style="background:${abBlendSwatch(c0)}"></span><span class="pl">From ↔ To blend</span></div>`
+      +axValRow(c0,axisA,'From')+axValRow(c0,axisB,'To');
+  const p=progByField[field];
+  return `<div class="psel" title="${p.score_field} · ${p.scoring_method}"><span class="dot" style="background:${swatchFor(field,c0[field])}"></span><span class="pl">${p.display_label}</span><b class="pv">${sv(c0[field])}</b></div>`;
 }
 function placeAnchorLabel(id,P,hue,text){const el=document.getElementById(id);el.textContent=text;el.style.color=`rgb(${hue})`;el.style.borderColor=`rgb(${hue})`;el.style.left=P.X+'px';el.style.top=P.Y+'px';el.style.display='block';}
 function hideAnchorLabels(){document.getElementById('lblA').style.display='none';document.getElementById('lblB').style.display='none';}
@@ -576,10 +680,9 @@ c.addEventListener('mousemove',e=>{if(panning)return;const r=c.getBoundingClient
   let best=-1,bd=64;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}
   if(best!==hover){hover=best;draw();}
   if(best>=0){const c0=cells[best];const[X,Y]=px(c0);
-    const p=progByField[field],d=domainFor(field),t=normScore(c0[field],d),swatch=t==null?'rgb(200,197,190)':ramp(t);
     pop.innerHTML=`<div class="bc">${shortBc(c0.barcode)}</div>
       <div class="pmeta">donor ${c0.donor} · ${c0.condition}</div>
-      <div class="psel" title="${p.score_field} · ${p.scoring_method}"><span class="dot" style="background:${swatch}"></span><span class="pl">${p.display_label}</span><b class="pv">${sv(c0[field])}</b></div>
+      ${selBlockHTML(c0)}
       ${scoreGroupsHTML(c0)}`;
     pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-260)lx=X-260;lx=Math.max(6,Math.min(lx,r.width-254));ly=Math.max(6,Math.min(ly,r.height-300));
     pop.style.left=lx+'px';pop.style.top=ly+'px';
@@ -600,13 +703,19 @@ function cardScoresHTML(c0){
     `</div>`;
   }).join('');
 }
-function openCard(i){const c0=cells[i];const p=progByField[field],d=domainFor(field),t=normScore(c0[field],d),swatch=t==null?'rgb(200,197,190)':ramp(t);
+// in contrast mode the card leads with the From/To pair (both values, directions, scopes, blended swatch)
+function abCardHTML(c0){
+  const line=(ax,tag,hue)=>{const p=progByField[ax.field],degen=transformFor(ax.field).status==='degenerate';
+    return `<div class="abrow"><span class="crsw" style="background:rgb(${hue})"></span><span class="abn">${tag} · ${p.display_label}</span><span class="abs">${ax.direction} · ${scopeLabel(ax)}${degen?' · sparse':''}</span><span class="abv">${sv(c0[ax.field])}</span></div>`;};
+  return `<div class="mgrp"><div class="mgrph">Contrast · <span class="abchip" style="background:${abBlendSwatch(c0)}"></span> blended colour on the map</div>${line(axisA,'From',ABHUE_A)}${line(axisB,'To',ABHUE_B)}</div>`;
+}
+function openCard(i){const c0=cells[i];const contrast=contrastActive();
   const chip=document.getElementById('mchip');
-  chip.querySelector('i').style.background=swatch;
-  chip.querySelector('b').textContent=`${p.display_label} · ${sv(c0[field])}`;
+  if(contrast){chip.querySelector('i').style.background=abBlendSwatch(c0);chip.querySelector('b').textContent='From ↔ To contrast';}
+  else{const p=progByField[field];chip.querySelector('i').style.background=swatchFor(field,c0[field]);chip.querySelector('b').textContent=`${p.display_label} · ${sv(c0[field])}`;}
   document.getElementById('mbc').textContent=c0.barcode;
   document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · cluster ${c0.cluster} (technical id)`;
-  document.getElementById('mgenes').innerHTML=cardScoresHTML(c0);
+  document.getElementById('mgenes').innerHTML=(contrast?abCardHTML(c0):'')+cardScoresHTML(c0);
   document.getElementById('msrc').innerHTML=`Scores: <code>score_genes</code> panel-minus-expression-bin-matched-control values. Naming reference: <a href="${PAPERS.masopust.url}" target="_blank" rel="noopener">Masopust et al. ↗</a> · data: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`;
   document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='flex';}
 // scrim is shared by the cell-detail modal and the methods slide-over; keep it up while either is open
@@ -619,43 +728,7 @@ document.getElementById('scrim').onclick=function(){closeCard();closeProv();};
 document.getElementById('provx').onclick=closeProv;document.getElementById('provbtn').onclick=openProv;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCard();closeProv();}});
 
-// re-run controls — revealed only when the host actually exposes /rerun
-function probeRerun(){fetch('/rerun/log',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('rerunWrap').style.display='flex';}).catch(function(){});}
-(function(){
-  const logEl=document.getElementById('rerunlog'),pre=document.getElementById('rlpre'),closeBtn=document.getElementById('rlClose');
-  let polling=false;
-  const rlphase=document.getElementById('rlphase'),rlpulse=document.getElementById('rlpulse'),rleta=document.getElementById('rleta');
-  function phaseOf(txt){
-    if(/\[4\/4\]/.test(txt))return 'rendering report';
-    if(/\[3\/4\]/.test(txt))return 'verifying';
-    if(/\[2\/4\]|emitted \d+ cells/.test(txt))return 'writing overlay';
-    if(/scoring \d+\/\d+|program \d+\/\d+/.test(txt))return 'scoring';
-    if(/cells: |panel genes/.test(txt))return 'loading data';
-    return 'starting';
-  }
-  const STAGES=['loading data','scoring','verifying','writing overlay','rendering report'];
-  function stageLabel(ph){var i=STAGES.indexOf(ph);return i<0?ph:'stage '+(i+1)+'/'+STAGES.length+' · '+ph;}
-  function roughEta(s){if(s<=15)return 'finishing';var r=Math.ceil(s/30)*30;if(r<60)return '~'+r+'s';var mn=Math.floor(r/60),sc=r%60;return '~'+mn+(sc?':'+String(sc).padStart(2,'0'):' min');}
-  function setMeta(phase,eta){rlphase.textContent=phase;rleta.textContent=eta?'· '+eta:'';}
-  function showClose(){closeBtn.style.display='inline';closeBtn.onclick=function(){logEl.style.display='none';};}
-  function openLog(){closeCard();closeBtn.style.display='none';rlpulse.style.display='inline';setMeta('starting','');logEl.style.display='flex';}
-  function poll(){
-    if(!polling)return;
-    fetch('/rerun/log').then(function(r){return r.json();}).then(function(j){
-      if(!polling)return;
-      if(j.lines&&j.lines.length){pre.textContent=j.lines.join('\n');pre.scrollTop=pre.scrollHeight;}
-      if(j.running&&j.started_epoch&&j.now_epoch){var el=j.now_epoch-j.started_epoch,ph=phaseOf(pre.textContent);rlpulse.style.display='inline';setMeta(stageLabel(ph),(ph==='verifying'||ph==='writing overlay'||ph==='rendering report')?'finishing':roughEta(Math.max(0,105-el)));}
-      if(j.result){polling=false;rlpulse.style.display='none';setMeta(j.result.ok?'complete':'failed','');
-        if(j.result.ok){pre.textContent+='\n↻ reloading with the regenerated map…';pre.scrollTop=pre.scrollHeight;setTimeout(function(){location.reload();},1500);}
-        else{pre.textContent+='\n✕ '+(j.result.error||'run failed');showClose();}
-      }else if(j.running){setTimeout(poll,1200);}
-      else{polling=false;showClose();}
-    }).catch(function(){if(polling)setTimeout(poll,2000);});
-  }
-  document.getElementById('rerunBtn').onclick=function(){openLog();pre.textContent='starting…';polling=true;
-    fetch('/rerun',{method:'POST'}).then(function(r){return r.json();}).then(function(){poll();}).catch(function(e){pre.textContent='✕ '+e;showClose();polling=false;});};
-  fetch('/rerun/log').then(function(r){return r.json();}).then(function(j){if(j.running){openLog();polling=true;poll();}}).catch(function(){});
-})();
-
 window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),field:()=>field,setField:f=>{field=f;document.getElementById('colorby').value=f;applyProgram();},selection:()=>selectionObj()};
 </script>
+</body>
+</html>
