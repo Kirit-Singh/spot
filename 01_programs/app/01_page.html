@@ -264,7 +264,7 @@
   /* a right spacer column mirrors the label column (--labw) so the Rest/8h/48h columns sit dead-centre */
   #prevSection{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:center;--labw:96px}
   .prevbody{width:max-content;max-width:100%;margin:0 auto}
-  .prevgrid{display:grid;grid-template-columns:var(--labw) repeat(3,32px) var(--labw);gap:3px;align-items:center;margin-top:8px}
+  .prevgrid{display:grid;grid-template-columns:var(--labw) repeat(3,32px) auto;gap:3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
   /* population labels are equal-width clickable chips — faint outline, accent on hover */
   .prevgrid .plbl{height:19px;line-height:17px;padding:0 5px;text-align:right;border:1px solid rgba(0,0,0,.06);border-radius:4px;font-size:8.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
@@ -272,14 +272,10 @@
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
   .prevgrid .ndkey{grid-column:2/5;justify-self:end;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
-  /* how each program is defined: Masopust modular descriptor + our curated marker panel */
-  #progRef{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:left}
-  .prref{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:3px 8px;align-items:center;margin-top:2px}
-  .prref .prh{font-family:'Inter Tight';font-size:7px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:700;padding-bottom:2px}
-  .prref .prp{font-size:8px;color:var(--ink);font-weight:600;white-space:nowrap;cursor:pointer}
-  .prref .prp:hover{color:var(--accent)}
-  .prref .prm{font-size:7.5px;color:var(--ink2);white-space:nowrap}
-  .prref .prg{font-family:var(--mono);font-size:7px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* modular-definition column (Masopust descriptor); header is the single Masopust hyperlink */
+  .prevgrid .prmod{font-size:8px;color:var(--ink2);white-space:nowrap;text-align:left;padding-left:5px}
+  .prevgrid .prmodh{text-align:left;color:var(--accent);text-decoration:none;white-space:nowrap;padding-left:5px}
+  .prevgrid .prmodh:hover{text-decoration:underline}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   /* too-sparse (Th9): hide the gradient/ticks, show a centred 'Too sparse to shade' at the same height */
   .cbar.degen{display:flex;align-items:center;justify-content:center}
@@ -356,7 +352,6 @@
       <div class="prevbody">
         <div class="prevgrid" id="prevGrid"></div>
       </div>
-      <div id="progRef"></div>
     </div>
   </div>
 </div>
@@ -518,7 +513,7 @@ Promise.all([
   // single-program gradient (default color-by = Naïve-like). Contrast + belt activate only once BOTH
   // programs are chosen. The acceptance anchor (treg_like→th1_like@Stim48hr, balanced_a_to_b →
   // 26b866f2ad813d71) is reproducible through the UI selections / __t.setContrast.
-  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildPrevalence();buildProgRef();
+  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildPrevalence();
   applyProgram();
   resize();
 }).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
@@ -553,6 +548,7 @@ function buildPrevalence(){
   const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
   // short labels for this compact grid only (full '-like' names stay in the tooltip + everywhere else)
   const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint+',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
+  const MOD={diff_naive_score:'naïve',diff_activated_score:'activated',diff_memory_score:'memory',diff_checkpoint_score:'exhausted',treg_like_score:'regulatory',cd4_ctl_like_score:'cytotoxic',th1_like_score:'type-1 helper',th2_like_score:'type-2 helper',th17_like_score:'type-17 helper',tfh_like_score:'follicular helper',th9_like_score:'type-9 helper'};
   const progs=programs.filter(p=>p.role!=='sensitivity');
   const tot={Rest:0,Stim8hr:0,Stim48hr:0},cnt={};
   progs.forEach(p=>cnt[p.score_field]={Rest:0,Stim8hr:0,Stim48hr:0});
@@ -561,8 +557,7 @@ function buildPrevalence(){
   let maxf=0;const prev={},degen={};
   progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
     prev[p.score_field]={};conds.forEach(([k])=>{const f=tot[k]?cnt[p.score_field][k]/tot[k]:0;prev[p.score_field][k]=f;if(!degen[p.score_field]&&f>maxf)maxf=f;});});
-  const sp='<div></div>';   // right spacer cell (mirrors the label column so values sit centred)
-  let html='<div></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('')+sp,anyND=false;
+  let html='<div></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('')+`<a class="ph prmodh" href="${PAPERS.masopust.url}" target="_blank" rel="noopener" title="Masopust et al. · Guidelines for T cell nomenclature">Modular definition ↗</a>`,anyND=false;
   progs.forEach(p=>{
     const nd=degen[p.score_field]; if(nd)anyND=true;
     html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${SHORT[p.score_field]||p.display_label}</div>`;
@@ -570,24 +565,11 @@ function buildPrevalence(){
       if(nd){html+='<div class="pc nd">ND</div>';return;}
       const f=prev[p.score_field][k],i=maxf?f/maxf:0;
       html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${Math.round(f*100)}%</div>`;});
-    html+=sp;
+    html+=`<div class="prmod">${MOD[p.score_field]||'—'}</div>`;
   });
   if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
   grid.innerHTML=html;
   grid.querySelectorAll('.plbl').forEach(el=>el.onclick=()=>{field=el.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
-}
-// per-program definitions: Masopust modular descriptor (naming) + our curated marker panel
-function buildProgRef(){
-  const el=document.getElementById('progRef'); if(!el||!programs.length)return;
-  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint+',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
-  const MOD={diff_naive_score:'diff · naïve',diff_activated_score:'diff · activated',diff_memory_score:'diff · memory',diff_checkpoint_score:'function · exhausted',treg_like_score:'function · regulatory',cd4_ctl_like_score:'function · cytotoxic',th1_like_score:'function · type-1 helper',th2_like_score:'function · type-2 helper',th17_like_score:'function · type-17 helper',tfh_like_score:'function · follicular helper',th9_like_score:'function · type-9 helper'};
-  const progs=programs.filter(p=>p.role!=='sensitivity');
-  let html='<div class="prref"><div class="prh"></div><div class="prh">Modular definition</div><div class="prh">Marker definition</div>';
-  progs.forEach(p=>{
-    html+=`<div class="prp" data-f="${p.score_field}" title="${p.display_label}">${SHORT[p.score_field]||p.display_label}</div><div class="prm">${MOD[p.score_field]||'—'}</div><div class="prg" title="${p.panel_genes.join(' · ')}">${p.panel_genes.join('·')}</div>`;
-  });
-  el.innerHTML=html+'</div>';
-  el.querySelectorAll('.prp').forEach(x=>x.onclick=()=>{field=x.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
 }
 function buildAxis(){
   // Analysis donor scope is fixed to all four donors (donor_scope="all"); each axis carries its own condition.
