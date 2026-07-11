@@ -11,8 +11,9 @@ invalid permutation-FDR / q-value interpretation**, **eliminates forced Treg ass
 unresolved cells**, and reports **continuous Treg-like and CD4 CTL-like transcriptional-compatibility
 scores**. These scores are **descriptive and are not validated lineage identities.**
 
-Reproduction now **pins the exact input revision and SHA-256** and verifies the **full
-barcode-indexed output** rather than aggregate counts.
+Reproduction now **pins the exact input revision and SHA-256** and verifies the **40,000-cell
+overlay's per-barcode output** (every emitted barcode and its 12 scores) rather than aggregate
+counts.
 
 **Important validation remains outstanding**: leave-one-donor-out analysis, activation-matched
 calibration, external-dataset confirmation, and protein or functional evidence. Stage-1 is therefore

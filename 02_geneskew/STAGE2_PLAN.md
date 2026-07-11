@@ -155,7 +155,7 @@ repression is QC only, not skew evidence.
 
 **Primary endpoint — `a_down` only.** To avoid three adaptively-selectable outcomes, the **sole
 primary endpoint is `a_down`** (reduction of the A / Treg-like program — the measurable pole).
-`b_up` (B / CD4 CTL-like increase) and `total_skew` (full A→B alignment) are **secondary /
+`b_up` (B / Th1-like increase) and `total_skew` (full A→B alignment) are **secondary /
 descriptive**: B may be sparse and is not well estimated until it is measured, so they never drive
 ranking on their own.
 

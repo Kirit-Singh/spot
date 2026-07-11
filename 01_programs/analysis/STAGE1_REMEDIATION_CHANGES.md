@@ -25,8 +25,10 @@ The Stage-1 outputs change from **forced categorical calls behind an invalid FDR
 - function: `—` 33,004 · Th1 4,550 · Treg 1,051 · Th2 528 · CD4-CTL 573 · Tfh 236 · Th9 40 · Th17 18
 - differentiation: N 6,409 · A 21,072 · M 10,871 · checkpoint-high 1,648
 
-**Superseding (this run):** **no categorical calls emitted.** 40,000 overlay cells + 396,000
-per-cell records, each carrying **12 continuous scores**: `treg_like_score`, `cd4_ctl_like_score`
+**Superseding (this run):** **no categorical calls emitted.** 40,000 overlay cells + 40,000
+per-cell records (the overlay's barcodes — the scores are computed over the full 396k in memory
+but only the 40,000-cell display sample is emitted and hashed), each carrying **12 continuous
+scores**: `treg_like_score`, `cd4_ctl_like_score`
 (+ `cd4_ctl_like_score_actadj`), `th1_like_score`, `th2_like_score`, `th17_like_score`,
 `tfh_like_score`, `th9_like_score`, `diff_naive_score`, `diff_activated_score`,
 `diff_memory_score`, `diff_checkpoint_score`.
@@ -34,11 +36,11 @@ per-cell records, each carrying **12 continuous scores**: `treg_like_score`, `cd
 **Per-barcode reproducibility (frozen gate):**
 - `n_cells` = 40,000; overlay↔records agree; schema + barcode-set intact.
 - `barcode_set_sha256` = `1224312e52231f4b2e07c192b39c6f9c69dd6e2d5b8bd64d936c17a9b2435a93`
-- `canonical_table_sha256` = `869bba8437e4ec34bf0754b8a9f49328956ec42d790fbd35fbb3cfd8e55268ea`
+- `canonical_table_sha256` = `6e1665d13eab1781407b43d232d089fb5fb6a6b9df5acd83cbbfb8fe3aed2755`
 
 ## 3. Donor × condition score medians (the residual confound, made visible)
 
-Median score across the 396,000 balanced cells. The point of showing this stratified is that
+Median score across the 40,000 balanced overlay cells (the emitted, hashed sample). The point of showing this stratified is that
 **removing condition from a labelling rule does not remove condition-associated biology from
 expression** — the association is real, reported, not solved.
 
