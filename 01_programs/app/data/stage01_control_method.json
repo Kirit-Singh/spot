@@ -33,7 +33,13 @@
   },
   "activation_predictor_draw": {
     "program_id": "activation_predictor",
-    "note": "controls for the activation-adjusted CD4 CTL-like sensitivity lane; display/sensitivity-only; never a Stage-2 pole"
+    "panel": ["CD69", "CD38", "MKI67", "TNFRSF9", "IL2RA"],
+    "occupied_bins": [18, 22, 24],
+    "n_controls": 150,
+    "leakage": 0,
+    "materialized": true,
+    "independently_verified": "lead reproduced these 150 rows with the frozen algorithm (key 12345|activation_predictor|{bin}|{gene}); occupied bins {18,22,24}, zero leakage",
+    "note": "controls for the activation-adjusted CD4 CTL-like sensitivity lane; display/sensitivity-only; never a Stage-2 pole. Rows are in stage01_controls_v3.csv (program_id=activation_predictor)."
   },
   "present_but_undetected_panel_genes": [],
   "intended_only_absent": [
@@ -45,7 +51,7 @@
   "independent_verification": {
     "verifier": "lead (generator != verifier)",
     "method": "independent code: chunked float64 CSR column-means -> divN bins -> detected pool -> own keyed-hash draws",
-    "result": "11/11 programs byte-identical control sets; 1950 rows, 0 mismatches on (program_id,bin,rank_in_bin); reproduced detected=17956, control_eligible_pool=17903, bin24_eligible=715, bin0_eligible=552, marker union 54 present 53 absent [HLA-DRA]"
+    "result": "11/11 primary programs byte-identical control sets (1950 rows, 0 mismatches on (program_id,bin,rank_in_bin)) + activation_predictor 150 rows independently reproduced (bins {18,22,24}, 0 leakage); total 2100 control rows; reproduced detected=17956, control_eligible_pool=17903, bin24_eligible=715, bin0_eligible=552, marker union 54 present 53 absent [HLA-DRA]"
   },
   "no_p_or_fdr": true
 }
