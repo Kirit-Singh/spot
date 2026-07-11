@@ -229,6 +229,13 @@
   .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
+  /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
+  #prevSection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .prevgrid{display:grid;grid-template-columns:1fr repeat(3,30px);gap:2px;align-items:center;margin-top:8px}
+  .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
+  .prevgrid .plbl{font-size:10px;color:var(--ink2);text-align:right;padding-right:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .prevgrid .plbl:hover{color:var(--accent)}
+  .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   .cbar.degen .cbg{background:rgb(176,172,164)}
   .cbar.degen .clip{display:none}
@@ -294,6 +301,10 @@
         <div class="crgrad" id="crGrad"></div>
         <div class="crends"><span id="crEndA">From</span><span>Mixed</span><span id="crEndB">To</span></div>
       </div>
+    </div>
+    <div id="prevSection">
+      <div class="lab">Program prevalence over time</div>
+      <div class="prevgrid" id="prevGrid"></div>
     </div>
   </div>
 </div>
@@ -455,7 +466,7 @@ Promise.all([
   // single-program gradient (default color-by = Naïve-like). Contrast + belt activate only once BOTH
   // programs are chosen. The acceptance anchor (treg_like→th1_like@Stim48hr, balanced_a_to_b →
   // 26b866f2ad813d71) is reproducible through the UI selections / __t.setContrast.
-  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();
+  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildPrevalence();
   applyProgram();
   resize();
 }).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
@@ -483,13 +494,34 @@ function buildFilters(){
   de.innerHTML=donors.map(k=>`<button data-d="${k}"${k===donorSel?' class="on"':''}>${k}</button>`).join('');
   de.onclick=e=>{if(!e.target.dataset.d)return;donorSel=e.target.dataset.d;[...de.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));draw();runPreflightUI();};
 }
+// program prevalence across the timecourse: for each program, the % of cells scoring high (>0.5) at
+// Rest / 8h / 48h; cell shade tracks prevalence (relative to the max cell). Click a program to colour the map.
+function buildPrevalence(){
+  const grid=document.getElementById('prevGrid'); if(!grid||!cells.length)return;
+  const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
+  const progs=programs.filter(p=>p.role!=='sensitivity');
+  const tot={Rest:0,Stim8hr:0,Stim48hr:0},cnt={};
+  progs.forEach(p=>cnt[p.score_field]={Rest:0,Stim8hr:0,Stim48hr:0});
+  cells.forEach(c=>{const cd=c.condition;if(tot[cd]==null)return;tot[cd]++;
+    progs.forEach(p=>{if(c[p.score_field]>0.5)cnt[p.score_field][cd]++;});});
+  let maxf=0;const prev={};
+  progs.forEach(p=>{prev[p.score_field]={};conds.forEach(([k])=>{const f=tot[k]?cnt[p.score_field][k]/tot[k]:0;prev[p.score_field][k]=f;if(f>maxf)maxf=f;});});
+  let html='<div class="ph"></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('');
+  progs.forEach(p=>{
+    html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${p.display_label}</div>`;
+    conds.forEach(([k])=>{const f=prev[p.score_field][k],i=maxf?f/maxf:0;
+      html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${f>=0.005?Math.round(f*100)+'%':''}</div>`;});
+  });
+  grid.innerHTML=html;
+  grid.querySelectorAll('.plbl').forEach(el=>el.onclick=()=>{field=el.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
+}
 function buildAxis(){
   // Analysis donor scope is fixed to all four donors (donor_scope="all"); each axis carries its own condition.
   // From/To program options lead with an empty placeholder — the contrast is inactive until BOTH are chosen.
   const progOpts='<option value="">— program —</option>'+programs.filter(p=>p.role!=='sensitivity').map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
-  // per-axis condition: real timepoints only ("All" is intentionally omitted — a screen needs one timepoint,
-  // so "All" would only ever produce a disabled button; the whole-map overview is not offered here).
-  const conds=meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9));
+  // per-axis condition: "All" (pooled across the timecourse) + real timepoints. Both poles "All" runs one
+  // pooled screen; a real timepoint runs that timepoint; differing timepoints = display-only.
+  const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
   const condOpts=conds.map(k=>`<option value="${k}">${CONDLAB[k]||k}</option>`).join('');
   document.querySelectorAll('.axsel.prog').forEach(s=>s.innerHTML=progOpts);
   document.querySelectorAll('.axsel.cond').forEach(s=>s.innerHTML=condOpts);
@@ -566,8 +598,8 @@ function preflight(){
   const A=regByField[axisA.field],B=regByField[axisB.field];
   if(!A||!B)return{ok:false,reason:'Program registry incomplete for a selected axis'};
   if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,reason:'A sensitivity field cannot be a contrast axis'};
-  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,reason:'Pick a real condition (Rest, 8 hr, or 48 hr) on both axes — “All” can’t define a contrast'};
-  if(axisA.condition!==axisB.condition)return{ok:false,reason:''};  // different timepoints = display-only cross-subset view; a screen still needs one timepoint, but show no error message
+  // "All" (both poles) = one pooled screen across the timecourse; a shared real timepoint = that timepoint.
+  if(axisA.condition!==axisB.condition)return{ok:false,reason:''};  // different timepoints = display-only cross-subset view (no error message)
   if(A.program_id===B.program_id&&axisA.direction===axisB.direction)return{ok:false,reason:'From and To are identical — pick distinct programs or opposite directions'};
   if(!A.stage2_selectable)return{ok:false,reason:stage2Reason(A)};
   if(!B.stage2_selectable)return{ok:false,reason:stage2Reason(B)};
