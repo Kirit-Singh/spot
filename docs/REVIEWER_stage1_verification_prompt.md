@@ -47,9 +47,14 @@ overlay drives the UMAP.
    match a fresh `score_genes` control draw at `SEED=12345` (25 bins, ctrl_size 50), and that the
    panels shown in the UI equal `panel_genes` in the registry (no UI gene outside the frozen panel).
 4. **"Programs over time" grid.** It must show the **median continuous score per timepoint**
-   (Rest/8h/48h), shaded within each program's own range, with the definition on screen. Confirm it
-   does **not** threshold cells, count a "% high," or otherwise smuggle in a prevalence/categorical
-   claim. Recompute a couple of medians from the overlay and check them against the displayed values.
+   (Rest/8h/48h), shaded on a **shared absolute scale across programs** (so a near-flat program
+   renders flat and the extent of each swing is comparable across rows — not per-row renormalised),
+   with the definition on screen. Confirm it does **not** threshold cells, count a "% high," or
+   otherwise smuggle in a prevalence/categorical claim. Recompute a couple of medians from the overlay
+   and check them against the displayed values. Note it is pooled over all four donors and does not
+   re-fire on the donor selector (a defensible summary — flag only if presented as donor-uniform).
+   The activation-adjusted CD4 CTL-like lane is selectable under "Sensitivity — see Methods" and must
+   read as a descriptive sensitivity check, never a primary program.
 5. **Labels don't overclaim.** `Checkpoint-high` (not `Checkpoint+`); the modular-definition column
    reads `checkpoint-associated` / `cytotoxic-like` (RNA compatibility does not demonstrate
    exhaustion or cytotoxicity); Th9 is correctly degenerate ("Too sparse to shade", `stage2_selectable=false`
