@@ -1,28 +1,31 @@
 # Stage-1 Continuous-Scoring v3 — Final Lock Implementation Plan
 
 > **For agentic workers:** Execution is **delegated to the Claude Science specialist on tcefold**
-> (91 GB; tcedirector's 31 GB has swap-died on the 396k object). The **lead session plans and
-> independently verifies** (generator ≠ verifier). Steps use checkbox (`- [ ]`) tracking. Do not
-> touch the frozen v2 artifacts except to mark them superseded.
+> (91 GB). The **lead session plans and independently verifies** (generator ≠ verifier). Steps use
+> checkbox (`- [ ]`) tracking. Do not touch v2 artifacts except to mark them superseded.
 >
-> **Rev 2 (conditional approval, 2026-07-11):** frozen control algorithm (keyed SHA-256 draws),
-> coordinates/overlay split, input-normalization language corrected, gates pre-registered, identifier
-> hierarchy fixed, `balanced_a_to_b` removed from serialization, "program-order-invariant" not
-> "independent", canonical-content hashing + real solver lock, "visual design unchanged" (behavior may).
+> **Rev 3 (2026-07-11):** gates are **pre-registered before scoring**; the input manifest + coordinates
+> are pinned **before** control construction; the exact bin formula is frozen (with the corrected
+> tcefold audit); keyed-hash encoding/namespace/digest-tie fully specified; the activation-predictor
+> draw has a stable program_id; the selection contract is placeholders (not a literal instance);
+> "all-marker-excluded comparison" is redefined as a v2→v3 change report; gate metrics carry concrete
+> thresholds; raw artifact hashes live in a separate release manifest (no self-referential file hash).
+> (Rev 2: coordinates/overlay split; input-normalization language; "program-order-invariant" not
+> "independent"; canonical hashing + solver lock; "visual design unchanged".)
 
 **Goal:** Re-lock Stage-1 as a frozen, reproducible *measurement* system for continuous
-transcriptional programs — with **program-order-invariant** control draws — and emit the full 396k
-score table + pre-registered validation battery, without any visual redesign.
+transcriptional programs — with **program-order-invariant** control draws — emitting the full 396k
+score table under **pre-registered** validation gates, without any visual redesign.
 
-**Architecture:** One deterministic run on all 396,000 NTC cells produces the release artifacts (full
-scores, immutable coordinates + generated 40k overlay, registry, summary, validation, input manifest,
-selection contract). The single score-changing edit is the control-pool redesign (Task 2); everything
-else is provenance, artifact, validation, and reproducibility rigor around it. Stage-2 is **not**
-re-run here — its v2 artifacts are marked superseded pending a separate Stage-2 remediation.
+**Architecture:** Inputs are pinned first; panels + controls are frozen and independently verified;
+gates are authored and committed **before** any scores exist; then one deterministic 396k run emits the
+scores + registry + summary + overlay; validation runs separately against the pre-registered gates;
+the release bundle + raw-hash manifest is assembled last. The single score-changing edit is the
+control-pool redesign (Task 2). Stage-2 is **not** re-run here — its v2 artifacts are marked superseded.
 
 **Tech Stack:** Python (vectorized scoring, numpy/scipy/anndata/pandas/pyarrow) in a **solver-locked**
-conda env on tcefold; keyed SHA-256 sampling; raw-file + canonical-content SHA-256 hashing; the
-existing hardened static-server + `verify_reproduce.py` gate.
+conda env on tcefold; keyed SHA-256 sampling; raw-file + canonical-content SHA-256; the hardened
+static-server + `verify_reproduce.py` gate.
 
 ## What "locked" means (non-negotiable framing)
 A frozen, reproducible measurement of specified RNA programs. It does **not** mean RNA has confirmed
@@ -30,44 +33,40 @@ bona-fide Treg/Th1 identity, nor that the programs are biologically or statistic
 Removing cross-panel markers from the control pool eliminates *direct* leakage (e.g. CXCR3 raising
 Th1-like while mechanically lowering Treg-like) — it does **not** decorrelate the programs; shared
 controls and genuine co-expression still correlate them, and that residual correlation is **measured
-and reported** (Task 7), never asserted away. A high Treg-like score measures the specified
-regulatory-associated RNA program — nothing more.
+and reported** (Task 7b), never asserted away.
 
 ## Global Constraints (every task inherits these)
-- **Visual design unchanged; behavior may change where science requires it.** No banners, no new
-  caveat blocks, no layout/typography/dropdown-interaction changes. But scientifically necessary
-  behavior **must** change: (a) `All`/all-times and differing-condition contrasts must **fail** the
-  analysis preflight (display-only, no selection artifact); (b) the "Programs over time" grid must read
-  the **396k summary**, not overlay-derived medians; (c) the hidden `balanced_a_to_b` objective is
-  removed from Stage-1 serialization.
-- **Input semantics (do not misstate).** The pinned `.X` is **already median-normalized (target total
-  ≈ 9,819) and `log1p`-transformed**; there is **no raw counts layer** in the object. Scores are
-  computed from `.X` — never described as "from raw expression." CP10k is a documented *reconstruction*
-  used only as an archived sensitivity, never mixed with or equated to the primary. An **immutable
-  input manifest** records matrix semantics, hashes, dimensions, and the exact CP10k reconstruction.
-- **Scoring uses `panel_genes_measured`, never intended.** HLA-DRA (absent) and any undetected gene
-  never contribute; intended vs measured are stored separately.
-- **Control draws are "program-order-invariant," not "independent."** Cross-program control overlap is
-  **allowed and measured**. The draw is deterministic and independent of program iteration order.
-- **No cross-program combination in Stage-1.** A +0.4 change in one program is not asserted equal to
-  +0.4 in another. `away_from_A` and `toward_B` stay separate; **no `balanced_skew` / `balanced_a_to_b`
-  is emitted anywhere in Stage-1** (any combination is a Stage-2 `run_id` concern).
+- **Gates before scores.** `stage01_gate_spec.json` is authored, reviewed, and committed **before** the
+  396k scoring run. Pre-registration is void if any score is seen first.
+- **Inputs pinned first.** The h5ad raw + canonical matrix hash, dimensions, `.X` semantics, and
+  `stage01_umap_coordinates.json` are pinned **before** control construction.
+- **Visual design unchanged; behavior may change where science requires it.** No banners/caveat
+  blocks/layout/typography/dropdown-interaction changes. But: (a) `All`/all-times and differing-condition
+  contrasts must **fail** the analysis preflight (display-only); (b) the "Programs over time" grid reads
+  the **396k summary**, not overlay medians; (c) the hidden `balanced_a_to_b` objective is removed from
+  Stage-1 serialization.
+- **Input semantics (do not misstate).** The pinned `.X` is **already median-normalized (total ≈ 9,819)
+  + `log1p`**; there is **no raw counts layer**. Scores are computed from `.X` — never "from raw
+  expression." CP10k is a documented *reconstruction* used only as an archived sensitivity.
+- **Scoring uses `panel_genes_measured`, never intended.** HLA-DRA (absent) never contributes.
+- **Control draws are "program-order-invariant," not "independent."** Cross-program overlap is allowed
+  and measured.
+- **No cross-program combination in Stage-1.** No `balanced_skew`/`balanced_a_to_b` anywhere in Stage-1;
+  combination is a Stage-2 `run_id` concern.
 - **Never invent a statistic; public data only; no p/q/FDR without a calibrated, verified null.**
-- **Continuous scores only** — no thresholds, no membership, no argmax/categorical calls.
-- **396k is authoritative.** All summaries + downstream signatures use all 396,000 cells; the 40k
-  overlay is a display-only derived sample.
+- **Continuous scores only** — no thresholds/membership/argmax.
+- **396k is authoritative;** the 40k overlay is display-only.
 - **Scorer name:** "deterministic expression-bin-matched panel-minus-control score" — never "exact
   Scanpy `score_genes` output."
-- **Embedding coordinates are frozen and hashed** in a minimal immutable input, not regenerated.
-- **Hashing:** every artifact carries a **raw-file SHA-256** *and* a **canonical-content SHA-256**
-  (frozen row/column ordering, fixed dtypes, explicit float-rounding rule, null / negative-zero
-  normalization, timestamp fields excluded from the canonical hash).
-- **Environment is solver-locked:** an explicit Linux conda-lock (or package URL/build/hash lock), not
-  just an `environment.yml`.
-- **New v3 hashes replace v2.** v2 artifacts are preserved in Git/HF history, marked superseded, never
-  overwritten or presented as current; downstream use of older registry hashes is rejected by the gate.
-- **generator ≠ verifier.** An independent pass re-derives every hash, re-runs verifier + mutation
-  tests on a clean host, and independently reconstructs controls.
+- **Hashing:** every artifact carries a **canonical-content SHA-256** (frozen row/column ordering,
+  fixed dtypes, explicit float-rounding, null/negative-zero normalization, timestamps excluded).
+  **Raw-file SHA-256s live in `stage01_release_manifest.json`** — a file never contains its own
+  raw-file hash (no self-referential hashing).
+- **Environment is solver-locked** (explicit Linux conda-lock), not just an `environment.yml`.
+- **New v3 hashes replace v2;** v2 preserved in history, marked superseded, never presented as current;
+  the gate rejects older registry hashes.
+- **generator ≠ verifier.** An independent pass re-derives hashes, re-runs verifier + mutation tests,
+  and reconstructs controls.
 - Modules ≤ 500 lines; every deterministic-logic change ships a regression/mutation test.
 
 ## Faulty-assumption ledger (guardrails enforced)
@@ -88,250 +87,237 @@ regulatory-associated RNA program — nothing more.
 ---
 
 ## File Structure
-- **Rewrite** `01_programs/analysis/stage1_pipeline.py` — v3 scorer, control redesign, emit release
-  artifacts from one 396k run. Split control build into `build_controls_v3.py` (≤500 lines each).
-- **New** `01_programs/analysis/build_controls_v3.py` — frozen control algorithm (Task 2) + reference
-  reconstruction used by the mutation test.
-- **New immutable input** `01_programs/app/data/stage01_umap_coordinates.json` — barcode + frozen x/y
-  **only** (no scores). The minimal, pinned coordinate input.
-- **New generated** `01_programs/app/data/stage01_umap_overlay.json` — 40k display artifact: coordinates
-  **plus** v3 scores. **Retire** `stage01_umap_seed.json` + `stage01_cell_records.json` from the v3
-  release (preserved in Git/HF history). Update loader, verifier, notebook, build script, smoke tests,
-  HF manifest.
-- **New** `01_programs/app/data/stage01_input_manifest.json` — immutable: matrix semantics
-  (median-norm total≈9,819 + log1p, no raw layer), h5ad raw + canonical hashes, dimensions, exact CP10k
-  reconstruction recipe.
-- **New** `01_programs/app/data/stage01_gate_spec.json` — **pre-registered** validation gates
-  (committed before v3 results): every metric, alternative seed, stratum, threshold, consequence, and
-  gate category.
-- **New** `01_programs/app/data/stage01_scores_full.parquet` — 396k barcodes × all primary scores + CTL
-  sensitivity + donor + condition; no categorical fields. (Gitignored if oversize; both hashes pinned.)
-- **New** `01_programs/app/data/stage01_summary.json` — full-396k medians + dispersion by
-  program×condition and donor×condition (the app grid's data source).
-- **New** `01_programs/app/data/stage01_validation.json` — results keyed to `gate_spec`, machine-readable
-  pass/fail + all input/output hashes.
-- **New** `01_programs/app/data/stage01_program_registry.json` — v3 schema (below).
-- **New** `01_programs/app/data/stage01_selection_contract.json` — the **frozen selection schema**, not a
-  materialized Treg→Th1 selection. Any bundled example is `stage01_selection_demo.json`, explicitly a
-  **demo fixture**, never presented as the Stage-1 output.
-- **Rewrite** `01_programs/analysis/verify_reproduce.py` — v3 gate (below) + canonical-content hashing.
-- **New** `01_programs/analysis/test_mutation_lock.py` — mutation tests proving protected changes fail.
-- **New** `01_programs/analysis/conda-linux-64.lock` (+ `environment.yml`) — real solver lock.
-- **Move** `cluster_scores.py`/`label_clusters.py`/argmax diagnostics out of the production chain.
-- **Update** app JS (data-plumbing + required behavior; **no visual change**): consume
-  coordinates+overlay+summary, drop `balanced_a_to_b` serialization, make `All`/differing-condition fail
-  the analysis preflight, feed the grid from `stage01_summary.json`.
-- **Update** `docs/HANDOVER.md`, `01_programs/README.md`; mark Stage-2 v2 artifacts superseded.
+- **Rewrite** `01_programs/analysis/stage1_pipeline.py`; **new** `build_controls_v3.py` (Task 2 frozen
+  algorithm + reference reconstruction). Split to keep each ≤500 lines.
+- **Immutable input** `stage01_umap_coordinates.json` — barcode + frozen x/y only (pinned FIRST).
+- **Generated** `stage01_umap_overlay.json` — 40k = pinned coordinates + v3 scores. **Retire**
+  `stage01_umap_seed.json` + `stage01_cell_records.json` from the v3 release (kept in Git/HF history);
+  update loader/verifier/notebook/build/smoke/HF manifest.
+- **Immutable input** `stage01_input_manifest.json` — matrix semantics (median-norm≈9,819 + log1p, no
+  raw layer), h5ad raw + canonical hashes, dimensions, exact CP10k reconstruction recipe. **Pinned FIRST.**
+- **Pre-registered** `stage01_gate_spec.json` — concrete metrics + thresholds + strata + consequences,
+  authored/committed **before** scoring (Task 7a).
+- **Scoring outputs** `stage01_scores_full.parquet` (396k), `stage01_program_registry.json` (v3 schema),
+  `stage01_summary.json` (396k medians + dispersion by program×condition and donor×condition).
+- **Validation output** `stage01_validation.json` — results keyed to `gate_spec` (separate run, Task 7b).
+- **Frozen schema** `stage01_selection_contract.json` — placeholders/rules, not a literal instance. Any
+  example is `stage01_selection_demo.json` (explicit demo fixture).
+- **Release manifest** `stage01_release_manifest.json` — raw-file SHA-256 of every release artifact
+  (avoids self-referential hashing).
+- **Rewrite** `verify_reproduce.py`; **new** `test_mutation_lock.py`; **new** `conda-linux-64.lock`.
+- **Move** cluster/argmax diagnostics out of the production chain.
+- **Update** app JS (plumbing + required behavior; no visual change); `docs/HANDOVER.md`,
+  `01_programs/README.md`; mark Stage-2 v2 superseded.
 
 ### Registry v3 — per-program record schema
 ```
-{ "score_field", "program_id", "display_label", "family", "role",
-  "panel_genes_intended": [...symbols...],
-  "panel_genes_measured": [...symbols detected + used...],
-  "gene_ids": {symbol: ensembl_id},
-  "coverage": {"n_intended","n_measured","genes_absent":[...],"in_effect_universe":[...]},
-  "selection_rationale": {symbol: "why this gene"},
-  "citations": ["module-specific primary citation(s)"],
-  "marker_bins": {symbol: bin_index},
-  "controls_by_bin": {bin_index: [control symbols]},
-  "candidate_counts": {bin_index: n_eligible_in_pool},
-  "sampling": {"scheme":"keyed_sha256","master_seed":12345,
-               "key":"master_seed|program_id|bin|gene","rule":"50 lowest hashes per occupied marker bin, no replacement"},
-  "pool_sha256", "bins_sha256",
-  "ctrl_size": 50, "n_bins": 25,
-  "normalization": "median_total≈9819 + log1p (from .X; no raw layer)",
-  "scoring_method": "deterministic expression-bin-matched panel-minus-control",
-  "coefficients": {...any stored fit coeffs...},
-  "stage2_selectable": true|false, "not_selectable_reason": "<exact reason or null>" }
+{ "score_field","program_id","display_label","family","role",
+  "panel_genes_intended":[...], "panel_genes_measured":[...], "gene_ids":{symbol:ensembl},
+  "coverage":{"n_intended","n_measured","genes_absent":[...],"in_effect_universe":[...]},
+  "selection_rationale":{symbol:"why"}, "citations":["module-specific primary"],
+  "marker_bins":{symbol:bin}, "controls_by_bin":{bin:[symbols]}, "candidate_counts":{bin:n},
+  "sampling":{"scheme":"keyed_sha256","namespace":"spotv3","master_seed":12345,
+              "key":"spotv3|{master_seed}|{program_id}|{bin}|{gene}","encoding":"utf-8",
+              "digest_tie":"digest_hex asc, then var_name index asc","rule":"50 lowest per occupied marker bin, no replacement"},
+  "pool_sha256","bins_sha256","ctrl_size":50,"n_bins":25,
+  "normalization":"median_total≈9819 + log1p (from .X; no raw layer)",
+  "scoring_method":"deterministic expression-bin-matched panel-minus-control",
+  "coefficients":{...}, "stage2_selectable":true|false, "not_selectable_reason":"<exact or null>" }
 ```
 
-### Identifier hierarchy (fixes cache-key ambiguity)
+### Identifier hierarchy
 ```
-question_id / contrast_id : hash(A, B, dir_A, dir_B, analysis_condition)         # biology only
+question_id / contrast_id : hash(A, B, dir_A, dir_B, analysis_condition)                 # biology only
 selection_id              : hash(question_id, registry_sha256, method_version, input_manifest_sha256)
 stage2_run_id             : hash(selection_id, stage2_method/config/mask/Perturb2State versions)
 ```
-**Never** load cached results using the biology-only `contrast_id` alone — results are keyed by
-`selection_id` (Stage-1 inputs) or `stage2_run_id` (Stage-2 method).
+Never load cached results by the biology-only `contrast_id` alone.
 
-### Selection contract schema (frozen; materialized only on "Identify genes")
+### Selection contract schema (frozen; placeholders — materialized only on "Identify genes")
 ```
-{ "A": {"program_id":"treg_like","direction":"high"},
-  "B": {"program_id":"th1_like","direction":"high"},
-  "analysis_condition": "Stim48hr",
-  "combination_policy": "deferred_to_stage2",
-  "ids": {"question_id","selection_id"},
-  "hashes": {"registry_sha256","method_version","input_manifest_sha256","code_sha256"} }
+{ "A":{"program_id":"<program_id>","direction":"high|low"},
+  "B":{"program_id":"<program_id>","direction":"high|low"},
+  "analysis_condition":"<single Stim timepoint>", "combination_policy":"deferred_to_stage2",
+  "ids":{"question_id","selection_id"},
+  "hashes":{"registry_sha256","method_version","input_manifest_sha256","code_sha256"} }
 ```
-Stage-1 emits the **two ordered axes only**; Stage-2 owns any combination.
+Rules: `A.program_id ≠ B.program_id`; identical `analysis_condition` both poles; no sensitivity field;
+no nonselectable program. A literal example lives only in `stage01_selection_demo.json`.
 
 ---
 
 ## Task 1: Freeze the program panels with real provenance
-**Executor:** CS specialist. **Verifier:** lead.
-- [ ] Per program: `panel_genes_intended`, `panel_genes_measured` (detected here + effect-universe
-  flag), Ensembl ids, per-gene `selection_rationale`, and **module-specific primary citations**
-  (Masopust cited only as the naming framework).
-- [ ] Review small panels — Th1 (4), Th2 (4), Tfh (3), Th9 (2, nonselectable), Treg-like (5, activated
-  substrate) — record concerns for Task 8.
-- [ ] **Verify (lead):** `measured ⊆ intended`; every measured gene has id + rationale + citation;
-  HLA-DRA appears only in `intended`.
+**Executor:** CS. **Verifier:** lead.
+- [ ] Per program: `panel_genes_intended` vs `panel_genes_measured` (detected in the pinned object +
+  effect-universe flag), Ensembl ids, per-gene `selection_rationale`, module-specific primary citations
+  (Masopust = naming framework only). Flag small panels (Th1=4, Th2=4, Tfh=3, Th9=2, Treg=5).
+- [ ] **Verify (lead):** `measured ⊆ intended`; each measured gene has id + rationale + citation;
+  HLA-DRA only in `intended`.
 
 ## Task 2: Freeze the control algorithm (THE score-changing edit)
-**Executor:** CS specialist. **Verifier:** lead. **Files:** `build_controls_v3.py`, registry (controls).
-Frozen, fully specified — no ambiguity permitted:
-- [ ] **Bins:** compute expression bins on **all finite genes in the pinned `.X` across all 396k
-  cells, before any marker pruning.** Bin statistic = per-gene **mean of `.X`** (log-normalized).
-  Ranking uses `scipy.stats.rankdata(..., method="average")` on the mean vector; bin index =
-  `floor(rank_fraction * 25)` clamped to `[0,24]`; document the exact tie/edge rule. Store `bins_sha256`.
-- [ ] **Pool:** `candidate_pool = all measured genes − ∪(every program-marker gene) − activation-predictor
-  marker genes`. Store `pool_sha256` and per-bin `candidate_counts`.
-- [ ] **Draw (keyed SHA-256, platform-independent — preferred over NumPy RNG):** for each program, for
-  each **occupied marker bin**, hash every eligible candidate as
-  `sha256("12345|{program_id}|{bin}|{gene}")`, sort ascending, take the **50 lowest** (no replacement).
-  Candidate identity + ordering come from the pinned H5AD `var_names`.
-- [ ] **Hard-fail:** if any occupied marker bin has `< ctrl_size (50)` eligible candidates, **abort
-  before scoring** — never silently shrink, borrow an adjacent bin, or reseed. (Checked on tcefold:
-  18,130 measured − 53 excluded = 18,077 candidates; occupied marker bins hold 745–755 each, so 50 is
-  comfortable; the 11-gene terminal bin holds no marker.)
-- [ ] Overlap across programs is **allowed and measured** (report in Task 7). Name these
-  **program-order-invariant draws**, not independent control sets.
-- [ ] Store `marker_bins`, `controls_by_bin`, `candidate_counts`, `pool_sha256`, `bins_sha256`, and the
-  `sampling` block in the registry. Provide a reference reconstruction from `(pool, bins, key rule)`.
-- [ ] **Verify (lead):** no program marker and no activation marker is in any control set (CXCR3 absent
-  from Treg-like controls); permuting program order → byte-identical controls; the keyed-hash reference
-  reconstructs every list exactly; hard-fail triggers on a synthetically thinned bin.
+**Executor:** CS. **Verifier:** lead. **Prerequisite:** the input h5ad raw + canonical matrix hash and
+`var_names` are already pinned (lock step 1 / Task 3 input manifest).
+- [ ] **Bins (frozen formula):** on **all finite genes in the pinned `.X` across all 396k cells, before
+  any marker pruning.** Per-gene statistic = **mean of `.X`**. `average_rank =
+  scipy.stats.rankdata(mean_vector, method="average")` (1-based); `bin = floor((average_rank − 1)/N ×
+  25)` clamped `[0,24]`, `N` = number of finite genes. Store `bins_sha256`.
+  *(tcefold audit with THIS formula: pruned pool 18,077; marker-occupied bins hold **715–725** eligible
+  candidates; the terminal bin holds **715** and is marker-occupied — ctrl_size=50 passes comfortably.)*
+- [ ] **Pool:** `all measured genes − ∪(every program marker) − activation-predictor markers`. Store
+  `pool_sha256` + per-bin `candidate_counts`.
+- [ ] **Draw (keyed SHA-256):** for each program × each occupied marker bin, `digest =
+  SHA-256(UTF-8("spotv3|" + "12345" + "|" + program_id + "|" + str(bin) + "|" + gene))` per eligible
+  candidate; sort by **(digest_hex asc, then var_name index asc)**; take the **50 lowest**, no
+  replacement. The **activation-predictor** draw uses the stable `program_id = "activation_predictor"`.
+- [ ] **Hard-fail** (abort before scoring) if any occupied marker bin has `< 50` eligible candidates —
+  never shrink/borrow/reseed.
+- [ ] Overlap across programs is allowed and **measured**. Store `marker_bins`, `controls_by_bin`,
+  `candidate_counts`, `pool_sha256`, `bins_sha256`, `sampling`. Provide a reference reconstruction.
+- [ ] **Verify (lead, independent):** re-derive bins with the exact formula; no program marker/activation
+  gene in any control set (CXCR3 absent from Treg-like controls); program-order permutation →
+  byte-identical controls; the keyed-hash reference reconstructs every list exactly; hard-fail triggers
+  on a synthetically thinned bin. *(If CS implemented a different bin/tie interpretation, regenerate.)*
 
-## Task 3: Scoring formula, normalization, input manifest
-**Executor:** CS specialist. **Verifier:** lead.
-- [ ] `score(c,p) = mean(.X over measured panel genes) − mean(.X over matched controls)`. Name it the
-  "deterministic expression-bin-matched panel-minus-control score."
-- [ ] Emit `stage01_input_manifest.json`: `.X` is median-normalized (total≈9,819) + `log1p`, **no raw
-  layer**; h5ad raw + canonical hashes; dimensions; the exact CP10k reconstruction recipe (archived
-  sensitivity only). Normalization string enters `method_version`.
+## Task 3: Input manifest (pinned first) + scoring formula + normalization
+**Executor:** CS. **Verifier:** lead.
+- [ ] **First (lock step 1):** emit `stage01_input_manifest.json` — `.X` is median-normalized (≈9,819)
+  + `log1p`, **no raw layer**; h5ad raw + canonical hashes; dimensions; exact CP10k reconstruction
+  recipe. Normalization string enters `method_version`. This is pinned **before** Task 2.
+- [ ] **Later (lock step 5):** `score(c,p) = mean(.X over measured panel) − mean(.X over matched
+  controls)`; name it the "deterministic expression-bin-matched panel-minus-control score."
 - [ ] **Verify (lead):** recompute a random sample of `(cell, program)` scores from `.X` + stored
-  controls, match `stage01_scores_full.parquet` to 5 dp; `method_version` differs from v2; no text
-  claims "raw expression" or "exact Scanpy output."
+  controls, match to 5 dp; `method_version` ≠ v2; no "raw expression"/"exact Scanpy" text.
 
 ## Task 4: Fully specify the activation-adjusted CTL sensitivity lane
-**Executor:** CS specialist. **Verifier:** lead.
-- [ ] Record: activation predictor genes, their exact predictor controls, **fit population = all 396k**,
-  normalization, regression slope + intercept, residual formula, code hash, method hash.
-- [ ] Raw CD4 CTL-like stays primary; actadj is display/sensitivity-only, `stage2_selectable=false`.
-- [ ] **Verify (lead):** residual reproduces from stored slope/intercept + inputs; excluded from every
-  selectable-program path.
+**Executor:** CS. **Verifier:** lead.
+- [ ] Record activation predictor genes, their exact predictor controls (drawn under
+  `program_id="activation_predictor"`), **fit population = all 396k**, normalization, slope + intercept,
+  residual formula, code + method hashes. Raw CD4 CTL-like stays primary; actadj is display/sensitivity-
+  only, `stage2_selectable=false`.
+- [ ] **Verify (lead):** residual reproduces from stored coefficients; excluded from every selectable path.
 
-## Task 5: Emit the release artifacts from one 396k run
-**Executor:** CS specialist. **Verifier:** lead.
-- [ ] One run emits together: `stage01_scores_full.parquet` (396k; donor, condition, all primary
-  scores, CTL sensitivity; **no categorical fields**); `stage01_umap_coordinates.json` (immutable
-  barcode+x/y); `stage01_umap_overlay.json` (40k = coordinates + same scores); `stage01_program_registry.json`
-  (v3); `stage01_summary.json` (396k medians + dispersion by program×condition and donor×condition);
-  `stage01_input_manifest.json`; `stage01_gate_spec.json` (Task 7, pre-registered); `stage01_validation.json`
-  (Task 7); `stage01_selection_contract.json` (schema only).
+## Task 5: The 396k scoring run (AFTER gates are committed)
+**Executor:** CS. **Verifier:** lead. **Prerequisite:** inputs pinned (step 1), controls verified (step 3),
+`stage01_gate_spec.json` committed (step 4).
+- [ ] The scoring run emits together: `stage01_scores_full.parquet` (396k; donor, condition, all primary
+  scores, CTL sensitivity; no categorical fields); `stage01_umap_overlay.json` (40k = pinned coordinates
+  + same scores); `stage01_program_registry.json` (v3); `stage01_summary.json` (396k medians + dispersion
+  by program×condition and donor×condition). `stage01_validation.json` comes from the **separate**
+  validation run (Task 7b), not here. The selection contract is a schema (placeholders).
 - [ ] **Verify (lead):** overlay scores equal the full-table scores for overlay barcodes; the summary is
-  computed from 396k (spot-check two medians against the parquet); no categorical field anywhere; no
-  materialized Treg→Th1 selection in the release (only the contract; any example is a named demo fixture).
+  computed from 396k (spot-check two medians); no categorical field; no materialized selection in the
+  release (only the contract; any example is the named demo fixture).
 
-## Task 6: Freeze + hash the embedding coordinates
-**Executor:** CS specialist. **Verifier:** lead.
+## Task 6: Freeze + hash the embedding coordinates (with lock step 1)
+**Executor:** CS. **Verifier:** lead.
 - [ ] Freeze the existing 40k x/y into `stage01_umap_coordinates.json`; do not regenerate the UMAP.
-  Hash `barcode+x+y` (canonical-content SHA).
-- [ ] **Verify (lead):** coordinate hash pinned in the registry + manifest and re-derivable.
+  Canonical-content hash `barcode+x+y`; record the raw-file SHA in the release manifest.
+- [ ] **Verify (lead):** coordinate hash pinned + re-derivable.
 
-## Task 7: Pre-registered validation battery (drives selectability)
-**Executor:** CS specialist. **Verifier:** lead. **Files:** `stage01_gate_spec.json`, `stage01_validation.json`.
-- [ ] **Author + commit `stage01_gate_spec.json` BEFORE running v3 validation** — every metric,
-  alternative seed, stratum, threshold, and consequence, grouped into: **(i) program-measurement gates;
-  (ii) condition-specific pair/contrast gates; (iii) overlay-fidelity gates; (iv) descriptive
-  sensitivities** (CP10k, v2-vs-v3 change) that inform but do not gate.
-- [ ] Run validation for **every primary program** (not "selectable programs" — that is circular):
-  leave-one-marker-out (**holding the frozen controls fixed**), detection/coverage, alternative-control-key
-  sensitivity, all-marker-excluded control comparison, median-vs-CP10k, and correlation with every other
-  program (report residual shared-control + co-expression correlation).
-- [ ] **Donor = leave-one-donor-out sensitivity at biological n=4** (not 396k independent replicates):
-  heterogeneity measured; no program driven entirely by one donor; selected condition has usable
-  variation; direction not a pooling artifact; D2's divergent Th1-like behavior captured explicitly.
-- [ ] **Overlay-fidelity:** 40k preserves donor×condition composition, per-program medians,
-  distributions, and broad correlations vs the 396k table.
-- [ ] Emit `stage01_validation.json` with pass/fail per gate keyed to `gate_spec`.
-- [ ] **Verify (lead):** two sensitivities re-run independently match; pass/fail states agree.
+## Task 7a: Pre-register the gates (BEFORE scoring)
+**Executor:** lead + CS. **Files:** `stage01_gate_spec.json` — committed before any score exists.
+Concrete metrics + thresholds (no vague prose), grouped into four categories:
+- [ ] **Program-measurement gates** (per primary program): coverage `n_measured ≥ 3` (else
+  auto-nonselectable); LOMO stability with **controls held fixed** — removing any single measured
+  marker shifts the program's global median by `≤ 0.5 × (cross-cell IQR of the score)`; control-key
+  sensitivity — 3 alternative `master_seed`s shift the program median by `≤ 0.10` log-units.
+- [ ] **Condition-specific pair/contrast gates** (per A/B at a condition): axis non-degeneracy —
+  `|median(A) − median(B)| ≥ 0.20` log-units **or** rank-biserial separation `≥ 0.10`; off-axis
+  specificity — the A−B direction is not collinear (`|r| ≥ 0.90`) with a third program's axis (else flag).
+- [ ] **Overlay-fidelity gates:** `|overlay median − 396k median| ≤ 0.02` per program; donor×condition
+  composition matches 396k within `±1` percentage point; per-program KS distance `≤ 0.03`.
+- [ ] **Donor stability (LODO, biological n=4):** the sign of each program's median at the selected
+  condition is preserved under all 4 leave-one-donor-out folds; no single donor supplies `> 50%` of the
+  program's above-median cells at that condition; D2's divergent Th1-like behavior recorded explicitly.
+- [ ] Commit `stage01_gate_spec.json`. **Verify (lead):** thresholds are concrete and committed before
+  scoring; every metric names its statistic, stratum, and consequence.
 
-## Task 8: Selectability + frozen selection rules + identifier hierarchy
-**Executor:** lead (from Task 7) with CS.
-- [ ] Set `stage2_selectable` + `not_selectable_reason` per program from Task 7. **No panel selectable
-  merely because one marker survives.** Th9 stays nonselectable until measurable.
-- [ ] Freeze selection rules (visual design unchanged): same condition both poles → executable; different
-  conditions / all-times → display-only (no selection artifact); sensitivity fields → never executable;
-  donor selector → display filter only (contrast uses all four donors). No membership/threshold.
-- [ ] Freeze the identifier hierarchy (`question_id`/`selection_id`/`run_id`) and the selection contract
-  schema. Selection is materialized **only on "Identify genes"** with the full `selection_id` hashes.
-- [ ] **Verify (lead):** every selectable program passes its gate; the contract emits only A, B,
-  directions, one shared condition, `combination_policy: deferred_to_stage2`, ids, and hashes.
+## Task 7b: Run validation against the pre-registered gates (AFTER scoring)
+**Executor:** CS. **Verifier:** lead. **Files:** `stage01_validation.json`.
+- [ ] Run for **every primary program** (not "selectable" — circular): LOMO (controls fixed),
+  detection/coverage, alternative-control-key sensitivity, median-vs-CP10k, correlation with every other
+  program (report residual shared-control + co-expression correlation). Donor = **LODO n=4**. Overlay
+  fidelity per 7a. Descriptive **v2→v3 change report** replaces the old "all-marker-excluded comparison"
+  (v3 is already all-marker-excluded).
+- [ ] Emit `stage01_validation.json` with pass/fail per gate keyed to `gate_spec` + all input/output
+  canonical hashes.
+- [ ] **Verify (lead):** re-run two sensitivities independently; pass/fail states agree.
 
-## Task 9: App data-plumbing + scientifically-required behavior (no visual change)
+## Task 8: Selectability + frozen selection rules + identifiers
+**Executor:** lead (from 7b) with CS.
+- [ ] Set `stage2_selectable` + `not_selectable_reason` per program from 7b gates. No panel selectable on
+  one surviving marker. Th9 nonselectable until measurable.
+- [ ] Freeze selection rules (visual design unchanged): same condition both poles → executable;
+  different/all-times → display-only (no artifact); sensitivity → never executable; donor selector →
+  display filter only. No membership/threshold.
+- [ ] Freeze the identifier hierarchy + selection-contract schema; selection materialized **only on
+  "Identify genes"** with `selection_id` hashes.
+- [ ] **Verify (lead):** each selectable program passes its 7a gate; the contract emits only A, B,
+  directions, one shared condition, `combination_policy: deferred_to_stage2`, ids, hashes.
+
+## Task 9: App data-plumbing + required behavior (no visual change)
 **Executor:** lead. **Files:** `01_programs/app/01_page.html` (JS only).
-- [ ] Loader consumes `stage01_umap_coordinates.json` + `stage01_umap_overlay.json` + `stage01_summary.json`
-  + v3 registry (retire seed/cell_records reads).
-- [ ] **Remove `balanced_a_to_b`** from Stage-1 serialization; the selection payload carries the two
-  ordered axes + condition only, materialized on "Identify genes" with `selection_id`.
-- [ ] Make `All`/all-times and differing-condition contrasts **fail** the analysis preflight (display-only).
-- [ ] Feed the "Programs over time" grid from `stage01_summary.json` (396k), not overlay medians.
-- [ ] **Verify (lead):** in-browser — no visual/layout diff; grid numbers equal the 396k summary; `All`
-  is rejected by preflight; no `balanced_a_to_b` in any emitted payload; map + gradient unchanged.
+- [ ] Loader consumes coordinates + overlay + summary + v3 registry (retire seed/cell_records reads).
+- [ ] **Remove `balanced_a_to_b`** from serialization; selection payload = two ordered axes + condition,
+  materialized on "Identify genes" with `selection_id`.
+- [ ] `All`/all-times and differing-condition contrasts **fail** the analysis preflight (display-only).
+- [ ] Feed the "Programs over time" grid from `stage01_summary.json` (396k).
+- [ ] **UI copy (user-requested, explicit exception to "no visual change"):** rename the contrast
+  button "Identify state skews →" → "ID program skew genes →".
+- [ ] **Verify (lead, in-browser):** no visual/layout diff (beyond the button copy above); grid numbers
+  equal the 396k summary; `All` rejected by preflight; no `balanced_a_to_b` in any payload.
 
 ## Task 10: Verifier + mutation tests + canonical hashing + solver lock
 **Executor:** lead. **Files:** `verify_reproduce.py`, `test_mutation_lock.py`, `conda-linux-64.lock`.
-- [ ] Verifier rejects any change to panels, controls, coefficients, roles, coordinates, registry, or
-  full scores; enforces raw-file + canonical-content SHA (frozen ordering/dtypes/rounding/neg-zero/no
-  timestamps); keeps forbidden-key + stale-string scans; independently reconstructs controls via the
-  Task 2 reference; **rejects older (v2) registry hashes.**
-- [ ] `test_mutation_lock.py`: mutate one control gene / panel gene / coefficient / coordinate / role
-  each → assert the verifier fails; assert a v2 hash is rejected.
-- [ ] Move cluster/argmax diagnostics out of the production chain (labelled non-production).
-- [ ] Ship a real **Linux conda lock** (not just `environment.yml`).
-- [ ] **Verify (lead):** mutation tests fail on tampering, pass clean; verifier re-derives all hashes on
-  a clean checkout.
+- [ ] Verifier rejects any change to panels/controls/coefficients/roles/coordinates/registry/full scores;
+  enforces canonical-content SHA (frozen ordering/dtype/rounding/neg-zero/no-timestamp) and checks raw
+  SHAs against `stage01_release_manifest.json`; keeps forbidden-key + stale-string scans; reconstructs
+  controls via the Task 2 reference; **rejects older (v2) registry hashes.**
+- [ ] `test_mutation_lock.py`: mutate one control gene / panel gene / coefficient / coordinate / role →
+  verifier fails; a v2 hash is rejected.
+- [ ] Move cluster/argmax diagnostics out of the production chain. Ship the Linux conda lock.
+- [ ] **Verify (lead):** mutation tests fail on tampering, pass clean; verifier re-derives all hashes clean.
 
 ## Task 11: Independent verification (generator ≠ verifier)
-**Executor:** independent pass (lead or a fresh agent that did not generate the artifacts).
-- [ ] On a clean host: re-derive every hash; re-run verifier + mutation tests; independently reconstruct
-  all control lists via keyed hashing; recompute a score sample; confirm the summary is 396k-based and
-  the six+ artifacts agree. Emit `verification.json` (all-pass required).
+**Executor:** independent pass. Applied to the **control build before gate authoring** (lock step 3) and
+to the **full release** at the end.
+- [ ] Re-derive every hash; re-run verifier + mutation tests on a clean host; independently reconstruct
+  all control lists via keyed hashing with the exact formula; recompute a score sample; confirm the
+  summary is 396k-based and artifacts agree. Emit `verification.json` (all-pass required).
 
 ## Task 12: Lock, supersede Stage-2, publish
 **Executor:** lead.
 - [ ] Mark every v2 Stage-2 artifact `superseded`, `incompatible_with_current_stage1`,
-  `stage3_eligible=false`. Preserve v2 in history; never overwrite or present as current.
-- [ ] Publish a **sanitized HF revision** with only current v3 artifacts; pin + verify the h5ad SHA and
-  the `stage01_umap_coordinates.json` SHA; update the HF manifest.
-- [ ] Tag **`stage1-continuous-v3`**; the verifier rejects older registry hashes downstream.
-- [ ] Update `docs/HANDOVER.md` + `01_programs/README.md` to v3; record the deferred Stage-2 remediation.
+  `stage3_eligible=false`. Preserve v2 in history.
+- [ ] Publish a sanitized HF revision with only current v3 artifacts; pin + verify the h5ad SHA and the
+  `stage01_umap_coordinates.json` SHA; update the HF manifest.
+- [ ] Tag **`stage1-continuous-v3`**; the verifier rejects older registry hashes.
+- [ ] Update `docs/HANDOVER.md` + `01_programs/README.md`; record the deferred Stage-2 remediation.
 
 ---
 
-## Deferred to a separate effort (NOT executed here) — Stage-2 remediation
+## Deferred (NOT executed here) — Stage-2 remediation
 After Stage-1 v3 locks and v2 Stage-2 is marked superseded, fix Stage-2 **before** re-running: exact
 contributing-guide masks; eligible-only candidate ranking; ≥2 evaluated guides for guide replication;
 honest donor-support denominators; generic `stage01_selection_contract.json` consumption; a
-method/config/input-aware `run_id`; off-axis specificity reporting. Only then generate a new v3
-selection and re-run direct projection + Perturb2State from scratch. The mask's biological gene content
-is scorer-independent, but its emitted artifact + hash bind to the contrast/run and are regenerated +
-re-pinned then.
+method/config/input-aware `run_id`; off-axis specificity reporting. Only then generate a new v3 selection
+and re-run direct projection + Perturb2State from scratch.
 
-## Lock sequence (execution order)
-1. Freeze panels + citations (T1). 2. Freeze the control algorithm — keyed draws, hard-fail (T2).
-3. Freeze normalization + scoring + input manifest (T3–T4). 4. Rerun 396k once (T5–T6). 5. Regenerate
-registry + full table + summary + coordinates + overlay together (T5). 6. Author gates, then run
-sensitivities (T7). 7. Decide selectability + freeze ids/selection (T8). 8. App plumbing/behavior (T9).
-9. Verifier + mutation tests on a clean host (T10–T11). 10. Publish immutable hashes + sanitized HF rev;
-tag `stage1-continuous-v3` (T12).
+## Lock sequence (execution order — gates are pre-registered BEFORE scoring)
+1. **Pin the input manifest + coordinate input** (T3 input-manifest part + T6) — before any control work.
+2. **Freeze panels (T1) and controls (T2)** against the pinned input.
+3. **Independently verify the controls** (T11 applied to the control build) — before gates.
+4. **Author, review, commit `stage01_gate_spec.json`** with concrete thresholds (T7a) — before scores.
+5. **Only then run the 396k primary scores** + emit scores/registry/summary/overlay (T3 scoring + T5).
+6. **Run validation/sensitivity separately** against the pre-registered gates (T7b) → selectability (T8).
+7. **Assemble the atomic release bundle** + `stage01_release_manifest.json`; app plumbing (T9); verifier
+   + mutation tests + independent verification on a clean host (T10–T11); publish sanitized HF rev + tag
+   `stage1-continuous-v3` (T12).
 
-## Self-review (spec coverage)
-Filenames split (coords vs overlay) + retirements → File Structure/T5–T6. Hard-fail bins + frozen keyed
-algorithm → T2. Static-selection removal + selection-on-click + demo-fixture naming → T5/T8/T9.
-Identifier hierarchy → schema + T8. `balanced_a_to_b` removed from serialization → T9. Gates pre-registered,
-every primary program, four categories, LOMO-controls-fixed, LODO n=4 → T7. Normalization/input language
-corrected + input manifest → T3. Raw-file + canonical-content hashing + solver lock → Global/T10.
-"Visual design unchanged" + `All` preflight + 396k-summary grid → Global/T9. "Program-order-invariant"
-not "independent" + residual-correlation reporting → Global/T2/T7.
+## Self-review (Rev-3 coverage)
+Gates-before-scoring → Global + lock steps 3–5 + T7a/T7b split. Input pinned first → Global + lock step 1
++ T3/T6. Exact bin formula + corrected audit (715–725, terminal 715 marker-occupied) → T2. Keyed-hash
+UTF-8/namespace/digest-tie + activation_predictor program_id → T2/registry `sampling`. Selection contract
+placeholders + demo fixture → schema + T8. "All-marker-excluded" → v2→v3 change report → T7b. Concrete
+gate metrics/thresholds → T7a. Raw hashes in release manifest, no self-referential → Global + File
+Structure + T10. "Program-order-invariant" + residual-correlation reporting → Global/T2/T7b.
