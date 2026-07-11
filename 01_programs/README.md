@@ -25,7 +25,7 @@ confirmed Treg identity.
 ## What it produces
 A 40,000-cell display overlay (`SEED=12345`), each cell carrying **12 continuous program scores**
 (`treg_like_score`, `cd4_ctl_like_score` + `_actadj`, `th1_like_score`, …, `diff_*_score`), plus a
-`meta.programs[]` contract and frozen per-score display domains (p02/p50/p98 over the full 396k) that
+`meta.programs[]` contract and frozen per-score display domains (quantiles p02…p99 over the full 396k) that
 drive the UI. **No categorical calls and no per-cell/per-cluster biological labels** — the workbench
 colours by one selected continuous score at a time (a display-only colour transform; the scores
 themselves are the scientific output). Cluster IDs are carried only as numeric technical provenance.
@@ -101,6 +101,7 @@ Method frozen in `STAGE1_REMEDIATION_METHOD.md`; old-vs-new in `STAGE1_REMEDIATI
 
 ## Data source
 Marson GWCD4i genome-scale CRISPRi perturb-seq (bioRxiv 2025.12.23.696273) — NTC CD4 cells, 4
-donors × Rest/Stim8hr/Stim48hr — public on the **CZI Virtual Cells Platform**. Program panels are
-sourced from Masopust et al., *Guidelines for T cell nomenclature*, Nat Rev Immunol
-2026;26:298-313 — used as a **panel source**, not as functional confirmation.
+donors × Rest/Stim8hr/Stim48hr — public on the **CZI Virtual Cells Platform**. Program **naming**
+follows Masopust et al., *Guidelines for T cell nomenclature*, Nat Rev Immunol 2026;26:298-313 —
+the naming consensus the program labels follow. The gene panels themselves are **curated canonical
+markers** (restricted to genes measurable in this dataset), not gene lists taken from that paper.

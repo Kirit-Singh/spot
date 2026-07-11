@@ -55,8 +55,10 @@ files are in each `outputs/<contrast_id>/` dir (gitignored, regenerable — see 
 ## Public data / sources used
 - Marson (Zhu et al. 2026) genome-scale CRISPRi CD4 Perturb-seq, via **CZI Virtual Cells Platform**,
   redistributed at the pinned HF revision above. `GWCD4i.DE_stats.h5ad` (10,282-gene effect universe),
-  `.by_guide.h5mu`, `.by_donors.h5mu`, sgRNA library metadata. Panels: Masopust et al., *Guidelines for
-  T cell nomenclature*, Nat Rev Immunol 2026;26:298-313. Perturb2State: `emdann/pert2state_model` (MIT).
+  `.by_guide.h5mu`, `.by_donors.h5mu`, sgRNA library metadata. Program **naming**: Masopust et al.,
+  *Guidelines for T cell nomenclature*, Nat Rev Immunol 2026;26:298-313 (nomenclature consensus; the
+  gene panels are curated canonical markers, not taken from that paper). Perturb2State:
+  `emdann/pert2state_model` (MIT).
 - No proprietary/account-gated data. No DrugBank/SIDER/DrugComb.
 
 ## Not evaluated / not built (honest)

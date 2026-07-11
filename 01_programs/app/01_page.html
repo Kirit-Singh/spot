@@ -215,6 +215,17 @@
   #provmodal .ppaper a{font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}
   #provmodal .ppaper a:hover{text-decoration:underline}
   #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+  #provmodal .regenrow{margin-top:10px}
+  #provmodal .regenline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #provmodal .regenlast{color:var(--muted);font-size:11px}
+  #provmodal .regenbtn{font:inherit;font-size:12px;font-weight:600;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  #provmodal .regenbtn:hover{border-color:var(--accent);color:var(--accent)}
+  #provmodal .regenhint{margin-top:9px}
+  #provmodal .regenhint p{color:var(--muted);font-size:11px;line-height:1.45;margin:0 0 7px}
+  #provmodal .regencmd{display:flex;align-items:center;gap:8px;background:var(--sunken);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+  #provmodal .regencmd code{font-family:var(--mono);font-size:11px;color:var(--ink2);flex:1;overflow-x:auto;white-space:nowrap}
+  #provmodal .regencopy{font:inherit;font-size:10px;font-weight:600;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+  #provmodal .regencopy:hover{color:var(--accent);border-color:var(--accent)}
   #provmodal a{color:var(--accent)}
   /* as the window narrows: drop the citation + source links; header/nav fonts already scale via clamp() */
   @media (max-width:1080px){
@@ -260,9 +271,10 @@
   .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
-  /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
+  /* programs over time — programs × Rest/8h/48h, cell = median program score (shaded within each row) */
   /* a right spacer column mirrors the label column (--labw) so the Rest/8h/48h columns sit dead-centre */
   #prevSection{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:center;--labw:96px}
+  #prevSection .prevcap{font-size:8.5px;color:var(--muted);letter-spacing:.02em;margin-top:2px}
   .prevbody{width:max-content;max-width:100%;margin:0 auto}
   .prevgrid{display:grid;grid-template-columns:var(--labw) repeat(3,32px) auto;gap:3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
@@ -348,6 +360,7 @@
     </div>
     <div id="prevSection">
       <div class="lab">Programs over time</div>
+      <div class="prevcap">median program score per timepoint · shaded within each program</div>
       <div class="prevbody">
         <div class="prevgrid" id="prevGrid"></div>
       </div>
@@ -385,7 +398,7 @@
     </div></div>
     <div class="pstep"><div class="pn">3</div><div class="pc">
       <h4>Program scores</h4>
-      <p>Every cell carries continuous <b>RNA panel-minus-control scores</b> — <code>score_genes</code> panel mean minus an expression-bin-matched control mean (25 bins, ctrl_size 50, fixed seed). 12 programs span three families (differentiation, functional, sensitivity), defined from the Masopust et al. nomenclature. These are continuous scores, not cell-type calls.</p>
+      <p>Every cell carries continuous <b>RNA panel-minus-control scores</b> — <code>score_genes</code> panel mean minus an expression-bin-matched control mean (25 bins, ctrl_size 50, fixed seed). 11 programs are shown across two families (differentiation, functional); a 12th activation-adjusted sensitivity lane is retained in the data but hidden from the UI. Program names follow the Masopust et al. nomenclature. These are continuous scores, not cell-type calls.</p>
     </div></div>
     <div class="pstep"><div class="pn">4</div><div class="pc">
       <h4>Activation sensitivity lane</h4>
@@ -396,7 +409,16 @@
       <p id="pScope"></p>
       <p style="margin-top:12px"><a href="/01_notebook.html" target="_blank" rel="noopener" style="text-decoration:none;font-weight:600">↗ Open methods and reproducibility</a> <span style="color:var(--muted);font-size:11px">— the pipeline sources and provenance behind this map.</span></p>
       <p style="margin-top:9px"><b>Reproduce:</b> <code>reproduce.sh</code> <span style="color:var(--muted);font-size:11px">fetches the pinned Hugging Face h5ad and verifies its SHA-256, then re-runs the fixed-seed scoring and emits the overlay. <a id="reproLink" href="https://github.com/Kirit-Singh/spot/blob/stage1-remediation/01_programs/analysis/reproduce.sh" target="_blank" rel="noopener" style="text-decoration:none">script ↗</a></span></p>
-      <p style="margin-top:6px;color:var(--muted);font-size:11px">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b>.</p>
+      <div class="regenrow">
+        <div class="regenline">
+          <button id="regenBtn" type="button" class="regenbtn">⟳ Regenerate overlay</button>
+          <span class="regenlast">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b>.</span>
+        </div>
+        <div id="regenHint" class="regenhint" hidden>
+          <p>The workbench serves <b>static, content-addressed artifacts</b> — regeneration runs offline against the pinned Hugging Face revision, then <code>verify_reproduce.py</code> gates the SHA-256 (must reproduce <code>6e1665d1…</code>) before redeploy. Run:</p>
+          <div class="regencmd"><code id="regenCmd">cd 01_programs/analysis && ./reproduce.sh</code><button id="regenCopy" type="button" class="regencopy">Copy</button></div>
+        </div>
+      </div>
     </div></div>
     <div class="ppapers">
       <div class="pph2">References</div>
@@ -499,7 +521,7 @@ Promise.all([
 ]).then(([d,reg])=>{
   DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
   // display-label overrides — cosmetic ONLY (never touch the frozen registry_sha256 / overlay hashes)
-  const LABEL_OVERRIDE={diff_checkpoint_score:'Checkpoint+'};
+  const LABEL_OVERRIDE={};  // map/pill labels use the frozen registry display_label (e.g. "Checkpoint-high"); no categorical "+" gate
   programs.forEach(p=>{if(LABEL_OVERRIDE[p.score_field])p.display_label=LABEL_OVERRIDE[p.score_field];});
   programs.forEach(p=>progByField[p.score_field]=p);
   programs.forEach(p=>transformFor(p.score_field));   // build + record each field's frozen display transform
@@ -540,30 +562,34 @@ function buildFilters(){
   de.innerHTML=donors.map(k=>`<button data-d="${k}"${k===donorSel?' class="on"':''}>${k}</button>`).join('');
   de.onclick=e=>{if(!e.target.dataset.d)return;donorSel=e.target.dataset.d;[...de.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));draw();runPreflightUI();};
 }
-// program prevalence across the timecourse: for each program, the % of cells scoring high (>0.5) at
-// Rest / 8h / 48h; cell shade tracks prevalence (relative to the max cell). Click a program to colour the map.
+// median program score across the timecourse: for each program, the MEDIAN continuous score
+// (panel-minus-control) among cells at Rest / 8h / 48h. Continuous — no threshold, no categorical
+// call, no prevalence. Cell shade tracks the median WITHIN each program (its own Rest→48h range),
+// so rows are read as trends, not compared across programs. Click a program to colour the map.
 function buildPrevalence(){
   const grid=document.getElementById('prevGrid'); if(!grid||!cells.length)return;
   const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
   // short labels for this compact grid only (full '-like' names stay in the tooltip + everywhere else)
-  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint+',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
-  const MOD={diff_naive_score:'naïve',diff_activated_score:'activated',diff_memory_score:'memory',diff_checkpoint_score:'exhausted',treg_like_score:'regulatory',cd4_ctl_like_score:'cytotoxic',th1_like_score:'type-1 helper',th2_like_score:'type-2 helper',th17_like_score:'type-17 helper',tfh_like_score:'follicular helper',th9_like_score:'type-9 helper'};
+  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint-high',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
+  // modular nomenclature descriptors — NAMING only, not functional-state calls. RNA compatibility does
+  // not demonstrate exhaustion or cytotoxicity, so those read 'checkpoint-associated' / 'cytotoxic-like'.
+  const MOD={diff_naive_score:'naïve',diff_activated_score:'activated',diff_memory_score:'memory',diff_checkpoint_score:'checkpoint-associated',treg_like_score:'regulatory',cd4_ctl_like_score:'cytotoxic-like',th1_like_score:'type-1 helper',th2_like_score:'type-2 helper',th17_like_score:'type-17 helper',tfh_like_score:'follicular helper',th9_like_score:'type-9 helper'};
   const progs=programs.filter(p=>p.role!=='sensitivity');
-  const tot={Rest:0,Stim8hr:0,Stim48hr:0},cnt={};
-  progs.forEach(p=>cnt[p.score_field]={Rest:0,Stim8hr:0,Stim48hr:0});
-  cells.forEach(c=>{const cd=c.condition;if(tot[cd]==null)return;tot[cd]++;
-    progs.forEach(p=>{if(c[p.score_field]>0.5)cnt[p.score_field][cd]++;});});
-  let maxf=0;const prev={},degen={};
+  const median=a=>{if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y);const m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+  const vals={};progs.forEach(p=>vals[p.score_field]={Rest:[],Stim8hr:[],Stim48hr:[]});
+  cells.forEach(c=>{const cd=c.condition;if(!vals[progs[0].score_field][cd])return;progs.forEach(p=>vals[p.score_field][cd].push(c[p.score_field]));});
+  const med={},degen={};
   progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
-    prev[p.score_field]={};conds.forEach(([k])=>{const f=tot[k]?cnt[p.score_field][k]/tot[k]:0;prev[p.score_field][k]=f;if(!degen[p.score_field]&&f>maxf)maxf=f;});});
+    med[p.score_field]={};conds.forEach(([k])=>{med[p.score_field][k]=median(vals[p.score_field][k]);});});
   let html='<div></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('')+`<a class="ph prmodh" href="${PAPERS.masopust.url}" target="_blank" rel="noopener" title="Masopust et al. · Guidelines for T cell nomenclature">Modular definition ↗</a>`,anyND=false;
   progs.forEach(p=>{
     const nd=degen[p.score_field]; if(nd)anyND=true;
     html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${SHORT[p.score_field]||p.display_label}</div>`;
+    const ms=conds.map(([k])=>med[p.score_field][k]),lo=Math.min(...ms),hi=Math.max(...ms);
     conds.forEach(([k])=>{
       if(nd){html+='<div class="pc nd">ND</div>';return;}
-      const f=prev[p.score_field][k],i=maxf?f/maxf:0;
-      html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${Math.round(f*100)}%</div>`;});
+      const v=med[p.score_field][k],i=hi>lo?(v-lo)/(hi-lo):0.5;
+      html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}" title="median ${v.toFixed(3)}">${v.toFixed(2)}</div>`;});
     html+=`<div class="prmod">${MOD[p.score_field]||'—'}</div>`;
   });
   if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
@@ -1013,6 +1039,8 @@ function openProv(){document.getElementById('provmodal').classList.add('open');d
 document.getElementById('mx').onclick=closeCard;
 document.getElementById('scrim').onclick=function(){closeCard();closeProv();};
 document.getElementById('provx').onclick=closeProv;document.getElementById('provbtn').onclick=openProv;
+document.getElementById('regenBtn').onclick=function(){const h=document.getElementById('regenHint');h.hidden=!h.hidden;this.textContent=h.hidden?'⟳ Regenerate overlay':'⟳ Regenerate overlay ▾';};
+document.getElementById('regenCopy').onclick=async function(){try{await navigator.clipboard.writeText(document.getElementById('regenCmd').textContent);this.textContent='Copied';}catch(e){this.textContent='⌘C to copy';}setTimeout(()=>{this.textContent='Copy';},1500);};
 {const lb=document.getElementById('linksBtn');if(lb){lb.onclick=e=>{e.stopPropagation();const w=lb.closest('.lkwrap');const o=w.classList.toggle('open');lb.setAttribute('aria-expanded',o);};document.addEventListener('click',()=>{const w=document.querySelector('.lkwrap.open');if(w)w.classList.remove('open');});}}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCard();closeProv();}});
 

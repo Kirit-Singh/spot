@@ -15,8 +15,10 @@
 #   bioRxiv 2025.12.23.696273 (CRISPRi; 4 donors; Rest/Stim8hr/Stim48hr).
 # - Data access: **CZI Virtual Cell Platform**. The embedded, clustered object is
 #   redistributed on Hugging Face (public, MIT).
-# - Panels: Masopust et al. *Guidelines for T cell nomenclature*, Nat Rev Immunol
-#   2026;26:298-313, used as a **panel source**, not as functional confirmation.
+# - Panel naming: Masopust et al. *Guidelines for T cell nomenclature*, Nat Rev
+#   Immunol 2026;26:298-313 — the naming consensus the program labels follow. The
+#   gene panels themselves are **curated canonical markers** (restricted to genes
+#   measurable in this dataset), not gene lists taken from that paper.
 #
 # Method is frozen in `STAGE1_REMEDIATION_METHOD.md`. `SEED` fixes the control-set
 # sampling in `score_genes` so the run is deterministic; `verify_reproduce.py` gates
@@ -60,8 +62,7 @@ print(f"donors: {sorted(obs['donor'].unique())}")
 # notebook (documented in the README); (ii) the **Leiden-0.8 clustering is spot's own**
 # (the authors embed but do not cluster the NTC cells); (iii) the subset is spot's
 # **quota-balanced** sample (33,000 cells per donor x condition = 396,000), NOT the
-# authors' NTC population weighting (~395,030). Percentages below are prevalences in an
-# equal-weighted spot sample, not in the source population. Numeric Leiden labels
+# authors' NTC population weighting (~395,030). Numeric Leiden labels
 # (obs `L0.8`) are carried only as technical provenance; the served overlay assigns NO
 # biological cluster label and does not depend on the cluster diagnostics.
 

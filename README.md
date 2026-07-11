@@ -13,7 +13,8 @@ Each stage locks a choice that feeds the next; the header breadcrumb builds as y
 ## The five stages
 1. **CD4 programs (UMAP)** — score CD4 cells into **continuous transcriptional-program
    compatibility scores** (Treg-**like**, Th1-**like**, …) from the Marson Perturb-seq NTC
-   cells, with panels from the T-cell nomenclature guidelines. **Exploratory — not
+   cells, scored against curated canonical-marker panels named per the T-cell
+   nomenclature guidelines. **Exploratory — not
    cell-type calls; RNA compatibility ≠ lineage/protein/function** (see
    `01_programs/REMEDIATION_STATEMENT.md`). Interactive score UMAP.
 2. **Skewing genes** — the reproducible gene levers that shift a program (v1 primary:
