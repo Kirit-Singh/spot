@@ -16,6 +16,8 @@
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
   /* top brand + source links */
   .top{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+  /* brand + title share ONE baseline so 'spot' (20px) and the title (16px) sit on the same line, not center-aligned boxes */
+  .hleft{display:flex;align-items:baseline;gap:12px;min-width:0}
   .brand{font-family:var(--serif);font-size:20px;font-weight:500}.brand b{color:var(--accent)}
   .subhead{display:flex;align-items:baseline;gap:8px;padding-left:12px;margin-left:2px;border-left:1px solid var(--line)}
   .subhead .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink)}
@@ -243,7 +245,7 @@
 </head>
 <body>
 
-<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2026)</a></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a><span class="dssep">·</span><button id="provbtn" class="methodstab"><span class="ic">i</span>Methods &amp; provenance</button></span></div>
+<div class="top"><div class="hleft"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2026)</a></span></div><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a><span class="dssep">·</span><button id="provbtn" class="methodstab"><span class="ic">i</span>Methods &amp; provenance</button></span></div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
   <div class="nstep off"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
