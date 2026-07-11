@@ -69,7 +69,8 @@
   .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
   /* rail children keep their natural height and the rail scrolls — never let the segmented controls squish to a line */
   .rail>*{flex-shrink:0}
-  .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
+  /* all sidebar section titles share ONE style — the MARKER GENES look (.pcard .pn) */
+  .lab{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin:0 0 5px}
   /* section labels sit under a single hairline that separates rail sections — no boxes */
   .lab.mt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   #donorSel{margin-bottom:5px}
@@ -234,13 +235,14 @@
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
   #prevSection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .prevbody{width:max-content;max-width:100%}
   .prevgrid{display:grid;grid-template-columns:max-content repeat(3,32px);gap:2px 3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
   .prevgrid .plbl{font-size:10px;color:var(--ink2);text-align:right;padding-right:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
   .prevgrid .plbl:hover{color:var(--accent)}
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
-  .prevkey{font-size:8.5px;color:var(--muted);margin-top:7px;line-height:1.4}
+  .prevkey{font-size:8.5px;color:var(--muted);margin-top:7px;line-height:1.4;text-align:center}
   .prevkey:empty{display:none}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   .cbar.degen .cbg{background:rgb(176,172,164)}
@@ -310,8 +312,10 @@
     </div>
     <div id="prevSection">
       <div class="lab">Program prevalence over time</div>
-      <div class="prevgrid" id="prevGrid"></div>
-      <div class="prevkey" id="prevKey"></div>
+      <div class="prevbody">
+        <div class="prevgrid" id="prevGrid"></div>
+        <div class="prevkey" id="prevKey"></div>
+      </div>
     </div>
   </div>
 </div>
