@@ -65,6 +65,8 @@
   #pop .srow .sv{font-family:var(--mono)}
   /* rail */
   .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+  /* rail children keep their natural height and the rail scrolls — never let the segmented controls squish to a line */
+  .rail>*{flex-shrink:0}
   .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
   /* section labels (Donor, Color-by) sit under a single hairline that separates rail sections — no boxes */
   .lab.mt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
@@ -104,8 +106,8 @@
   /* matched button pair — Clear (active) + Identify genes (disabled/muted) share shape/radius/padding/font/height; differ only by state */
   /* Identify (program+direction width) + Clear (condition width) on one row — share height/radius/border/font, differ by width + state */
   .ctclear,.idbtn{font:inherit;font-size:11px;font-weight:600;height:27px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
-  .ctclear{width:var(--condw);padding:0;color:var(--ink2);background:var(--surface);cursor:pointer}
-  .ctclear:hover{border-color:var(--treg);color:var(--treg)}
+  .ctclear{width:var(--condw);padding:0;color:#C0392B;background:rgba(192,57,43,.06);border-color:rgba(192,57,43,.32);cursor:pointer}
+  .ctclear:hover{background:rgba(192,57,43,.13);border-color:#C0392B;color:#C0392B}
   .idbtn{width:calc(var(--progw) + 6px + var(--dirw));padding:0 9px;color:var(--muted);background:var(--sunken);cursor:not-allowed}
   .idbtn .pend{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 7px}
   /* Identify-genes enabled only when preflight passes: accent-filled + a live short-contrast_id pill */
@@ -116,6 +118,9 @@
   .ctstate{font-size:10px;line-height:1.4;max-width:236px;margin-top:1px}
   .ctstate:empty{display:none}
   .ctstate.warn{color:#B9770E}
+  /* the identical-programs error sits BELOW last run, red + centred */
+  .cterr{font-size:10.5px;color:#C0392B;text-align:center;font-weight:500;line-height:1.35;margin-top:5px}
+  .cterr:empty{display:none}
   .ctstate.ok{color:var(--accent);font-family:var(--mono);font-size:9.5px;word-break:break-all}
   /* A→B conveyor belt on the plot (display-only; anchors are score-weighted centroids, no membership) */
   #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
@@ -242,9 +247,10 @@
     <div class="ctbar" role="group" aria-label="Contrast two programs on the map">
       <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" aria-label="From condition"></select></div>
       <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" aria-label="To condition"></select></div>
-      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify state skews →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">Clear</button></div>
+      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify state skews →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">✕ Clear</button></div>
       <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
       <div id="lastrun"></div>
+      <div id="ctErr" class="cterr" role="alert"></div>
     </div>
     <canvas id="c"></canvas>
     <svg id="skewline" width="100%" height="100%" aria-hidden="true"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
@@ -266,8 +272,8 @@
       <label class="lab mt" for="colorby">Color by program score</label>
       <select id="colorby" class="colorsel" aria-label="Color the map by program score"></select>
       <div class="cbar">
-        <div class="cbg" id="cbGrad"><span class="clip lo" title="low values clipped">◄</span><span class="clip hi" title="high values clipped">►</span></div>
-        <div class="cbtk"><span>low</span><span>mid</span><span>high</span></div>
+        <div class="cbg" id="cbGrad"></div>
+        <div class="cbtk"><span>Low</span><span>Mid</span><span>High</span></div>
         <div class="cbn" id="cbNote">grey = no data</div>
       </div>
       <div class="pcard">
@@ -282,9 +288,8 @@
       <div class="crrow" id="crA"></div>
       <div class="crrow" id="crB"></div>
       <div class="crleg">
-        Hue blends the two programs by score — a cell high on both shows a mixed colour. Opacity tracks the stronger score.
         <div class="crgrad" id="crGrad"></div>
-        <div class="crends"><span id="crEndA">From</span><span>mixed</span><span id="crEndB">To</span></div>
+        <div class="crends"><span id="crEndA">From</span><span>Mixed</span><span id="crEndB">To</span></div>
       </div>
     </div>
   </div>
@@ -433,6 +438,9 @@ Promise.all([
   fetch('./data/stage01_program_registry.json').then(r=>r.ok?r.json():null).catch(()=>null)
 ]).then(([d,reg])=>{
   DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
+  // display-label overrides — cosmetic ONLY (never touch the frozen registry_sha256 / overlay hashes)
+  const LABEL_OVERRIDE={diff_checkpoint_score:'Checkpoint+'};
+  programs.forEach(p=>{if(LABEL_OVERRIDE[p.score_field])p.display_label=LABEL_OVERRIDE[p.score_field];});
   programs.forEach(p=>progByField[p.score_field]=p);
   programs.forEach(p=>transformFor(p.score_field));   // build + record each field's frozen display transform
   // registry supplies program_id + stage2_selectable (absent from overlay meta.programs) + the frozen provenance hashes
@@ -573,17 +581,20 @@ function condShort(k){return k==='All'?'All times':(CONDLAB[k]||k);}
 // reflect preflight into the button + inline functional state (no banner); kick async contrast_id compute
 function runPreflightUI(){
   const btn=document.getElementById('idgenes');if(!btn)return;
-  const pf=preflight(),pend=document.getElementById('idpend'),st=document.getElementById('ctstate'),seq=++pfSeq;
+  const pf=preflight(),pend=document.getElementById('idpend'),st=document.getElementById('ctstate'),err=document.getElementById('ctErr'),seq=++pfSeq;
   // §4.3 display-vs-analysis: the rail display filter excludes the (shared, single) contrast condition
   const dispMismatch=contrastActive()&&axisA.condition!=='All'&&axisA.condition===axisB.condition&&cond!=='All'&&cond!==axisA.condition;
   if(!pf.ok){
     curContrastId=null;btn.disabled=true;btn.classList.remove('ready');btn.title=pf.reason;
     pend.style.display='none';pend.textContent='';
     // empty / partial selection shows no verbose helper line; a real conflict gets a short muted reason
-    if(!axisA.field||!axisB.field){st.className='ctstate';st.textContent='';}
-    else{st.className='ctstate warn';st.textContent=pf.reason;}
+    const isIdentical=pf.reason&&pf.reason.indexOf('identical')>=0;
+    if(!axisA.field||!axisB.field){st.className='ctstate';st.textContent='';err.textContent='';}
+    else if(isIdentical){st.className='ctstate';st.textContent='';err.textContent=pf.reason;}
+    else{st.className='ctstate warn';st.textContent=pf.reason;err.textContent='';}
     return;
   }
+  err.textContent='';
   btn.disabled=false;btn.classList.add('ready');btn.title='Identify state skews for this contrast';
   computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.contrast_id;pend.style.display='';pend.textContent=r.contrast_id.slice(0,8);
     if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes the contrast condition (analysis uses '+condShort(axisA.condition)+')';}
