@@ -334,7 +334,6 @@
       <div class="pcard">
         <div class="pn" id="pcName">Marker genes</div>
         <div class="pg" id="pcGenes"></div>
-        <a class="psrc" id="pcSrc" target="_blank" rel="noopener"></a>
       </div>
     </div>
 
@@ -769,9 +768,6 @@ function applyProgram(){
   const cbNote=document.getElementById('cbNote');
   cbNote.textContent=degen?'Too sparse to shade':'';
   cbNote.style.display=degen?'':'none';
-  const src=document.getElementById('pcSrc');
-  src.href=PAPERS.masopust.url;
-  src.innerHTML='Naming: Masopust ↗ · marker panel curated';
   const pg=document.getElementById('pcGenes');pg.textContent=p.panel_genes.join('  ·  ');requestAnimationFrame(fitMarkers);
   draw();
 }
