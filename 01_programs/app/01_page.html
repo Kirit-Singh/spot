@@ -365,8 +365,9 @@ let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
 // program_id + stage2_selectable live in the program registry (NOT in the overlay meta.programs)
 let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
-// each axis carries its own condition; when both match on a single REAL condition that shared value is
-// the executable contrast's analysis_condition (preflight enforces the match). donor scope is fixed to all.
+// each axis carries its own condition (enables cross-subset display comparisons); when both share one
+// REAL condition that value is the executable analysis_condition. Different timepoints render as a
+// display-only view (no screen — a screen needs one timepoint). donor scope is fixed to all.
 let objective='balanced_a_to_b',curContrastId=null,pfSeq=0;
 const DATASET_ID='marson2025_gwcd4_perturbseq';
 const EFFECT_UNIVERSE_ID='marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad';
@@ -551,7 +552,7 @@ function preflight(){
   if(!A||!B)return{ok:false,reason:'Program registry incomplete for a selected axis'};
   if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,reason:'A sensitivity field cannot be a contrast axis'};
   if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,reason:'Pick a real condition (Rest, 8 hr, or 48 hr) on both axes — “All” can’t define a contrast'};
-  if(axisA.condition!==axisB.condition)return{ok:false,reason:'From and To must use the same condition'};
+  if(axisA.condition!==axisB.condition)return{ok:false,reason:''};  // different timepoints = display-only cross-subset view; a screen still needs one timepoint, but show no error message
   if(A.program_id===B.program_id&&axisA.direction===axisB.direction)return{ok:false,reason:'From and To are identical — pick distinct programs or opposite directions'};
   if(!A.stage2_selectable)return{ok:false,reason:stage2Reason(A)};
   if(!B.stage2_selectable)return{ok:false,reason:stage2Reason(B)};
