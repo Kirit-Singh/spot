@@ -68,10 +68,13 @@
   /* rail children keep their natural height and the rail scrolls — never let the segmented controls squish to a line */
   .rail>*{flex-shrink:0}
   .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
-  /* section labels (Donor, Color-by) sit under a single hairline that separates rail sections — no boxes */
+  /* section labels sit under a single hairline that separates rail sections — no boxes */
   .lab.mt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   #donorSel{margin-bottom:5px}
-  #contrastPanel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  /* the separator goes on the CONTAINER (both singleProg and contrastPanel) so a first-child
+     margin can't escape upward and cut through the donor tabs; reset the inner Color-by label's own line */
+  #singleProg,#contrastPanel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  #singleProg>.lab.mt{margin-top:0;padding-top:0;border-top:0}
   .colorsel{width:100%;font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:9px 30px 9px 11px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 5.5L9 0z' fill='%233E7D8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
   .colorsel:hover{border-color:var(--accent)}
   /* selected-program metadata card */
