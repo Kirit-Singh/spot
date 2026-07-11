@@ -18,225 +18,112 @@ pre.code.sh{border-left-color:#3E7A5A;color:#2b3a30}
 .md pre.code.sh{margin:8px 0}
 pre.out{background:transparent;border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:6px 0 0 2px;overflow-x:auto;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.5;color:var(--ink2);white-space:pre-wrap;word-break:break-word}
 pre.out .ol{color:var(--muted);font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
-@media(prefers-color-scheme:dark){:root{--bg:#1a1714;--surface:#221e1a;--ink:#efe9df;--ink2:#c9c1b4;--muted:#8f8779;--line:#332d26;--sunken:#2a251f;--code:#201c18}pre.code{color:#d9d2c6}pre.code.sh{color:#a9d3ba}}</style></head><body><div class="wrap"><div class="hd"><h1>How this map was built — provenance notebook</h1><div class="sub">A single clean pass reproducing the <a href="/01_page.html">spot · Stage-1 CD4 workbench</a> overlay end to end — data fetched from the <a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" target="_blank" rel="noopener">CZI Virtual Cell Platform</a> via the <code>vcp</code> CLI, then scVI/Leiden clusters → a reproducible label rule → Masopust et al. per-cell calls → the permutation-FDR floor → two validation checks. Deterministic (fixed seed): a re-run reproduces every value below.</div><div class="sub" style="margin-top:9px;font-size:11.5px">Analysis built &amp; validated with <b style="color:var(--treg)">Claude Science</b> (Anthropic's science workbench, on the compute host) · auto-rendered from <code>stage1_pipeline.py</code> on <b>2026-07-10 17:54 EDT</b>.</div></div><div class="md"><h2>spot Stage-1 CD4 nomenclature map — reproducible pipeline</h2><p>Single-pass reproduction of the Stage-1 workbench overlay: from the Marson non-targeting-control (NTC) CD4 T cells to the Masopust et al. per-cell differentiation + function calls, with the two validation checks that decide the contested labels.</p><p><b>Sources</b></p><ul><li>Cells &amp; design: Marson <i>Genome-scale perturb-seq in primary human CD4+ T cells</i>, bioRxiv 2025.12.23.696273 (CRISPRi; 4 donors; Rest/Stim8hr/Stim48hr; bead-isolated naive CD4).</li><li>Data access: <b>CZI Virtual Cell Platform</b> — pulled with the <code>vcp</code> CLI (cell below), not a private file.</li><li>Nomenclature: Masopust et al. <i>Guidelines for T cell nomenclature</i>, Nat Rev Immunol 2026;26:298-313 (Tables 1 &amp; 3).</li></ul><p><b>This notebook emits the deployed overlay</b> (§8). <code>SEED</code> fixes the permutation null so the run is deterministic, and <code>verify_reproduce.py</code> gates the emitted counts. The 40k deployed map: ~82.5% no functional call, Activated.8hr Th1 30.8% (of that compartment), Treg <b>cluster</b> 6.3% (of which 10.8% are Treg-called). (Full-population 396k no-call is ~82.2%.)</p></div><div class="cell"><div class="ci">[1]</div><pre class="code">import os, anndata as ad, numpy as np, scipy.sparse as sp, pandas as pd, json
-from collections import Counter
+@media(prefers-color-scheme:dark){:root{--bg:#1a1714;--surface:#221e1a;--ink:#efe9df;--ink2:#c9c1b4;--muted:#8f8779;--line:#332d26;--sunken:#2a251f;--code:#201c18}pre.code{color:#d9d2c6}pre.code.sh{color:#a9d3ba}}</style></head><body><div class="wrap"><div class="hd"><h1>How this map was built — rendered methodology report</h1><div class="sub"><b>This is a rendered report of <code>stage1_pipeline.py</code>, NOT an executed notebook.</b> Code cells are shown as source; numeric results come from running the pipeline itself (deterministic, fixed seed), not from this renderer. The map shows <b>continuous transcriptional-program scores</b> — no categorical cell-type calls, no FDR/p/q, no prevalence. The embedded object derives from the <a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" target="_blank" rel="noopener">CZI Virtual Cells Platform</a> (Marson perturb-seq) and is redistributed on Hugging Face (public, MIT); the clustering is spot-specific and paper-inspired, not a verbatim reproduction. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function.</div><div class="sub" style="margin-top:9px;font-size:11.5px">Rendered from <code>stage1_pipeline.py</code> on <b>2026-07-10 22:46 EDT</b>.</div></div><div class="md"><h2>spot Stage-1 CD4 transcriptional-program scoring — reproducible pipeline</h2><p>Continuous per-cell scoring of the Marson non-targeting-control (NTC) CD4 T cells against descriptive transcriptional-program panels. <b>This is exploratory decision-support, not a cell-type classifier.</b> It emits continuous program scores only — no categorical calls, no FDR, no "cell type", no prevalence.</p><p><b>RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function.</b> The programs are named "-like transcriptional program" (e.g. Treg-like, CD4 CTL-like) throughout.</p><p><b>Sources</b></p><ul><li>Cells &amp; design: Marson <i>Genome-scale perturb-seq in primary human CD4+ T cells</i>, bioRxiv 2025.12.23.696273 (CRISPRi; 4 donors; Rest/Stim8hr/Stim48hr).</li><li>Data access: <b>CZI Virtual Cell Platform</b>. The embedded, clustered object is redistributed on Hugging Face (public, MIT).</li><li>Panels: Masopust et al. <i>Guidelines for T cell nomenclature</i>, Nat Rev Immunol 2026;26:298-313, used as a <b>panel source</b>, not as functional confirmation.</li></ul><p>Method is frozen in <code>STAGE1_REMEDIATION_METHOD.md</code>. <code>SEED</code> fixes the control-set sampling in <code>score_genes</code> so the run is deterministic; <code>verify_reproduce.py</code> gates the emitted per-barcode scores.</p></div><div class="cell"><div class="ci">[1]</div><pre class="code">import os, anndata as ad, numpy as np, scipy.sparse as sp, pandas as pd, json
 import warnings; warnings.filterwarnings("ignore")
 
-# Data dir holding ntc_clustered.h5ad + cluster_labels.json. Override with SPOT_DATA.
 D = os.environ.get("SPOT_DATA", "./spot_scvi/").rstrip("/") + "/"
-SEED = 12345          # fixes the permutation null -&gt; deterministic, reproducible run
-rng = np.random.default_rng(SEED)</pre></div><div class="md"><h3>1. Data</h3><p>The dataset is public on the CZI Virtual Cell Platform and is pulled with the <code>vcp</code> CLI — no dependence on any local/private path. The download is cached, so it fetches once and re-uses on later runs.</p></div><div class="cell"><div class="ci sh">shell</div><pre class="code sh">$ vcp data download --query '"Primary Human CD4+ T Cell Perturb-seq"' -o ./czi_cache/</pre></div><div class="md"><p>From that raw release we take the non-targeting-control (NTC) cells, balance them across the three stimulation conditions, and embed + cluster (§2) to produce <code>ntc_clustered.h5ad</code>. <code>.X</code> follows the authors' preprocessing exactly: <code>sc.pp.normalize_total()</code> at its default (per-cell total set to the median, ~9819) then <code>log1p</code>, on raw counts (scVI itself trains on raw counts, so <code>.X</code> is only the scoring matrix). 18,130 genes; var_names = gene symbols; loaded backed to keep RAM low until the full matrix is needed.</p></div><div class="cell"><div class="ci">[2]</div><pre class="code">a = ad.read_h5ad(D + "ntc_clustered.h5ad", backed="r")
+SEED = 12345
+METHOD_VERSION = "stage1-continuous-v2"
+rng = np.random.default_rng(SEED)</pre></div><div class="md"><h3>1. Data</h3><p>The embedded object <code>ntc_clustered.h5ad</code> is fetched from the public HF dataset. <code>.X</code> is the authors' default-median <code>normalize_total()</code> + <code>log1p</code> on raw counts (used only as the scoring matrix; scVI trains on raw counts). NB: alternative normalizations (e.g. CP10k, target_sum=1e4) are <b>not</b> call-invariant — changing the target sum changes <code>log1p(alpha*x)</code> and shifts panel-minus-control scores; median normalization is frozen as part of the method and any alternative is a sensitivity analysis, not an identity.</p></div><div class="cell"><div class="ci">[2]</div><pre class="code">a = ad.read_h5ad(D + "ntc_clustered.h5ad", backed="r")
 obs = a.obs
 N = a.n_obs
-print(f"cells: {N:,}")
-print(f"genes: {a.shape[1]:,}")
-print(f"all non-targeting: {(obs['perturbed_gene_name']=='NTC').all()}")
-print("condition balance:")
-print(obs["condition"].value_counts().to_string())
-print(f"donors: {sorted(obs['donor'].unique())}")</pre><pre class="out"><span class="ol">result ▸</span>
-cells: 396,000  |  genes: 18,130  |  all NTC: True
-Rest 132,000 / Stim8hr 132,000 / Stim48hr 132,000  |  4 donors</pre></div><div class="md"><h3>2. Embedding &amp; clustering</h3><p>The embedding uses the authors' scVI configuration (5000 HVG seurat_v3, n_latent=30, n_layers=2, dropout=0.2, NB, batch=donor) on raw counts, then a 100-NN UMAP. The <b>Leiden-0.8 clustering (13 clusters) is spot's own</b> — the authors' NTC notebook embeds but does not cluster the cells — as are the 5 state-program names (Naive / Activated / Cycling / Memory / Treg); the Marson paper defines no cell-state taxonomy (it clusters the 3,341 perturbations, not the cells). We load the precomputed Leiden labels (obs <code>L0.8</code>); the cluster-&gt;program annotation is the reproducible output of <code>label_clusters.py</code> (cluster_labels.json), a fixed confound-aware marker-argmax rule. See <code>cluster_scores.py</code> for the per-cluster panel scoring it consumes.</p></div><div class="cell"><div class="ci sh">shell</div><pre class="code sh">$ python cluster_scores.py   # per-cluster panel z-scores (IL2RA/GZMB/FAS/MKI67 dropped as confounders)
-$ python label_clusters.py   # fixed rule -&gt; cluster_labels.json  (reproduces all 13 deployed labels)</pre></div><div class="cell"><div class="ci">[3]</div><pre class="code">cluster = obs["L0.8"].astype(int).values
-cond = obs["condition"].astype(str).values
+print(f"cells: {N:,}  |  genes: {a.shape[1]:,}  |  all NTC: {(obs['perturbed_gene_name']=='NTC').all()}")
+print("condition balance:"); print(obs["condition"].value_counts().to_string())
+print(f"donors: {sorted(obs['donor'].unique())}")</pre></div><div class="md"><h3>2. Embedding &amp; clustering (spot-specific, paper-inspired — NOT paper-exact)</h3><p>The embedding uses the authors' published scVI <b>architecture</b> values (5000 HVG seurat_v3, n_latent=30, n_layers=2, dropout=0.2, NB, batch=donor) on raw counts, then a 100-NN UMAP. It is <b>not a verbatim reproduction</b>: (i) the executed host script did not confirm several of the authors' training settings against their notebook (documented in the README); (ii) the <b>Leiden-0.8 clustering is spot's own</b> (the authors embed but do not cluster the NTC cells); (iii) the subset is spot's <b>quota-balanced</b> sample (33,000 cells per donor x condition = 396,000), NOT the authors' NTC population weighting (~395,030). Percentages below are prevalences in an equal-weighted spot sample, not in the source population. We load the precomputed Leiden labels (obs <code>L0.8</code>); per-cluster continuous program z-scores are the output of <code>cluster_scores.py</code> -&gt; <code>label_clusters.py</code> (cluster_labels.json), which assigns NO forced cluster label.</p></div><div class="cell"><div class="ci">[3]</div><pre class="code">cluster = obs["L0.8"].astype(int).values
+condv = obs["condition"].astype(str).values
+donorv = obs["donor"].astype(str).values
+barcodes = obs["barcode"].values
 meta = json.load(open(D + "stage01_umap_seed.json"))["meta"]
-# Cluster -&gt; state-program labels come from the reproducible labeling step
-# (cluster_scores.py -&gt; label_clusters.py -&gt; cluster_labels.json), NOT from the
-# overlay we are about to regenerate (that read was circular).
 _lab = D + "cluster_labels.json"
 if os.path.exists(_lab):
     meta["clusters"] = json.load(open(_lab))
-cl_prog = {c["id"]: c["top_program"] for c in meta["clusters"]}
-prog = np.array([cl_prog[c] for c in cluster], dtype=object)
-
-print("Leiden clusters:", sorted(np.unique(cluster)))
-print("state programs (cells):")
-for p, n in Counter(prog).most_common():
-    print(f"  {p:10s} {n:7,}  ({100*n/N:4.1f}%)")</pre><pre class="out"><span class="ol">result ▸</span>
-Activated 177,118 (44.7) | Cycling 104,786 (26.5) | Naive 85,588 (21.6)
-Treg 25,125 (6.3) | Memory 3,383 (0.9)</pre></div><div class="md"><h3>3. Masopust nomenclature panels</h3><p>Differentiation axis (argmax, always assigned) and function axis (kept only if it clears the FDR floor in §4). Human marker panels from Tables 1 &amp; 3, restricted to genes measurable in this 3' dataset.</p><p><b>Confounded-marker handling</b> (both because the substrate is polyclonally activated, so activation signal masquerades as lineage signal):</p><ul><li><b>CD25/IL2RA dropped from Treg</b> — a Table 1 <i>activation</i> marker (activated T cells are CD25hi), so it inflates Treg on any stimulated cell.</li><li><b>CD4-CTL conditioned, not dropped</b> — GZMB/PRF1/NKG7 are core cytotoxic effectors, so we keep the full cytotoxic panel rather than discard signal. Because those markers also rise with activation, we regress the activation score out of the CD4-CTL panel score (§4) so activation alone does not read as CTL.</li></ul><p>Validation §7 compares the two alternatives that were rejected — dropping the markers (loses real CTL signal) and re-including them naively (inflates calls, halves coherence) — against the conditioning we adopt here.</p></div><div class="cell"><div class="ci">[4]</div><pre class="code">FUNC = {
-    "Th1":     ["CXCR3", "TBX21", "IFNG", "IL12RB2"],
-    "Th2":     ["PTGDR2", "IL4", "IL5", "IL13"],
-    "Th17":    ["CCR6", "RORC", "IL17A", "IL17F", "IL23R", "KLRB1"],
-    "Tfh":     ["CXCR5", "BCL6", "IL21"],
-    "Treg":    ["FOXP3", "IKZF2", "CTLA4", "CCR8", "TNFRSF18"],   # IL2RA dropped
-    "CD4-CTL": ["GNLY", "PRF1", "GZMH", "KLRD1", "GZMB", "NKG7"], # full cytotoxic panel; activation-conditioned in §4
-    "Th9":     ["IL9", "SPI1"],
+# display-only colour key per cluster (NOT a call; excluded from exported records)
+cl_display = {c["id"]: c.get("dominant_program_for_display_only") for c in meta["clusters"]}
+print("Leiden clusters:", sorted(np.unique(cluster)))</pre></div><div class="md"><h3>3. Transcriptional-program panels (Masopust et al. panels, descriptive)</h3><p>Human marker panels restricted to genes measurable in this probe-based (10x Flex) dataset. These score descriptive transcriptional programs; they are NOT functional assays. Marker non-detection is reported descriptively, never used as a hard gate (Flex dropout makes absence-of-detection weak evidence of absence).</p></div><div class="cell"><div class="ci">[4]</div><pre class="code">FUNC = {
+    "th1_like":     ["CXCR3", "TBX21", "IFNG", "IL12RB2"],
+    "th2_like":     ["PTGDR2", "IL4", "IL5", "IL13"],
+    "th17_like":    ["CCR6", "RORC", "IL17A", "IL17F", "IL23R", "KLRB1"],
+    "tfh_like":     ["CXCR5", "BCL6", "IL21"],
+    "treg_like":    ["FOXP3", "IKZF2", "CTLA4", "CCR8", "TNFRSF18"],
+    "cd4_ctl_like": ["GNLY", "PRF1", "GZMH", "KLRD1", "GZMB", "NKG7"],
+    "th9_like":     ["IL9", "SPI1"],
 }
-DS = {
-    "N": ["CCR7", "SELL", "TCF7", "LEF1", "IL7R", "MAL"],
-    "A": ["CD69", "IL2RA", "CD38", "MKI67", "HLA-DRA", "TNFRSF9"],
-    "M": ["ITGAL", "FAS", "CD58", "ITGA4", "S100A4", "CD27"],
-    "X": ["PDCD1", "TOX", "HAVCR2", "LAG3", "TIGIT", "ENTPD1"],   # relabelled 'checkpoint-high activated'
+DIFF = {
+    "diff_naive":      ["CCR7", "SELL", "TCF7", "LEF1", "IL7R", "MAL"],
+    "diff_activated":  ["CD69", "IL2RA", "CD38", "MKI67", "HLA-DRA", "TNFRSF9"],
+    "diff_memory":     ["ITGAL", "FAS", "CD58", "ITGA4", "S100A4", "CD27"],
+    "diff_checkpoint": ["PDCD1", "TOX", "HAVCR2", "LAG3", "TIGIT", "ENTPD1"],
 }
-FK, DK = list(FUNC), list(DS)
-vs = set(a.var_names)
-print("panel genes present in data:")
-for k, g in {**FUNC, **DS}.items():
-    miss = [x for x in g if x not in vs]
-    print(f"  {k:8s} {len(g)-len(miss)}/{len(g)}" + (f"  MISSING {miss}" if miss else ""))</pre><pre class="out"><span class="ol">result ▸</span>
-HLA-DRA is absent from var_names -&gt; silently dropped from the A panel.</pre></div><div class="md"><h3>4. Permutation-FDR floor scoring</h3><p>Per-cell function calls use <code>sc.tl.score_genes</code> (Seurat-style: panel mean minus expression-bin-matched control mean, 25 bins, ctrl_size 50), reimplemented vectorized so the null is cheap (validated to corr 0.99 with scanpy). The floor is a <b>per-cell permutation FDR</b>, not a fixed cutoff: for each panel we draw 500 size-matched random gene sets, form a per-cell empirical p = (1+#{null&gt;=real})/(1+500), BH-adjust the 7 lineage p-values within each cell, and keep the argmax lineage only if q &lt; 0.05. The null is size- <i>and</i> expression-matched, so the floor scales with each cell's expression breadth (activated cells face a higher bar automatically).</p><p>CD4-CTL is scored on the residual of its full cytotoxic panel after regressing out the activation score (§3), so the same floor gates a de-confounded signal. Two biological gates then apply (Table 3 definitions): Th2 requires IFNG-, GATA3+, CCR4+; CD4-CTL requires CD27-, GNLY+. Differentiation 'X' is relabelled 'checkpoint-high activated' (acute in-vitro stim is not chronic-antigen exhaustion).</p></div><div class="cell"><div class="ci">[5]</div><pre class="code"># ---- vectorized score_genes ----
-Xf = a.to_memory().X.tocsc()
+FK, DK = list(FUNC), list(DIFF)
+vs = set(a.var_names)</pre></div><div class="md"><h3>4. Continuous program scoring (no inference)</h3><p>Per-cell scores use <code>sc.tl.score_genes</code> (panel mean minus expression-bin-matched control mean, 25 bins, ctrl_size 50), reimplemented vectorized. <b>These are the only scientific outputs on the program axes: continuous scores.</b> No permutation null, no p/q, no FDR, no argmax, no categorical call. The prior permutation "null" is removed (its random panels were drawn uniformly, not expression-matched, so it was mislabeled as well as unsupported).</p><p>For CD4 CTL-like, an activation-conditioned <b>sensitivity</b> score is reported alongside the raw score (activation regressed out); it is descriptive, drives nothing.</p></div><div class="cell"><div class="ci">[5]</div><pre class="code">Xf = a.to_memory().X.tocsc()
 var = np.array(a.var_names); v2i = {g: i for i, g in enumerate(var)}
 N_BINS, CTRL_SIZE = 25, 50
 obs_avg = pd.Series(np.asarray(Xf.mean(0)).ravel(), index=var)
 obs_avg = obs_avg[np.isfinite(obs_avg)]
 obs_cut = (obs_avg.rank(method="min") // int(round(len(obs_avg)/(N_BINS-1)))).astype(int)
-pool = obs_cut.index.values
 
 def mean_cols(idx):
     return np.zeros(N) if len(idx) == 0 else np.asarray(Xf[:, idx].sum(1)).ravel()/len(idx)
 
 def score_panel(gl, rng):
-    gl = [g for g in gl if g in v2i]; gl_idx = np.array([v2i[g] for g in gl])
+    gl = [g for g in gl if g in v2i]
+    gl_idx = np.sort(np.array([v2i[g] for g in gl]))            # sorted -&gt; deterministic float summation
     ctrl = set()
     for c in np.unique(obs_cut.loc[gl]):
         cand = obs_cut.index[obs_cut.values == c].values
         ctrl.update(rng.choice(cand, CTRL_SIZE, replace=False) if len(cand) &gt; CTRL_SIZE else cand)
     ctrl -= set(gl)
-    return mean_cols(gl_idx) - mean_cols([v2i[g] for g in ctrl])
+    ctrl_idx = np.sort(np.array([v2i[g] for g in ctrl]))        # SORT: set-iteration order is hash-randomized;
+    return mean_cols(gl_idx) - mean_cols(ctrl_idx)              # sorting makes the summation order reproducible
 
-def bh_rowwise(P):
-    n, m = P.shape; order = np.argsort(P, 1); ranks = np.argsort(order, 1) + 1
-    q = P * m / ranks; qs = np.take_along_axis(q, order, 1)
-    qs = np.minimum.accumulate(qs[:, ::-1], 1)[:, ::-1]
-    out = np.empty_like(qs); np.put_along_axis(out, order, qs, 1); return np.clip(out, 0, 1)
+# continuous scores (the shipped scientific outputs)
+func_scores = {f"{k}_score": score_panel(FUNC[k], rng) for k in FK}
+diff_scores = {f"{k}_score": score_panel(DIFF[k], rng) for k in DK}
 
-# ---- real scores ----
-Rf = np.vstack([score_panel(FUNC[k], rng) for k in FK]).T
-Rd = np.vstack([score_panel(DS[k], rng) for k in DK]).T
-
-# ---- CD4-CTL: condition out the activation component (keep GZMB/PRF1/NKG7 etc.) ----
-# GZMB/NKG7 are genuine cytotoxic effectors but also rise with activation; rather than
-# drop them, regress the activation score out of the CD4-CTL panel score so activation
-# alone doesn't read as CTL. The size-matched null below (raw random panels) then gates
-# this residual — identical to the conditioned validation in §7.
+# CD4 CTL-like activation-conditioned SENSITIVITY score (descriptive; drives nothing)
 S_act = score_panel([g for g in ["CD69", "CD38", "MKI67", "TNFRSF9", "IL2RA"] if g in v2i], rng)
-_ci = FK.index("CD4-CTL")
-_bctl = np.polyfit(S_act, Rf[:, _ci], 1)
-Rf[:, _ci] = Rf[:, _ci] - (_bctl[0] * S_act + _bctl[1])
+raw_ctl = func_scores["cd4_ctl_like_score"]
+_b = np.polyfit(S_act, raw_ctl, 1)
+func_scores["cd4_ctl_like_score_actadj"] = raw_ctl - (_b[0]*S_act + _b[1])
 
-# ---- size-matched permutation null (500 per panel size) ----
-N_PERM = 500
-sizes = {}
-for k in FK:
-    sizes.setdefault(len([g for g in FUNC[k] if g in vs]), []).append(k)
-count = {k: np.zeros(N, np.int32) for k in FK}
-print(f"running {N_PERM}-permutation null over {len(sizes)} panel-size groups (the ~2 min step)...", flush=True)
-for gi, (s, lins) in enumerate(sizes.items()):
-    Rs = np.vstack([Rf[:, FK.index(k)] for k in lins]).T
-    Cs = np.zeros_like(Rs, np.int32)
-    for i in range(N_PERM):
-        Cs += (score_panel(list(rng.choice(pool, s, replace=False)), rng)[:, None] &gt;= Rs)
-        if (i + 1) % 50 == 0:
-            print(f"  group {gi+1}/{len(sizes)} (panels {'/'.join(lins)}): permutation {i+1}/{N_PERM}", flush=True)
-    for j, k in enumerate(lins):
-        count[k] = Cs[:, j]
-empp = np.vstack([(1 + count[k]) / (1 + N_PERM) for k in FK]).T
+# marker-detection descriptors (descriptive, not gates)
+def det(g):
+    if g not in vs: return np.zeros(N, bool)
+    v = a[:, [g]].to_memory().X; v = v.toarray() if sp.issparse(v) else np.asarray(v)
+    return (v.ravel() &gt; 0)
+marker_det = {f"{g.lower()}_detected": det(g) for g in ["GNLY", "CD27", "IFNG", "GATA3", "CCR4"]}
 
-# ---- FDR floor + gates ----
-Q = bh_rowwise(empp); fa = Rf.argmax(1); qwin = Q[np.arange(N), fa]
-func = np.array([FK[i] for i in fa], dtype=object); func[qwin &gt;= 0.05] = "—"
-def col(g):
-    v = a[:, [g]].to_memory().X; return (v.toarray() if sp.issparse(v) else np.asarray(v)).ravel()
-IFNG, GATA3, CCR4, CD27, GNLY = map(col, ["IFNG", "GATA3", "CCR4", "CD27", "GNLY"])
-func[(func == "Th2") &amp; ~((IFNG == 0) &amp; (GATA3 &gt; 0) &amp; (CCR4 &gt; 0))] = "—"
-func[(func == "CD4-CTL") &amp; ~((CD27 == 0) &amp; (GNLY &gt; 0))] = "—"
-ds = np.where(np.array([DK[i] for i in Rd.argmax(1)]) == "X", "checkpoint-high activated",
-              np.array([DK[i] for i in Rd.argmax(1)], dtype=object)).astype(object)
-
-print("per-cell function calls:")
-for k, v in Counter(func).most_common():
-    print(f"  {k:10s} {100*v/N:5.1f}%")
-print("per-cell differentiation:")
-for k, v in Counter(ds).most_common():
-    print(f"  {k:26s} {100*v/N:5.1f}%")</pre><pre class="out"><span class="ol">result ▸</span>
-function: — 82.2 | Th1 11.6 | Treg 2.7 | CD4-CTL 1.5 | Th2 1.3 | Tfh 0.6 | Th9 0.1 | Th17 0.0
-differentiation: A 52.4 | M 27.4 | N 16.0 | checkpoint-high activated 4.2</pre></div><div class="md"><h3>5. Key results — per-subtype composition</h3><p>Subtype = state program x that cluster's dominant timepoint. Resting clusters are ~100% function-null (naive-derived cells that have not polarized); only the 8hr-activated mass has a coherent lineage skew (Th1), and the Treg cluster is the one discrete target.</p></div><div class="cell"><div class="ci">[6]</div><pre class="code">def sub(pgm, c): return (prog == pgm) &amp; (cond == c)
-subtypes = [("Naive","Rest"),("Activated","Stim8hr"),("Activated","Stim48hr"),
-            ("Cycling","Rest"),("Cycling","Stim48hr"),("Memory","Rest"),("Treg","Stim48hr")]
-print(f"{'subtype':20s} {'n':&gt;7s}  {'no-call':&gt;7s}  top functional calls")
-for pgm, c in subtypes:
-    m = sub(pgm, c); n = int(m.sum())
-    fc = Counter([x for x in func[m] if x != "—"])
-    top = ", ".join(f"{k} {100*v/n:.1f}%" for k, v in fc.most_common(3))
-    print(f"{pgm+'.'+c:20s} {n:7,}  {100*(func[m]=='—').mean():6.0f}%  {top}")</pre><pre class="out"><span class="ol">result ▸</span>
-Naive.Rest        ~99% no-call (resting/unpolarized; CD4-CTL 1.0% likely spurious)
-Activated.Stim8hr  ~62% no-call | Th1 30.8% (coherent skew)
-Activated.Stim48hr ~87% no-call | no coherent winner (Th1 4.1 / Treg 4.0)
-Treg.Stim48hr      ~77% no-call | Treg 10.8% (discrete target) | CD4-CTL 4.6%</pre></div><div class="md"><h3>6. Validation 1 — is the small "Memory" cluster T stem-cell memory (Tscm)?</h3><p>Cluster 5 (top_program 'Memory', relabelled 'Resting', ~0.9%). Tscm = CD95/FAS+ <b>while retaining</b> stemness (CCR7/SELL/TCF7/LEF1/IL7R) and staying effector-low. Compare cluster 5 vs the pure naive clusters.</p></div><div class="cell"><div class="ci">[7]</div><pre class="code">mk = ["FAS","TCF7","LEF1","SELL","IL7R","CCR7","GZMB"]
-M = a[:, mk].to_memory().X; M = M.toarray() if sp.issparse(M) else np.asarray(M)
-gx = {mk[j]: M[:, j] for j in range(len(mk))}
-m5 = cluster == 5
-naive_cl = [c["id"] for c in meta["clusters"] if c["top_program"] == "Naive"]
-mnv = np.isin(cluster, naive_cl)
-print(f"{'marker':6s} {'cl5 det%':&gt;9s} {'naive det%':&gt;11s}  verdict")
-for g in mk:
-    c5, nv = 100*(gx[g][m5]&gt;0).mean(), 100*(gx[g][mnv]&gt;0).mean()
-    if g == "FAS":  v = "NOT elevated" if c5 &lt;= nv else "elevated"
-    elif g == "GZMB": v = "effector UP" if c5 &gt; nv else "low"
-    else: v = "retained" if c5 &gt;= 0.9*nv else "REDUCED"
-    print(f"{g:6s} {c5:8.0f}% {nv:10.0f}%  {v}")
-# per-cell Tscm co-expression (FAS+ &amp; stem+ &amp; GZMB-)
-tscm = (gx["FAS"]&gt;0) &amp; ((gx["CCR7"]&gt;0)|(gx["SELL"]&gt;0)|(gx["TCF7"]&gt;0)) &amp; (gx["GZMB"]==0)
-print(f"\nTscm co-expression: cluster5 {100*tscm[m5].mean():.1f}%  vs  naive {100*tscm[mnv].mean():.1f}%")
-print("VERDICT: not Tscm — CD95 not elevated, stemness reduced, GZMB up. 'Resting' is correct.")</pre><pre class="out"><span class="ol">result ▸</span>
-cl5 FAS 50% (&lt; naive 59%); TCF7/SELL/LEF1/IL7R all reduced; GZMB 63% &gt; naive 36%.
-Tscm co-expression 8.8% (cl5) &lt; 31.5% (naive). Not stem-memory.</pre></div><div class="md"><h3>7. Validation 2 — is dropping confounded markers fair, or under-calling?</h3><p>Re-score Treg and CD4-CTL three ways and measure <b>coherence</b> = fraction of called cells for which that lineage is the top-scoring lineage across all 7 (a real lineage call vs the smeared activation program): (a) v2 drop; (b) confounded markers re-included naively; (c) included but conditioned (CD25-bright for Treg; activation-regressed for CD4-CTL).</p></div><div class="cell"><div class="ci">[8]</div><pre class="code">def null_p(realscore, size, n_perm=300, tag=""):
-    cnt = np.zeros(N, np.int32)
-    for i in range(n_perm):
-        cnt += (score_panel(list(rng.choice(pool, size, replace=False)), rng) &gt;= realscore)
-        if (i + 1) % 100 == 0:
-            print(f"  validation-2 null {tag}: {i+1}/{n_perm}", flush=True)
-    return (1 + cnt) / (1 + n_perm)
-
-IL2RA = col("IL2RA")
-S_act = score_panel([g for g in ["CD69","CD38","MKI67","TNFRSF9","IL2RA"] if g in v2i], rng)
-panels = {
-    "Treg": (["FOXP3","IKZF2","CTLA4","CCR8","TNFRSF18"], ["FOXP3","IKZF2","CTLA4","CCR8","TNFRSF18","IL2RA"], 4),
-    "CD4-CTL": (["GNLY","PRF1","GZMH","KLRD1"], ["GNLY","PRF1","GZMH","KLRD1","GZMB","NKG7"], 5),
-}
-for _li, (lin, (pa, pb, lin_idx)) in enumerate(panels.items()):
-    print(f"validation 2 (confounded-marker re-score): {lin} ({_li+1}/{len(panels)}) ...", flush=True)
-    Sa, Sb = score_panel(pa, rng), score_panel(pb, rng)
-    pa_, pb_ = null_p(Sa, len(pa), tag=lin+" dropped"), null_p(Sb, len(pb), tag=lin+" included")
-    if lin == "Treg":
-        bright = IL2RA &gt;= np.quantile(IL2RA[IL2RA&gt;0], 0.75)
-        c_called = (pb_ &lt; 0.05) &amp; bright
-    else:
-        b = np.polyfit(S_act, Sb, 1); Sc = Sb - (b[0]*S_act + b[1]); c_called = null_p(Sc, len(pb), tag=lin+" conditioned") &lt; 0.05
-    def coh(mask): return 100*(fa[mask] == lin_idx).mean() if mask.sum() else 0
-    print(f"\n{lin}:")
-    print(f"  (a) dropped     : {100*(pa_&lt;0.05).mean():5.2f}% called, {coh(pa_&lt;0.05):3.0f}% coherent")
-    print(f"  (b) incl naive  : {100*(pb_&lt;0.05).mean():5.2f}% called, {coh(pb_&lt;0.05):3.0f}% coherent")
-    print(f"  (c) conditioned : {100*c_called.mean():5.2f}% called, {coh(c_called):3.0f}% coherent")</pre><pre class="out"><span class="ol">result ▸</span>
-Treg:    (a) 12.5%/55%  (b) 42.7%/30%  (c) 18.2%/30%
-CD4-CTL: (a) 11.4%/65%  (b) 42.4%/42%  (c) 23.9%/62%
-The two lineages resolve oppositely. Treg: any IL2RA re-inclusion (b/c) collapses
-coherence 55%-&gt;30% with no purity gain -&gt; Treg stays dropped. CD4-CTL: conditioning
-(c) roughly doubles calls (11.4%-&gt;23.9%) at comparable coherence (65% vs 62%),
-recovering real cytotoxic signal (GZMB/PRF1/NKG7) the drop discarded -&gt; CD4-CTL is
-conditioned in §4. Caveat: coherence is a purity proxy graded against the main
-argmax (mildly circular), and conditioning adds a few spurious CD4-CTL calls in
-resting cells (~1% of Naive.Rest) — a non-target lineage, so low-stakes.</pre></div><div class="md"><h3>8. Emit the overlay</h3><p>Take the workbench overlay's 40,000 painted cells, keep every dot's position / cluster / donor / condition / treg_score exactly, and replace only each cell's <code>func</code>/<code>ds</code> with THIS run's per-cell calls (matched by barcode); then recompute <code>meta.nomen_counts</code> and write the file. <code>verify_reproduce.py</code> checks the file this cell writes.</p></div><div class="cell"><div class="ci">[9]</div><pre class="code">barcodes = obs["barcode"].values   # the overlay keys on obs['barcode'], not obs.index
-b2f = dict(zip(barcodes, func))
-b2d = dict(zip(barcodes, ds))
-from datetime import datetime
+print("emitted continuous program scores:", sorted(list(func_scores) + list(diff_scores)))</pre></div><div class="md"><h3>5. Descriptive score summary by donor x condition</h3><p>Median program score per donor x condition — the honest, stratified view that keeps the residual activation/timepoint association visible instead of hiding it behind a single number. No thresholds, no calls.</p></div><div class="cell"><div class="ci">[6]</div><pre class="code">df = pd.DataFrame({"donor": donorv, "condition": condv, **{k: v for k, v in func_scores.items()}})
+for k in ["treg_like_score", "cd4_ctl_like_score", "th1_like_score"]:
+    print(f"\nmedian {k} by donor x condition:")
+    print(df.groupby(["condition", "donor"])[k].median().round(3).to_string())</pre></div><div class="md"><h3>6. Emit overlay + per-cell records together</h3><p>One canonical per-barcode table drives BOTH <code>stage01_umap_seed.json</code> (the 40k display overlay, carrying continuous scores + a display-only colour key) and <code>stage01_cell_records.json</code> (the exported per-cell records: continuous scores only, no display key). The wall-clock timestamp is kept out of the canonical body (separate <code>meta.emitted_at</code>). <code>verify_reproduce.py</code> hashes the per-barcode scores.</p></div><div class="cell"><div class="ci">[7]</div><pre class="code">allcols = {**func_scores, **diff_scores}
+b2i = {str(barcodes[i]): i for i in range(N)}
 overlay = json.load(open(D + "stage01_umap_seed.json"))
-overlay["meta"]["clusters"] = meta["clusters"]   # reproducible labels (cluster_labels.json)
+overlay["meta"]["clusters"] = meta["clusters"]
+# records = the OVERLAY's cells only (matches the overlay set exactly), scores + marker
+# detections; no display key, no call. Keyed by barcode.
+records = {}
 for c in overlay["cells"]:
-    c["func"], c["ds"] = b2f[c["barcode"]], b2d[c["barcode"]]
-    c["top_program"] = cl_prog[c["cluster"]]     # per-cell state derived from the reproducible labeling
-overlay["meta"]["nomen_counts"] = {
-    "ds":   dict(Counter(c["ds"]   for c in overlay["cells"])),
-    "func": dict(Counter(c["func"] for c in overlay["cells"])),
-}
-overlay["meta"]["emitted_at"] = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")  # date+time this map was last regenerated
+    bc = str(c["barcode"]); i = b2i[bc]
+    rec = {k: round(float(allcols[k][i]), 5) for k in allcols}
+    for mk, mv in marker_det.items():
+        rec[mk] = bool(mv[i])
+    records[bc] = rec
+    for k in allcols: c[k] = rec[k]
+    # DISPLAY-ONLY colour key: the cell's own top program score (excluded from records/analysis)
+    c["dominant_program_for_display_only"] = max(
+        (k for k in func_scores if k.endswith("_score") and not k.endswith("_actadj")),
+        key=lambda k: rec[k])
+    # remove retired categorical fields if present
+    c.pop("func", None); c.pop("ds", None); c.pop("funcc", None); c.pop("dsc", None)
+    c.pop("top_program", None)
+overlay["meta"].pop("nomen_counts", None); overlay["meta"].pop("nomen_method", None)
+overlay["meta"]["method_version"] = METHOD_VERSION
+overlay["meta"]["score_fields"] = sorted(allcols)
+
+from datetime import datetime
+overlay["meta"]["emitted_at"] = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
 json.dump(overlay, open("stage01_umap_seed.emitted.json", "w"))
-n = len(overlay["cells"])
-print(f"emitted {n} cells")
-print("nomen_counts.func:", overlay["meta"]["nomen_counts"]["func"])</pre><pre class="out"><span class="ol">result ▸</span>
-emitted 40000 cells
-func: — 33004 (82.5%), Th1 4550 (11.4%), Treg 1051, Th2 528, CD4-CTL 573, Tfh 236, Th9 40, Th17 18</pre></div><div class="md"><h3>Summary</h3><ul><li>396k balanced NTC CD4 cells; 5 workbench state clusters (Marson names none).</li><li>Deployed overlay (this notebook emits it, §8): ~82.2% no functional call (expected for a Th0 screen); Th1 the only coherent activated skew (8hr, 30.8% called); Treg cluster 6.3% (10.8% Treg-called), the Stage-1 target.</li><li>Cluster 5 is resting, not Tscm. Dropping CD25 / GZMB+NKG7 raises purity at the cost of recall.</li></ul></div><div class="md"><h3>Reproduce — one command, identical results</h3><p>The whole map is a deterministic function of the public CZI dataset. Fetch it with <code>vcp</code>, run this pipeline, and — because <code>SEED</code> fixes the null and every step is order-independent — the printed numbers come out <b>identical</b> to the ones shown above. That equality is the check: if any figure differs, the run is not reproducing.</p><pre class="code sh"># fetch (cached) + run + regenerate the workbench overlay JSON, in one go
-./reproduce.sh</pre><p>which is just:</p><pre class="code sh">vcp data download --query '"Primary Human CD4+ T Cell Perturb-seq"' -o ./czi_cache/
-python stage1_pipeline.py                 # this notebook, headless
-python verify_reproduce.py                # asserts every printed stat == committed reference; exits nonzero on drift</pre><p>The workbench's <code>data/stage01_umap_seed.json</code> is emitted by the same run, so the map you see is downstream of the CZI data + this pipeline.</p></div></div></body></html>
+# records: continuous scores + marker detections only, keyed by barcode (no display key)
+json.dump(records, open("stage01_cell_records.emitted.json", "w"))
+print(f"emitted {len(overlay['cells'])} overlay cells + {len(records)} per-cell records")</pre></div><div class="md"><h3>Summary</h3><ul><li>396k quota-balanced NTC CD4 cells; continuous transcriptional-program scores only.</li><li>No categorical calls, no FDR, no "cell type", no prevalence.</li><li>The Treg-like program is a candidate transcriptional program for downstream study, NOT a confirmed Treg identity; RNA compatibility shows neither suppressive function nor protein expression. External / protein / functional validation remains required.</li></ul><h3>Reproduce</h3><pre class="code sh">./reproduce.sh   # fetch the pinned HF revision + hash, run this pipeline, verify per-barcode</pre></div></div></body></html>

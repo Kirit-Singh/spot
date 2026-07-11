@@ -1,6 +1,6 @@
 <!-- @dsCard group="Screens" -->
 <meta charset="utf-8">
-<title>spot · stage 01 — CD4 programs (real data)</title>
+<title>spot · stage 01 — CD4 transcriptional programs</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#FAF9F7;--surface:#FFFFFF;--sunken:#F4F2EE;--line:#E7E3DC;--ink:#1E1B16;--ink2:#5C564C;--muted:#8A8172;--treg:#9A3E9C;--gold:#B98900;--serif:'Newsreader',serif;--mono:'IBM Plex Mono',monospace}
@@ -9,6 +9,7 @@
   /* top brand + progressive lock */
   .top{height:50px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface)}
   .brand{font-family:var(--serif);font-size:20px;font-weight:500}.brand b{color:var(--treg)}
+  .disclaimer{flex:0 0 auto;background:#FBEFE0;border-bottom:1px solid #E7D3B0;color:#8A5A00;font-size:11px;line-height:1.4;padding:7px 20px;font-weight:500;letter-spacing:.005em}
   .subhead{display:flex;align-items:baseline;gap:8px;padding-left:12px;margin-left:2px;border-left:1px solid var(--line)}
   .subhead .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink)}
   .subhead a{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none}
@@ -217,7 +218,8 @@
   #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
 </style>
 
-<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><label class="dslab" for="dsPick">dataset</label><select id="dsPick" class="dssel" title="Select dataset — sourced from Hugging Face"></select><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></span></div>
+<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></span></div>
+<div class="disclaimer">⚠ Exploratory continuous transcriptional-program scores — not validated cell-type calls. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. One in-vitro 4-donor dataset; requires external validation.</div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
   <div class="nstep"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
@@ -290,22 +292,22 @@
     </div></div>
     <div class="pstep"><div class="pn">2</div><div class="pc">
       <h4>Clustering &amp; annotation</h4>
-      <p>scVI at the authors' parameters (on raw counts) → <b>Leiden-0.8</b> → 13 clusters. The clustering and the 5 state-program names (Naïve / Activated / Cycling / Resting / Treg) are the workbench's own — the authors' NTC notebook embeds but doesn't cluster the cells, and Marson defines no cell-state taxonomy (it clusters the 3,341 <i>perturbations</i>, not cells). Labels are assigned by a fixed, confound-aware marker rule (<code>label_clusters.py</code>), reproducible from the raw object.</p>
+      <p>scVI at the authors' parameters (on raw counts) → <b>Leiden-0.8</b> → 13 clusters. The clustering and the state-program labels (naïve-like / activated / cycling / adhesion-high / treg-like) are the workbench's own display keys — the authors' NTC notebook embeds but doesn't cluster the cells, and Marson defines no cell-state taxonomy (it clusters the 3,341 <i>perturbations</i>, not cells). Each cluster's label is just the argmax of continuous, within-dataset z-scored program scores; it is a display convenience, not a cell-type assignment.</p>
     </div></div>
     <div class="pstep"><div class="pn">3</div><div class="pc">
-      <h4>State labels</h4>
-      <p>Naïve and Resting are quiescent, naïve-derived; <b>Cycling is bimodal</b> — naïve/resting-like at rest, activated at 48&nbsp;hr (cell cycle is orthogonal to lineage). The former "Memory" cluster is labelled <b>Resting</b>: 3′ scRNA-seq cannot resolve the CD45RA/CD45RO switch, and the Masopust "M" call rests on non-specific adhesion markers (CD11a/CD95/CD58). It is not Tscm — SELL/TCF7/LEF1 sit at ~half the naïve level and CD95 is not elevated (a downshift out of naïve, not a stem-memory gain; memory can't form in ≤48&nbsp;hr in vitro). Activated splits by timepoint (8&nbsp;hr Th1-skew, 48&nbsp;hr no skew); Treg is a discrete cluster.</p>
+      <h4>Continuous program scores</h4>
+      <p>Every cell carries continuous <b>transcriptional-program compatibility scores</b> (7 functional programs — Th1/2/17-like, Tfh-like, Th9-like, Treg-like, CD4 CTL-like — and 4 differentiation-state scores). These are RNA-signature similarities, <b>not categorical calls</b>: a high Treg-like or CD4 CTL-like score does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. On 10x Flex (probe-based) data, dropout of low-abundance transcripts (e.g. FOXP3) is expected, so scores are read as continuous gradients, never thresholded into cell types.</p>
     </div></div>
     <div class="pstep"><div class="pn">4</div><div class="pc">
-      <h4>Function calls</h4>
-      <p>Per-cell scoring against the Masopust et al. helper-lineage signatures behind a <b>permutation-FDR floor</b> (500 shuffled-gene nulls, BH q&lt;0.05). Activation confounds are handled per lineage: CD25/IL2RA dropped from Treg; CD4-CTL keeps its full cytotoxic panel (GNLY/PRF1/GZMH/KLRD1/GZMB/NKG7) with the activation score regressed out. 82% of cells return no call (polyclonal Th0 stimulation); coherent skews appear at 8&nbsp;hr (Th1) and in the Treg cluster.</p>
+      <h4>Program scoring</h4>
+      <p>Per-cell scoring against the Masopust et al. helper-program signatures, expressed as continuous within-dataset z-scores (no thresholds, no discrete calls). Activation is a known confound for the Treg-like and CD4 CTL-like programs, so an activation-adjusted CD4 CTL-like score (<code>cd4_ctl_like_score_actadj</code>) is reported alongside the raw score for context. All values are exploratory and directional only.</p>
     </div></div>
     <div class="pstep"><div class="pn">5</div><div class="pc">
-      <h4>Review &amp; validation</h4>
-      <p>Reviewed with <b>Claude Science</b> against the raw data and both papers. Two labelling decisions tested against the numbers:</p>
-      <p class="pval"><b>"Resting", not Tscm.</b> Stemness markers are lower than naïve (SELL 37% vs 76%, TCF7 20% vs 44%, LEF1 51% vs 79%) and CD95/FAS is not elevated — a downshift out of naïve, not a stem-memory gain.</p>
-      <p class="pval"><b>How activation confounds are handled.</b> Treg and CD4-CTL both carry markers that switch on with <i>any</i> activation (CD25 for Treg; GZMB/NKG7 for CD4-CTL), which would tag ordinary activated cells. They resolve oppositely: re-including CD25 collapses Treg call coherence (55→30%) with no gain, so it's <b>dropped</b>. For CD4-CTL, GZMB/PRF1/NKG7 are core cytotoxic effectors, so rather than discard them we <b>regress out the activation component</b> — roughly doubling real CTL calls (11→24%) at comparable coherence. (This adds ~1% spurious CD4-CTL calls in resting cells — a non-target lineage.)</p>
-      <p class="pval"><b>Treg = cluster, not the FDR call.</b> The per-cell FDR function-Treg (2.7%) and the Leiden Treg cluster (6.3%) overlap by only Jaccard 0.08. FOXP3 is captured in just 28% of cluster-Tregs (3′ dropout of a low-abundance TF), so the FDR gate rejects real Tregs for a missing FOXP3 read, not for being less Treg — it's detection-biased, not purer. The whole-transcriptome cluster is the primary Treg definition; the FDR call is kept only as a caveated secondary. <b>What it is:</b> activation-<i>induced</i> FOXP3⁺ regulatory-like cells at 48&nbsp;hr, not natural Tregs — FOXP3⁺CTLA4⁺ rises ~26× Rest→48&nbsp;hr while Helios/IKZF2 stays flat, and the cluster is ~99% Stim48hr (one resting FOXP3⁺ cell falls in it). Stage-2 reads its hits as modulators of induced FOXP3.</p>
+      <h4>Scope &amp; limits</h4>
+      <p>Reviewed with <b>Claude Science</b> against the raw data and both papers. What this map is — and is not:</p>
+      <p class="pval"><b>Continuous scores, not calls.</b> Every colour and number here is a continuous transcriptional-program compatibility score. Nothing on this page asserts a validated cell type, lineage, or function.</p>
+      <p class="pval"><b>Activation is confounded with several programs.</b> Treg-like and CD4 CTL-like signatures share genes that switch on with <i>any</i> activation, so raw scores partly track activation state. The activation-adjusted CD4 CTL-like score is provided for context; neither version is a cytotoxicity or suppression measurement.</p>
+      <p class="pval"><b>External validation required.</b> This rests on one in-vitro, 4-donor CD4 dataset. RNA program-compatibility can suggest hypotheses but cannot confirm protein expression, cytotoxicity, suppressive function, or lineage stability. Treat all programs as suggestive pending orthogonal (protein / functional) confirmation.</p>
       <p style="margin-top:12px"><a href="/01_notebook.html" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none;font-weight:600">↗ Open the full executable notebook</a> <span style="color:var(--muted);font-size:11px">— every code cell and output from the Claude Science session that built and validated this map.</span></p>
       <p style="margin-top:9px"><b>Reproduce:</b> <code>./reproduce.sh</code> <span style="color:var(--muted);font-size:11px">pulls the CZI dataset via <code>vcp</code>, regenerates the cluster labels (<code>cluster_scores.py</code> → <code>label_clusters.py</code>), re-runs the fixed-seed per-cell scoring and emits the overlay — the whole chain, front to back. <a href="/reproduce.sh" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none">script ↗</a> · <a href="/01_trace.html" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none">recorded vcp run ↗</a></span></p>
       <p style="margin-top:6px;color:var(--muted);font-size:11px">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b> · <b id="matchPct" style="color:var(--ink2)">—</b> to the reference reproduction.</p>
@@ -320,46 +322,37 @@
 </div>
 
 <script>
-const HUES=[[14,124,134],[176,64,110],[176,120,30],[76,86,192],[150,60,40],[20,120,80],[120,110,140],[70,120,160],[190,90,60],[110,90,170],[150,100,40],[90,130,110]];
-// Masopust et al. modular nomenclature (Guidelines for T cell nomenclature, Nat Rev Immunol 2026;26:298-313)
-// two orthogonal axes: differentiation state (N/A/M/X) × function (Th subsets); each viewable per-cell or by-cluster
-const PAL={
-  ds:{order:['N','A','M','checkpoint-high activated'],
-    N:{label:'Naïve',hue:[150,160,178],mk:['CCR7','SELL','TCF7','LEF1']},
-    A:{label:'Activated',hue:[214,120,40],mk:['CD69','CD38','MKI67','HLA-DRA']},
-    M:{label:'Memory',hue:[54,150,92],mk:['ITGAL','CD58','ITGA4','S100A4']},
-    'checkpoint-high activated':{label:'Chkpt-hi',hue:[124,50,92],mk:['PDCD1','TOX','HAVCR2','LAG3']}},
-  func:{order:['Th1','Th2','Th17','Tfh','Treg','CD4-CTL','Th9','—'],
-    Th1:{label:'Th1',hue:[201,102,33],mk:['CXCR3','TBX21','IFNG']},
-    Th2:{label:'Th2',hue:[20,148,136],mk:['PTGDR2','IL4','IL13']},
-    Th17:{label:'Th17',hue:[214,158,20],mk:['CCR6','RORC','IL17A']},
-    Tfh:{label:'Tfh',hue:[60,104,196],mk:['CXCR5','BCL6','IL21']},
-    Treg:{label:'Treg',hue:[213,43,71],mk:['FOXP3','IKZF2','CTLA4','CCR8']},
-    'CD4-CTL':{label:'CD4-CTL',hue:[130,52,50],mk:['GNLY','GZMB','PRF1','NKG7','GZMH','KLRD1']},
-    Th9:{label:'Th9',hue:[150,96,178],mk:['IL9','SPI1']},
-    '—':{label:'no functional signal',hue:[210,205,196],mk:['—']}}
-};
-const MUTED={'N':1,'—':1};
-// Marson state programs — merged by top_program (condition suffix dropped; use the rail timepoint toggle)
-const PROG=[
- {k:'Naive',label:'Naïve',hue:[110,135,182],mk:['CCR7','SELL','TCF7','LEF1']},
- {k:'Activated',label:'Activated',hue:[214,120,40],mk:['CD69','IL2RA','CD38','TNFRSF9']},
- {k:'Cycling',label:'Cycling',hue:[150,92,172],mk:['MKI67','TOP2A','PCNA','MCM7']},
- {k:'Memory',label:'Resting',hue:[54,150,92],mk:['FAS','ITGAL','ITGA4','CD58']},
- {k:'Treg',label:'Treg',hue:[213,43,71],mk:['FOXP3','IL2RA','CTLA4','IKZF2','CCR8']},
+// ── colour palettes (display-only; continuous transcriptional-program scores, never categorical calls) ──
+// 5 cluster STATE programs — meta.clusters[].dominant_program_for_display_only (argmax of within-dataset z-scores)
+const STATE_PROG=[
+ {k:'naive_like',label:'Naïve-like',hue:[110,135,182],mk:['CCR7','SELL','TCF7','LEF1']},
+ {k:'activated',label:'Activated',hue:[214,120,40],mk:['CD69','IL2RA','CD38','TNFRSF9']},
+ {k:'cycling',label:'Cycling',hue:[150,92,172],mk:['MKI67','TOP2A','PCNA','MCM7']},
+ {k:'adhesion_high',label:'Adhesion-high',hue:[54,150,92],mk:['ITGAL','ITGA4','CD58','S100A4']},
+ {k:'treg_like',label:'Treg-like',hue:[213,43,71],mk:['FOXP3','IL2RA','CTLA4','IKZF2','CCR8']},
 ];
-const progmap={};PROG.forEach(p=>progmap[p.k]=p);
-// muted differentiation base colours for the Masopust merged view (cells with no function call)
-const DS_MUTED={N:{label:'Naïve',hue:[176,184,200]},A:{label:'Activated',hue:[214,198,176]},M:{label:'Resting',hue:[184,206,190]},'checkpoint-high activated':{label:'Chkpt-hi',hue:[200,182,198]}};
-const DS_MUTED_ORDER=['N','A','M','checkpoint-high activated'];
+const stateMap={};STATE_PROG.forEach(p=>stateMap[p.k]=p);
+// 7 per-cell FUNCTIONAL program score-fields — cells[].dominant_program_for_display_only (argmax, display-only)
+const FUNC_PROG={
+ treg_like_score:{label:'Treg-like',hue:[213,43,71]},
+ cd4_ctl_like_score:{label:'CD4 CTL-like',hue:[130,52,50]},
+ th1_like_score:{label:'Th1-like',hue:[201,102,33]},
+ th2_like_score:{label:'Th2-like',hue:[20,148,136]},
+ th17_like_score:{label:'Th17-like',hue:[214,158,20]},
+ tfh_like_score:{label:'Tfh-like',hue:[60,104,196]},
+ th9_like_score:{label:'Th9-like',hue:[150,96,178]},
+};
+const FUNC_ORDER=['treg_like_score','cd4_ctl_like_score','th1_like_score','th2_like_score','th17_like_score','tfh_like_score','th9_like_score'];
+// score rows for the cell cards / hover popovers — labelled program-compatibility scores, shown as continuous values (never "calls")
+const FUNC_ROWS=[['treg_like_score','Treg-like'],['cd4_ctl_like_score','CD4 CTL-like'],['th1_like_score','Th1-like'],['th2_like_score','Th2-like'],['th17_like_score','Th17-like'],['tfh_like_score','Tfh-like'],['th9_like_score','Th9-like']];
+const DIFF_ROWS=[['diff_naive_score','Naïve'],['diff_activated_score','Activated'],['diff_memory_score','Adhesion / rest'],['diff_checkpoint_score','Checkpoint-high']];
 // timepoint shading: Rest lighter → Stim8hr base → Stim48hr darker (within each program hue)
 const TP_SHADE={Rest:0.34,Stim8hr:0.02,Stim48hr:-0.17};
 function shadeHue(hue,cond){const f=TP_SHADE[cond]||0;return f>0?hue.map(v=>Math.round(v+(255-v)*f)):hue.map(v=>Math.round(v*(1+f)));}
-// per-cell category + colour for the current scheme (Marson = program shaded by timepoint; Masopust = function-else-differentiation)
+// per-cell colour: Coarse = cluster STATE program (shaded by timepoint); Fine = cell FUNCTIONAL program (display-only argmax of continuous scores)
 function catInfo(c0){
-  if(scheme==='marson'){const prog=cmap[c0.cluster]?cmap[c0.cluster].top_program:'?';const p=progmap[prog];const base=p?p.hue:[150,150,150];return{key:prog,label:p?p.label:prog,hue:shadeHue(base,c0.condition),muted:false};}
-  if(c0.func&&c0.func!=='—'){const f=PAL.func[c0.func];return{key:c0.func,label:c0.func,hue:f?f.hue:[150,150,150],muted:false};}
-  const d=DS_MUTED[c0.ds];return{key:c0.ds,label:d?d.label:c0.ds,hue:d?d.hue:[205,205,200],muted:true};
+  if(scheme==='marson'){const k=cmap[c0.cluster];const key=k?k.dominant_program_for_display_only:'?';const p=stateMap[key];const base=p?p.hue:[150,150,150];return{key,label:p?p.label:key,hue:shadeHue(base,c0.condition),muted:false};}
+  const key=c0.dominant_program_for_display_only;const f=FUNC_PROG[key];return{key,label:f?f.label:(key||'—'),hue:f?f.hue:[150,150,150],muted:!f};
 }
 const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
 let DATA=null,cells=[],clusters=[],cmap={},scheme='marson',cond='All',donorSel='All',dir='to',hover=-1;
@@ -368,95 +361,64 @@ let DATA=null,cells=[],clusters=[],cmap={},scheme='marson',cond='All',donorSel='
 // remote ones) and a link to its Hugging Face page. The header dropdown reads this.
 const DATASETS=[
   {id:'cd4-marson',label:'CD4 · Marson NTC',overlay:'./data/stage01_umap_seed.json',records:'./data/stage01_cell_records.json',
-   src:'https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq',srcName:'CZ Biohub',srcTip:'Marson GWCD4i — Billion Cell Project, CZ Biohub · CZI Virtual Cell Platform',
+   src:'https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq',srcName:'CZI Virtual Cells Platform',srcTip:'Marson GWCD4i — Billion Cell Project · CZI Virtual Cells Platform',
    hf:'https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson'}
 ];
-// sentence-picker populations — "Show me [A] → [B]" highlights matching cells
-// activated-lineage test (used by the umbrella "all" rows): activated / cycling / Treg clusters
-const isAct=c=>{const k=cmap[c.cluster];return k&&(k.top_program==='Activated'||k.top_program==='Cycling'||k.is_treg_cluster);};
+// sentence-picker populations — "Show me [A] → [B]" highlights matching cells.
+// All predicates use the new continuous-score schema: cluster STATE program + cell FUNCTIONAL
+// dominant program (display-only argmax) + condition. No categorical cell-type calls.
+const isActCluster=c=>{const k=cmap[c.cluster];return !!k&&(k.dominant_program_for_display_only==='activated'||k.dominant_program_for_display_only==='cycling'||k.dominant_program_for_display_only==='treg_like');};
+const inState=(c,s)=>{const k=cmap[c.cluster];return !!k&&k.dominant_program_for_display_only===s;};
 const POPS=[
- // Integrated hybrid taxonomy: umbrella groups (each with a clickable "all …" row) + subtypes underneath.
- // ── Quiescent umbrella (naïve + resting memory) — renamed from "Naïve" since it isn't naïve-pure
- {k:'um:Naive',label:'all quiescent',um:'Quiescent',umbrella:true,test:c=>{var k=cmap[c.cluster];return k&&(k.top_program==='Naive'||k.top_program==='Memory'||(k.top_program==='Cycling'&&c.condition==='Rest'));}},
- {k:'naive',label:'naïve',um:'Quiescent',test:c=>cmap[c.cluster]&&cmap[c.cluster].top_program==='Naive'},
- {k:'cycling_naive',label:'naïve-cycling',um:'Quiescent',test:c=>cmap[c.cluster]&&cmap[c.cluster].top_program==='Cycling'&&c.condition==='Rest'},
- {k:'memory',label:'resting',um:'Quiescent',test:c=>cmap[c.cluster]&&cmap[c.cluster].top_program==='Memory'},
- // ── Activated · 8h (umbrella includes cycling); functional subtypes underneath
- {k:'um:Act8',label:'all activated · 8h',um:'Activated · 8h',umbrella:true,test:c=>c.condition==='Stim8hr'&&isAct(c)},
- {k:'Treg_func_8h',label:'Treg · func-call (8h)',um:'Activated · 8h',test:c=>c.func==='Treg'&&c.condition==='Stim8hr'},
- {k:'Th1_8h',label:'Th1 (8h)',um:'Activated · 8h',test:c=>c.func==='Th1'&&c.condition==='Stim8hr'},
- {k:'Th2_8h',label:'Th2 (8h)',um:'Activated · 8h',test:c=>c.func==='Th2'&&c.condition==='Stim8hr'},
- {k:'Tfh_8h',label:'Tfh (8h)',um:'Activated · 8h',test:c=>c.func==='Tfh'&&c.condition==='Stim8hr'},
- {k:'CD4-CTL_8h',label:'CD4-CTL (8h)',um:'Activated · 8h',test:c=>c.func==='CD4-CTL'&&c.condition==='Stim8hr'},
- // ── Activated · 48h (umbrella includes cycling + Treg)
- {k:'um:Act48',label:'all activated · 48h',um:'Activated · 48h',umbrella:true,test:c=>c.condition==='Stim48hr'&&isAct(c)},
- // Treg reverted to cluster-backed (whole-transcriptome, less circular for Stage-2 DE); FDR func-call kept as a caveated secondary
- {k:'Treg',label:'Treg',um:'Activated · 48h',test:c=>cmap[c.cluster]&&cmap[c.cluster].is_treg_cluster},
- {k:'Treg_func_48h',label:'Treg · func-call (48h)',um:'Activated · 48h',test:c=>c.func==='Treg'&&c.condition==='Stim48hr'},
- {k:'Th1_48h',label:'Th1 (48h)',um:'Activated · 48h',test:c=>c.func==='Th1'&&c.condition==='Stim48hr'},
- {k:'Th2_48h',label:'Th2 (48h)',um:'Activated · 48h',test:c=>c.func==='Th2'&&c.condition==='Stim48hr'},
- {k:'Tfh_48h',label:'Tfh (48h)',um:'Activated · 48h',test:c=>c.func==='Tfh'&&c.condition==='Stim48hr'},
- {k:'CD4-CTL_48h',label:'CD4-CTL (48h)',um:'Activated · 48h',test:c=>c.func==='CD4-CTL'&&c.condition==='Stim48hr'},
+ // ── Quiescent umbrella (naïve-like + adhesion-high + resting cycling)
+ {k:'um:Quiescent',label:'all quiescent',um:'Quiescent',umbrella:true,test:c=>inState(c,'naive_like')||inState(c,'adhesion_high')||(inState(c,'cycling')&&c.condition==='Rest')},
+ {k:'naive',label:'naïve-like',um:'Quiescent',test:c=>inState(c,'naive_like')},
+ {k:'adhesion',label:'adhesion-high',um:'Quiescent',test:c=>inState(c,'adhesion_high')},
+ {k:'cycling_rest',label:'cycling · rest',um:'Quiescent',test:c=>inState(c,'cycling')&&c.condition==='Rest'},
+ // ── Activated · 8h (umbrella = activated/cycling/treg-like clusters at 8 hr); program subtypes underneath
+ {k:'um:Act8',label:'all activated · 8h',um:'Activated · 8h',umbrella:true,test:c=>c.condition==='Stim8hr'&&isActCluster(c)},
+ {k:'treg_prog_8h',label:'Treg-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='treg_like_score'&&c.condition==='Stim8hr'},
+ {k:'th1_8h',label:'Th1-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th1_like_score'&&c.condition==='Stim8hr'},
+ {k:'ctl_8h',label:'CD4 CTL-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='cd4_ctl_like_score'&&c.condition==='Stim8hr'},
+ // ── Activated · 48h (umbrella = activated/cycling/treg-like clusters at 48 hr)
+ {k:'um:Act48',label:'all activated · 48h',um:'Activated · 48h',umbrella:true,test:c=>c.condition==='Stim48hr'&&isActCluster(c)},
+ {k:'treg_clust',label:'Treg-like cluster',um:'Activated · 48h',test:c=>inState(c,'treg_like')},
+ {k:'treg_prog_48h',label:'Treg-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='treg_like_score'&&c.condition==='Stim48hr'},
+ {k:'th1_48h',label:'Th1-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th1_like_score'&&c.condition==='Stim48hr'},
+ {k:'ctl_48h',label:'CD4 CTL-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='cd4_ctl_like_score'&&c.condition==='Stim48hr'},
 ];
 const pmap={};POPS.forEach(p=>pmap[p.k]=p);
 const HLA=[36,132,196],HLB=[196,52,132];
 let pickA=null,pickB=null;
-// ── per-paper lineage-calling spec (verified by Claude Science) ──
+// ── reference papers (nomenclature source only; no cell-type calls made here) ──
 const PAPERS={
   marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1',cite:'Marson GWCD4i perturb-seq · bioRxiv 2025 (10.64898/2025.12.23.696273)'},
   ahmed:{url:'https://www.nature.com/articles/s41577-025-01238-2',cite:'Masopust, Awasthi, Bosselut et al. · Guidelines for T cell nomenclature · Nat Rev Immunol 2026;26(4):298–313'}
 };
-function ahmedTable(n){return PAPERS.ahmed.url+'/tables/'+n;}
-// STATE layer = workbench Leiden clustering of Marson NTC cells (NOT a Marson-defined taxonomy)
-const STATE_SPEC={
- Naive:{ahmed:'Naïve (Diff N): CCR7hi, CD45RA+, CD95−',link:ahmedTable(1),tab:'Table 1'},
- Activated:{ahmed:'Activated (Diff A): CD69+, CD25hi, ±Ki67/HLA-DR/CD38',link:ahmedTable(1),tab:'Table 1'},
- Cycling:{ahmed:'no Masopust state — proliferation is folded into "Activated"',link:null,tab:''},
- Memory:{ahmed:'Memory (Diff M): CD11ahi, CD95+, CD58+ (hard to discriminate on 3′ Flex)',link:ahmedTable(1),tab:'Table 1'},
- Treg:{ahmed:'Treg (Fn): FOXP3+, CD25hi, CD127low, CTLA4+, GITR+',link:ahmedTable(3),tab:'Table 3'}
-};
-// FUNCTION layer = Masopust per-cell FDR-gated signature
-const FUNC_SPEC={
- Th1:{ahmed:'CXCR3+, T-bet+, IFNG+; CCR4/6−, CXCR5−',link:ahmedTable(3),tab:'Table 3'},
- Th2:{ahmed:'CRTh2+, CCR4+, GATA3+, IL4/5/13+; IFNG−',link:ahmedTable(3),tab:'Table 3'},
- Th17:{ahmed:'CCR6+, RORγt+, IL17+',link:ahmedTable(3),tab:'Table 3'},
- Tfh:{ahmed:'CXCR5+, BCL6+',link:ahmedTable(3),tab:'Table 3'},
- 'CD4-CTL':{ahmed:'granzyme B+, CCR7−, CD27−, ±CD95',link:ahmedTable(3),tab:'Table 3'},
- Treg:{ahmed:'FOXP3+, CD25hi, CD127low, CTLA4+, GITR+',link:ahmedTable(3),tab:'Table 3'}
-};
-const DS_SPEC={
- N:{lab:'Naïve',ahmed:'CCR7hi, CD45RA+, CD95−',link:ahmedTable(1),tab:'Table 1'},
- A:{lab:'Activated',ahmed:'CD69+, CD25hi, ±Ki67/HLA-DR',link:ahmedTable(1),tab:'Table 1'},
- M:{lab:'Resting (adh-hi)',ahmed:'Masopust "memory" markers (CD11ahi, CD95+, CD58+) — but here these are ubiquitous adhesion transcripts on cultured naïve-derived cells, not true CD45RO+ memory',link:ahmedTable(1),tab:'Table 1'},
- 'checkpoint-high activated':{lab:'Chkpt-hi',ahmed:'Highest acute-activation intensity — PD-1/CTLA4/LAG3 induced by strong TCR signal at 8–48 hr, NOT chronic exhaustion. Not a discrete state: a ~5% tail spread across the activated/cycling/Treg clusters (≤19% of any one).',link:ahmedTable(5),tab:'Table 5'}
-};
 let FULL=null,REC=null;
-let mLabels=[],mComp={},clDom={};  // Marson label positions + per-subtype Masopust composition + each cluster's location-defined dominant timepoint
+let mLabels=[],mComp={},clDom={};  // cluster label positions + per-cluster display summary + each cluster's dominant timepoint
 let sx,sy,ox,oy,dom=[-0.2,0.6];
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
-function modTag(c0){const f=c0.func&&c0.func!=='—';return `${f?c0.func+' · ':''}${(DS_MUTED[c0.ds]||{}).label||c0.ds}`;}
-// Marson labels: one label per distinct program×timepoint region (a program split across two masses gets labelled at both), collision-nudged
-// honest map labels (Science 2026-07-09): Marson names no cell clusters — these are our Leiden annotation.
-// Activated splits by timepoint into its real character; Memory is renamed Resting (no memory in a naive-isolated culture).
-function refLabel(prog,cond){
-  if(prog==='Activated')return cond==='Stim8hr'?'Activated · Th1-skew':cond==='Stim48hr'?'Activated · late':'Activated';
-  return (progmap[prog]||{}).label||prog;
-}
+// short display tag for a cell's dominant functional program (display-only; continuous argmax)
+function modTag(c0){const f=FUNC_PROG[c0.dominant_program_for_display_only];return f?f.label:(c0.dominant_program_for_display_only||'—');}
+// cluster labels: one label per distinct state-program×timepoint region, collision-nudged.
+// Labels are display-only argmax of continuous cluster program scores — not cell-type calls.
+function refLabel(prog,cond){return (stateMap[prog]||{}).label||prog;}
 function drawMarsonLabels(){
   const cc={};
   for(const c0 of cells){if(!vis(c0))continue;const id=c0.cluster;if(!cc[id])cc[id]={sx:0,sy:0,n:0,cond:{}};const[X,Y]=px(c0);cc[id].sx+=X;cc[id].sy+=Y;cc[id].n++;cc[id].cond[c0.condition]=(cc[id].cond[c0.condition]||0)+1;}
-  // group clusters by program + dominant condition; keep the largest cluster's centroid per group
+  // group clusters by state program + dominant condition; keep the largest cluster's centroid per group
   const groups={};
-  clusters.forEach(k=>{const g=cc[k.id];if(!g||g.n<250)return;const p=progmap[k.top_program];if(!p)return;
-    const dc=Object.entries(g.cond).sort((a,b)=>b[1]-a[1])[0][0];const key=k.top_program+'|'+dc;
+  clusters.forEach(k=>{const g=cc[k.id];if(!g||g.n<250)return;const sk=k.dominant_program_for_display_only;const p=stateMap[sk];if(!p)return;
+    const dc=Object.entries(g.cond).sort((a,b)=>b[1]-a[1])[0][0];const key=sk+'|'+dc;
     if(!groups[key]||g.n>groups[key].n)groups[key]={p,cond:dc,X:g.sx/g.n,Y:g.sy/g.n,n:g.n};});
   // drop same-program labels that landed close together (adjacent same-timepoint sub-clusters)
   const pts=[];
-  Object.values(groups).sort((a,b)=>b.n-a.n).forEach(o=>{if(pts.some(q=>q.p.k===o.p.k&&Math.hypot(q.X-o.X,q.Y-o.Y)<120))return;o.txt=refLabel(o.p.k,o.cond);x.font=`600 ${o.p.k==='Treg'?12.5:11}px 'Inter Tight'`;o.tw=x.measureText(o.txt).width;pts.push(o);});
+  Object.values(groups).sort((a,b)=>b.n-a.n).forEach(o=>{if(pts.some(q=>q.p.k===o.p.k&&Math.hypot(q.X-o.X,q.Y-o.Y)<120))return;o.txt=refLabel(o.p.k,o.cond);x.font=`600 ${o.p.k==='treg_like'?12.5:11}px 'Inter Tight'`;o.tw=x.measureText(o.txt).width;pts.push(o);});
   const placed=[];
   pts.forEach(o=>{for(let it=0;it<10;it++){let clash=false;for(const q of placed){if(Math.abs(q.X-o.X)<(o.tw+q.tw)/2+6&&Math.abs(q.Y-o.Y)<19){o.Y=q.Y+19;clash=true;}}if(!clash)break;}placed.push(o);});
   mLabels=pts.map(o=>({prog:o.p.k,label:o.txt,X:o.X,Y:o.Y,tw:o.tw,cond:o.cond}));
-  pts.forEach(o=>{const treg=o.p.k==='Treg';x.font=`600 ${treg?12.5:11}px 'Inter Tight'`;x.textAlign='center';
+  pts.forEach(o=>{const treg=o.p.k==='treg_like';x.font=`600 ${treg?12.5:11}px 'Inter Tight'`;x.textAlign='center';
     x.fillStyle='rgba(250,249,247,.86)';x.fillRect(o.X-o.tw/2-5,o.Y-9,o.tw+10,17);
     x.fillStyle=`rgb(${o.p.hue})`;x.fillText(o.txt,o.X,o.Y+3.5);});
 }
@@ -484,7 +446,7 @@ function loadDataset(ds){
   DATA=d;cells=d.cells;clusters=d.meta.clusters;
   clusters.forEach((k,i)=>cmap[k.id]=k);
   // colour each cluster by its Marson program (merges sub-clusters; drops the condition suffix)
-  clusters.forEach(k=>{k.hue=(progmap[k.top_program]||{}).hue||[150,150,150];});
+  clusters.forEach(k=>{k.hue=(stateMap[k.dominant_program_for_display_only]||{}).hue||[150,150,150];});
   // treg-score robust domain
   const ss=cells.map(c=>c.treg_score).sort((a,b)=>a-b);
   dom=[ss[Math.floor(ss.length*0.02)],ss[Math.floor(ss.length*0.98)]];
@@ -498,7 +460,7 @@ function loadDataset(ds){
   const donors=['All',...[...new Set(cells.map(c=>c.donor))].sort()];
   document.getElementById('donorSel').innerHTML=donors.map(k=>`<button data-d="${k}"${k==='All'?' class="on"':''}>${k}</button>`).join('');
   document.getElementById('donorSel').onclick=e=>{if(e.target.dataset.d){donorSel=e.target.dataset.d;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));updatePkInfo();applyScheme();}};
-  // sentence picker — options grouped + badged by source (Marson cluster vs Masopust signature)
+  // sentence picker — options grouped by condition umbrella (cluster state + per-cell program)
   const optsFor=um=>POPS.filter(p=>p.um===um).sort((a,b)=>(a.umbrella?0:1)-(b.umbrella?0:1)).map(p=>`<option value="${p.k}">${p.label}</option>`).join('');
   const grp=['Quiescent','Activated · 8h','Activated · 48h'].map(u=>`<optgroup label="${u}">${optsFor(u)}</optgroup>`).join('');
   document.getElementById('pkA').innerHTML=`<option value="">cells…</option>`+grp;
@@ -507,10 +469,10 @@ function loadDataset(ds){
   document.getElementById('pkB').onchange=e=>{pickB=pmap[e.target.value]||null;syncPicker();};
   document.getElementById('pkClr').onclick=()=>{pickA=pickB=null;document.getElementById('pkA').value='';document.getElementById('pkB').value='';syncPicker();};
   document.getElementById('dsTitle').textContent=d.meta.title||'CD4 transcriptional programs';
-  // upstream source link — driven by the manifest (credits the data source: CZ Biohub)
+  // upstream source link — driven by the manifest (credits the data source: CZI Virtual Cells Platform)
   const _a=document.getElementById('dsSrc');_a.textContent=`${ds.srcName} ↗`;_a.href=ds.src;_a.title=ds.srcTip||ds.srcName;
   document.getElementById('emittedAt').textContent=d.meta.emitted_at||'—';
-  document.getElementById('matchPct').textContent=(d.meta.match_pct!=null)?(d.meta.match_pct+'% match'):'—';
+  document.getElementById('matchPct').textContent=(d.meta&&d.meta.match_pct!=null)?(d.meta.match_pct+'% match'):'—';
   document.getElementById('lastrun').innerHTML=d.meta.emitted_at?('analysis last run · <b>'+d.meta.emitted_at+'</b>'):'';
   applyScheme();
   resize();
@@ -519,11 +481,7 @@ function loadDataset(ds){
   fetch(ds.records,{cache:'no-store'}).then(r=>r.json()).then(d=>REC=d).catch(e=>console.error('records load failed',e));
   }).catch(e=>{console.error('dataset load failed',e);var ln=document.getElementById('lastrun');if(ln)ln.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
 }
-// populate the dataset picker from the HF-sourced manifest, then load the first entry
-(function(){const sel=document.getElementById('dsPick');if(!sel)return;
-  sel.innerHTML=DATASETS.map(x=>`<option value="${x.id}">${x.label}</option>`).join('');
-  sel.onchange=e=>{const ds=DATASETS.find(x=>x.id===e.target.value)||DATASETS[0];loadDataset(ds);};
-})();
+// load the default (and only) dataset from the manifest
 loadDataset(DATASETS[0]);
 
 function pct(arr,p){const a=arr.slice().sort((x,y)=>x-y);return a[cl(Math.floor(a.length*p),0,a.length-1)];}
@@ -542,8 +500,6 @@ function ramp(t){t=cl((t-dom[0])/(dom[1]-dom[0]),0,1);
   const a=[237,231,238],b=[154,62,156];return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;}
 function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
 
-const HELPER_POPS={Th1:1,Th2:1,Th17:1,Tfh:1,'CD4-CTL':1};
-const STATE_POPS={naive:1,activated:1,cycling:1,memory:1,Treg:1};
 function pkStats(p){let n=0,stim=0;for(const c0 of cells){if(!vis(c0)||!p.test(c0))continue;n++;if(c0.condition!=='Rest')stim++;}return{n,stim};}
 function updatePkInfo(){/* hypothesis now shown in the plot-top toolbar + on-canvas connector */}
 function setConn(){const b=document.getElementById('dir');b.dataset.dir=dir;b.querySelector('.cw').textContent=dir==='to'?'toward':'away from';}
@@ -571,15 +527,15 @@ function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const ah=sch
   // legend
   if(pk){lgs.innerHTML=[[pickA,HLA],[pickB,HLB]].filter(([p])=>p).map(([p,h])=>`<span><i style="background:rgb(${h})"></i>${p.label} · ${cells.filter(c0=>vis(c0)&&p.test(c0)).length.toLocaleString()}</span>`).join('');}
   else if(ah){
-    const dsP=DS_MUTED_ORDER.filter(k=>cells.some(c0=>vis(c0)&&c0.func==='—'&&c0.ds===k));
-    const fnP=PAL.func.order.filter(k=>k!=='—'&&cells.some(c0=>vis(c0)&&c0.func===k));
-    lgs.innerHTML=dsP.map(k=>`<span><i style="background:rgb(${DS_MUTED[k].hue})"></i>${DS_MUTED[k].label}</span>`).join('')+fnP.map(k=>`<span><i style="background:rgb(${PAL.func[k].hue})"></i>${PAL.func[k].label}</span>`).join('');
+    // Fine · per-cell dominant functional program (display-only argmax of continuous scores)
+    const fnP=FUNC_ORDER.filter(k=>cells.some(c0=>vis(c0)&&c0.dominant_program_for_display_only===k));
+    lgs.innerHTML=fnP.map(k=>`<span><i style="background:rgb(${FUNC_PROG[k].hue})"></i>${FUNC_PROG[k].label}</span>`).join('');
   } else {
     const tps=[['Rest','0'],['Stim8hr','8'],['Stim48hr','48']],idx={Rest:0,Stim8hr:1,Stim48hr:2};
     const txtOn=rgb=>((0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255>0.62?'#1E1B16':'#fff');
-    const inProg=p=>c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].top_program===p.k;
+    const inProg=p=>c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].dominant_program_for_display_only===p.k;
     let anyMulti=false;
-    const rows=PROG.filter(p=>cells.some(inProg(p))).map(p=>{
+    const rows=STATE_PROG.filter(p=>cells.some(inProg(p))).map(p=>{
       const test=inProg(p),counts=tps.map(([cd,num])=>({cd,num,n:0,sh:shadeHue(p.hue,cd)}));
       for(const c0 of cells){if(!test(c0))continue;const i=idx[c0.condition];if(i!=null)counts[i].n++;}
       const tot=counts.reduce((a,b)=>a+b.n,0)||1;
@@ -617,7 +573,7 @@ function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const ah=sch
     document.getElementById('pklabels').innerHTML=lblHTML;
   } else if(ah){
     hideSkewLine();document.getElementById('pklabels').innerHTML='';
-    labelCentroids(c0=>c0.ds, DS_MUTED, DS_MUTED_ORDER, true);
+    labelCentroids(c0=>c0.dominant_program_for_display_only, FUNC_PROG, FUNC_ORDER, false);
   } else {
     hideSkewLine();document.getElementById('pklabels').innerHTML='';
     drawMarsonLabels();
@@ -642,35 +598,28 @@ function applyScheme(){
   if(ah){ns.textContent='based on Masopust et al. ↗';ns.href=PAPERS.ahmed.url;}
   else{ns.textContent='based on scVI/Leiden · Marson data ↗';ns.href=PAPERS.marson.url;}
   if(ah){
-    document.getElementById('markslab').textContent='Per-cell differentiation + function';
-    const dsRows=DS_MUTED_ORDER.map(k=>({k,n:cells.filter(c0=>c0.ds===k).length})).filter(r=>r.n>0);
-    const fnRows=PAL.func.order.filter(k=>k!=='—').map(k=>({k,n:cells.filter(c0=>c0.func===k).length})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+    document.getElementById('markslab').textContent='Per-cell functional programs · continuous scores';
+    const fnRows=FUNC_ORDER.map(k=>({k,n:cells.filter(c0=>vis(c0)&&c0.dominant_program_for_display_only===k).length})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
     document.getElementById('marks').innerHTML=
-      `<div class="klab">Differentiation · base colour</div>`+
-      dsRows.map(({k})=>`<div class="mk"><span class="d" style="background:rgb(${DS_MUTED[k].hue})"></span><span class="nm">${DS_MUTED[k].label}</span><span class="gs">${((PAL.ds[k]||{}).mk||[]).slice(0,4).join(', ')}</span></div>`).join('')+
-      `<div class="klab" style="margin-top:10px">Function · FDR overlay</div>`+
-      fnRows.map(({k})=>`<div class="mk"><span class="d" style="background:rgb(${PAL.func[k].hue})"></span><span class="nm">${PAL.func[k].label}</span><span class="gs">${(PAL.func[k].mk||[]).slice(0,4).join(', ')}</span></div>`).join('');
+      `<div class="klab">Dominant program · display-only argmax</div>`+
+      fnRows.map(({k,n})=>`<div class="mk"><span class="d" style="background:rgb(${FUNC_PROG[k].hue})"></span><span class="nm">${FUNC_PROG[k].label}</span><span class="gs">${n.toLocaleString()} cells</span></div>`).join('')+
+      `<div class="compsum" style="margin-top:9px">Colour = highest-scoring transcriptional program per cell. Continuous compatibility scores, not cell-type calls.</div>`;
   } else {
-    const filtNote=(cond==='All'&&donorSel==='All')?'all cells':[cond!=='All'?({Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'}[cond]||cond):'',donorSel!=='All'?donorSel:''].filter(Boolean).join(' · ');
-    document.getElementById('markslab').textContent='Marker genes';
-    const tot=cells.filter(vis).length||1;
+    document.getElementById('markslab').textContent='Cluster state programs · display-only';
     mComp={};clDom={};
     const CNL={Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
-    // Masopust FUNCTION axis (effector polarization) — FDR-gated, honestly sparse
-    const compOf=list=>{const n=list.length||1;const fc={};list.forEach(c0=>fc[c0.func]=(fc[c0.func]||0)+1);
-      const top=PAL.func.order.filter(fk=>fk!=='—').map(fk=>({fk,c:fc[fk]||0})).filter(s=>s.c>0).sort((a,b)=>b.c-a.c);
-      // coherent = a real lineage winner (top func ≥8%); below that it's the generic-activation floor (Science: smeared argmax), not polarization
-      return {n:list.length,coh:top.length?top[0].c/n>=0.08:false,topfk:top.length?top[0].fk:null};};
-    // location-defined subtype: each cluster is pushed to its single dominant timepoint (over ALL cells, filter-independent)
+    // dominant condition per cluster (over ALL cells, filter-independent)
     {const cc={};cells.forEach(c0=>{const id=c0.cluster;(cc[id]=cc[id]||{})[c0.condition]=((cc[id]||{})[c0.condition]||0)+1;});
      Object.entries(cc).forEach(([id,o])=>{clDom[id]=Object.entries(o).sort((a,b)=>b[1]-a[1])[0][0];});}
-    const subOf=c0=>{const k=cmap[c0.cluster];return k?k.top_program+'|'+clDom[c0.cluster]:null;};
-    const bySub={};cells.forEach(c0=>{if(!vis(c0))return;const s=subOf(c0);if(s)(bySub[s]=bySub[s]||[]).push(c0);});
-    Object.entries(bySub).forEach(([s,list])=>{const[pk,cn]=s.split('|');const p=progmap[pk]||{hue:[150,150,150],label:pk};mComp[s]={...compOf(list),hue:p.hue,label:p.label,cn:CNL[cn]||cn,rest:cn==='Rest'};});
-    const rows=PROG.map(p=>{const pc=cells.filter(c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].top_program===p.k);return{p,pc,n:pc.length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
-    rows.forEach(({p,pc})=>{mComp[p.k+'|All']={...compOf(pc),hue:p.hue,label:p.label,cn:'',rest:false};});
+    // per-cluster display summary: dominant per-cell functional program among the visible cells
+    const funcByCluster={};
+    cells.forEach(c0=>{if(!vis(c0))return;const id=c0.cluster;const fp=c0.dominant_program_for_display_only;(funcByCluster[id]=funcByCluster[id]||{});funcByCluster[id][fp]=(funcByCluster[id][fp]||0)+1;});
+    clusters.forEach(k=>{const fc=funcByCluster[k.id];const p=stateMap[k.dominant_program_for_display_only]||{hue:[150,150,150],label:k.dominant_program_for_display_only};
+      let topfk=null,topn=0,tot=0;if(fc){Object.entries(fc).forEach(([f,n])=>{tot+=n;if(n>topn){topn=n;topfk=f;}});}
+      mComp[k.id]={hue:p.hue,label:p.label,n:tot,topfk,cn:CNL[clDom[k.id]]||clDom[k.id]};});
+    const rows=STATE_PROG.map(p=>{const pc=cells.filter(c0=>vis(c0)&&cmap[c0.cluster]&&cmap[c0.cluster].dominant_program_for_display_only===p.k);return{p,pc,n:pc.length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
     document.getElementById('marks').innerHTML=rows.map(({p,n})=>
-      `<div class="mk${p.k==='Treg'?' treg':''}"><span class="d" style="background:rgb(${p.hue})"></span><span class="nm">${p.label}</span><span class="gs">${(p.mk||[]).slice(0,4).join(', ')}</span></div>`
+      `<div class="mk${p.k==='treg_like'?' treg':''}"><span class="d" style="background:rgb(${p.hue})"></span><span class="nm">${p.label}</span><span class="gs">${(p.mk||[]).slice(0,4).join(', ')}</span></div>`
     ).join('');
   }
   draw();
@@ -683,16 +632,13 @@ c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.
   if(best!==hover){hover=best;draw();}
   const comppop=document.getElementById('comppop');
   if(best>=0&&scheme==='marson'){
-    const c0=cells[best];const k=cmap[c0.cluster];const prog=k?k.top_program:null;
+    const c0=cells[best];const k=cmap[c0.cluster];const prog=k?k.dominant_program_for_display_only:null;
     const dc=prog?clDom[c0.cluster]:null;
-    const comp=dc?(mComp[prog+'|'+dc]||mComp[prog+'|All']):null;
+    const comp=k?mComp[c0.cluster]:null;
     let labs=prog?mLabels.filter(l=>l.prog===prog):[];const sl=labs.filter(l=>l.cond===dc);if(sl.length)labs=sl;
     if(comp&&labs.length){const[cx,cy]=px(c0);let lab=labs[0],bdl=1e18;labs.forEach(l=>{const d=(l.X-cx)**2+(l.Y-cy)**2;if(d<bdl){bdl=d;lab=l;}});
-      let body;
-      if(comp.coh){const fp=PAL.func[comp.topfk]||{};const g=(fp.mk||[]).slice(0,3).join(', ');
-        body=`<div class="compsum"><b>${fp.label||comp.topfk}-hi</b>${g?` <span style="color:var(--muted)">· ${g}</span>`:''}</div>`;
-      } else if(comp.rest){body=`<div class="compsum">resting</div>`;
-      } else {body=`<div class="compsum">no skew</div>`;}
+      const fp=comp.topfk?FUNC_PROG[comp.topfk]:null;
+      const body=fp?`<div class="compsum">top program-compat · <b>${fp.label}</b> <span style="color:var(--muted)">· display-only argmax</span></div>`:`<div class="compsum">continuous program scores</div>`;
       comppop.innerHTML=`<div class="cph" style="color:rgb(${comp.hue})">${comp.label}${comp.cn?' · '+comp.cn:''} · ${comp.n.toLocaleString()} cells</div>`+body;
       let lx=lab.X-91,ly=lab.Y+13;lx=Math.max(6,Math.min(lx,r.width-188));ly=Math.min(ly,r.height-70);
       comppop.style.left=lx+'px';comppop.style.top=ly+'px';comppop.style.display='block';
@@ -700,16 +646,21 @@ c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.
     pop.style.display='none';return;
   }
   comppop.style.display='none';
-  if(best>=0){const c0=cells[best];const k=cmap[c0.cluster];const[X,Y]=px(c0);
-    const hasFunc=c0.func&&c0.func!=='—';
-    const dsH={N:'resting · naïve-like',M:'resting',A:'activated','checkpoint-high activated':'checkpoint-hi'}[c0.ds]||c0.ds;
+  if(best>=0){const c0=cells[best];const[X,Y]=px(c0);
+    const key=c0.dominant_program_for_display_only,fp=FUNC_PROG[key];
     const bc=(c0.barcode.split('_').find(t=>/^[ACGT]{8,}/.test(t))||c0.barcode).slice(0,26);
+    const sv=(f)=>{const v=c0[f];return v==null?'—':(v>=0?'+':'')+v.toFixed(2);};
+    const rowsFn=FUNC_ROWS.map(([f,lab])=>`<div class="row"><span>${lab}</span><b>${sv(f)}</b></div>`).join('');
+    const rowsDiff=DIFF_ROWS.map(([f,lab])=>`<div class="row"><span>${lab}</span><b>${sv(f)}</b></div>`).join('');
     pop.innerHTML=`<div class="bc">${bc}</div>
       <div class="row"><span>Donor · condition</span><b>${c0.donor} · ${c0.condition}</b></div>
-      <div class="row"><span>State <i>· our Leiden</i></span><b>${k?((progmap[k.top_program]||{}).label||k.top_program):c0.cluster}</b></div>
-      <div class="row"><span>Masopust state <i>· diff.</i></span><b>${dsH}</b></div>
-      <div class="row"><span>Function <i>· FDR</i></span><b>${hasFunc?c0.func:'no polarization'}</b></div>`;
-    pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-272)lx=X-272;lx=Math.max(6,Math.min(lx,r.width-266));ly=Math.max(6,Math.min(ly,r.height-150));
+      <div class="row"><span>Dominant program <i>· display-only</i></span><b style="color:rgb(${fp?fp.hue:[120,120,120]})">${fp?fp.label:(key||'—')}</b></div>
+      <div class="pph">Program-compatibility scores <span>continuous · not calls</span></div>
+      ${rowsFn}
+      <div class="pph">Differentiation-state scores</div>
+      ${rowsDiff}
+      <div class="ref">RNA program-compatibility scores — not validated cell-type calls.</div>`;
+    pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-272)lx=X-272;lx=Math.max(6,Math.min(lx,r.width-266));ly=Math.max(6,Math.min(ly,r.height-260));
     pop.style.left=lx+'px';pop.style.top=ly+'px';}
   else pop.style.display='none';
 });
@@ -744,33 +695,30 @@ function drawNbr(c0,N){const[g,W,H]=hidpi(document.getElementById('mNbr'));if(!F
   near.forEach(i=>{g.fillStyle=tregRamp(FULL.treg[i]);g.globalAlpha=.92;g.beginPath();g.arc(mapx(FULL.x[i]),mapy(FULL.y[i]),2.7,0,6.283);g.fill();});
   g.globalAlpha=1;g.fillStyle='#9A3E9C';g.beginPath();g.arc(CX,CY,4.4,0,6.283);g.fill();g.strokeStyle='#1E1B16';g.lineWidth=1.3;g.stroke();}
 
-function openCard(i){const c0=cells[i],k=cmap[c0.cluster];const rec=REC?REC[c0.barcode]:null;const ah=scheme==='ahmed';
+function openCard(i){const c0=cells[i],k=cmap[c0.cluster];const rec=REC?REC[c0.barcode]:null;
   const ci=catInfo(c0);
   const chip=document.getElementById('mchip');
   chip.querySelector('i').style.background=`rgb(${ci.hue})`;
-  chip.querySelector('b').textContent=ah?modTag(c0):ci.label;
+  chip.querySelector('b').textContent=ci.label;
   document.getElementById('mbc').textContent=c0.barcode;
-  const clab=k?((progmap[k.top_program]||{}).label||k.top_program):'—';
-  document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · ${clab} (coarse) · ${modTag(c0)} (fine)`;
-  // home program (Marson Leiden state) + this cell's expression of its canonical markers
-  const prog=k?k.top_program:null,hp=prog?(progmap[prog]||{}):{},hpMk=hp.mk||[],hpHue=(hp.hue||[120,120,120]).join(',');
-  document.getElementById('mhp').innerHTML=prog?`Home program · <b style="color:rgb(${hpHue})">${hp.label||prog}</b>`:'';
-  const srcfile=`${c0.donor}_${c0.condition}.assigned_guide.h5ad`;
-  const dsSp=DS_SPEC[c0.ds]||{}, fnSp=(c0.func&&c0.func!=='—')?(FUNC_SPEC[c0.func]||{}):null;
-  const plinks=`<a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`+
-    (dsSp.link?` · <a href="${dsSp.link}" target="_blank" rel="noopener">Masopust diff ↗</a>`:'')+
-    (fnSp&&fnSp.link?` · <a href="${fnSp.link}" target="_blank" rel="noopener">function ↗</a>`:'');
-  if(rec){const ref=(REC&&REC.__marker_ref__)||{},me=rec.marker_expr||{},det=(REC&&REC.__marker_det__&&REC.__marker_det__[prog])||{};
-    document.getElementById('mgenes').innerHTML=hpMk.map(g=>{const r=ref[g],dr=(det[g]!=null)?det[g]+'%':'';
-      if(!r)return `<div class="mrow nm"><span class="mg">${g}</span><span class="mb"></span><span class="ml">not in panel</span><span class="md"></span></div>`;
-      const v=me[g]||0,p95=r[2]||v||1;let lab,cls,w;
-      if(v<=0){lab='not detected';cls='nodet';w=0;}else{w=Math.min(v/p95,1)*100;lab=v<r[0]?'low':v<r[1]?'mid':'high';cls='det '+lab;}
-      return `<div class="mrow ${cls}"><span class="mg">${g}</span><span class="mb"><i style="width:${w.toFixed(0)}%;background:rgb(${hpHue})"></i></span><span class="ml">${lab}</span><span class="md">${dr}</span></div>`;}).join('');
-    document.getElementById('mcap').innerHTML=prog?`Right column · % of ${hp.label||prog} cells expressing each gene · 3′ dropout, so a low % is expected.`:'';
-    const ntc=/non-?targeting|NTC/i.test((rec.guide_type||'')+(rec.perturbed_gene_name||''));
-    document.getElementById('msrc').innerHTML=`<div>record · <b>${srcfile}</b> · guide ${ntc?'<span class="ntc">non-targeting control</span>':'<b style="color:var(--ink2)">'+rec.perturbed_gene_name+'</b>'}</div>`+
-      `<div style="margin-top:7px;color:var(--muted)">Lineage calls — how each paper names this cell: ${plinks}</div>`;
-  } else {document.getElementById('mgenes').innerHTML='<span style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">loading…</span>';document.getElementById('mcap').innerHTML='';document.getElementById('msrc').innerHTML='';}
+  const clab=k?((stateMap[k.dominant_program_for_display_only]||{}).label||k.dominant_program_for_display_only):'—';
+  const key=c0.dominant_program_for_display_only,fp=FUNC_PROG[key];
+  document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · ${clab} cluster (coarse) · dominant program ${fp?fp.label:key} (fine · display-only)`;
+  document.getElementById('mhp').innerHTML=`<b>Transcriptional-program compatibility scores</b> — continuous, display-only. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function.`;
+  // score bars built from the cell's continuous scores (diverging around 0; clamped to ±1.5 for display)
+  const bar=v=>{const t=Math.max(-1.5,Math.min(1.5,v||0)),w=Math.abs(t)/1.5*50;return{w:w.toFixed(0),left:(t<0?50-w:50).toFixed(0)};};
+  const sv=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(2);
+  const rowHTML=(f,lab,hue)=>{const v=c0[f],b=bar(v);return `<div class="mrow det"><span class="mg">${lab}</span><span class="mb" style="position:relative"><i style="position:absolute;left:${b.left}%;width:${b.w}%;background:rgb(${hue})"></i></span><span class="ml">${sv(v)}</span><span class="md"></span></div>`;};
+  document.getElementById('mgenes').innerHTML=
+    `<div class="t">Functional-program compatibility · continuous score</div>`+
+    FUNC_ROWS.map(([f,lab])=>rowHTML(f,lab,FUNC_PROG[f].hue)).join('')+
+    `<div class="t" style="margin-top:11px">Differentiation-state score · continuous</div>`+
+    DIFF_ROWS.map(([f,lab])=>rowHTML(f,lab,[120,120,120])).join('');
+  // detected markers from the per-cell record (10x Flex, probe-based; dropout expected)
+  if(rec){const dets=[['gnly_detected','GNLY'],['cd27_detected','CD27'],['ifng_detected','IFNG'],['gata3_detected','GATA3'],['ccr4_detected','CCR4']];
+    document.getElementById('mcap').innerHTML='Markers detected in this cell (10x Flex, probe-based; dropout expected): '+dets.filter(([f])=>rec[f]!=null).map(([f,g])=>`<b style="color:${rec[f]?'#15803D':'var(--muted)'}">${g}${rec[f]?'+':'−'}</b>`).join(' · ');
+  } else document.getElementById('mcap').innerHTML='';
+  document.getElementById('msrc').innerHTML=`<div style="color:var(--muted)">Continuous transcriptional-program scores — not validated cell-type calls. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. Nomenclature reference: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a> · <a href="${PAPERS.ahmed.url}" target="_blank" rel="noopener">Masopust ↗</a></div>`;
   document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='block';}
 function closeCard(){document.getElementById('scrim').style.display='none';document.getElementById('modal').style.display='none';document.getElementById('provmodal').style.display='none';}
 function openProv(){document.getElementById('scrim').style.display='block';document.getElementById('provmodal').style.display='flex';}
@@ -786,8 +734,8 @@ document.getElementById('provx').onclick=closeCard;document.getElementById('prov
     if(/\[3\/4\]/.test(txt))return 'verifying';
     if(/\[2\/4\]|emitted \d+ cells/.test(txt))return 'writing overlay';
     if(/validation-2 null|validation 2/.test(txt))return 'validating';
-    if(/per-cell function calls/.test(txt))return 'validating';
-    if(/permutation \d+\/\d+/.test(txt))return 'scoring';
+    if(/per-cell program scores|scoring programs/.test(txt))return 'validating';
+    if(/scoring \d+\/\d+|program \d+\/\d+/.test(txt))return 'scoring';
     if(/cells: |panel genes|state programs/.test(txt))return 'loading data';
     return 'starting';
   }
