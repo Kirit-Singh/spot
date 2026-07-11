@@ -8,6 +8,54 @@ regenerable from the scripts below. An independent Claude Science read is in
 
 ---
 
+## 0. VERIFIED — independent Claude Science checks (2026-07-11): key corrections
+An independent CS session **reproduced the spot metric verbatim** (corr 0.520, TBX21 top —
+identical to `explore2.py`), then ran the check battery. Several initial readings were
+**overturned** — read these before §4–§6 (full verbatim read:
+`docs/cs_review_temporal_th1_treg.md` → "Round 2"; metrics:
+`temporal_exploration/cs_review_metrics.json`).
+
+1. **The axis is a "Th1 dial," not a reciprocal Th1↔Treg see-saw.** Reciprocal-pole control:
+   on a *toward-Th1* ranking the Treg master regulators do **not** come out on top —
+   **FOXP3 ranks 6317/6620** (despite a real, strong KD: own log_fc −4.3), IL2RA 1648,
+   CTLA4 3522. Knocking out the Treg master TF does not push cells toward Th1. Fits the
+   culture (TCR/CD28, **no TGF-β/iTreg polarization** → no committed-Treg program); the
+   "Treg" pole rides on activation markers (CTLA4/IL2RA/TNFRSF18, up on any activated
+   Tconv). **Reframe: a Th1-program dial, where the "Treg" direction means "low-Th1 /
+   generically activated," not committed Treg.**
+2. **The 0.52 cross-time correlation is largely a *donor* artifact — not "time-specific."**
+   Decomposed over the 6 donor-pairs: within-timepoint reliability (donor-halves, same
+   time) = **0.227**; cross-time **same-donor** = 0.48; cross-time **independent-donor** =
+   **0.169** (at/below the noise floor). The pooled 0.52 is high because the same 4 donors
+   sit at both timepoints (donor-of-origin is a large, time-stable component). Top-hit
+   overlap 8→48 ≈ **16%** (2/25, 8/50, 18/100). **Only top-of-list temporal claims are
+   defensible (TBX21↑; SMARCE1/ATP2A2↓ stress-levers); the middle of the ranking is
+   noise.** Retire "partly shared, partly time-specific."
+3. **TBX21 is a *pure Th1 off-switch* — confirmed.** Two-arm split @48 h: away-from-Th1
+   **+2.16**, toward-Treg **−0.08**. The whole "balanced" score is the Th1-down arm — it
+   does nothing toward Treg (same for PPP1R14B). **Report both arms and rank on
+   `min(away, toward)`, never the sum** — the sum manufactures a Treg lever out of a Th1
+   collapse. (LOO: TBX21 is genuine coordinated downstream regulation, not a single-gene
+   artifact — dropping any Th1 panel gene leaves away ≥ +1.59.)
+4. **Drop SOCS1.** Footprint = **1 DE gene, 0 downstream** (essentially no transcriptional
+   effect); with no donor-pair data + single-guide at 8 h, its ranking rests on nothing.
+5. **"Grows over time" survives the top confound but not reproducibility.** KD depth is
+   *weaker* at 48 h (TBX21 own log_fc −4.47→−4.04; SOCS1 −1.37→−0.60), so growth is **not**
+   a KD-depth artifact. For TBX21 it holds at the individual-gene level (T-bet is switched
+   off by the culture — baseMean 180→51 — while the more-developed Th1 program widens the
+   readout: a **dynamic-range** effect, not "signalling stronger"). It does not generalise
+   across the lever set (per #2).
+6. **Footprint sorts the field:** sledgehammers to down-weight — **HCCS (1231 DE), POLG2
+   (616), MEN1 (2157)**; 8 h stress-levers **SMARCE1 (3267), ATP2A2 (3260), KIF20A**.
+   **IL21R** (107 DE, real Treg-up arm +0.44) is the one mechanistically interesting early
+   lever.
+
+**Net:** TBX21 is a valid *Th1 off-switch* hit (survives LOO, donor+guide concordant, real
+KD) — but it's a TF (undruggable by inhibition) and its direction *reduces* Th1, the wrong
+sign if the goal is anti-tumor effector enhancement. Fix the therapeutic direction before
+any druggability step. **Sections §4–§6 below record the pre-verification exploration;
+where they conflict with §0, §0 governs.**
+
 ## 1. The question (as it evolved)
 Not "watch a cell become a Treg" (untestable here — see §2) but: **reverse-engineer the
 causal gene levers that push CD4 T cells along a Th1-like ↔ Treg-like axis, and see how

@@ -78,3 +78,73 @@ Several things, roughly in order of how much they'd change my mind:
 Net: your conservatism on 1 and 2 is right (extend the naive-drop to 8hr); the 0.52 needs a reliability ceiling before it means "time-specific"; and I'd stop using "signalling getting stronger" until the KD-depth and dynamic-range confounds are ruled out — the NTC-expression rise is too weak to carry that claim.
 
 I have the DE_stats and NTC h5ad on the granted paths, so I can actually run the checks that would move this rather than just argue them — the ones I'd prioritize: (i) TBX21/SOCS1 target-KD depth at 8hr vs 48hr, (ii) the two-arm split (Th1-down vs Treg-up) for the top hits, (iii) LOO on the Th1 panel for TBX21, (iv) global DE-footprint breadth to sort shifters from sledgehammers, and (v) the within-timepoint reliability ceiling for the 0.52. Want me to take any of those on? If so, point me at where your frozen panels and the balanced-skew code live (spot repo?) so I reproduce your metric rather than a lookalike.
+
+---
+
+## Round 2 — CS ran the checks (verified, 2026-07-11)
+
+_CS reproduced the spot metric verbatim (corr 0.520, TBX21 top — same as `explore2.py`), then ran checks (i)–(v) + the reciprocal-pole control. Two came out against its own predictions, flagged plainly. Metrics in `cs_review_metrics.json`._
+
+Done. Here's what the checks actually show — and two of them came out **against** what I predicted last turn, which I'll flag plainly.
+
+## First, the reproduction is clean
+
+I ran your frozen library verbatim (`projection.py`/`masks.py`/`config.py`, poles `A=th1_like` away / `B=treg_like` toward, 30kb mask via `sgrna_library_metadata`). I get **corr(balanced_8, balanced_48) = 0.520** on n=6,620 eligible-both, TBX21 top at 48hr with balanced 1.04 growing +0.72 from 8hr. Same numbers as your `explore2.py`. So everything below is on your metric, not a lookalike.
+
+## (i) KD depth — my top confound is *wrong*, and this helps you
+
+I predicted the effect grows because dCas9-KRAB knocks down deeper by 48hr. It's the opposite. On-target `log_fc` of the target's own gene:
+- **TBX21: −4.47 @8hr → −4.04 @48hr** (effect_size −15.9 → −9.2)
+- **SOCS1: −1.37 @8hr → −0.60 @48hr** (effect_size −8.7 → −4.6)
+
+The knockdown is *weaker* at 48hr for both, while the projected skew grows. So "effect grows" is **not** a KD-depth artifact — that confound is dead. (Note the mechanism: TBX21 `baseMean` drops 180→51, i.e. T-bet is being turned off by the culture itself between 8 and 48hr, so there's less transcript for CRISPRi to remove.) This materially strengthens the user's "signalling getting stronger" reading against the confound I was most worried about — though panel C below still complicates it.
+
+## (ii) Two-arm split — TBX21 is a Th1 off-switch, full stop
+
+This confirms my prediction hard. TBX21 balanced 1.04 @48hr decomposes into **away-from-Th1 = +2.16, toward-Treg = −0.08**. The entire skew is the Th1-down arm; the Treg arm is *negative*. Calling TBX21 a "toward-Treg lever" is a metric artifact of summing two arms — it does nothing toward the Treg pole. PPP1R14B is the same pattern (away +0.90, toward −0.06). By contrast, 27 of the top-30 have genuine both-arm movement (CMIP toward +0.74, GATB +0.57, HCCS +0.56 are real Treg-up). **Recommendation: rank on `min(away, toward)` or report both arms, never the sum alone — the sum manufactures a Treg lever out of a pure Th1 collapse.** The augmented table has both arms for all 11,210 targets.
+
+## (iii) LOO on the Th1 panel — TBX21 is robust, not a single-gene artifact
+
+With TBX21 masked, the surviving Th1 panel is CXCR3/IFNG/IL12RB2. At 48hr the away arm is +2.16, and dropping any single gene leaves it strongly positive: drop CXCR3 → +1.73, drop IFNG → +1.59, drop IL12RB2 → +3.15. Both CXCR3 (−3.0) and IFNG (−3.3) fall hard on their own. So TBX21 KD coordinately collapses multiple Th1 markers, not one direct target — it survives LOO. That's genuine downstream program regulation, not a panel artifact. (IL12RB2 barely moves, so it's diluting the signal — dropping it *raises* the arm.)
+
+## (iv) Footprint — sorts the field cleanly, and flags your worries
+
+Eligible-both DE-breadth is very skewed (median `n_total_de_genes` = 3, p90 = 144, p99 = 1599). Against that:
+- **TBX21**: 403 DE genes (94th pct) — broad, but that's expected for a lineage master TF, and LOO says it's coherent. Acceptable.
+- **SOCS1**: **1 DE gene, 0 downstream** (11th pct). This is the surprise — SOCS1 KD is *not* a sledgehammer here; it barely does anything transcriptionally. Combined with what you found (no donor-pair data, single-guide at 8hr), **SOCS1 is far weaker than its ranking suggests** and I would not carry it forward. Its balanced 0.26 rests on almost nothing.
+- **Genuine sledgehammers in the top set: HCCS (1231), POLG2 (616), MEN1 (2157)** — mitochondrial/chromatin essential machinery, high both-arm scores that are almost certainly nonspecific stress. Down-weight.
+- **8hr-dominant set**: SMARCE1 (3267 DE), ATP2A2 (3260), KIF20A (1780) dominate the largest-shrinking levers — broad-footprint, consistent with the essential-gene/stress category. PDIA3/DARS1/COG5 are more modest (11–27 DE). IL21R (107 DE, real Treg-up arm 0.44) remains the one mechanistically interesting early lever.
+
+## (v) The 0.52 — this is the finding that most changes the story
+
+I decomposed the 0.52 using the 6 donor-pair modalities. **Within-timepoint reliability (two disjoint donor-halves, same time) is only r = 0.227 at both 8hr and 48hr.** That alone means the skew is noisy and the honest ceiling is low. But the apples-to-apples version is sharper and reveals a **donor confound**, not just noise:
+
+| Comparison | r |
+|---|---|
+| within-time, independent donors, same time | 0.227 |
+| cross-time, **same** donors (AB@8 vs AB@48) | **0.48** |
+| cross-time, **independent** donors + independent time | **0.169** |
+| main screen (pooled 4-donor, 8 vs 48) | 0.520 |
+
+The pooled 0.52 is high **because donor identity is shared across the two timepoints** — same 4 donors at 8 and 48hr, and donor-of-origin is a large, time-stable component of each target's skew. When you break the shared donor (independent donors *and* independent time), cross-time r falls to **0.169 — at or below the within-time noise floor of 0.227.** So the correct reading is the reverse of "partly shared, partly time-specific": **once you remove donor, there is very little reproducible cross-time signal at all — neither strongly shared nor cleanly time-specific.** The hit level says the same thing: **only 2/25, 8/50, 18/100 top toward-Treg levers overlap between 8 and 48hr (~16%)**, barely above chance. Any per-target "grows / is 8hr-specific" claim below the very top of the list is not supported by these data.
+
+**Bottom line for 3b/3c: I would not say the lever set is "partly shared, partly time-specific" — the number is dominated by donor, and reproducibility is low. The safe claims are the top-of-list ones (TBX21 grows; the SMARCE1/ATP2A2 stress-levers shrink); the middle of the ranking is noise.** And "signalling getting stronger" survives the KD-depth confound but not the reproducibility one — for TBX21 specifically it holds at the individual-gene level (T-bet turns off in culture, the Th1 arm widens), but you can't generalize it across the lever set.
+
+## The reciprocal-pole control — it failed, informatively
+
+This is the check I'd weight most for the whole framing. On a toward-Th1 ranking, the Treg master regulators do **not** come out on top: **FOXP3 ranks 6317/6620** (near the bottom — its KD if anything reads slightly toward-Treg), IL2RA 1648, CTLA4 3522. And FOXP3 was genuinely, strongly knocked down (own log_fc −4.3 @8hr, −3.4 @48hr, significant) — so this isn't a failed-KD excuse. **Knocking out the Treg master TF does not push cells toward Th1 in this data.** That means your axis is **not a reciprocal Th1↔Treg see-saw** — it's largely a *Th1-program readout* with a Treg-flavored label. Which fits everything else: no TGF-β/iTreg polarization in this culture, so there isn't a real Treg program for FOXP3 to be the master of. The Treg "pole" is riding on activation-associated markers (CTLA4/IL2RA/TNFRSF18 all go up on any activated Tconv). I'd stop describing this as a Th1↔Treg axis and call it what it is: a **Th1-program dial**, with the "Treg" direction meaning "low Th1 / generically activated," not "committed Treg."
+
+## Net recommendations
+
+1. **Report both arms, rank on `min(away,toward)`.** Drop TBX21 and PPP1R14B from the "toward-Treg lever" list — they're pure Th1 off-switches (the metric summed them into a Treg score).
+2. **Retire "partly shared, partly time-specific."** The 0.52 is a donor artifact; donor-independent cross-time r ≈ 0.17 ≈ noise. Only top-of-list temporal claims (TBX21↑, SMARCE1/ATP2A2↓) are defensible.
+3. **Reframe the axis as a Th1 dial, not Th1↔Treg** — the reciprocal control (FOXP3 KD doesn't push toward Th1) shows the Treg pole isn't a real committed-Treg program in this culture.
+4. **Drop SOCS1** — 1 DE gene, no downstream, no donor data, single-guide at 8hr. Its ranking is not backed by an effect.
+5. **TBX21 is a valid *Th1 off-switch* hit** (survives LOO, donor+guide concordant per your run, KD is real). But it's a TF (historically undruggable by inhibition), and its "direction" is *reducing* Th1 — which is the wrong sign if the immunotherapy goal is anti-tumor effector enhancement. Confirm the therapeutic direction before it goes to druggability.
+
+Deliverables:
+- [spot_th1treg_review.png]({{artifact:6191b933-6b7c-4915-bbff-a190cc043ca3}}) — the four checks (TBX21 arms, KD depth, 0.52 decomposition, hit-level overlap)
+- [spot_th1treg_review_table.csv]({{artifact:20052223-b429-4e1c-aca4-6c25d72f2b90}}) — all 11,210 targets × both timepoints with arms, KD depth, footprint, eligibility
+- [spot_review_metrics.json]({{artifact:2763f1e5-1a1c-4f2d-acc2-d92c9c1a0c19}}) — the headline numbers
+
+One caveat on my own reliability estimate: the within-timepoint ceiling uses 2-donor halves, so it's a floor on the true 4-donor reliability. Even Spearman-Brown'd up it only reaches ~0.36–0.41, still well under 0.52 — but if you want the airtight version, a per-donor (not per-pair) leave-one-out would nail the ceiling exactly. Want me to run that, or take the "report both arms + Th1-dial reframe" into a short methods note for the stage-2 writeup?
