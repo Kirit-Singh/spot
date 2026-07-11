@@ -23,7 +23,7 @@ APP_DATA="${SPOT_APP_DATA:-../app/data}"    # the SERVED path; artifacts are sta
 HF_REPO="${SPOT_HF_REPO:-KiritSingh/spot-CD4-Marson}"
 # PINNED input revision + content hash (the embedding object is immutable; the superseding
 # remediation revision does not change the h5ad content). Override only to reproduce a different pin.
-HF_REVISION="${SPOT_HF_REVISION:-<PIN_AFTER_SUPERSEDE>}"
+HF_REVISION="${SPOT_HF_REVISION:-e5fcf98b56a9302921d402e97fc5a190bd88f9a6}"
 H5AD_SHA256="${SPOT_H5AD_SHA256:-2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43}"
 echo "using SPOT_DATA=$SPOT_DATA  APP_DATA=$APP_DATA  HF_REPO=$HF_REPO@$HF_REVISION"
 
