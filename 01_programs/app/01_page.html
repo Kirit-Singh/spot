@@ -359,8 +359,8 @@ const VIR_CSS='linear-gradient(90deg,'+VIR.map((s,i)=>`rgb(${s}) ${(i/(VIR.lengt
 const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
 let DATA=null,cells=[],meta=null,programs=[],progByField={};
 let field='diff_naive_score',cond='All',donorSel='All',hover=-1;
-let axisA={field:null,condition:'All',direction:'high',donor:'All'},
-    axisB={field:null,condition:'All',direction:'high',donor:'All'};
+let axisA={field:null,condition:'Stim48hr',direction:'high',donor:'All'},
+    axisB={field:null,condition:'Stim48hr',direction:'high',donor:'All'};
 let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
 // program_id + stage2_selectable live in the program registry (NOT in the overlay meta.programs)
@@ -473,8 +473,9 @@ function buildAxis(){
   // Analysis donor scope is fixed to all four donors (donor_scope="all"); each axis carries its own condition.
   // From/To program options lead with an empty placeholder — the contrast is inactive until BOTH are chosen.
   const progOpts='<option value="">— program —</option>'+programs.filter(p=>p.role!=='sensitivity').map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
-  const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
-  // per-axis condition: "All" is display-only and cannot define an executable contrast (preflight rejects it).
+  // per-axis condition: real timepoints only ("All" is intentionally omitted — a screen needs one timepoint,
+  // so "All" would only ever produce a disabled button; the whole-map overview is not offered here).
+  const conds=meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9));
   const condOpts=conds.map(k=>`<option value="${k}">${CONDLAB[k]||k}</option>`).join('');
   document.querySelectorAll('.axsel.prog').forEach(s=>s.innerHTML=progOpts);
   document.querySelectorAll('.axsel.cond').forEach(s=>s.innerHTML=condOpts);
@@ -499,8 +500,8 @@ function syncAxisUI(){
 }
 // Clear → reset A and B to the empty placeholder state → contrastActive() false → single-program gradient
 function clearContrast(){
-  axisA={field:null,condition:'All',direction:'high',donor:'All'};
-  axisB={field:null,condition:'All',direction:'high',donor:'All'};
+  axisA={field:null,condition:'Stim48hr',direction:'high',donor:'All'};
+  axisB={field:null,condition:'Stim48hr',direction:'high',donor:'All'};
   syncAxisUI();updateAxisMeta();
 }
 // friendly condition (Rest / 8 hr / 48 hr / All times) + donor only if not "All"
