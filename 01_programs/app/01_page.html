@@ -84,24 +84,26 @@
   .seg button.on{background:var(--accent);color:#fff}
   /* top-of-plot program-axis contrast panel — vertical stack: A row / B row / actions */
   /* contrast panel: no card chrome — controls sit plainly on the UMAP (--chipw sets the From/To pill width + the actions-row indent) */
-  .ctbar{position:absolute;top:12px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:stretch;gap:7px;--chipw:42px}
-  .ctactions{display:flex;align-items:center;gap:8px;margin-top:1px;padding-left:calc(var(--chipw) + 6px)}
+  .ctbar{position:absolute;top:12px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:stretch;gap:7px;--chipw:42px;--dirw:56px}
+  /* actions stack vertically: full-width Identify button, then a toggle-width Clear beneath it, both indented past the chip to line up with the program select */
+  .ctactions{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:2px;padding-left:calc(var(--chipw) + 6px)}
   .ctbar .ctsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
   .ctgrp{display:flex;align-items:center;gap:6px;min-width:0}
   .ctchip{font-family:var(--mono);font-size:9.5px;font-weight:700;color:#fff;height:20px;min-width:var(--chipw);padding:0 6px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;text-transform:uppercase;letter-spacing:.03em}
   .ctchip.a{background:rgb(38,150,190)}.ctchip.b{background:rgb(201,74,120)}
   .ctvs{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600;padding:0 1px}
   .axsel{flex:0 1 auto;min-width:0;font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 18px 4px 7px;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
-  .axsel.prog{max-width:124px}.axsel.cond{max-width:90px}.axsel.obj{max-width:120px}
+  .axsel.prog{flex:0 0 auto;width:124px;max-width:124px}.axsel.cond{flex:0 0 auto;width:82px}.axsel.obj{max-width:120px}
   .axsel:hover{border-color:var(--accent)}
-  .ctanalysis .ctlbl{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:0 1px;white-space:nowrap}
-  .axdir{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer;white-space:nowrap;text-transform:capitalize}
+  .ctlbl{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:0 1px;white-space:nowrap}
+  .axdir{flex:0 0 auto;width:var(--dirw);text-align:center;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 0;cursor:pointer;white-space:nowrap;text-transform:capitalize}
   .axdir:hover{border-color:var(--accent)}
   /* matched button pair — Clear (active) + Identify genes (disabled/muted) share shape/radius/padding/font/height; differ only by state */
-  .ctclear,.idbtn{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;height:27px;padding:0 11px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-  .ctclear{color:var(--ink2);background:var(--surface);cursor:pointer}
+  /* Identify (full control width) + Clear (toggle width) share height/radius/border/font — SAME HEIGHT, differ by width + state */
+  .ctclear,.idbtn{font:inherit;font-size:11px;font-weight:600;height:27px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+  .ctclear{width:var(--dirw);padding:0;color:var(--ink2);background:var(--surface);cursor:pointer}
   .ctclear:hover{border-color:var(--treg);color:var(--treg)}
-  .idbtn{color:var(--muted);background:var(--sunken);cursor:not-allowed}
+  .idbtn{width:100%;padding:0 11px;color:var(--muted);background:var(--sunken);cursor:not-allowed}
   .idbtn .pend{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 7px}
   /* Identify-genes enabled only when preflight passes: accent-filled + a live short-contrast_id pill */
   .idbtn.ready{color:#fff;background:var(--accent);border-color:var(--accent);cursor:pointer}
@@ -120,8 +122,8 @@
   /* on-plot A/B population labels (sit at each pole's score-weighted centroid; belt runs between them) */
   .anchlbl{position:absolute;z-index:5;display:none;transform:translate(-50%,-50%);background:rgba(255,255,255,.92);border:1.5px solid var(--line);border-radius:8px;padding:3px 9px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 9px rgba(30,27,22,.12)}
   /* belt stays ink-black (the app body has no dark theme, so no dark override) */
-  /* on-plot viewer controls (zoom in / reset / zoom out) — bottom-right, clear of the From/To bar and rail; reuses the app's surface/line/ink2/accent tokens + radius/shadow conventions */
-  .viewctl{position:absolute;right:14px;bottom:14px;z-index:6;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 2px 9px rgba(30,27,22,.10);overflow:hidden}
+  /* on-plot viewer controls (zoom in / reset / zoom out) — top-right, clear of the contrast bar (top-left) and rail; reuses the app's surface/line/ink2/accent tokens + radius/shadow conventions */
+  .viewctl{position:absolute;right:14px;top:14px;z-index:6;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 2px 9px rgba(30,27,22,.10);overflow:hidden}
   .viewctl button{width:32px;height:30px;display:flex;align-items:center;justify-content:center;padding:0;font:inherit;font-size:16px;font-weight:600;line-height:1;color:var(--ink2);background:var(--surface);border:0;border-top:1px solid var(--line);cursor:pointer}
   .viewctl button:first-child{border-top:0}
   .viewctl button:hover{color:var(--accent);background:var(--sunken)}
@@ -199,8 +201,8 @@
   @media (max-width:430px){
     .top{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}
     .nav{overflow-x:auto;white-space:nowrap;padding:8px 12px}
-    .ctbar{left:8px;top:8px;--chipw:36px}
-    .axsel.prog{max-width:98px}.axsel.cond{max-width:74px}.axsel.obj{max-width:88px}
+    .ctbar{left:8px;top:8px;--chipw:36px;--dirw:48px}
+    .axsel.prog{width:98px;max-width:98px}.axsel.cond{width:70px}.axsel.obj{max-width:88px}
     .ctstate{max-width:200px}
     .rail{padding:12px 14px}
   }
@@ -234,10 +236,10 @@
 <div class="body">
   <div class="plot">
     <div class="ctbar" role="group" aria-label="Contrast two programs on the map">
-      <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button></div>
-      <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button></div>
-      <div class="ctgrp ctanalysis"><span class="ctlbl">Analysis</span><select class="axsel cond" id="analysisCond" aria-label="Analysis condition — the single real condition that defines the Stage 2 contrast"></select><select class="axsel obj" id="objectiveSel" aria-label="Contrast objective"></select></div>
-      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify genes</span> <span class="pend" id="idpend">Stage 2 →</span></button><button class="ctclear" id="ctclear">✕ Clear</button></div>
+      <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" aria-label="From condition"></select></div>
+      <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" aria-label="To condition"></select></div>
+      <div class="ctgrp ctobj"><span class="ctlbl">Objective</span><select class="axsel obj" id="objectiveSel" aria-label="Contrast objective — how gene knockdowns are ranked"></select></div>
+      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify gene skews →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">Clear</button></div>
       <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
       <div id="lastrun"></div>
     </div>
@@ -363,8 +365,9 @@ let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
 // program_id + stage2_selectable live in the program registry (NOT in the overlay meta.programs)
 let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
-// ONE shared analysis condition (a single real condition) + objective define the executable contrast; donor scope is fixed to all
-let analysisCond='Stim48hr',objective='balanced_a_to_b',curContrastId=null,pfSeq=0;
+// each axis carries its own condition; when both match on a single REAL condition that shared value is
+// the executable contrast's analysis_condition (preflight enforces the match). donor scope is fixed to all.
+let objective='balanced_a_to_b',curContrastId=null,pfSeq=0;
 const DATASET_ID='marson2025_gwcd4_perturbseq';
 const EFFECT_UNIVERSE_ID='marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad';
 const DONOR_SCOPE='all',STAGE1_METHOD_VERSION='stage1-continuous-v2';
@@ -433,12 +436,10 @@ Promise.all([
     REGISTRY_SHA=reg.registry_sha256||'';
     REGISTRY_OK=!!(REGISTRY_SHA&&programs.filter(p=>p.role!=='sensitivity').every(p=>regByField[p.score_field]&&regByField[p.score_field].program_id));}
   METHOD_VERSION=meta.method_version||'';H5AD_SHA=(meta.source||{}).h5ad_sha256||'';HF_REV=(meta.source||{}).hf_revision||'';HF_REPO=(meta.source||{}).hf_repo||'';
-  // canonical default selection = the acceptance anchor (treg_like-high → th1_like-high, Stim48hr, balanced_a_to_b → 26b866f2ad813d71)
-  if(progByField['treg_like_score']&&progByField['th1_like_score']){
-    axisA={field:'treg_like_score',condition:'Stim48hr',direction:'high',donor:'All'};
-    axisB={field:'th1_like_score',condition:'Stim48hr',direction:'high',donor:'All'};
-    analysisCond='Stim48hr';
-  } else {axisA.field=axisB.field='diff_naive_score';axisA.condition=axisB.condition=analysisCond;}
+  // START EMPTY: no default contrast. From/To programs stay unset (placeholder) so the map shows the
+  // single-program gradient (default color-by = Naïve-like). Contrast + belt activate only once BOTH
+  // programs are chosen. The acceptance anchor (treg_like→th1_like@Stim48hr, balanced_a_to_b →
+  // 26b866f2ad813d71) is reproducible through the UI selections / __t.setContrast.
   buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();
   applyProgram();
   resize();
@@ -468,35 +469,39 @@ function buildFilters(){
   de.onclick=e=>{if(!e.target.dataset.d)return;donorSel=e.target.dataset.d;[...de.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));draw();runPreflightUI();};
 }
 function buildAxis(){
-  // Analysis donor scope is fixed to all four donors (donor_scope="all"); ONE shared analysis condition defines the contrast.
-  const progOpts=programs.filter(p=>p.role!=='sensitivity').map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
+  // Analysis donor scope is fixed to all four donors (donor_scope="all"); each axis carries its own condition.
+  // From/To program options lead with an empty placeholder — the contrast is inactive until BOTH are chosen.
+  const progOpts='<option value="">— program —</option>'+programs.filter(p=>p.role!=='sensitivity').map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
   const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
-  // "All times" stays selectable as a DISPLAY-only view but cannot define an executable contrast (preflight rejects it).
-  const condOpts=conds.map(k=>`<option value="${k}">${k==='All'?'All times':(CONDLAB[k]||k)}</option>`).join('');
+  // per-axis condition: "All" is display-only and cannot define an executable contrast (preflight rejects it).
+  const condOpts=conds.map(k=>`<option value="${k}">${CONDLAB[k]||k}</option>`).join('');
   document.querySelectorAll('.axsel.prog').forEach(s=>s.innerHTML=progOpts);
-  const ac=document.getElementById('analysisCond');ac.innerHTML=condOpts;
-  ac.onchange=e=>{analysisCond=e.target.value;axisA.condition=axisB.condition=analysisCond;updateAxisMeta();};
+  document.querySelectorAll('.axsel.cond').forEach(s=>s.innerHTML=condOpts);
   const ob=document.getElementById('objectiveSel');
-  ob.innerHTML='<option value="balanced_a_to_b">Balanced A→B</option><option value="away_from_a">Away from A</option>';
-  ob.onchange=e=>{objective=e.target.value;updateAxisMeta();};
+  ob.innerHTML='<option value="balanced_a_to_b" title="Ranks gene knockdowns that move cells away from the From program AND toward the To program.">From → To (balanced)</option>'
+             +'<option value="away_from_a" title="Ranks knockdowns that reduce the From program (To used as context).">Away from From</option>';
+  ob.onchange=e=>{objective=e.target.value;syncObjTitle();updateAxisMeta();};
   document.querySelectorAll('.axsel.prog').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.field=e.target.value;updateAxisMeta();});
+  document.querySelectorAll('.axsel.cond').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.condition=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';e.target.textContent=ax.direction;updateAxisMeta();});
   document.getElementById('ctclear').onclick=clearContrast;
   document.getElementById('idgenes').onclick=onIdentifyGenes;
-  syncAxisUI();
+  syncAxisUI();syncObjTitle();
   updateAxisMeta();
 }
-// reflect the axisA/axisB state back into the bar's selects + direction toggles
+// keep the objective control's own tooltip in sync with the selected option
+function syncObjTitle(){const ob=document.getElementById('objectiveSel');if(!ob)return;const o=ob.options[ob.selectedIndex];ob.title=o?o.title:'';}
+// reflect the axisA/axisB state back into the bar's selects (empty field → placeholder) + toggles + conditions
 function syncAxisUI(){
-  document.querySelectorAll('.axsel.prog').forEach(s=>s.value=s.dataset.ax==='A'?axisA.field:axisB.field);
+  document.querySelectorAll('.axsel.prog').forEach(s=>s.value=(s.dataset.ax==='A'?axisA.field:axisB.field)||'');
+  document.querySelectorAll('.axsel.cond').forEach(s=>s.value=s.dataset.ax==='A'?axisA.condition:axisB.condition);
   document.querySelectorAll('.axdir').forEach(b=>b.textContent=b.dataset.ax==='A'?axisA.direction:axisB.direction);
-  const ac=document.getElementById('analysisCond');if(ac)ac.value=analysisCond;
   const ob=document.getElementById('objectiveSel');if(ob)ob.value=objective;
 }
-// ✕ Clear → reset A and B to an identical neutral state → contrastActive() false → gradient (analysis condition kept)
+// Clear → reset A and B to the empty placeholder state → contrastActive() false → single-program gradient
 function clearContrast(){
-  axisA={field:field,condition:analysisCond,direction:'high',donor:'All'};
-  axisB={field:field,condition:analysisCond,direction:'high',donor:'All'};
+  axisA={field:null,condition:'All',direction:'high',donor:'All'};
+  axisB={field:null,condition:'All',direction:'high',donor:'All'};
   syncAxisUI();updateAxisMeta();
 }
 // friendly condition (Rest / 8 hr / 48 hr / All times) + donor only if not "All"
@@ -530,7 +535,7 @@ function canonicalContent(){
   const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{};
   return {A:{program_id:A.program_id,score_field:axisA.field,direction:axisA.direction},
           B:{program_id:B.program_id,score_field:axisB.field,direction:axisB.direction},
-          analysis_condition:analysisCond,dataset_id:DATASET_ID,donor_scope:DONOR_SCOPE,
+          analysis_condition:axisA.condition,dataset_id:DATASET_ID,donor_scope:DONOR_SCOPE,
           effect_universe_id:EFFECT_UNIVERSE_ID,objective:objective,
           program_registry_sha256:REGISTRY_SHA,source_h5ad_sha256:H5AD_SHA,
           source_hf_revision:HF_REV,stage1_method_version:METHOD_VERSION};
@@ -542,14 +547,14 @@ async function computeContrast(){
 function hashesOk(){return REGISTRY_SHA===EXPECT.registry&&H5AD_SHA===EXPECT.h5ad&&HF_REV===EXPECT.hf&&METHOD_VERSION===STAGE1_METHOD_VERSION;}
 // preflight gate — Identify-genes is enabled ONLY when this returns ok:true
 function preflight(){
-  if(!REGISTRY_OK)return{ok:false,reason:'Program registry unavailable — cannot resolve program IDs / Stage-2 eligibility'};
+  if(!REGISTRY_OK)return{ok:false,reason:'Program registry unavailable — cannot resolve program IDs'};
+  if(!axisA.field||!axisB.field)return{ok:false,reason:'Choose a From and a To program'};
   const A=regByField[axisA.field],B=regByField[axisB.field];
   if(!A||!B)return{ok:false,reason:'Program registry incomplete for a selected axis'};
-  if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,reason:'A sensitivity field cannot be a primary contrast axis'};
-  if(!contrastActive())return{ok:false,reason:'Select two distinct programs for From and To'};
+  if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,reason:'A sensitivity field cannot be a contrast axis'};
+  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,reason:'Pick a real condition (Rest, 8 hr, or 48 hr) on both axes — “All” can’t define a contrast'};
+  if(axisA.condition!==axisB.condition)return{ok:false,reason:'From and To must use the same condition'};
   if(A.program_id===B.program_id&&axisA.direction===axisB.direction)return{ok:false,reason:'From and To are identical — pick distinct programs or opposite directions'};
-  if(axisA.condition!==axisB.condition)return{ok:false,reason:'From and To must share one analysis condition'};
-  if(analysisCond==='All')return{ok:false,reason:'“All times” cannot define an executable contrast — pick Rest, 8 hr, or 48 hr'};
   if(!A.stage2_selectable)return{ok:false,reason:stage2Reason(A)};
   if(!B.stage2_selectable)return{ok:false,reason:stage2Reason(B)};
   if(!hashesOk())return{ok:false,reason:'Unknown dataset or method hash — cannot build a verifiable contrast'};
@@ -557,25 +562,29 @@ function preflight(){
 }
 function stage2Reason(p){
   const r=p.stage2_unavailable_reason;
-  if(r==='no_panel_genes_in_effect_universe')return `${p.display_label} not available for Stage 2: no panel genes in effect universe`;
-  if(r==='role_sensitivity_display_only')return `${p.display_label} is display-only and not available for Stage 2`;
-  return `${p.display_label} not available for Stage 2`;
+  if(r==='no_panel_genes_in_effect_universe')return `${p.display_label} has no panel genes in the effect universe`;
+  if(r==='role_sensitivity_display_only')return `${p.display_label} is display-only`;
+  return `${p.display_label} can’t be a contrast axis`;
 }
 function condShort(k){return k==='All'?'All times':(CONDLAB[k]||k);}
 // reflect preflight into the button + inline functional state (no banner); kick async contrast_id compute
 function runPreflightUI(){
   const btn=document.getElementById('idgenes');if(!btn)return;
   const pf=preflight(),pend=document.getElementById('idpend'),st=document.getElementById('ctstate'),seq=++pfSeq;
-  // §4.3 display-vs-analysis: the display filter excludes the (single) selected analysis condition
-  const dispMismatch=contrastActive()&&analysisCond!=='All'&&cond!=='All'&&cond!==analysisCond;
+  // §4.3 display-vs-analysis: the rail display filter excludes the (shared, single) contrast condition
+  const dispMismatch=contrastActive()&&axisA.condition!=='All'&&axisA.condition===axisB.condition&&cond!=='All'&&cond!==axisA.condition;
   if(!pf.ok){
-    curContrastId=null;btn.disabled=true;btn.classList.remove('ready');btn.title=pf.reason;pend.textContent='Stage 2 →';
-    st.className='ctstate warn';st.textContent=pf.reason;return;
+    curContrastId=null;btn.disabled=true;btn.classList.remove('ready');btn.title=pf.reason;
+    pend.style.display='none';pend.textContent='';
+    // empty / partial selection shows no verbose helper line; a real conflict gets a short muted reason
+    if(!axisA.field||!axisB.field){st.className='ctstate';st.textContent='';}
+    else{st.className='ctstate warn';st.textContent=pf.reason;}
+    return;
   }
-  btn.disabled=false;btn.classList.add('ready');btn.title='Proceed to Stage 2 (skewing genes) with this contrast';
-  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.contrast_id;pend.textContent=r.contrast_id.slice(0,8)+' →';
-    if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes selected analysis condition (analysis uses '+condShort(analysisCond)+')';}
-    else{st.className='ctstate ok';st.textContent='Stage 2 ready · contrast '+r.contrast_id;}
+  btn.disabled=false;btn.classList.add('ready');btn.title='Identify gene skews for this contrast';
+  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.contrast_id;pend.style.display='';pend.textContent=r.contrast_id.slice(0,8);
+    if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes the contrast condition (analysis uses '+condShort(axisA.condition)+')';}
+    else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.contrast_id;}
   });
 }
 // full emitted artifact — canonical body + the non-canonical mirrors/provenance (matches the reference shape)
@@ -583,7 +592,7 @@ function buildSelectionArtifact(r){
   const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{};
   return {schema_version:'spot.stage01_selection.v1',contrast_id:r.contrast_id,
     canonical_contrast_sha256:r.canonical_contrast_sha256,canonical_content:r.canonical_content,
-    objective:objective,analysis_condition:analysisCond,donor_scope:DONOR_SCOPE,
+    objective:objective,analysis_condition:axisA.condition,donor_scope:DONOR_SCOPE,
     A_program_id:A.program_id,A_score_field:axisA.field,A_direction:axisA.direction,
     B_program_id:B.program_id,B_score_field:axisB.field,B_direction:axisB.direction,
     dataset_id:DATASET_ID,effect_universe_id:EFFECT_UNIVERSE_ID,stage1_method_version:METHOD_VERSION,
@@ -613,8 +622,8 @@ async function onIdentifyGenes(){
   // carry the contrast_id in the URL for Stage 2 (page not built yet — keep the param, don't hard-break the shell)
   try{history.pushState({contrast:r.contrast_id},'', '?contrast='+r.contrast_id);}catch(e){}
   const st=document.getElementById('ctstate');st.className='ctstate ok';
-  st.textContent=cached?('Loaded cached Stage-2 result · contrast '+r.contrast_id)
-                       :('Proceeding to Stage 2 · contrast '+r.contrast_id+' (selection saved; no cached result yet)');
+  st.textContent=cached?('Loaded cached result · contrast '+r.contrast_id)
+                       :('Selection saved · contrast '+r.contrast_id+' (no cached result yet)');
 }
 // shrink #lastrun's font (10px → 7px floor) until its single line fits inside the contrast panel's control width
 function fitLastRun(){
@@ -661,7 +670,7 @@ function resize(){const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r
   const W=r.width,H=r.height,pad=54,top=58,bot=72;
   const xs=cells.map(c=>c.x),ys=cells.map(c=>c.y);
   const xmn=pct(xs,.015),xmx=pct(xs,.985),ymn=pct(ys,.015),ymx=pct(ys,.985);
-  const s=Math.min((W-2*pad)/(xmx-xmn),(H-top-bot)/(ymx-ymn))*0.92;
+  const s=Math.min((W-2*pad)/(xmx-xmn),(H-top-bot)/(ymx-ymn))*0.83;  // slightly zoomed-out fit (~10% looser than 0.92) so the cloud isn't tight on load
   // TOP-ANCHORED: cloud top sits at y=top (small margin); any vertical slack falls below it
   sx=s;sy=s;ox=(W-(xmx-xmn)*s)/2-xmn*s;oy=top-ymn*s;
   resetView();}                    // resize recomputes the fit AND returns to the top-anchored fit view
@@ -878,7 +887,7 @@ window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),field:()=>field,set
   computeContrast,preflight,canonicalContent,canonicalJSON,
   contrastId:async()=>(await computeContrast()).contrast_id,
   artifact:async()=>buildSelectionArtifact(await computeContrast()),
-  setContrast:(af,ad,bf,bd,c,o)=>{axisA={field:af,condition:c||analysisCond,direction:ad||'high',donor:'All'};axisB={field:bf,condition:c||analysisCond,direction:bd||'high',donor:'All'};if(c)analysisCond=c;if(o)objective=o;syncAxisUI();updateAxisMeta();}};
+  setContrast:(af,ad,bf,bd,c,o)=>{const cc=c||'All';axisA={field:af,condition:cc,direction:ad||'high',donor:'All'};axisB={field:bf,condition:cc,direction:bd||'high',donor:'All'};if(o)objective=o;syncAxisUI();syncObjTitle();updateAxisMeta();}};
 </script>
 </body>
 </html>
