@@ -4,6 +4,14 @@
 > (91 GB). The **lead session plans and independently verifies** (generator ≠ verifier). Steps use
 > checkbox (`- [ ]`) tracking. Do not touch v2 artifacts except to mark them superseded.
 >
+> **Rev 4 (2026-07-11):** bins frozen to the **÷N** form `bin=floor((rank−1)*25/n_finite)`,
+> `n_finite=18,130` (no top clamp; ÷(n−1) rejected); pool terminology split into `assay_present` (18,130)
+> / `detected_in_396k` (17,956) / `control_eligible_pool` (17,903 = detected − 53); normalization is
+> "target total 9,819 with float roundoff" (matrix hash is the identity check, not exact equality);
+> scoring is **chunked on tcefold** (frozen coefficient matrix, backed CSR 10k–25k-cell chunks, RSS
+> smoke-test first); proceed-order = regenerate → verify → commit defs+gates → configure+smoke tcefold →
+> authorize scoring.
+>
 > **Rev 3 (2026-07-11):** gates are **pre-registered before scoring**; the input manifest + coordinates
 > are pinned **before** control construction; the exact bin formula is frozen (with the corrected
 > tcefold audit); keyed-hash encoding/namespace/digest-tie fully specified; the activation-predictor
@@ -116,8 +124,8 @@ and reported** (Task 7b), never asserted away.
   "coverage":{"n_intended","n_measured","genes_absent":[...],"in_effect_universe":[...]},
   "selection_rationale":{symbol:"why"}, "citations":["module-specific primary"],
   "marker_bins":{symbol:bin}, "controls_by_bin":{bin:[symbols]}, "candidate_counts":{bin:n},
-  "sampling":{"scheme":"keyed_sha256","namespace":"spotv3","master_seed":12345,
-              "key":"spotv3|{master_seed}|{program_id}|{bin}|{gene}","encoding":"utf-8",
+  "sampling":{"scheme":"keyed_sha256","master_seed":12345,
+              "key":"{master_seed}|{program_id}|{bin}|{gene}","encoding":"utf-8",
               "digest_tie":"digest_hex asc, then var_name index asc","rule":"50 lowest per occupied marker bin, no replacement"},
   "pool_sha256","bins_sha256","ctrl_size":50,"n_bins":25,
   "normalization":"median_total≈9819 + log1p (from .X; no raw layer)",
@@ -157,18 +165,22 @@ no nonselectable program. A literal example lives only in `stage01_selection_dem
 ## Task 2: Freeze the control algorithm (THE score-changing edit)
 **Executor:** CS. **Verifier:** lead. **Prerequisite:** the input h5ad raw + canonical matrix hash and
 `var_names` are already pinned (lock step 1 / Task 3 input manifest).
-- [ ] **Bins (frozen formula):** on **all finite genes in the pinned `.X` across all 396k cells, before
-  any marker pruning.** Per-gene statistic = **mean of `.X`**. `average_rank =
-  scipy.stats.rankdata(mean_vector, method="average")` (1-based); `bin = floor((average_rank − 1)/N ×
-  25)` clamped `[0,24]`, `N` = number of finite genes. Store `bins_sha256`.
-  *(tcefold audit with THIS formula: pruned pool 18,077; marker-occupied bins hold **715–725** eligible
-  candidates; the terminal bin holds **715** and is marker-occupied — ctrl_size=50 passes comfortably.)*
-- [ ] **Pool:** `all measured genes − ∪(every program marker) − activation-predictor markers`. Store
-  `pool_sha256` + per-bin `candidate_counts`.
-- [ ] **Draw (keyed SHA-256):** for each program × each occupied marker bin, `digest =
-  SHA-256(UTF-8("spotv3|" + "12345" + "|" + program_id + "|" + str(bin) + "|" + gene))` per eligible
-  candidate; sort by **(digest_hex asc, then var_name index asc)**; take the **50 lowest**, no
-  replacement. The **activation-predictor** draw uses the stable `program_id = "activation_predictor"`.
+- [ ] **Bins (FROZEN, ÷N form — no top clamp):** binning universe = **all 18,130 finite assay-present
+  genes** (in `var_names`) across all 396k cells, before pruning. Per-gene statistic = **mean of `.X`**.
+  `rank = scipy.stats.rankdata(mean_X, method="average")` (1-based);
+  **`bin = floor((rank − 1) * 25 / n_finite)`, `n_finite = 18,130`.** This maps ranks to bins 0–24 with
+  no special top-value clamp (the ÷(n−1) form reaches 25 and needs an exception — **rejected**). Store
+  `bins_sha256`. *(Audit: control-eligible bins hold ~716–725 candidates; no hard-fail.)*
+- [ ] **Pool (distinct terminology):** `assay_present` = genes in `var_names` (**18,130**);
+  `detected_in_396k` = nnz>0 (**17,956**); **`control_eligible_pool` = detected_in_396k − the 53
+  program/activation markers = 17,903**. Controls are drawn only from `control_eligible_pool`. The
+  **binning universe stays all 18,130 assay-present genes** (undetected genes occupy unused bin 0, so
+  this only changes `pool_sha256`, not the draws). Record any **present_but_undetected panel gene
+  separately** (e.g. HLA-DRA) — never silently scored. Store `pool_sha256` + per-bin `candidate_counts`.
+- [ ] **Draw (keyed SHA-256, frozen):** for each program × each occupied marker bin, `digest =
+  SHA-256(UTF-8("12345|" + program_id + "|" + str(bin) + "|" + gene))` per candidate in
+  `control_eligible_pool`; sort by **(digest_hex asc, then var_name index asc)**; take the **50 lowest**,
+  no replacement. The **activation-predictor** draw uses the stable `program_id = "activation_predictor"`.
 - [ ] **Hard-fail** (abort before scoring) if any occupied marker bin has `< 50` eligible candidates —
   never shrink/borrow/reseed.
 - [ ] Overlap across programs is allowed and **measured**. Store `marker_bins`, `controls_by_bin`,
@@ -180,9 +192,12 @@ no nonselectable program. A literal example lives only in `stage01_selection_dem
 
 ## Task 3: Input manifest (pinned first) + scoring formula + normalization
 **Executor:** CS. **Verifier:** lead.
-- [ ] **First (lock step 1):** emit `stage01_input_manifest.json` — `.X` is median-normalized (≈9,819)
-  + `log1p`, **no raw layer**; h5ad raw + canonical hashes; dimensions; exact CP10k reconstruction
-  recipe. Normalization string enters `method_version`. This is pinned **before** Task 2.
+- [ ] **First (lock step 1):** emit `stage01_input_manifest.json` — `.X` is median-normalized to a
+  **target total 9,819 with float roundoff** (observed reconstructed per-cell totals: min 9818.9985536,
+  max 9819.0017994, median 9819.0000498; **0/396,000 exactly float64 9819.0** — the **pinned matrix hash,
+  not exact equality, is the authoritative identity check**) + `log1p`, **no raw layer**; h5ad raw +
+  canonical + var-order + barcode-set hashes; dimensions; exact CP10k reconstruction recipe.
+  Normalization string enters `method_version`. Pinned **before** Task 2.
 - [ ] **Later (lock step 5):** `score(c,p) = mean(.X over measured panel) − mean(.X over matched
   controls)`; name it the "deterministic expression-bin-matched panel-minus-control score."
 - [ ] **Verify (lead):** recompute a random sample of `(cell, program)` scores from `.X` + stored
@@ -199,6 +214,10 @@ no nonselectable program. A literal example lives only in `stage01_selection_dem
 ## Task 5: The 396k scoring run (AFTER gates are committed)
 **Executor:** CS. **Verifier:** lead. **Prerequisite:** inputs pinned (step 1), controls verified (step 3),
 `stage01_gate_spec.json` committed (step 4).
+- [ ] **Compute (chunked on tcefold — never densify the full matrix):** build a frozen **gene×program
+  coefficient matrix** (measured panel = `+1/|panel|`, matched controls = `−1/|controls|`, per program);
+  stream **backed CSR row chunks of 10k–25k cells**, multiply each chunk by the coefficient matrix, and
+  write the score table deterministically. **Smoke-test one chunk and report peak RSS before the full run.**
 - [ ] The scoring run emits together: `stage01_scores_full.parquet` (396k; donor, condition, all primary
   scores, CTL sensitivity; no categorical fields); `stage01_umap_overlay.json` (40k = pinned coordinates
   + same scores); `stage01_program_registry.json` (v3); `stage01_summary.json` (396k medians + dispersion
@@ -305,13 +324,17 @@ and re-run direct projection + Perturb2State from scratch.
 
 ## Lock sequence (execution order — gates are pre-registered BEFORE scoring)
 1. **Pin the input manifest + coordinate input** (T3 input-manifest part + T6) — before any control work.
-2. **Freeze panels (T1) and controls (T2)** against the pinned input.
-3. **Independently verify the controls** (T11 applied to the control build) — before gates.
-4. **Author, review, commit `stage01_gate_spec.json`** with concrete thresholds (T7a) — before scores.
-5. **Only then run the 396k primary scores** + emit scores/registry/summary/overlay (T3 scoring + T5).
-6. **Run validation/sensitivity separately** against the pre-registered gates (T7b) → selectability (T8).
-7. **Assemble the atomic release bundle** + `stage01_release_manifest.json`; app plumbing (T9); verifier
-   + mutation tests + independent verification on a clean host (T10–T11); publish sanitized HF rev + tag
+2. **Freeze panels (T1) and controls (T2, ÷N + `control_eligible_pool`)** against the pinned input.
+3. **Regenerate the affected draws, then independently verify controls** (keyed reconstruction, leakage,
+   order-invariance; T11 on the control build) — before gates.
+4. **Commit exact input/method definitions + `stage01_gate_spec.json`** (concrete thresholds, T7a) —
+   before any score exists.
+5. **Configure + smoke-test chunked scoring on tcefold** (frozen coefficient matrix, backed CSR chunks
+   10k–25k cells; report peak RSS).
+6. **Only then authorize the full 396k scoring run** + emit scores/registry/summary/overlay (T3 + T5).
+7. **Run validation/sensitivity separately** against the pre-registered gates (T7b) → selectability (T8).
+8. **Assemble the release bundle** + `stage01_release_manifest.json`; app plumbing (T9); verifier +
+   mutation tests + independent verification on a clean host (T10–T11); publish sanitized HF rev + tag
    `stage1-continuous-v3` (T12).
 
 ## Self-review (Rev-3 coverage)
