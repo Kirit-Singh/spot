@@ -272,6 +272,14 @@
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
   .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
   .prevgrid .ndkey{grid-column:2/5;justify-self:end;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
+  /* how each program is defined: Masopust modular descriptor + our curated marker panel */
+  #progRef{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:left}
+  .prref{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:3px 8px;align-items:center;margin-top:2px}
+  .prref .prh{font-family:'Inter Tight';font-size:7px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:700;padding-bottom:2px}
+  .prref .prp{font-size:8px;color:var(--ink);font-weight:600;white-space:nowrap;cursor:pointer}
+  .prref .prp:hover{color:var(--accent)}
+  .prref .prm{font-size:7.5px;color:var(--ink2);white-space:nowrap}
+  .prref .prg{font-family:var(--mono);font-size:7px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   /* too-sparse (Th9): hide the gradient/ticks, show a centred 'Too sparse to shade' at the same height */
   .cbar.degen{display:flex;align-items:center;justify-content:center}
@@ -348,6 +356,7 @@
       <div class="prevbody">
         <div class="prevgrid" id="prevGrid"></div>
       </div>
+      <div id="progRef"></div>
     </div>
   </div>
 </div>
@@ -509,7 +518,7 @@ Promise.all([
   // single-program gradient (default color-by = Naïve-like). Contrast + belt activate only once BOTH
   // programs are chosen. The acceptance anchor (treg_like→th1_like@Stim48hr, balanced_a_to_b →
   // 26b866f2ad813d71) is reproducible through the UI selections / __t.setContrast.
-  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildPrevalence();
+  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildPrevalence();buildProgRef();
   applyProgram();
   resize();
 }).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
@@ -566,6 +575,19 @@ function buildPrevalence(){
   if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
   grid.innerHTML=html;
   grid.querySelectorAll('.plbl').forEach(el=>el.onclick=()=>{field=el.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
+}
+// per-program definitions: Masopust modular descriptor (naming) + our curated marker panel
+function buildProgRef(){
+  const el=document.getElementById('progRef'); if(!el||!programs.length)return;
+  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint+',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
+  const MOD={diff_naive_score:'diff · naïve',diff_activated_score:'diff · activated',diff_memory_score:'diff · memory',diff_checkpoint_score:'function · exhausted',treg_like_score:'function · regulatory',cd4_ctl_like_score:'function · cytotoxic',th1_like_score:'function · type-1 helper',th2_like_score:'function · type-2 helper',th17_like_score:'function · type-17 helper',tfh_like_score:'function · follicular helper',th9_like_score:'function · type-9 helper'};
+  const progs=programs.filter(p=>p.role!=='sensitivity');
+  let html='<div class="prref"><div class="prh"></div><div class="prh">Modular definition</div><div class="prh">Marker definition</div>';
+  progs.forEach(p=>{
+    html+=`<div class="prp" data-f="${p.score_field}" title="${p.display_label}">${SHORT[p.score_field]||p.display_label}</div><div class="prm">${MOD[p.score_field]||'—'}</div><div class="prg" title="${p.panel_genes.join(' · ')}">${p.panel_genes.join('·')}</div>`;
+  });
+  el.innerHTML=html+'</div>';
+  el.querySelectorAll('.prp').forEach(x=>x.onclick=()=>{field=x.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
 }
 function buildAxis(){
   // Analysis donor scope is fixed to all four donors (donor_scope="all"); each axis carries its own condition.
@@ -766,9 +788,8 @@ function applyProgram(){
   cbNote.textContent=degen?'Too sparse to shade':'';
   cbNote.style.display=degen?'':'none';
   const src=document.getElementById('pcSrc');
-  const n=p.family==='differentiation'?1:3;
-  src.href=PAPERS.masopust.url+'/tables/'+n;
-  src.innerHTML='Panel source · Masopust Table '+n+' ↗';
+  src.href=PAPERS.masopust.url;
+  src.innerHTML='Naming: Masopust ↗ · marker panel curated';
   const pg=document.getElementById('pcGenes');pg.textContent=p.panel_genes.join('  ·  ');requestAnimationFrame(fitMarkers);
   draw();
 }

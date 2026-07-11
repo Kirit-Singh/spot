@@ -77,7 +77,7 @@ barcodes = obs["barcode"].values
 print("Leiden clusters:", sorted(np.unique(cluster)))
 
 # %% [markdown]
-# ## 3. Transcriptional-program panels (Masopust et al. panels, descriptive)
+# ## 3. Transcriptional-program panels (curated canonical markers; names per Masopust nomenclature)
 #
 # Human marker panels restricted to genes measurable in this probe-based (10x Flex)
 # dataset. These score descriptive transcriptional programs; they are NOT functional
