@@ -71,9 +71,12 @@
   .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
   .seg button:first-child{border-left:0}
   .seg button.on{background:var(--accent);color:#fff}
+  /* transparent stacked title, top-left of the plot */
+  .plotlabel{position:absolute;top:13px;left:18px;z-index:6;display:flex;flex-direction:column;gap:1px;pointer-events:none;background:transparent}
+  .plotlabel .pe{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .plotlabel .pt{font-family:var(--serif);font-size:18px;font-weight:500;color:var(--ink);line-height:1.05}
   /* top-of-plot program-axis contrast toolbar (a skew-bar; sits ready, active on contrast) */
-  .ctbar{position:absolute;top:12px;left:14px;right:14px;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;padding:8px 11px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(4px);box-shadow:0 2px 10px rgba(30,27,22,.05)}
-  .ctbar .cttitle{font-family:var(--serif);font-size:15px;font-weight:500;color:var(--ink);white-space:nowrap;line-height:1}
+  .ctbar{position:absolute;top:58px;left:14px;right:14px;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;padding:8px 11px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(4px);box-shadow:0 2px 10px rgba(30,27,22,.05)}
   .ctbar .ctsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
   .ctgrp{display:flex;align-items:center;gap:6px;min-width:0}
   .ctchip{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 20px}
@@ -97,7 +100,7 @@
   #ablegend{position:absolute;left:20px;bottom:16px;z-index:6;display:none;flex-direction:column;gap:6px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:9px 12px;backdrop-filter:blur(3px);font-size:12px}
   #ablegend .abr{display:flex;align-items:center;gap:7px;color:var(--ink2);font-weight:600}
   #ablegend .abr i{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
-  @media(prefers-color-scheme:dark){#skewline .skl{stroke:rgba(230,225,215,.22)}#skewline .belt polyline{stroke:#EDE7DD}}
+  /* belt stays ink-black (the app body has no dark theme, so no dark override) */
   /* methods & scope */
   .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
   #lastrun{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:9px}
@@ -189,9 +192,8 @@
 
 <div class="body">
   <div class="plot">
+    <div class="plotlabel"><span class="pe">Stage 01 · CD4</span><span class="pt">CD4 transcriptional programs</span></div>
     <div class="ctbar">
-      <div class="cttitle">CD4 transcriptional programs</div>
-      <div class="ctsep"></div>
       <div class="ctgrp"><span class="ctchip a">A</span><select class="axsel prog" data-ax="A" data-k="field"></select><button class="axdir" data-ax="A">high</button><select class="axsel cond" data-ax="A" data-k="condition"></select></div>
       <span class="ctvs">vs</span>
       <div class="ctgrp"><span class="ctchip b">B</span><select class="axsel prog" data-ax="B" data-k="field"></select><button class="axdir" data-ax="B">high</button><select class="axsel cond" data-ax="B" data-k="condition"></select></div>
