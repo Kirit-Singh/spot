@@ -84,6 +84,17 @@
   .axsel.prog{flex:2 1 0}
   .axdir{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
   .axdir:hover{border-color:var(--accent)}
+  /* A→B conveyor belt on the plot (display-only; anchors are score-weighted centroids, no membership) */
+  #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
+  #skewline .skl{fill:none;stroke:rgba(50,44,36,.16);stroke-width:6;stroke-linecap:round}
+  #skewline .belt{animation:beltflow .9s linear infinite}
+  #skewline .belt polyline{fill:none;stroke:rgba(50,44,36,.72);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  @keyframes beltflow{from{transform:translate(0,0)}to{transform:translate(var(--mx,0),var(--my,0))}}
+  #ablegend{position:absolute;top:52px;left:30px;z-index:6;display:none;flex-direction:column;gap:5px;font-size:12px}
+  #ablegend .abr{display:flex;align-items:center;gap:7px;color:var(--ink2);font-weight:600}
+  #ablegend .abr i{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  #ablegend .abn{font-size:10.5px;color:var(--muted);font-weight:400}
+  @media(prefers-color-scheme:dark){#skewline .skl{stroke:rgba(230,225,215,.16)}#skewline .belt polyline{stroke:rgba(230,225,215,.7)}}
   .axmeta{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:9px;line-height:1.4}
   .idbtn{width:100%;margin-top:9px;border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:600;background:var(--line);color:var(--muted);cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:9px}
   .idbtn .pend{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 8px}
@@ -182,6 +193,8 @@
       <div class="cbtk"><span id="cbLo">—</span><span id="cbMid">—</span><span id="cbHi">—</span></div>
       <div class="cbn">low → high · frozen display domain · grey = no data</div>
     </div>
+    <svg id="skewline"><line class="skl"/><g class="belt"></g></svg>
+    <div id="ablegend"></div>
     <div id="pop"></div>
     <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
   </div>
@@ -356,6 +369,7 @@ function updateAxisMeta(){
   const lab=ax=>`${progByField[ax.field].display_label} ${ax.direction}`;
   document.getElementById('axMeta').textContent=`Contrast A (${lab(axisA)}) vs B (${lab(axisB)}) — a provisional selection for stage 2.`;
   window.__stage01Selection=selectionObj();
+  draw();
 }
 function buildMethods(){
   document.getElementById('scope').textContent=meta.methods_and_scope;
@@ -397,7 +411,25 @@ window.addEventListener('resize',resize);
 function px(c){return[c.x*sx+ox,c.y*sy+oy];}
 function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
 
-function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const d=domainFor(field);
+// A/B contrast: active once the two axes name DIFFERENT programs ("select one, then the other").
+const ABHUE_A=[38,150,190], ABHUE_B=[201,74,120];   // A pole (teal-blue), B pole (rose)
+function contrastActive(){return !!(axisA.field&&axisB.field&&axisA.field!==axisB.field);}
+// a cell's continuous strength on an axis pole (0..1): its frozen-domain score, flipped for
+// 'low', zeroed if it falls outside the axis's own condition/donor scope. No threshold, no argmax.
+function pole(c0,ax){
+  if(ax.condition!=='All'&&c0.condition!==ax.condition)return 0;
+  if(ax.donor!=='All'&&c0.donor!==ax.donor)return 0;
+  const t=normScore(c0[ax.field],domainFor(ax.field));
+  if(t==null)return 0;
+  return ax.direction==='low'?1-t:t;
+}
+function draw(){if(sx==null)return;const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);
+  const contrast=contrastActive();
+  document.querySelector('.cbar').style.display=contrast?'none':'block';
+  document.getElementById('ablegend').style.display=contrast?'flex':'none';
+  if(contrast){drawContrast();return;}
+  hideSkewLine();
+  const d=domainFor(field);
   for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);
     const t=normScore(c0[field],d);
     if(t==null){x.fillStyle='rgb(200,197,190)';x.globalAlpha=.35;}
@@ -408,6 +440,48 @@ function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const d=doma
   }
   x.globalAlpha=1;
 }
+// contrast render: high-A cells in A-hue, high-B in B-hue, low-on-both faded; opacity ∝ score.
+function drawContrast(){
+  let axmx=0,axmy=0,awa=0,bxmx=0,bxmy=0,bwa=0;
+  for(let pass=0;pass<2;pass++){                              // faded first, prominent on top
+    for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;
+      const pa=pole(c0,axisA),pb=pole(c0,axisB),pm=Math.max(pa,pb),prominent=pm>=0.5;
+      if((pass===0)===prominent)continue;
+      const[X,Y]=px(c0);let hue,al;
+      if(pm<0.15){hue=[196,192,184];al=.06;}                  // low on both → fade out
+      else{hue=pa>=pb?ABHUE_A:ABHUE_B;al=.14+.72*pm;}
+      x.fillStyle=`rgb(${hue[0]},${hue[1]},${hue[2]})`;x.globalAlpha=al;
+      const rad=i===hover?4.6:(prominent?2.9:2.3);
+      x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
+      if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
+      // anchor weight = pole^3 so each end pulls toward its program's PEAK (co-located
+      // programs still separate enough to show a belt); opacity above stays linear in score.
+      if(pa>0){const w=pa*pa*pa;axmx+=X*w;axmy+=Y*w;awa+=w;}
+      if(pb>0){const w=pb*pb*pb;bxmx+=X*w;bxmy+=Y*w;bwa+=w;}
+    }
+  }
+  x.globalAlpha=1;
+  if(awa>0&&bwa>0){const A={X:axmx/awa,Y:axmy/awa},B={X:bxmx/bwa,Y:bxmy/bwa};
+    if(Math.hypot(B.X-A.X,B.Y-A.Y)>22)updateSkewLine(A,B);else hideSkewLine();}
+  else hideSkewLine();
+  document.getElementById('ablegend').innerHTML=
+    `<div class="abr"><i style="background:rgb(${ABHUE_A})"></i>A · ${progByField[axisA.field].display_label} ${axisA.direction}</div>`+
+    `<div class="abr"><i style="background:rgb(${ABHUE_B})"></i>B · ${progByField[axisB.field].display_label} ${axisB.direction}</div>`+
+    `<div class="abn">opacity ∝ score · low on both fades · conveyor flows A → B</div>`;
+}
+// animated conveyor belt of chevrons from anchor a to anchor b (screen px), flowing a→b
+function updateSkewLine(a,b){const svg=document.getElementById('skewline');
+  const ang=Math.atan2(b.Y-a.Y,b.X-a.X),ux=Math.cos(ang),uy=Math.sin(ang);
+  const ax=a.X+ux*20,ay=a.Y+uy*20,bx=b.X-ux*20,by=b.Y-uy*20,L=Math.hypot(bx-ax,by-ay);
+  const ln=svg.querySelector('.skl');ln.setAttribute('x1',ax);ln.setAttribute('y1',ay);ln.setAttribute('x2',bx);ln.setAttribute('y2',by);
+  const s=6,gap=18,cx=Math.cos(ang),cy=Math.sin(ang);let chev='';
+  for(let dd=0;dd<=L+gap;dd+=gap){const p0x=ax+ux*dd,p0y=ay+uy*dd;
+    const tx=p0x+cx*s,ty=p0y+cy*s,w1x=p0x+Math.cos(ang+2.4)*s,w1y=p0y+Math.sin(ang+2.4)*s,w2x=p0x+Math.cos(ang-2.4)*s,w2y=p0y+Math.sin(ang-2.4)*s;
+    chev+=`<polyline points="${w1x.toFixed(1)},${w1y.toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)} ${w2x.toFixed(1)},${w2y.toFixed(1)}"/>`;}
+  const belt=svg.querySelector('.belt');belt.innerHTML=chev;
+  belt.style.setProperty('--mx',(ux*gap).toFixed(2)+'px');belt.style.setProperty('--my',(uy*gap).toFixed(2)+'px');
+  svg.style.display='block';}
+function hideSkewLine(){document.getElementById('skewline').style.display='none';}
 
 // grouped score rows (hover popover)
 function scoreGroupsHTML(c0){
