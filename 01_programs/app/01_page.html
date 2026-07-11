@@ -42,7 +42,7 @@
   canvas.grabbing{cursor:grabbing}
   /* plot title now lives inline in the top-of-plot contrast toolbar (.ctbar) */
   /* on-plot continuous colour key */
-  .cbar{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px 8px}
+  .cbar{margin-top:9px}
   .cbar .cbt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
   .cbar .cbg{position:relative;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.08)}
   .cbar .clip{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted);line-height:1}
@@ -66,11 +66,14 @@
   /* rail */
   .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
   .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
-  .lab.mt{margin-top:14px}
+  /* section labels (Donor, Color-by) sit under a single hairline that separates rail sections — no boxes */
+  .lab.mt{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  #donorSel{margin-bottom:5px}
+  #contrastPanel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   .colorsel{width:100%;font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:9px 30px 9px 11px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 5.5L9 0z' fill='%233E7D8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
   .colorsel:hover{border-color:var(--accent)}
   /* selected-program metadata card */
-  .pcard{margin-top:11px;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--surface)}
+  .pcard{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
   .pcard .pn{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--ink2);line-height:1.2}
   .pcard .pf{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:3px}
   .pcard .psrc{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--accent);text-decoration:none;margin-top:9px}
@@ -215,7 +218,7 @@
   .crmeta{min-width:0}
   .crlab{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
   .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.02em}
-  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:11px;background:var(--sunken);border-radius:9px;padding:9px 11px}
+  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
   .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
@@ -655,9 +658,11 @@ function applyProgram(){
   const cbar=document.querySelector('.cbar'),grad=document.getElementById('cbGrad');
   cbar.classList.toggle('degen',degen);
   grad.style.background=degen?DEGEN_CSS:VIR_CSS;
-  document.getElementById('cbNote').textContent=degen
-    ?'Too sparse to shade — present cells shown flat. grey = no data'
-    :'grey = no data';
+  // "grey = no data" only when the field actually has no shadeable data (degenerate, e.g. Th9);
+  // for normal fully-scored programs there is no grey, so the note is hidden.
+  const cbNote=document.getElementById('cbNote');
+  cbNote.textContent=degen?'Too sparse to shade — present cells shown flat. grey = no data':'';
+  cbNote.style.display=degen?'':'none';
   const src=document.getElementById('pcSrc');
   const n=p.family==='differentiation'?1:3;
   src.href=PAPERS.masopust.url+'/tables/'+n;
