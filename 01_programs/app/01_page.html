@@ -3,264 +3,217 @@
 <title>spot · stage 01 — CD4 transcriptional programs</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#FAF9F7;--surface:#FFFFFF;--sunken:#F4F2EE;--line:#E7E3DC;--ink:#1E1B16;--ink2:#5C564C;--muted:#8A8172;--treg:#9A3E9C;--gold:#B98900;--serif:'Newsreader',serif;--mono:'IBM Plex Mono',monospace}
+  :root{--bg:#FAF9F7;--surface:#FFFFFF;--sunken:#F4F2EE;--line:#E7E3DC;--ink:#1E1B16;--ink2:#5C564C;--muted:#8A8172;--accent:#3E7D8C;--treg:#9A3E9C;--serif:'Newsreader',serif;--mono:'IBM Plex Mono',monospace}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;height:760px;display:flex;flex-direction:column;overflow:hidden}
-  /* top brand + progressive lock */
-  .top{height:50px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface)}
-  .brand{font-family:var(--serif);font-size:20px;font-weight:500}.brand b{color:var(--treg)}
-  .disclaimer{flex:0 0 auto;background:#FBEFE0;border-bottom:1px solid #E7D3B0;color:#8A5A00;font-size:11px;line-height:1.4;padding:7px 20px;font-weight:500;letter-spacing:.005em}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  /* top brand + source links */
+  .top{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+  .brand{font-family:var(--serif);font-size:20px;font-weight:500}.brand b{color:var(--accent)}
   .subhead{display:flex;align-items:baseline;gap:8px;padding-left:12px;margin-left:2px;border-left:1px solid var(--line)}
   .subhead .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink)}
-  .subhead a{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none}
-  .subhead a:hover{text-decoration:underline}
-  /* dataset switcher + Hugging Face source link (right side of the top bar) */
   .dstools{margin-left:auto;display:flex;align-items:center;gap:11px}
-  .dstools .dslab{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-  .dssel{font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:7px;padding:4px 23px 4px 9px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
-  .dssel:hover{border-color:var(--treg)}
-  .srclink{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none;white-space:nowrap}
+  .srclink{font-family:var(--mono);font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap}
   .srclink:hover{text-decoration:underline}
   .dstools .dssep{color:#D9D3C8;font-size:11px}
-  .hflink{font-family:var(--mono);font-size:11px;color:var(--treg);text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .hflink{font-family:var(--mono);font-size:11px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
   .hflink:hover{text-decoration:underline}
-  /* unified pipeline nav (merges the old breadcrumb + tab bars into one) */
-  .nav{display:flex;align-items:center;gap:3px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px}
-  .nav .nstep{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:9px;color:var(--muted);font-weight:500;white-space:nowrap;cursor:pointer}
-  .nav .nstep:hover:not(.on){color:var(--ink2);background:var(--sunken)}
+  /* pipeline nav — stage 01 active; later stages are not yet built (visibly disabled) */
+  .nav{flex:0 0 auto;display:flex;align-items:center;gap:3px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px}
+  .nav .nstep{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:9px;color:var(--muted);font-weight:500;white-space:nowrap}
   .nav .nstep .n{font-family:var(--mono);font-size:10.5px;opacity:.55}
-  .nav .nstep.on{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--treg)}
-  .nav .nstep.on .n{opacity:1;color:var(--treg)}
+  .nav .nstep.on{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .nav .nstep.on .n{opacity:1;color:var(--accent)}
+  .nav .nstep.off{opacity:.5;cursor:not-allowed}
   .nav .nsep{color:#D9D3C8;padding:0 1px}
   /* body */
-  .body{flex:1;display:grid;grid-template-columns:1fr 320px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
+  .body{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
   .plot{position:relative;border-right:1px solid var(--line);min-height:0;overflow:hidden}
   canvas{width:100%;height:100%;display:block}
   .ttl{position:absolute;top:14px;left:20px;pointer-events:none}
   .ttl b{font-family:var(--serif);font-size:19px;font-weight:500}
   .ttl .s{font-size:11.5px;color:var(--muted);font-family:var(--mono);margin-top:2px}
-  .real{display:inline-block;font-family:'Inter Tight';font-size:9px;font-weight:700;letter-spacing:.04em;color:#15803D;background:#E4F0E6;border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:2px}
-  /* condition scrubber */
-  .cond{position:absolute;top:14px;right:16px;display:flex;gap:3px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px}
-  .cond button{font:inherit;font-size:11px;border:0;background:transparent;color:var(--ink2);padding:5px 10px;border-radius:6px;cursor:pointer}
-  .cond button.on{background:var(--ink);color:#fff}
-  /* skewing-hypothesis builder (rail) — "Show me [A] skews to/away [B]" */
-  .skq{background:var(--sunken);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:flex;align-items:center;flex-wrap:wrap;gap:8px 6px}
-  .skq .pk{flex:1 1 76px;min-width:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);background:transparent;border:0;border-bottom:1.5px solid var(--line);border-radius:0;padding:3px 15px 3px 1px;cursor:pointer;appearance:none;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;transition:border-color .12s;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3l3 3 3-3' stroke='%239A3E9C' fill='none' stroke-width='1.5'/></svg>");background-repeat:no-repeat;background-position:right 1px center}
-  .skq .pk:hover,.skq .pk:focus{border-bottom-color:var(--treg);outline:0}
-  .skq .conn{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--treg);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap;transition:border-color .12s}
-  .skq .conn:hover{border-color:var(--treg)}
-  .skq .conn .arw{font-size:13px;line-height:1;font-weight:400}
-  .skq .skqx{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 1px;opacity:0;pointer-events:none;transition:opacity .12s}
-  .skq.active .skqx{opacity:1;pointer-events:auto}
-  #skewcap{position:absolute;top:54px;left:50%;transform:translateX(-50%);display:none;background:var(--treg);color:#fff;font-family:'Inter Tight';font-size:12.5px;font-weight:600;padding:6px 15px;border-radius:20px;box-shadow:0 4px 16px rgba(154,62,156,.3);white-space:nowrap;z-index:6}
-  #lastrun{flex:0 0 auto;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.4;margin:9px 0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ttl .s b{font-family:'Inter Tight';font-weight:600;color:var(--ink2);font-size:11.5px}
+  /* on-plot continuous colour key */
+  .cbar{position:absolute;left:20px;bottom:16px;width:236px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:9px 11px 8px;backdrop-filter:blur(3px)}
+  .cbar .cbt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
+  .cbar .cbg{position:relative;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.08)}
+  .cbar .clip{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted);line-height:1}
+  .cbar .clip.lo{left:-9px}.cbar .clip.hi{right:-9px}
+  .cbar .cbtk{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2);margin-top:4px}
+  .cbar .cbn{font-size:9.5px;color:var(--muted);margin-top:5px;line-height:1.4}
+  /* popover */
+  #pop{position:absolute;display:none;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:0 8px 28px rgba(30,27,22,.16);padding:12px 14px;width:246px;font-size:12px;z-index:9}
+  #pop .bc{font-family:var(--mono);font-size:10.5px;color:var(--accent);word-break:break-all;margin-bottom:4px}
+  #pop .pmeta{font-size:11.5px;color:var(--ink2);margin-bottom:8px}
+  #pop .psel{display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--sunken);border-radius:8px;margin-bottom:9px}
+  #pop .psel .dot{width:11px;height:11px;border-radius:50%;flex:0 0 11px;border:1px solid rgba(0,0,0,.12)}
+  #pop .psel .pl{font-weight:600;font-size:12.5px}
+  #pop .psel .pv{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  #pop .grp{margin-top:7px}
+  #pop .grph{font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;border-top:1px solid var(--sunken);padding-top:6px;margin-bottom:2px}
+  #pop .srow{display:flex;justify-content:space-between;padding:2px 0;color:var(--ink2)}
+  #pop .srow.em{color:var(--ink);font-weight:600}
+  #pop .srow .sv{font-family:var(--mono)}
+  /* rail */
+  .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+  .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
+  .lab.mt{margin-top:14px}
+  .colorsel{width:100%;font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:9px 30px 9px 11px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 5.5L9 0z' fill='%233E7D8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+  .colorsel:hover{border-color:var(--accent)}
+  /* selected-program metadata card */
+  .pcard{margin-top:11px;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--surface)}
+  .pcard .pn{font-family:var(--serif);font-size:16px;font-weight:500;line-height:1.2}
+  .pcard .pf{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+  .pcard .pg{font-family:var(--mono);font-size:11px;color:var(--ink2);line-height:1.5;margin-top:8px;overflow-wrap:anywhere}
+  .pcard .pg b{color:var(--muted);font-weight:500}
+  .pcard .pm{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:7px}
+  .pcard .ps{font-size:10px;color:var(--muted);line-height:1.45;margin-top:7px;border-top:1px solid var(--sunken);padding-top:6px}
+  /* segmented filters */
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
+  .seg button:first-child{border-left:0}
+  .seg button.on{background:var(--accent);color:#fff}
+  /* A/B program-axis contrast builder */
+  .axbox{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--sunken)}
+  .axrow{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .axrow:last-of-type{margin-bottom:0}
+  .axtag{font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 20px}
+  .axtag.a{background:var(--accent)}.axtag.b{background:var(--treg)}
+  .axsel{flex:1 1 auto;min-width:0;font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 18px 4px 7px;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
+  .axsel.prog{flex:2 1 0}
+  .axdir{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+  .axdir:hover{border-color:var(--accent)}
+  .axmeta{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:9px;line-height:1.4}
+  .idbtn{width:100%;margin-top:9px;border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:600;background:var(--line);color:var(--muted);cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:9px}
+  .idbtn .pend{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 8px}
+  /* methods & scope */
+  .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
+  #lastrun{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:9px}
   #lastrun b{color:var(--ink2);font-weight:500}
-  /* skewing hypothesis as a toolbar across the top of the plot (full width, no truncation) */
-  #skewbar{position:absolute;top:0;left:0;right:0;z-index:6;display:flex;align-items:center;flex-wrap:nowrap;gap:13px;padding:14px 20px 14px 32px;background:transparent}
-  #skewbar .sbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;flex:0 0 auto}
-  #skewbar .skq{background:transparent;padding:0;margin:0;border-radius:0;flex:0 0 auto;flex-wrap:nowrap;gap:9px}
-  #skewbar .skq .pk{flex:0 0 auto;width:auto;min-width:56px;max-width:120px;font-size:14px;padding:4px 17px 4px 2px}
-  #skewbar .conn{font-size:12px;padding:4px 12px;min-width:106px;justify-content:center}
-  #skewbar .conn .arw{font-size:14px}
-  #skewbar .skq .skqx{font-size:15px}
-  #skewbar .lock{width:auto;flex:0 0 auto;margin:0;padding:7px 13px;font-size:12px;border-radius:9px}
-  #lastrun b{color:var(--ink2);font-weight:600}
+  .provbtn{width:100%;margin-top:11px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;text-align:left;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .provbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .provbtn .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
+  /* re-run log overlay (revealed only when the host exposes /rerun) */
   #rerunlog{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:12}
   #rerunlog .rlh{display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);flex:0 0 auto}
-  #rerunlog .rlspin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--treg);border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto}
+  #rerunlog .rlspin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto}
   @keyframes spin{to{transform:rotate(360deg)}}
   #rerunlog .rltw{display:flex;flex-direction:column;line-height:1.2;flex:1 1 auto;min-width:0}
   #rerunlog .rlt{font-family:'Inter Tight';font-size:14px;font-weight:600}
   #rerunlog .rlsub{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.02em}
   #rerunlog #rlmeta{font-family:var(--mono);font-size:11px;white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:4px}
-  #rerunlog #rlphase{color:var(--treg);font-weight:600}
-  #rerunlog .rlpulse{color:var(--treg);font-size:8px;animation:pulse 1s ease-in-out infinite}
+  #rerunlog #rlphase{color:var(--accent);font-weight:600}
+  #rerunlog .rlpulse{color:var(--accent);font-size:8px;animation:pulse 1s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.15}}
   #rerunlog #rleta{color:var(--muted);margin-left:4px}
-  #rerunlog .rlx{font-size:11.5px;color:var(--treg);cursor:pointer;flex:0 0 auto}
+  #rerunlog .rlx{font-size:11.5px;color:var(--accent);cursor:pointer;flex:0 0 auto}
   #rerunlog pre{flex:1;min-height:0;overflow:auto;margin:0;padding:14px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.55;color:var(--ink2);white-space:pre-wrap;word-break:break-word}
-  .pkinfo{display:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:10.5px;color:var(--ink2);font-family:var(--mono);line-height:1.5;margin-bottom:8px}
-  .pkinfo b{color:var(--ink);font-weight:600}
-  .pkinfo .warn{color:#B45309;font-weight:600}
-  /* legend */
-  /* plot colour key — transparent row across the top of the UMAP, under the skewing row */
-  .lgstate{position:absolute;top:56px;left:32px;right:20px;display:none;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13px;z-index:6}
-  .lgstate span{display:flex;align-items:center;gap:7px;color:var(--ink2)}
-  .lgstate i{width:11px;height:11px;border-radius:50%}
-  .lgstate .tpdot{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-family:var(--mono);font-size:8.5px;font-weight:600;line-height:1}
-  /* on-plot centroid labels for the picked groups — HTML overlay so they sit ABOVE the connector */
-  #pklabels{position:absolute;inset:0;z-index:5;pointer-events:none}
-  #pklabels .pklab{position:absolute;transform:translate(-50%,-50%);text-align:center;background:rgba(250,249,247,.9);border-radius:5px;padding:2px 7px;white-space:nowrap}
-  #pklabels .pkl-t{font:600 13px 'Inter Tight',sans-serif;line-height:1.2}
-  #pklabels .pkl-s{font:500 10px 'Inter Tight',sans-serif;color:#8A8172;line-height:1.2}
-  /* skew connector — a thick "belt" band with chevrons that flow along it in the travel direction */
-  #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
-  #skewline .skl{fill:none;stroke:rgba(50,44,36,.2);stroke-width:6;stroke-linecap:round}
-  #skewline .belt{animation:beltflow .9s linear infinite}
-  #skewline .belt polyline{fill:none;stroke:rgba(50,44,36,.72);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-  @keyframes beltflow{from{transform:translate(0,0)}to{transform:translate(var(--mx,0),var(--my,0))}}
-  /* rail */
-  .rail{background:var(--surface);padding:14px 18px 12px;display:flex;flex-direction:column;overflow:hidden}
-  .keywrap{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;margin-top:6px;display:flex;flex-direction:column}
-  .lab{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 5px}
-  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:9px}
-  .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
-  .seg button:first-child{border-left:0}
-  .seg button.on{background:var(--treg);color:#fff}
-  .lock{width:100%;background:var(--treg);color:#fff;border:0;border-radius:10px;padding:11px;font-size:13.5px;font-weight:600;cursor:pointer;margin:2px 0 4px}
-  .lock:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
-  .cnt{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px}
-  .cnt b{color:var(--treg)}
-  .chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2);margin:8px 0 4px;cursor:pointer}
-  .prov{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
-  .prov .src{font-size:12px;color:var(--ink2);line-height:1.5}.prov .src b{color:var(--ink)}
-  .kv{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.7;overflow-wrap:anywhere;word-break:break-word}
-  .kv b{color:var(--ink2);font-weight:500}
-  .kv a,.prov a{color:var(--treg);overflow-wrap:anywhere;word-break:break-word}
-  .mk{display:flex;align-items:baseline;gap:8px;font-size:13px;padding:4.5px 0;border-top:1px solid var(--sunken)}
-  .mk .d{width:9px;height:9px;border-radius:50%;flex:0 0 9px;position:relative;top:1px}
-  .mk .nm{font-weight:600;width:78px;flex:0 0 78px}
-  .mk .gs{font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .klab{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:7px 0 5px}
-  .chips{display:flex;flex-direction:column;align-items:stretch;gap:5px;margin-bottom:1px}
-  .chip{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;line-height:1.4;padding:1px 0}
-  .chip i{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
-  .chip u{font-family:var(--mono);font-size:11.5px;font-weight:400;color:var(--muted);text-decoration:none;margin-left:auto}
-  /* per-state Masopust-function composition bar */
-  .compbar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:1px 0 3px;background:#EEEAE3}
-  .compbar i{display:block;height:100%}
-  .compsum{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin:0 0 9px;line-height:1.4}
-  /* on-map composition tooltip (hover a Marson state) */
-  #comppop{position:absolute;display:none;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 20px rgba(30,27,22,.16);padding:8px 11px;width:182px;z-index:8;pointer-events:none}
-  #comppop .cph{font-size:12px;font-weight:600;margin-bottom:5px}
-  #comppop .compbar{margin:0 0 4px}#comppop .compsum{margin:0;line-height:1.35}
-  /* popover */
-  #pop{position:absolute;display:none;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:0 8px 28px rgba(30,27,22,.16);padding:12px 14px;width:258px;font-size:12px;z-index:9}
-  #pop .pph{font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:9px 0 3px;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--sunken);padding-top:7px}
-  #pop .pph span{font-weight:500;text-transform:none;letter-spacing:0;font-size:9.5px}
-  #pop .row i{font-style:normal;color:var(--muted);font-size:10px}
-  #pop a{color:var(--treg);text-decoration:none}#pop a:hover{text-decoration:underline}
-  #pop .bc{font-family:var(--mono);font-size:10.5px;color:var(--treg);word-break:break-all;margin-bottom:8px}
-  #pop .row{display:flex;justify-content:space-between;padding:3px 0;color:var(--ink2)}
-  #pop .row b{color:var(--ink);font-weight:600}
-  #pop .bar{height:6px;background:var(--sunken);border-radius:3px;overflow:hidden;margin:3px 0 8px}
-  #pop .bar i{display:block;height:100%;background:var(--treg)}
-  #pop .ref{font-size:10px;color:var(--muted);border-top:1px solid var(--sunken);padding-top:7px;margin-top:4px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word}
-  #pop .ref code{font-family:var(--mono);font-size:9.5px;color:var(--ink2);overflow-wrap:anywhere;word-break:break-all}
-  #pop a,#modal a{color:var(--treg);overflow-wrap:anywhere;word-break:break-all}
   /* ── cell-detail modal card ── */
   #scrim{position:fixed;inset:0;background:rgba(30,27,22,.34);display:none;z-index:40}
-  #modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:648px;max-width:94vw;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:41;overflow:hidden}
-  #modal .hd{padding:16px 18px 14px;border-bottom:1px solid var(--line)}
+  #modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;max-height:88vh;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:41;overflow:hidden;flex-direction:column}
+  #modal .hd{padding:16px 18px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
   #modal .hdtop{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  #modal .chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600}
-  #modal .chip i{width:10px;height:10px;border-radius:50%}
+  #modal .chip{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600}
+  #modal .chip i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
   #modal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
-  #modal .bc{font-family:var(--mono);font-size:12px;color:var(--treg);margin:9px 0 3px;word-break:break-all}
+  #modal .bc{font-family:var(--mono);font-size:12px;color:var(--accent);margin:10px 0 3px;word-break:break-all}
   #modal .mmeta{font-family:var(--mono);font-size:11px;color:var(--muted)}
-  #modal .score{margin-top:11px;display:flex;align-items:center;gap:10px}
-  #modal .score .lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
-  #modal .score .v{font-family:var(--mono);font-size:13px;color:var(--ink)}
-  #modal .score .bar{flex:1;height:7px;background:var(--sunken);border-radius:4px;overflow:hidden}
-  #modal .score .bar i{display:block;height:100%;background:linear-gradient(90deg,#C79BC8,var(--treg))}
-  #modal .maps{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
-  #modal .pane{background:var(--surface);padding:12px 14px}
-  #modal .pane .h{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
-  #modal .pane .h span{color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:10px}
-  #modal canvas{width:100%;height:148px;display:block;margin-top:8px;border-radius:8px;background:var(--bg)}
-  #modal .rec{padding:13px 18px 16px;border-top:1px solid var(--line)}
-  #modal .rec .h{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
-  #modal .rec .h b{color:var(--ink2);font-family:var(--mono);font-weight:500;text-transform:none;letter-spacing:0}
-  #modal #mhp{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-bottom:12px}
-  #modal .rec .t{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px}
-  #modal .mrow{display:grid;grid-template-columns:74px 1fr 74px 62px;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;margin:5px 0}
-  #modal .mrow .mg{font-weight:600;color:var(--ink)}
-  #modal .mrow .mb{height:6px;background:var(--sunken);border-radius:3px;overflow:hidden}
-  #modal .mrow .mb i{display:block;height:100%;opacity:.92;border-radius:3px}
-  #modal .mrow .ml{text-align:right;font-family:'Inter Tight';font-size:10.5px;font-weight:600;letter-spacing:.02em}
-  #modal .mrow .md{text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
-  #modal .mrow.det.high .ml{color:var(--ink)}
-  #modal .mrow.det.mid .ml{color:var(--ink2)}
-  #modal .mrow.det.low .ml{color:var(--muted)}
-  #modal .mrow.nodet .mg{color:var(--muted);font-weight:500}
-  #modal .mrow.nodet .ml,#modal .mrow.nm .ml{color:var(--muted);font-weight:400;font-style:italic}
-  #modal .kv{font-family:var(--mono);font-size:11px;color:var(--ink2);line-height:1.85}
-  #modal .kv .k{color:var(--muted)}
-  #modal .ntc{display:inline-block;font-family:'Inter Tight';font-size:9px;font-weight:700;letter-spacing:.03em;color:#15803D;background:#E4F0E6;border-radius:5px;padding:2px 6px;margin-top:5px}
-  #modal .mcap{font-family:'Inter Tight';font-size:9.5px;line-height:1.5;color:var(--muted);margin:9px 2px 0}
-  #modal .src{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:12px;border-top:1px solid var(--sunken);padding-top:9px;word-break:break-all}
+  #modal .rec{padding:14px 18px 16px;overflow-y:auto}
+  #modal .rec .t{font-family:var(--serif);font-size:16px;font-weight:500;margin-bottom:11px}
+  #modal .mgrp{margin-bottom:11px}
+  #modal .mgrph{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:5px}
+  #modal .mrow{display:grid;grid-template-columns:132px 1fr 54px;align-items:center;gap:9px;font-size:11.5px;margin:4px 0}
+  #modal .mrow .mg{font-weight:500;color:var(--ink2)}
+  #modal .mrow.em .mg{font-weight:700;color:var(--ink)}
+  #modal .mrow.em{background:var(--sunken);border-radius:6px;padding:2px 6px;margin-left:-6px;margin-right:-6px}
+  #modal .mrow .mb{position:relative;height:6px;background:var(--sunken);border-radius:3px;overflow:hidden}
+  #modal .mrow.em .mb{background:#E7E1DA}
+  #modal .mrow .mb i{position:absolute;display:block;height:100%;background:var(--accent);opacity:.85;border-radius:3px}
+  #modal .mrow.em .mb i{background:var(--treg)}
+  #modal .mrow .ml{text-align:right;font-family:var(--mono);font-size:11px;color:var(--ink)}
+  #modal .src{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--sunken);padding-top:9px;line-height:1.6;word-break:break-word}
+  #modal .src a{color:var(--accent);text-decoration:none}#modal .src a:hover{text-decoration:underline}
+  #modal .src code{font-size:9.5px;color:var(--ink2)}
   /* ── provenance / method popup ── */
-  .provbtn{flex:0 0 auto;width:100%;margin-top:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;text-align:left;cursor:pointer;display:flex;align-items:center;gap:7px;white-space:nowrap}
-  .provbtn:hover{border-color:var(--treg);color:var(--treg)}
-  .provbtn .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
   #provmodal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;max-width:94vw;max-height:84vh;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:42;flex-direction:column;overflow:hidden}
   #provmodal .phd{padding:16px 20px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex:0 0 auto}
   #provmodal .ptitle{font-family:'Inter Tight';font-size:16px;font-weight:600;line-height:1.2}
-  #provmodal .psub{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
   #provmodal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
   #provmodal .pbody{padding:2px 20px 20px;overflow-y:auto}
   #provmodal .pstep{display:grid;grid-template-columns:26px 1fr;gap:13px;padding:14px 0;border-bottom:1px solid var(--sunken)}
-  #provmodal .pn{width:24px;height:24px;border-radius:50%;background:var(--treg);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  #provmodal .pn{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
   #provmodal .pc h4{font-size:13px;font-weight:600;margin:2px 0 5px}
   #provmodal .pc p{font-size:12px;line-height:1.55;color:var(--ink2);margin:0}
   #provmodal .pc p b{color:var(--ink);font-weight:600}
-  #provmodal .pc .pval{font-size:11.5px;line-height:1.5;color:var(--ink2);margin:8px 0 0;padding-left:11px;border-left:2px solid var(--treg)}
-  #provmodal .pc .mono{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
   #provmodal code{font-family:var(--mono);font-size:11px;background:var(--sunken);border-radius:4px;padding:1px 5px}
-  #provmodal .rerunbtn{font-family:'Inter Tight';font-size:11.5px;font-weight:600;color:#fff;background:var(--treg);border:0;border-radius:8px;padding:6px 13px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
+  #provmodal .rerunbtn{font-family:'Inter Tight';font-size:11.5px;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:6px 13px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
   #provmodal .rerunbtn:disabled{opacity:.6;cursor:default}
   #provmodal .ppapers{padding-top:15px}
   #provmodal .pph2{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
   #provmodal .ppaper{margin-bottom:11px}
-  #provmodal .ppaper a{font-size:12px;color:var(--treg);text-decoration:none;font-weight:600}
+  #provmodal .ppaper a{font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}
   #provmodal .ppaper a:hover{text-decoration:underline}
   #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+  #provmodal a{color:var(--accent)}
+  @media (max-width:720px){
+    .body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) auto}
+    .plot{border-right:0;border-bottom:1px solid var(--line)}
+    .rail{max-height:48vh}
+  }
 </style>
 
 <div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></span></div>
-<div class="disclaimer">⚠ Exploratory continuous transcriptional-program scores — not validated cell-type calls. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. One in-vitro 4-donor dataset; requires external validation. <b>Map colour = display-only top program, gated to "mixed" when the top scores are close — the continuous scores in the cell cards are primary.</b></div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
-  <div class="nstep"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
-  <div class="nstep"><span class="n">03</span>Drug link</div><span class="nsep">›</span>
-  <div class="nstep"><span class="n">04</span>PK / PD · brain</div><span class="nsep">›</span>
-  <div class="nstep"><span class="n">05</span>Trial</div>
+  <div class="nstep off"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
+  <div class="nstep off"><span class="n">03</span>Drug link</div><span class="nsep">›</span>
+  <div class="nstep off"><span class="n">04</span>PK / PD · brain</div><span class="nsep">›</span>
+  <div class="nstep off"><span class="n">05</span>Trial</div>
 </div>
 
 <div class="body">
   <div class="plot">
-    <div id="skewbar">
-      <span class="sbl">Skewing</span>
-      <div class="skq" id="skq">
-        <select id="pkA" class="pk"></select>
-        <button class="conn" id="dir" data-dir="to" title="click to flip direction"><span class="arw">⇄</span><span class="cw">toward</span></button>
-        <select id="pkB" class="pk"></select>
-        <button class="skqx" id="pkClr" title="clear">✕</button>
-      </div>
-      <button class="lock" id="idgenes" disabled>Identify genes →</button>
-    </div>
+    <div class="ttl"><b>CD4 transcriptional programs</b><div class="s">colour = <b id="ttlProg">Naïve-like</b> RNA-program score</div></div>
     <canvas id="c"></canvas>
-    <svg id="skewline"><line class="skl"/><g class="belt"></g></svg>
-    <div id="pklabels"></div>
-    <div class="lgstate" id="lgstate"></div>
+    <div class="cbar">
+      <div class="cbt" id="cbTitle">Naïve-like RNA-program score</div>
+      <div class="cbg" id="cbGrad"><span class="clip lo" title="values ≤ p02 clipped">◄</span><span class="clip hi" title="values ≥ p98 clipped">►</span></div>
+      <div class="cbtk"><span id="cbLo">—</span><span id="cbMid">—</span><span id="cbHi">—</span></div>
+      <div class="cbn">low → high · frozen display domain · grey = no data</div>
+    </div>
     <div id="pop"></div>
-    <div id="comppop"></div>
-    <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless · Claude Science pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
+    <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
   </div>
   <div class="rail">
-    <div class="lab">Show cells · condition</div>
-    <div class="seg" id="cond"></div>
-    <div class="lab">Donor</div>
-    <div class="seg" id="donorSel"></div>
-    <div class="lab" style="margin-top:7px;display:flex;align-items:baseline;gap:7px">Nomenclature <a id="nomsrc" target="_blank" rel="noopener" style="font-weight:500;letter-spacing:0;text-transform:none;font-size:10px;color:var(--treg);text-decoration:none"></a></div>
-    <div class="seg" id="scheme"><button data-s="marson" class="on">Coarse · Clusters</button><button data-s="ahmed">Fine · Per-Cell</button></div>
-    <div class="keywrap">
-      <div class="lab" id="markslab">States &amp; markers · Leiden on the UMAP graph</div>
-      <div id="marks"></div>
+    <div class="lab">Color by program score</div>
+    <select id="colorby" class="colorsel"></select>
+    <div class="pcard">
+      <div class="pn" id="pcName">—</div>
+      <div class="pf" id="pcFam">—</div>
+      <div class="pg" id="pcGenes"></div>
+      <div class="pm" id="pcMethod"></div>
+      <div class="ps" id="pcSrc"></div>
     </div>
+
+    <div class="lab mt">Show cells · condition</div>
+    <div class="seg" id="cond"></div>
+    <div class="lab mt">Donor</div>
+    <div class="seg" id="donorSel"></div>
+
+    <div class="lab mt">Program-axis contrast <span style="font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)">· stage 2 input</span></div>
+    <div class="axbox">
+      <div class="axrow"><span class="axtag a">A</span><select class="axsel prog" data-ax="A" data-k="field"></select><button class="axdir" data-ax="A">high</button></div>
+      <div class="axrow"><span style="width:20px;flex:0 0 20px"></span><select class="axsel" data-ax="A" data-k="condition"></select><select class="axsel" data-ax="A" data-k="donor"></select></div>
+      <div class="axrow" style="margin-top:11px"><span class="axtag b">B</span><select class="axsel prog" data-ax="B" data-k="field"></select><button class="axdir" data-ax="B">high</button></div>
+      <div class="axrow"><span style="width:20px;flex:0 0 20px"></span><select class="axsel" data-ax="B" data-k="condition"></select><select class="axsel" data-ax="B" data-k="donor"></select></div>
+      <div class="axmeta" id="axMeta"></div>
+      <button class="idbtn" id="idgenes" disabled title="Stage 2 (skewing genes) is not built yet">Identify genes → <span class="pend">Stage 2 pending</span></button>
+    </div>
+
+    <div class="scope" id="scope"></div>
     <div id="lastrun"></div>
-    <button id="provbtn" class="provbtn"><span class="ic">i</span>How this map was built · provenance</button>
+    <button id="provbtn" class="provbtn"><span class="ic">i</span>Methods &amp; provenance</button>
   </div>
 </div>
 
@@ -272,490 +225,259 @@
     <div class="mmeta" id="mmeta"></div>
   </div>
   <div class="rec">
-    <div id="mhp"></div>
-    <div class="t">Marker expression in this cell <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted)">· relative to cells expressing each gene</span></div>
+    <div class="t">RNA-program scores</div>
     <div id="mgenes"></div>
-    <div class="mcap" id="mcap"></div>
     <div class="src" id="msrc"></div>
   </div>
 </div>
 
 <div id="provmodal">
   <div class="phd">
-    <div><div class="ptitle">How this map was built</div></div>
+    <div><div class="ptitle">Methods &amp; provenance</div></div>
     <button class="x" id="provx">✕</button>
   </div>
   <div class="pbody">
     <div class="pstep"><div class="pn">1</div><div class="pc">
       <h4>Data source</h4>
-      <p>≈396,000 non-targeting-control CD4 T cells from the <b>Marson GWCD4i</b> CRISPRi perturb-seq; 4 donors × Rest / Stim&nbsp;8&nbsp;hr / Stim&nbsp;48&nbsp;hr. Public on the <b>CZI Virtual Cell Platform</b>, pulled via the <code>vcp</code> CLI. 40,000-cell subsample of the scVI embedding shown.</p>
+      <p>≈396,000 non-targeting-control CD4 T cells from the <b>Marson</b> genome-scale CRISPRi perturb-seq (primary human CD4); 4 donors × Rest / Stim&nbsp;8&nbsp;hr / Stim&nbsp;48&nbsp;hr. Public on the <b>CZI Virtual Cells Platform</b> and mirrored to <b>Hugging Face</b> at a pinned revision (SHA-256 verified). A 40,000-cell subsample of the embedding is shown here.</p>
     </div></div>
     <div class="pstep"><div class="pn">2</div><div class="pc">
-      <h4>Clustering &amp; annotation</h4>
-      <p>scVI at the authors' parameters (on raw counts) → <b>Leiden-0.8</b> → 13 clusters. The clustering and the state-program labels (naïve-like / activated / cycling / adhesion-high / treg-like) are the workbench's own display keys — the authors' NTC notebook embeds but doesn't cluster the cells, and Marson defines no cell-state taxonomy (it clusters the 3,341 <i>perturbations</i>, not cells). Each cluster's label is just the argmax of continuous, within-dataset z-scored program scores; it is a display convenience, not a cell-type assignment.</p>
+      <h4>Embedding &amp; clustering</h4>
+      <p id="pEmbed"></p>
     </div></div>
     <div class="pstep"><div class="pn">3</div><div class="pc">
-      <h4>Continuous program scores</h4>
-      <p>Every cell carries continuous <b>transcriptional-program compatibility scores</b> (7 functional programs — Th1/2/17-like, Tfh-like, Th9-like, Treg-like, CD4 CTL-like — and 4 differentiation-state scores). These are RNA-signature similarities, <b>not categorical calls</b>: a high Treg-like or CD4 CTL-like score does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. On 10x Flex (probe-based) data, dropout of low-abundance transcripts (e.g. FOXP3) is expected, so scores are read as continuous gradients, never thresholded into cell types.</p>
+      <h4>Program scores</h4>
+      <p>Every cell carries continuous <b>RNA panel-minus-control scores</b> — <code>score_genes</code> panel mean minus an expression-bin-matched control mean (25 bins, ctrl_size 50, fixed seed). 12 programs span three families (differentiation, functional, sensitivity), defined from the Masopust et al. nomenclature. These are continuous scores, not cell-type calls.</p>
     </div></div>
     <div class="pstep"><div class="pn">4</div><div class="pc">
-      <h4>Program scoring</h4>
-      <p>Per-cell scoring against the Masopust et al. helper-program signatures, expressed as continuous within-dataset z-scores (no thresholds, no discrete calls). Activation is a known confound for the Treg-like and CD4 CTL-like programs, so an activation-adjusted CD4 CTL-like score (<code>cd4_ctl_like_score_actadj</code>) is reported alongside the raw score for context. All values are exploratory and directional only.</p>
+      <h4>Activation sensitivity lane</h4>
+      <p>Activation is a known confound for the Treg-like and CD4 CTL-like programs. An activation-adjusted CD4 CTL-like score (<code>cd4_ctl_like_score_actadj</code>) is reported alongside the raw score as a descriptive sensitivity check.</p>
     </div></div>
     <div class="pstep"><div class="pn">5</div><div class="pc">
-      <h4>Scope &amp; limits</h4>
-      <p>Reviewed with <b>Claude Science</b> against the raw data and both papers. What this map is — and is not:</p>
-      <p class="pval"><b>Continuous scores, not calls.</b> Every colour and number here is a continuous transcriptional-program compatibility score. Nothing on this page asserts a validated cell type, lineage, or function.</p>
-      <p class="pval"><b>Activation is confounded with several programs.</b> Treg-like and CD4 CTL-like signatures share genes that switch on with <i>any</i> activation, so raw scores partly track activation state. The activation-adjusted CD4 CTL-like score is provided for context; neither version is a cytotoxicity or suppression measurement.</p>
-      <p class="pval"><b>External validation required.</b> This rests on one in-vitro, 4-donor CD4 dataset. RNA program-compatibility can suggest hypotheses but cannot confirm protein expression, cytotoxicity, suppressive function, or lineage stability. Treat all programs as suggestive pending orthogonal (protein / functional) confirmation.</p>
-      <p style="margin-top:12px"><a href="/01_notebook.html" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none;font-weight:600">↗ Open the full executable notebook</a> <span style="color:var(--muted);font-size:11px">— every code cell and output from the Claude Science session that built and validated this map.</span></p>
-      <p style="margin-top:9px"><b>Reproduce:</b> <code>./reproduce.sh</code> <span style="color:var(--muted);font-size:11px">pulls the CZI dataset via <code>vcp</code>, regenerates the cluster labels (<code>cluster_scores.py</code> → <code>label_clusters.py</code>), re-runs the fixed-seed per-cell scoring and emits the overlay — the whole chain, front to back. <a href="/reproduce.sh" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none">script ↗</a> · <a href="/01_trace.html" target="_blank" rel="noopener" style="color:var(--treg);text-decoration:none">recorded vcp run ↗</a></span></p>
-      <p style="margin-top:6px;color:var(--muted);font-size:11px">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b> · <b id="matchPct" style="color:var(--ink2)">—</b> to the reference reproduction.</p>
-      <p style="margin-top:9px;display:flex;align-items:center;gap:10px"><button id="rerunBtn" class="rerunbtn">⟳ Re-run analysis</button> <span id="rerunStatus" style="font-size:11px;color:var(--muted)">runs the pipeline on the compute host and re-verifies (~2–3 min).</span></p>
+      <h4>Scope &amp; reproduction</h4>
+      <p id="pScope"></p>
+      <p style="margin-top:12px"><a href="/01_notebook.html" target="_blank" rel="noopener" style="text-decoration:none;font-weight:600">↗ Open methods and reproducibility</a> <span style="color:var(--muted);font-size:11px">— the pipeline sources and provenance behind this map.</span></p>
+      <p style="margin-top:9px"><b>Reproduce:</b> <code>reproduce.sh</code> <span style="color:var(--muted);font-size:11px">fetches the pinned Hugging Face h5ad and verifies its SHA-256, then re-runs the fixed-seed scoring and emits the overlay. <a id="reproLink" href="https://github.com/Kirit-Singh/spot/blob/stage1-remediation/01_programs/analysis/reproduce.sh" target="_blank" rel="noopener" style="text-decoration:none">script ↗</a></span></p>
+      <p style="margin-top:6px;color:var(--muted);font-size:11px">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b>.</p>
+      <p id="rerunWrap" style="margin-top:9px;display:none;align-items:center;gap:10px"><button id="rerunBtn" class="rerunbtn">⟳ Re-run analysis</button> <span id="rerunStatus" style="font-size:11px;color:var(--muted)">runs the pipeline on the compute host and re-verifies (~2–3 min).</span></p>
     </div></div>
     <div class="ppapers">
-      <div class="pph2">Papers</div>
-      <div class="ppaper"><a href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">Marson GWCD4i perturb-seq · bioRxiv ↗</a><span>Source of the cells and experimental design — a genome-scale CRISPRi screen in primary human CD4.</span></div>
-      <div class="ppaper"><a href="https://www.nature.com/articles/s41577-025-01238-2" target="_blank" rel="noopener">Masopust et al. · Guidelines for T cell nomenclature · Nat Rev Immunol 2026 ↗</a><span>Naming framework — marker-based consensus definitions for CD4 differentiation states and helper functions; cells are scored against these directly.</span></div>
+      <div class="pph2">References</div>
+      <div class="ppaper"><a id="paperMarson" target="_blank" rel="noopener">Marson genome-scale CRISPRi perturb-seq · bioRxiv ↗</a><span>Source of the cells and experimental design — a genome-scale CRISPRi screen in primary human CD4.</span></div>
+      <div class="ppaper"><a id="paperMasopust" target="_blank" rel="noopener">Masopust et al. · Guidelines for T cell nomenclature · Nat Rev Immunol 2026 ↗</a><span>Naming framework — marker-based consensus definitions for CD4 differentiation states and helper functions; the program panels are scored against these.</span></div>
     </div>
   </div>
 </div>
 
 <script>
-// ── colour palettes (display-only; continuous transcriptional-program scores, never categorical calls) ──
-// 5 cluster STATE programs — meta.clusters[].dominant_program_for_display_only (argmax of within-dataset z-scores)
-const STATE_PROG=[
- {k:'naive_like',label:'Naïve-like',hue:[110,135,182],mk:['CCR7','SELL','TCF7','LEF1']},
- {k:'activated',label:'Activated',hue:[214,120,40],mk:['CD69','IL2RA','CD38','TNFRSF9']},
- {k:'cycling',label:'Cycling',hue:[150,92,172],mk:['MKI67','TOP2A','PCNA','MCM7']},
- {k:'adhesion_high',label:'Adhesion-high',hue:[54,150,92],mk:['ITGAL','ITGA4','CD58','S100A4']},
- {k:'treg_like',label:'Treg-like',hue:[213,43,71],mk:['FOXP3','IL2RA','CTLA4','IKZF2','CCR8']},
-];
-const stateMap={};STATE_PROG.forEach(p=>stateMap[p.k]=p);
-// 7 per-cell FUNCTIONAL program score-fields — cells[].dominant_program_for_display_only (argmax, display-only)
-const FUNC_PROG={
- treg_like_score:{label:'Treg-like',hue:[213,43,71]},
- cd4_ctl_like_score:{label:'CD4 CTL-like',hue:[130,52,50]},
- th1_like_score:{label:'Th1-like',hue:[201,102,33]},
- th2_like_score:{label:'Th2-like',hue:[20,148,136]},
- th17_like_score:{label:'Th17-like',hue:[214,158,20]},
- tfh_like_score:{label:'Tfh-like',hue:[60,104,196]},
- th9_like_score:{label:'Th9-like',hue:[150,96,178]},
-};
-const FUNC_ORDER=['treg_like_score','cd4_ctl_like_score','th1_like_score','th2_like_score','th17_like_score','tfh_like_score','th9_like_score'];
-// score rows for the cell cards / hover popovers — labelled program-compatibility scores, shown as continuous values (never "calls")
-const FUNC_ROWS=[['treg_like_score','Treg-like'],['cd4_ctl_like_score','CD4 CTL-like'],['th1_like_score','Th1-like'],['th2_like_score','Th2-like'],['th17_like_score','Th17-like'],['tfh_like_score','Tfh-like'],['th9_like_score','Th9-like']];
-const DIFF_ROWS=[['diff_naive_score','Naïve'],['diff_activated_score','Activated'],['diff_memory_score','Adhesion / rest'],['diff_checkpoint_score','Checkpoint-high']];
-// timepoint shading: Rest lighter → Stim8hr base → Stim48hr darker (within each program hue)
-const TP_SHADE={Rest:0.34,Stim8hr:0.02,Stim48hr:-0.17};
-function shadeHue(hue,cond){const f=TP_SHADE[cond]||0;return f>0?hue.map(v=>Math.round(v+(255-v)*f)):hue.map(v=>Math.round(v*(1+f)));}
-// Display-only "top program" is a forced argmax of weakly-separated, relative-within-dataset
-// scores. It is MARGIN-GATED: when the top-two scores are close (ambiguous), the cell/cluster is
-// shown as "mixed / no clear top" instead of asserting a misleading label. The continuous scores
-// in the cell cards are the primary evidence.
-const CLUSTER_MARGIN=0.4, CELL_MARGIN=0.05, MIX_HUE=[178,178,172];
-function topMargin(obj,keys){const v=keys.map(k=>obj[k]).filter(n=>typeof n==='number').sort((a,b)=>b-a);return v.length>1?v[0]-v[1]:Infinity;}
-function gatedState(c0){const k=cmap[c0.cluster];if(!k)return null;const z=k.program_scores_within_dataset_z;if(z&&topMargin(z,Object.keys(z))<CLUSTER_MARGIN)return 'mixed';return k.dominant_program_for_display_only;}
-function gatedFunc(c0){return topMargin(c0,FUNC_ORDER)<CELL_MARGIN?'mixed':c0.dominant_program_for_display_only;}
-// per-cell colour: Coarse = cluster STATE program (shaded by timepoint); Fine = cell FUNCTIONAL program — both margin-gated
-function catInfo(c0){
-  if(scheme==='marson'){const key=gatedState(c0);if(key==='mixed'||!key)return{key:'mixed',label:'mixed / no clear top',hue:MIX_HUE,muted:true};const p=stateMap[key];const base=p?p.hue:[150,150,150];return{key,label:p?p.label:key,hue:shadeHue(base,c0.condition),muted:false};}
-  const key=gatedFunc(c0);if(key==='mixed')return{key:'mixed',label:'mixed / no clear top',hue:MIX_HUE,muted:true};const f=FUNC_PROG[key];return{key,label:f?f.label:(key||'—'),hue:f?f.hue:[150,150,150],muted:!f};
-}
-const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
-let DATA=null,cells=[],clusters=[],cmap={},scheme='marson',cond='All',donorSel='All',dir='to',hover=-1;
-// Hugging Face-sourced dataset manifest. Add an entry per published spot dataset;
-// each carries its overlay + records (local for the default; an HF resolve URL for
-// remote ones) and a link to its Hugging Face page. The header dropdown reads this.
-const DATASETS=[
-  {id:'cd4-marson',label:'CD4 · Marson NTC',overlay:'./data/stage01_umap_seed.json',records:'./data/stage01_cell_records.json',
-   src:'https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq',srcName:'CZI Virtual Cells Platform',srcTip:'Marson GWCD4i — Billion Cell Project · CZI Virtual Cells Platform',
-   hf:'https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson'}
-];
-// sentence-picker populations — "Show me [A] → [B]" highlights matching cells.
-// All predicates use the new continuous-score schema: cluster STATE program + cell FUNCTIONAL
-// dominant program (display-only argmax) + condition. No categorical cell-type calls.
-const isActCluster=c=>{const k=cmap[c.cluster];return !!k&&(k.dominant_program_for_display_only==='activated'||k.dominant_program_for_display_only==='cycling'||k.dominant_program_for_display_only==='treg_like');};
-const inState=(c,s)=>{const k=cmap[c.cluster];return !!k&&k.dominant_program_for_display_only===s;};
-const POPS=[
- // ── Quiescent umbrella (naïve-like + adhesion-high + resting cycling)
- {k:'um:Quiescent',label:'all quiescent',um:'Quiescent',umbrella:true,test:c=>inState(c,'naive_like')||inState(c,'adhesion_high')||(inState(c,'cycling')&&c.condition==='Rest')},
- {k:'naive',label:'naïve-like',um:'Quiescent',test:c=>inState(c,'naive_like')},
- {k:'adhesion',label:'adhesion-high',um:'Quiescent',test:c=>inState(c,'adhesion_high')},
- {k:'cycling_rest',label:'cycling · rest',um:'Quiescent',test:c=>inState(c,'cycling')&&c.condition==='Rest'},
- // ── Activated · 8h (umbrella = activated/cycling/treg-like clusters at 8 hr); program subtypes underneath
- {k:'um:Act8',label:'all activated · 8h',um:'Activated · 8h',umbrella:true,test:c=>c.condition==='Stim8hr'&&isActCluster(c)},
- {k:'treg_prog_8h',label:'Treg-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='treg_like_score'&&c.condition==='Stim8hr'},
- {k:'th1_8h',label:'Th1-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th1_like_score'&&c.condition==='Stim8hr'},
- {k:'ctl_8h',label:'CD4 CTL-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='cd4_ctl_like_score'&&c.condition==='Stim8hr'},
- {k:'th2_8h',label:'Th2-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th2_like_score'&&c.condition==='Stim8hr'},
- {k:'th17_8h',label:'Th17-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th17_like_score'&&c.condition==='Stim8hr'},
- {k:'tfh_8h',label:'Tfh-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='tfh_like_score'&&c.condition==='Stim8hr'},
- {k:'th9_8h',label:'Th9-like program (8h)',um:'Activated · 8h',test:c=>c.dominant_program_for_display_only==='th9_like_score'&&c.condition==='Stim8hr'},
- // ── Activated · 48h (umbrella = activated/cycling/treg-like clusters at 48 hr)
- {k:'um:Act48',label:'all activated · 48h',um:'Activated · 48h',umbrella:true,test:c=>c.condition==='Stim48hr'&&isActCluster(c)},
- {k:'treg_clust',label:'Treg-like cluster',um:'Activated · 48h',test:c=>inState(c,'treg_like')},
- {k:'treg_prog_48h',label:'Treg-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='treg_like_score'&&c.condition==='Stim48hr'},
- {k:'th1_48h',label:'Th1-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th1_like_score'&&c.condition==='Stim48hr'},
- {k:'ctl_48h',label:'CD4 CTL-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='cd4_ctl_like_score'&&c.condition==='Stim48hr'},
- {k:'th2_48h',label:'Th2-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th2_like_score'&&c.condition==='Stim48hr'},
- {k:'th17_48h',label:'Th17-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th17_like_score'&&c.condition==='Stim48hr'},
- {k:'tfh_48h',label:'Tfh-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='tfh_like_score'&&c.condition==='Stim48hr'},
- {k:'th9_48h',label:'Th9-like program (48h)',um:'Activated · 48h',test:c=>c.dominant_program_for_display_only==='th9_like_score'&&c.condition==='Stim48hr'},
-];
-const pmap={};POPS.forEach(p=>pmap[p.k]=p);
-const HLA=[36,132,196],HLB=[196,52,132];
-let pickA=null,pickB=null;
-// ── reference papers (nomenclature source only; no cell-type calls made here) ──
+// ── reference links (nomenclature + data source only; no cell-type calls made here) ──
 const PAPERS={
-  marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1',cite:'Marson GWCD4i perturb-seq · bioRxiv 2025 (10.64898/2025.12.23.696273)'},
-  ahmed:{url:'https://www.nature.com/articles/s41577-025-01238-2',cite:'Masopust, Awasthi, Bosselut et al. · Guidelines for T cell nomenclature · Nat Rev Immunol 2026;26(4):298–313'}
+  marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1'},
+  masopust:{url:'https://www.nature.com/articles/s41577-025-01238-2'}
 };
-let FULL=null,REC=null;
-let mLabels=[],mComp={},clDom={};  // cluster label positions + per-cluster display summary + each cluster's dominant timepoint
-let sx,sy,ox,oy,dom=[-0.2,0.6];
+const FAM_ORDER=['differentiation','functional','sensitivity'];
+const FAM_LABEL={differentiation:'Differentiation programs',functional:'Functional programs',sensitivity:'Sensitivity'};
+const CONDLAB={All:'All',Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
+const COND_ORDER={Rest:0,Stim8hr:1,Stim48hr:2};
+// viridis-like sequential ramp (perceptually ordered; low → high)
+const VIR=[[68,1,84],[71,44,122],[59,81,139],[44,113,142],[33,144,141],[39,173,129],[92,200,99],[170,220,50],[253,231,37]];
+function ramp(t){t=Math.max(0,Math.min(1,t));const f=t*(VIR.length-1),i=Math.min(VIR.length-2,Math.floor(f)),g=f-i,a=VIR[i],b=VIR[i+1];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*g)},${Math.round(a[1]+(b[1]-a[1])*g)},${Math.round(a[2]+(b[2]-a[2])*g)})`;}
+const VIR_CSS='linear-gradient(90deg,'+VIR.map((s,i)=>`rgb(${s}) ${(i/(VIR.length-1)*100).toFixed(1)}%`).join(',')+')';
+
+const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
+let DATA=null,cells=[],meta=null,programs=[],progByField={};
+let field='diff_naive_score',cond='All',donorSel='All',hover=-1;
+let axisA={field:null,condition:'All',direction:'high',donor:'All'},
+    axisB={field:null,condition:'All',direction:'high',donor:'All'};
+let sx,sy,ox,oy;
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
-// short display tag for a cell's dominant functional program (display-only; continuous argmax)
-function modTag(c0){const f=FUNC_PROG[c0.dominant_program_for_display_only];return f?f.label:(c0.dominant_program_for_display_only||'—');}
-// cluster labels: one label per distinct state-program×timepoint region, collision-nudged.
-// Labels are display-only argmax of continuous cluster program scores — not cell-type calls.
-function refLabel(prog,cond){return (stateMap[prog]||{}).label||prog;}
-function drawMarsonLabels(){
-  const cc={};
-  for(const c0 of cells){if(!vis(c0))continue;const id=c0.cluster;if(!cc[id])cc[id]={sx:0,sy:0,n:0,cond:{}};const[X,Y]=px(c0);cc[id].sx+=X;cc[id].sy+=Y;cc[id].n++;cc[id].cond[c0.condition]=(cc[id].cond[c0.condition]||0)+1;}
-  // group clusters by state program + dominant condition; keep the largest cluster's centroid per group
-  const groups={};
-  clusters.forEach(k=>{const g=cc[k.id];if(!g||g.n<250)return;const sk=k.dominant_program_for_display_only;const p=stateMap[sk];if(!p)return;
-    const dc=Object.entries(g.cond).sort((a,b)=>b[1]-a[1])[0][0];const key=sk+'|'+dc;
-    if(!groups[key]||g.n>groups[key].n)groups[key]={p,cond:dc,X:g.sx/g.n,Y:g.sy/g.n,n:g.n};});
-  // drop same-program labels that landed close together (adjacent same-timepoint sub-clusters)
-  const pts=[];
-  Object.values(groups).sort((a,b)=>b.n-a.n).forEach(o=>{if(pts.some(q=>q.p.k===o.p.k&&Math.hypot(q.X-o.X,q.Y-o.Y)<120))return;o.txt=refLabel(o.p.k,o.cond);x.font=`600 ${o.p.k==='treg_like'?12.5:11}px 'Inter Tight'`;o.tw=x.measureText(o.txt).width;pts.push(o);});
-  const placed=[];
-  pts.forEach(o=>{for(let it=0;it<10;it++){let clash=false;for(const q of placed){if(Math.abs(q.X-o.X)<(o.tw+q.tw)/2+6&&Math.abs(q.Y-o.Y)<19){o.Y=q.Y+19;clash=true;}}if(!clash)break;}placed.push(o);});
-  mLabels=pts.map(o=>({prog:o.p.k,label:o.txt,X:o.X,Y:o.Y,tw:o.tw,cond:o.cond}));
-  pts.forEach(o=>{const treg=o.p.k==='treg_like';x.font=`600 ${treg?12.5:11}px 'Inter Tight'`;x.textAlign='center';
-    x.fillStyle='rgba(250,249,247,.86)';x.fillRect(o.X-o.tw/2-5,o.Y-9,o.tw+10,17);
-    x.fillStyle=`rgb(${o.p.hue})`;x.fillText(o.txt,o.X,o.Y+3.5);});
-}
-// label the centroids of each category present (≥180 cells), coloured by the palette
-function labelCentroids(catFn,palObj,order,forceDark){
-  const cen={};order.forEach(k=>cen[k]={sx:0,sy:0,n:0});
-  cells.forEach(c0=>{if(!vis(c0))return;const k=catFn(c0);const g=cen[k];if(g){const[X,Y]=px(c0);g.sx+=X;g.sy+=Y;g.n++;}});
-  const pts=[];
-  order.forEach(k=>{const g=cen[k];if(!g||g.n<200)return;const o=palObj[k]||{};const lab=o.label||k;const treg=k==='Treg';
-    x.font=`600 ${treg?12.5:11}px 'Inter Tight'`;pts.push({X:g.sx/g.n,Y:g.sy/g.n,lab,hue:o.hue,treg,n:g.n,tw:x.measureText(lab).width});});
-  const placed=[];
-  pts.sort((a,b)=>b.n-a.n).forEach(o=>{for(let it=0;it<12;it++){let clash=false;for(const q of placed){if(Math.abs(q.X-o.X)<(o.tw+q.tw)/2+6&&Math.abs(q.Y-o.Y)<19){o.Y=q.Y+19;clash=true;}}if(!clash)break;}placed.push(o);});
-  pts.forEach(o=>{x.font=`600 ${o.treg?12.5:11}px 'Inter Tight'`;x.textAlign='center';
-    x.fillStyle='rgba(250,249,247,.84)';x.fillRect(o.X-o.tw/2-5,o.Y-9,o.tw+10,17);
-    x.fillStyle=forceDark?'#3A342B':`rgb(${o.hue||[58,52,43]})`;x.fillText(o.lab,o.X,o.Y+3.5);});
+const sv=v=>(v==null||isNaN(v))?'—':(v>=0?'+':'')+v.toFixed(2);
+function domainFor(f){return (meta.score_display_domains&&meta.score_display_domains[f])||progByField[f].display_domain;}
+// map a raw score through its FROZEN display domain → [0,1]; p50 as midpoint. null = missing data.
+function normScore(v,d){
+  if(v==null||isNaN(v))return null;
+  const p02=d.p02,p50=d.p50,p98=d.p98;let t;
+  if(p50>p02&&p98>p50){t=v<=p50?0.5*(v-p02)/(p50-p02):0.5+0.5*(v-p50)/(p98-p50);}
+  else{const span=(p98-p02)||1;t=(v-p02)/span;}
+  return Math.max(0,Math.min(1,t));
 }
 
-function loadDataset(ds){
-  // reset per-dataset view state so switching datasets starts clean
-  REC=null;cmap={};cond='All';donorSel='All';pickA=pickB=null;hover=-1;
-  const _hf=document.getElementById('dsHf');if(_hf)_hf.href=ds.hf;
-  // NOTE: remote (HF-hosted) overlays are untested — CORS to huggingface.co and
-  // re-entrancy on rapid A→B→A switches need verifying when a 2nd dataset is added.
-  fetch(ds.overlay).then(r=>{if(!r.ok)throw new Error('overlay HTTP '+r.status);return r.json();}).then(d=>{
-  DATA=d;cells=d.cells;clusters=d.meta.clusters;
-  clusters.forEach((k,i)=>cmap[k.id]=k);
-  // colour each cluster by its Marson program (merges sub-clusters; drops the condition suffix)
-  clusters.forEach(k=>{k.hue=(stateMap[k.dominant_program_for_display_only]||{}).hue||[150,150,150];});
-  // treg-score robust domain
-  const ss=cells.map(c=>c.treg_score).sort((a,b)=>a-b);
-  dom=[ss[Math.floor(ss.length*0.02)],ss[Math.floor(ss.length*0.98)]];
-  // condition buttons (short labels in the rail; data-c keeps the full value) — ordered Rest→8hr→48hr
-  const cOrd={Rest:0,Stim8hr:1,Stim48hr:2};
-  const conds=['All',...d.meta.condition.slice().sort((a,b)=>(cOrd[a]??9)-(cOrd[b]??9))];
-  const condLab={All:'All',Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
-  document.getElementById('cond').innerHTML=conds.map(k=>`<button data-c="${k}"${k==='All'?' class="on"':''}>${condLab[k]||k}</button>`).join('');
-  document.getElementById('cond').onclick=e=>{if(e.target.dataset.c){cond=e.target.dataset.c;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.c===cond));updatePkInfo();applyScheme();}};
-  // donor buttons
-  const donors=['All',...[...new Set(cells.map(c=>c.donor))].sort()];
-  document.getElementById('donorSel').innerHTML=donors.map(k=>`<button data-d="${k}"${k==='All'?' class="on"':''}>${k}</button>`).join('');
-  document.getElementById('donorSel').onclick=e=>{if(e.target.dataset.d){donorSel=e.target.dataset.d;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));updatePkInfo();applyScheme();}};
-  // sentence picker — options grouped by condition umbrella (cluster state + per-cell program)
-  const optsFor=um=>POPS.filter(p=>p.um===um).sort((a,b)=>(a.umbrella?0:1)-(b.umbrella?0:1)).map(p=>`<option value="${p.k}">${p.label}</option>`).join('');
-  const grp=['Quiescent','Activated · 8h','Activated · 48h'].map(u=>`<optgroup label="${u}">${optsFor(u)}</optgroup>`).join('');
-  document.getElementById('pkA').innerHTML=`<option value="">cells…</option>`+grp;
-  document.getElementById('pkB').innerHTML=`<option value="">state…</option>`+grp;
-  document.getElementById('pkA').onchange=e=>{pickA=pmap[e.target.value]||null;syncPicker();};
-  document.getElementById('pkB').onchange=e=>{pickB=pmap[e.target.value]||null;syncPicker();};
-  document.getElementById('pkClr').onclick=()=>{pickA=pickB=null;document.getElementById('pkA').value='';document.getElementById('pkB').value='';syncPicker();};
-  document.getElementById('dsTitle').textContent=d.meta.title||'CD4 transcriptional programs';
-  // upstream source link — driven by the manifest (credits the data source: CZI Virtual Cells Platform)
-  const _a=document.getElementById('dsSrc');_a.textContent=`${ds.srcName} ↗`;_a.href=ds.src;_a.title=ds.srcTip||ds.srcName;
-  document.getElementById('emittedAt').textContent=d.meta.emitted_at||'—';
-  document.getElementById('matchPct').textContent=(d.meta&&d.meta.match_pct!=null)?(d.meta.match_pct+'% match'):'—';
-  document.getElementById('lastrun').innerHTML=d.meta.emitted_at?('analysis last run · <b>'+d.meta.emitted_at+'</b>'):'';
-  applyScheme();
+fetch('./data/stage01_umap_seed.json').then(r=>{if(!r.ok)throw new Error('overlay HTTP '+r.status);return r.json();}).then(d=>{
+  DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
+  programs.forEach(p=>progByField[p.score_field]=p);
+  axisA.field=axisB.field='diff_naive_score';
+  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();
+  applyProgram();
   resize();
-  syncPicker(); // refresh idgenes/skq state to match the reset pickers
-  // lazy-load the two card datasets (needed only on click)
-  fetch(ds.records,{cache:'no-store'}).then(r=>r.json()).then(d=>REC=d).catch(e=>console.error('records load failed',e));
-  }).catch(e=>{console.error('dataset load failed',e);var ln=document.getElementById('lastrun');if(ln)ln.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
+  probeRerun();
+}).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('scope');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
+
+function buildHeader(){
+  const s=meta.source;
+  const a=document.getElementById('dsSrc');a.textContent='CZI Virtual Cells Platform ↗';a.href='https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq';a.title=s.dataset;
+  document.getElementById('dsHf').href=`https://huggingface.co/datasets/${s.hf_repo}/tree/${s.hf_revision}`;
 }
-// load the default (and only) dataset from the manifest
-loadDataset(DATASETS[0]);
+function buildSelector(){
+  const sel=document.getElementById('colorby');
+  sel.innerHTML=FAM_ORDER.map(fam=>{
+    const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
+    return `<optgroup label="${FAM_LABEL[fam]}">`+ps.map(p=>`<option value="${p.score_field}"${p.score_field===field?' selected':''}>${p.display_label}</option>`).join('')+`</optgroup>`;
+  }).join('');
+  sel.onchange=e=>{field=e.target.value;applyProgram();};
+}
+function buildFilters(){
+  const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
+  const ce=document.getElementById('cond');
+  ce.innerHTML=conds.map(k=>`<button data-c="${k}"${k===cond?' class="on"':''}>${CONDLAB[k]||k}</button>`).join('');
+  ce.onclick=e=>{if(!e.target.dataset.c)return;cond=e.target.dataset.c;[...ce.children].forEach(b=>b.classList.toggle('on',b.dataset.c===cond));draw();};
+  const donors=['All',...meta.design.donors.slice().sort()];
+  const de=document.getElementById('donorSel');
+  de.innerHTML=donors.map(k=>`<button data-d="${k}"${k===donorSel?' class="on"':''}>${k}</button>`).join('');
+  de.onclick=e=>{if(!e.target.dataset.d)return;donorSel=e.target.dataset.d;[...de.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));draw();};
+}
+function buildAxis(){
+  const progOpts=programs.map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
+  const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
+  const condOpts=conds.map(k=>`<option value="${k}">${k==='All'?'All conditions':(CONDLAB[k]||k)}</option>`).join('');
+  const donorOpts=['All',...meta.design.donors.slice().sort()].map(k=>`<option value="${k}">${k==='All'?'All donors':k}</option>`).join('');
+  document.querySelectorAll('.axsel[data-k="field"]').forEach(s=>{s.innerHTML=progOpts;s.value=s.dataset.ax==='A'?axisA.field:axisB.field;});
+  document.querySelectorAll('.axsel[data-k="condition"]').forEach(s=>s.innerHTML=condOpts);
+  document.querySelectorAll('.axsel[data-k="donor"]').forEach(s=>s.innerHTML=donorOpts);
+  document.querySelectorAll('.axsel').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax[e.target.dataset.k]=e.target.value;updateAxisMeta();});
+  document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';e.target.textContent=ax.direction;updateAxisMeta();});
+  updateAxisMeta();
+}
+function selectionObj(){
+  const one=ax=>({score_field:ax.field,condition:ax.condition,direction:ax.direction,donor:ax.donor,method_version:meta.method_version});
+  return {A:one(axisA),B:one(axisB)};
+}
+function updateAxisMeta(){
+  const lab=ax=>`${progByField[ax.field].display_label} ${ax.direction}`;
+  document.getElementById('axMeta').textContent=`Contrast A (${lab(axisA)}) vs B (${lab(axisB)}) — a provisional selection for stage 2.`;
+  window.__stage01Selection=selectionObj();
+}
+function buildMethods(){
+  document.getElementById('scope').textContent=meta.methods_and_scope;
+  document.getElementById('lastrun').innerHTML=meta.emitted_at?('analysis last run · <b>'+meta.emitted_at+'</b>'):'';
+  document.getElementById('emittedAt').textContent=meta.emitted_at||'—';
+  const emb=meta.embedding||{};
+  document.getElementById('pEmbed').innerHTML=`${emb.method||'scVI embedding then UMAP'}. Clustering: ${emb.clustering||'Leiden'}. ${emb.cluster_ids||'Numeric cluster ids are retained as technical provenance only — not named biological states.'}`;
+  document.getElementById('pScope').textContent=meta.methods_and_scope;
+  document.getElementById('paperMarson').href=PAPERS.marson.url;
+  document.getElementById('paperMasopust').href=PAPERS.masopust.url;
+}
+
+// selected-program → legend, colour key, rail card, title
+function applyProgram(){
+  const p=progByField[field],d=domainFor(field);
+  document.getElementById('ttlProg').textContent=p.display_label;
+  document.getElementById('cbTitle').textContent=p.display_label+' RNA-program score';
+  document.getElementById('cbGrad').style.background=VIR_CSS;
+  document.getElementById('cbLo').textContent=d.p02.toFixed(2);
+  document.getElementById('cbMid').textContent=d.p50.toFixed(2);
+  document.getElementById('cbHi').textContent=d.p98.toFixed(2);
+  document.getElementById('pcName').textContent=p.display_label;
+  document.getElementById('pcFam').textContent=FAM_LABEL[p.family]+(p.role==='sensitivity'?' · sensitivity lane':'');
+  document.getElementById('pcGenes').innerHTML=`<b>panel</b> ${p.panel_genes.join(' · ')}`;
+  document.getElementById('pcMethod').textContent=p.scoring_method;
+  document.getElementById('pcSrc').textContent=p.source;
+  draw();
+}
 
 function pct(arr,p){const a=arr.slice().sort((x,y)=>x-y);return a[cl(Math.floor(a.length*p),0,a.length-1)];}
 function resize(){const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;x.setTransform(2,0,0,2,0,0);
-  const W=r.width,H=r.height,pad=58,top=118,bot=44;
+  const W=r.width,H=r.height,pad=54,top=58,bot=72;
   const xs=cells.map(c=>c.x),ys=cells.map(c=>c.y);
-  // robust extents: 1.5-98.5 pct so a few UMAP outliers don't squash the dense cloud
   const xmn=pct(xs,.015),xmx=pct(xs,.985),ymn=pct(ys,.015),ymx=pct(ys,.985);
   const s=Math.min((W-2*pad)/(xmx-xmn),(H-top-bot)/(ymx-ymn))*0.92;
   sx=s;sy=s;ox=(W-(xmx-xmn)*s)/2-xmn*s;oy=top+((H-top-bot)-(ymx-ymn)*s)/2-ymn*s;
   draw();}
 window.addEventListener('resize',resize);
-
 function px(c){return[c.x*sx+ox,c.y*sy+oy];}
-function ramp(t){t=cl((t-dom[0])/(dom[1]-dom[0]),0,1);
-  const a=[237,231,238],b=[154,62,156];return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;}
 function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
 
-function pkStats(p){let n=0,stim=0;for(const c0 of cells){if(!vis(c0)||!p.test(c0))continue;n++;if(c0.condition!=='Rest')stim++;}return{n,stim};}
-function updatePkInfo(){/* hypothesis now shown in the plot-top toolbar + on-canvas connector */}
-function setConn(){const b=document.getElementById('dir');b.dataset.dir=dir;b.querySelector('.cw').textContent=dir==='to'?'toward':'away from';}
-function updateSkewLine(a,b){const svg=document.getElementById('skewline');
-  const ang=Math.atan2(b.Y-a.Y,b.X-a.X),ux=Math.cos(ang),uy=Math.sin(ang);
-  const ax=a.X+ux*18,ay=a.Y+uy*18,bx=b.X-ux*18,by=b.Y-uy*18,L=Math.hypot(bx-ax,by-ay);
-  const ln=svg.querySelector('.skl');ln.setAttribute('x1',ax);ln.setAttribute('y1',ay);ln.setAttribute('x2',bx);ln.setAttribute('y2',by);
-  // chevrons tiled along the belt, all pointing in the travel direction (conveyor)
-  const to=dir==='to',ca=to?ang:ang+Math.PI,cx=Math.cos(ca),cy=Math.sin(ca),s=6,gap=18;
-  // trim one step off the leading (arrow-point) end so the arrowhead stops short of the
-  // target label instead of poking past it; keep the trailing overshoot for seamless flow-in
-  const dLo=to?-gap:0, dHi=to?L:L+gap;
-  let chev='';
-  for(let d=dLo; d<=dHi; d+=gap){const px=ax+ux*d,py=ay+uy*d;
-    const tx=px+cx*s,ty=py+cy*s,w1x=px+Math.cos(ca+2.4)*s,w1y=py+Math.sin(ca+2.4)*s,w2x=px+Math.cos(ca-2.4)*s,w2y=py+Math.sin(ca-2.4)*s;
-    chev+=`<polyline points="${w1x.toFixed(1)},${w1y.toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)} ${w2x.toFixed(1)},${w2y.toFixed(1)}"/>`;}
-  const belt=svg.querySelector('.belt');belt.innerHTML=chev;
-  const tsign=to?1:-1;  // belt flows toward the target (to) or away from it
-  belt.style.setProperty('--mx',(ux*gap*tsign).toFixed(2)+'px');belt.style.setProperty('--my',(uy*gap*tsign).toFixed(2)+'px');
-  svg.style.display='block';}
-function hideSkewLine(){document.getElementById('skewline').style.display='none';}
-function syncPicker(){document.getElementById('idgenes').disabled=!(pickA&&pickB);document.getElementById('skq').classList.toggle('active',!!(pickA||pickB));updatePkInfo();draw();}
-function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const ah=scheme==='ahmed';const pk=pickA||pickB;
-  const lgs=document.getElementById('lgstate');lgs.style.display='flex';
-  // legend
-  if(pk){lgs.innerHTML=[[pickA,HLA],[pickB,HLB]].filter(([p])=>p).map(([p,h])=>`<span><i style="background:rgb(${h})"></i>${p.label} · ${cells.filter(c0=>vis(c0)&&p.test(c0)).length.toLocaleString()}</span>`).join('');}
-  else if(ah){
-    // Fine · per-cell dominant functional program (display-only argmax of continuous scores)
-    const fnP=FUNC_ORDER.filter(k=>cells.some(c0=>vis(c0)&&gatedFunc(c0)===k));
-    lgs.innerHTML=fnP.map(k=>`<span><i style="background:rgb(${FUNC_PROG[k].hue})"></i>${FUNC_PROG[k].label}</span>`).join('');
-  } else {
-    const tps=[['Rest','0'],['Stim8hr','8'],['Stim48hr','48']],idx={Rest:0,Stim8hr:1,Stim48hr:2};
-    const txtOn=rgb=>((0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255>0.62?'#1E1B16':'#fff');
-    const inProg=p=>c0=>vis(c0)&&gatedState(c0)===p.k;
-    let anyMulti=false;
-    const rows=STATE_PROG.filter(p=>cells.some(inProg(p))).map(p=>{
-      const test=inProg(p),counts=tps.map(([cd,num])=>({cd,num,n:0,sh:shadeHue(p.hue,cd)}));
-      for(const c0 of cells){if(!test(c0))continue;const i=idx[c0.condition];if(i!=null)counts[i].n++;}
-      const tot=counts.reduce((a,b)=>a+b.n,0)||1;
-      // a timepoint earns its own dot only if it holds a meaningful share of the state (≥8%)
-      const present=counts.filter(c=>c.n/tot>=0.08);
-      let dots;
-      if(present.length>1){anyMulti=true;
-        dots=`<span style="display:inline-flex;gap:3px">`+present.map(c=>`<span class="tpdot" style="background:rgb(${c.sh});color:${txtOn(c.sh)}">${c.num}</span>`).join('')+`</span>`;
-      } else {const d=counts.slice().sort((a,b)=>b.n-a.n)[0];dots=`<i style="background:rgb(${d.sh})"></i>`;}
-      return `<span>${dots}${p.label}</span>`;
-    }).join('');
-    lgs.innerHTML=rows+(anyMulti?`<span style="color:var(--muted);font-size:10.5px">0 / 8 / 48 = hr post-stim</span>`:'');
-  }
-  // dots
-  for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);let rad=i===hover?4.4:2.5;
-    if(pk){let hl=null;if(pickA&&pickA.test(c0))hl=HLA;else if(pickB&&pickB.test(c0))hl=HLB;
-      if(hl){x.fillStyle=`rgb(${hl})`;x.globalAlpha=.92;rad=i===hover?4.6:2.9;}else{x.fillStyle='rgb(188,184,176)';x.globalAlpha=.10;}}
-    else{const ci=catInfo(c0);x.fillStyle=`rgb(${ci.hue})`;x.globalAlpha=ci.muted?.48:.88;}
+function draw(){const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);const d=domainFor(field);
+  for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);
+    const t=normScore(c0[field],d);
+    if(t==null){x.fillStyle='rgb(200,197,190)';x.globalAlpha=.35;}
+    else{x.fillStyle=ramp(t);x.globalAlpha=.82;}
+    const rad=i===hover?4.4:2.5;
     x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
     if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
   }
   x.globalAlpha=1;
-  // centroid labels
-  if(pk){
-    const cn={};
-    [['A',pickA,HLA],['B',pickB,HLB]].forEach(([id,p,hue])=>{if(!p)return;let mx=0,my=0,n=0;for(const c0 of cells){if(!vis(c0)||!p.test(c0))continue;const[X,Y]=px(c0);mx+=X;my+=Y;n++;}if(n)cn[id]={X:mx/n,Y:my/n,p,hue};});
-    // directional connector A→B as an animated SVG overlay (flowing dashes + midpoint arrow)
-    if(cn.A&&cn.B&&Math.hypot(cn.B.X-cn.A.X,cn.B.Y-cn.A.Y)>50)updateSkewLine(cn.A,cn.B);else hideSkewLine();
-    const tot=cells.filter(vis).length||1;let lblHTML='';
-    ['A','B'].forEach(id=>{const o=cn[id];if(!o)return;
-      const s=pkStats(o.p);const pc=100*s.n/tot;const pcs=s.n===0?'0%':(pc<0.1?'<0.1%':pc.toFixed(1)+'%');
-      const dom=s.n?(s.stim/s.n>=.5?Math.round(100*s.stim/s.n)+'% Stim':Math.round(100*(s.n-s.stim)/s.n)+'% Rest'):'—';
-      const sub=`${s.n.toLocaleString()} · ${pcs} of shown · ${dom}`;
-      lblHTML+=`<div class="pklab" style="left:${o.X.toFixed(1)}px;top:${o.Y.toFixed(1)}px"><div class="pkl-t" style="color:rgb(${o.hue})">${o.p.label}</div><div class="pkl-s">${sub}</div></div>`;});
-    document.getElementById('pklabels').innerHTML=lblHTML;
-  } else if(ah){
-    hideSkewLine();document.getElementById('pklabels').innerHTML='';
-    labelCentroids(c0=>c0.dominant_program_for_display_only, FUNC_PROG, FUNC_ORDER, false);
-  } else {
-    hideSkewLine();document.getElementById('pklabels').innerHTML='';
-    drawMarsonLabels();
-  }
 }
 
-document.getElementById('scheme').onclick=e=>{if(e.target.dataset.s){scheme=e.target.dataset.s;[...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b.dataset.s===scheme));applyScheme();}};
-document.getElementById('dir').onclick=e=>{dir=dir==='to'?'away':'to';setConn();updatePkInfo();draw();};
-function selectStage(i){document.querySelectorAll('.nav .nstep').forEach((s,j)=>s.classList.toggle('on',j===i));}
-// click any pipeline step to make it the active tab/pane
-document.querySelector('.nav').onclick=e=>{const s=e.target.closest('.nstep');if(!s)return;
-  selectStage([...document.querySelectorAll('.nav .nstep')].indexOf(s));};
-document.getElementById('idgenes').onclick=()=>{if(!(pickA&&pickB))return;
-  selectStage(1);  // no locked state — jump straight to stage 02 (skewing genes)
-};
-
-function nPct(fn){return 100*cells.filter(fn).length/cells.length;}
-const SUB='color:var(--muted);font-size:9px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;border:0;padding:4px 0 2px';
-function applyScheme(){
-  const ah=scheme==='ahmed';
-  const ns=document.getElementById('nomsrc');
-  if(ah){ns.textContent='based on Masopust et al. ↗';ns.href=PAPERS.ahmed.url;}
-  else{ns.textContent='based on scVI/Leiden · Marson data ↗';ns.href=PAPERS.marson.url;}
-  if(ah){
-    document.getElementById('markslab').textContent='Per-cell functional programs · continuous scores';
-    const fnRows=FUNC_ORDER.map(k=>({k,n:cells.filter(c0=>vis(c0)&&gatedFunc(c0)===k).length})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
-    document.getElementById('marks').innerHTML=
-      `<div class="klab">Dominant program · display-only argmax</div>`+
-      fnRows.map(({k,n})=>`<div class="mk"><span class="d" style="background:rgb(${FUNC_PROG[k].hue})"></span><span class="nm">${FUNC_PROG[k].label}</span><span class="gs">${n.toLocaleString()} cells</span></div>`).join('')+
-      `<div class="compsum" style="margin-top:9px">Colour = highest-scoring transcriptional program per cell. Continuous compatibility scores, not cell-type calls.</div>`;
-  } else {
-    document.getElementById('markslab').textContent='Cluster state programs · display-only';
-    mComp={};clDom={};
-    const CNL={Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
-    // dominant condition per cluster (over ALL cells, filter-independent)
-    {const cc={};cells.forEach(c0=>{const id=c0.cluster;(cc[id]=cc[id]||{})[c0.condition]=((cc[id]||{})[c0.condition]||0)+1;});
-     Object.entries(cc).forEach(([id,o])=>{clDom[id]=Object.entries(o).sort((a,b)=>b[1]-a[1])[0][0];});}
-    // per-cluster display summary: dominant per-cell functional program among the visible cells
-    const funcByCluster={};
-    cells.forEach(c0=>{if(!vis(c0))return;const id=c0.cluster;const fp=c0.dominant_program_for_display_only;(funcByCluster[id]=funcByCluster[id]||{});funcByCluster[id][fp]=(funcByCluster[id][fp]||0)+1;});
-    clusters.forEach(k=>{const fc=funcByCluster[k.id];const p=stateMap[k.dominant_program_for_display_only]||{hue:[150,150,150],label:k.dominant_program_for_display_only};
-      let topfk=null,topn=0,tot=0;if(fc){Object.entries(fc).forEach(([f,n])=>{tot+=n;if(n>topn){topn=n;topfk=f;}});}
-      mComp[k.id]={hue:p.hue,label:p.label,n:tot,topfk,cn:CNL[clDom[k.id]]||clDom[k.id]};});
-    const rows=STATE_PROG.map(p=>{const pc=cells.filter(c0=>vis(c0)&&gatedState(c0)===p.k);return{p,pc,n:pc.length};}).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
-    document.getElementById('marks').innerHTML=rows.map(({p,n})=>
-      `<div class="mk${p.k==='treg_like'?' treg':''}"><span class="d" style="background:rgb(${p.hue})"></span><span class="nm">${p.label}</span><span class="gs">${(p.mk||[]).slice(0,4).join(', ')}</span></div>`
-    ).join('');
-  }
-  draw();
+// grouped score rows (hover popover)
+function scoreGroupsHTML(c0){
+  return FAM_ORDER.map(fam=>{
+    const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
+    return `<div class="grp"><div class="grph">${FAM_LABEL[fam]}</div>`+
+      ps.map(p=>`<div class="srow${p.score_field===field?' em':''}" title="${p.score_field} · ${p.scoring_method}"><span class="sl">${p.display_label}</span><span class="sv">${sv(c0[p.score_field])}</span></div>`).join('')+
+    `</div>`;
+  }).join('');
 }
+function shortBc(bc){return (bc.split('_').find(t=>/^[ACGT]{8,}/.test(t))||bc).slice(0,26);}
 
 c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
-  let best=-1,bd=64;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const d=(X-mx)**2+(Y-my)**2;if(d<bd){bd=d;best=i;}}
-  // with a skewing hypothesis active, only the selected groups respond to hover
-  if((pickA||pickB)&&best>=0&&!((pickA&&pickA.test(cells[best]))||(pickB&&pickB.test(cells[best]))))best=-1;
+  let best=-1,bd=64;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}
   if(best!==hover){hover=best;draw();}
-  const comppop=document.getElementById('comppop');
-  if(best>=0&&scheme==='marson'){
-    const c0=cells[best];const k=cmap[c0.cluster];const prog=k?k.dominant_program_for_display_only:null;
-    const dc=prog?clDom[c0.cluster]:null;
-    const comp=k?mComp[c0.cluster]:null;
-    let labs=prog?mLabels.filter(l=>l.prog===prog):[];const sl=labs.filter(l=>l.cond===dc);if(sl.length)labs=sl;
-    if(comp&&labs.length){const[cx,cy]=px(c0);let lab=labs[0],bdl=1e18;labs.forEach(l=>{const d=(l.X-cx)**2+(l.Y-cy)**2;if(d<bdl){bdl=d;lab=l;}});
-      const fp=comp.topfk?FUNC_PROG[comp.topfk]:null;
-      const body=fp?`<div class="compsum">top program-compat · <b>${fp.label}</b> <span style="color:var(--muted)">· display-only argmax</span></div>`:`<div class="compsum">continuous program scores</div>`;
-      comppop.innerHTML=`<div class="cph" style="color:rgb(${comp.hue})">${comp.label}${comp.cn?' · '+comp.cn:''} · ${comp.n.toLocaleString()} cells</div>`+body;
-      let lx=lab.X-91,ly=lab.Y+13;lx=Math.max(6,Math.min(lx,r.width-188));ly=Math.min(ly,r.height-70);
-      comppop.style.left=lx+'px';comppop.style.top=ly+'px';comppop.style.display='block';
-    } else comppop.style.display='none';
-    pop.style.display='none';return;
-  }
-  comppop.style.display='none';
   if(best>=0){const c0=cells[best];const[X,Y]=px(c0);
-    const key=c0.dominant_program_for_display_only,fp=FUNC_PROG[key];
-    const bc=(c0.barcode.split('_').find(t=>/^[ACGT]{8,}/.test(t))||c0.barcode).slice(0,26);
-    const sv=(f)=>{const v=c0[f];return v==null?'—':(v>=0?'+':'')+v.toFixed(2);};
-    const rowsFn=FUNC_ROWS.map(([f,lab])=>`<div class="row"><span>${lab}</span><b>${sv(f)}</b></div>`).join('');
-    const rowsDiff=DIFF_ROWS.map(([f,lab])=>`<div class="row"><span>${lab}</span><b>${sv(f)}</b></div>`).join('');
-    pop.innerHTML=`<div class="bc">${bc}</div>
-      <div class="row"><span>Donor · condition</span><b>${c0.donor} · ${c0.condition}</b></div>
-      <div class="row"><span>Dominant program <i>· display-only</i></span><b style="color:rgb(${fp?fp.hue:[120,120,120]})">${fp?fp.label:(key||'—')}</b></div>
-      <div class="pph">Program-compatibility scores <span>continuous · not calls</span></div>
-      ${rowsFn}
-      <div class="pph">Differentiation-state scores</div>
-      ${rowsDiff}
-      <div class="ref">RNA program-compatibility scores — not validated cell-type calls.</div>`;
-    pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-272)lx=X-272;lx=Math.max(6,Math.min(lx,r.width-266));ly=Math.max(6,Math.min(ly,r.height-260));
-    pop.style.left=lx+'px';pop.style.top=ly+'px';}
-  else pop.style.display='none';
+    const p=progByField[field],d=domainFor(field),t=normScore(c0[field],d),swatch=t==null?'rgb(200,197,190)':ramp(t);
+    pop.innerHTML=`<div class="bc">${shortBc(c0.barcode)}</div>
+      <div class="pmeta">donor ${c0.donor} · ${c0.condition}</div>
+      <div class="psel" title="${p.score_field} · ${p.scoring_method}"><span class="dot" style="background:${swatch}"></span><span class="pl">${p.display_label}</span><b class="pv">${sv(c0[field])}</b></div>
+      ${scoreGroupsHTML(c0)}`;
+    pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-260)lx=X-260;lx=Math.max(6,Math.min(lx,r.width-254));ly=Math.max(6,Math.min(ly,r.height-300));
+    pop.style.left=lx+'px';pop.style.top=ly+'px';
+  } else pop.style.display='none';
 });
-c.addEventListener('mouseleave',()=>{hover=-1;pop.style.display='none';document.getElementById('comppop').style.display='none';draw();});
+c.addEventListener('mouseleave',()=>{hover=-1;pop.style.display='none';draw();});
 
 // ── click a dot → open the cell-detail card ──
-function nearestCell(mx,my){let best=-1,bd=400;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const d=(X-mx)**2+(Y-my)**2;if(d<bd){bd=d;best=i;}}return best;}
-c.addEventListener('click',e=>{if(pickA&&pickB)return;/* a two-state hypothesis is active — dots aren't individually inspectable */
-  const r=c.getBoundingClientRect();const i=nearestCell(e.clientX-r.left,e.clientY-r.top);if(i>=0)openCard(i);});
+function nearestCell(mx,my){let best=-1,bd=400;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}return best;}
+c.addEventListener('click',e=>{const r=c.getBoundingClientRect();const i=nearestCell(e.clientX-r.left,e.clientY-r.top);if(i>=0)openCard(i);});
 
-function hidpi(cv){const r=cv.getBoundingClientRect();cv.width=r.width*2;cv.height=r.height*2;const g=cv.getContext('2d');g.setTransform(2,0,0,2,0,0);return[g,r.width,r.height];}
-function tregRamp(t){t=cl((t-dom[0])/(dom[1]-dom[0]),0,1);const a=[237,231,238],b=[154,62,156];return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;}
-
-function drawLoc(c0){const[g,W,H]=hidpi(document.getElementById('mLoc'));if(!FULL)return;const B=FULL.meta.bounds,pad=12;
-  const mapx=v=>pad+(v-B.xmin)/(B.xmax-B.xmin)*(W-2*pad), mapy=v=>pad+(v-B.ymin)/(B.ymax-B.ymin)*(H-2*pad);
-  for(let i=0;i<FULL.x.length;i+=1){g.fillStyle=tregRamp(FULL.treg[i]);g.globalAlpha=.32;g.beginPath();g.arc(mapx(FULL.x[i]),mapy(FULL.y[i]),.8,0,6.283);g.fill();}
-  g.globalAlpha=1;const PX=mapx(c0.x),PY=mapy(c0.y);
-  // white halo for contrast against the dense cloud
-  g.fillStyle='rgba(255,255,255,.9)';g.beginPath();g.arc(PX,PY,6,0,6.283);g.fill();
-  g.strokeStyle='#1E1B16';g.lineWidth=1;g.beginPath();g.moveTo(PX-14,PY);g.lineTo(PX-7,PY);g.moveTo(PX+7,PY);g.lineTo(PX+14,PY);g.moveTo(PX,PY-14);g.lineTo(PX,PY-7);g.moveTo(PX,PY+7);g.lineTo(PX,PY+14);g.stroke();
-  g.fillStyle='#9A3E9C';g.beginPath();g.arc(PX,PY,3.6,0,6.283);g.fill();
-  g.strokeStyle='#1E1B16';g.lineWidth=1.4;g.beginPath();g.arc(PX,PY,3.6,0,6.283);g.stroke();}
-
-function drawNbr(c0,N){const[g,W,H]=hidpi(document.getElementById('mNbr'));if(!FULL)return;
-  const d=[];for(let i=0;i<FULL.x.length;i++){d.push([i,(FULL.x[i]-c0.x)**2+(FULL.y[i]-c0.y)**2]);}
-  d.sort((a,b)=>a[1]-b[1]);const near=d.slice(0,N).map(o=>o[0]);
-  let xmn=1e9,xmx=-1e9,ymn=1e9,ymx=-1e9;near.forEach(i=>{xmn=Math.min(xmn,FULL.x[i]);xmx=Math.max(xmx,FULL.x[i]);ymn=Math.min(ymn,FULL.y[i]);ymx=Math.max(ymx,FULL.y[i]);});
-  const padd=(xmx-xmn)*.12+.4;xmn-=padd;xmx+=padd;ymn-=padd;ymx+=padd;const pad=12;
-  const mapx=v=>pad+(v-xmn)/(xmx-xmn)*(W-2*pad), mapy=v=>pad+(v-ymn)/(ymx-ymn)*(H-2*pad);
-  const CX=mapx(c0.x),CY=mapy(c0.y);
-  g.strokeStyle='rgba(154,62,156,.20)';g.lineWidth=1;near.slice(1,16).forEach(i=>{g.beginPath();g.moveTo(CX,CY);g.lineTo(mapx(FULL.x[i]),mapy(FULL.y[i]));g.stroke();});
-  near.forEach(i=>{g.fillStyle=tregRamp(FULL.treg[i]);g.globalAlpha=.92;g.beginPath();g.arc(mapx(FULL.x[i]),mapy(FULL.y[i]),2.7,0,6.283);g.fill();});
-  g.globalAlpha=1;g.fillStyle='#9A3E9C';g.beginPath();g.arc(CX,CY,4.4,0,6.283);g.fill();g.strokeStyle='#1E1B16';g.lineWidth=1.3;g.stroke();}
-
-function openCard(i){const c0=cells[i],k=cmap[c0.cluster];const rec=REC?REC[c0.barcode]:null;
-  const ci=catInfo(c0);
-  const chip=document.getElementById('mchip');
-  chip.querySelector('i').style.background=`rgb(${ci.hue})`;
-  chip.querySelector('b').textContent=ci.label;
-  document.getElementById('mbc').textContent=c0.barcode;
-  const clab=k?((stateMap[k.dominant_program_for_display_only]||{}).label||k.dominant_program_for_display_only):'—';
-  const key=c0.dominant_program_for_display_only,fp=FUNC_PROG[key];
-  document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · ${clab} cluster (coarse) · dominant program ${fp?fp.label:key} (fine · display-only)`;
-  document.getElementById('mhp').innerHTML=`<b>Transcriptional-program compatibility scores</b> — continuous, display-only. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function.`;
-  // score bars built from the cell's continuous scores (diverging around 0; clamped to ±1.5 for display)
+function cardScoresHTML(c0){
   const bar=v=>{const t=Math.max(-1.5,Math.min(1.5,v||0)),w=Math.abs(t)/1.5*50;return{w:w.toFixed(0),left:(t<0?50-w:50).toFixed(0)};};
-  const sv=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(2);
-  const rowHTML=(f,lab,hue)=>{const v=c0[f],b=bar(v);return `<div class="mrow det"><span class="mg">${lab}</span><span class="mb" style="position:relative"><i style="position:absolute;left:${b.left}%;width:${b.w}%;background:rgb(${hue})"></i></span><span class="ml">${sv(v)}</span><span class="md"></span></div>`;};
-  document.getElementById('mgenes').innerHTML=
-    `<div class="t">Functional-program compatibility · continuous score</div>`+
-    FUNC_ROWS.map(([f,lab])=>rowHTML(f,lab,FUNC_PROG[f].hue)).join('')+
-    `<div class="t" style="margin-top:11px">Differentiation-state score · continuous</div>`+
-    DIFF_ROWS.map(([f,lab])=>rowHTML(f,lab,[120,120,120])).join('');
-  // detected markers from the per-cell record (10x Flex, probe-based; dropout expected)
-  if(rec){const dets=[['gnly_detected','GNLY'],['cd27_detected','CD27'],['ifng_detected','IFNG'],['gata3_detected','GATA3'],['ccr4_detected','CCR4']];
-    document.getElementById('mcap').innerHTML='Markers detected in this cell (10x Flex, probe-based; dropout expected): '+dets.filter(([f])=>rec[f]!=null).map(([f,g])=>`<b style="color:${rec[f]?'#15803D':'var(--muted)'}">${g}${rec[f]?'+':'−'}</b>`).join(' · ');
-  } else document.getElementById('mcap').innerHTML='';
-  document.getElementById('msrc').innerHTML=`<div style="color:var(--muted)">Continuous transcriptional-program scores — not validated cell-type calls. RNA program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity, or suppressive function. Nomenclature reference: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a> · <a href="${PAPERS.ahmed.url}" target="_blank" rel="noopener">Masopust ↗</a></div>`;
-  document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='block';}
+  return FAM_ORDER.map(fam=>{
+    const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
+    return `<div class="mgrp"><div class="mgrph">${FAM_LABEL[fam]}</div>`+
+      ps.map(p=>{const v=c0[p.score_field],b=bar(v);return `<div class="mrow${p.score_field===field?' em':''}" title="${p.score_field} · ${p.scoring_method}"><span class="mg">${p.display_label}</span><span class="mb"><i style="left:${b.left}%;width:${b.w}%"></i></span><span class="ml">${sv(v)}</span></div>`;}).join('')+
+    `</div>`;
+  }).join('');
+}
+function openCard(i){const c0=cells[i];const p=progByField[field],d=domainFor(field),t=normScore(c0[field],d),swatch=t==null?'rgb(200,197,190)':ramp(t);
+  const chip=document.getElementById('mchip');
+  chip.querySelector('i').style.background=swatch;
+  chip.querySelector('b').textContent=`${p.display_label} · ${sv(c0[field])}`;
+  document.getElementById('mbc').textContent=c0.barcode;
+  document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · cluster ${c0.cluster} (technical id)`;
+  document.getElementById('mgenes').innerHTML=cardScoresHTML(c0);
+  document.getElementById('msrc').innerHTML=`Scores: <code>score_genes</code> panel-minus-expression-bin-matched-control values. Nomenclature reference: <a href="${PAPERS.masopust.url}" target="_blank" rel="noopener">Masopust et al. ↗</a> · data: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`;
+  document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='flex';}
 function closeCard(){document.getElementById('scrim').style.display='none';document.getElementById('modal').style.display='none';document.getElementById('provmodal').style.display='none';}
 function openProv(){document.getElementById('scrim').style.display='block';document.getElementById('provmodal').style.display='flex';}
 document.getElementById('mx').onclick=closeCard;document.getElementById('scrim').onclick=closeCard;
 document.getElementById('provx').onclick=closeCard;document.getElementById('provbtn').onclick=openProv;
-// --- re-run: poll-based + refresh-resilient (server runs it in a background thread) ---
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCard();});
+
+// re-run controls — revealed only when the host actually exposes /rerun
+function probeRerun(){fetch('/rerun/log',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('rerunWrap').style.display='flex';}).catch(function(){});}
 (function(){
   const logEl=document.getElementById('rerunlog'),pre=document.getElementById('rlpre'),closeBtn=document.getElementById('rlClose');
   let polling=false;
   const rlphase=document.getElementById('rlphase'),rlpulse=document.getElementById('rlpulse'),rleta=document.getElementById('rleta');
   function phaseOf(txt){
-    if(/\[4\/4\]/.test(txt))return 'rendering notebook';
+    if(/\[4\/4\]/.test(txt))return 'rendering report';
     if(/\[3\/4\]/.test(txt))return 'verifying';
     if(/\[2\/4\]|emitted \d+ cells/.test(txt))return 'writing overlay';
-    if(/validation-2 null|validation 2/.test(txt))return 'validating';
-    if(/per-cell program scores|scoring programs/.test(txt))return 'validating';
     if(/scoring \d+\/\d+|program \d+\/\d+/.test(txt))return 'scoring';
-    if(/cells: |panel genes|state programs/.test(txt))return 'loading data';
+    if(/cells: |panel genes/.test(txt))return 'loading data';
     return 'starting';
   }
-  var STAGES=['loading data','scoring','validating','writing overlay','verifying','rendering notebook'];
+  const STAGES=['loading data','scoring','verifying','writing overlay','rendering report'];
   function stageLabel(ph){var i=STAGES.indexOf(ph);return i<0?ph:'stage '+(i+1)+'/'+STAGES.length+' · '+ph;}
   function roughEta(s){if(s<=15)return 'finishing';var r=Math.ceil(s/30)*30;if(r<60)return '~'+r+'s';var mn=Math.floor(r/60),sc=r%60;return '~'+mn+(sc?':'+String(sc).padStart(2,'0'):' min');}
   function setMeta(phase,eta){rlphase.textContent=phase;rleta.textContent=eta?'· '+eta:'';}
@@ -766,11 +488,7 @@ document.getElementById('provx').onclick=closeCard;document.getElementById('prov
     fetch('/rerun/log').then(function(r){return r.json();}).then(function(j){
       if(!polling)return;
       if(j.lines&&j.lines.length){pre.textContent=j.lines.join('\n');pre.scrollTop=pre.scrollHeight;}
-      if(j.running&&j.started_epoch&&j.now_epoch){
-        var el=j.now_epoch-j.started_epoch,ph=phaseOf(pre.textContent);
-        rlpulse.style.display='inline';
-        setMeta(stageLabel(ph), (ph==='verifying'||ph==='writing overlay'||ph==='rendering notebook')?'finishing':roughEta(Math.max(0,105-el)));
-      }
+      if(j.running&&j.started_epoch&&j.now_epoch){var el=j.now_epoch-j.started_epoch,ph=phaseOf(pre.textContent);rlpulse.style.display='inline';setMeta(stageLabel(ph),(ph==='verifying'||ph==='writing overlay'||ph==='rendering report')?'finishing':roughEta(Math.max(0,105-el)));}
       if(j.result){polling=false;rlpulse.style.display='none';setMeta(j.result.ok?'complete':'failed','');
         if(j.result.ok){pre.textContent+='\n↻ reloading with the regenerated map…';pre.scrollTop=pre.scrollHeight;setTimeout(function(){location.reload();},1500);}
         else{pre.textContent+='\n✕ '+(j.result.error||'run failed');showClose();}
@@ -778,13 +496,10 @@ document.getElementById('provx').onclick=closeCard;document.getElementById('prov
       else{polling=false;showClose();}
     }).catch(function(){if(polling)setTimeout(poll,2000);});
   }
-  document.getElementById('rerunBtn').onclick=function(){
-    openLog();pre.textContent='starting…';polling=true;
-    fetch('/rerun',{method:'POST'}).then(function(r){return r.json();}).then(function(){poll();}).catch(function(e){pre.textContent='✕ '+e;showClose();polling=false;});
-  };
-  // refresh-resilient: on load, re-attach to any in-progress run
+  document.getElementById('rerunBtn').onclick=function(){openLog();pre.textContent='starting…';polling=true;
+    fetch('/rerun',{method:'POST'}).then(function(r){return r.json();}).then(function(){poll();}).catch(function(e){pre.textContent='✕ '+e;showClose();polling=false;});};
   fetch('/rerun/log').then(function(r){return r.json();}).then(function(j){if(j.running){openLog();polling=true;poll();}}).catch(function(){});
 })();
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCard();});
-window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),ready:()=>!!REC,cmap:()=>cmap};
+
+window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),field:()=>field,setField:f=>{field=f;document.getElementById('colorby').value=f;applyProgram();},selection:()=>selectionObj()};
 </script>

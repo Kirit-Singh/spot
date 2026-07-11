@@ -39,7 +39,9 @@ Conventions in `CLAUDE.md`.
 
 ## Data
 Public datasets only — Marson CD4 Perturb-seq, DepMap/CCLE (expression, DEMETER2,
-PRISM), LINCS, Open Targets/ChEMBL/DrugBank. No data bundled in this repo.
+PRISM), LINCS, Open Targets/ChEMBL/DrugBank. **Source matrices are not bundled** in this
+repo; the small **derived display artifacts** that the workbench renders are tracked
+(~47 MB of JSON under `01_programs/app/data/`).
 
 ## License
 Code: **MIT** (`LICENSE`). Third-party data & reference sources: **`DATA_LICENSES.md`**.

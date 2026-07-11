@@ -168,8 +168,8 @@ for kind, lines in parse_cells(src):
         n += 1; body.append(render_code(lines, n))
 
 header = (
-    '<div class="hd"><h1>How this map was built — rendered methodology report</h1>'
-    '<div class="sub"><b>This is a rendered report of <code>stage1_pipeline.py</code>, NOT an '
+    '<div class="hd"><h1>Methods &amp; reproducibility</h1>'
+    '<div class="sub"><b>This is a rendered report of <code>stage1_pipeline.py</code>, not an '
     'executed notebook.</b> Code cells are shown as source; numeric results come from running the '
     'pipeline itself (deterministic, fixed seed), not from this renderer. The map shows '
     '<b>continuous transcriptional-program scores</b> — no categorical cell-type calls, no FDR/p/q, '
@@ -184,7 +184,7 @@ header = (
 )
 doc = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-       '<title>spot · Stage-1 provenance notebook</title><style>' + CSS + '</style></head>'
+       '<title>spot · Stage-1 methods &amp; reproducibility</title><style>' + CSS + '</style></head>'
        '<body><div class="wrap">' + header + "".join(body) + "</div></body></html>")
 open(OUT, "w").write(doc)
 print(f"rendered {OUT} ({n} code cells) at {now}")

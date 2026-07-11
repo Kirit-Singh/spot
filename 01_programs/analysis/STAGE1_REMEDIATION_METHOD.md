@@ -50,9 +50,10 @@ and is reported; generalization across donors; external / protein / functional v
 **Emit continuous per-program z-scores only.** No `top_program`, no compatibility flag, no
 veto, no threshold. Fields per cluster: `pct`, the five continuous program z-scores
 (`naive_like_z`, `activated_z`, `cycling_z`, `adhesion_high_z`, `treg_like_z`),
-`dominant_condition` (**reported, never an input**), and — **only if a single colour is
-operationally needed for the map** — `dominant_program_for_display_only` (the argmax, **clearly
-excluded from analysis and from exported records**; not a biological call).
+`dominant_condition` (**reported, never an input**). **This cluster step is a non-production
+diagnostic** (`SPOT_RUN_CLUSTER_DIAG=1`): the served overlay does not consume it and emits **no**
+cluster label, no per-cluster colour key, and no argmax — cluster IDs survive only as numeric
+technical provenance.
 
 **Describe the z-scores honestly:** they are **standardized *within this dataset's* clusters**
 (cluster mean minus cross-cluster mean over cross-cluster SD), so they mean **relatively
@@ -102,8 +103,10 @@ filter*, **default off**, **never stored** as a biological call, excluded from e
   tolerance** for the float scores (raw float-byte hashes fail across environments). Also
   require: expected nonzero row count; unique-barcode-count == row-count; an exact expected
   **barcode-set hash**; no missing/extra records between overlay and records; schema validation.
-  (The `dominant_program_for_display_only` field, being display-only and derivable from the
-  scores, is **not** part of the exported records nor the scientific hash.)
+  (The served overlay carries **no** display-argmax field; the map colour is a per-cell gradient
+  over one selected continuous score, derived in the UI from the frozen per-score display domains,
+  and is never hashed. The gate also enforces a cell-key whitelist, forbidden-field rejection, the
+  `programs[]`/domain contract, and a stale-string scan over the served artifacts.)
 - `stage1_pipeline.py`: regenerate **overlay and `stage01_cell_records.json` together** from one
   canonical per-barcode table; write temp then **atomically replace**; keep the wall-clock
   timestamp **out of the canonical body**.
@@ -120,9 +123,15 @@ permutation null; every categorical `func` / `ds` call; `is_treg_cluster`; the f
 the aggregate-count `match_pct` "cell-for-cell" claim.
 **Added:** continuous `treg_like_score`, `cd4_ctl_like_score` (+ `_actadj`), `th1_like_score`,
 `th2_like_score`, `th17_like_score`, `tfh_like_score`, `th9_like_score`; continuous
-differentiation scores; cluster continuous program z-scores; marker-detection descriptors;
-`dominant_condition` (reported); `dominant_program_for_display_only` (display-only, excluded
-from exports/analysis); `method_version`.
+differentiation scores; `method_version`. The served overlay is then **rebuilt from an explicit
+whitelist**: a clean `meta` carrying the `programs[]` contract (score field, label, family, panel
+genes, method, role, source) and **frozen per-score display domains** (p02/p50/p98 over the full
+396k), with cells reduced to `barcode, x, y, cluster, condition, donor` + the 12 scores.
+
+**Later removed in the schema cleanup (2026-07):** the per-cell `dominant_program_for_display_only`
+argmax, the inherited `treg_score` / `func_margin` / `low_conf` fields, the marker-detection
+descriptors, and all retired `meta` (embedding "verbatim-reproduction" claims, `nomen_counts`,
+`match_pct`, per-cluster labels). Cluster program z-scores remain a non-production diagnostic only.
 
 ## 9. Explicitly NOT specified here
 
