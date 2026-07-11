@@ -71,12 +71,9 @@
   .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
   .seg button:first-child{border-left:0}
   .seg button.on{background:var(--accent);color:#fff}
-  /* transparent stacked title, top-left of the plot */
-  .plotlabel{position:absolute;top:13px;left:18px;z-index:6;display:flex;flex-direction:column;gap:1px;pointer-events:none;background:transparent}
-  .plotlabel .pe{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-  .plotlabel .pt{font-family:var(--serif);font-size:18px;font-weight:500;color:var(--ink);line-height:1.05}
-  /* top-of-plot program-axis contrast toolbar (a skew-bar; sits ready, active on contrast) */
-  .ctbar{position:absolute;top:58px;left:14px;right:14px;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;padding:8px 11px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(4px);box-shadow:0 2px 10px rgba(30,27,22,.05)}
+  /* top-of-plot program-axis contrast panel — vertical stack: A row / B row / actions */
+  .ctbar{position:absolute;top:12px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:stretch;gap:7px;padding:9px 11px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(4px);box-shadow:0 2px 10px rgba(30,27,22,.05)}
+  .ctactions{display:flex;align-items:center;gap:8px;margin-top:1px}
   .ctbar .ctsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
   .ctgrp{display:flex;align-items:center;gap:6px;min-width:0}
   .ctchip{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 20px}
@@ -87,7 +84,7 @@
   .axsel:hover{border-color:var(--accent)}
   .axdir{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap;text-transform:capitalize}
   .axdir:hover{border-color:var(--accent)}
-  .ctclear{flex:0 0 auto;margin-left:auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  .ctclear{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap}
   .ctclear:hover{border-color:var(--treg);color:var(--treg)}
   .idbtn{flex:0 0 auto;border:0;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:600;background:var(--line);color:var(--muted);cursor:not-allowed;display:flex;align-items:center;gap:8px;white-space:nowrap}
   .idbtn .pend{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 7px}
@@ -95,11 +92,10 @@
   #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
   #skewline .skl{fill:none;stroke:rgba(30,27,22,.12);stroke-width:8;stroke-linecap:round}
   #skewline .belt{animation:beltflow .9s linear infinite}
-  #skewline .belt polyline{fill:none;stroke:var(--ink);stroke-width:4.2;stroke-linecap:round;stroke-linejoin:round;opacity:1}
+  #skewline .belt polyline{fill:none;stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;opacity:.62}
   @keyframes beltflow{from{transform:translate(0,0)}to{transform:translate(var(--mx,0),var(--my,0))}}
-  #ablegend{position:absolute;left:20px;bottom:16px;z-index:6;display:none;flex-direction:column;gap:6px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:9px 12px;backdrop-filter:blur(3px);font-size:12px}
-  #ablegend .abr{display:flex;align-items:center;gap:7px;color:var(--ink2);font-weight:600}
-  #ablegend .abr i{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  /* on-plot A/B population labels (sit at each pole's score-weighted centroid; belt runs between them) */
+  .anchlbl{position:absolute;z-index:5;display:none;transform:translate(-50%,-50%);background:rgba(255,255,255,.92);border:1.5px solid var(--line);border-radius:8px;padding:3px 9px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 9px rgba(30,27,22,.12)}
   /* belt stays ink-black (the app body has no dark theme, so no dark override) */
   /* methods & scope */
   .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
@@ -192,13 +188,10 @@
 
 <div class="body">
   <div class="plot">
-    <div class="plotlabel"><span class="pe">Stage 01 · CD4</span><span class="pt">CD4 transcriptional programs</span></div>
     <div class="ctbar">
       <div class="ctgrp"><span class="ctchip a">A</span><select class="axsel prog" data-ax="A" data-k="field"></select><button class="axdir" data-ax="A">high</button><select class="axsel cond" data-ax="A" data-k="condition"></select></div>
-      <span class="ctvs">vs</span>
       <div class="ctgrp"><span class="ctchip b">B</span><select class="axsel prog" data-ax="B" data-k="field"></select><button class="axdir" data-ax="B">high</button><select class="axsel cond" data-ax="B" data-k="condition"></select></div>
-      <button class="ctclear" id="ctclear">✕ Clear</button>
-      <button class="idbtn" id="idgenes" disabled title="Stage 2 (skewing genes) is not built yet">Identify genes → <span class="pend">Stage 2 pending</span></button>
+      <div class="ctactions"><button class="ctclear" id="ctclear">✕ Clear</button><button class="idbtn" id="idgenes" disabled title="Stage 2 (skewing genes) is not built yet">Identify genes → <span class="pend">Stage 2 pending</span></button></div>
     </div>
     <canvas id="c"></canvas>
     <div class="cbar">
@@ -207,8 +200,8 @@
       <div class="cbtk"><span id="cbLo">—</span><span id="cbMid">—</span><span id="cbHi">—</span></div>
       <div class="cbn">low → high · frozen display domain · grey = no data</div>
     </div>
-    <svg id="skewline"><line class="skl"/><g class="belt"></g></svg>
-    <div id="ablegend"></div>
+    <svg id="skewline"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
+    <div id="lblA" class="anchlbl"></div><div id="lblB" class="anchlbl"></div>
     <div id="pop"></div>
     <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
   </div>
@@ -455,9 +448,8 @@ function pole(c0,ax){
 function draw(){if(sx==null)return;const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);
   const contrast=contrastActive();
   document.querySelector('.cbar').style.display=contrast?'none':'block';
-  document.getElementById('ablegend').style.display=contrast?'flex':'none';
   if(contrast){drawContrast();return;}
-  hideSkewLine();
+  hideSkewLine();hideAnchorLabels();
   const d=domainFor(field);
   for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);
     const t=normScore(c0[field],d);
@@ -490,18 +482,22 @@ function drawContrast(){
     }
   }
   x.globalAlpha=1;
+  const lblText=ax=>`${progByField[ax.field].display_label} ${ax.direction} · ${scopeLabel(ax)}`;
   if(awa>0&&bwa>0){const A={X:axmx/awa,Y:axmy/awa},B={X:bxmx/bwa,Y:bxmy/bwa};
-    if(Math.hypot(B.X-A.X,B.Y-A.Y)>22)updateSkewLine(A,B);else hideSkewLine();}
-  else hideSkewLine();
-  document.getElementById('ablegend').innerHTML=
-    `<div class="abr"><i style="background:rgb(${ABHUE_A})"></i>A · ${progByField[axisA.field].display_label} ${axisA.direction} · ${scopeLabel(axisA)}</div>`+
-    `<div class="abr"><i style="background:rgb(${ABHUE_B})"></i>B · ${progByField[axisB.field].display_label} ${axisB.direction} · ${scopeLabel(axisB)}</div>`;
+    if(Math.hypot(B.X-A.X,B.Y-A.Y)>22)updateSkewLine(A,B);else hideSkewLine();
+    placeAnchorLabel('lblA',A,ABHUE_A,lblText(axisA));
+    placeAnchorLabel('lblB',B,ABHUE_B,lblText(axisB));
+  } else {hideSkewLine();hideAnchorLabels();}
 }
+function placeAnchorLabel(id,P,hue,text){const el=document.getElementById(id);el.textContent=text;el.style.color=`rgb(${hue})`;el.style.borderColor=`rgb(${hue})`;el.style.left=P.X+'px';el.style.top=P.Y+'px';el.style.display='block';}
+function hideAnchorLabels(){document.getElementById('lblA').style.display='none';document.getElementById('lblB').style.display='none';}
 // animated conveyor belt of chevrons from anchor a to anchor b (screen px), flowing a→b
 function updateSkewLine(a,b){const svg=document.getElementById('skewline');
   const ang=Math.atan2(b.Y-a.Y,b.X-a.X),ux=Math.cos(ang),uy=Math.sin(ang);
   const ax=a.X+ux*20,ay=a.Y+uy*20,bx=b.X-ux*20,by=b.Y-uy*20,L=Math.hypot(bx-ax,by-ay);
   const ln=svg.querySelector('.skl');ln.setAttribute('x1',ax);ln.setAttribute('y1',ay);ln.setAttribute('x2',bx);ln.setAttribute('y2',by);
+  // fade-mask endpoints along the belt so chevrons fade IN at the start and OUT at the end
+  const g=svg.querySelector('#beltGrad');g.setAttribute('x1',ax);g.setAttribute('y1',ay);g.setAttribute('x2',bx);g.setAttribute('y2',by);
   const s=8,gap=21,cx=Math.cos(ang),cy=Math.sin(ang);let chev='';
   for(let dd=0;dd<=L+gap;dd+=gap){const p0x=ax+ux*dd,p0y=ay+uy*dd;
     const tx=p0x+cx*s,ty=p0y+cy*s,w1x=p0x+Math.cos(ang+2.4)*s,w1y=p0y+Math.sin(ang+2.4)*s,w2x=p0x+Math.cos(ang-2.4)*s,w2y=p0y+Math.sin(ang-2.4)*s;
