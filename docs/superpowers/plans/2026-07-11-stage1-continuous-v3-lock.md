@@ -4,6 +4,13 @@
 > (91 GB). The **lead session plans and independently verifies** (generator ≠ verifier). Steps use
 > checkbox (`- [ ]`) tracking. Do not touch v2 artifacts except to mark them superseded.
 >
+> **Rev 5 (2026-07-11):** the T7a gate set is **replaced** with the owner-approved, scale-aware,
+> membership-free set (no cross-program raw-median gate; no zero-origin sign / above-median-membership
+> gate). Gates are frozen engineering/QC tolerances (no p/FDR); `stage1_selectable_by_condition` per
+> condition; `stage2_base_portability` kept separate; two rows (Pair redundancy, Off-axis association)
+> await exact thresholds. **Control build independently verified byte-identical** (11/11 programs,
+> `bins_sha256=0e8423df…`, `pool_sha256=72b4648c…`, `control_eligible_pool=17,903`).
+>
 > **Rev 4 (2026-07-11):** bins frozen to the **÷N** form `bin=floor((rank−1)*25/n_finite)`,
 > `n_finite=18,130` (no top clamp; ÷(n−1) rejected); pool terminology split into `assay_present` (18,130)
 > / `detected_in_396k` (17,956) / `control_eligible_pool` (17,903 = detected − 53); normalization is
@@ -233,23 +240,35 @@ no nonselectable program. A literal example lives only in `stage01_selection_dem
   Canonical-content hash `barcode+x+y`; record the raw-file SHA in the release manifest.
 - [ ] **Verify (lead):** coordinate hash pinned + re-derivable.
 
-## Task 7a: Pre-register the gates (BEFORE scoring)
-**Executor:** lead + CS. **Files:** `stage01_gate_spec.json` — committed before any score exists.
-Concrete metrics + thresholds (no vague prose), grouped into four categories:
-- [ ] **Program-measurement gates** (per primary program): coverage `n_measured ≥ 3` (else
-  auto-nonselectable); LOMO stability with **controls held fixed** — removing any single measured
-  marker shifts the program's global median by `≤ 0.5 × (cross-cell IQR of the score)`; control-key
-  sensitivity — 3 alternative `master_seed`s shift the program median by `≤ 0.10` log-units.
-- [ ] **Condition-specific pair/contrast gates** (per A/B at a condition): axis non-degeneracy —
-  `|median(A) − median(B)| ≥ 0.20` log-units **or** rank-biserial separation `≥ 0.10`; off-axis
-  specificity — the A−B direction is not collinear (`|r| ≥ 0.90`) with a third program's axis (else flag).
-- [ ] **Overlay-fidelity gates:** `|overlay median − 396k median| ≤ 0.02` per program; donor×condition
-  composition matches 396k within `±1` percentage point; per-program KS distance `≤ 0.03`.
-- [ ] **Donor stability (LODO, biological n=4):** the sign of each program's median at the selected
-  condition is preserved under all 4 leave-one-donor-out folds; no single donor supplies `> 50%` of the
-  program's above-median cells at that condition; D2's divergent Th1-like behavior recorded explicitly.
-- [ ] Commit `stage01_gate_spec.json`. **Verify (lead):** thresholds are concrete and committed before
-  scoring; every metric names its statistic, stratum, and consequence.
+## Task 7a: Pre-register the gates (BEFORE scoring) — APPROVED SET
+**Executor:** lead + CS. **File:** `stage01_gate_spec.json` — committed before any score exists.
+Frozen **engineering/QC tolerances**, NOT inferential cutoffs — **no p-values / FDR**. Scale-aware and
+membership-free: **no cross-program raw-median comparison** (A/B have different scales), **no
+zero-origin sign test**, **no "above-median" cell membership**. Store `stage1_selectable_by_condition`
+(not one global boolean); keep `stage2_base_portability` **separate** from Stage-1 measurement validity;
+never treat 396k cells as biological replicates. If a program fails, record it nonselectable **for that
+condition** — do NOT retune markers, seeds, or thresholds afterward.
+
+| Gate | Frozen rule | Consequence |
+|---|---|---|
+| Global coverage | `n_panel_genes_used ≥ 3` | else globally nonselectable |
+| Stage-2 base portability | `n_panel_in_effect_universe ≥ 3`, `n_control_in_effect_universe ≥ 10`; record retained panel/control coefficient fractions | else Stage-2 unavailable (separate from Stage-1 validity); target-specific masking stays a Stage-2 gate |
+| Condition measurability | in every donor at condition C: panel-score `IQR > 0` **and** ≥2 panel genes detected in ≥1% of cells | fail only program×condition |
+| LOMO panel robustness | controls **fixed**; compare `panel_mean_full` vs `panel_mean_minus_gene` (NOT the control-sharing scores); for every removed marker and donor at C: `Spearman ρ ≥ 0.80` **and** `median(|Δpanel|)/IQR(panel_mean_full) ≤ 0.25` | fail program×condition; undefined metric fails |
+| Control-draw sensitivity | 20 alt master seeds (`12346…12365`); for every seed and donor×condition: primary-vs-alt score `ρ ≥ 0.90` **and** `|median_alt − median_primary|/IQR_primary ≤ 0.25` | fail program×condition |
+| Selection preflight | both programs pass at the selected condition; same real condition; all four donors; no sensitivity lane; no `All`; reject identical program+direction | hard structural gate |
+| Pair redundancy | donor-specific `Spearman ρ(A,B)` within the selected condition | **[threshold + consequence PENDING — truncated in transmission]** |
+| Off-axis association | `A–C` and `B–C` Spearman separately for every third program C, in the selected condition | **[threshold + consequence PENDING — truncated in transmission]** |
+| Overlay composition | **exact** frozen donor×condition barcode counts (not ±1 pp) | failure blocks overlay release |
+| Overlay distributions | per program×donor×condition: IQR-standardized median error `≤ 0.10 × full-data IQR` **and** ECDF sup-distance `D ≤ 0.05` (no KS p-value) | blocks overlay release, not program selectability |
+| Overlay correlations | per condition: max pairwise `Spearman` difference between overlay and full data `≤ 0.10` | failure blocks overlay release |
+| Donor sensitivity | `max_LODO |median_3donor − median_4donor| / IQR_4donor > 0.25` | set `donor_sensitive=true` (flag only) |
+| CP10k & v2 comparison | stratified rank concordance + IQR-standardized shifts | descriptive only |
+
+- [ ] Fill the two PENDING rows with the owner's exact thresholds, then commit `stage01_gate_spec.json`
+  (machine-readable: per-gate statistic / stratum / threshold / consequence). **Verify (lead):**
+  membership-free + scale-aware; committed before any score exists; `stage1_selectable_by_condition`
+  present; portability separated.
 
 ## Task 7b: Run validation against the pre-registered gates (AFTER scoring)
 **Executor:** CS. **Verifier:** lead. **Files:** `stage01_validation.json`.
