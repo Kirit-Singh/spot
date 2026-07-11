@@ -136,17 +136,30 @@ def score_panel(gl, rng):
         ctrl.update(rng.choice(cand, CTRL_SIZE, replace=False) if len(cand) > CTRL_SIZE else cand)
     ctrl -= set(gl)
     ctrl_idx = np.sort(np.array([v2i[g] for g in ctrl]))        # SORT: set-iteration order is hash-randomized;
-    return mean_cols(gl_idx) - mean_cols(ctrl_idx)              # sorting makes the summation order reproducible
+    ctrl_symbols = [str(var[i]) for i in ctrl_idx]             # EXACT frozen control genes, index-sorted (deterministic)
+    return mean_cols(gl_idx) - mean_cols(ctrl_idx), ctrl_symbols  # sorting makes the summation order reproducible
+
+# EXACT frozen control genes each score_panel() sampled, per score field. Threaded out of
+# score_panel WITHOUT changing the scoring math or the RNG draw order (score_panel still
+# consumes `rng` in the same FK -> DK -> S_act sequence). Stored in meta.programs[].control_genes.
+CONTROL_GENES = {}
+def _score_field(name, gl):
+    s, ctrl = score_panel(gl, rng)
+    CONTROL_GENES[name] = ctrl
+    return s
 
 # continuous scores (the shipped scientific outputs)
-func_scores = {f"{k}_score": score_panel(FUNC[k], rng) for k in FK}
-diff_scores = {f"{k}_score": score_panel(DIFF[k], rng) for k in DK}
+func_scores = {f"{k}_score": _score_field(f"{k}_score", FUNC[k]) for k in FK}
+diff_scores = {f"{k}_score": _score_field(f"{k}_score", DIFF[k]) for k in DK}
 
 # CD4 CTL-like activation-conditioned SENSITIVITY score (descriptive sensitivity lane)
-S_act = score_panel([g for g in ["CD69", "CD38", "MKI67", "TNFRSF9", "IL2RA"] if g in v2i], rng)
+S_act, _ = score_panel([g for g in ["CD69", "CD38", "MKI67", "TNFRSF9", "IL2RA"] if g in v2i], rng)
 raw_ctl = func_scores["cd4_ctl_like_score"]
 _b = np.polyfit(S_act, raw_ctl, 1)
 func_scores["cd4_ctl_like_score_actadj"] = raw_ctl - (_b[0]*S_act + _b[1])
+# the actadj sensitivity lane reuses the cd4_ctl_like panel's frozen control set (activation
+# is regressed out afterward; no new control draw), so its exact control genes are identical.
+CONTROL_GENES["cd4_ctl_like_score_actadj"] = CONTROL_GENES["cd4_ctl_like_score"]
 
 print("emitted continuous program scores:", sorted(list(func_scores) + list(diff_scores)))
 
@@ -181,10 +194,13 @@ from datetime import datetime
 allcols = {**func_scores, **diff_scores}                       # 12 continuous scores over all 396k
 b2i = {str(barcodes[i]): i for i in range(N)}
 
-# frozen per-score display domain over the FULL 396k universe (p02 / p50 / p98)
+# frozen per-score display domain over the FULL 396k universe. Richer quantiles
+# (p02 p10 p25 p50 p75 p90 p95 p98 p99) so the §4.1 sparse-domain transform can pick the
+# first upper quantile STRICTLY greater than p50; p02/p50/p98 retained for back-compat.
+_DOMAIN_QUANTILES = [2, 10, 25, 50, 75, 90, 95, 98, 99]
 def _domain(v):
-    p = np.percentile(v, [2, 50, 98])
-    return {"p02": round(float(p[0]), 5), "p50": round(float(p[1]), 5), "p98": round(float(p[2]), 5)}
+    p = np.percentile(v, _DOMAIN_QUANTILES)
+    return {f"p{q:02d}": round(float(pi), 5) for q, pi in zip(_DOMAIN_QUANTILES, p)}
 SCORE_DOMAINS = {k: _domain(allcols[k]) for k in sorted(allcols)}
 
 # programs[] contract — the single source of truth for the UI selector / legend / cards / methods.
@@ -212,6 +228,7 @@ programs = [{
     "display_label": DISPLAY_LABEL[k],
     "family": FAMILY_OF[k],
     "panel_genes": PANEL_OF[k],
+    "control_genes": CONTROL_GENES[k],   # EXACT frozen control genes score_panel() sampled (symbols)
     "scoring_method": (_METHOD if not k.endswith("_actadj")
                        else "cd4_ctl_like_score with a linear activation score regressed out (descriptive sensitivity lane)"),
     "role": ("sensitivity" if k.endswith("_actadj") else "primary"),
