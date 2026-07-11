@@ -273,8 +273,8 @@
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* programs over time — programs × Rest/8h/48h, cell = median program score (shaded within each row) */
   /* a right spacer column mirrors the label column (--labw) so the Rest/8h/48h columns sit dead-centre */
-  #prevSection{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:center;--labw:96px}
-  #prevSection .prevcap{font-size:8.5px;color:var(--muted);letter-spacing:.02em;margin-top:2px}
+  #timeGridSection{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:center;--labw:96px}
+  #timeGridSection .prevcap{font-size:8.5px;color:var(--muted);letter-spacing:.02em;margin-top:2px}
   .prevbody{width:max-content;max-width:100%;margin:0 auto}
   .prevgrid{display:grid;grid-template-columns:var(--labw) repeat(3,32px) auto;gap:3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
@@ -358,11 +358,11 @@
         <div class="crends"><span id="crEndA">From</span><span>Mixed</span><span id="crEndB">To</span></div>
       </div>
     </div>
-    <div id="prevSection">
+    <div id="timeGridSection">
       <div class="lab">Programs over time</div>
-      <div class="prevcap">median program score per timepoint · shaded within each program</div>
+      <div class="prevcap">median program score per timepoint · shaded on a shared scale</div>
       <div class="prevbody">
-        <div class="prevgrid" id="prevGrid"></div>
+        <div class="prevgrid" id="timeGrid"></div>
       </div>
     </div>
   </div>
@@ -398,7 +398,7 @@
     </div></div>
     <div class="pstep"><div class="pn">3</div><div class="pc">
       <h4>Program scores</h4>
-      <p>Every cell carries continuous <b>RNA panel-minus-control scores</b> — <code>score_genes</code> panel mean minus an expression-bin-matched control mean (25 bins, ctrl_size 50, fixed seed). 11 programs are shown across two families (differentiation, functional); a 12th activation-adjusted sensitivity lane is retained in the data but hidden from the UI. Program names follow the Masopust et al. nomenclature. These are continuous scores, not cell-type calls.</p>
+      <p>Every cell carries continuous <b>RNA panel-minus-control scores</b> — <code>score_genes</code> panel mean minus an expression-bin-matched control mean (25 bins, ctrl_size 50, fixed seed). 11 programs span two families (differentiation, functional); a 12th activation-adjusted CD4 CTL-like sensitivity lane is selectable in the color-by menu (see step 4). Program names follow the Masopust et al. nomenclature. These are continuous scores, not cell-type calls.</p>
     </div></div>
     <div class="pstep"><div class="pn">4</div><div class="pc">
       <h4>Activation sensitivity lane</h4>
@@ -534,7 +534,7 @@ Promise.all([
   // single-program gradient (default color-by = Naïve-like). Contrast + belt activate only once BOTH
   // programs are chosen. The acceptance anchor (treg_like→th1_like@Stim48hr, balanced_a_to_b →
   // 26b866f2ad813d71) is reproducible through the UI selections / __t.setContrast.
-  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildPrevalence();
+  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildProgramTimeGrid();
   applyProgram();
   resize();
 }).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
@@ -549,7 +549,9 @@ function buildSelector(){
   sel.innerHTML=FAM_ORDER.map(fam=>{
     const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
     return `<optgroup label="${FAM_LABEL[fam]}">`+ps.map(p=>`<option value="${p.score_field}"${p.score_field===field?' selected':''}>${p.display_label}</option>`).join('')+`</optgroup>`;
-  }).join('');
+  }).join('')
+  // activation-adjusted sensitivity lane — surfaced here so the confound is visible where it bites (see Methods)
+  +(()=>{const sp=programs.filter(p=>p.role==='sensitivity');return sp.length?`<optgroup label="${FAM_LABEL.sensitivity} — see Methods">`+sp.map(p=>`<option value="${p.score_field}"${p.score_field===field?' selected':''}>${p.display_label}</option>`).join('')+`</optgroup>`:'';})();
   sel.onchange=e=>{field=e.target.value;applyProgram();};
 }
 function buildFilters(){
@@ -564,10 +566,11 @@ function buildFilters(){
 }
 // median program score across the timecourse: for each program, the MEDIAN continuous score
 // (panel-minus-control) among cells at Rest / 8h / 48h. Continuous — no threshold, no categorical
-// call, no prevalence. Cell shade tracks the median WITHIN each program (its own Rest→48h range),
-// so rows are read as trends, not compared across programs. Click a program to colour the map.
-function buildPrevalence(){
-  const grid=document.getElementById('prevGrid'); if(!grid||!cells.length)return;
+// call, no prevalence. Cell shade tracks the median on a SHARED absolute scale across all programs,
+// so a near-flat program renders flat and the extent of each swing is comparable across rows (1:1,
+// not per-row renormalised). Click a program to colour the map.
+function buildProgramTimeGrid(){
+  const grid=document.getElementById('timeGrid'); if(!grid||!cells.length)return;
   const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
   // short labels for this compact grid only (full '-like' names stay in the tooltip + everywhere else)
   const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint-high',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
@@ -581,14 +584,17 @@ function buildPrevalence(){
   const med={},degen={};
   progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
     med[p.score_field]={};conds.forEach(([k])=>{med[p.score_field][k]=median(vals[p.score_field][k]);});});
+  // shared absolute scale across all non-degenerate medians → magnitude comparable across rows
+  let gLo=Infinity,gHi=-Infinity;
+  progs.forEach(p=>{if(degen[p.score_field])return;conds.forEach(([k])=>{const v=med[p.score_field][k];if(v<gLo)gLo=v;if(v>gHi)gHi=v;});});
+  const gSpan=gHi>gLo?gHi-gLo:1;
   let html='<div></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('')+`<a class="ph prmodh" href="${PAPERS.masopust.url}" target="_blank" rel="noopener" title="Masopust et al. · Guidelines for T cell nomenclature">Modular definition ↗</a>`,anyND=false;
   progs.forEach(p=>{
     const nd=degen[p.score_field]; if(nd)anyND=true;
     html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${SHORT[p.score_field]||p.display_label}</div>`;
-    const ms=conds.map(([k])=>med[p.score_field][k]),lo=Math.min(...ms),hi=Math.max(...ms);
     conds.forEach(([k])=>{
       if(nd){html+='<div class="pc nd">ND</div>';return;}
-      const v=med[p.score_field][k],i=hi>lo?(v-lo)/(hi-lo):0.5;
+      const v=med[p.score_field][k],i=(v-gLo)/gSpan;
       html+=`<div class="pc" style="background:${ramp(i)};color:${i>0.55?'#1E1B16':'#fff'}" title="median ${v.toFixed(3)}">${v.toFixed(2)}</div>`;});
     html+=`<div class="prmod">${MOD[p.score_field]||'—'}</div>`;
   });
@@ -791,9 +797,9 @@ function applyProgram(){
   grad.style.background=degen?DEGEN_CSS:VIR_CSS;
   // "grey = no data" only when the field actually has no shadeable data (degenerate, e.g. Th9);
   // for normal fully-scored programs there is no grey, so the note is hidden.
-  const cbNote=document.getElementById('cbNote');
-  cbNote.textContent=degen?'Too sparse to shade':'';
-  cbNote.style.display=degen?'':'none';
+  const cbNote=document.getElementById('cbNote'),isSens=p.role==='sensitivity';
+  cbNote.textContent=degen?'Too sparse to shade':(isSens?'Activation-adjusted sensitivity lane — see Methods':'');
+  cbNote.style.display=(degen||isSens)?'':'none';
   const pg=document.getElementById('pcGenes');pg.textContent=p.panel_genes.join('  ·  ');requestAnimationFrame(fitMarkers);
   draw();
 }
