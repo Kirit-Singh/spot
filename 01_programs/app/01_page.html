@@ -132,7 +132,7 @@
   /* methods & scope */
   .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
   /* flows below the contrast controls; JS shrinks the font so the single line never exceeds the control width */
-  #lastrun{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;margin-top:2px}
+  #lastrun{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;margin-top:2px;margin-left:calc(var(--chipw) + 6px)}
   #lastrun b{color:var(--ink2);font-weight:500}
   /* methods & provenance tab (top-right), opens the right slide-over */
   .methodstab{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
@@ -622,12 +622,13 @@ async function onIdentifyGenes(){
   st.textContent=cached?('Loaded cached result · contrast '+r.contrast_id)
                        :('Selection saved · contrast '+r.contrast_id+' (no cached result yet)');
 }
-// shrink #lastrun's font (10px → 7px floor) until its single line fits inside the contrast panel's control width
+// shrink #lastrun's font (10px → 7px floor) until its single line fits under the action buttons
+// (spans the Identify-button's left edge to the Clear-button's right edge)
 function fitLastRun(){
   const el=document.getElementById('lastrun');if(!el||!el.textContent)return;
-  const acts=document.querySelector('.ctactions');if(!acts)return;
+  const idb=document.getElementById('idgenes'),clr=document.getElementById('ctclear');if(!idb||!clr)return;
   el.style.width='0px';                 // don't let #lastrun drive the panel width while we measure it
-  const avail=acts.offsetWidth;         // the actions row stretches to the panel's full control width
+  const avail=Math.round(clr.getBoundingClientRect().right-idb.getBoundingClientRect().left); // Identify-left → Clear-right
   el.style.fontSize='10px';el.style.width=avail+'px';
   let fs=10;
   while(el.scrollWidth>avail&&fs>7){fs-=0.5;el.style.fontSize=fs+'px';}
