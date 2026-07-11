@@ -108,6 +108,7 @@
   .ctlbl{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:0 1px;white-space:nowrap}
   .axdir{flex:0 0 auto;width:var(--dirw);text-align:center;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 0;cursor:pointer;white-space:nowrap;text-transform:capitalize}
   .axdir:hover{border-color:var(--accent)}
+  .axdir.hi{color:#C0392B}.axdir.lo{color:#2E74B5}
   /* matched button pair — Clear (active) + Identify genes (disabled/muted) share shape/radius/padding/font/height; differ only by state */
   /* Identify (program+direction width) + Clear (condition width) on one row — share height/radius/border/font, differ by width + state */
   .ctclear,.idbtn{font:inherit;font-size:11px;font-weight:600;height:27px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
@@ -390,8 +391,8 @@ const VIR_CSS='linear-gradient(90deg,'+VIR.map((s,i)=>`rgb(${s}) ${(i/(VIR.lengt
 const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
 let DATA=null,cells=[],meta=null,programs=[],progByField={};
 let field='diff_naive_score',cond='All',donorSel='All',hover=-1;
-let axisA={field:null,condition:'Stim48hr',direction:'high',donor:'All'},
-    axisB={field:null,condition:'Stim48hr',direction:'high',donor:'All'};
+let axisA={field:null,condition:'All',direction:'high',donor:'All'},
+    axisB={field:null,condition:'All',direction:'high',donor:'All'};
 let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
 // program_id + stage2_selectable live in the program registry (NOT in the overlay meta.programs)
@@ -543,7 +544,7 @@ function buildAxis(){
   // away-from-A decomposition + Perturb2State knockdown-informed support are presented on Stage 2.
   document.querySelectorAll('.axsel.prog').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.field=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axsel.cond').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.condition=e.target.value;updateAxisMeta();});
-  document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';e.target.textContent=ax.direction;updateAxisMeta();});
+  document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';setAxdir(e.target,ax.direction);updateAxisMeta();});
   document.getElementById('ctclear').onclick=clearContrast;
   document.getElementById('idgenes').onclick=onIdentifyGenes;
   syncAxisUI();syncObjTitle();
@@ -551,17 +552,19 @@ function buildAxis(){
 }
 // keep the objective control's own tooltip in sync with the selected option
 function syncObjTitle(){const ob=document.getElementById('objectiveSel');if(!ob)return;const o=ob.options[ob.selectedIndex];ob.title=o?o.title:'';}
+// direction toggle text + colour (high = red, low = blue)
+function setAxdir(b,dir){b.textContent=dir;b.classList.toggle('hi',dir==='high');b.classList.toggle('lo',dir==='low');}
 // reflect the axisA/axisB state back into the bar's selects (empty field → placeholder) + toggles + conditions
 function syncAxisUI(){
   document.querySelectorAll('.axsel.prog').forEach(s=>s.value=(s.dataset.ax==='A'?axisA.field:axisB.field)||'');
   document.querySelectorAll('.axsel.cond').forEach(s=>s.value=s.dataset.ax==='A'?axisA.condition:axisB.condition);
-  document.querySelectorAll('.axdir').forEach(b=>b.textContent=b.dataset.ax==='A'?axisA.direction:axisB.direction);
+  document.querySelectorAll('.axdir').forEach(b=>setAxdir(b,b.dataset.ax==='A'?axisA.direction:axisB.direction));
   const ob=document.getElementById('objectiveSel');if(ob)ob.value=objective;
 }
 // Clear → reset A and B to the empty placeholder state → contrastActive() false → single-program gradient
 function clearContrast(){
-  axisA={field:null,condition:'Stim48hr',direction:'high',donor:'All'};
-  axisB={field:null,condition:'Stim48hr',direction:'high',donor:'All'};
+  axisA={field:null,condition:'All',direction:'high',donor:'All'};
+  axisB={field:null,condition:'All',direction:'high',donor:'All'};
   syncAxisUI();updateAxisMeta();
 }
 // friendly condition (Rest / 8 hr / 48 hr / All times) + donor only if not "All"
