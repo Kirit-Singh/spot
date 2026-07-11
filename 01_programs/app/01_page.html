@@ -30,10 +30,7 @@
   .body{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
   .plot{position:relative;border-right:1px solid var(--line);min-height:0;overflow:hidden}
   canvas{width:100%;height:100%;display:block}
-  .ttl{position:absolute;top:14px;left:20px;pointer-events:none}
-  .ttl b{font-family:var(--serif);font-size:19px;font-weight:500}
-  .ttl .s{font-size:11.5px;color:var(--muted);font-family:var(--mono);margin-top:2px}
-  .ttl .s b{font-family:'Inter Tight';font-weight:600;color:var(--ink2);font-size:11.5px}
+  /* plot title now lives inline in the top-of-plot contrast toolbar (.ctbar) */
   /* on-plot continuous colour key */
   .cbar{position:absolute;left:20px;bottom:16px;width:236px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:9px 11px 8px;backdrop-filter:blur(3px)}
   .cbar .cbt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
@@ -74,37 +71,41 @@
   .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
   .seg button:first-child{border-left:0}
   .seg button.on{background:var(--accent);color:#fff}
-  /* A/B program-axis contrast builder */
-  .axbox{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--sunken)}
-  .axrow{display:flex;align-items:center;gap:6px;margin-bottom:8px}
-  .axrow:last-of-type{margin-bottom:0}
-  .axtag{font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 20px}
-  .axtag.a{background:var(--accent)}.axtag.b{background:var(--treg)}
-  .axsel{flex:1 1 auto;min-width:0;font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 18px 4px 7px;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
-  .axsel.prog{flex:2 1 0}
-  .axdir{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+  /* top-of-plot program-axis contrast toolbar (a skew-bar; sits ready, active on contrast) */
+  .ctbar{position:absolute;top:12px;left:14px;right:14px;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;padding:8px 11px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(4px);box-shadow:0 2px 10px rgba(30,27,22,.05)}
+  .ctbar .cttitle{font-family:var(--serif);font-size:15px;font-weight:500;color:var(--ink);white-space:nowrap;line-height:1}
+  .ctbar .ctsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+  .ctgrp{display:flex;align-items:center;gap:6px;min-width:0}
+  .ctchip{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:0 0 20px}
+  .ctchip.a{background:rgb(38,150,190)}.ctchip.b{background:rgb(201,74,120)}
+  .ctvs{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600;padding:0 1px}
+  .axsel{flex:0 1 auto;min-width:0;font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 18px 4px 7px;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
+  .axsel.prog{max-width:150px}.axsel.cond{max-width:120px}
+  .axsel:hover{border-color:var(--accent)}
+  .axdir{flex:0 0 auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap;text-transform:capitalize}
   .axdir:hover{border-color:var(--accent)}
+  .ctclear{flex:0 0 auto;margin-left:auto;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  .ctclear:hover{border-color:var(--treg);color:var(--treg)}
+  .idbtn{flex:0 0 auto;border:0;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:600;background:var(--line);color:var(--muted);cursor:not-allowed;display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .idbtn .pend{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 7px}
   /* A→B conveyor belt on the plot (display-only; anchors are score-weighted centroids, no membership) */
   #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
-  #skewline .skl{fill:none;stroke:rgba(62,125,140,.22);stroke-width:8;stroke-linecap:round}
+  #skewline .skl{fill:none;stroke:rgba(30,27,22,.12);stroke-width:8;stroke-linecap:round}
   #skewline .belt{animation:beltflow .9s linear infinite}
-  #skewline .belt polyline{fill:none;stroke:var(--accent);stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round;opacity:.96}
+  #skewline .belt polyline{fill:none;stroke:var(--ink);stroke-width:4.2;stroke-linecap:round;stroke-linejoin:round;opacity:1}
   @keyframes beltflow{from{transform:translate(0,0)}to{transform:translate(var(--mx,0),var(--my,0))}}
-  #ablegend{position:absolute;top:52px;left:30px;z-index:6;display:none;flex-direction:column;gap:5px;font-size:12px}
+  #ablegend{position:absolute;left:20px;bottom:16px;z-index:6;display:none;flex-direction:column;gap:6px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:9px 12px;backdrop-filter:blur(3px);font-size:12px}
   #ablegend .abr{display:flex;align-items:center;gap:7px;color:var(--ink2);font-weight:600}
   #ablegend .abr i{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
-  #ablegend .abn{font-size:10.5px;color:var(--muted);font-weight:400}
-  @media(prefers-color-scheme:dark){#skewline .skl{stroke:rgba(120,190,205,.24)}#skewline .belt polyline{stroke:#5FB3C4}}
-  .axmeta{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:9px;line-height:1.4}
-  .idbtn{width:100%;margin-top:9px;border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:600;background:var(--line);color:var(--muted);cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:9px}
-  .idbtn .pend{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 8px}
+  @media(prefers-color-scheme:dark){#skewline .skl{stroke:rgba(230,225,215,.22)}#skewline .belt polyline{stroke:#EDE7DD}}
   /* methods & scope */
   .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
   #lastrun{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:9px}
   #lastrun b{color:var(--ink2);font-weight:500}
-  .provbtn{width:100%;margin-top:11px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;text-align:left;cursor:pointer;display:flex;align-items:center;gap:7px}
-  .provbtn:hover{border-color:var(--accent);color:var(--accent)}
-  .provbtn .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
+  /* methods & provenance tab (top-right), opens the right slide-over */
+  .methodstab{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .methodstab:hover{border-color:var(--accent);color:var(--accent)}
+  .methodstab .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
   /* re-run log overlay (revealed only when the host exposes /rerun) */
   #rerunlog{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:12}
   #rerunlog .rlh{display:flex;align-items:center;gap:11px;padding:14px 20px;border-bottom:1px solid var(--line);flex:0 0 auto}
@@ -147,7 +148,8 @@
   #modal .src a{color:var(--accent);text-decoration:none}#modal .src a:hover{text-decoration:underline}
   #modal .src code{font-size:9.5px;color:var(--ink2)}
   /* ── provenance / method popup ── */
-  #provmodal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;max-width:94vw;max-height:84vh;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:42;flex-direction:column;overflow:hidden}
+  #provmodal{position:fixed;top:0;right:0;height:100vh;width:600px;max-width:94vw;background:var(--surface);border-radius:16px 0 0 16px;box-shadow:-24px 0 64px rgba(30,27,22,.28);display:flex;z-index:42;flex-direction:column;overflow:hidden;transform:translateX(102%);transition:transform .34s cubic-bezier(.4,0,.2,1);will-change:transform}
+  #provmodal.open{transform:translateX(0)}
   #provmodal .phd{padding:16px 20px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex:0 0 auto}
   #provmodal .ptitle{font-family:'Inter Tight';font-size:16px;font-weight:600;line-height:1.2}
   #provmodal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
@@ -168,13 +170,15 @@
   #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
   #provmodal a{color:var(--accent)}
   @media (max-width:720px){
-    .body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) auto}
+    .body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(240px,1fr) auto}
     .plot{border-right:0;border-bottom:1px solid var(--line)}
     .rail{max-height:48vh}
+    /* reclaim top-bar space: keep brand + Methods tab; source links live on in the provenance panel */
+    .dstools .srclink,.dstools .hflink,.dstools .dssep{display:none}
   }
 </style>
 
-<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></span></div>
+<div class="top"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span></span><span class="dstools"><a id="dsSrc" class="srclink" target="_blank" rel="noopener"></a><span class="dssep">·</span><a id="dsHf" class="hflink" target="_blank" rel="noopener">🤗 Hugging Face ↗</a><span class="dssep">·</span><button id="provbtn" class="methodstab"><span class="ic">i</span>Methods &amp; provenance</button></span></div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
   <div class="nstep off"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
@@ -185,7 +189,15 @@
 
 <div class="body">
   <div class="plot">
-    <div class="ttl"><b>CD4 transcriptional programs</b><div class="s">colour = <b id="ttlProg">Naïve-like</b> RNA-program score</div></div>
+    <div class="ctbar">
+      <div class="cttitle">CD4 transcriptional programs</div>
+      <div class="ctsep"></div>
+      <div class="ctgrp"><span class="ctchip a">A</span><select class="axsel prog" data-ax="A" data-k="field"></select><button class="axdir" data-ax="A">high</button><select class="axsel cond" data-ax="A" data-k="condition"></select></div>
+      <span class="ctvs">vs</span>
+      <div class="ctgrp"><span class="ctchip b">B</span><select class="axsel prog" data-ax="B" data-k="field"></select><button class="axdir" data-ax="B">high</button><select class="axsel cond" data-ax="B" data-k="condition"></select></div>
+      <button class="ctclear" id="ctclear">✕ Clear</button>
+      <button class="idbtn" id="idgenes" disabled title="Stage 2 (skewing genes) is not built yet">Identify genes → <span class="pend">Stage 2 pending</span></button>
+    </div>
     <canvas id="c"></canvas>
     <div class="cbar">
       <div class="cbt" id="cbTitle">Naïve-like RNA-program score</div>
@@ -199,34 +211,20 @@
     <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
   </div>
   <div class="rail">
-    <div class="lab">Color by program score</div>
-    <select id="colorby" class="colorsel"></select>
-    <div class="pcard">
-      <div class="pn" id="pcName">—</div>
-      <div class="pf" id="pcFam">—</div>
-      <div class="pg" id="pcGenes"></div>
-      <div class="pm" id="pcMethod"></div>
-      <div class="ps" id="pcSrc"></div>
-    </div>
-
-    <div class="lab mt">Show cells · condition</div>
+    <div class="lab">Show cells · condition</div>
     <div class="seg" id="cond"></div>
     <div class="lab mt">Donor</div>
     <div class="seg" id="donorSel"></div>
 
-    <div class="lab mt">Program-axis contrast <span style="font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)">· stage 2 input</span></div>
-    <div class="axbox">
-      <div class="axrow"><span class="axtag a">A</span><select class="axsel prog" data-ax="A" data-k="field"></select><button class="axdir" data-ax="A">high</button></div>
-      <div class="axrow"><span style="width:20px;flex:0 0 20px"></span><select class="axsel" data-ax="A" data-k="condition"></select><select class="axsel" data-ax="A" data-k="donor"></select></div>
-      <div class="axrow" style="margin-top:11px"><span class="axtag b">B</span><select class="axsel prog" data-ax="B" data-k="field"></select><button class="axdir" data-ax="B">high</button></div>
-      <div class="axrow"><span style="width:20px;flex:0 0 20px"></span><select class="axsel" data-ax="B" data-k="condition"></select><select class="axsel" data-ax="B" data-k="donor"></select></div>
-      <div class="axmeta" id="axMeta"></div>
-      <button class="idbtn" id="idgenes" disabled title="Stage 2 (skewing genes) is not built yet">Identify genes → <span class="pend">Stage 2 pending</span></button>
+    <div class="lab mt">Color by program score</div>
+    <select id="colorby" class="colorsel"></select>
+    <div class="pcard">
+      <div class="pn" id="pcName">—</div>
+      <div class="pg" id="pcGenes"></div>
+      <div class="ps" id="pcSrc"></div>
     </div>
 
-    <div class="scope" id="scope"></div>
     <div id="lastrun"></div>
-    <button id="provbtn" class="provbtn"><span class="ic">i</span>Methods &amp; provenance</button>
   </div>
 </div>
 
@@ -306,6 +304,18 @@ let axisA={field:null,condition:'All',direction:'high',donor:'All'},
 let sx,sy,ox,oy;
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
 const sv=v=>(v==null||isNaN(v))?'—':(v>=0?'+':'')+v.toFixed(2);
+// render a "YYYY-MM-DD HH:MM UTC" string in the viewer's LOCAL timezone (with tz abbrev if available)
+function fmtLocal(s){
+  if(!s)return '';
+  let dt=new Date(String(s).replace(' UTC',' GMT'));
+  if(isNaN(dt))dt=new Date(s);
+  if(isNaN(dt))return s;
+  let out=dt.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  try{const parts=new Intl.DateTimeFormat(undefined,{timeZoneName:'short'}).formatToParts(dt),
+        tz=parts.find(p=>p.type==='timeZoneName');
+      if(tz&&/[A-Za-z]/.test(tz.value))out+=' '+tz.value;}catch(e){}
+  return out;
+}
 function domainFor(f){return (meta.score_display_domains&&meta.score_display_domains[f])||progByField[f].display_domain;}
 // map a raw score through its FROZEN display domain → [0,1]; p50 as midpoint. null = missing data.
 function normScore(v,d){
@@ -324,7 +334,7 @@ fetch('./data/stage01_umap_seed.json').then(r=>{if(!r.ok)throw new Error('overla
   applyProgram();
   resize();
   probeRerun();
-}).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('scope');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
+}).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
 
 function buildHeader(){
   const s=meta.source;
@@ -350,31 +360,46 @@ function buildFilters(){
   de.onclick=e=>{if(!e.target.dataset.d)return;donorSel=e.target.dataset.d;[...de.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));draw();};
 }
 function buildAxis(){
+  // Donor is fixed to "All" (dropped from the compact top-of-plot bar) but kept in the selection object.
   const progOpts=programs.map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
   const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
   const condOpts=conds.map(k=>`<option value="${k}">${k==='All'?'All conditions':(CONDLAB[k]||k)}</option>`).join('');
-  const donorOpts=['All',...meta.design.donors.slice().sort()].map(k=>`<option value="${k}">${k==='All'?'All donors':k}</option>`).join('');
-  document.querySelectorAll('.axsel[data-k="field"]').forEach(s=>{s.innerHTML=progOpts;s.value=s.dataset.ax==='A'?axisA.field:axisB.field;});
+  document.querySelectorAll('.axsel[data-k="field"]').forEach(s=>s.innerHTML=progOpts);
   document.querySelectorAll('.axsel[data-k="condition"]').forEach(s=>s.innerHTML=condOpts);
-  document.querySelectorAll('.axsel[data-k="donor"]').forEach(s=>s.innerHTML=donorOpts);
   document.querySelectorAll('.axsel').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax[e.target.dataset.k]=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';e.target.textContent=ax.direction;updateAxisMeta();});
+  document.getElementById('ctclear').onclick=clearContrast;
+  syncAxisUI();
   updateAxisMeta();
+}
+// reflect the axisA/axisB state back into the bar's selects + direction toggles
+function syncAxisUI(){
+  document.querySelectorAll('.axsel[data-k="field"]').forEach(s=>s.value=s.dataset.ax==='A'?axisA.field:axisB.field);
+  document.querySelectorAll('.axsel[data-k="condition"]').forEach(s=>s.value=s.dataset.ax==='A'?axisA.condition:axisB.condition);
+  document.querySelectorAll('.axdir').forEach(b=>b.textContent=b.dataset.ax==='A'?axisA.direction:axisB.direction);
+}
+// ✕ Clear → reset A and B to an identical neutral state → contrastActive() false → gradient
+function clearContrast(){
+  axisA={field:field,condition:'All',direction:'high',donor:'All'};
+  axisB={field:field,condition:'All',direction:'high',donor:'All'};
+  syncAxisUI();updateAxisMeta();
+}
+// friendly condition (Rest / 8 hr / 48 hr / All conditions) + donor only if not "All"
+function scopeLabel(ax){
+  const cl2=ax.condition==='All'?'All conditions':(CONDLAB[ax.condition]||ax.condition);
+  return (ax.donor&&ax.donor!=='All')?cl2+' · '+ax.donor:cl2;
 }
 function selectionObj(){
   const one=ax=>({score_field:ax.field,condition:ax.condition,direction:ax.direction,donor:ax.donor,method_version:meta.method_version});
   return {A:one(axisA),B:one(axisB)};
 }
 function updateAxisMeta(){
-  const lab=ax=>`${progByField[ax.field].display_label} ${ax.direction}`;
-  document.getElementById('axMeta').textContent=`Contrast A (${lab(axisA)}) vs B (${lab(axisB)}) — a provisional selection for stage 2.`;
   window.__stage01Selection=selectionObj();
   draw();
 }
 function buildMethods(){
-  document.getElementById('scope').textContent=meta.methods_and_scope;
-  document.getElementById('lastrun').innerHTML=meta.emitted_at?('analysis last run · <b>'+meta.emitted_at+'</b>'):'';
-  document.getElementById('emittedAt').textContent=meta.emitted_at||'—';
+  document.getElementById('lastrun').innerHTML=meta.emitted_at?('analysis last run · <b>'+fmtLocal(meta.emitted_at)+'</b>'):'';
+  document.getElementById('emittedAt').textContent=fmtLocal(meta.emitted_at)||'—';
   const emb=meta.embedding||{};
   document.getElementById('pEmbed').innerHTML=`${emb.method||'scVI embedding then UMAP'}. Clustering: ${emb.clustering||'Leiden'}. ${emb.cluster_ids||'Numeric cluster ids are retained as technical provenance only — not named biological states.'}`;
   document.getElementById('pScope').textContent=meta.methods_and_scope;
@@ -385,16 +410,13 @@ function buildMethods(){
 // selected-program → legend, colour key, rail card, title
 function applyProgram(){
   const p=progByField[field],d=domainFor(field);
-  document.getElementById('ttlProg').textContent=p.display_label;
   document.getElementById('cbTitle').textContent=p.display_label+' RNA-program score';
   document.getElementById('cbGrad').style.background=VIR_CSS;
   document.getElementById('cbLo').textContent=d.p02.toFixed(2);
   document.getElementById('cbMid').textContent=d.p50.toFixed(2);
   document.getElementById('cbHi').textContent=d.p98.toFixed(2);
   document.getElementById('pcName').textContent=p.display_label;
-  document.getElementById('pcFam').textContent=FAM_LABEL[p.family]+(p.role==='sensitivity'?' · sensitivity lane':'');
   document.getElementById('pcGenes').innerHTML=`<b>panel</b> ${p.panel_genes.join(' · ')}`;
-  document.getElementById('pcMethod').textContent=p.scoring_method;
   document.getElementById('pcSrc').textContent=p.source;
   draw();
 }
@@ -411,9 +433,14 @@ window.addEventListener('resize',resize);
 function px(c){return[c.x*sx+ox,c.y*sy+oy];}
 function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
 
-// A/B contrast: active once the two axes name DIFFERENT programs ("select one, then the other").
+// A/B contrast: active once the two axes differ in ANY dimension — program field, condition,
+// direction, or donor. Identical in all four → single-program gradient.
 const ABHUE_A=[38,150,190], ABHUE_B=[201,74,120];   // A pole (teal-blue), B pole (rose)
-function contrastActive(){return !!(axisA.field&&axisB.field&&axisA.field!==axisB.field);}
+function contrastActive(){
+  if(!axisA.field||!axisB.field)return false;
+  return axisA.field!==axisB.field||axisA.condition!==axisB.condition||
+         axisA.direction!==axisB.direction||axisA.donor!==axisB.donor;
+}
 // a cell's continuous strength on an axis pole (0..1): its frozen-domain score, flipped for
 // 'low', zeroed if it falls outside the axis's own condition/donor scope. No threshold, no argmax.
 function pole(c0,ax){
@@ -465,9 +492,8 @@ function drawContrast(){
     if(Math.hypot(B.X-A.X,B.Y-A.Y)>22)updateSkewLine(A,B);else hideSkewLine();}
   else hideSkewLine();
   document.getElementById('ablegend').innerHTML=
-    `<div class="abr"><i style="background:rgb(${ABHUE_A})"></i>A · ${progByField[axisA.field].display_label} ${axisA.direction}</div>`+
-    `<div class="abr"><i style="background:rgb(${ABHUE_B})"></i>B · ${progByField[axisB.field].display_label} ${axisB.direction}</div>`+
-    `<div class="abn">opacity ∝ score · low on both fades · conveyor flows A → B</div>`;
+    `<div class="abr"><i style="background:rgb(${ABHUE_A})"></i>A · ${progByField[axisA.field].display_label} ${axisA.direction} · ${scopeLabel(axisA)}</div>`+
+    `<div class="abr"><i style="background:rgb(${ABHUE_B})"></i>B · ${progByField[axisB.field].display_label} ${axisB.direction} · ${scopeLabel(axisB)}</div>`;
 }
 // animated conveyor belt of chevrons from anchor a to anchor b (screen px), flowing a→b
 function updateSkewLine(a,b){const svg=document.getElementById('skewline');
@@ -529,13 +555,17 @@ function openCard(i){const c0=cells[i];const p=progByField[field],d=domainFor(fi
   document.getElementById('mbc').textContent=c0.barcode;
   document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · cluster ${c0.cluster} (technical id)`;
   document.getElementById('mgenes').innerHTML=cardScoresHTML(c0);
-  document.getElementById('msrc').innerHTML=`Scores: <code>score_genes</code> panel-minus-expression-bin-matched-control values. Nomenclature reference: <a href="${PAPERS.masopust.url}" target="_blank" rel="noopener">Masopust et al. ↗</a> · data: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`;
+  document.getElementById('msrc').innerHTML=`Scores: <code>score_genes</code> panel-minus-expression-bin-matched-control values. Naming reference: <a href="${PAPERS.masopust.url}" target="_blank" rel="noopener">Masopust et al. ↗</a> · data: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a>`;
   document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='flex';}
-function closeCard(){document.getElementById('scrim').style.display='none';document.getElementById('modal').style.display='none';document.getElementById('provmodal').style.display='none';}
-function openProv(){document.getElementById('scrim').style.display='block';document.getElementById('provmodal').style.display='flex';}
-document.getElementById('mx').onclick=closeCard;document.getElementById('scrim').onclick=closeCard;
-document.getElementById('provx').onclick=closeCard;document.getElementById('provbtn').onclick=openProv;
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCard();});
+// scrim is shared by the cell-detail modal and the methods slide-over; keep it up while either is open
+function syncScrim(){const on=document.getElementById('modal').style.display==='flex'||document.getElementById('provmodal').classList.contains('open');document.getElementById('scrim').style.display=on?'block':'none';}
+function closeCard(){document.getElementById('modal').style.display='none';syncScrim();}
+function closeProv(){document.getElementById('provmodal').classList.remove('open');syncScrim();}
+function openProv(){document.getElementById('provmodal').classList.add('open');document.getElementById('scrim').style.display='block';}
+document.getElementById('mx').onclick=closeCard;
+document.getElementById('scrim').onclick=function(){closeCard();closeProv();};
+document.getElementById('provx').onclick=closeProv;document.getElementById('provbtn').onclick=openProv;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCard();closeProv();}});
 
 // re-run controls — revealed only when the host actually exposes /rerun
 function probeRerun(){fetch('/rerun/log',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('rerunWrap').style.display='flex';}).catch(function(){});}
