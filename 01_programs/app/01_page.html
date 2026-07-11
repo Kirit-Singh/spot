@@ -85,7 +85,7 @@
   .pcard .pf{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:3px}
   .pcard .psrc{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--accent);text-decoration:none;margin-top:9px}
   .pcard .psrc:hover{text-decoration:underline}
-  .pcard .pg{display:flex;flex-direction:column;gap:1px;font-family:var(--mono);font-size:11px;color:var(--ink2);line-height:1.55;margin-top:8px}
+  .pcard .pg{white-space:nowrap;overflow:hidden;font-family:var(--mono);font-size:11px;color:var(--ink2);line-height:1.55;margin-top:8px}
   .pcard .pm{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:7px}
   /* segmented filters */
   .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
@@ -233,11 +233,14 @@
   .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
   /* program prevalence over time — programs × Rest/8h/48h, cell shade = % of cells high */
   #prevSection{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-  .prevgrid{display:grid;grid-template-columns:1fr repeat(3,30px);gap:2px;align-items:center;margin-top:8px}
+  .prevgrid{display:grid;grid-template-columns:max-content repeat(3,32px);gap:2px 3px;align-items:center;margin-top:8px}
   .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
-  .prevgrid .plbl{font-size:10px;color:var(--ink2);text-align:right;padding-right:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .prevgrid .plbl{font-size:10px;color:var(--ink2);text-align:left;padding-right:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
   .prevgrid .plbl:hover{color:var(--accent)}
   .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
+  .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
+  .prevkey{font-size:8.5px;color:var(--muted);margin-top:7px;line-height:1.4}
+  .prevkey:empty{display:none}
   /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
   .cbar.degen .cbg{background:rgb(176,172,164)}
   .cbar.degen .clip{display:none}
@@ -307,6 +310,7 @@
     <div id="prevSection">
       <div class="lab">Program prevalence over time</div>
       <div class="prevgrid" id="prevGrid"></div>
+      <div class="prevkey" id="prevKey"></div>
     </div>
   </div>
 </div>
@@ -506,15 +510,20 @@ function buildPrevalence(){
   progs.forEach(p=>cnt[p.score_field]={Rest:0,Stim8hr:0,Stim48hr:0});
   cells.forEach(c=>{const cd=c.condition;if(tot[cd]==null)return;tot[cd]++;
     progs.forEach(p=>{if(c[p.score_field]>0.5)cnt[p.score_field][cd]++;});});
-  let maxf=0;const prev={};
-  progs.forEach(p=>{prev[p.score_field]={};conds.forEach(([k])=>{const f=tot[k]?cnt[p.score_field][k]/tot[k]:0;prev[p.score_field][k]=f;if(f>maxf)maxf=f;});});
-  let html='<div class="ph"></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('');
+  let maxf=0;const prev={},degen={};
+  progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
+    prev[p.score_field]={};conds.forEach(([k])=>{const f=tot[k]?cnt[p.score_field][k]/tot[k]:0;prev[p.score_field][k]=f;if(!degen[p.score_field]&&f>maxf)maxf=f;});});
+  let html='<div class="ph"></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join(''),anyND=false;
   progs.forEach(p=>{
+    const nd=degen[p.score_field]; if(nd)anyND=true;
     html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${p.display_label}</div>`;
-    conds.forEach(([k])=>{const f=prev[p.score_field][k],i=maxf?f/maxf:0;
-      html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${f>=0.005?Math.round(f*100)+'%':''}</div>`;});
+    conds.forEach(([k])=>{
+      if(nd){html+='<div class="pc nd">ND</div>';return;}
+      const f=prev[p.score_field][k],i=maxf?f/maxf:0;
+      html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}">${Math.round(f*100)}%</div>`;});
   });
   grid.innerHTML=html;
+  const key=document.getElementById('prevKey'); if(key)key.textContent=anyND?'ND — not detected in this dataset':'';
   grid.querySelectorAll('.plbl').forEach(el=>el.onclick=()=>{field=el.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
 }
 function buildAxis(){
@@ -715,8 +724,14 @@ function applyProgram(){
   const n=p.family==='differentiation'?1:3;
   src.href=PAPERS.masopust.url+'/tables/'+n;
   src.innerHTML='Panel source · Masopust Table '+n+' ↗';
-  document.getElementById('pcGenes').innerHTML=p.panel_genes.map(g=>`<div>${g}</div>`).join('');
+  const pg=document.getElementById('pcGenes');pg.textContent=p.panel_genes.join('  ·  ');requestAnimationFrame(fitMarkers);
   draw();
+}
+// scale the marker-gene line down (11px → 6px floor) until it fits on one line within the rail width
+function fitMarkers(){
+  const el=document.getElementById('pcGenes');if(!el||!el.textContent)return;
+  el.style.fontSize='11px';let fs=11;
+  while(el.scrollWidth>el.clientWidth&&fs>6){fs-=0.5;el.style.fontSize=fs+'px';}
 }
 
 function pct(arr,p){const a=arr.slice().sort((x,y)=>x-y);return a[cl(Math.floor(a.length*p),0,a.length-1)];}
