@@ -31,7 +31,8 @@
   /* body */
   .body{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
   .plot{position:relative;border-right:1px solid var(--line);min-height:0;overflow:hidden}
-  canvas{width:100%;height:100%;display:block}
+  canvas{width:100%;height:100%;display:block;cursor:grab}
+  canvas.grabbing{cursor:grabbing}
   /* plot title now lives inline in the top-of-plot contrast toolbar (.ctbar) */
   /* on-plot continuous colour key */
   .cbar{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px 8px}
@@ -102,6 +103,13 @@
   /* on-plot A/B population labels (sit at each pole's score-weighted centroid; belt runs between them) */
   .anchlbl{position:absolute;z-index:5;display:none;transform:translate(-50%,-50%);background:rgba(255,255,255,.92);border:1.5px solid var(--line);border-radius:8px;padding:3px 9px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 9px rgba(30,27,22,.12)}
   /* belt stays ink-black (the app body has no dark theme, so no dark override) */
+  /* on-plot viewer controls (zoom in / reset / zoom out) — bottom-right, clear of the From/To bar and rail; reuses the app's surface/line/ink2/accent tokens + radius/shadow conventions */
+  .viewctl{position:absolute;right:14px;bottom:14px;z-index:6;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 2px 9px rgba(30,27,22,.10);overflow:hidden}
+  .viewctl button{width:32px;height:30px;display:flex;align-items:center;justify-content:center;padding:0;font:inherit;font-size:16px;font-weight:600;line-height:1;color:var(--ink2);background:var(--surface);border:0;border-top:1px solid var(--line);cursor:pointer}
+  .viewctl button:first-child{border-top:0}
+  .viewctl button:hover{color:var(--accent);background:var(--sunken)}
+  .viewctl button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .viewctl .vreset{font-size:13px}
   /* methods & scope */
   .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
   /* flows below the contrast controls; JS shrinks the font so the single line never exceeds the control width */
@@ -203,6 +211,11 @@
     <canvas id="c"></canvas>
     <svg id="skewline"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
     <div id="lblA" class="anchlbl"></div><div id="lblB" class="anchlbl"></div>
+    <div class="viewctl" role="group" aria-label="Zoom and pan the map">
+      <button id="vzin" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+      <button id="vreset" class="vreset" type="button" aria-label="Reset view" title="Reset view">⤢</button>
+      <button id="vzout" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+    </div>
     <div id="pop"></div>
     <div id="rerunlog"><div class="rlh"><span class="rlspin"></span><div class="rltw"><span class="rlt">Re-running analysis</span><span class="rlsub">headless pipeline on the compute host</span></div><span id="rlmeta"><span id="rlphase"></span><span class="rlpulse" id="rlpulse" style="display:none">●</span><span id="rleta"></span></span><span class="rlx" id="rlClose" style="display:none">✕ close</span></div><pre id="rlpre"></pre></div>
   </div>
@@ -285,7 +298,9 @@ const PAPERS={
   marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1'},
   masopust:{url:'https://www.nature.com/articles/s41577-025-01238-2'}
 };
-const FAM_ORDER=['differentiation','functional','sensitivity'];
+// 'sensitivity' (cd4_ctl_like_score_actadj) removed from the UI by human decision (2026-07);
+// the score is retained in the data/records for provenance but is not a display/contrast option.
+const FAM_ORDER=['differentiation','functional'];
 const FAM_LABEL={differentiation:'Differentiation programs',functional:'Functional programs',sensitivity:'Sensitivity'};
 const CONDLAB={All:'All',Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
 const COND_ORDER={Rest:0,Stim8hr:1,Stim48hr:2};
@@ -301,6 +316,8 @@ let field='diff_naive_score',cond='All',donorSel='All',hover=-1;
 let axisA={field:null,condition:'All',direction:'high',donor:'All'},
     axisB={field:null,condition:'All',direction:'high',donor:'All'};
 let sx,sy,ox,oy;
+// pan/zoom view transform, layered on top of the fit transform (default = fit view)
+let vk=1,vtx=0,vty=0;const VK_MIN=0.5,VK_MAX=12;
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
 const sv=v=>(v==null||isNaN(v))?'—':(v>=0?'+':'')+v.toFixed(2);
 // render a "YYYY-MM-DD HH:MM UTC" string in the viewer's LOCAL timezone (with tz abbrev if available)
@@ -360,7 +377,7 @@ function buildFilters(){
 }
 function buildAxis(){
   // Donor is fixed to "All" (dropped from the compact top-of-plot bar) but kept in the selection object.
-  const progOpts=programs.map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
+  const progOpts=programs.filter(p=>p.role!=='sensitivity').map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
   const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
   const condOpts=conds.map(k=>`<option value="${k}">${k==='All'?'All times':(CONDLAB[k]||k)}</option>`).join('');
   document.querySelectorAll('.axsel[data-k="field"]').forEach(s=>s.innerHTML=progOpts);
@@ -435,11 +452,19 @@ function resize(){const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r
   const xs=cells.map(c=>c.x),ys=cells.map(c=>c.y);
   const xmn=pct(xs,.015),xmx=pct(xs,.985),ymn=pct(ys,.015),ymx=pct(ys,.985);
   const s=Math.min((W-2*pad)/(xmx-xmn),(H-top-bot)/(ymx-ymn))*0.92;
-  sx=s;sy=s;ox=(W-(xmx-xmn)*s)/2-xmn*s;oy=top+((H-top-bot)-(ymx-ymn)*s)/2-ymn*s;
-  draw();}
+  // TOP-ANCHORED: cloud top sits at y=top (small margin); any vertical slack falls below it
+  sx=s;sy=s;ox=(W-(xmx-xmn)*s)/2-xmn*s;oy=top-ymn*s;
+  resetView();}                    // resize recomputes the fit AND returns to the top-anchored fit view
 window.addEventListener('resize',resize);
 window.addEventListener('resize',fitLastRun);
-function px(c){return[c.x*sx+ox,c.y*sy+oy];}
+// data → screen (CSS px): fit transform, then the pan/zoom view transform on top
+function px(c){return[(c.x*sx+ox)*vk+vtx,(c.y*sy+oy)*vk+vty];}
+// ── pan/zoom view transform ──
+function resetView(){vk=1;vtx=0;vty=0;draw();}   // back to the default top-anchored fit
+// zoom by `factor` about screen point (mx,my) so the data under the cursor stays put
+function zoomAt(factor,mx,my){const nk=cl(vk*factor,VK_MIN,VK_MAX);if(nk===vk)return;
+  vtx=mx-(mx-vtx)*(nk/vk);vty=my-(my-vty)*(nk/vk);vk=nk;draw();}
+function zoomCenter(factor){const r=c.getBoundingClientRect();zoomAt(factor,r.width/2,r.height/2);}
 function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
 
 // A/B contrast: active once the two axes differ in ANY dimension — program field, condition,
@@ -532,7 +557,22 @@ function scoreGroupsHTML(c0){
 }
 function shortBc(bc){return (bc.split('_').find(t=>/^[ACGT]{8,}/.test(t))||bc).slice(0,26);}
 
-c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+// ── viewer controls: wheel zooms about the cursor; drag pans; +/−/reset buttons ──
+document.getElementById('vzin').onclick=()=>zoomCenter(1.4);
+document.getElementById('vzout').onclick=()=>zoomCenter(1/1.4);
+document.getElementById('vreset').onclick=resetView;
+c.addEventListener('wheel',e=>{e.preventDefault();const r=c.getBoundingClientRect();
+  zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+// click-vs-drag: only treat pointer motion as a pan past a ~4px threshold; a plain click still selects a cell
+let panning=false,panMoved=false,pStartX=0,pStartY=0,pOX=0,pOY=0,suppressClick=false;
+c.addEventListener('mousedown',e=>{if(e.button!==0)return;panning=true;panMoved=false;
+  pStartX=e.clientX;pStartY=e.clientY;pOX=vtx;pOY=vty;});
+window.addEventListener('mousemove',e=>{if(!panning)return;const dx=e.clientX-pStartX,dy=e.clientY-pStartY;
+  if(!panMoved&&Math.hypot(dx,dy)>4){panMoved=true;c.classList.add('grabbing');pop.style.display='none';}
+  if(panMoved){vtx=pOX+dx;vty=pOY+dy;draw();}});
+window.addEventListener('mouseup',()=>{if(!panning)return;panning=false;c.classList.remove('grabbing');
+  if(panMoved)suppressClick=true;});   // swallow the click that ends a drag so it doesn't open a card
+c.addEventListener('mousemove',e=>{if(panning)return;const r=c.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
   let best=-1,bd=64;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}
   if(best!==hover){hover=best;draw();}
   if(best>=0){const c0=cells[best];const[X,Y]=px(c0);
@@ -549,7 +589,7 @@ c.addEventListener('mouseleave',()=>{hover=-1;pop.style.display='none';draw();})
 
 // ── click a dot → open the cell-detail card ──
 function nearestCell(mx,my){let best=-1,bd=400;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}return best;}
-c.addEventListener('click',e=>{const r=c.getBoundingClientRect();const i=nearestCell(e.clientX-r.left,e.clientY-r.top);if(i>=0)openCard(i);});
+c.addEventListener('click',e=>{if(suppressClick){suppressClick=false;return;}const r=c.getBoundingClientRect();const i=nearestCell(e.clientX-r.left,e.clientY-r.top);if(i>=0)openCard(i);});
 
 function cardScoresHTML(c0){
   const bar=v=>{const t=Math.max(-1.5,Math.min(1.5,v||0)),w=Math.abs(t)/1.5*50;return{w:w.toFixed(0),left:(t<0?50-w:50).toFixed(0)};};
