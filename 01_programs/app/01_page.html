@@ -84,26 +84,26 @@
   .seg button.on{background:var(--accent);color:#fff}
   /* top-of-plot program-axis contrast panel — vertical stack: A row / B row / actions */
   /* contrast panel: no card chrome — controls sit plainly on the UMAP (--chipw sets the From/To pill width + the actions-row indent) */
-  .ctbar{position:absolute;top:12px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:stretch;gap:7px;--chipw:42px;--dirw:56px}
-  /* actions stack vertically: full-width Identify button, then a toggle-width Clear beneath it, both indented past the chip to line up with the program select */
-  .ctactions{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:2px;padding-left:calc(var(--chipw) + 6px)}
+  .ctbar{position:absolute;top:12px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:stretch;gap:7px;--chipw:42px;--dirw:56px;--progw:124px;--condw:82px}
+  /* actions row: Identify button spans program+direction; Clear sits under the condition dropdown (same width), on the same row */
+  .ctactions{display:flex;flex-direction:row;align-items:center;gap:6px;margin-top:2px;padding-left:calc(var(--chipw) + 6px)}
   .ctbar .ctsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
   .ctgrp{display:flex;align-items:center;gap:6px;min-width:0}
   .ctchip{font-family:var(--mono);font-size:9.5px;font-weight:700;color:#fff;height:20px;min-width:var(--chipw);padding:0 6px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;text-transform:uppercase;letter-spacing:.03em}
   .ctchip.a{background:rgb(38,150,190)}.ctchip.b{background:rgb(201,74,120)}
   .ctvs{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600;padding:0 1px}
   .axsel{flex:0 1 auto;min-width:0;font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 18px 4px 7px;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
-  .axsel.prog{flex:0 0 auto;width:124px;max-width:124px}.axsel.cond{flex:0 0 auto;width:82px}.axsel.obj{max-width:120px}
+  .axsel.prog{flex:0 0 auto;width:var(--progw);max-width:var(--progw)}.axsel.cond{flex:0 0 auto;width:var(--condw)}.axsel.obj{max-width:120px}
   .axsel:hover{border-color:var(--accent)}
   .ctlbl{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:0 1px;white-space:nowrap}
   .axdir{flex:0 0 auto;width:var(--dirw);text-align:center;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 0;cursor:pointer;white-space:nowrap;text-transform:capitalize}
   .axdir:hover{border-color:var(--accent)}
   /* matched button pair — Clear (active) + Identify genes (disabled/muted) share shape/radius/padding/font/height; differ only by state */
-  /* Identify (full control width) + Clear (toggle width) share height/radius/border/font — SAME HEIGHT, differ by width + state */
+  /* Identify (program+direction width) + Clear (condition width) on one row — share height/radius/border/font, differ by width + state */
   .ctclear,.idbtn{font:inherit;font-size:11px;font-weight:600;height:27px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
-  .ctclear{width:var(--dirw);padding:0;color:var(--ink2);background:var(--surface);cursor:pointer}
+  .ctclear{width:var(--condw);padding:0;color:var(--ink2);background:var(--surface);cursor:pointer}
   .ctclear:hover{border-color:var(--treg);color:var(--treg)}
-  .idbtn{width:100%;padding:0 11px;color:var(--muted);background:var(--sunken);cursor:not-allowed}
+  .idbtn{width:calc(var(--progw) + 6px + var(--dirw));padding:0 9px;color:var(--muted);background:var(--sunken);cursor:not-allowed}
   .idbtn .pend{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 7px}
   /* Identify-genes enabled only when preflight passes: accent-filled + a live short-contrast_id pill */
   .idbtn.ready{color:#fff;background:var(--accent);border-color:var(--accent);cursor:pointer}
@@ -201,8 +201,8 @@
   @media (max-width:430px){
     .top{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}
     .nav{overflow-x:auto;white-space:nowrap;padding:8px 12px}
-    .ctbar{left:8px;top:8px;--chipw:36px;--dirw:48px}
-    .axsel.prog{width:98px;max-width:98px}.axsel.cond{width:70px}.axsel.obj{max-width:88px}
+    .ctbar{left:8px;top:8px;--chipw:36px;--dirw:48px;--progw:98px;--condw:70px}
+    .axsel.obj{max-width:88px}
     .ctstate{max-width:200px}
     .rail{padding:12px 14px}
   }
@@ -238,7 +238,7 @@
     <div class="ctbar" role="group" aria-label="Contrast two programs on the map">
       <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" aria-label="From condition"></select></div>
       <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" aria-label="To condition"></select></div>
-      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify gene skews →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">Clear</button></div>
+      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">Identify state skews →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">Clear</button></div>
       <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
       <div id="lastrun"></div>
     </div>
@@ -578,7 +578,7 @@ function runPreflightUI(){
     else{st.className='ctstate warn';st.textContent=pf.reason;}
     return;
   }
-  btn.disabled=false;btn.classList.add('ready');btn.title='Identify gene skews for this contrast';
+  btn.disabled=false;btn.classList.add('ready');btn.title='Identify state skews for this contrast';
   computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.contrast_id;pend.style.display='';pend.textContent=r.contrast_id.slice(0,8);
     if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes the contrast condition (analysis uses '+condShort(axisA.condition)+')';}
     else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.contrast_id;}
