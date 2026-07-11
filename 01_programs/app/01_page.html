@@ -589,7 +589,7 @@ function buildPrevalence(){
     conds.forEach(([k])=>{
       if(nd){html+='<div class="pc nd">ND</div>';return;}
       const v=med[p.score_field][k],i=hi>lo?(v-lo)/(hi-lo):0.5;
-      html+=`<div class="pc" style="background:rgba(62,125,140,${(0.05+0.9*i).toFixed(3)});color:${i>0.55?'#fff':'var(--ink2)'}" title="median ${v.toFixed(3)}">${v.toFixed(2)}</div>`;});
+      html+=`<div class="pc" style="background:${ramp(i)};color:${i>0.55?'#1E1B16':'#fff'}" title="median ${v.toFixed(3)}">${v.toFixed(2)}</div>`;});
     html+=`<div class="prmod">${MOD[p.score_field]||'—'}</div>`;
   });
   if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
