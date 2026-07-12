@@ -419,7 +419,7 @@
     </div></div>
     <div class="pstep"><div class="pn">4</div><div class="pc">
       <h4>Activation sensitivity lane</h4>
-      <p>Activation is a known confound for the Treg-like and CD4 CTL-like programs. An activation-adjusted CD4 CTL-like score (<code>cd4_ctl_like_score_actadj</code>) is reported alongside the raw score as a descriptive sensitivity check.</p>
+      <p>Activation associates with <b>most programs, not only Treg-like / CD4 CTL-like</b>. Pooled Spearman |ρ| against the activation score is strongest for naïve / memory / checkpoint (~0.50–0.57), then CD4 CTL-like (0.45), Treg-like (0.44), Th1-like (0.38); it stays nontrivial <b>within donor×timepoint strata</b> (max |donor ρ| ~0.26–0.36) and is substantially timepoint-driven. Full program×condition/donor table: <code>stage01_activation_association_v1.json</code> (descriptive; no p/q/FDR). An activation-adjusted CD4 CTL-like score (<code>cd4_ctl_like_score_actadj</code>) is a descriptive sensitivity <b>residual, not a deconfounding</b> (near-zero pooled overlap but retained condition/donor structure) and stays non-selectable; the raw score axes remain primary.</p>
     </div></div>
     <div class="pstep"><div class="pn">5</div><div class="pc">
       <h4>Scope &amp; reproduction</h4>
