@@ -130,20 +130,38 @@ def test_the_joint_status_enum_stays_closed_at_five_values():
         "both_arms", "away_from_A_only", "toward_B_only", "opposed", "not_evaluable")
 
 
-def test_the_real_fixture_bundle_leaves_absent_joint_context_absent(
+def test_joint_context_is_carried_verbatim_or_left_honestly_absent(
         loaded_direct, analysis_build):
-    """Stage 2 does not release joint context yet — and Stage 3 says so, honestly.
+    """Whatever Stage 2 says about joint context, Stage 3 repeats — or admits it wasn't said.
 
-    It does not synthesise a joint_status from the two arms it CAN see, and it does not
-    tier what it was not given. An absent field is emitted as absent; it is never filled
-    in with a plausible guess.
+    Both worlds are asserted, because Stage 2 is expected to start releasing joint context
+    and this invariant must hold across that change rather than being rewritten after it:
+
+      * Stage 2 RELEASES it  -> every value is carried byte-identically, per target.
+      * Stage 2 is SILENT    -> the field is emitted as absent. Stage 3 does not
+        synthesise a joint_status from the two arms it CAN see, and does not tier what it
+        was not given.
     """
     cross = analysis_build["tables"]["cross_arm"]
     assert cross, "the cross-arm table must exist to make this claim"
-    assert not any(f in loaded_direct.screen.columns for f in JOINT_OWNED), (
-        "this test asserts what Stage 3 does with an ABSENT joint context; Stage 2 now "
-        "releases one, so assert pass-through against it instead")
 
+    screen = loaded_direct.screen
+    released = [f for f in JOINT_OWNED if f in screen.columns]
+
+    if released:
+        # Pass-through, byte for byte, against the row Stage 2 actually released.
+        upstream = {row["target_id"]: row for row in screen.to_dict("records")}
+        for row in cross:
+            source = upstream[row["target_id"]]
+            for field in released:
+                want = source[field]
+                want = None if pd.isna(want) else want
+                assert row[field] == want, (
+                    f"{row['target_id']}: Stage 3 CHANGED a Stage-2 {field} — "
+                    f"{want!r} became {row[field]!r}")
+        return
+
+    # Stage 2 is silent. Absence is recorded as absence, never filled in with a guess.
     for row in cross:
         for field in JOINT_OWNED:
             assert row[field] is None, (
