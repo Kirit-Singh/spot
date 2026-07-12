@@ -341,6 +341,15 @@ honest donor-support denominators; generic `stage01_selection_contract.json` con
 method/config/input-aware `run_id`; off-axis specificity reporting. Only then generate a new v3 selection
 and re-run direct projection + Perturb2State from scratch.
 
+## Merge criteria (PR #16) — decision (a), 2026-07-11
+PR #16 merges once the **Stage-1 v3 lock is complete + independently verified** (T7b validation
+passed/adjudicated → T8 selectability frozen → T9 app consumes v3 with no visual regression → T10
+verifier + mutation tests green → T11 independent verification clean → **T12 sanitized HF revision
+published + hashes verified + tag `stage1-continuous-v3`**). At merge, **v2 Stage-2 is marked
+`superseded` / `incompatible_with_current_stage1` / `stage3_eligible=false`**; the Stage-2 remediation +
+re-run against v3 is a **separate follow-up PR**, not on PR #16's critical path. HF publish/verify (T12)
+is the final gate but not the only one — all of T7b–T11 must be green first.
+
 ## Lock sequence (execution order — gates are pre-registered BEFORE scoring)
 1. **Pin the input manifest + coordinate input** (T3 input-manifest part + T6) — before any control work.
 2. **Freeze panels (T1) and controls (T2, ÷N + `control_eligible_pool`)** against the pinned input.
