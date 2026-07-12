@@ -22,12 +22,25 @@ from typing import Any, Optional
 
 from . import domain, identity
 from .hashing import file_sha256
-from .manifest_schema import (ADMISSIBLE_IDENTITY_METHODS, ALLOWED_IDENTITY_METHODS,
-                              AMBIGUOUS, DETERMINED, EVIDENCE_STATES,
-                              ManifestError, MUTABLE_REVISIONS, NON_NULL_ROW_KEYS,
-                              PROOF_ROW_KEYS, QUARANTINED_SOURCES,
-                              REQUIRED_ROW_KEYS, SHA256_RE, VERIFIED_RAW_BYTES,
-                              is_nullish, require, scope_of, scope_sort_key)
+from .manifest_schema import (
+    ADMISSIBLE_IDENTITY_METHODS,
+    ALLOWED_IDENTITY_METHODS,
+    AMBIGUOUS,
+    DETERMINED,
+    EVIDENCE_STATES,
+    MUTABLE_REVISIONS,
+    NON_NULL_ROW_KEYS,
+    PROOF_ROW_KEYS,
+    QUARANTINED_SOURCES,
+    REQUIRED_ROW_KEYS,
+    SHA256_RE,
+    VERIFIED_RAW_BYTES,
+    ManifestError,
+    is_nullish,
+    require,
+    scope_of,
+    scope_sort_key,
+)
 
 
 # --------------------------------------------------------------------------- #

@@ -1,11 +1,9 @@
 """The masked projection formula, the two arms, and per-arm ranking."""
 import numpy as np
 import pytest
-
 from direct import config
 from direct import projection as proj
-from direct.projection import (ARM_A, ARM_B, INSUFFICIENT_AXIS_COVERAGE,
-                               MASK_UNRESOLVED, OK)
+from direct.projection import ARM_A, ARM_B, INSUFFICIENT_AXIS_COVERAGE, MASK_UNRESOLVED, OK
 
 EPS = config.SIGN_EPS
 

@@ -20,15 +20,12 @@ every evaluable arm in a support-less pass was labelled ``evaluated``.
 """
 from __future__ import annotations
 
-import json
 import os
 
 import pandas as pd
 import pytest
-
 from direct import arms, config, disposition, domain
 from direct.run_screen import build_screen
-
 from fixtures_direct import default_specs
 
 TIERS_WITHOUT_SUPPORT = {"not_evaluated", "evaluable_no_directional_signal",

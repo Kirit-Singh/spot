@@ -31,11 +31,9 @@ import os
 
 import numpy as np
 import pytest
-
 from direct import domain, io_data, record_id
 from direct.run_screen import build_screen
-
-from fixtures_spec import CONDITION, DONOR_PAIRS, TARGET_GENES
+from fixtures_spec import CONDITION, DONOR_PAIRS
 from test_source_replay import run_and_verify, verify
 
 

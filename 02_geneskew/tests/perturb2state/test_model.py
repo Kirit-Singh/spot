@@ -8,8 +8,8 @@ import pytest
 
 pytest.importorskip("pert2state_model")
 
-from perturb2state import config as cfg          # noqa: E402
-from perturb2state import model_runner as MR     # noqa: E402
+from perturb2state import config as cfg  # noqa: E402
+from perturb2state import model_runner as MR  # noqa: E402
 
 CFG = cfg.CONFIGS[0]                              # pca_off
 

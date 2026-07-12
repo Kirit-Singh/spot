@@ -47,7 +47,6 @@ import os
 
 import pandas as pd
 import pytest
-
 from direct import config, preflight, reissue
 from direct.run_screen import build_screen
 

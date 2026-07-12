@@ -37,8 +37,14 @@ import os
 from typing import Any, Optional
 
 from . import identity, record_id
-from .record_id import (OFFSETS_FIELD, RECORD_ID_PREFIX, ROWS_FIELD,  # noqa: F401
-                        RULE_METADATA, RULE_METADATA_KEY, derive_record_id)
+from .record_id import (  # noqa: F401
+    OFFSETS_FIELD,
+    RECORD_ID_PREFIX,
+    ROWS_FIELD,
+    RULE_METADATA,
+    RULE_METADATA_KEY,
+    derive_record_id,
+)
 
 # v2: the record id binds the completeness proof, and the proof is mandatory.
 SCHEMA_VERSION = "spot.stage02_source_records.v2"

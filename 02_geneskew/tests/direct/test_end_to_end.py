@@ -11,15 +11,16 @@ import os
 
 import pandas as pd
 import pytest
-
-from direct import disposition, domain, gate, guides, preflight
+from direct import config, disposition, domain, gate, guides, preflight
 from direct.run_screen import build_screen
 from direct.selection import SelectionError
-
-from direct import config
-
-from fixtures_direct import (COMMON_UNIVERSE, DONOR_DROPPED_GENE, TARGET_GENES,
-                             UNIVERSE, default_specs)
+from fixtures_direct import (
+    COMMON_UNIVERSE,
+    DONOR_DROPPED_GENE,
+    TARGET_GENES,
+    UNIVERSE,
+    default_specs,
+)
 
 
 @pytest.fixture

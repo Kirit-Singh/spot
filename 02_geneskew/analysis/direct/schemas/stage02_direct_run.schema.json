@@ -83,6 +83,16 @@
         "unresolved"
       ]
     },
+    "jointStatus": {
+      "description": "Derived from each arm's own evaluability and direction \u2014 NEVER from the tier. Both raw arm values ship alongside, so nothing this label merges is lost.",
+      "enum": [
+        "both_arms",
+        "away_from_A_only",
+        "toward_B_only",
+        "opposed",
+        "not_evaluable"
+      ]
+    },
     "modulation": {
       "description": "Derived per arm, only where that arm has direction evidence. The two arms are never collapsed into one drug direction.",
       "enum": [
@@ -100,6 +110,18 @@
         "only_away_from_A_evaluated",
         "only_toward_B_evaluated",
         "neither_arm_evaluated"
+      ]
+    },
+    "paretoTier": {
+      "description": "Nullable Int64. Frontier index: tier 1 is non-dominated, peel and repeat. Null wherever the target is not evaluable on BOTH arms \u2014 not tier 0, not last, not a sentinel. A tier is an ORDER, not a score: it has no units and cannot be averaged, and two targets in one tier are INCOMPARABLE, not tied.",
+      "oneOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "projectionStatus": {
@@ -124,6 +146,17 @@
     "sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "type": "string"
+    },
+    "sha256Nullable": {
+      "oneOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "supportStatus": {
       "description": "Support is INFERENTIAL, and AVAILABILITY is asked first. 'unavailable_no_contributor_evidence_in_this_release_pass' is the state of THIS release pass: the support estimates carry no contributor evidence, so support was never evaluated for ANY arm, however evaluable that arm is. 'evaluated' asserts that support evidence existed and was assessed, and may never be emitted where it was not. Where this is not 'evaluated', raw counts remain as diagnostics but no support boolean or tier may be true.",
@@ -866,7 +899,31 @@
                 "null"
               ]
             },
+            "direct_config_sha256": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "direct_method_version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "effect_source_sha256": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "effective_donor_n": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "estimate_mask_sha256": {
               "type": [
                 "string",
                 "null"
@@ -878,7 +935,25 @@
                 "null"
               ]
             },
+            "joint_ordering_method_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "joint_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "mask_gene_count": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mask_method_version": {
               "type": [
                 "string",
                 "null"
@@ -907,6 +982,9 @@
                 "string",
                 "null"
               ]
+            },
+            "pareto_tier": {
+              "const": "Int64"
             },
             "qc_low_target_expression": {
               "type": [
@@ -1073,13 +1151,21 @@
             "contributor_status",
             "crispri_modality",
             "desired_modulation_agreement",
+            "direct_config_sha256",
+            "direct_method_version",
+            "effect_source_sha256",
             "effective_donor_n",
+            "estimate_mask_sha256",
             "inference_status",
+            "joint_ordering_method_id",
+            "joint_status",
             "mask_gene_count",
+            "mask_method_version",
             "mask_resolved",
             "mask_unresolved_reason",
             "n_cells_target",
             "n_guides_source",
+            "pareto_tier",
             "qc_low_target_expression",
             "qc_ontarget_effect_size",
             "qc_ontarget_significant",
@@ -1516,17 +1602,38 @@
             "desired_modulation_agreement": {
               "$ref": "#/$defs/modulationAgreement"
             },
+            "direct_config_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "direct_method_version": {
+              "const": "stage2-direct-v5-pooled-main-two-arm"
+            },
+            "effect_source_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
             "effective_donor_n": {
               "type": "integer"
             },
+            "estimate_mask_sha256": {
+              "$ref": "#/$defs/sha256Nullable"
+            },
             "inference_status": {
               "const": "not_calibrated"
+            },
+            "joint_ordering_method_id": {
+              "const": "spot.stage02.pareto.two_arm.v1"
+            },
+            "joint_status": {
+              "$ref": "#/$defs/jointStatus"
             },
             "mask_gene_count": {
               "type": [
                 "number",
                 "null"
               ]
+            },
+            "mask_method_version": {
+              "const": "stage2-direct-mask-v1-contributing-guide-and-offtarget"
             },
             "mask_resolved": {
               "type": "boolean"
@@ -1548,6 +1655,9 @@
                 "number",
                 "null"
               ]
+            },
+            "pareto_tier": {
+              "$ref": "#/$defs/paretoTier"
             },
             "qc_low_target_expression": {
               "type": "boolean"
@@ -1681,13 +1791,21 @@
             "contributor_status",
             "crispri_modality",
             "desired_modulation_agreement",
+            "direct_config_sha256",
+            "direct_method_version",
+            "effect_source_sha256",
             "effective_donor_n",
+            "estimate_mask_sha256",
             "inference_status",
+            "joint_ordering_method_id",
+            "joint_status",
             "mask_gene_count",
+            "mask_method_version",
             "mask_resolved",
             "mask_unresolved_reason",
             "n_cells_target",
             "n_guides_source",
+            "pareto_tier",
             "qc_low_target_expression",
             "qc_ontarget_effect_size",
             "qc_ontarget_significant",

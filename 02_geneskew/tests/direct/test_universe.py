@@ -1,6 +1,5 @@
 """One common effect-gene universe across the released objects."""
 import pytest
-
 from direct import universe as uni
 from direct.universe import UniverseError
 

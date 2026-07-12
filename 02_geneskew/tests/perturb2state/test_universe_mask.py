@@ -1,8 +1,7 @@
 """Gene-universe exclusion + masking tests (plan §6.2.8, §6.3, §6.9)."""
 import numpy as np
-
-from perturb2state import universe as U
 from perturb2state import pmatrix
+from perturb2state import universe as U
 
 
 def _axis():

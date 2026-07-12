@@ -64,6 +64,19 @@ def method_block() -> dict[str, Any]:
     }
 
 
+def config_sha256() -> str:
+    """The frozen Stage-2 config, as one id: method + eligibility policy.
+
+    Emitted on every screen row so the row can name the policy that produced it without
+    a join. ``direct_method_version`` says WHICH method; this says which THRESHOLDS it
+    ran with — and a loosened ``n_cells_min`` or ``min_surviving_control`` changes which
+    targets are evaluable at all, so a row that names only the method version is naming
+    half of what decided it.
+    """
+    return content_hash({"stage2_method": method_block(),
+                         "stage2_eligibility_policy": config.ELIGIBILITY_POLICY})
+
+
 def build_run_binding(*, selection, lane: str, stage1_release,
                       stage2_inputs: list[dict[str, Any]],
                       guide_manifest: dict[str, Any], mask_sha256: str,

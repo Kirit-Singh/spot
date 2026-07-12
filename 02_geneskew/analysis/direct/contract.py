@@ -56,6 +56,13 @@ def screen_column_allowlist() -> frozenset:
         "effective_donor_n", "crispri_modality", "inference_status",
         "cell_level_support_state", "concordance_class",
         "desired_modulation_agreement",
+        # what produced this row, ON the row: the method, the frozen config, the pinned
+        # effect source, and THIS estimate's own mask
+        "direct_method_version", "direct_config_sha256", "effect_source_sha256",
+        "estimate_mask_sha256", "mask_method_version",
+        # the JOINT ordering. A tier and a label — deliberately not a magnitude: there is
+        # no field here a consumer could sort as if it were a combined score.
+        "pareto_tier", "joint_status", "joint_ordering_method_id",
     }
     for arm in config.ARMS:
         p = config.ARM_POLE[arm]

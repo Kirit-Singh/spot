@@ -25,12 +25,18 @@ the generator by construction, whatever the generator happens to say today.
 from __future__ import annotations
 
 import numpy as np
-
 import verify_rules as R  # noqa: E402
-
-from verify_source import (CONDITION_COL, GUIDE_COL, GUIDE_TYPE_COL,  # noqa: E402
-                           KEEP_COL, TARGET_COL, TARGETING, _excluded,
-                           _is_pooled, _source_scope)
+from verify_source import (  # noqa: E402
+    CONDITION_COL,
+    GUIDE_COL,
+    GUIDE_TYPE_COL,
+    KEEP_COL,
+    TARGET_COL,
+    TARGETING,
+    _excluded,
+    _is_pooled,
+    _source_scope,
+)
 
 
 def source_determinable_scopes(cols):

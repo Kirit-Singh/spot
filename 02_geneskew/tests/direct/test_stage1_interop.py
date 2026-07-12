@@ -20,7 +20,6 @@ import os
 
 import pandas as pd
 import pytest
-
 from direct import config, selection
 from direct.run_screen import build_screen
 from direct.selection import SelectionError

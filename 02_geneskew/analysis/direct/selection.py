@@ -27,8 +27,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from . import config
-from . import trust
+from . import config, trust
 from .hashing import content_hash, file_sha256
 
 ACCEPTED_SCHEMA_PREFIX = "spot.stage01_selection_contract."

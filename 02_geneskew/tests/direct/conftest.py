@@ -19,17 +19,44 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fixtures_direct as F  # noqa: E402
 import fixtures_evidence as E  # noqa: E402
 import fixtures_io as IO  # noqa: E402
-from fixtures_spec import (  # noqa: E402,F401
-    A_PANEL, B_PANEL, CONDITION, COMMON_UNIVERSE, CONTROLS, DONOR_PAIRS, DONORS,
-    TARGET_GENES, UNIVERSE)
-from fixtures_evidence import (  # noqa: E402,F401
-    Evidence, MANIFEST_NAME, RECORD_TABLE_NAME, REPLAY_REPORT_NAME, SOURCE_NAME,
-    contributing_guides, kept_proof, link_citations, main_ambiguous, manifest_doc,
-    manifest_rows, raw_source_rows, source_record_doc, source_records, write_evidence,
-    write_source_file)
 from fixtures_direct import (  # noqa: E402,F401
-    RunArgs, TargetSpec, default_specs, derived_ids, write_selection,
-    write_stage1_gates, write_stage1_release)
+    RunArgs,
+    TargetSpec,
+    default_specs,
+    derived_ids,
+    write_selection,
+    write_stage1_gates,
+    write_stage1_release,
+)
+from fixtures_evidence import (  # noqa: E402,F401
+    MANIFEST_NAME,
+    RECORD_TABLE_NAME,
+    REPLAY_REPORT_NAME,
+    SOURCE_NAME,
+    Evidence,
+    contributing_guides,
+    kept_proof,
+    link_citations,
+    main_ambiguous,
+    manifest_doc,
+    manifest_rows,
+    raw_source_rows,
+    source_record_doc,
+    source_records,
+    write_evidence,
+    write_source_file,
+)
+from fixtures_spec import (  # noqa: E402,F401
+    A_PANEL,
+    B_PANEL,
+    COMMON_UNIVERSE,
+    CONDITION,
+    CONTROLS,
+    DONOR_PAIRS,
+    DONORS,
+    TARGET_GENES,
+    UNIVERSE,
+)
 
 _write_registry = F._write_registry
 _write_main = IO._write_main

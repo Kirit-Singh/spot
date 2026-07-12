@@ -31,7 +31,6 @@ import json
 import os
 
 import pytest
-
 from test_source_replay import run_and_verify
 
 HASH_CHECK = "run_binding_sha256 is the hash of the binding content"

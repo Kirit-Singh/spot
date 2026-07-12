@@ -18,8 +18,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from . import config, domain
-from .projection import (INSUFFICIENT_AXIS_COVERAGE, MASK_UNRESOLVED, OK,
-                         sign_of)
+from .projection import INSUFFICIENT_AXIS_COVERAGE, MASK_UNRESOLVED, OK, sign_of
 
 # --------------------------------------------------------------------------- #
 # Base (pre-outcome) QC — shared by both arms, a function of NEITHER outcome.

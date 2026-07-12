@@ -28,15 +28,23 @@ import io
 import os
 
 import pytest
-
-from direct import identity, manifest as mf, record_id
-from direct import verify_evidence as E, verify_rules as R, verify_run
+from direct import identity, record_id, verify_run
+from direct import manifest as mf
+from direct import verify_evidence as E
+from direct import verify_rules as R
 from direct.run_screen import build_screen
-
-from fixtures_evidence import (NON_TARGETING_GUIDES, SOURCE_NAME, kept_proof,
-                               link_citations, manifest_doc, manifest_rows,
-                               raw_source_rows, source_record_doc, source_records)
 from fixtures_direct import default_specs
+from fixtures_evidence import (
+    NON_TARGETING_GUIDES,
+    SOURCE_NAME,
+    kept_proof,
+    link_citations,
+    manifest_doc,
+    manifest_rows,
+    raw_source_rows,
+    source_record_doc,
+    source_records,
+)
 from fixtures_spec import CONDITION, TARGET_GENES
 
 pytestmark = pytest.mark.filterwarnings("ignore")

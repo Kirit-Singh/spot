@@ -10,7 +10,6 @@ import os
 import jsonschema
 import pandas as pd
 import pytest
-
 from direct import config
 from direct.run_screen import build_screen
 

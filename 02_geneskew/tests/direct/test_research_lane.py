@@ -6,8 +6,8 @@ import os
 
 import pandas as pd
 import pytest
-
-from direct import config, selection as sel_mod, trust
+from direct import config, trust
+from direct import selection as sel_mod
 from direct.run_screen import build_screen
 from direct.selection import SelectionError
 from direct.trust import TrustError

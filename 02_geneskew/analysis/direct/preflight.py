@@ -26,9 +26,8 @@ import json
 import os
 from typing import Any
 
-from . import config, domain, gate
+from . import config, domain, gate, run_screen
 from . import manifest as mf
-from . import run_screen
 
 SCHEMA_VERSION = "spot.stage02_direct_preflight.v1"
 
@@ -85,7 +84,7 @@ def strict_replay(args, ctx, failures: list[dict[str, str]]) -> dict[str, Any]:
     Expensive by construction; this is the release gate, not the every-invocation
     default, and it runs on tcefold. It writes no scientific result.
     """
-    from . import replay                          # h5py-heavy; imported only when used
+    from . import replay  # h5py-heavy; imported only when used
     doc = ctx["manifest_doc"]
     pinned = dict(doc["source_replay"])
     src = getattr(args, "strict_replay_source", None) or args.pseudobulk

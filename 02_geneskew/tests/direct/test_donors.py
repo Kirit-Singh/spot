@@ -1,6 +1,5 @@
 """Six overlapping donor-pair estimates are three complementary splits, not six."""
 import pytest
-
 from direct import donors
 
 DONORS = ["D1", "D2", "D3", "D4"]

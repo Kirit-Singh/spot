@@ -10,9 +10,16 @@ from typing import Optional
 
 import h5py
 import numpy as np
-
-from fixtures_spec import (A_PANEL, B_PANEL, CONDITION, DONOR_PAIRS,
-                           DONOR_UNIVERSE, SYMBOL_TARGETS, UNIVERSE, TargetSpec)
+from fixtures_spec import (
+    A_PANEL,
+    B_PANEL,
+    CONDITION,
+    DONOR_PAIRS,
+    DONOR_UNIVERSE,
+    SYMBOL_TARGETS,
+    UNIVERSE,
+    TargetSpec,
+)
 
 
 def _write_categorical(obs: h5py.Group, name: str, values: list[str]) -> None:

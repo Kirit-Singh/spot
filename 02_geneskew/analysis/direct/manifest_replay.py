@@ -17,14 +17,21 @@ import json
 import os
 from typing import Any, Optional
 
-from .manifest_schema import (COMPLETENESS_RULE_ID, DETERMINED,
-                              REPLAY_COMPLETE, REPLAY_COMPLETENESS_KEYS,
-                              REPLAY_REPLAYED, REPLAY_RULE_ID, REPLAY_SCHEMA,
-                              SOURCE_CLASSIFICATION_RULE_ID,
-                              SUPERSEDED_REPLAY_SCHEMAS,
-                              is_nullish, require, scope_of, scope_partition)
-
-
+from .manifest_schema import (
+    COMPLETENESS_RULE_ID,
+    DETERMINED,
+    REPLAY_COMPLETE,
+    REPLAY_COMPLETENESS_KEYS,
+    REPLAY_REPLAYED,
+    REPLAY_RULE_ID,
+    REPLAY_SCHEMA,
+    SOURCE_CLASSIFICATION_RULE_ID,
+    SUPERSEDED_REPLAY_SCHEMAS,
+    is_nullish,
+    require,
+    scope_of,
+    scope_partition,
+)
 
 
 # --------------------------------------------------------------------------- #

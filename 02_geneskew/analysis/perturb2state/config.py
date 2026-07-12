@@ -40,11 +40,13 @@ N_SCORE_BINS = 10                          # deciles along z_A and along z_B
 # Per-gene donor-aware continuous model (plan §6.2.5):
 #   mean_expression_g ~ 1 + z_A + z_B + activation + donor
 # fit by weighted least squares across pseudobulk units (weight = n_cells).
-SIGNATURE_MODEL = "WLS mean_expr_g ~ 1 + z_A + z_B + activation + donor(K-1 dummies); weight=n_cells_unit"
+SIGNATURE_MODEL = ("WLS mean_expr_g ~ 1 + z_A + z_B + activation + donor(K-1 dummies); "
+                   "weight=n_cells_unit")
 
 # Signature normalisation (plan §6.2.11): z-score away/toward SEPARATELY across
 # the readout gene universe, then combined = away_norm + toward_norm.
-SIGNATURE_NORMALIZATION = "per-gene-universe z-score of away and toward separately; combined = away_norm + toward_norm"
+SIGNATURE_NORMALIZATION = ("per-gene-universe z-score of away and toward separately; "
+                           "combined = away_norm + toward_norm")
 
 LANES = ["away_from_A", "toward_b", "combined_A_to_B"]
 

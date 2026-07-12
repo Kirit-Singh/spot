@@ -122,6 +122,13 @@ POLE_SIGN = {"high": +1, "low": -1}
 MASK_NEIGHBORHOOD_COLUMN = "nearby_gene_within_30kb"
 MASK_WINDOW_KB = 30
 MASK_REASONS = ("intended_target", "neighbor_within_window", "offtarget_alignment")
+# WHICH mask rule built the removed-gene set. Emitted per row alongside the estimate's
+# own mask id, and bound into the run: the intended target, its 30-kb neighbourhood and
+# every off-target alignment of the CONTRIBUTING guides are removed before the panel and
+# control means are recomputed. A different mask rule is a different measurement, and a
+# row that names its mask hash without naming the rule that produced it can be compared
+# only against itself.
+MASK_METHOD_VERSION = "stage2-direct-mask-v1-contributing-guide-and-offtarget"
 
 # --------------------------------------------------------------------------- #
 # Contributing-guide resolution ladder (frozen; never guess a guide identity).

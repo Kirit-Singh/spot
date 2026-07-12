@@ -27,14 +27,18 @@ import json
 import os
 
 import pytest
-
-from direct import identity, record_id, sources
+from direct import record_id, sources
 from direct.sources import SourceRecordError
-
-from fixtures_evidence import (kept_proof, link_citations, manifest_rows,
-                               raw_source_rows, source_record_doc, source_records)
 from fixtures_direct import default_specs
-from fixtures_spec import CONDITION, TARGET_GENES
+from fixtures_evidence import (
+    kept_proof,
+    link_citations,
+    manifest_rows,
+    raw_source_rows,
+    source_record_doc,
+    source_records,
+)
+from fixtures_spec import TARGET_GENES
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

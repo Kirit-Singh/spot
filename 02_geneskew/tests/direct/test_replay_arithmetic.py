@@ -22,13 +22,11 @@ import copy
 import os
 
 import pytest
-
 from direct import replay
 from direct.manifest import ManifestError
 from direct.run_screen import build_screen
-
-from fixtures_spec import TargetSpec
 from fixtures_direct import TARGET_GENES
+from fixtures_spec import TargetSpec
 from test_source_replay import run_and_verify, verify
 
 RULE_IDS = ("replay_rule_id", "completeness_rule_id")
@@ -402,6 +400,7 @@ def test_the_verifier_refuses_a_report_describing_a_DIFFERENT_universe():
 def test_editing_the_pinned_report_on_disk_is_caught_by_its_hash(synthetic_run):
     """Belt and braces: the arithmetic gate does not replace the pin, it backs it up."""
     import json
+
     from fixtures_evidence import REPLAY_REPORT_NAME
 
     args = run_and_verify(synthetic_run())

@@ -1,6 +1,5 @@
 """Broad target-signature construction tests (plan §6.2, §6.9)."""
 import numpy as np
-
 from perturb2state import signature as S
 
 

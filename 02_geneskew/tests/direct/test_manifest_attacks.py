@@ -19,14 +19,11 @@ import copy
 import os
 from dataclasses import replace
 
-import numpy as np
 import pandas as pd
 import pytest
-
 from direct import config, domain, guides
 from direct.manifest import ManifestError
 from direct.run_screen import build_screen
-
 from fixtures_direct import CONDITION, DONOR_PAIRS, TARGET_GENES, default_specs
 
 pytestmark = pytest.mark.filterwarnings("ignore")

@@ -21,7 +21,6 @@ support resolves to an explicit unavailable state — never to a borrowed pooled
 contributor set, and never to a guide guessed from a slot name.
 """
 import pytest
-
 from direct import domain, guides
 from direct.guides import Estimate
 

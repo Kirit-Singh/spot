@@ -29,8 +29,24 @@ from typing import Any, Optional
 
 import numpy as np
 
-from . import arms, config, disposition, domain, donors, emit, gate, guides, identity
-from . import io_data, masks, runid, screen_row, trust
+from . import (
+    arms,
+    config,
+    disposition,
+    domain,
+    donors,
+    emit,
+    gate,
+    guides,
+    identity,
+    io_data,
+    masks,
+    pareto,
+    runid,
+    screen_row,
+    support_lanes,
+    trust,
+)
 from . import manifest as mf
 from . import projection as proj
 from . import selection as sel_mod
@@ -63,74 +79,6 @@ def _f(v) -> Optional[float]:
 
 def _b(v) -> Optional[bool]:
     return None if v is None else bool(v)
-
-
-# --------------------------------------------------------------------------- #
-# Support lanes: EXPLICITLY UNAVAILABLE in this release pass.
-#
-# The audited contributor artifact is global, all-condition, POOLED-MAIN only. The
-# guide-slot and donor-pair estimates have no contributor evidence in it, so they get
-# none: no mask, no projection, no replication claim, and no power to elevate an
-# evidence tier. They are still ENUMERATED and emitted with an explicit unavailable
-# state, because a silently absent estimate reads as "the release does not ship it".
-# --------------------------------------------------------------------------- #
-def _unavailable_support_estimate(est: guides.Estimate) -> tuple[list, dict]:
-    """One support estimate, refused for a named reason. No mask. No projection."""
-    contrib = guides.resolve(est, library={}, manifest_index=None)
-    return guides.contributor_rows(est, contrib), {
-        "estimate_id": est.estimate_id,
-        "guide_id": None,                       # never guessed from a slot name
-        "values": arms.empty_values(),          # never projected
-        "unresolved_reason": contrib.reason,
-    }
-
-
-def _guide_lane(ident, cond: str, guide_ids: dict) -> tuple[list, list]:
-    """Per-slot contributor rows and slot records for one target — all unavailable.
-
-    ``guide_ids`` maps modality -> {target -> {"released_estimate_id"}} and is METADATA
-    ONLY: the slot's effect vector is never read, and its ``n_guides`` is never read
-    either. In this release that field is a COPY of the pooled estimate's count, not
-    the slot's own contributor count, so reading it as the slot's own would be the
-    same class of error this pass exists to remove.
-    """
-    contrib_rows, slots = [], []
-    for mod_id in sorted(guide_ids):
-        entry = guide_ids[mod_id]["by_target"].get(ident.target_id)
-        if entry is None:
-            continue
-        rows, slot = _unavailable_support_estimate(guides.Estimate(
-            estimate_type=guides.GUIDE, estimate_id=mod_id,
-            released_estimate_id=entry["released_estimate_id"],
-            target_id=ident.target_id, target_ensembl=ident.target_ensembl,
-            condition=cond, n_guides=None,
-            target_id_namespace=ident.target_id_namespace,
-            target_symbol=ident.target_symbol,
-            released_target_ensembl=ident.released_target_ensembl))
-        contrib_rows += rows
-        slots.append(slot)
-    return contrib_rows, slots
-
-
-def _donor_lane(ident, cond: str, donor_ids: dict) -> tuple[list, dict]:
-    """Per-donor-pair contributor rows for one target — all unavailable."""
-    contrib_rows: list[dict] = []
-    values: dict[str, dict] = {}
-    for pair_id in sorted(donor_ids):
-        entry = donor_ids[pair_id]["by_target"].get(ident.target_id)
-        values[pair_id] = arms.empty_values()   # never projected
-        if entry is None:
-            continue
-        rows, _slot = _unavailable_support_estimate(guides.Estimate(
-            estimate_type=guides.DONOR_PAIR, estimate_id=pair_id,
-            released_estimate_id=entry["released_estimate_id"],
-            target_id=ident.target_id, target_ensembl=ident.target_ensembl,
-            condition=cond, n_guides=None, donor_pair=pair_id,
-            target_id_namespace=ident.target_id_namespace,
-            target_symbol=ident.target_symbol,
-            released_target_ensembl=ident.released_target_ensembl))
-        contrib_rows += rows
-    return contrib_rows, values
 
 
 # --------------------------------------------------------------------------- #
@@ -262,7 +210,7 @@ def build_screen(args) -> dict:
     # would make ``--preflight-only`` an advisory notice rather than a gate: the two
     # would answer different questions about identical inputs, and the one that writes
     # the science would be the weaker of them.
-    from . import preflight            # imported here: preflight imports this module
+    from . import preflight  # imported here: preflight imports this module
     verdict = preflight.assess(args, ctx)
     if verdict["verdict"] != preflight.GO:
         # The failure text is carried through verbatim, not summarised into check names.
@@ -280,6 +228,24 @@ def build_screen(args) -> dict:
     manifest_doc, gene_universe = ctx["manifest_doc"], ctx["gene_universe"]
     splits, support = ctx["splits"], ctx["support_contract"]
     universe_ids = gene_universe["gene_ids"]
+
+    # ---- the input pins, taken BEFORE the loop so a row can name its own source ----
+    # Hashed once. Computing this after the loop and then re-hashing the DE object to
+    # stamp the rows would read the pinned ~16 GB source twice for one number.
+    manifest = emit.input_manifest({
+        "GWCD4i.DE_stats.h5ad": args.de_main,
+        "GWCD4i.DE_stats.by_guide.h5mu": args.by_guide,
+        "GWCD4i.DE_stats.by_donors.h5mu": args.by_donors,
+        "sgrna_library_metadata.suppl_table.csv": args.sgrna,
+        "stage01_program_registry.json": args.registry,
+        "stage01_selection_contract.json": args.selection,
+    })
+    identity_hashes = {
+        "direct_method_version": config.METHOD_VERSION,
+        "direct_config_sha256": runid.config_sha256(),
+        "effect_source_sha256": next(
+            e["sha256"] for e in manifest if e["name"] == "GWCD4i.DE_stats.h5ad"),
+    }
 
     # ---- the ONLY dense read in the lane: the pooled main effect layers ----
     main = io_data.load_main(args.de_main, cond)
@@ -329,11 +295,11 @@ def build_screen(args) -> dict:
             target_identity_resolved=ident.ensembl_resolved)
 
         # SUPPORT: enumerated, explicitly unavailable, never projected, never masked.
-        g_contrib, slots = _guide_lane(ident, cond, ctx["guide_ids"])
+        g_contrib, slots = support_lanes.guide_lane(ident, cond, ctx["guide_ids"])
         contrib_rows += g_contrib
         guide_rows += arms.guide_support_rows(target, cond, slots, run_id=None)
 
-        d_contrib, pair_values = _donor_lane(ident, cond, ctx["donor_ids"])
+        d_contrib, pair_values = support_lanes.donor_lane(ident, cond, ctx["donor_ids"])
         contrib_rows += d_contrib
         donor_rows += arms.donor_support_rows(target, cond, pair_values,
                                               splits["splits"], scores,
@@ -345,26 +311,23 @@ def build_screen(args) -> dict:
             zdeltas={"A": zda, "B": zdb}, scores=scores, zscores=zscores,
             base_state=base_state, base_passed=base_passed,
             base_reasons=base_reasons, slots=slots, pair_values=pair_values,
-            splits=splits, n_guides=n_guides))
+            splits=splits, n_guides=n_guides, identity_hashes=identity_hashes))
 
     # ---- INDEPENDENT ranks: one per arm, over that arm's own population ----
     for arm in config.ARMS:
         proj.rank_arm(screen_rows, arm,
                       evaluable_key=f"{config.ARM_POLE[arm]}_evaluable",
                       rank_column=config.ARM_RANK_COLUMN[arm])
-    ordered = proj.emit_order(screen_rows)
 
+    # ---- the JOINT ordering: Pareto tiers over the two arms, added ALONGSIDE ----
+    # Strictly additive. It reads the arm values and writes only its own three columns,
+    # so neither arm's value nor either arm's rank can move because a joint field exists.
+    # The verifier re-derives both arms from the inputs and would see it if they did.
+    pareto.assign_tiers(screen_rows)
+    ordered = proj.emit_order(screen_rows)
 
     # ---- identifiers: masks and inputs are bound BEFORE the run is named ----
     mask_sha = emit.mask_content_sha256(mask_rows)
-    manifest = emit.input_manifest({
-        "GWCD4i.DE_stats.h5ad": args.de_main,
-        "GWCD4i.DE_stats.by_guide.h5mu": args.by_guide,
-        "GWCD4i.DE_stats.by_donors.h5mu": args.by_donors,
-        "sgrna_library_metadata.suppl_table.csv": args.sgrna,
-        "stage01_program_registry.json": args.registry,
-        "stage01_selection_contract.json": args.selection,
-    })
     guide_manifest_block = mf.provenance_block(manifest_doc)
     binding = runid.build_run_binding(
         selection=selection, lane=lane, stage1_release=ctx["release"],
@@ -401,7 +364,8 @@ def build_screen(args) -> dict:
     # emitted in stable target order: sorting by an arm would BE a headline rank
     emit.write_parquet(ordered, os.path.join(out_dir, "screen.parquet"),
                        ["target_id"],
-                       nullable_int_columns=tuple(config.ARM_RANK_COLUMN.values()))
+                       nullable_int_columns=(tuple(config.ARM_RANK_COLUMN.values())
+                                             + (pareto.TIER_COLUMN,)))
     emit.write_parquet(guide_rows, os.path.join(out_dir, "guide_support.parquet"),
                        ["target_id", "estimate_id", "arm"])
     emit.write_parquet(donor_rows, os.path.join(out_dir, "donor_support.parquet"),

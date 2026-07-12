@@ -14,18 +14,15 @@ code/fixture host.
 """
 from __future__ import annotations
 
-import copy
 import json
 import os
 
 import pytest
-
 from direct import replay
 from direct.record_id import RULE_METADATA, RULE_METADATA_KEY, derive_record_id
 from direct.sources import SCHEMA_VERSION as RECORDS_SCHEMA
-
-from release_gate import PSEUDOBULK, needs
 from fixtures_spec import SYMBOL_TARGETS
+from release_gate import PSEUDOBULK, needs
 
 pytestmark = [pytest.mark.filterwarnings("ignore"), needs(PSEUDOBULK)]
 

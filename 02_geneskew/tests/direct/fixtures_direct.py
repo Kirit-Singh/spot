@@ -11,19 +11,55 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-from fixtures_spec import (A_PANEL, B_PANEL, CONDITION, CONTROLS, COMMON_UNIVERSE,
-                           DONOR_DROPPED_GENE, DONOR_PAIRS, DONOR_UNIVERSE, DONORS,
-                           RELEASE_CONDITIONS, SYMBOL_TARGETS, TARGET_GENES,
-                           UNIVERSE, TargetSpec)
-from fixtures_io import (_write_by_donors, _write_by_guide, _write_main,
-                         _write_modality, _write_obs, _write_sgrna)
 from fixtures_evidence import (  # noqa: F401  (the one evidence API, re-exported)
-    Evidence, IDENTITY_METHOD, MANIFEST_NAME, NON_TARGETING_GUIDES,
-    NON_TARGETING_TARGET, PINNED_REVISION, RECORD_TABLE_NAME, REGISTRY_NAME,
-    REPLAY_REPORT_NAME, SOURCE_CLASS, SOURCE_NAME, contributing_guides, kept_proof,
-    link_citations, main_ambiguous, manifest_doc, manifest_rows, raw_source_rows,
-    source_record_doc, source_records, write_evidence, write_replay_report,
-    write_source_file)
+    IDENTITY_METHOD,
+    MANIFEST_NAME,
+    NON_TARGETING_GUIDES,
+    NON_TARGETING_TARGET,
+    PINNED_REVISION,
+    RECORD_TABLE_NAME,
+    REGISTRY_NAME,
+    REPLAY_REPORT_NAME,
+    SOURCE_CLASS,
+    SOURCE_NAME,
+    Evidence,
+    contributing_guides,
+    kept_proof,
+    link_citations,
+    main_ambiguous,
+    manifest_doc,
+    manifest_rows,
+    raw_source_rows,
+    source_record_doc,
+    source_records,
+    write_evidence,
+    write_replay_report,
+    write_source_file,
+)
+from fixtures_io import (
+    _write_by_donors,
+    _write_by_guide,
+    _write_main,
+    _write_modality,
+    _write_obs,
+    _write_sgrna,
+)
+from fixtures_spec import (
+    A_PANEL,
+    B_PANEL,
+    COMMON_UNIVERSE,
+    CONDITION,
+    CONTROLS,
+    DONOR_DROPPED_GENE,
+    DONOR_PAIRS,
+    DONOR_UNIVERSE,
+    DONORS,
+    RELEASE_CONDITIONS,
+    SYMBOL_TARGETS,
+    TARGET_GENES,
+    UNIVERSE,
+    TargetSpec,
+)
 
 
 def write_stage1_gates(d: str, selectable: bool = True,

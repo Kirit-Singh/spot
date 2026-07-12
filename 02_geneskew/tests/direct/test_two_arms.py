@@ -10,10 +10,8 @@ import os
 
 import pandas as pd
 import pytest
-
 from direct import config
 from direct.run_screen import build_screen
-
 from fixtures_direct import TARGET_GENES
 
 ANTI_B = TARGET_GENES[10]        # strong away-from-A, NEGATIVE toward-B

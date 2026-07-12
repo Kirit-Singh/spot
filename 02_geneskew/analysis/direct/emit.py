@@ -20,10 +20,14 @@ from typing import Any, Iterable
 
 import pandas as pd
 
-from . import config, disposition, domain, guides
-from .contract import (COMBINED_OBJECTIVE_ALIASES, FORBIDDEN_LEGACY_COLUMNS,
-                       FORBIDDEN_PQ_COLUMNS, HEADLINE_RANK_ALIASES,
-                       screen_column_allowlist)
+from . import config, disposition, domain, guides, pareto
+from .contract import (
+    COMBINED_OBJECTIVE_ALIASES,
+    FORBIDDEN_LEGACY_COLUMNS,
+    FORBIDDEN_PQ_COLUMNS,
+    HEADLINE_RANK_ALIASES,
+    screen_column_allowlist,
+)
 from .hashing import content_hash, file_sha256
 
 SCHEMA_SCREEN = "spot.stage02_screen.v3"
@@ -162,6 +166,26 @@ def direct_contract(gene_universe: dict[str, Any]) -> dict[str, Any]:
                                  "desired_modulation_agreement"],
             "cross_arm_rule_id": config.CROSS_ARM_RULE_ID,
             "cross_arm_fields_rank_or_gate": False,
+        },
+        # THE JOINT ORDERING. A consumer may order by tier; it may not reduce the two
+        # arms to one number, and there is no field here it could use to try.
+        "joint_ordering": {
+            "method_id": pareto.METHOD_ID,
+            "objectives": list(pareto.OBJECTIVES),
+            "objective_orientation": pareto.OBJECTIVE_ORIENTATION,
+            "tier_column": pareto.TIER_COLUMN,
+            "tier_dtype": config.RANK_DTYPE,
+            "tier_nullable": True,
+            "tier_null_when_not_jointly_evaluable": True,
+            "tier_is_a_score": False,
+            "tier_is_averageable": False,
+            "same_tier_means_incomparable_not_tied": True,
+            "status_column": pareto.STATUS_COLUMN,
+            "status_vocabulary": list(pareto.JOINT_STATUSES),
+            "status_derived_from_tier": False,
+            "arm_values_and_ranks_unchanged_by_joint_fields": True,
+            "display_order": pareto.DISPLAY_ORDER,
+            "display_order_is_a_rank": pareto.DISPLAY_ORDER_IS_A_RANK,
         },
         "arm_state_vocabulary": {
             "states": [disposition.ARM_EVALUABLE, disposition.ARM_EXCLUDED_BASE_QC,
@@ -392,6 +416,9 @@ def verification(*, out_dir: str, run_id: str, run_sha256: str,
                 and not a["evaluable_without_a_rank"]
                 for a in arm_report.values()),
         },
+        # The JOINT ordering, as counts and ids. Reported so an auditor can see WHAT it
+        # did without it ever becoming a number a consumer can sort on.
+        "joint_ordering": pareto.summary(rows),
         "cross_arm": {
             "concordance_class_counts": dict(Counter(
                 r["concordance_class"] for r in rows)),

@@ -19,6 +19,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import verify_rules as R
+from verify_method import MASK_METHOD_VERSION, METHOD_VERSION  # noqa: E402
 
 
 def _num(v):
@@ -156,6 +157,14 @@ def rebuild(ctx):
                "base_qc_passed": base_pass,
                "mask_resolved": main_mask is not None,
                "mask_gene_count": None if main_mask is None else len(main_mask),
+               # THIS estimate's mask, re-derived: the gene set the verifier itself
+               # computed from the library and the manifest-proven guides
+               "estimate_mask_sha256": (None if main_mask is None
+                                        else R.content_sha256(sorted(main_mask))),
+               "mask_method_version": MASK_METHOD_VERSION,
+               "direct_method_version": METHOD_VERSION,
+               "direct_config_sha256": ctx["expected_config_sha256"],
+               "effect_source_sha256": ctx["effect_source_sha256"],
                "effective_donor_n": n_donors}
         for arm in R.ARMS:
             p = R.POLE[arm]
@@ -218,6 +227,10 @@ def rebuild(ctx):
 SCREEN_COMPARE = (
     ["released_estimate_id", "target_id_namespace", "target_ensembl",
      "base_qc_state", "base_qc_passed", "mask_resolved", "mask_gene_count",
+     # the row's own identity: its mask, the method, the frozen config, the pinned
+     # effect source. Each RE-DERIVED by the verifier, not read from the run.
+     "estimate_mask_sha256", "mask_method_version", "direct_method_version",
+     "direct_config_sha256", "effect_source_sha256",
      "effective_donor_n", "concordance_class", "desired_modulation_agreement"]
     + [c for arm in R.ARMS for c in (
         arm, R.RANK_COL[arm],
@@ -239,9 +252,14 @@ SCREEN_COMPARE = (
 
 
 def _eq(a, b) -> bool:
-    if a is None or (isinstance(a, float) and a != a) or (pd.isna(a) if not isinstance(a, (list, set, dict)) else False):
+    def _isnull(v):
+        if v is None or (isinstance(v, float) and v != v):
+            return True
+        return False if isinstance(v, (list, set, dict)) else bool(pd.isna(v))
+
+    if _isnull(a):
         a = None
-    if b is None or (isinstance(b, float) and b != b) or (pd.isna(b) if not isinstance(b, (list, set, dict)) else False):
+    if _isnull(b):
         b = None
     if a is None or b is None:
         return a is None and b is None
@@ -291,6 +309,16 @@ def compare_all(ctx, prov, rep):
         col = R.RANK_COL[arm]
         rep.check(f"{col} dtype is nullable Int64",
                   str(emitted[col].dtype) == "Int64")
+
+    # ---- THE JOINT ORDERING, re-derived from the EMITTED arm values ----
+    # Deliberately from the shipped table, not from the reconstruction: a tier rewritten
+    # after emission leaves the reconstruction — and every score, rank and hash —
+    # untouched, and is invisible to every other check here.
+    from verify_pareto import TIER_COLUMN, check_joint_ordering
+
+    rep.check(f"{TIER_COLUMN} dtype is nullable Int64",
+              str(emitted[TIER_COLUMN].dtype) == "Int64")
+    check_joint_ordering(emitted.to_dict("records"), rep)
 
     # ---- masks / contributing_guides / guide_support / donor_support ----
     compare_masks(run_dir, built, rep)

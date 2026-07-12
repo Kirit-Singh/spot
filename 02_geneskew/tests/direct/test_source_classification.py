@@ -51,11 +51,9 @@ import os
 
 import pandas as pd
 import pytest
-
 from direct import config, replay
 from direct.manifest import ManifestError
 from direct.run_screen import build_screen
-
 from fixtures_direct import TARGET_GENES, default_specs
 from test_source_replay import verify
 
@@ -270,7 +268,6 @@ def _rule_failures(rows, raw):
     that the rule REFUSES a manifest the source refutes.
     """
     import numpy as np
-
     from direct import verify_classification as VC
     from direct.verify_run import Report
 
@@ -370,8 +367,7 @@ def test_a_NON_TARGETING_control_never_makes_a_scope_determinable(synthetic_run)
     scope whose only kept rows were controls must stay genuinely ambiguous — never
     forced into ``determined`` by the mere presence of rows.
     """
-    from fixtures_evidence import (NON_TARGETING_GUIDES, NON_TARGETING_TARGET,
-                                   raw_source_rows)
+    from fixtures_evidence import NON_TARGETING_GUIDES, NON_TARGETING_TARGET, raw_source_rows
     raw = raw_source_rows(default_specs())
     controls = [r for r in raw if r["guide_id"] in NON_TARGETING_GUIDES]
     assert controls, "the fixture no longer ships non-targeting controls"

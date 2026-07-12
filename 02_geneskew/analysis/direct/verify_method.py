@@ -62,6 +62,11 @@ HEADLINE_ARM_PERMITTED = False
 EFFECT_LAYER_PRIMARY = "log_fc"
 EFFECT_LAYER_SENSITIVITY = "zscore"
 
+# WHICH mask rule removed the genes, restated. The intended target, its 30-kb
+# neighbourhood and every off-target alignment of the CONTRIBUTING guides come out
+# before the panel and control means are recomputed.
+MASK_METHOD_VERSION = "stage2-direct-mask-v1-contributing-guide-and-offtarget"
+
 # The EXACT method block run_id must have hashed. Exact, not a subset: an extra field is
 # a claim nobody restated, and a missing one is a claim that stopped being bound.
 EXPECTED_METHOD = {
@@ -121,6 +126,20 @@ EXPECTED_ELIGIBILITY_POLICY = {
     "sign_eps": 1e-9,
     "float_decimals": 6,
 }
+
+
+def expected_config_sha256() -> str:
+    """The frozen config's id, re-derived from THIS module's restatement.
+
+    Emitted on every screen row. Re-deriving it here means the row's ``direct_config_
+    sha256`` is checked against the policy the VERIFIER expects, not against the policy
+    the run happened to hash — so a run that loosened a threshold and honestly hashed the
+    loosened policy is caught by the row, not merely by the binding.
+    """
+    import verify_rules as R
+
+    return R.content_sha256({"stage2_method": EXPECTED_METHOD,
+                             "stage2_eligibility_policy": EXPECTED_ELIGIBILITY_POLICY})
 
 
 def _diff(expected: dict, actual) -> list[str]:

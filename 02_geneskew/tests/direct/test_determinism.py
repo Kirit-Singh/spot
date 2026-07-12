@@ -22,7 +22,6 @@ import os
 
 import pandas as pd
 import pytest
-
 from direct import manifest as mf
 from direct.hashing import file_sha256
 from direct.run_screen import build_screen
@@ -140,9 +139,8 @@ def test_the_canonical_hash_is_order_independent_but_content_sensitive(synthetic
 # --------------------------------------------------------------------------- #
 def test_a_semantic_change_to_the_evidence_still_changes_the_run_id(synthetic_run):
     """Order-invariance must not have bought itself by ignoring the rows."""
-    from fixtures_spec import TARGET_GENES
-
     from direct.manifest import ManifestError
+    from fixtures_spec import TARGET_GENES
 
     baseline = build_screen(synthetic_run())
 

@@ -139,6 +139,33 @@ def build_estimate_mask(est: Estimate, contrib: Contributors,
     }
 
 
+def estimate_mask_sha256(mask: dict) -> Optional[str]:
+    """THIS estimate's mask, as one id: the exact gene SET removed from its projection.
+
+    The run-level ``mask_sha256`` hashes every mask in the run at once, which cannot
+    answer the only question a reader of one row actually has: *which genes were removed
+    from THIS target's projection*. Without a per-estimate id the screen is not
+    self-describing — you must join it back to masks.parquet to find out what was masked,
+    and a screen that cannot state its own mask is a screen you have to trust.
+
+    The id is over the GENE SET, not over (gene, reason). Deliberately: the gene set is
+    what changes the numbers — it is exactly what is subtracted from the panel and control
+    means — whereas the reason is provenance for why a gene is in it. Hashing the reasons
+    in would also make the id unverifiable: the standalone verifier reconstructs which
+    genes a guide masks, not the label it was filed under, so an id it cannot re-derive is
+    an id nothing independent can check. The reasons stay in masks.parquet, where they are
+    compared row by row.
+
+    Null on an unresolved mask, never an empty-set hash. An empty mask and an absent one
+    are opposite claims — "nothing needed removing" versus "we could not tell what to
+    remove" — and giving them the same id would let a projection that refused to run look
+    identical to one that ran and masked nothing.
+    """
+    if not mask["resolved"]:
+        return None
+    return content_hash(sorted(mask["gene_set"]))
+
+
 def mask_rows_for_emit(est: Estimate, mask: dict, universe: Iterable[str],
                        run_id: str) -> list[dict]:
     """Emit the mask rows of one estimate, intersected with the gene universe.

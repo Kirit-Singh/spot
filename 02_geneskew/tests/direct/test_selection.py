@@ -1,11 +1,8 @@
 """The Stage-1 selection contract is consumed, never constructed or repaired."""
-import json
 
 import pytest
-
 from direct import selection as sel_mod
 from direct.selection import SelectionError
-
 from fixtures_direct import CONDITION, write_selection
 
 

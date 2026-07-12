@@ -10,15 +10,12 @@ import os
 
 import pandas as pd
 import pytest
-
-from direct import config, disposition, selection as sel_mod, trust
+from direct import config, disposition, trust
 from direct.hashing import file_sha256
-from direct.run_screen import build_screen, main as cli_main
-from direct.selection import SelectionError
+from direct.run_screen import build_screen
+from direct.run_screen import main as cli_main
 from direct.sources import SourceRecordError
 from direct.verify_run import main as verify_main
-
-from fixtures_direct import TARGET_GENES
 
 
 def _verify(result, inputs_root) -> int:

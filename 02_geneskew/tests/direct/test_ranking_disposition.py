@@ -1,5 +1,4 @@
 """Base QC once, then two independent arms: gates, support, direction."""
-import pytest
 
 from direct import config, disposition
 from direct.config import ARM_A, ARM_B

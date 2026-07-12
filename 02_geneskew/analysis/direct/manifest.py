@@ -40,18 +40,37 @@ from typing import Any, Optional
 
 from . import domain, sources
 from .hashing import content_hash, file_sha256
+from .manifest_replay import validate_replay  # noqa: F401  (the release gate)
 from .manifest_schema import (  # noqa: F401  (the frozen vocabulary, re-exported)
-    ADMISSIBLE_IDENTITY_METHODS, ALLOWED_IDENTITY_METHODS, AMBIGUOUS, DETERMINED,
-    EVIDENCE_STATES, MUTABLE_REVISIONS, NON_NULL_ROW_KEYS, PROOF_ROW_KEYS,
-    QUARANTINED_SOURCES, REPLAY_COMPLETE, REPLAY_COMPLETENESS_KEYS, REPLAY_REPLAYED,
-    REPLAY_SCHEMA, REQUIRED_ROW_KEYS, SCHEMA_PREFIX, SCHEMA_VERSION,
-    SOURCE_CLASS_MARSON, SOURCE_CLASSES, SOURCE_RECORD_TABLE_SCHEMA,
-    SUPERSEDED_REPLAY_SCHEMAS, SUPERSEDED_SCHEMA_VERSIONS,
-    ManifestError, canonical_row_key, canonical_rows, is_nullish, require,
-    scope_of)
-from .manifest_replay import validate_replay          # noqa: F401  (the release gate)
-from .manifest_validate import (  # noqa: F401
-    validate_rows, validate_sources)
+    ADMISSIBLE_IDENTITY_METHODS,
+    ALLOWED_IDENTITY_METHODS,
+    AMBIGUOUS,
+    DETERMINED,
+    EVIDENCE_STATES,
+    MUTABLE_REVISIONS,
+    NON_NULL_ROW_KEYS,
+    PROOF_ROW_KEYS,
+    QUARANTINED_SOURCES,
+    REPLAY_COMPLETE,
+    REPLAY_COMPLETENESS_KEYS,
+    REPLAY_REPLAYED,
+    REPLAY_SCHEMA,
+    REQUIRED_ROW_KEYS,
+    SCHEMA_PREFIX,
+    SCHEMA_VERSION,
+    SOURCE_CLASS_MARSON,
+    SOURCE_CLASSES,
+    SOURCE_RECORD_TABLE_SCHEMA,
+    SUPERSEDED_REPLAY_SCHEMAS,
+    SUPERSEDED_SCHEMA_VERSIONS,
+    ManifestError,
+    canonical_row_key,
+    canonical_rows,
+    is_nullish,
+    require,
+    scope_of,
+)
+from .manifest_validate import validate_rows, validate_sources  # noqa: F401
 
 _require = require          # the historical private name, kept for call sites
 

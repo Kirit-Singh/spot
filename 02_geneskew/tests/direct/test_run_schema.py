@@ -36,11 +36,10 @@ import os
 import jsonschema
 import pandas as pd
 import pytest
-
-from direct import config, disposition as D, emit, guides
+from direct import config, emit, guides
+from direct import disposition as D
 from direct import projection as P
 from direct.run_screen import build_screen
-
 from test_p2s_contract import SCHEMA_PATH, _descriptor, _row_example
 
 

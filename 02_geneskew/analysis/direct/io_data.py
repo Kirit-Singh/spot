@@ -136,7 +136,8 @@ def load_main_identity_universe(h5ad_path: str) -> dict[str, dict[str, Any]]:
         # estimates.
         if prior is not None:
             raise ValueError(
-                f"pooled-main release: condition {c!r} ships {'two identical' if prior == row else 'two different'} "
+                f"pooled-main release: condition {c!r} ships "
+                f"{'two identical' if prior == row else 'two different'} "
                 f"estimates for target {t!r} ({prior['released_estimate_id']!r} and "
                 f"{released[i]!r}); the pooled-main scope universe is not unique per "
                 "(condition, target) and cannot be matched against a contributor "

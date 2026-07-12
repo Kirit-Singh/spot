@@ -36,7 +36,6 @@ import json
 import os
 
 import pytest
-
 from direct import cli, gate, preflight, runid
 from direct.run_screen import build_screen, prepare
 

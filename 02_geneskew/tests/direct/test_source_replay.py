@@ -33,15 +33,16 @@ import subprocess
 import sys
 
 import pytest
-
 from direct import replay
 from direct.manifest import ManifestError
 from direct.run_screen import build_screen
-
-from fixtures_evidence import (NON_TARGETING_GUIDES, SOURCE_NAME, kept_proof,
-                               manifest_rows, raw_source_rows, source_record_doc,
-                               source_records)
 from fixtures_direct import default_specs
+from fixtures_evidence import (
+    NON_TARGETING_GUIDES,
+    SOURCE_NAME,
+    kept_proof,
+    raw_source_rows,
+)
 from fixtures_spec import SYMBOL_TARGETS, TARGET_GENES
 
 pytestmark = pytest.mark.filterwarnings("ignore")

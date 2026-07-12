@@ -10,11 +10,9 @@ import os
 
 import pandas as pd
 import pytest
-
 from direct import guides, identity
 from direct.run_screen import build_screen
-
-from fixtures_spec import RELEASE_CONDITIONS, SYMBOL_TARGETS
+from fixtures_spec import RELEASE_CONDITIONS
 
 # The exact, verified membership of the symbol-namespace disposition set.
 EXPECTED_SYMBOLS = {"MTRNR2L1", "MTRNR2L4", "MTRNR2L8", "OCLM"}
@@ -30,7 +28,8 @@ DECOY_KEYS = {
     "OCLM": None,                    # symbol-prefixed key
 }
 
-from release_gate import DE_STATS as _RELEASE, needs
+from release_gate import DE_STATS as _RELEASE
+from release_gate import needs
 
 # OPT-IN ONLY. The presence of a 16 GB DE object on this host is not permission to
 # read it: the ordinary synthetic suite must cost the same everywhere. See
@@ -285,6 +284,7 @@ def test_the_disposition_table_is_lossless(screen):
 def _verify(result, args) -> int:
     import contextlib
     import io as _io
+
     from direct.verify_run import main as verify_main
     with contextlib.redirect_stdout(_io.StringIO()):
         return verify_main(["--run-dir", result["out_dir"],

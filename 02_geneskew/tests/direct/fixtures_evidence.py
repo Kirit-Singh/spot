@@ -145,8 +145,8 @@ def write_source_file(d: str, specs: list[TargetSpec], source_rows_fn=None
     """
     import h5py
     import numpy as np
-    from fixtures_io import _write_categorical
     from direct.hashing import file_sha256
+    from fixtures_io import _write_categorical
 
     raw = raw_source_rows(specs)
     proof = kept_proof(raw)                       # from the PRISTINE rows

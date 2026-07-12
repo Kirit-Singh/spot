@@ -41,14 +41,21 @@ import pandas as pd
 # of the generator package.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import verify_rules as R              # noqa: E402  (independent reimplementation)
-from verify_binding import (verify_evidence_domain,  # noqa: E402
-                            verify_identity, verify_release_gate,
-                            verify_replay_rules_bound, verify_stage1_gates,
-                            verify_support_contract)
+import verify_rules as R  # noqa: E402  (independent reimplementation)
+from verify_binding import (  # noqa: E402
+    verify_evidence_domain,
+    verify_identity,
+    verify_release_gate,
+    verify_replay_rules_bound,
+    verify_stage1_gates,
+    verify_support_contract,
+)
 from verify_evidence import resolve_contributors, scope_coverage  # noqa: E402
-from verify_method import (verify_eligibility_policy,  # noqa: E402
-                           verify_method_identity)
+from verify_method import (  # noqa: E402
+    expected_config_sha256,
+    verify_eligibility_policy,
+    verify_method_identity,
+)
 from verify_source import check_source_replay, decode, obs_column  # noqa: E402
 
 # WHICH modalities are support, restated. In the released by-guide object the support
@@ -393,14 +400,19 @@ def reconstruct(run_dir, inputs_root, rep, strict=False):
 
     ctx = dict(cond=cond, genes=genes, meta=meta, log_fc=log_fc, by_guide=by_guide,
                by_donor=by_donor, library=library, axis=derived_axis,
-               universe=universe, contrib=contrib, run_dir=run_dir)
+               universe=universe, contrib=contrib, run_dir=run_dir,
+               # Re-derived, never read from the run: the config id comes from the
+               # verifier's OWN restated policy, and the effect-source id from the bytes
+               # of the DE object the verifier itself opened.
+               expected_config_sha256=expected_config_sha256(),
+               effect_source_sha256=R.sha256_file(paths[de]))
     rebuild_and_compare(ctx, prov, rep)
     verify_identity(prov, binding, axis_doc, run_dir, rep)
     return rep
 
 
 def rebuild_and_compare(ctx, prov, rep):
-    from verify_tables import compare_all      # split for module size
+    from verify_tables import compare_all  # split for module size
     compare_all(ctx, prov, rep)
 
 

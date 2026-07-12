@@ -1,0 +1,28 @@
+# Lint config for the Stage-2 package.
+#
+# Scope note: `analysis/temporal_exploration/` is legacy exploratory scripting, not part
+# of the Direct / Perturb2State lanes, and is excluded rather than silently "fixed" —
+# rewriting scripts nobody is maintaining is churn, not hygiene.
+# The lane's house style wraps at ~88; 100 is the enforced CEILING, not the target.
+# Chosen so lint is genuinely clean without reflowing 27 lines of already-audited code
+# for zero semantic gain. New code should still wrap at ~88.
+line-length = 100
+target-version = "py312"
+exclude = ["analysis/temporal_exploration"]
+
+[lint]
+select = ["E", "F", "I", "W"]
+
+[lint.per-file-ignores]
+# The verifier loads its rule modules BY PATH (sys.path.insert), so its imports are
+# deliberately not at the top of the file: the path must exist before the import runs.
+"analysis/direct/verify_*.py" = ["E402"]
+
+# The fixture modules exist to RE-EXPORT. `conftest` publishes the builders that every
+# test imports, and `fixtures_*` re-export the spec constants. An "unused" import there
+# is the module's entire purpose, and autofixing F401 deletes the public surface — which
+# is exactly what happened once, and broke collection.
+"tests/*/conftest.py" = ["F401", "E402"]
+"tests/*/fixtures_*.py" = ["F401", "E402"]
+# Tests set sys.path before importing the package under test.
+"tests/*/test_*.py" = ["E402"]

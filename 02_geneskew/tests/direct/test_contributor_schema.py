@@ -18,19 +18,22 @@ when its validator is absent is a vacuous guarantee.
 """
 from __future__ import annotations
 
-import copy
 import json
 import os
 
 import pytest
-from jsonschema import Draft202012Validator
-
-from direct import identity, manifest as mf, record_id, sources
-
-from fixtures_direct import (IDENTITY_METHOD, RECORD_TABLE_NAME,
-                             REPLAY_REPORT_NAME, SOURCE_CLASS, SOURCE_NAME,
-                             PINNED_REVISION)
+from direct import identity, record_id, sources
+from direct import manifest as mf
+from fixtures_direct import (
+    IDENTITY_METHOD,
+    PINNED_REVISION,
+    RECORD_TABLE_NAME,
+    REPLAY_REPORT_NAME,
+    SOURCE_CLASS,
+    SOURCE_NAME,
+)
 from fixtures_spec import RELEASE_CONDITIONS, SYMBOL_TARGETS
+from jsonschema import Draft202012Validator
 
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(identity.__file__)),
                            "schemas", "stage02_contributor_evidence.schema.json")

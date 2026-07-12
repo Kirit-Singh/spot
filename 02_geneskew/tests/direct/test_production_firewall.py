@@ -9,7 +9,6 @@ import json
 import os
 
 import pytest
-
 from direct import config, trust
 from direct.run_screen import build_screen
 from direct.selection import SelectionError

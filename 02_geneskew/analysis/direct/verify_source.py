@@ -218,8 +218,7 @@ def check_completeness(manifest_doc, records, cols, rep, coverage=None):
 
     # THE SOURCE CLASSIFIES. Everything above this line reads ``evidence_state`` and
     # believes it, so everything above this line is blind to a downgrade.
-    from verify_classification import (check_source_classification,
-                                       source_determinable_scopes)
+    from verify_classification import check_source_classification, source_determinable_scopes
     provable = source_determinable_scopes(cols)
     counts = check_source_classification(manifest_doc, provable, rep)
 

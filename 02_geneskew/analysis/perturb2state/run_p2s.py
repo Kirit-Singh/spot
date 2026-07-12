@@ -23,12 +23,13 @@ import pandas as pd
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..")))  # analysis/ on path
 
-from direct import io_data                                   # noqa: E402
+from direct import io_data  # noqa: E402
 from direct.hashing import content_hash, file_sha256, round_float  # noqa: E402
-from perturb2state import config as cfg                      # noqa: E402
-from perturb2state import universe as U                      # noqa: E402
-from perturb2state import signature_io as sio                # noqa: E402
-from perturb2state import pmatrix, model_runner, stability   # noqa: E402
+
+from perturb2state import config as cfg  # noqa: E402
+from perturb2state import model_runner, pmatrix, stability  # noqa: E402
+from perturb2state import signature_io as sio  # noqa: E402
+from perturb2state import universe as U  # noqa: E402
 
 
 def _ntc_symbols(ntc_path: str) -> list[str]:
@@ -281,7 +282,8 @@ def _manifest(contrast_id, axis, uni, built, hashes, target_order, recon_df,
             "condition": cfg.ANALYSIS_CONDITION,
             "model": cfg.SIGNATURE_MODEL,
             "n_score_bins": cfg.N_SCORE_BINS,
-            "binning": "donor-stratified quantile bins of the continuous scores (NOT biological thresholds)",
+            "binning": ("donor-stratified quantile bins of the continuous scores "
+                        "(NOT biological thresholds)"),
             "activation_program_id": built["activation_program_id"],
             "activation_collinear_with_pole": False,
             "normalization": cfg.SIGNATURE_NORMALIZATION,

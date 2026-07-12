@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import arms, config, disposition, emit
+from . import arms, config, disposition, emit, masks
 from . import projection as proj
 from .hashing import round_float
 
@@ -34,15 +34,24 @@ def _b(v):
 
 def screen_row(*, ident, i, meta, cond, mask, contrib, deltas, zdeltas, scores,
                 zscores, base_state, base_passed, base_reasons, slots, pair_values,
-                splits, n_guides) -> dict[str, Any]:
+                splits, n_guides, identity_hashes) -> dict[str, Any]:
     """One complete disposition record per SOURCE target.
 
     Carries BASE QC once, then each arm's own score, evaluability, support,
     direction and tier. There is no combined score and no headline rank.
+
+    ``identity_hashes`` makes the row SELF-DESCRIBING: which method version, which frozen
+    config, which pinned effect source. A row that carries only ``run_id`` is a row you
+    must join back to provenance before you can say what produced it, and a consumer that
+    cannot check what produced a number is a consumer that has to trust it.
     """
     row = {
         "schema_version": emit.SCHEMA_SCREEN,
         "run_id": None,                     # filled once the run is named
+        # --- what produced this row, on the row ---
+        "direct_method_version": identity_hashes["direct_method_version"],
+        "direct_config_sha256": identity_hashes["direct_config_sha256"],
+        "effect_source_sha256": identity_hashes["effect_source_sha256"],
         # --- target identity, honestly named ---
         "released_estimate_id": ident.released_estimate_id,   # exact obs.index
         "target_id": ident.target_id,                          # exact target_contrast
@@ -58,6 +67,10 @@ def screen_row(*, ident, i, meta, cond, mask, contrib, deltas, zdeltas, scores,
         "mask_resolved": mask["resolved"],
         "mask_unresolved_reason": mask["reason"],
         "mask_gene_count": (None if not mask["resolved"] else len(mask["gene_set"])),
+        # THIS estimate's mask, by id: which genes were removed from THIS projection and
+        # why. Null when unresolved — an absent mask is not an empty one.
+        "estimate_mask_sha256": masks.estimate_mask_sha256(mask),
+        "mask_method_version": config.MASK_METHOD_VERSION,
         "contributing_guide_ids": ";".join(contrib.guide_ids),
         "contributor_status": contrib.status,
         "contributor_source": contrib.source,

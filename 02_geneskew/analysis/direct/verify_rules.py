@@ -17,7 +17,6 @@ import re
 import sys
 from typing import Optional
 
-
 # The mask / donor-split / projection rules are re-exported here so ``R.<rule>`` stays
 # the one call site. Imported BY PATH, never as ``direct.verify_project``: the verifier
 # is standalone and must not import the generator package.
@@ -25,8 +24,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from verify_project import (  # noqa: E402,F401
-    complementary_splits, guide_mask_genes, program_delta)
+from verify_project import complementary_splits, guide_mask_genes, program_delta  # noqa: E402,F401
 
 ARM_A, ARM_B = "away_from_A", "toward_B"
 ARMS = (ARM_A, ARM_B)
@@ -84,9 +82,7 @@ def canonical_num(x) -> Optional[float]:
     return None if math.isnan(v) or math.isinf(v) else v
 
 
-# --------------------------------------------------------------------------- #
 # Column contract (allowlist, not just a denylist).
-# --------------------------------------------------------------------------- #
 def screen_allowlist() -> set:
     base = {
         "schema_version", "run_id", "released_estimate_id", "target_id",
@@ -100,6 +96,10 @@ def screen_allowlist() -> set:
         "effective_donor_n", "crispri_modality", "inference_status",
         "cell_level_support_state", "concordance_class",
         "desired_modulation_agreement",
+        # row identity + joint ordering (a tier and a label, never a magnitude)
+        "direct_method_version", "direct_config_sha256", "effect_source_sha256",
+        "estimate_mask_sha256", "mask_method_version", "pareto_tier",
+        "joint_status", "joint_ordering_method_id",
     }
     for arm in ARMS:
         p = POLE[arm]

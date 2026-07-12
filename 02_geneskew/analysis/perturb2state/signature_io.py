@@ -11,9 +11,9 @@ The heavy read is isolated here; all numeric logic lives in ``signature.py``.
 from __future__ import annotations
 
 import numpy as np
+from direct.hashing import content_hash, round_float
 
 from . import config, signature
-from direct.hashing import content_hash, round_float
 
 
 def _symbol_cols(symbols: list[str], want: list[str]) -> list[int]:

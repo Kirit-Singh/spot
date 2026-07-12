@@ -1,11 +1,10 @@
 """Stability + integration-policy tests (plan §6.6, §6.7, §6.9)."""
 import numpy as np
 import pandas as pd
-
-from perturb2state import config as cfg
-from perturb2state import stability
 from direct import config as dcfg
 from direct import projection as proj
+from perturb2state import config as cfg
+from perturb2state import stability
 
 
 def _coef_df():
@@ -187,5 +186,6 @@ def test_ui_values_match_integration_and_stability():
     integ = stability.integration_lane(stab, "manifestsha").set_index("target_ensembl")
     comb = stab[stab["lane"] == cfg.SUPPORT_LANE].set_index("target_ensembl")
     for t in comb.index:
-        assert integ.loc[t, "perturb2state_selection_frequency"] == comb.loc[t, "selection_frequency"]
+        assert (integ.loc[t, "perturb2state_selection_frequency"]
+                == comb.loc[t, "selection_frequency"])
         assert integ.loc[t, "perturb2state_support_status"] == comb.loc[t, "support_status"]

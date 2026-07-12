@@ -1,11 +1,9 @@
 """run_id binds the science, and nothing but the science."""
-import copy
 import json
 import os
 
-import pytest
-
-from direct import runid, selection as sel_mod
+from direct import runid
+from direct import selection as sel_mod
 from direct.trust import FixtureRelease
 
 _INPUTS = [{"name": "de.h5ad", "sha256": "a" * 64, "size_bytes": 10},

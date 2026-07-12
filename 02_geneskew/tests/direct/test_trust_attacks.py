@@ -5,20 +5,16 @@ its own forger must still fail.
 """
 import json
 import os
-import shutil
 
 import pandas as pd
 import pytest
-
 from direct import trust
 from direct.manifest import ManifestError
 from direct.run_screen import build_screen
 from direct.selection import SelectionError
 from direct.trust import TrustError
 from direct.verify_run import main as verify_main
-
-from fixtures_direct import (CONDITION, SOURCE_NAME, TARGET_GENES,
-                             write_stage1_gates)
+from fixtures_direct import SOURCE_NAME, TARGET_GENES, write_stage1_gates
 
 
 def _edit_json(path, fn):
