@@ -1,0 +1,579 @@
+{
+  "$id": "https://spot.local/schemas/stage02_pathway_record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One record per gene set. Carries BOTH evidence lines side by side \u2014 per-arm ranked enrichment and signature convergence \u2014 and never fuses them. Every set is emitted, including untestable ones: a pathway missing from the table is indistinguishable from one that was tested and found nothing.",
+  "properties": {
+    "method": {
+      "type": "object"
+    },
+    "n_convergent": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "n_records": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "n_single_target_support": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pathway_layer_available": {
+      "type": "boolean"
+    },
+    "records": {
+      "items": {
+        "additionalProperties": false,
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "rank_away_from_A"
+              ]
+            },
+            {
+              "required": [
+                "rank_toward_B"
+              ]
+            },
+            {
+              "required": [
+                "away_from_A"
+              ]
+            },
+            {
+              "required": [
+                "toward_B"
+              ]
+            },
+            {
+              "required": [
+                "pareto_tier"
+              ]
+            },
+            {
+              "required": [
+                "joint_status"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "convergence": {
+            "additionalProperties": false,
+            "if": {
+              "properties": {
+                "convergent": {
+                  "const": true
+                }
+              }
+            },
+            "properties": {
+              "cluster_id": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "convergence_refused_reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "convergent": {
+                "type": "boolean"
+              },
+              "measured_perturbations": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "method_id": {
+                "const": "spot.stage02.pathway.signature_convergence.v1"
+              },
+              "min_perturbations_for_convergence": {
+                "const": 2
+              },
+              "min_shared_unmasked_genes": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "n_measured_perturbations": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "n_supporting_perturbations": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "n_supportive_pairs": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "pairwise_support": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "n_shared_unmasked_genes": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "similarity": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "target_a": {
+                      "type": "string"
+                    },
+                    "target_b": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "target_a",
+                    "target_b",
+                    "similarity",
+                    "n_shared_unmasked_genes"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "rounding_rule": {
+                "const": "half_even_6dp"
+              },
+              "similarity_metric": {
+                "const": "cosine_on_shared_unmasked_support"
+              },
+              "similarity_threshold": {
+                "type": "number"
+              },
+              "single_target_support": {
+                "type": "boolean"
+              },
+              "supporting_perturbations": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "convergent",
+              "n_measured_perturbations",
+              "measured_perturbations",
+              "n_supporting_perturbations",
+              "supporting_perturbations",
+              "single_target_support",
+              "min_perturbations_for_convergence",
+              "cluster_id",
+              "n_supportive_pairs",
+              "pairwise_support",
+              "similarity_metric",
+              "similarity_threshold",
+              "min_shared_unmasked_genes",
+              "method_id",
+              "rounding_rule",
+              "convergence_refused_reason"
+            ],
+            "then": {
+              "properties": {
+                "n_supporting_perturbations": {
+                  "minimum": 2,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "n_supporting_perturbations"
+              ]
+            },
+            "type": "object"
+          },
+          "coverage": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "direct_config_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "effect_universe_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "enrichment": {
+            "additionalProperties": false,
+            "properties": {
+              "away_from_A": {
+                "additionalProperties": false,
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "p_value"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "pvalue"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "q_value"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "qvalue"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "padj"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "fdr"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "significance"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "adjusted_p_value"
+                      ]
+                    }
+                  ]
+                },
+                "properties": {
+                  "enrichment_value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "inference_status": {
+                    "const": "not_calibrated"
+                  },
+                  "leading_edge": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "method_id": {
+                    "const": "spot.stage02.pathway.ranked_arm_enrichment.v1"
+                  },
+                  "n_hits_in_ranking": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "n_leading_edge": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "n_ranked": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "no_pq_reason": {
+                    "const": "no_calibrated_null_for_this_enrichment_statistic"
+                  },
+                  "peak_rank": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "rounding_rule": {
+                    "const": "half_even_6dp"
+                  },
+                  "statistic_name": {
+                    "const": "weighted_running_sum_enrichment_score"
+                  },
+                  "testable": {
+                    "type": "boolean"
+                  },
+                  "undefined_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "enrichment_value",
+                  "statistic_name",
+                  "method_id",
+                  "rounding_rule",
+                  "leading_edge",
+                  "n_leading_edge",
+                  "n_hits_in_ranking",
+                  "n_ranked",
+                  "peak_rank",
+                  "testable",
+                  "undefined_reason",
+                  "inference_status",
+                  "no_pq_reason"
+                ],
+                "type": "object"
+              },
+              "toward_B": {
+                "additionalProperties": false,
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "p_value"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "pvalue"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "q_value"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "qvalue"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "padj"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "fdr"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "significance"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "adjusted_p_value"
+                      ]
+                    }
+                  ]
+                },
+                "properties": {
+                  "enrichment_value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "inference_status": {
+                    "const": "not_calibrated"
+                  },
+                  "leading_edge": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "method_id": {
+                    "const": "spot.stage02.pathway.ranked_arm_enrichment.v1"
+                  },
+                  "n_hits_in_ranking": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "n_leading_edge": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "n_ranked": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "no_pq_reason": {
+                    "const": "no_calibrated_null_for_this_enrichment_statistic"
+                  },
+                  "peak_rank": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "rounding_rule": {
+                    "const": "half_even_6dp"
+                  },
+                  "statistic_name": {
+                    "const": "weighted_running_sum_enrichment_score"
+                  },
+                  "testable": {
+                    "type": "boolean"
+                  },
+                  "undefined_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "enrichment_value",
+                  "statistic_name",
+                  "method_id",
+                  "rounding_rule",
+                  "leading_edge",
+                  "n_leading_edge",
+                  "n_hits_in_ranking",
+                  "n_ranked",
+                  "peak_rank",
+                  "testable",
+                  "undefined_reason",
+                  "inference_status",
+                  "no_pq_reason"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "away_from_A",
+              "toward_B"
+            ],
+            "type": "object"
+          },
+          "gene_id_namespace": {
+            "const": "ensembl_gene_id"
+          },
+          "gene_set_release": {
+            "additionalProperties": false,
+            "properties": {
+              "n_sets": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "release_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "source": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "release_id",
+              "sha256",
+              "n_sets"
+            ],
+            "type": "object"
+          },
+          "n_genes_in_set": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "n_genes_in_universe": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "schema_version": {
+            "const": "spot.stage02_pathway_record.v1"
+          },
+          "science_evidence_refs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "record_type": {
+                  "enum": [
+                    "literature",
+                    "database",
+                    "analysis",
+                    "annotation"
+                  ]
+                },
+                "science_evidence_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "science_evidence_id",
+                "sha256",
+                "record_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "science_may_change_primary_ranks": {
+            "const": false
+          },
+          "set_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "set_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "set_id",
+          "set_name",
+          "gene_set_release",
+          "gene_id_namespace",
+          "effect_universe_sha256",
+          "direct_config_sha256",
+          "n_genes_in_set",
+          "n_genes_in_universe",
+          "coverage",
+          "enrichment",
+          "convergence",
+          "science_evidence_refs",
+          "science_may_change_primary_ranks"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "records_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "spot.stage02_pathway_record.v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "method",
+    "pathway_layer_available",
+    "n_records",
+    "records"
+  ],
+  "title": "Stage-2 pathway record (spot.stage02_pathway_record.v1)",
+  "type": "object"
+}
