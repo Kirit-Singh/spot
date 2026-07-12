@@ -10,6 +10,16 @@ lane, with a message that says what to do about it — which is the whole point 
 
 Unfreezing is allowed. It is just not allowed to happen SILENTLY: bump the schema id, hand
 Stage 4 the new hash, and update the pin deliberately.
+
+**What external review finding B6 taught this file.** The r7 freeze pinned the CONTRACT
+BYTES and nothing else — so a hole in the VERIFIER (it never recomputed the manifest's own
+identity, and accepted a forged one) was completely invisible to the freeze. A frozen schema
+that only a broken verifier admits is not a frozen product.
+
+So the freeze now also pins the verifier's GATE INVENTORY. A check cannot be silently
+deleted, renamed or lost: the gate set is hashed, and a gate that stops running is a gate
+that stops protecting. The pin is over gate NAMES, not verifier source bytes — a comment
+edit must not break a freeze, but a missing gate must.
 """
 from __future__ import annotations
 
@@ -23,12 +33,21 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_DIR = os.path.abspath(os.path.join(_HERE, "..", "schemas"))
 
 # The generic contract Stage 4 consumes, and the digest of the whole schema set.
-# Re-hashed at the r7 freeze; see the round's HANDOFF.md §5.
+# Re-hashed at the r7 freeze; UNCHANGED at the r8/B6 freeze — B6 was a verifier defect,
+# and the contract Stage 4 binds to never moved. See the round's HANDOFF.md §5.
 FROZEN_CONTRACT = "spot.stage03_drug_annotation.v1"
 FROZEN_CONTRACT_SHA256 = \
     "361d0833d5cb099155ac6ad87557c728fcd64feba1e2ccbf7938bd2c6f4c9eed"
 FROZEN_SCHEMA_SET_SHA256 = \
     "5b42a64c8aca0fd279ba1440cb956ce034246f542362a6a8b470d27ca2f11b82"
+
+# The verifier's gate inventory on a clean bundle (sorted check names, newline-joined).
+# NEW at r8, closing the class of defect B6 belonged to: the freeze pinned the contract
+# but not the thing that ADMITS it, so a verifier that had quietly stopped checking
+# something was indistinguishable from one that never checked it.
+FROZEN_VERIFIER_GATESET_SHA256 = \
+    "aeb211bc59da0f1338843ec51a3d29a8b662ca7627c4476f0289a255ecf73dff"
+FROZEN_VERIFIER_N_CHECKS = 61          # 60 at r7 + the B6 manifest-identity gate
 
 _UNFREEZE = (
     "\n\nThe Stage-3 contract is FROZEN and Stage 4 binds to these bytes. If this change "
@@ -75,6 +94,48 @@ def test_the_whole_schema_set_is_byte_frozen():
     got = _schema_set_sha256()
     assert got == FROZEN_SCHEMA_SET_SHA256, (
         f"the schemas/ set changed: {got} != pinned {FROZEN_SCHEMA_SET_SHA256}" + _UNFREEZE)
+
+
+def test_the_verifier_gate_inventory_is_frozen(tmp_path, analysis_build, direct_run,
+                                               analysis_cache):
+    """A gate that stops running is a gate that stops protecting — and B6 proved that is
+    not hypothetical. Pin the gate NAMES so a check cannot vanish unnoticed.
+
+    Names, not source bytes: reformatting the verifier must not break a freeze, but
+    losing a check must.
+    """
+    from druglink import artifacts
+    from verifier import verify_stage3
+
+    bundle = artifacts.write_bundle(
+        output_root=str(tmp_path / "gateset"), artifact_class="analysis",
+        document=analysis_build["document"], doc_id=analysis_build["document_id"],
+        tables=analysis_build["tables"], created_at="2026-07-12T00:00:00+00:00")
+    rep = verify_stage3.verify(
+        bundle=bundle, cache_root=analysis_cache, direct_run=direct_run["run_dir"],
+        direct_inputs_root=direct_run["inputs_root"], artifact_class="analysis",
+        direct_analysis=direct_run["analysis"])
+
+    failed = [n for n, ok, _ in rep.checks if not ok]
+    assert not failed, f"an honest bundle must verify with ZERO failures: {failed}"
+
+    names = sorted(n for n, _, _ in rep.checks)
+    got = hashlib.sha256("\n".join(names).encode()).hexdigest()
+
+    assert len(rep.checks) == FROZEN_VERIFIER_N_CHECKS, (
+        f"the verifier ran {len(rep.checks)} checks, pinned at "
+        f"{FROZEN_VERIFIER_N_CHECKS}" + _UNFREEZE)
+    assert got == FROZEN_VERIFIER_GATESET_SHA256, (
+        f"the verifier gate set changed: {got} != pinned "
+        f"{FROZEN_VERIFIER_GATESET_SHA256}" + _UNFREEZE)
+
+
+def test_the_manifest_identity_gate_is_in_the_frozen_inventory():
+    """B6's gate, named explicitly. If it is ever deleted, this says so by name rather
+    than leaving a bare hash mismatch for someone to decode."""
+    from verifier import checks
+    assert checks.MANIFEST_IDENTITY_GATE
+    assert set(checks.MANIFEST_IDENTITY_EXCLUDED) == {"manifest_sha256", "created_at"}
 
 
 def test_the_frozen_contract_still_declares_its_own_id():

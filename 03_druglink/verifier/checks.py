@@ -27,6 +27,25 @@ EXPECTED_DIRECT_FILES = {
     "contributing_guides.parquet", "guide_support.parquet", "donor_support.parquet",
 }
 
+# --------------------------------------------------------------------------- #
+# The manifest's OWN identity.
+#
+# The manifest is the root of trust for the whole bundle: every file hash and the
+# document hash are recorded IN it. Verifying those entries while never recomputing the
+# manifest's own canonical identity proves only that the manifest agrees with itself —
+# a forged `manifest_sha256` sailed through all 60 checks (external review B6).
+#
+# `manifest_sha256` cannot cover itself, and `created_at` is a non-semantic timestamp
+# (the same bundle rebuilt at a different wall-clock time is the same bundle). Both are
+# excluded — and NOTHING else is, so no semantic field can hide outside the identity.
+# --------------------------------------------------------------------------- #
+MANIFEST_IDENTITY_EXCLUDED = ("manifest_sha256", "created_at")
+
+MANIFEST_IDENTITY_GATE = (
+    "manifest_sha256 reproduces from the manifest's own canonical content "
+    "(excluding manifest_sha256 and the non-semantic created_at)"
+)
+
 
 def _read_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as fh:
@@ -231,6 +250,16 @@ def check_direction(rep: Report, *, edges: list[dict[str, Any]],
 # --------------------------------------------------------------------------- #
 def check_integrity(rep: Report, *, bundle: str, doc: dict[str, Any],
                     manifest: dict[str, Any]) -> None:
+    # FIRST: the manifest must prove its own identity. Every check below reads the
+    # manifest's recorded hashes, so a manifest that has not proved itself is not a
+    # trustworthy source for any of them. A missing manifest_sha256 fails here too —
+    # `declared` is then None, which no hash equals.
+    declared = manifest.get("manifest_sha256")
+    recomputed = canon.chash(canon.without(manifest, MANIFEST_IDENTITY_EXCLUDED))
+    rep.check(MANIFEST_IDENTITY_GATE, recomputed == declared,
+              f"manifest declares {str(declared)[:12]}…, but its own canonical content "
+              f"hashes to {recomputed[:12]}…")
+
     rep.check("document_sha256 reproduces from the document's own content",
               canon.chash(canon.without(doc, ("document_sha256",)))
               == doc["document_sha256"])
