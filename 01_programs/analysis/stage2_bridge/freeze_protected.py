@@ -21,6 +21,7 @@ DATA = os.path.join(PROGRAMS, "app", "data")  # 01_programs/app/data/
 sys.path.insert(0, HERE)
 sys.path.insert(0, ANALYSIS)
 
+import build_registry_view as rv  # noqa: E402  (independent Stage-2 view rebuild)
 import canonical  # noqa: E402
 import verify_stage1_provenance as prov  # noqa: E402  (independent scorer-projection recipe)
 
@@ -46,6 +47,8 @@ PROTECTED_RAW = {
     "requirements": (ANALYSIS, "requirements.txt"),
     "scores_parquet_staged": (os.path.join(ANALYSIS, "_t8_staging"), "stage01_scores_full.candidate.parquet"),
     "umap_coordinates_staged": (os.path.join(ANALYSIS, "_t8_staging"), "stage01_umap_coordinates.json"),
+    # The Stage-2 scorer VIEW is the executable projection selection_id binds — protect it directly (S1-M1).
+    "stage2_registry_view": (DATA, "stage01_stage2_registry_view.json"),
 }
 
 
@@ -76,6 +79,8 @@ def compute_baseline() -> dict:
         # the Stage-2 registry VIEW, which carries no panel_provenance / nested sha256).
         "registry_direct_canonical_content_sha256": canonical.canonical_content_sha256(reg),
         "registry_scorer_projection_sha256": prov._canon(prov._scoring_projection(reg)),
+        # Stage-2 view canonical content hash = what the biological selection_id actually binds (S1-M1).
+        "stage2_view_canonical_sha256": rv.build_and_hash()[2],
         "validation_direct_canonical_content_sha256": canonical.canonical_content_sha256(val),
         "selectability_direct_canonical_content_sha256": canonical.canonical_content_sha256(sel),
     }
@@ -99,6 +104,13 @@ def _self_check(base: dict) -> None:
     assert base["raw_sha256"]["registry_v3"] == \
         "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f", \
         "served registry raw sha drift"
+    # The Stage-2 scorer VIEW (what selection_id binds) must reproduce its known raw + canonical hashes.
+    assert base["stage2_view_canonical_sha256"] == \
+        "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c", \
+        "stage2 view canonical drift"
+    assert base["raw_sha256"]["stage2_registry_view"] == \
+        "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f", \
+        "stage2 view raw drift"
 
 
 if __name__ == "__main__":

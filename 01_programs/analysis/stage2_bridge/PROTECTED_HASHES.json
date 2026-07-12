@@ -14,6 +14,7 @@
     "scores_parquet_staged": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
     "selectability_v3": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "solver_lock": "d394692d839e248a3823e6bb5f16acd9bbad9cc876b713820b68f126195dc7e3",
+    "stage2_registry_view": "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f",
     "summary_v3": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
     "umap_coordinates_staged": "a7164168aaf61466ca699e1b00633c37ecef88705db443fb7fb0d00a86ccbbf6",
     "umap_overlay_v3": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
@@ -25,5 +26,6 @@
   "registry_self_declared_sha256": "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa",
   "registry_selfrule_recomputed_sha256": "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa",
   "selectability_direct_canonical_content_sha256": "520c904003015af7a6074cf4311e654b259c638d22384e45ef5bad3ea6657edc",
+  "stage2_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
   "validation_direct_canonical_content_sha256": "1ab6c0e0dc7537ca06d94e66d8067581a2690d2653bb7f7354907d1d23ed7dbf"
 }
