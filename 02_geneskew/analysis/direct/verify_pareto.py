@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -104,7 +105,7 @@ def _dominates(x, y) -> bool:
 def derive_tiers(rows) -> dict:
     """target_id -> tier (or None). Re-derived from the EMITTED arm values."""
     pool = [r for r in rows if jointly_evaluable(r)]
-    out = {r["target_id"]: None for r in rows}
+    out: dict[str, Optional[int]] = {r["target_id"]: None for r in rows}
 
     tier, remaining = 1, list(pool)
     while remaining:

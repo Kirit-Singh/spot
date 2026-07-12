@@ -184,8 +184,9 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             c = cluster_of.get(t)
             if c is not None:
                 member_clusters.setdefault(c, []).append(t)
-        best = max(member_clusters.items(), key=lambda kv: (len(kv[1]), -kv[0]),
-                   default=(None, []))
+        best: tuple[Optional[int], list[str]] = max(
+            member_clusters.items(), key=lambda kv: (len(kv[1]), -kv[0]),
+            default=(None, []))
         n_supporting = len(best[1])
 
         convergent = n_supporting >= MIN_PERTURBATIONS_FOR_CONVERGENCE

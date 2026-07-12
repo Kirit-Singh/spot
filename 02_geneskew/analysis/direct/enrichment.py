@@ -151,6 +151,7 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
         testable = len(s["genes_in_universe"]) >= bundle["min_set_size"] \
             and len(s["genes_in_universe"]) <= bundle["max_set_size"]
 
+        result: dict[str, Any]
         if not testable:
             # EMITTED, not dropped. Silently omitting a set hides which pathways were
             # never tested, and a reader cannot tell "not enriched" from "never asked".
