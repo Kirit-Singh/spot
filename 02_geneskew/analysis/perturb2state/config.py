@@ -48,7 +48,26 @@ SIGNATURE_MODEL = ("WLS mean_expr_g ~ 1 + z_A + z_B + activation + donor(K-1 dum
 SIGNATURE_NORMALIZATION = ("per-gene-universe z-score of away and toward separately; "
                            "combined = away_norm + toward_norm")
 
-LANES = ["away_from_A", "toward_b", "combined_A_to_B"]
+# THE ARM LANES, named EXACTLY as Direct names its arms. They used to be spelled
+# ``toward_b`` here and ``toward_B`` in Direct — the retired v2 casing on one side of a
+# join and the current casing on the other. Nothing joined them, so nothing noticed; the
+# first code to merge P2S onto the screen by lane name would have silently matched zero
+# rows for that arm and reported no support where support existed.
+ARM_LANES = ["away_from_A", "toward_B"]
+
+# THE QUARANTINED LANE. ``combined_A_to_B`` is z(away) + z(toward): a combined objective.
+# It is retained ONLY as a reconstruction diagnostic — it answers "does the fitted
+# perturbation signature reconstruct the summed direction at all", which is a question
+# about the MODEL, not about a target's priority. It may never rank, gate, order or
+# promote anything, it is excluded from the integration lane a consumer reads, and the
+# name says so.
+RECONSTRUCTION_DIAGNOSTIC_LANE = "combined_A_to_B"
+RECONSTRUCTION_DIAGNOSTIC_IS_RANKING = False
+RECONSTRUCTION_DIAGNOSTIC_EXCLUDED_FROM = [
+    "integration_lane", "joint_ordering", "support_status", "any_rank_or_gate",
+]
+
+LANES = ARM_LANES + [RECONSTRUCTION_DIAGNOSTIC_LANE]
 
 # --------------------------------------------------------------------------- #
 # Perturbation matrix (plan §6.3).
@@ -107,8 +126,24 @@ RECONSTRUCTION_CV_LABEL = "reconstruction_gene_cv"   # NEVER donor/guide/holdout
 # identities. The underlying frequencies/signs are ALWAYS retained regardless.
 # A POSITIVE coefficient uses the measured knockdown signature as-is (supportive
 # for a CRISPRi/inhibition hypothesis); a NEGATIVE coefficient uses its inverse
-# (opposed). Support is judged on the combined_A_to_B lane.
-SUPPORT_LANE = "combined_A_to_B"
+# (opposed).
+#
+# SUPPORT IS JUDGED PER ARM. It used to be judged on ``combined_A_to_B``, and that lane
+# is z(away) + z(toward) — an unweighted sum of two z-scored arms, which is a COMBINED
+# OBJECTIVE by any other name. Direct refuses one for the reason it always refuses one:
+# summing the arms fixes an exchange rate between "moved away from A" and "moved toward
+# B" that nobody has, and it lets a target that opposes B carry a strong combined score
+# on the strength of its away arm alone.
+#
+# P2S never ranked anything, so this was not a Direct defect — but it was the same
+# mistake one layer out. A consumer reading a single ``perturb2state_support_status``
+# derived from the summed lane cannot tell WHICH arm the support is for, and "supported"
+# on a target whose support is entirely away-arm and whose toward arm is opposed is a
+# sentence that means the opposite of what it appears to mean.
+#
+# So support is emitted once PER DIRECT ARM, under the arms' own names, and the combined
+# lane is quarantined below.
+SUPPORT_LANES = ["away_from_A", "toward_B"]
 SUPPORT_MIN_SELECTION = 0.5        # nonzero-selection frequency to be "selected"
 SUPPORT_SIGN_DOMINANCE = 0.75      # fraction of selected runs sharing one sign
 SUPPORT_STATUS_VALUES = [

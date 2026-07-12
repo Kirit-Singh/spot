@@ -136,7 +136,10 @@ def _run_plan(X_by_layer, signatures, gene_ids, coverage_by_layer, log):
 def _sensitivity_runs(args, universe_gene_ids, signatures, mask_by_target,
                       target_order, coef_records, recon_records, log):
     """Guide-specific + donor-pair matrices as sensitivity (plan §6.6)."""
-    lane = cfg.SUPPORT_LANE
+    # Sensitivity is run PER ARM. It used to run on the combined lane only, which meant
+    # the guide/donor-pair robustness of the support a consumer reads was never actually
+    # measured on the lanes that support is now reported for.
+    lanes = list(cfg.ARM_LANES)
     _cfg = {c.name: c for c in cfg.CONFIGS}["pca_off"]
 
     def run_matrix(mod_load, matrix_tag):
@@ -146,18 +149,18 @@ def _sensitivity_runs(args, universe_gene_ids, signatures, mask_by_target,
         if X.shape[1] == 0:
             log(f"{matrix_tag}: no eligible columns present; skipped")
             return
-        y = pd.Series(signatures["all_donor"][lane], index=universe_gene_ids)
-        y = y.reindex(X.index)
-        mid = f"{matrix_tag}|{cfg.AUTHOR_LAYER}|pca_off|all_donor|{lane}"
-        t = time.time()
-        res = model_runner.run_one(X, y, _cfg, mid)
-        coef_records.extend(model_runner.coef_records(res["coefs"],
-                            {"matrix": matrix_tag, "layer": cfg.AUTHOR_LAYER,
-                             "config": "pca_off", "scope": "all_donor", "lane": lane}))
-        recon_records.append({"matrix": matrix_tag, "layer": cfg.AUTHOR_LAYER,
-                              "config": "pca_off", "scope": "all_donor", "lane": lane,
-                              **res["recon"], "seconds": round(time.time() - t, 1)})
-        log(f"sensitivity {mid}: {round(time.time()-t,1)}s X={X.shape}")
+        for lane in lanes:
+            y = pd.Series(signatures["all_donor"][lane], index=universe_gene_ids)
+            y = y.reindex(X.index)
+            mid = f"{matrix_tag}|{cfg.AUTHOR_LAYER}|pca_off|all_donor|{lane}"
+            t = time.time()
+            res = model_runner.run_one(X, y, _cfg, mid)
+            tags = {"matrix": matrix_tag, "layer": cfg.AUTHOR_LAYER,
+                    "config": "pca_off", "scope": "all_donor", "lane": lane}
+            coef_records.extend(model_runner.coef_records(res["coefs"], tags))
+            recon_records.append({**tags, **res["recon"],
+                                  "seconds": round(time.time() - t, 1)})
+            log(f"sensitivity {mid}: {round(time.time()-t,1)}s X={X.shape}")
 
     for m in io_data.list_modalities(args.by_guide):
         if m.startswith("guide_"):
@@ -315,7 +318,11 @@ def _manifest(contrast_id, axis, uni, built, hashes, target_order, recon_df,
             "coef_sem_semantics": cfg.COEF_SEM_SEMANTICS},
         "stability": {
             "nonzero_tolerance": cfg.NONZERO_TOL,
-            "support_rule": {"lane": cfg.SUPPORT_LANE,
+            "support_rule": {"lanes": list(cfg.SUPPORT_LANES),
+                             "reconstruction_diagnostic_lane":
+                                 cfg.RECONSTRUCTION_DIAGNOSTIC_LANE,
+                             "reconstruction_diagnostic_may_rank_or_gate":
+                                 cfg.RECONSTRUCTION_DIAGNOSTIC_IS_RANKING,
                              "min_selection_frequency": cfg.SUPPORT_MIN_SELECTION,
                              "sign_dominance": cfg.SUPPORT_SIGN_DOMINANCE,
                              "status_values": cfg.SUPPORT_STATUS_VALUES,
@@ -337,7 +344,7 @@ _FORBIDDEN = {"p_value", "pvalue", "p_val", "pval", "q_value", "qvalue", "qval",
 def _verification(out_dir, contrast_id, manifest_sha, coef_df, recon_df, stab_df,
                   integ_df, uni, hashes, target_order, screen):
     from collections import Counter
-    support = stab_df[stab_df["lane"] == cfg.SUPPORT_LANE]
+    support = stab_df[stab_df["lane"].isin(cfg.SUPPORT_LANES)]
     top = support.sort_values(
         ["selection_frequency", "median_coefficient"], ascending=False).head(15)
     sym = dict(zip(screen["target_ensembl"].astype(str), screen["target_symbol"]))

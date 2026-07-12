@@ -57,7 +57,7 @@ def test_reversed_contributor_flips_desired_sign():
     sig = S.desired_signatures(beta_a, beta_b)
     # desired_away_A = -beta_A  -> sign flip vs beta_A
     assert np.allclose(sig["away_from_A"], [-1.0, 2.0])
-    assert np.allclose(sig["toward_b"], [0.5, 0.5])
+    assert np.allclose(sig["toward_B"], [0.5, 0.5])
 
 
 def test_away_toward_normalised_separately_then_summed():
@@ -66,6 +66,6 @@ def test_away_toward_normalised_separately_then_summed():
     sig = S.desired_signatures(beta_a, beta_b)
     # each normalised lane is mean 0 / unit sd
     assert abs(sig["away_from_A_norm"].mean()) < 1e-9
-    assert abs(sig["toward_b_norm"].std() - 1.0) < 1e-9
+    assert abs(sig["toward_B_norm"].std() - 1.0) < 1e-9
     assert np.allclose(sig["combined_A_to_B"],
-                       sig["away_from_A_norm"] + sig["toward_b_norm"])
+                       sig["away_from_A_norm"] + sig["toward_B_norm"])

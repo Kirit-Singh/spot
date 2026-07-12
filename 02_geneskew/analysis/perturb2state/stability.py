@@ -10,7 +10,7 @@ Run tags carried on each coefficient row:
     layer   : zscore | log_fc
     config  : pca_off | pca_on_50
     scope   : all_donor | lodo_D1..lodo_D4
-    lane    : away_from_A | toward_b | combined_A_to_B
+    lane    : away_from_A | toward_B | combined_A_to_B (quarantined diagnostic)
 """
 from __future__ import annotations
 
@@ -120,23 +120,89 @@ def compute_stability(coef_df: pd.DataFrame, coverage: dict,
     return df
 
 
-def integration_lane(stability_df: pd.DataFrame, model_manifest_sha: str) -> pd.DataFrame:
-    """Per-target secondary support lane for Stage-2 integration (plan §6.7).
+# The per-arm fields a consumer sees. Every one is prefixed with the arm it is ABOUT, so
+# a support status can never be read as applying to a target overall.
+_ARM_FIELDS = {
+    "selection_frequency": "selection_frequency",
+    "positive_frequency": "positive_frequency",
+    "negative_frequency": "negative_frequency",
+    "lodo_sign_agreement": "lodo_sign_agreement",
+    "guide_sign_agreement": "guide_agreement",
+    "logfc_zscore_agreement": "logfc_zscore_agreement",
+    "support_status": "support_status",
+    "median_coefficient": "median_coefficient",
+}
 
-    Derived ONLY from the combined_A_to_B lane. These columns are the visible
-    secondary support lane; they never change the direct ranking.
+# A coefficient is a fitted reconstruction weight. It is NOT a p-value, NOT a probability
+# and NOT an effect size in the DE sense, and nothing downstream may treat it as one.
+COEFFICIENT_SEMANTICS = "fitted_reconstruction_weight_not_inference"
+OPPOSED_STATUS = "p2s_opposed"
+
+
+def integration_lane(stability_df: pd.DataFrame, model_manifest_sha: str,
+                     model_commit: str = "unpinned") -> pd.DataFrame:
+    """The secondary support lane a Stage-2 consumer reads — PER DIRECT ARM (§6.7).
+
+    It used to be derived from a single lane, ``combined_A_to_B``, which is
+    z(away) + z(toward): a combined objective. One ``perturb2state_support_status`` came
+    out of it, and it could not say WHICH arm it supported. "Supported" on a target whose
+    support is entirely away-arm — while its toward arm is actively opposed — is a
+    sentence that means the opposite of what it looks like.
+
+    So support is emitted once per arm, under the arms' own names. The combined lane is
+    quarantined as a reconstruction diagnostic and never reaches this table.
+
+    P2S ADDS. It never promotes, demotes, reorders or gates: no field here is a rank, and
+    the Direct arm scores and ranks are byte-identical with and without this merge.
     """
-    s = stability_df[stability_df["lane"] == config.SUPPORT_LANE].copy()
-    out = pd.DataFrame({
-        "target_ensembl": s["target_ensembl"],
-        "perturb2state_selection_frequency": s["selection_frequency"],
-        "perturb2state_positive_frequency": s["positive_frequency"],
-        "perturb2state_negative_frequency": s["negative_frequency"],
-        "perturb2state_lodo_sign_agreement": s["lodo_sign_agreement"],
-        "perturb2state_guide_agreement": s["guide_sign_agreement"],
-        "perturb2state_logfc_zscore_agreement": s["logfc_zscore_agreement"],
-        "perturb2state_support_status": s["support_status"],
-        "perturb2state_median_coefficient": s["median_coefficient"],
-    })
+    arms = [lane for lane in config.ARM_LANES]
+    stray = set(stability_df["lane"]) - set(config.LANES)
+    if stray:
+        raise ValueError(f"perturb2state: unknown lane(s) {sorted(stray)}")
+
+    out = pd.DataFrame({"target_ensembl": sorted(
+        stability_df["target_ensembl"].astype(str).unique())})
+
+    for lane in arms:
+        s = stability_df[stability_df["lane"] == lane].copy()
+        s["target_ensembl"] = s["target_ensembl"].astype(str)
+        s = s.set_index("target_ensembl")
+        for src, name in _ARM_FIELDS.items():
+            col = f"perturb2state_{lane}_{name}"
+            out[col] = out["target_ensembl"].map(s[src]) if len(s) else None
+        # The OPPOSED flag, per arm and explicit. A negative coefficient means the
+        # reconstruction wanted the INVERSE of the measured knockdown signature, and that
+        # is a finding — not a weak yes, and never something to average away.
+        status = f"perturb2state_{lane}_support_status"
+        out[f"perturb2state_{lane}_opposed"] = out[status].eq(OPPOSED_STATUS)
+
     out["perturb2state_model_manifest_sha256"] = model_manifest_sha
+    out["perturb2state_model_commit"] = model_commit
+    out["perturb2state_coefficient_semantics"] = COEFFICIENT_SEMANTICS
+    out["perturb2state_is_secondary_support_only"] = True
+    out["perturb2state_may_rank_or_gate"] = False
+    return out.sort_values("target_ensembl").reset_index(drop=True)
+
+
+def reconstruction_diagnostic(stability_df: pd.DataFrame) -> pd.DataFrame:
+    """The QUARANTINED combined lane. A model diagnostic — never a priority.
+
+    Kept, and kept visible, because deleting it would hide a real question: does the
+    fitted signature reconstruct the summed direction at all? That is a question about
+    the MODEL. It is not a question about which target matters, and the column names,
+    this function's name and the flags below all say so — separately from the integration
+    lane, so it cannot be joined into a consumer's table by accident.
+    """
+    s = stability_df[
+        stability_df["lane"] == config.RECONSTRUCTION_DIAGNOSTIC_LANE].copy()
+    out = pd.DataFrame({
+        "target_ensembl": s["target_ensembl"].astype(str),
+        "p2s_reconstruction_selection_frequency": s["selection_frequency"],
+        "p2s_reconstruction_median_coefficient": s["median_coefficient"],
+        "p2s_reconstruction_support_status": s["support_status"],
+    })
+    out["p2s_reconstruction_is_a_combined_objective"] = True
+    out["p2s_reconstruction_may_rank_or_gate"] = False
+    out["p2s_reconstruction_excluded_from"] = ";".join(
+        config.RECONSTRUCTION_DIAGNOSTIC_EXCLUDED_FROM)
     return out.sort_values("target_ensembl").reset_index(drop=True)

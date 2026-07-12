@@ -140,10 +140,14 @@ def desired_signatures(beta_a: np.ndarray, beta_b: np.ndarray) -> dict:
     away_n = _zscore(away)
     toward_n = _zscore(toward)
     return {
+        # named EXACTLY as Direct names its arms. ``toward_b`` was the retired v2
+        # casing, and it sat on one side of a join whose other side said ``toward_B``.
         "away_from_A": away,
-        "toward_b": toward,
+        "toward_B": toward,
         "away_from_A_norm": away_n,
-        "toward_b_norm": toward_n,
+        "toward_B_norm": toward_n,
+        # QUARANTINED: a combined objective, retained as a reconstruction diagnostic
+        # only. It never ranks, gates or orders anything.
         "combined_A_to_B": away_n + toward_n,
     }
 
