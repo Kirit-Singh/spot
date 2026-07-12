@@ -345,6 +345,39 @@
     }
    },
    "max_abs_donor_rho_any_condition": 0.348324
+  },
+  "cd4_ctl_like_score_actadj": {
+   "pooled_rho": 0.035249,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.277482,
+      "D2": -0.434864,
+      "D3": -0.208498,
+      "D4": -0.228423
+     },
+     "max_abs_donor_rho": 0.434864
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.039887,
+      "D2": -0.133556,
+      "D3": 0.020763,
+      "D4": -0.057899
+     },
+     "max_abs_donor_rho": 0.133556
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.083279,
+      "D2": -0.103326,
+      "D3": 0.059083,
+      "D4": -0.033145
+     },
+     "max_abs_donor_rho": 0.103326
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.434864
   }
  },
  "pooled_ranking": [
@@ -387,6 +420,10 @@
   [
    "th9_like_score",
    -0.040944
+  ],
+  [
+   "cd4_ctl_like_score_actadj",
+   0.035249
   ]
  ]
 }

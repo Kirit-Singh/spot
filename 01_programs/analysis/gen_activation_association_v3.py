@@ -5,8 +5,9 @@ External review S1-M4: the UI named activation as a confound only for Treg-like 
 association is broader (checkpoint is in fact the strongest). This computes, from the frozen 396k v3 score
 parquet, the Spearman rho of every program score against ``diff_activated_score`` — pooled, and per
 condition x donor (the within-stratum association that pooled timepoint structure can mask). It is purely
-DESCRIPTIVE: no p, q, FDR or calibrated null (consistent with the Stage-1 firewall). The activation axis
-itself and the pooled CD4-CTL residual (``cd4_ctl_like_score_actadj``) are included.
+DESCRIPTIVE: no p, q, FDR or calibrated null (consistent with the Stage-1 firewall). The pooled CD4-CTL
+activation-adjusted residual (``cd4_ctl_like_score_actadj``) IS included; the activation axis
+``diff_activated_score`` is the reference and is not self-correlated.
 
 Emits ``stage01_activation_association_v1.json`` (schema spot.stage01_activation_association.v1).
 Run on tcefold (has the parquet + pyarrow):
@@ -33,7 +34,11 @@ def _rho(x, y):
 
 
 def compute(df: pd.DataFrame) -> dict:
-    fields = [c for c in df.columns if c.endswith("_score") and c != ACT]  # every program + the actadj residual
+    meta = {"barcode", "donor", "condition"}
+    # every program score + the CD4-CTL activation-adjusted residual (…_actadj), excluding the activation
+    # axis itself (ACT) and the id/metadata columns. NB: the residual ends in `_actadj`, not `_score`, so a
+    # `_score` suffix filter would silently drop it (external review S1-M4 re-audit).
+    fields = [c for c in df.columns if c not in meta and c != ACT]
     conds = sorted(map(str, df["condition"].unique()))
     donors = sorted(map(str, df["donor"].unique()))
     a_all = df[ACT].to_numpy()
