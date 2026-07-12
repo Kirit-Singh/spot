@@ -33,7 +33,7 @@ PROGRAM_B = "th17_like"
 # Targets, in the fixture's own Ensembl block (fixtures_spec.TARGET_GENES range).
 MOVER = "ENSG00000000200"        # moves hard by 48hr: DiD clears the floor
 DRIFTER = "ENSG00000000201"      # moves a little: DiD stays inside the floor
-STILL = "ENSG00000000202"        # THE NEGATIVE CONTROL: identical at every condition
+STILL = "ENSG00000000202"        # SYNTHETIC ZERO-SIGNAL control: identical at every condition
 B_MOVER = "ENSG00000000203"      # moves on the toward_B arm only
 
 
@@ -60,11 +60,19 @@ def permuted_specs() -> list[TargetSpec]:
 
 
 def flattened_specs() -> list[TargetSpec]:
-    """THE WHOLE-TABLE NEGATIVE CONTROL: no target moves at any condition.
+    """THE WHOLE-TABLE SYNTHETIC ZERO-SIGNAL CONTROL: no target moves at any condition.
 
     Every condition gets the target's Rest effect vector, so the release carries no
     temporal signal at all and every DiD on every pair must be exactly 0.0. The batch
     flags, which are a property of the DESIGN and not of the data, must be unchanged.
+
+    THIS IS NOT AN NTC (M5). It is a CONSTRUCTED zero-signal input: it proves the
+    estimator invents no movement where the input holds none — a property of the CODE.
+    It says nothing about the donor/batch floor of a REAL non-targeting control, because
+    a real NTC would carry real donor and batch variation and would NOT come back exactly
+    zero. Real-NTC validation is PENDING and is not possible from this effect
+    representation: GWCD4i.DE_stats.h5ad ships no NTC target rows at all — NTC is the
+    CONTRAST BASELINE every target is measured against, not a row that can be projected.
     """
     return [_remap(spec, {c: spec.effects_at(REST) for c in TEMPORAL_CONDITIONS})
             for spec in temporal_specs()]
@@ -88,8 +96,10 @@ def temporal_specs() -> list[TargetSpec]:
                                       STIM48: (-1.1, 0.0)},
                    guide_slot_effects=dict(guides),
                    manifest_slots={"guide_1": "g-D-1", "guide_2": "g-D-2"}),
-        # THE NEGATIVE CONTROL. No condition_effects at all, so the effect vector is
-        # bit-for-bit the same at every condition and EVERY DiD must be exactly 0.0.
+        # THE SYNTHETIC ZERO-SIGNAL CONTROL (M5). No condition_effects at all, so the
+        # effect vector is bit-for-bit the same at every condition and EVERY DiD must be
+        # exactly 0.0. It is NOT an NTC: it tests that the CODE invents no movement, not
+        # that a real non-targeting control sits inside the donor/batch floor.
         TargetSpec(STILL, ["g-S-1", "g-S-2"], 2.0, a_effect=-0.7, b_effect=0.4,
                    guide_slot_effects=dict(guides),
                    manifest_slots={"guide_1": "g-S-1", "guide_2": "g-S-2"}),

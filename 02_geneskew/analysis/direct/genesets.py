@@ -30,6 +30,7 @@ Nothing here knows which source it is: the loader is parameterised by release + 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional
 
 from .hashing import content_hash, file_sha256
@@ -44,6 +45,47 @@ ALLOWED_NAMESPACES = (ENSEMBL_GENE_ID,)
 # Sources we know how to name. An unknown source is not fatal — the bundle still pins its
 # release and hash — but it must SAY what it is.
 KNOWN_SOURCES = ("reactome", "go_bp", "fixture")
+
+# --------------------------------------------------------------------------- #
+# LICENCE, per source (m3). A licence is not a footnote: it decides what may be
+# redistributed and how it must be attributed, and recording the wrong one is a
+# compliance claim we cannot stand behind.
+#
+# REACTOME IS CC0 — NOT CC BY 4.0. The Reactome database data and files derived from it
+# are released under CC0 1.0 (https://reactome.org/license). It was recorded as
+# "CC BY 4.0" and that is simply wrong. The expected licence is ENFORCED below rather
+# than merely documented, because a bundle that arrives asserting the wrong licence is
+# exactly the artifact that would be cited later.
+#
+# GO stays CC BY 4.0 — and it must name a DATED release: "GO" is not a version any more
+# than "Reactome" is, and a CC BY attribution that cannot name what it is attributing is
+# not an attribution.
+# --------------------------------------------------------------------------- #
+SOURCE_LICENSE = {
+    "reactome": "CC0-1.0",
+    "go_bp": "CC-BY-4.0",
+    "fixture": "not_applicable_synthetic",
+}
+SOURCE_LICENSE_REFERENCE = {
+    "reactome": "https://reactome.org/license",
+    "go_bp": "http://geneontology.org/docs/go-citation-policy/",
+    "fixture": None,
+}
+# Sources whose release_id must carry a date (YYYY-MM-DD or YYYY-MM): an undated release
+# id cannot identify the thing being attributed.
+REQUIRE_DATED_RELEASE = ("go_bp",)
+_DATED_RE = re.compile(r"\d{4}-\d{2}(-\d{2})?")
+
+# The licence recorded in error, kept here BY NAME so a bundle carrying it is refused
+# with a message that says what happened rather than a generic mismatch.
+RETIRED_LICENSE_CLAIMS = {("reactome", "CC-BY-4.0"): (
+    "Reactome database data and derived files are CC0 1.0, not CC BY 4.0. The bundle is "
+    "asserting a licence Reactome does not use; see https://reactome.org/license")}
+
+
+def normalize_license(value: Any) -> str:
+    """``CC BY 4.0`` / ``cc-by-4.0`` / ``CC_BY_4.0`` all name the same licence."""
+    return re.sub(r"[\s_]+", "-", str(value or "").strip()).upper().replace("--", "-")
 
 # A set too small to say anything, or so large it says nothing. Both are reported, and
 # both are excluded from convergence claims rather than silently kept.
@@ -88,6 +130,34 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
              "gene-set bundle: release.release_id is required. 'Reactome' is not a "
              "version — pathway membership changes between releases, so an enrichment "
              "computed against an unnamed release cannot be reproduced or contested")
+
+    # ---- THE LICENCE (m3). Declared, correct, and referenced — or refused. ----
+    expected = SOURCE_LICENSE[source]
+    declared_license = normalize_license(release.get("license"))
+    _require(bool(declared_license),
+             f"gene-set bundle: release.license is required for source {source!r} "
+             f"(expected {expected!r}). A redistributable artifact that will not say "
+             "what licence it carries cannot be redistributed")
+    retired = RETIRED_LICENSE_CLAIMS.get((source, declared_license))
+    _require(retired is None, f"gene-set bundle: {retired}")
+    _require(declared_license == normalize_license(expected),
+             f"gene-set bundle: source {source!r} is licensed {expected!r}, but the "
+             f"bundle declares {declared_license!r}. The licence decides what may be "
+             "redistributed and how it must be attributed; recording the wrong one is a "
+             "compliance claim nobody can stand behind")
+    reference = SOURCE_LICENSE_REFERENCE[source]
+    if reference is not None:
+        _require(str(release.get("license_reference", "")).strip() == reference,
+                 f"gene-set bundle: release.license_reference must cite {reference!r} "
+                 f"for source {source!r}; a licence nobody can look up is not a licence")
+
+    # ...and a DATED release where attribution needs one.
+    if source in REQUIRE_DATED_RELEASE:
+        _require(bool(_DATED_RE.search(release_id)),
+                 f"gene-set bundle: source {source!r} must name a DATED release "
+                 f"(YYYY-MM-DD or YYYY-MM), got release_id {release_id!r}. 'GO' is not a "
+                 "version, and a CC BY attribution that cannot name what it is "
+                 "attributing is not an attribution")
 
     namespace = str(doc.get("gene_id_namespace", ""))
     _require(namespace in ALLOWED_NAMESPACES,
@@ -144,7 +214,13 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
             "release_id": release_id,
             "sha256": file_sha256(path),
             "n_sets": len(sets),
+            "license": expected,
+            "license_reference": reference,
         },
+        # m3: the licence travels WITH the bundle, checked against the source's actual
+        # terms — Reactome is CC0, not CC BY 4.0.
+        "gene_set_license": expected,
+        "gene_set_license_reference": reference,
         "gene_id_namespace": namespace,
         "effect_universe_sha256": effect_universe_sha256,
         "min_set_size": MIN_SET_SIZE,
@@ -186,6 +262,9 @@ def binding_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         "status": "bound",
         "schema_version": bundle["schema_version"],
         "gene_set_release": bundle["gene_set_release"],
+        # m3: the licence is part of what the run stands on, and it is bound, not noted
+        "gene_set_license": bundle["gene_set_license"],
+        "gene_set_license_reference": bundle["gene_set_license_reference"],
         "gene_id_namespace": bundle["gene_id_namespace"],
         "effect_universe_sha256": bundle["effect_universe_sha256"],
         "canonical_sha256": bundle["canonical_sha256"],

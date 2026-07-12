@@ -96,8 +96,15 @@ def method_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
 
 def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
                   signatures: dict[str, dict[str, float]],
-                  config_sha256: str) -> dict[str, Any]:
-    """The FULL pathway evidence table. Absent bundle -> an explicit unavailable state."""
+                  config_sha256: str,
+                  pairs: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
+    """The FULL pathway evidence table. Absent bundle -> an explicit unavailable state.
+
+    ``pairs`` may be supplied by the production runner, which computes only the INTRA-SET
+    pairs (the only ones any set is allowed to stand on after B1). Absent, they are
+    computed here over all measured signatures — fine for a fixture, quadratic for a
+    release.
+    """
     if bundle is None:
         return {
             "schema_version": SCHEMA_VERSION,
@@ -109,7 +116,8 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
 
     per_arm = {arm: {e["set_id"]: e for e in enrichment.enrich_arm(rows, bundle, arm)}
                for arm in config.ARMS}
-    pairs = convergence.pairwise(signatures)
+    if pairs is None:
+        pairs = convergence.pairwise(signatures)
     # NO global clustering. Each set's convergence is computed on the subgraph induced by
     # its OWN members, so a non-member can never bridge two of them (B1).
     conv = {c["set_id"]: c

@@ -77,10 +77,57 @@ def _comparison_block(from_cond: str, to_cond: str,
             **{k: verdict[k] for k in _COMPARISON_FIELDS}}
 
 
+def v3_conditions(args) -> Optional[list[str]]:
+    """The ORDERED condition pair a Stage-1 v3 temporal contract names (B3).
+
+    A ``temporal_cross_condition`` selection names exactly two conditions, in order —
+    that IS the comparison it asked for. Executing the whole 6-pair cross-product for a
+    contract that asked for one directed pair would answer a question nobody put, and
+    would bind a run to a selection it did not honour.
+
+    Absent a v3 contract (the fixture / legacy path), this returns None and the runner
+    computes every ordered pair the release can support.
+    """
+    path = getattr(args, "stage1_v3_selection", None)
+    schema = getattr(args, "stage1_v3_schema", None)
+    if not path:
+        return None
+    from .. import stage1_v3
+
+    if not schema:
+        raise ValueError(
+            "--stage1-v3-selection requires --stage1-v3-schema: the contract is "
+            "validated against the PINNED schema, and a contract checked against no "
+            "schema has been checked against nothing")
+    # The FULL v3 gate: schema pin, content hash, one-biology, condition count, routing,
+    # estimator availability and the execution status that must FOLLOW from all of it.
+    bound = stage1_v3.load(path, schema)
+    mode = bound.get("analysis_mode")
+    if mode != stage1_v3.MODE_TEMPORAL:
+        raise ValueError(
+            f"this is the TEMPORAL runner, but the v3 selection declares analysis_mode "
+            f"{mode!r}. A within-condition selection is not executed here — the two "
+            "estimators answer different questions and their numbers look alike")
+    conds = list(bound["conditions"])
+    if len(conds) != 2:
+        raise ValueError(
+            f"a {stage1_v3.MODE_TEMPORAL} selection names exactly two conditions, in "
+            f"order; this one names {conds}")
+    return conds
+
+
 def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, Any]:
-    """Compute every ordered cross-condition comparison the release can support."""
+    """Compute every ordered cross-condition comparison the release can support.
+
+    When a Stage-1 v3 ``temporal_cross_condition`` contract is supplied, the ORDERED PAIR
+    it names is what gets computed — the contract asked a question, and this answers that
+    question rather than a superset of it.
+    """
     created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
     pol = policy.load(getattr(args, "batch_policy", None))
+    contract_pair = v3_conditions(args)
+    if contract_pair and conditions is None:
+        conditions = contract_pair
 
     # THE SAME binding and THE SAME release gate the within-condition build runs. A
     # temporal run that could stand on inputs the screen would have refused would be a
@@ -137,6 +184,12 @@ def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, An
     binding = {
         "temporal_method": method_block(pol),
         "temporal_method_sha256": method_sha,
+        # B3: the ANALYSIS MODE and the ORDERED CONDITION PAIR the Stage-1 v3 contract
+        # asked for, bound into the run identity. A run that answered a different
+        # comparison from the one it was asked must not be able to keep this id.
+        "analysis_mode": ("temporal_cross_condition" if contract_pair
+                          else "temporal_cross_condition_all_released_pairs"),
+        "stage1_v3_contract_conditions": contract_pair,
         "conditions": conds,
         "comparisons": [records.comparison_id(a, b) for a, b in pairs],
         "selection": {

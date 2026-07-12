@@ -46,10 +46,17 @@ def main(argv=None):
     ap.add_argument("--batch-policy", default=None,
                     help="the frozen batch-confound policy (defaults to the pinned "
                          "policy shipped alongside this module)")
+    ap.add_argument("--stage1-v3-selection", default=None,
+                    help="a Stage-1 v3 selection contract with "
+                         "analysis_mode=temporal_cross_condition. Its ORDERED condition "
+                         "pair is the comparison that gets computed, and it is bound "
+                         "into the run identity.")
+    ap.add_argument("--stage1-v3-schema", default=None,
+                    help="the PINNED v3 JSON schema the contract is validated against")
     ap.add_argument("--conditions", nargs="*", default=None,
-                    help="conditions to compare (default: every condition the release "
-                         "ships). EVERY ordered pair of them is computed, in BOTH "
-                         "directions; none is ever refused.")
+                    help="conditions to compare (default: the v3 contract's pair, or "
+                         "every condition the release ships). EVERY ordered pair of them "
+                         "is computed, in BOTH directions; none is ever refused.")
     ap.add_argument("--out-root", required=True)
     args = ap.parse_args(argv)
 

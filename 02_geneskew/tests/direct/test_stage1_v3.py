@@ -191,22 +191,51 @@ def test_GATE_B_NAMES_NO_PROGRAM_AND_NO_CONDITION():
 # --------------------------------------------------------------------------- #
 # 2. TEMPORAL IS REFUSED. It is NEVER routed through the within-condition formula.
 # --------------------------------------------------------------------------- #
-def test_a_temporal_selection_is_REFUSED_until_the_estimator_exists(schema):
-    """The single most dangerous thing this gate prevents.
+# B3: the estimator now EXISTS. The gate's job flips from "refuse until it is built" to
+# "admit it, and only under the identity it actually has". Both states are asserted: the
+# REFUSED path is exercised by simulating an absent estimator, so the guard that stopped
+# a temporal selection being routed through the within-condition formula is still proven.
+def test_a_temporal_selection_is_READY_now_that_the_estimator_EXISTS(schema):
+    """The estimator is built (``direct.temporal``) and independently verified, so a
+    temporal contract is executable rather than parked."""
+    bound = G.validate(emit(mode=G.MODE_TEMPORAL), schema)
+    assert bound["execution_status"] == G.EXECUTION_READY
+    assert bound["estimator_status"] == G.ESTIMATOR_AVAILABLE
+    assert bound["estimator_id"] == G.ESTIMATOR_TEMPORAL
+    assert bound["analysis_mode"] == G.MODE_TEMPORAL
+    assert len(bound["conditions"]) == 2          # an ordered PAIR
 
-    The within-condition formula would consume a temporal selection and return numbers,
-    and the numbers would look exactly like an answer.
+
+def test_a_temporal_selection_is_REFUSED_when_the_estimator_is_ABSENT(schema,
+                                                                      monkeypatch):
+    """The guard that mattered, still proven.
+
+    If the temporal estimator were not built, the within-condition formula would happily
+    consume a temporal selection and return numbers — and the numbers would look exactly
+    like an answer. Simulate its absence and the gate must still refuse.
     """
-    assert refusal(emit(mode=G.MODE_TEMPORAL), schema) == G.REFUSE_ESTIMATOR_MISSING
+    monkeypatch.setattr(G, "IMPLEMENTED_ESTIMATORS", (G.ESTIMATOR_WITHIN,))
+    doc = emit(mode=G.MODE_TEMPORAL, estimator_status=G.ESTIMATOR_NOT_IMPLEMENTED,
+               execution_status=G.EXECUTION_AWAITING)
+    assert refusal(doc, schema) == G.REFUSE_ESTIMATOR_MISSING
 
 
-def test_relabelling_the_TEMPORAL_ESTIMATOR_as_available_does_not_make_it_exist(schema):
+def test_an_estimator_STAGE2_HAS_NOT_BUILT_cannot_vote_itself_available(schema,
+                                                                        monkeypatch):
     """Stage-2 decides what Stage-2 has implemented. A contract cannot vote itself
-    an estimator."""
+    an estimator — asserted with the estimator simulated absent."""
+    monkeypatch.setattr(G, "IMPLEMENTED_ESTIMATORS", (G.ESTIMATOR_WITHIN,))
     doc = emit(mode=G.MODE_TEMPORAL,
                estimator_status=G.ESTIMATOR_AVAILABLE,
                execution_status=G.EXECUTION_READY)
     assert refusal(doc, schema) == G.REFUSE_ESTIMATOR_OVERCLAIM
+
+
+def test_the_execution_status_must_still_FOLLOW_from_the_contract(schema):
+    """The estimator exists, so `awaiting_estimator` no longer follows from anything."""
+    doc = emit(mode=G.MODE_TEMPORAL, estimator_status=G.ESTIMATOR_AVAILABLE,
+               execution_status=G.EXECUTION_AWAITING)
+    assert refusal(doc, schema) == G.REFUSE_STATUS
 
 
 def test_a_temporal_selection_cannot_borrow_the_within_condition_estimator(schema):
@@ -216,9 +245,25 @@ def test_a_temporal_selection_cannot_borrow_the_within_condition_estimator(schem
     assert refusal(doc, schema) == G.REFUSE_MODE_ROUTE
 
 
-def test_the_temporal_estimator_is_not_in_the_implemented_set():
-    assert G.ESTIMATOR_TEMPORAL not in G.IMPLEMENTED_ESTIMATORS
-    assert G.IMPLEMENTED_ESTIMATORS == (G.ESTIMATOR_WITHIN,)
+def test_the_temporal_estimator_IS_in_the_implemented_set():
+    assert G.ESTIMATOR_TEMPORAL in G.IMPLEMENTED_ESTIMATORS
+    assert G.IMPLEMENTED_ESTIMATORS == (G.ESTIMATOR_WITHIN, G.ESTIMATOR_TEMPORAL)
+
+
+def test_the_registry_binds_the_METHOD_not_merely_the_name():
+    """A contract that says 'temporal, available' while naming no method hash has
+    admitted a word. The bridge binds what it is admitting."""
+    reg = G.estimator_registry()
+    t = reg[G.ESTIMATOR_TEMPORAL]
+    assert t["status"] == G.ESTIMATOR_AVAILABLE
+    assert t["analysis_mode"] == G.MODE_TEMPORAL
+    assert t["n_conditions"] == 2
+    assert len(t["method_sha256"]) == 64
+    assert t["inference_status"] == "not_calibrated"
+    assert t["estimand_is_per_cell_fate"] is False
+    # ...and the within-condition estimator is still there, unchanged
+    assert reg[G.ESTIMATOR_WITHIN]["status"] == G.ESTIMATOR_AVAILABLE
+    assert reg[G.ESTIMATOR_WITHIN]["n_conditions"] == 1
 
 
 @pytest.mark.parametrize("mode,n", [(G.MODE_WITHIN, 2), (G.MODE_TEMPORAL, 1)])

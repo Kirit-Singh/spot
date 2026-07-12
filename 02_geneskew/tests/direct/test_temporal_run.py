@@ -106,8 +106,15 @@ class TestTheDiDIsTheDifferenceOfTwoWithinConditionArmValues:
                 assert r[f"{p}_{end}_n_guide_slots_released"] >= 0
 
 
-class TestTheNegativeControl:
-    """A target with an identical effect vector at every condition must not move."""
+class TestTheSyntheticZeroSignalControl:
+    """A CONSTRUCTED zero-signal target must not move. This is NOT an NTC (M5).
+
+    It proves the estimator fabricates no movement where its input holds none — a
+    property of the code. A real non-targeting control would carry real donor and batch
+    variation and would not come back exactly zero; that validation is PENDING and is not
+    available from this effect representation (the DE object ships no NTC target rows —
+    NTC is the contrast baseline, not a projectable row).
+    """
 
     def test_an_unchanging_target_has_exactly_zero_did_on_every_pair(self, built):
         _, df = built

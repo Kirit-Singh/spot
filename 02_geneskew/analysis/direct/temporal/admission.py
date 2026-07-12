@@ -57,7 +57,17 @@ KEY_FIREWALL_EXCEPTIONS = frozenset({"away_from_A_zscore", "toward_B_zscore"})
 # ...and the NEGATIVE DECLARATIONS: exempt ONLY while they still say "forbidden". The
 # artifact has to be able to write down its own prohibition; it does not get to keep the
 # exemption after flipping the prohibition off.
-NEGATIVE_DECLARATIONS = {"combined_objective_permitted": False}
+#
+#   combined_objective_permitted   the direct lane's ban on a combined arm objective
+#   evidence_lines_are_combined    the pathway lane's ban on fusing enrichment with
+#                                  convergence into one "pathway score"
+#
+# Both are `False` in every honest artifact, and the moment either becomes `True` the
+# firewall fires — which is exactly the event it exists to catch.
+NEGATIVE_DECLARATIONS = {
+    "combined_objective_permitted": False,
+    "evidence_lines_are_combined": False,
+}
 
 REQUIRED_FILES = ("temporal.parquet", "endpoints.parquet", "temporal_provenance.json")
 

@@ -46,7 +46,8 @@ def gene_set_doc(universe: list[str], targets: list[str],
     ]
     return {
         "schema_version": genesets.SCHEMA_VERSION,
-        "release": {"source": SOURCE, "release_id": RELEASE_ID},
+        "release": {"source": SOURCE, "release_id": RELEASE_ID,
+                    "license": genesets.SOURCE_LICENSE[SOURCE]},
         "gene_id_namespace": "ensembl_gene_id",
         "effect_universe_sha256": effect_universe_sha256,
         "sets": sets,

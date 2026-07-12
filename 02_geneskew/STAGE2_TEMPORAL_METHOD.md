@@ -112,10 +112,27 @@ More cells would not fix this. Every record carries this note
 
 ## 3. The reliability threshold
 
-The batch×perturbation interaction does **not bias** the DiD (it is donor noise, symmetric across
-shared donors), but its **noise floor is large relative to the temporal signal** — 0.6×–2.0× the
-temporal DiD signal std. Per-target Stim48hr calls are therefore **fragile**, and the estimator
-says so in machine fields rather than leaving a reader to assume precision it does not have.
+The batch×perturbation interaction is an **uncalibrated donor/batch interaction reference floor**,
+and it is used as a **scale reference only**. Three limits on what it can be claimed to do (M6):
+
+1. **We do not claim it is unbiased.** The earlier wording here said the interaction "does not
+   bias the DiD" because it is "donor noise, symmetric across shared donors". That symmetry is an
+   **assumption, and it is unverified** — and it cannot be verified in this design, because batch
+   is perfectly aliased with donor (§2). An interaction term that is *not* symmetric across the
+   donors that flip replicate would bias a Stim48hr DiD, and nothing here can rule that out.
+2. **It is uncalibrated.** There is no null, so the threshold below is not a test and its
+   crossings carry no error rate.
+3. **The scale may not transfer.** The diagnostic computed these projections **UNMASKED**, over
+   all released targets. The estimator's arm values are **target-specific masked** projections —
+   each target's own gene, its 30 kb neighbourhood and its guides' off-target alignments are
+   removed before the panel and control means are taken. The two scales are close but **not
+   guaranteed to match**, so a badge near the threshold should be read as "near the reference
+   floor", not as a measurement against this target's own noise.
+
+What *is* measured: the interaction spread is **large relative to the temporal signal** —
+0.6×–2.0× the temporal DiD signal std. Per-target Stim48hr calls are therefore **fragile**, and
+the estimator says so in machine fields rather than leaving a reader to assume precision it does
+not have.
 
 Per arm, from that arm's **own program**:
 
@@ -126,7 +143,8 @@ badge = above_interaction_floor   iff  |temporal_did| ≥ reliability_threshold
 ```
 
 `interaction_std` is the per-program **batch-aligned split** (`split1_batchAligned`, Rest)
-interaction spread from the diagnostic — the split that actually carries the batch contrast:
+interaction spread from the diagnostic — the split that actually carries the batch contrast. It is
+an **uncalibrated reference scale, computed UNMASKED**, and it is not this target's own noise:
 
 | program | interaction_std | threshold (k=2) |
 |---|---|---|
@@ -206,6 +224,26 @@ method, both code trees, the frozen batch policy, k, and the display policy.
 > the code that produced it. Every *scientific* value is byte-identical (golden screen-content
 > hash `e9b72535…` and mask hash `f3eea380…` both unchanged), which is the invariant that matters
 > and the one the test pins.
+
+## 6b. Controls — what is validated, and what is **not** (M5)
+
+**What runs today: a SYNTHETIC ZERO-SIGNAL control.** A constructed target whose effect
+vector is bit-for-bit identical at every condition. Every DiD on every pair must come back
+**exactly 0.0**. This proves a property of the **code** — the estimator fabricates no movement
+where its input holds none — and it is asserted per-target and across the whole table
+(`fixtures_temporal.flattened_specs`).
+
+**It is NOT an NTC, and it was previously mislabelled as one.** A real non-targeting control
+carries real donor and batch variation; it would *not* come back exactly zero, and where it
+landed relative to the donor/batch reference floor is the question that actually matters.
+
+**Real-NTC validation: PENDING — and not available from this effect representation.**
+`GWCD4i.DE_stats.h5ad` ships **no NTC target rows** (verified: 0 of 11,526 `target_contrast`
+categories are non-targeting/control). NTC is the **contrast baseline** every target is
+measured *against*, not a row that can be projected. A real NTC null therefore requires
+constructing pseudo-target groups from NTC guides and **re-running the upstream DE model**
+(STAGE2_PLAN §9(A)) — an unbuilt prerequisite, not a step this estimator can take. Until that
+exists, **no claim is made that observed temporal movements exceed a real NTC null.**
 
 ## 7. Verification (generator ≠ verifier)
 

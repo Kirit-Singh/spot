@@ -505,6 +505,15 @@
           "gene_set_release": {
             "additionalProperties": false,
             "properties": {
+              "license": {
+                "type": "string"
+              },
+              "license_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "n_sets": {
                 "minimum": 1,
                 "type": "integer"
@@ -526,7 +535,8 @@
               "source",
               "release_id",
               "sha256",
-              "n_sets"
+              "n_sets",
+              "license"
             ],
             "type": "object"
           },

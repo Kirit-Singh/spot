@@ -445,8 +445,8 @@ endpoints. This reproduces the locked verdict without naming a condition:
 A **pure batch effect is not identifiable** (aliased with donor; no R1 Stim48hr exists) — it can
 only be bounded, never measured. Every record carries that note.
 
-**Reliability threshold.** The interaction noise floor is 0.6×–2.0× the temporal signal, so
-per-target Stim48hr calls are fragile. Per arm, from that arm's own program:
+**Reliability threshold.** The interaction spread is 0.6×–2.0× the temporal signal, so per-target
+Stim48hr calls are fragile. Per arm, from that arm's own program:
 `|temporal_did| ≥ k × interaction_std(program)`, **k = 2.0** (frozen before any result), with
 `interaction_std` the diagnostic's per-program batch-aligned split value (≈0.16 `diff_naive`,
 0.08 `diff_memory`, 0.47 `diff_checkpoint`, 0.76 `cd4_ctl_like`). The badge is a **precision
@@ -455,11 +455,26 @@ unmeasured floor yields `interaction_floor_unavailable_for_program` — never a 
 Extra-caution: `th17_like`, `th2_like`, `tfh_like` (sparse panels, r≈0–0.15); `th9_like` listed
 though non-selectable.
 
+Three limits on the floor, stated because the earlier wording overclaimed (M6): it is an
+**uncalibrated donor/batch interaction reference floor**; we do **not** claim the interaction is
+unbiased — that rests on a **symmetry assumption which is unverified and unverifiable here**,
+since batch is aliased with donor; and the diagnostic's scale is **UNMASKED**, so it may not match
+the estimator's target-specific **masked** projections. Read a near-threshold badge as "near the
+reference floor", not as a measurement against that target's own noise.
+
 **Display policy — METHODS-ONLY.** These are machine fields for provenance. The UI renders **no
 inline batch flag and no reliability badge**, applies **no hard filter**, and shows **all
 comparisons plainly**. The 48-hour confound and the precision limitation are documented **once**
 (here / `STAGE2_TEMPORAL_METHOD.md`) and surfaced via the **methods/provenance drawer** — never as
 a per-comparison caveat in the main canvas. The policy is bound into the method hash.
+
+**Controls (M5).** What runs is a **synthetic zero-signal control**: a constructed target whose
+effect vector is identical at every condition, whose DiD must be exactly `0.0` on every pair. It
+proves the *code* invents no movement where the input has none. It is **not an NTC** (it was
+previously mislabelled as one). **Real-NTC validation is PENDING and is not available from this
+effect representation** — `DE_stats` ships no NTC target rows (NTC is the contrast *baseline*,
+§2), so a real NTC null needs the §9(A) pseudo-target rerun, which does not exist. No claim is
+made that any observed temporal movement exceeds a real NTC null.
 
 **Additivity.** `code_tree_sha256` lists only the `.py` files directly in the direct package, so
 the `temporal` subpackage is invisible to it and the dependency is one-way. **No temporal code can

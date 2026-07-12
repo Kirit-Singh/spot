@@ -212,6 +212,19 @@ class TestTheNegativeDeclarationIsExemptOnlyWhileItForbids:
                 {"combined_objective_permitted": sneaky}) == \
                 ["combined_objective_permitted"]
 
+    def test_the_pathway_lanes_prohibition_is_exempt_only_while_it_forbids(self):
+        # the ban on fusing enrichment with convergence into one "pathway score"
+        assert admission.forbidden_keys({"evidence_lines_are_combined": False}) == []
+        assert admission.forbidden_keys({"evidence_lines_are_combined": True}) == \
+            ["evidence_lines_are_combined"]
+
+    def test_every_negative_declaration_is_a_prohibition_and_defaults_to_false(self):
+        # An exemption list is only auditable if everything on it is the same KIND of
+        # thing. Each of these is a rule saying "this is forbidden".
+        assert set(admission.NEGATIVE_DECLARATIONS) == {
+            "combined_objective_permitted", "evidence_lines_are_combined"}
+        assert all(v is False for v in admission.NEGATIVE_DECLARATIONS.values())
+
     def test_a_flipped_prohibition_in_a_real_artifact_is_rejected(self, artifact):
         out, prov = artifact
 

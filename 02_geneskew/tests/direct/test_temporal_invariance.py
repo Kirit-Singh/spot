@@ -166,7 +166,8 @@ class TestTheConditionLabelPermutationControl:
     def test_a_release_with_no_temporal_signal_yields_no_temporal_movement(
             self, temporal_run):
         # Every target gets the same effect vector at every condition — the whole-table
-        # negative control. Every DiD on every pair must be exactly zero.
+        # SYNTHETIC ZERO-SIGNAL control (M5; not an NTC). Every DiD on every pair must be
+        # exactly zero: the estimator must invent no movement where the input has none.
         df = self._run(temporal_run, T.flattened_specs())
         for arm in direct_config.ARMS:
             assert (df[f"{arm}_temporal_did"].abs() == 0.0).all()

@@ -220,14 +220,24 @@ def support_ids_for(args, ctx: dict, cond: str) -> tuple[dict, dict]:
 
 def condition_rows(*, ctx: dict, args, cond: str, identity_hashes: dict[str, Any],
                    guide_ids: Optional[dict] = None,
-                   donor_ids: Optional[dict] = None) -> dict[str, Any]:
-    """Every within-condition row for ONE condition: scores, ranks and joint tiers."""
+                   donor_ids: Optional[dict] = None,
+                   signature_targets: Optional[set] = None) -> dict[str, Any]:
+    """Every within-condition row for ONE condition: scores, ranks and joint tiers.
+
+    ``signature_targets`` asks for the target-masked SIGNATURE of those targets — the
+    full effect vector on the target's own unmasked support — for the pathway lane. It is
+    built from the very mask this pass already computed for the score, so a signature can
+    never be masked differently from the number it is meant to explain. Restricted to the
+    targets that are actually gene-set members, because holding 11k dense vectors to
+    answer a question about a few hundred would be work done to be thrown away.
+    """
     axis, splits = ctx["axis"], ctx["splits"]
     library, manifest_index = ctx["library"], ctx["manifest_index"]
     universe_ids = ctx["gene_universe"]["gene_ids"]
     identities = ctx["identities_by_condition"][cond]
     if guide_ids is None or donor_ids is None:
         guide_ids, donor_ids = support_ids_for(args, ctx, cond)
+    signatures: dict[str, dict[str, float]] = {}
 
     # ---- the ONLY dense read in the lane: the pooled main effect layers ----
     main = io_data.load_main(args.de_main, cond)
@@ -266,6 +276,17 @@ def condition_rows(*, ctx: dict, args, cond: str, identity_hashes: dict[str, Any
         da, db, scores = _both_deltas(main["log_fc"][i], axis, gene_index, mask_set)
         zda, zdb, zscores = _both_deltas(main["zscore"][i], axis, gene_index,
                                          mask_set)
+
+        # THE TARGET-MASKED SIGNATURE (pathway lane). The SAME mask the score above was
+        # taken under: the perturbed gene, its neighbourhood and its guides' off-target
+        # alignments are already out. An unresolved mask yields no signature — refusing
+        # to project is refusing to project, and it does not become optional here.
+        if (signature_targets is not None and target in signature_targets
+                and mask_set is not None):
+            row_values = main["log_fc"][i]
+            signatures[target] = {
+                g: float(row_values[gene_index[g]]) for g in universe_ids
+                if g in gene_index and g not in mask_set}
 
         # BASE QC once: a function of neither arm's outcome.
         base_state, base_passed, base_reasons = disposition.base_qc(
@@ -309,6 +330,7 @@ def condition_rows(*, ctx: dict, args, cond: str, identity_hashes: dict[str, Any
 
     return {"screen": screen_rows, "contrib": contrib_rows, "masks": mask_rows,
             "guide": guide_rows, "donor": donor_rows,
+            "signatures": signatures,
             "n_source_targets": len(targets)}
 
 

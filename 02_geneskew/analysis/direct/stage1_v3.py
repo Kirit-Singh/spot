@@ -80,10 +80,20 @@ ESTIMATOR_WITHIN = "within_condition_v1"
 ESTIMATOR_TEMPORAL = "temporal_cross_condition_v1"
 ESTIMATOR_FOR_MODE = {MODE_WITHIN: ESTIMATOR_WITHIN, MODE_TEMPORAL: ESTIMATOR_TEMPORAL}
 
-# WHICH estimators Stage-2 has actually built. The temporal estimator is a DIFFERENT
-# measurement — it compares across conditions — and until it exists and is verified, a
-# temporal selection is refused rather than routed through the within-condition formula.
-IMPLEMENTED_ESTIMATORS = (ESTIMATOR_WITHIN,)
+# WHICH estimators Stage-2 has actually built. STAGE-2 DECIDES THIS — a contract cannot
+# vote itself an estimator, and this table is the only place that says.
+#
+# The temporal estimator is a DIFFERENT measurement: it compares ACROSS conditions, and
+# routing it through the within-condition formula would return numbers that look exactly
+# like an answer. It was therefore refused here until it existed. It NOW EXISTS
+# (``direct.temporal``: a population-level difference-in-differences on program
+# projections, inference_status=not_calibrated) and it is admitted by a fail-closed
+# independent verifier, so it is built, and a temporal selection is READY rather than
+# awaiting_estimator.
+#
+# What each estimator IS, so the bridge can bind the thing it is admitting rather than a
+# name: see ``estimator_registry()``.
+IMPLEMENTED_ESTIMATORS = (ESTIMATOR_WITHIN, ESTIMATOR_TEMPORAL)
 
 # Typed refusal reasons. Every refusal is one of these; none is a sentence.
 REFUSE_SCHEMA = "selection_schema_is_not_v3"
@@ -104,6 +114,54 @@ REFUSE_CONDITIONS = "condition_count_does_not_match_the_analysis_mode"
 # The boundary this gate cannot cross, stated once, as an id.
 STAGE1_SELECTION_ID_NOT_REDERIVABLE = (
     "spot.stage02.gate_b.selection_id_is_a_citation_not_a_recomputable_key.v1")
+
+
+def estimator_registry() -> dict[str, Any]:
+    """WHAT Stage-2 has built, and WHAT each estimator is — for the Stage-1 v3 bridge.
+
+    The bridge sets ``estimator_status`` and ``execution_status``, and it must be able to
+    bind the METHOD it is admitting, not merely a name. A contract that says "temporal,
+    available" while naming no method hash has admitted a word.
+
+    Import-light on purpose: the temporal method hash is resolved lazily, so a caller
+    that only wants to know WHICH estimators exist does not pay for the policy artifact.
+    """
+    reg: dict[str, Any] = {
+        ESTIMATOR_WITHIN: {
+            "estimator_id": ESTIMATOR_WITHIN,
+            "analysis_mode": MODE_WITHIN,
+            "n_conditions": 1,
+            "status": ESTIMATOR_AVAILABLE,
+            "method_id": config.METHOD_ID,
+            "method_version": config.METHOD_VERSION,
+            "inference_status": config.INFERENCE_STATUS,
+        },
+        ESTIMATOR_TEMPORAL: {
+            "estimator_id": ESTIMATOR_TEMPORAL,
+            "analysis_mode": MODE_TEMPORAL,
+            # a cross-condition estimate compares exactly two conditions, IN ORDER
+            "n_conditions": 2,
+            "status": (ESTIMATOR_AVAILABLE if ESTIMATOR_TEMPORAL in
+                       IMPLEMENTED_ESTIMATORS else ESTIMATOR_NOT_IMPLEMENTED),
+        },
+    }
+    from .temporal import config as tconfig
+    from .temporal import policy as tpolicy
+    from .temporal import run_temporal as trun
+
+    reg[ESTIMATOR_TEMPORAL].update({
+        "method_id": tconfig.ESTIMATOR_ID,
+        "method_version": tconfig.ESTIMATOR_VERSION,
+        "estimand_id": tconfig.ESTIMAND_ID,
+        "estimand_level": tconfig.ESTIMAND_LEVEL,
+        "estimand_is_per_cell_fate": tconfig.ESTIMAND_IS_PER_CELL_FATE,
+        "inference_status": tconfig.INFERENCE_STATUS,
+        # THE HASH THE BRIDGE BINDS. It covers the temporal method, the within-condition
+        # method it differences, the frozen batch policy and both code trees — so a
+        # contract admitted against it cannot silently be executed by a different one.
+        "method_sha256": trun.temporal_method_sha256(tpolicy.load()),
+    })
+    return reg
 
 
 class SelectionV3Error(ValueError):

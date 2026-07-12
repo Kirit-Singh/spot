@@ -138,6 +138,40 @@ def pairwise(signatures: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
     return out
 
 
+def pairwise_within_sets(bundle: dict[str, Any],
+                         signatures: dict[str, dict[str, float]]
+                         ) -> list[dict[str, Any]]:
+    """Only the pairs a gene set can actually stand on: BOTH endpoints in the same set.
+
+    After B1 these are the only pairs convergence ever reads — a cross-set pair cannot
+    be an edge of any set's induced subgraph, so computing it would be work done to
+    produce a number nothing is allowed to use.
+
+    It is also what makes the production lane tractable: the all-pairs form is O(n^2)
+    over every measured target (~11k targets is ~63M pairs), while the union of
+    within-set pairs is bounded by the sets themselves.
+    """
+    wanted: set[tuple[str, str]] = set()
+    for s in bundle["sets"].values():
+        measured = sorted(g for g in s["genes"] if g in signatures)
+        for i, a in enumerate(measured):
+            for b in measured[i + 1:]:
+                wanted.add((a, b))
+
+    out = []
+    for a, b in sorted(wanted):
+        sim, n_shared = cosine_on_shared(signatures[a], signatures[b])
+        out.append({
+            "target_a": a, "target_b": b,
+            "similarity": sim,
+            "n_shared_unmasked_genes": n_shared,
+            "supportive": sim is not None and sim >= SIMILARITY_THRESHOLD,
+            "similarity_metric": SIMILARITY_METRIC,
+            "method_id": METHOD_ID,
+        })
+    return out
+
+
 def induced_components(members: list[str],
                        supportive_pairs: list[dict[str, Any]]
                        ) -> list[list[str]]:

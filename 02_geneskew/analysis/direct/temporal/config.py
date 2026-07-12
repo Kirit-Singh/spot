@@ -77,6 +77,27 @@ RELIABILITY_RULE_ID = "spot.stage02.temporal.rule.did_vs_k_times_interaction_std
 RELIABILITY_IS_A_SIGNIFICANCE_TEST = False
 RELIABILITY_COMPARATOR = "abs_did_ge_k_times_interaction_std"
 
+# WHAT THE FLOOR IS, AND WHAT IT IS NOT (M6). The earlier wording claimed the
+# batch x perturbation interaction "does not bias the DiD" because it is donor noise
+# "symmetric across shared donors". That symmetry is an ASSUMPTION, it is UNVERIFIED, and
+# it cannot be verified in this design — batch is perfectly aliased with donor, so an
+# interaction that is not symmetric across the donors that flip replicate would bias a
+# Stim48hr DiD and nothing here could see it. These fields ship on the artifact so the
+# limitation travels with the number instead of living only in a document.
+RELIABILITY_FLOOR_KIND = "uncalibrated_donor_batch_interaction_reference_floor"
+RELIABILITY_FLOOR_IS_CALIBRATED = False
+RELIABILITY_ABSENCE_OF_BIAS_CLAIMED = False
+RELIABILITY_SYMMETRY_ASSUMPTION = (
+    "the interaction is assumed symmetric across the donors shared by the two endpoints; "
+    "this is UNVERIFIED and is not verifiable in this design (batch is aliased with "
+    "donor), so no absence-of-bias claim is made")
+RELIABILITY_SCALE_CAVEAT = (
+    "the diagnostic's interaction_std was computed on UNMASKED program projections over "
+    "all released targets; the estimator's arm values are TARGET-SPECIFIC MASKED "
+    "projections. The two scales are close but not guaranteed to match, so a badge near "
+    "the threshold means 'near the reference floor', not 'measured against this target's "
+    "own noise'")
+
 # --------------------------------------------------------------------------- #
 # Display policy (user decision, recorded so the artifact cannot drift from it).
 # --------------------------------------------------------------------------- #
@@ -113,6 +134,11 @@ TEMPORAL_POLICY = {
     "reliability_rule_id": RELIABILITY_RULE_ID,
     "reliability_comparator": RELIABILITY_COMPARATOR,
     "reliability_is_a_significance_test": RELIABILITY_IS_A_SIGNIFICANCE_TEST,
+    "reliability_floor_kind": RELIABILITY_FLOOR_KIND,
+    "reliability_floor_is_calibrated": RELIABILITY_FLOOR_IS_CALIBRATED,
+    "reliability_absence_of_bias_claimed": RELIABILITY_ABSENCE_OF_BIAS_CLAIMED,
+    "reliability_symmetry_assumption": RELIABILITY_SYMMETRY_ASSUMPTION,
+    "reliability_scale_caveat": RELIABILITY_SCALE_CAVEAT,
     "display_policy_id": DISPLAY_POLICY_ID,
     "ui_renders_inline_batch_flag": UI_RENDERS_INLINE_BATCH_FLAG,
     "ui_renders_inline_reliability_badge": UI_RENDERS_INLINE_RELIABILITY_BADGE,
