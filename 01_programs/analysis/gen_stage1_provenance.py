@@ -33,7 +33,7 @@ PROVENANCE_STATUS = "PRIMARY_LOCATORS_VERIFIED_BOUNDED"
 # Pinned source-artifact SHA-256 (independently verified upstream). Build is fail-closed on mismatch.
 SOURCE_ARTIFACTS = [
     {"role": "prior_marker_ledger", "file": "stage01_panel_provenance_ledger.csv",
-     "sha256": "596a4435cbd729dbcbfa68df2adef730b1807fa9c0e8c39f0f102c284c4f3461"},
+     "sha256": "29f050ca9d5239e78f359f896ec9fee9ae273a16338edaa8a5fa9189ffa54e0c"},   # S1-M5b: +FOXP3 Wang 2007 human corroboration
     {"role": "lineage_completion", "file": "lineage_primary_source_completion.csv",
      "sha256": "ff35c27cf210a225cab4c8e072ba3f585ec841a091b0518aff352ae6f22c8ff8"},
     {"role": "lineage_integration_map", "file": "LINEAGE_REGISTRY_INTEGRATION_MAP.md",

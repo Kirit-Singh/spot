@@ -46,7 +46,7 @@
   "v3_registry_source": {
     "artifact": "stage01_program_registry_v3.json",
     "location": "release_staging_not_served",
-    "raw_sha256": "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f",
+    "raw_sha256": "04ce0a25e16c4b3eea74817f01fb986134a0baec36a3464455f049803089e72d",
     "present": true
   },
   "v2_registry": {
@@ -62,8 +62,8 @@
     "join_rule": "coordinates_from_seed_scores_from_overlay_by_exact_barcode",
     "registry": {
       "file": "stage01_program_registry_v3.json",
-      "raw_sha256": "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f",
-      "registry_sha256": "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa"
+      "raw_sha256": "04ce0a25e16c4b3eea74817f01fb986134a0baec36a3464455f049803089e72d",
+      "registry_sha256": "070e798e4e15e4fde2b087db9257b1b98a0441b0dcb7ad3f3c76c288521008ae"
     },
     "overlay": {
       "file": "stage01_umap_overlay_v3.json",
@@ -109,5 +109,5 @@
     "base_portability_source_field": "stage2_base_portability.stage2_base_portable",
     "frozen_coordinate_shell": "stage01_umap_seed.json"
   },
-  "self_canonical_sha256": "3efe2d6154cafcfd9398de853615066e8662f102355a3bb5cdcfff0a707bc3ee"
+  "self_canonical_sha256": "0778433d41e91568a41e566a273d4064477fb6dd6796720b309ffc811f9df719"
 }

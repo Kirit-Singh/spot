@@ -9,8 +9,8 @@
     "stage1_t8_preflight.py": "2351a33e8e4cfe3c1d7d57fb62944718aee78a377600f1f76d479836bf921357",
     "test_stage1_t8.py": "b0a0fbb4371f1b38512a13c48bd38ff017d79ab05678890f3b21185a14e96d4c",
     "gen_full_release_verification.py": "d59e0109798fd21bee2e3fb16e240ebc6a952465a70967da03ffec68f7c3c380",
-    "gen_stage1_provenance.py": "282dc2909326102653ab019d6e87901f98c8b0867b2c3d93531c2304f352db1c",
-    "verify_stage1_provenance.py": "3a5ba17505e0fa325788ddb67295ed3bb217b19f139e3d36f1627ca6cc084d30",
+    "gen_stage1_provenance.py": "caf62a0c4a37281b163c3b9d137de1c1ff777709a62b3cbc386558d9fba70055",
+    "verify_stage1_provenance.py": "52aeea040f2e89e698d4e1db49502f142eba6ec48ca81b3dd767ecbaa2ced3fd",
     "test_stage1_provenance.py": "ab7ee5cc9c9893a5211355a33d89cf8e5e0bf9c179d729256613bf07343771c7",
     "note": "Generator, independent verifier and mutation suite are distinct files (generator != verifier)."
   },
@@ -29,7 +29,7 @@
     "bins_v3_raw_sha256": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
     "control_eligible_pool_raw_sha256": "70072addb7c8c323eda8b110d1efe6d2670f8a00dfe6138e36a5ea7f79db541a",
     "v2_registry_raw_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
-    "v3_registry_raw_sha256": "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f",
+    "v3_registry_raw_sha256": "04ce0a25e16c4b3eea74817f01fb986134a0baec36a3464455f049803089e72d",
     "scores_full_parquet_raw_sha256": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
     "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
     "coordinates_barcode_plus_xy_sha256": "c3d3a0a752614470693a0148ba37a45cf20aba290a6e54b4f7fa0bc468a6605b",
@@ -38,8 +38,8 @@
   "outputs_by_hash": {
     "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "validation_semantics_raw_sha256": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026",
-    "current_raw_sha256": "d97c6899121f942abc29048e174f92be10d56e749ab936fbeee8b628a3ffeebe",
-    "release_manifest_raw_sha256": "863cdaa6c37a3004e558bb93c1cac67493a5d07860435f715ea6c21ef360c965",
+    "current_raw_sha256": "887c239e892fcc243aad8d7193fc1b385f92beafe64d9f29cec617ca4c7a33a5",
+    "release_manifest_raw_sha256": "32479fadfb3ed4f999488ef402878434c6d613f82ea0aa42acd61f65791af2b7",
     "umap_coordinates_raw_sha256": "a7164168aaf61466ca699e1b00633c37ecef88705db443fb7fb0d00a86ccbbf6",
     "umap_overlay_v3_raw_sha256": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
     "summary_v3_raw_sha256": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
@@ -79,5 +79,5 @@
     "reproducibility": "Heavy artifacts (parquet, v3 overlay, coordinates, v3 registry, v3 summary) are gitignored release-staging outputs bound here by hash; the reproduce chain regenerates them from pinned inputs."
   },
   "recovery_receipt_all_pass": true,
-  "self_canonical_sha256": "d361efd826eef1528e404fa41fae34264b9a08027e8a85f71a1b0a7610b4cd85"
+  "self_canonical_sha256": "e7b5e7e45f7fc326703d5656c1357d519a9daab41738a8e030b3e26ec6e6b324"
 }
