@@ -4,6 +4,24 @@
 > (91 GB). The **lead session plans and independently verifies** (generator ≠ verifier). Steps use
 > checkbox (`- [ ]`) tracking. Do not touch v2 artifacts except to mark them superseded.
 >
+> **Rev 6 — bins amendment → method `stage1-continuous-v3.0.1` (2026-07-11):** T7b's self-check found
+> the frozen `bins_sha256=0e8423df` is **not reproducible** (Phase-1 chunked-stream float summation
+> order; the exact kernel state is gone, and the checkpoint stored only `marker_bins`/`candidate_counts`/
+> the hash — NOT the 18,130 per-gene bins). Per decision (a), the bins become an **explicit committed
+> artifact** `stage01_bins_v3.csv` (18,130 rows `var_index,gene,bin`, var_names order, bins 0–24),
+> recomputed **on tcefold**. This is a **prospective equivalent-method amendment, NOT recovery** —
+> `0e8423df` is recorded as a **superseded/unrecoverable intermediate** (no per-gene diff claims against
+> it). **Acceptance (all three):** (1) new bins' marker-bin assignments == checkpoint `marker_bins`;
+> (2) candidate_counts for every occupied marker bin == checkpoint `candidate_counts_occupied_marker_bins`;
+> (3) all 2,100 primary + activation-predictor controls reconstruct byte-for-byte — together these prove
+> equivalence on the occupied marker bins, so alt-seed draws reproduce (reproducing only the primary
+> controls is **necessary but not sufficient**). Then: independent verifier confirms the 18,130-row
+> artifact + new hash; re-pin `bins_sha256` in control-method + registry + gate-spec reference +
+> release-manifest; bump `method_version → stage1-continuous-v3.0.1` (scorer coefficients + all 396k
+> scores **byte-unchanged**, so **no 396k re-run**); the 20-seed sensitivity uses the newly canonical
+> bins; add the bin-mutation test; preserve the aborted T7b attempt in provenance. **T7b stays paused
+> until this amendment is committed and independently verified.**
+>
 > **Rev 5 (2026-07-11):** the T7a gate set is **replaced** with the owner-approved, scale-aware,
 > membership-free set (no cross-program raw-median gate; no zero-origin sign / above-median-membership
 > gate). Gates are frozen engineering/QC tolerances (no p/FDR); `stage1_selectable_by_condition` per
