@@ -1,0 +1,1748 @@
+{
+  "$defs": {
+    "armRank": {
+      "description": "Nullable Int64. Dense 1..n over THIS arm's evaluable, non-null-score population; descending by this arm's canonical score; ties broken by target_ensembl ascending. Null wherever that arm is not ranked. Reconstructible from the emitted table alone.",
+      "oneOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "armScore": {
+      "description": "CANONICAL float64. Emitted, hashed AND ranked at full precision; display rounding is a UI concern only. NaN/inf are canonicalised to null. Null wherever that arm is not evaluable.",
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "armState": {
+      "enum": [
+        "evaluable",
+        "excluded_base_qc",
+        "insufficient_axis_coverage",
+        "mask_unresolved"
+      ]
+    },
+    "armSupportState": {
+      "description": "Within-dataset support FOR ONE ARM. Cell-level is deferred.",
+      "enum": [
+        "not_evaluated",
+        "screen_only",
+        "within_dataset_replicated"
+      ]
+    },
+    "baseQcState": {
+      "description": "Pre-outcome, computed once, a function of NEITHER arm. In precedence order. A MISSING or INVALID required measurement is an explicit non-evaluable state, never a favourable one.",
+      "enum": [
+        "unavailable_in_condition",
+        "unresolved_target_identity",
+        "mask_unresolved",
+        "missing_qc_measurement",
+        "invalid_qc_measurement",
+        "underpowered_cells",
+        "low_target_expression",
+        "no_detectable_source_on_target_repression",
+        "qc_pass_single_guide",
+        "qc_pass_two_guide",
+        "qc_pass_multi_guide"
+      ]
+    },
+    "concordanceClass": {
+      "description": "DESCRIPTIVE ONLY. Never ranks, never gates.",
+      "enum": [
+        "concordant_both_arms",
+        "away_from_A_only",
+        "toward_B_only",
+        "discordant_arms",
+        "partially_evaluated",
+        "not_evaluated"
+      ]
+    },
+    "contributorSource": {
+      "description": "The ONLY path to a guide identity. Null wherever identity was not resolved; a slot name is never evidence.",
+      "oneOf": [
+        {
+          "const": "manifest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contributorStatus": {
+      "enum": [
+        "resolved",
+        "unresolved"
+      ]
+    },
+    "modulation": {
+      "description": "Derived per arm, only where that arm has direction evidence. The two arms are never collapsed into one drug direction.",
+      "enum": [
+        "decrease",
+        "increase",
+        "no_direction_evidence",
+        "not_evaluated"
+      ]
+    },
+    "modulationAgreement": {
+      "description": "A conflict is a FINDING, not a tie to be broken.",
+      "enum": [
+        "agree",
+        "conflict",
+        "only_away_from_A_evaluated",
+        "only_toward_B_evaluated",
+        "neither_arm_evaluated"
+      ]
+    },
+    "projectionStatus": {
+      "description": "This arm's OWN projection outcome. The arms never share one.",
+      "enum": [
+        "ok",
+        "insufficient_axis_coverage",
+        "mask_unresolved"
+      ]
+    },
+    "replicationState": {
+      "description": "'unavailable_no_contributor_evidence_in_this_release_pass' is the state of THIS release pass: the by-guide estimates carry no contributor evidence, so none was projected and there is no replication claim to make in EITHER direction. It is not the same as 'unavailable_unresolved_guides' (the guides were asked for and could not be resolved) and emphatically not the same as 'replicated_discordant' \u2014 reporting a negative result from numbers that were never evidence would be inventing one.",
+      "enum": [
+        "not_evaluated",
+        "unavailable_no_contributor_evidence_in_this_release_pass",
+        "unavailable_unresolved_guides",
+        "single_guide_no_replication",
+        "replicated_concordant",
+        "replicated_discordant"
+      ]
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "supportStatus": {
+      "description": "Support is INFERENTIAL, and AVAILABILITY is asked first. 'unavailable_no_contributor_evidence_in_this_release_pass' is the state of THIS release pass: the support estimates carry no contributor evidence, so support was never evaluated for ANY arm, however evaluable that arm is. 'evaluated' asserts that support evidence existed and was assessed, and may never be emitted where it was not. Where this is not 'evaluated', raw counts remain as diagnostics but no support boolean or tier may be true.",
+      "enum": [
+        "evaluated",
+        "not_evaluated_base_qc",
+        "not_evaluated_arm",
+        "unavailable_no_contributor_evidence_in_this_release_pass"
+      ]
+    },
+    "targetIdNamespace": {
+      "enum": [
+        "ensembl_gene_id",
+        "gene_symbol"
+      ]
+    },
+    "tier": {
+      "enum": [
+        "not_evaluated",
+        "evaluable_no_directional_signal",
+        "tier3_screen_only",
+        "tier2_guide_replicated",
+        "tier1_guide_and_donor_split"
+      ]
+    }
+  },
+  "$id": "spot.stage02_direct_run.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "The ONLY schema a downstream lane (Perturb2State, Stage-3) may assume. There is no combined/balanced objective, no headline rank, and no A-only primary. A consumer MUST choose an arm explicitly. A target may be ranked in one arm, in both, or in neither.",
+  "properties": {
+    "analysis_condition": {
+      "type": "string"
+    },
+    "gene_universe_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "hashes": {
+      "description": "Every binding that made this run. A consumer must re-check these, not trust them.",
+      "properties": {
+        "code_tree_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contributor_manifest_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environment_lock_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_binding_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage1_release": {
+          "properties": {
+            "kind": {
+              "enum": [
+                "production",
+                "research",
+                "fixture"
+              ]
+            },
+            "method_version": {
+              "type": "string"
+            },
+            "n_production_selectable": {
+              "description": "RE-DERIVED from the Stage-1 validation rows against the gate spec. No stored boolean is read. 0 means no production run is possible.",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "method_version",
+            "n_production_selectable"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "run_binding_sha256",
+        "code_tree_sha256",
+        "stage1_release",
+        "contributor_manifest_sha256",
+        "environment_lock_sha256"
+      ],
+      "type": "object"
+    },
+    "lane": {
+      "description": "production: gate-passed, Stage-3 eligible. research_only: same computation and same complete evidence, but the failed production gate is RECORDED not required; never production/Stage-3 eligible. synthetic: fixture only; never stands in for research.",
+      "enum": [
+        "production",
+        "research_only",
+        "synthetic"
+      ]
+    },
+    "mask_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "namespace": {
+      "description": "production | research_only | synthetic",
+      "enum": [
+        "production",
+        "research_only",
+        "synthetic"
+      ]
+    },
+    "production_eligible": {
+      "description": "false for every non-production run",
+      "type": "boolean"
+    },
+    "production_gate_passed": {
+      "description": "the RE-DERIVED Stage-1 gate outcome, recorded even when it fails",
+      "type": "boolean"
+    },
+    "question_id": {
+      "description": "Biology-only identifier (A, B, directions, condition). NEVER a run or cache key.",
+      "type": "string"
+    },
+    "run_id": {
+      "description": "THE run key. Results live at <out_root>/<run_id>/. Never key a cache on question_id.",
+      "type": "string"
+    },
+    "screen": {
+      "description": "screen.parquet, one row per SOURCE target, emitted in target_ensembl order (NOT by any arm \u2014 an arm-sorted emission order would be a headline rank).",
+      "properties": {
+        "arms": {
+          "const": [
+            "away_from_A",
+            "toward_B"
+          ],
+          "description": "Two ordered, separate objectives. Never combined, averaged or reduced.",
+          "type": "array"
+        },
+        "columns": {
+          "additionalProperties": false,
+          "description": "The EXACT emitted column set: name -> pandas dtype. All 91 are REQUIRED and no other column may appear. Requiring a subset made the schema a floor, not a contract: a run could drop an arm's support status, replication state, tier or evaluability and still validate.",
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "adj_p_value"
+                ]
+              },
+              {
+                "required": [
+                  "aggregate_score"
+                ]
+              },
+              {
+                "required": [
+                  "arms_both_positive"
+                ]
+              },
+              {
+                "required": [
+                  "balanced_a_to_b"
+                ]
+              },
+              {
+                "required": [
+                  "balanced_score"
+                ]
+              },
+              {
+                "required": [
+                  "balanced_skew"
+                ]
+              },
+              {
+                "required": [
+                  "combination"
+                ]
+              },
+              {
+                "required": [
+                  "combination_score"
+                ]
+              },
+              {
+                "required": [
+                  "combination_state"
+                ]
+              },
+              {
+                "required": [
+                  "combined_score"
+                ]
+              },
+              {
+                "required": [
+                  "composite_score"
+                ]
+              },
+              {
+                "required": [
+                  "contrast_id"
+                ]
+              },
+              {
+                "required": [
+                  "desired_target_modulation"
+                ]
+              },
+              {
+                "required": [
+                  "eligibility_state"
+                ]
+              },
+              {
+                "required": [
+                  "fdr"
+                ]
+              },
+              {
+                "required": [
+                  "headline_rank"
+                ]
+              },
+              {
+                "required": [
+                  "is_eligible"
+                ]
+              },
+              {
+                "required": [
+                  "mean_arm_score"
+                ]
+              },
+              {
+                "required": [
+                  "overall_rank"
+                ]
+              },
+              {
+                "required": [
+                  "overall_score"
+                ]
+              },
+              {
+                "required": [
+                  "p_adj"
+                ]
+              },
+              {
+                "required": [
+                  "p_val"
+                ]
+              },
+              {
+                "required": [
+                  "p_value"
+                ]
+              },
+              {
+                "required": [
+                  "padj"
+                ]
+              },
+              {
+                "required": [
+                  "primary_endpoint"
+                ]
+              },
+              {
+                "required": [
+                  "primary_rank"
+                ]
+              },
+              {
+                "required": [
+                  "pval"
+                ]
+              },
+              {
+                "required": [
+                  "pvalue"
+                ]
+              },
+              {
+                "required": [
+                  "q_val"
+                ]
+              },
+              {
+                "required": [
+                  "q_value"
+                ]
+              },
+              {
+                "required": [
+                  "qval"
+                ]
+              },
+              {
+                "required": [
+                  "qvalue"
+                ]
+              },
+              {
+                "required": [
+                  "rank"
+                ]
+              },
+              {
+                "required": [
+                  "rank_primary"
+                ]
+              },
+              {
+                "required": [
+                  "significance"
+                ]
+              },
+              {
+                "required": [
+                  "total_skew"
+                ]
+              },
+              {
+                "required": [
+                  "toward_b"
+                ]
+              }
+            ],
+            "description": "FATAL: a combined-objective alias (incl. balanced_score, composite_score, balanced_skew, balanced_a_to_b), a headline rank, a single eligibility flag, or any p/q column."
+          },
+          "properties": {
+            "A_control_surviving": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_delta": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_desired_target_modulation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_donor_split_denominator": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_donor_split_support": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_estimate_available": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_evaluable": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_evidence_tier": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_guide_missing_reasons": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_guide_replication_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_guide_replication_supported": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_guide_slots_released": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_guides_concordant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_guides_evaluated": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_guides_mapped": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_splits_agreeing": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_splits_evaluable": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_splits_internally_concordant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_splits_internally_discordant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_splits_missing": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_n_splits_total": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_panel_surviving": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_projection_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_reasons": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_support_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "A_support_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_control_surviving": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_delta": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_desired_target_modulation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_donor_split_denominator": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_donor_split_support": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_estimate_available": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_evaluable": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_evidence_tier": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_guide_missing_reasons": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_guide_replication_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_guide_replication_supported": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_guide_slots_released": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_guides_concordant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_guides_evaluated": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_guides_mapped": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_splits_agreeing": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_splits_evaluable": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_splits_internally_concordant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_splits_internally_discordant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_splits_missing": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_n_splits_total": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_panel_surviving": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_projection_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_reasons": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_support_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "B_support_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "away_from_A": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "away_from_A_zscore": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "base_qc_passed": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "base_qc_reasons": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "base_qc_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cell_level_support_state": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "concordance_class": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "condition": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contributing_guide_ids": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contributor_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contributor_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "crispri_modality": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "desired_modulation_agreement": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "effective_donor_n": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "inference_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mask_gene_count": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mask_resolved": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mask_unresolved_reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "n_cells_target": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "n_guides_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "qc_low_target_expression": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "qc_ontarget_effect_size": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "qc_ontarget_significant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "qc_target_baseMean": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rank_away_from_A": {
+              "const": "Int64"
+            },
+            "rank_toward_B": {
+              "const": "Int64"
+            },
+            "released_estimate_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "run_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "schema_version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_distal_offtarget_flag": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_neighboring_gene_KD": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "target_ensembl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "target_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "target_id_namespace": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "target_symbol": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "toward_B": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "toward_B_zscore": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "A_control_surviving",
+            "A_delta",
+            "A_desired_target_modulation",
+            "A_donor_split_denominator",
+            "A_donor_split_support",
+            "A_estimate_available",
+            "A_evaluable",
+            "A_evidence_tier",
+            "A_guide_missing_reasons",
+            "A_guide_replication_state",
+            "A_guide_replication_supported",
+            "A_n_guide_slots_released",
+            "A_n_guides_concordant",
+            "A_n_guides_evaluated",
+            "A_n_guides_mapped",
+            "A_n_splits_agreeing",
+            "A_n_splits_evaluable",
+            "A_n_splits_internally_concordant",
+            "A_n_splits_internally_discordant",
+            "A_n_splits_missing",
+            "A_n_splits_total",
+            "A_panel_surviving",
+            "A_projection_status",
+            "A_reasons",
+            "A_state",
+            "A_support_state",
+            "A_support_status",
+            "B_control_surviving",
+            "B_delta",
+            "B_desired_target_modulation",
+            "B_donor_split_denominator",
+            "B_donor_split_support",
+            "B_estimate_available",
+            "B_evaluable",
+            "B_evidence_tier",
+            "B_guide_missing_reasons",
+            "B_guide_replication_state",
+            "B_guide_replication_supported",
+            "B_n_guide_slots_released",
+            "B_n_guides_concordant",
+            "B_n_guides_evaluated",
+            "B_n_guides_mapped",
+            "B_n_splits_agreeing",
+            "B_n_splits_evaluable",
+            "B_n_splits_internally_concordant",
+            "B_n_splits_internally_discordant",
+            "B_n_splits_missing",
+            "B_n_splits_total",
+            "B_panel_surviving",
+            "B_projection_status",
+            "B_reasons",
+            "B_state",
+            "B_support_state",
+            "B_support_status",
+            "away_from_A",
+            "away_from_A_zscore",
+            "base_qc_passed",
+            "base_qc_reasons",
+            "base_qc_state",
+            "cell_level_support_state",
+            "concordance_class",
+            "condition",
+            "contributing_guide_ids",
+            "contributor_source",
+            "contributor_status",
+            "crispri_modality",
+            "desired_modulation_agreement",
+            "effective_donor_n",
+            "inference_status",
+            "mask_gene_count",
+            "mask_resolved",
+            "mask_unresolved_reason",
+            "n_cells_target",
+            "n_guides_source",
+            "qc_low_target_expression",
+            "qc_ontarget_effect_size",
+            "qc_ontarget_significant",
+            "qc_target_baseMean",
+            "rank_away_from_A",
+            "rank_toward_B",
+            "released_estimate_id",
+            "run_id",
+            "schema_version",
+            "source_distal_offtarget_flag",
+            "source_neighboring_gene_KD",
+            "target_ensembl",
+            "target_id",
+            "target_id_namespace",
+            "target_symbol",
+            "toward_B",
+            "toward_B_zscore"
+          ],
+          "type": "object"
+        },
+        "row_example": {
+          "additionalProperties": false,
+          "description": "One fully-typed emitted row. Every emitted column is REQUIRED and every closed runtime vocabulary is enumerated here, so an enum that drifts in the code fails the schema instead of silently widening the contract.",
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "adj_p_value"
+                ]
+              },
+              {
+                "required": [
+                  "aggregate_score"
+                ]
+              },
+              {
+                "required": [
+                  "arms_both_positive"
+                ]
+              },
+              {
+                "required": [
+                  "balanced_a_to_b"
+                ]
+              },
+              {
+                "required": [
+                  "balanced_score"
+                ]
+              },
+              {
+                "required": [
+                  "balanced_skew"
+                ]
+              },
+              {
+                "required": [
+                  "combination"
+                ]
+              },
+              {
+                "required": [
+                  "combination_score"
+                ]
+              },
+              {
+                "required": [
+                  "combination_state"
+                ]
+              },
+              {
+                "required": [
+                  "combined_score"
+                ]
+              },
+              {
+                "required": [
+                  "composite_score"
+                ]
+              },
+              {
+                "required": [
+                  "contrast_id"
+                ]
+              },
+              {
+                "required": [
+                  "desired_target_modulation"
+                ]
+              },
+              {
+                "required": [
+                  "eligibility_state"
+                ]
+              },
+              {
+                "required": [
+                  "fdr"
+                ]
+              },
+              {
+                "required": [
+                  "headline_rank"
+                ]
+              },
+              {
+                "required": [
+                  "is_eligible"
+                ]
+              },
+              {
+                "required": [
+                  "mean_arm_score"
+                ]
+              },
+              {
+                "required": [
+                  "overall_rank"
+                ]
+              },
+              {
+                "required": [
+                  "overall_score"
+                ]
+              },
+              {
+                "required": [
+                  "p_adj"
+                ]
+              },
+              {
+                "required": [
+                  "p_val"
+                ]
+              },
+              {
+                "required": [
+                  "p_value"
+                ]
+              },
+              {
+                "required": [
+                  "padj"
+                ]
+              },
+              {
+                "required": [
+                  "primary_endpoint"
+                ]
+              },
+              {
+                "required": [
+                  "primary_rank"
+                ]
+              },
+              {
+                "required": [
+                  "pval"
+                ]
+              },
+              {
+                "required": [
+                  "pvalue"
+                ]
+              },
+              {
+                "required": [
+                  "q_val"
+                ]
+              },
+              {
+                "required": [
+                  "q_value"
+                ]
+              },
+              {
+                "required": [
+                  "qval"
+                ]
+              },
+              {
+                "required": [
+                  "qvalue"
+                ]
+              },
+              {
+                "required": [
+                  "rank"
+                ]
+              },
+              {
+                "required": [
+                  "rank_primary"
+                ]
+              },
+              {
+                "required": [
+                  "significance"
+                ]
+              },
+              {
+                "required": [
+                  "total_skew"
+                ]
+              },
+              {
+                "required": [
+                  "toward_b"
+                ]
+              }
+            ],
+            "description": "FATAL: a combined-objective alias (incl. balanced_score, composite_score, balanced_skew, balanced_a_to_b), a headline rank, a single eligibility flag, or any p/q column."
+          },
+          "properties": {
+            "A_control_surviving": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "A_delta": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "A_desired_target_modulation": {
+              "$ref": "#/$defs/modulation"
+            },
+            "A_donor_split_denominator": {
+              "type": "integer"
+            },
+            "A_donor_split_support": {
+              "type": "boolean"
+            },
+            "A_estimate_available": {
+              "type": "boolean"
+            },
+            "A_evaluable": {
+              "type": "boolean"
+            },
+            "A_evidence_tier": {
+              "$ref": "#/$defs/tier"
+            },
+            "A_guide_missing_reasons": {
+              "type": "string"
+            },
+            "A_guide_replication_state": {
+              "$ref": "#/$defs/replicationState"
+            },
+            "A_guide_replication_supported": {
+              "type": "boolean"
+            },
+            "A_n_guide_slots_released": {
+              "type": "integer"
+            },
+            "A_n_guides_concordant": {
+              "type": "integer"
+            },
+            "A_n_guides_evaluated": {
+              "type": "integer"
+            },
+            "A_n_guides_mapped": {
+              "type": "integer"
+            },
+            "A_n_splits_agreeing": {
+              "type": "integer"
+            },
+            "A_n_splits_evaluable": {
+              "type": "integer"
+            },
+            "A_n_splits_internally_concordant": {
+              "type": "integer"
+            },
+            "A_n_splits_internally_discordant": {
+              "type": "integer"
+            },
+            "A_n_splits_missing": {
+              "type": "integer"
+            },
+            "A_n_splits_total": {
+              "type": "integer"
+            },
+            "A_panel_surviving": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "A_projection_status": {
+              "$ref": "#/$defs/projectionStatus"
+            },
+            "A_reasons": {
+              "type": "string"
+            },
+            "A_state": {
+              "$ref": "#/$defs/armState"
+            },
+            "A_support_state": {
+              "$ref": "#/$defs/armSupportState"
+            },
+            "A_support_status": {
+              "$ref": "#/$defs/supportStatus"
+            },
+            "B_control_surviving": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "B_delta": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "B_desired_target_modulation": {
+              "$ref": "#/$defs/modulation"
+            },
+            "B_donor_split_denominator": {
+              "type": "integer"
+            },
+            "B_donor_split_support": {
+              "type": "boolean"
+            },
+            "B_estimate_available": {
+              "type": "boolean"
+            },
+            "B_evaluable": {
+              "type": "boolean"
+            },
+            "B_evidence_tier": {
+              "$ref": "#/$defs/tier"
+            },
+            "B_guide_missing_reasons": {
+              "type": "string"
+            },
+            "B_guide_replication_state": {
+              "$ref": "#/$defs/replicationState"
+            },
+            "B_guide_replication_supported": {
+              "type": "boolean"
+            },
+            "B_n_guide_slots_released": {
+              "type": "integer"
+            },
+            "B_n_guides_concordant": {
+              "type": "integer"
+            },
+            "B_n_guides_evaluated": {
+              "type": "integer"
+            },
+            "B_n_guides_mapped": {
+              "type": "integer"
+            },
+            "B_n_splits_agreeing": {
+              "type": "integer"
+            },
+            "B_n_splits_evaluable": {
+              "type": "integer"
+            },
+            "B_n_splits_internally_concordant": {
+              "type": "integer"
+            },
+            "B_n_splits_internally_discordant": {
+              "type": "integer"
+            },
+            "B_n_splits_missing": {
+              "type": "integer"
+            },
+            "B_n_splits_total": {
+              "type": "integer"
+            },
+            "B_panel_surviving": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "B_projection_status": {
+              "$ref": "#/$defs/projectionStatus"
+            },
+            "B_reasons": {
+              "type": "string"
+            },
+            "B_state": {
+              "$ref": "#/$defs/armState"
+            },
+            "B_support_state": {
+              "$ref": "#/$defs/armSupportState"
+            },
+            "B_support_status": {
+              "$ref": "#/$defs/supportStatus"
+            },
+            "away_from_A": {
+              "$ref": "#/$defs/armScore"
+            },
+            "away_from_A_zscore": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "base_qc_passed": {
+              "type": "boolean"
+            },
+            "base_qc_reasons": {
+              "type": "string"
+            },
+            "base_qc_state": {
+              "$ref": "#/$defs/baseQcState"
+            },
+            "cell_level_support_state": {
+              "const": "screen_only"
+            },
+            "concordance_class": {
+              "$ref": "#/$defs/concordanceClass"
+            },
+            "condition": {
+              "type": "string"
+            },
+            "contributing_guide_ids": {
+              "type": "string"
+            },
+            "contributor_source": {
+              "$ref": "#/$defs/contributorSource"
+            },
+            "contributor_status": {
+              "$ref": "#/$defs/contributorStatus"
+            },
+            "crispri_modality": {
+              "const": "CRISPRi_knockdown"
+            },
+            "desired_modulation_agreement": {
+              "$ref": "#/$defs/modulationAgreement"
+            },
+            "effective_donor_n": {
+              "type": "integer"
+            },
+            "inference_status": {
+              "const": "not_calibrated"
+            },
+            "mask_gene_count": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "mask_resolved": {
+              "type": "boolean"
+            },
+            "mask_unresolved_reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "n_cells_target": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "n_guides_source": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "qc_low_target_expression": {
+              "type": "boolean"
+            },
+            "qc_ontarget_effect_size": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "qc_ontarget_significant": {
+              "type": "boolean"
+            },
+            "qc_target_baseMean": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "rank_away_from_A": {
+              "$ref": "#/$defs/armRank"
+            },
+            "rank_toward_B": {
+              "$ref": "#/$defs/armRank"
+            },
+            "released_estimate_id": {
+              "type": "string"
+            },
+            "run_id": {
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "spot.stage02_screen.v3"
+            },
+            "source_distal_offtarget_flag": {
+              "type": "boolean"
+            },
+            "source_neighboring_gene_KD": {
+              "type": "boolean"
+            },
+            "target_ensembl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "target_id": {
+              "type": "string"
+            },
+            "target_id_namespace": {
+              "$ref": "#/$defs/targetIdNamespace"
+            },
+            "target_symbol": {
+              "type": "string"
+            },
+            "toward_B": {
+              "$ref": "#/$defs/armScore"
+            },
+            "toward_B_zscore": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "A_control_surviving",
+            "A_delta",
+            "A_desired_target_modulation",
+            "A_donor_split_denominator",
+            "A_donor_split_support",
+            "A_estimate_available",
+            "A_evaluable",
+            "A_evidence_tier",
+            "A_guide_missing_reasons",
+            "A_guide_replication_state",
+            "A_guide_replication_supported",
+            "A_n_guide_slots_released",
+            "A_n_guides_concordant",
+            "A_n_guides_evaluated",
+            "A_n_guides_mapped",
+            "A_n_splits_agreeing",
+            "A_n_splits_evaluable",
+            "A_n_splits_internally_concordant",
+            "A_n_splits_internally_discordant",
+            "A_n_splits_missing",
+            "A_n_splits_total",
+            "A_panel_surviving",
+            "A_projection_status",
+            "A_reasons",
+            "A_state",
+            "A_support_state",
+            "A_support_status",
+            "B_control_surviving",
+            "B_delta",
+            "B_desired_target_modulation",
+            "B_donor_split_denominator",
+            "B_donor_split_support",
+            "B_estimate_available",
+            "B_evaluable",
+            "B_evidence_tier",
+            "B_guide_missing_reasons",
+            "B_guide_replication_state",
+            "B_guide_replication_supported",
+            "B_n_guide_slots_released",
+            "B_n_guides_concordant",
+            "B_n_guides_evaluated",
+            "B_n_guides_mapped",
+            "B_n_splits_agreeing",
+            "B_n_splits_evaluable",
+            "B_n_splits_internally_concordant",
+            "B_n_splits_internally_discordant",
+            "B_n_splits_missing",
+            "B_n_splits_total",
+            "B_panel_surviving",
+            "B_projection_status",
+            "B_reasons",
+            "B_state",
+            "B_support_state",
+            "B_support_status",
+            "away_from_A",
+            "away_from_A_zscore",
+            "base_qc_passed",
+            "base_qc_reasons",
+            "base_qc_state",
+            "cell_level_support_state",
+            "concordance_class",
+            "condition",
+            "contributing_guide_ids",
+            "contributor_source",
+            "contributor_status",
+            "crispri_modality",
+            "desired_modulation_agreement",
+            "effective_donor_n",
+            "inference_status",
+            "mask_gene_count",
+            "mask_resolved",
+            "mask_unresolved_reason",
+            "n_cells_target",
+            "n_guides_source",
+            "qc_low_target_expression",
+            "qc_ontarget_effect_size",
+            "qc_ontarget_significant",
+            "qc_target_baseMean",
+            "rank_away_from_A",
+            "rank_toward_B",
+            "released_estimate_id",
+            "run_id",
+            "schema_version",
+            "source_distal_offtarget_flag",
+            "source_neighboring_gene_KD",
+            "target_ensembl",
+            "target_id",
+            "target_id_namespace",
+            "target_symbol",
+            "toward_B",
+            "toward_B_zscore"
+          ],
+          "type": "object"
+        },
+        "row_key": {
+          "const": "target_id"
+        }
+      },
+      "required": [
+        "columns",
+        "row_key",
+        "arms",
+        "row_example"
+      ],
+      "type": "object"
+    },
+    "selection_id": {
+      "type": "string"
+    },
+    "stage3_eligible": {
+      "description": "false for every non-production run",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "run_id",
+    "question_id",
+    "selection_id",
+    "analysis_condition",
+    "lane",
+    "mask_sha256",
+    "gene_universe_sha256",
+    "screen",
+    "hashes",
+    "namespace",
+    "production_eligible",
+    "stage3_eligible",
+    "production_gate_passed"
+  ],
+  "title": "Spot Stage-2 direct run \u2014 definitive two-arm contract",
+  "type": "object"
+}

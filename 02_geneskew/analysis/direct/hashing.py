@@ -31,6 +31,28 @@ def round_float(x: Any) -> Any:
     return round(xf, FLOAT_DECIMALS)
 
 
+def canonical_num(x: Any) -> Any:
+    """The CANONICAL scientific value: full float64, never display-rounded.
+
+    Scientific values are emitted, hashed AND ranked at full precision. Rounding
+    happens only for display, in the UI, downstream of every artifact — because a
+    value rounded before ranking silently changes the science: two scores that are
+    distinct at float64 become an emitted tie, and the emitted tie-break then
+    disagrees with the rank that was actually assigned.
+
+    Non-finite values are not scores: they become null.
+    """
+    if x is None:
+        return None
+    try:
+        xf = float(x)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(xf) or math.isinf(xf):
+        return None
+    return xf
+
+
 def canonical_json(obj: Any) -> str:
     """Serialise with sorted keys and compact separators (stable ordering)."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"),

@@ -1,6 +1,7 @@
 """spot Stage-2 primary — direct measured perturbation screen.
 
-Pure, deterministic core (hashing, config, contrast, masks, projection) is
-importable without the heavy single-cell stack; ``run_screen`` is the IO
-orchestrator that reads the pinned DE_stats artifacts on tcedirector.
+The pure, deterministic core (config, selection, guides, masks, projection,
+disposition, donors, hashing, runid) imports without the single-cell stack;
+``io_data`` and ``run_screen`` are the IO orchestration layer that reads the
+pinned perturbation artifacts.
 """

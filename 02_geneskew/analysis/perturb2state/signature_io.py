@@ -22,7 +22,6 @@ def _symbol_cols(symbols: list[str], want: list[str]) -> list[int]:
 
 
 def _decode_cat(grp) -> np.ndarray:
-    import h5py
     cats = np.array([x.decode() if isinstance(x, (bytes, bytearray)) else str(x)
                      for x in grp["categories"][:]], dtype=object)
     codes = grp["codes"][:]

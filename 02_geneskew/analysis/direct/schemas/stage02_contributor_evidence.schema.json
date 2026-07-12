@@ -1,0 +1,745 @@
+{
+  "$defs": {
+    "estimateType": {
+      "enum": [
+        "main",
+        "guide",
+        "donor_pair"
+      ]
+    },
+    "identityMethod": {
+      "$comment": "The enum is the vocabulary; ADMISSIBILITY is narrower and per-class.",
+      "description": "An ENUM. An arbitrary method string is not auditable and is refused. NOTE: for source_class marson_gwcd4i_public_release the ONLY admissible method is released_per_guide_identity_column \u2014 that release ships no author-supplied contributor table, so such a claim is evidence of fabrication, not of provenance. Admissibility-per-class is a cross-object rule enforced in the runtime and the standalone verifier (see x-runtime-enforced-invariants).",
+      "enum": [
+        "cell_level_assigned_guide_barcode_join",
+        "released_per_guide_identity_column",
+        "author_supplied_contributor_table"
+      ]
+    },
+    "immutableRevision": {
+      "description": "A revision that can move is not a pin.",
+      "minLength": 7,
+      "not": {
+        "enum": [
+          "main",
+          "master",
+          "HEAD",
+          "head",
+          "latest",
+          "dev",
+          "trunk",
+          "none",
+          "null",
+          ""
+        ]
+      },
+      "type": "string"
+    },
+    "manifestRow": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/targetIdentity"
+        },
+        {
+          "properties": {
+            "condition": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "donor_pair": {
+              "type": "null"
+            },
+            "estimate_id": {
+              "const": "main"
+            },
+            "estimate_type": {
+              "const": "main"
+            },
+            "evidence_state": {
+              "description": "An ambiguous identity stays UNAVAILABLE. It is never rounded to a guess.",
+              "enum": [
+                "determined",
+                "ambiguous"
+              ]
+            },
+            "guide_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "identity_method": {
+              "$ref": "#/$defs/identityMethod"
+            },
+            "included": {
+              "type": "boolean"
+            },
+            "n_cells": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "n_guides": {
+              "type": [
+                "integer",
+                "number",
+                "null"
+              ]
+            },
+            "source_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "source_record_id": {
+              "description": "The citation. The row does NOT derive it \u2014 it cannot, because the id binds the offset proof, which lives in the table. Borrowing is refused a different way: the cited record must match the row's ENTIRE released scope key and guide, and the table is 1:1 on that key. Null for an ambiguous row, which proves nothing.",
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/sourceRecordId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          },
+          "required": [
+            "estimate_type",
+            "estimate_id",
+            "condition",
+            "donor_pair",
+            "guide_id",
+            "evidence_state"
+          ]
+        },
+        {
+          "$ref": "#/$defs/pooledMainScope"
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence_state": {
+                "const": "determined"
+              },
+              "included": {
+                "const": true
+              }
+            },
+            "required": [
+              "evidence_state"
+            ]
+          },
+          "then": {
+            "description": "A determined, included row must bind WHICH source, WHERE in it, and HOW \u2014 and that record must then resolve to the same full key and guide. (`included` absent means included.)",
+            "properties": {
+              "guide_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "source_record_id": {
+                "$ref": "#/$defs/sourceRecordId"
+              }
+            },
+            "required": [
+              "guide_id",
+              "identity_method",
+              "source_id",
+              "source_record_id",
+              "source_sha256"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence_state": {
+                "const": "ambiguous"
+              }
+            },
+            "required": [
+              "evidence_state"
+            ]
+          },
+          "then": {
+            "description": "An ambiguous row proves no guide, and resolution SKIPS it \u2014 so it may not carry a citation nobody will ever check. It owes no proof at all (the release's own ambiguous scopes omit identity_method / source_id / source_sha256 entirely), but it still carries the full released target identity.",
+            "properties": {
+              "guide_id": {
+                "type": "null"
+              },
+              "source_record_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "type": "object"
+    },
+    "offsetProof": {
+      "description": "The COMPLETE all-offset proof: EVERY kept raw row of the pinned source for this record's (target, condition, guide), in ASCENDING order. Not a sample, not the locator alone. Ascending because the proof's ORDER is part of the hashed identity, so a reordered proof is a different, unverified claim. A record with no offset proof claims a contributor it never showed the rows for.",
+      "items": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "pooledMainScope": {
+      "description": "THE EVIDENCE DOMAIN, expressed. Every row and every record is an all-condition POOLED-MAIN scope. A by-guide or donor-pair row here is a claim this pass has no method to check.",
+      "properties": {
+        "donor_pair": {
+          "type": "null"
+        },
+        "estimate_id": {
+          "const": "main"
+        },
+        "estimate_type": {
+          "const": "main"
+        }
+      }
+    },
+    "recordIdRule": {
+      "description": "The table must DECLARE the identity rule its ids were minted under, and the declaration is machine-validated against the rule the verifier compiles \u2014 including the payload field list, because that list is what decides whether the completeness proof is bound into the id at all. A rule nobody checks is documentation, not a contract.",
+      "properties": {
+        "canonical_json": {
+          "const": "json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(',',':'), allow_nan=False) encoded UTF-8"
+        },
+        "identity_payload_fields": {
+          "const": [
+            "estimate_type",
+            "estimate_id",
+            "released_estimate_id",
+            "target_id",
+            "target_id_namespace",
+            "target_ensembl",
+            "target_symbol",
+            "condition",
+            "donor_pair",
+            "guide_id",
+            "identity_method",
+            "source_id",
+            "source_sha256",
+            "pseudobulk_source_offsets",
+            "pseudobulk_source_rows"
+          ],
+          "description": "The EXACT hashed payload, offset/row proof included.",
+          "type": "array"
+        },
+        "null_handling": {
+          "const": "target_ensembl and donor_pair serialize as JSON null when absent; they are part of the hashed payload."
+        },
+        "rule": {
+          "const": "source_record_id = 'srcrec:sha256:' + sha256( canonical_json(identity_payload) )"
+        }
+      },
+      "required": [
+        "rule",
+        "canonical_json",
+        "identity_payload_fields",
+        "null_handling"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceClass": {
+      "description": "The source class the manifest reconstructs from. The identity method must be admissible FOR THAT CLASS.",
+      "enum": [
+        "marson_gwcd4i_public_release"
+      ]
+    },
+    "sourceRecord": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/targetIdentity"
+        },
+        {
+          "properties": {
+            "condition": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "donor_pair": {
+              "type": "null"
+            },
+            "estimate_id": {
+              "const": "main"
+            },
+            "estimate_type": {
+              "const": "main"
+            },
+            "guide_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "identity_method": {
+              "$ref": "#/$defs/identityMethod"
+            },
+            "pseudobulk_source_offsets": {
+              "$ref": "#/$defs/offsetProof"
+            },
+            "pseudobulk_source_rows": {
+              "description": "The obs index NAME of each offset, in the same order \u2014 exactly one per offset. That the names ARE the names of those rows is checked against the raw source by replay, not here.",
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "source_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "source_record_id": {
+              "$ref": "#/$defs/sourceRecordId"
+            },
+            "source_row_index": {
+              "description": "The LOCATOR: one exact row of the pinned raw source (obs) that proves this record. It must be one OF this record's own offsets \u2014 a locator outside its own proof is pointing somewhere else. Replayed against the source itself (obs.guide_id / obs.perturbed_gene_id / obs.culture_condition / obs.keep_for_DE / obs.guide_type) by replay.py.",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          },
+          "required": [
+            "source_record_id",
+            "estimate_type",
+            "estimate_id",
+            "condition",
+            "donor_pair",
+            "guide_id",
+            "identity_method",
+            "source_id",
+            "source_sha256",
+            "source_row_index",
+            "pseudobulk_source_offsets",
+            "pseudobulk_source_rows"
+          ]
+        },
+        {
+          "$ref": "#/$defs/pooledMainScope"
+        }
+      ],
+      "description": "The cited evidence itself. Carries the FULL estimate key, the FULL released target identity, the pinned source hash, a LOCATOR into the raw source, and the COMPLETE all-offset/row proof \u2014 so a citation resolves 1:1 against evidence that can be replayed and proven COMPLETE rather than believed.",
+      "type": "object"
+    },
+    "sourceRecordId": {
+      "description": "The compiled rule: 'srcrec:sha256:' + the FULL sha256 of the canonical identity payload, offsets and row names INCLUDED. Not the superseded 'srec-' + 32-hex over a payload that omitted the proof. That the digest is the digest OF THIS PAYLOAD is a computation, not a shape, and the pattern is all the schema can check \u2014 it is re-derived by the runtime and the verifier.",
+      "pattern": "^srcrec:sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceReplayReport": {
+      "description": "spot.stage02_source_replay.v2 \u2014 the RAW SOURCE's verdict. The source_record_table is only a GENERATED artifact; agreeing with the manifest proves the producer was self-consistent, not that the evidence is real. THE RELEASE GATE REQUIRES this report: with none, there is no contributor evidence and the run fails closed.\n\nv1 was EXISTENCE-ONLY and is SUPERSEDED. It proved each cited locator pointed at a kept raw row that said what the record said \u2014 which cannot see a contributor that was silently DROPPED. Every named guide would be real, every hash right, every locator replayed, and the mask still built from an incomplete guide set, which changes the score. v2 additionally proves COMPLETENESS against the raw source.\n\nThe manifest is deliberately NOT hashed here: the manifest must pin this report among its sources, so a report that hashed the manifest back would be a cycle no honest pair could satisfy.",
+      "properties": {
+        "completeness_failures": {
+          "type": "array"
+        },
+        "completeness_rule_id": {
+          "const": "spot.stage02.direct.completeness_rule.v2",
+          "description": "WHICH completeness rule produced this verdict. Exact, for the same reason."
+        },
+        "completeness_verdict": {
+          "description": "Whether every released pooled scope names EXACTLY the guides the source kept for it, every record's offset array is EXACTLY the kept rows for its (target, condition, guide), and every cited guide is a TARGETING guide. Re-derived from the raw source, never inferred from the table.",
+          "enum": [
+            "complete",
+            "incomplete"
+          ]
+        },
+        "evidence_columns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "failures": {
+          "type": "array"
+        },
+        "n_failed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_nontargeting_guides_cited": {
+          "description": "Must be 0. A non-targeting control never contributed to a perturbation estimate, and only obs.guide_type can tell the difference.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_records": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_records_offset_proven": {
+          "description": "How many records had their COMPLETE offset proof confirmed against the raw source. Must equal n_records; an unproven offset set is not a proof.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_replayed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_ambiguous": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_complete": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_determined": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_downgraded": {
+          "const": 0
+        },
+        "n_scopes_incomplete": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_named": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_overclaimed": {
+          "const": 0
+        },
+        "n_scopes_source_determinable": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_scopes_source_non_determinable": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_source_rows": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replay_rule_id": {
+          "const": "spot.stage02.direct.replay_rule.v2",
+          "description": "WHICH replay rule produced this verdict. Exact: a 'replayed' computed under another rule is not this gate's 'replayed'."
+        },
+        "schema_version": {
+          "const": "spot.stage02_source_replay.v2"
+        },
+        "source_classification_rule_id": {
+          "const": "spot.stage02.direct.source_classification_rule.v1"
+        },
+        "source_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_record_table_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "verdict": {
+          "description": "Only `replayed`, with n_failed = 0 and n_replayed = every record, admits the evidence \u2014 AND completeness_verdict must be `complete`.",
+          "enum": [
+            "replayed",
+            "refused"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_id",
+        "source_sha256",
+        "source_record_table_sha256",
+        "verdict",
+        "n_records",
+        "n_replayed",
+        "n_failed",
+        "completeness_verdict",
+        "n_scopes_complete",
+        "n_scopes_incomplete",
+        "n_records_offset_proven",
+        "n_nontargeting_guides_cited",
+        "n_scopes_determined",
+        "n_scopes_ambiguous",
+        "n_scopes_named",
+        "replay_rule_id",
+        "completeness_rule_id",
+        "source_classification_rule_id",
+        "n_scopes_source_determinable",
+        "n_scopes_source_non_determinable",
+        "n_scopes_downgraded",
+        "n_scopes_overclaimed"
+      ],
+      "type": "object"
+    },
+    "targetIdentity": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "target_id_namespace": {
+                "const": "ensembl_gene_id"
+              }
+            },
+            "required": [
+              "target_id_namespace"
+            ]
+          },
+          "then": {
+            "description": "ensembl_gene_id => target_id IS an accession and target_ensembl is a non-null accession. That it is the SAME accession is an equality JSON Schema cannot express (see x-runtime-enforced-invariants.target_ensembl_equals_target_id).",
+            "properties": {
+              "target_ensembl": {
+                "pattern": "^ENSG[0-9]+$",
+                "type": "string"
+              },
+              "target_id": {
+                "pattern": "^ENSG[0-9]+$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "target_id_namespace": {
+                "const": "gene_symbol"
+              }
+            },
+            "required": [
+              "target_id_namespace"
+            ]
+          },
+          "then": {
+            "description": "gene_symbol => target_id is NOT an accession, and target_ensembl is NULL. This is the rule that refuses promoting an ENSG-looking released_estimate_id prefix into target_ensembl.",
+            "properties": {
+              "target_ensembl": {
+                "type": "null"
+              },
+              "target_id": {
+                "not": {
+                  "pattern": "^ENSG[0-9]+$"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "The FULL generic released target identity, carried by every manifest row AND every source record. Both namespaces are first-class; target_ensembl is nullable BY CONTRACT, not by accident \u2014 it is null for every one of the 12 gene-symbol scopes.",
+      "properties": {
+        "released_estimate_id": {
+          "description": "The exact frozen obs.index, verbatim. PROVENANCE ONLY: never parsed, split or pattern-matched to satisfy any target field. Its ENSG-looking prefix is a release key, not a gene \u2014 for 9 of the 12 symbol scopes it names a DIFFERENT gene than the target.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "target_ensembl": {
+          "description": "Nullable, and EXPLICIT-SOURCE ONLY. Populated only when target_id literally IS an Ensembl accession. NULL for every gene_symbol scope. It never comes from the released_estimate_id.",
+          "pattern": "^ENSG[0-9]+$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_id": {
+          "description": "The exact obs.target_contrast, whatever namespace it is in. An exact string, never a parsed fragment.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "target_id_namespace": {
+          "description": "Which namespace target_id is in. Decided ONLY by the literal value of target_id against the exact Ensembl rule ^ENSG[0-9]+$.",
+          "enum": [
+            "ensembl_gene_id",
+            "gene_symbol"
+          ]
+        },
+        "target_symbol": {
+          "description": "The exact obs.target_contrast_gene_name. Required and non-empty: all 33,983 released rows carry one. It is an exact string, not a pattern \u2014 six Ensembl-namespace rows carry an ENSG-looking symbol, which is permitted.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "released_estimate_id",
+        "target_id",
+        "target_id_namespace",
+        "target_symbol",
+        "target_ensembl"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "spot.stage02_contributor_evidence.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "THREE artifacts, all hash-pinned in the trusted source registry. The manifest CITES evidence; the source-record table IS the evidence; the replay report is the RAW SOURCE's verdict on it. Stage-2 resolves every determined citation against the table, and admits the evidence only if the source itself confirmed it COMPLETE. A locator is not a proof because it is a non-empty string, and two generated files agreeing with each other is not provenance.\n\nTHE EVIDENCE DOMAIN is GLOBAL, ALL-CONDITION, POOLED-MAIN ONLY: 33,983 scopes. It is NOT the selected-condition main+guide+donor estimate universe (~40k per condition), and conflating the two was a P0 bug. By-guide and donor-pair support carries NO contributor evidence in this pass, so a support row inside this manifest is not extra evidence \u2014 it is a claim with no method behind it, and admitting it would let a support estimate acquire a mask and an evidence tier it never earned.\n\nEVERY row of BOTH artifacts carries the FULL generic target identity \u2014 released_estimate_id, target_id, target_id_namespace, target_symbol, target_ensembl. A target may not be named by Ensembl accession alone: of the 33,983 scopes, 33,971 are keyed by accession and exactly 12 by gene symbol (MTRNR2L1 / MTRNR2L4 / MTRNR2L8 / OCLM x Rest, Stim8hr, Stim48hr). An accession-only contract cannot express those 12 and would drop them.\n\nNine of those 12 carry an ENSG-looking released_estimate_id prefix belonging to a DIFFERENT gene than the symbol being targeted. released_estimate_id is therefore PROVENANCE ONLY: preserved verbatim, never parsed, split or pattern-matched to satisfy any target field. Promoting such a prefix into target_ensembl is refused as a gene_symbol row with a non-null target_ensembl.",
+  "properties": {
+    "manifest": {
+      "description": "spot.stage02_contributor_manifest.v3 \u2014 one row per (released POOLED-MAIN scope, guide). Must cover EXACTLY the global all-condition pooled-main scope universe: no extra scope, no missing scope, no duplicate scope, no null key.\n\nv3 supersedes v2 because the SEMANTICS changed, not the spelling: the evidence domain is stated and enforced; citations name source-record ids minted under the compiled record-id rule (which binds the offset/row proof); and the release gate is a COMPLETENESS-bearing replay report, not an existence-only one. A v1/v2 manifest is refused, never migrated in place.",
+      "properties": {
+        "identity_method": {
+          "$ref": "#/$defs/identityMethod"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/manifestRow"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "spot.stage02_contributor_manifest.v3"
+        },
+        "source_class": {
+          "$ref": "#/$defs/sourceClass"
+        },
+        "source_record_table": {
+          "description": "Names the source in `sources` that holds the cited records. Required.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_record_table_schema_version": {
+          "const": "spot.stage02_source_records.v2",
+          "description": "WHICH evidence schema the citations resolve in. Machine-checked against the table's own schema_version. The superseded pair declared 'spot.stage02_source_records.target_id_proposal.v1' over a table that said 'spot.stage02_source_records.v1' \u2014 two names for the evidence, and nothing comparing them."
+        },
+        "source_replay_report": {
+          "description": "Names the source in `sources` that holds the source-native replay + completeness report. Required: contributor evidence that was never replayed against the raw source is refused.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "properties": {
+              "name": {
+                "description": "The quarantined mixed tables are NOT a permitted provenance.",
+                "minLength": 1,
+                "not": {
+                  "enum": [
+                    "contributing_guides.canonical.csv.gz",
+                    "contributing_guides.mixed.csv.gz"
+                  ]
+                },
+                "type": "string"
+              },
+              "revision": {
+                "$ref": "#/$defs/immutableRevision"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "required": [
+              "name",
+              "sha256",
+              "revision"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_record_table_schema_version",
+        "source_class",
+        "source_record_table",
+        "source_replay_report",
+        "sources",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "source_record_table": {
+      "description": "spot.stage02_source_records.v2 \u2014 the records the manifest cites. Each carries the FULL estimate key, the FULL released target identity, the guide identity, AND the complete all-offset/row proof, so a citation can be resolved, checked and replayed rather than believed.\n\nv2 supersedes v1 because v1's ids were minted under an obsolete rule: a 32-hex truncation of a payload that OMITTED pseudobulk_source_offsets / pseudobulk_source_rows. The completeness proof was never bound into the record's identity, so a producer could swap a record's offsets and row names for a smaller or fabricated set and EVERY id would still re-derive perfectly. Superseded ids are never grandfathered.",
+      "properties": {
+        "canonical_source_record_id_rule": {
+          "$ref": "#/$defs/recordIdRule"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/sourceRecord"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "spot.stage02_source_records.v2"
+        }
+      },
+      "required": [
+        "schema_version",
+        "canonical_source_record_id_rule",
+        "records"
+      ],
+      "type": "object"
+    },
+    "source_registry": {
+      "description": "The trust anchor. Independently supplied; the manifest may not vouch for its own sources. Every source must exist on disk with raw bytes hashing to its pin.",
+      "properties": {
+        "sources": {
+          "additionalProperties": {
+            "properties": {
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "revision": {
+                "$ref": "#/$defs/immutableRevision"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "required": [
+              "path",
+              "sha256",
+              "revision"
+            ],
+            "type": "object"
+          },
+          "minProperties": 1,
+          "type": "object"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "type": "object"
+    },
+    "source_replay_report": {
+      "$ref": "#/$defs/sourceReplayReport"
+    }
+  },
+  "required": [
+    "manifest",
+    "source_record_table",
+    "source_replay_report",
+    "source_registry"
+  ],
+  "title": "Stage-2 contributor evidence \u2014 the adapter contract for the pending Claude Science pooled-contributor artifact",
+  "type": "object",
+  "x-runtime-enforced-invariants": {
+    "citation_resolution": "source_record_id must exist in the source-record table, and the resolved record must match the full key \u2014 estimate_type, estimate_id, released_estimate_id, target_id, target_id_namespace, target_symbol, target_ensembl, condition, donor_pair \u2014 plus guide_id, identity_method and source_id, with source_sha256 equal to the pinned hash of that source on BOTH the row and the record. Resolution is 1:1: two records for one (key, guide) is refused.",
+    "contributors_are_targeting_guides": "Every cited guide must be a TARGETING guide in obs.guide_type. A non-targeting control never contributed to a perturbation estimate.",
+    "description": "Invariants this schema CANNOT express, enforced instead by BOTH the runtime loader (direct.manifest / direct.sources / direct.replay) and the independent standalone verifier (direct.verify_run / direct.verify_evidence / direct.verify_source), and covered by mutation tests. They are named here so the schema is not read as a stronger guarantee than it is: a document can be schema-valid and still be refused.",
+    "identity_method_admissible_for_source_class": "identityMethod is the vocabulary; admissibility is narrower and per-class. For marson_gwcd4i_public_release only released_per_guide_identity_column is admissible. This is a cross-object rule (row vs manifest.source_class).",
+    "locator_is_one_of_the_records_own_offsets": "source_row_index must appear in this record's pseudobulk_source_offsets. JSON Schema cannot compare a property to a member of a sibling array.",
+    "no_orphan_records": "Every source record must be cited by some determined manifest row. A record nobody cites is evidence for a claim nobody made.",
+    "offsets_are_exactly_the_kept_rows": "The offset array must be EXACTLY the raw rows the source kept (keep_for_DE) for this record's (target, condition, guide) \u2014 no more, no fewer, in ascending order, with pseudobulk_source_rows naming precisely those rows. Decidable only against the raw source, by replay.",
+    "record_id_is_derived_not_chosen": "Every record's source_record_id is RE-DERIVED from its own canonical payload \u2014 identity AND the offset/row proof \u2014 and must match what it declares. The pattern ^srcrec:sha256:[0-9a-f]{64}$ is all the schema can check; that the digest is the digest OF THIS PAYLOAD is a computation, not a shape (source_record_id_is_not_derived_from_its_own_payload). A manifest row does NOT derive the id it cites and cannot: it does not hold the proof the id is a hash of.",
+    "record_id_rule_metadata_is_the_compiled_rule": "canonical_source_record_id_rule must equal the rule the verifier compiles, byte for byte, including the exact identity_payload_fields list and its order. The schema can only require the two proof fields to be present somewhere in that list; the exact equality is machine-checked (table_rule_metadata_is_not_the_compiled_record_id_rule). A table that states one rule while its producer implemented another is refused before a record is indexed.",
+    "released_estimate_id_is_never_parsed": "That the producer did not derive a target field by splitting the release key is a property of the PRODUCER, not of the document. It is enforced structurally (a gene_symbol row with a non-null target_ensembl is refused) and by a source-level test asserting no module splits released_estimate_id.",
+    "scope_completeness": "For every released pooled-main scope, the guides the manifest names must be EXACTLY the guides the source kept for that (target, condition). This is the check an existence-only replay cannot make and a silently dropped contributor hides from. Determined + ambiguous scopes must together be EVERY released scope: a scope the report never looked at cannot be reported complete.",
+    "scope_coverage": "The manifest must cover EXACTLY the GLOBAL all-condition pooled-main released scope universe, by full identity: no extra scope, no missing scope, no duplicate scope, no null key, no renamed target.",
+    "source_bytes_match_the_pin": "Every declared source must appear in the independently supplied trusted registry with the same sha256 and revision, and the bytes on disk must hash to that pin. A self-declared hash establishes nothing.",
+    "source_native_replay_is_the_gate": "The pinned replay report must bind THESE exact table bytes to THOSE exact source bytes with verdict=replayed, n_failed=0, completeness_verdict=complete, n_scopes_incomplete=0, n_nontargeting_guides_cited=0 and n_records_offset_proven=n_records. A run with no valid report has NO contributor evidence and fails closed \u2014 generated-table agreement is never silently accepted as source verification. --strict-replay re-derives the whole verdict from the raw source.",
+    "support_is_unavailable": "By-guide and donor-pair estimates carry no contributor evidence in this pass. They get no mask, no projection, no replication claim, and no power to elevate an evidence tier. Changing a support input can never move a pooled-main score or rank.",
+    "target_ensembl_equals_target_id": "For target_id_namespace = ensembl_gene_id, target_ensembl must equal target_id EXACTLY. JSON Schema 2020-12 has no way to compare two sibling property values (there is no $data), so the schema can only require that both are well-formed accessions. A well-formed accession that is a DIFFERENT gene is schema-valid and is refused at runtime with namespace_ensembl_gene_id_but_target_ensembl_does_not_equal_target_id."
+  },
+  "x-status": {
+    "pending": "Until a real, independently audited manifest + source-record table pair exists, production and research runs have no contributor evidence and remain unavailable. The manifest schema id is spot.stage02_contributor_manifest.v3, the source-record schema id is spot.stage02_source_records.v2, and the replay schema id is spot.stage02_source_replay.v2. The superseded v2/v1 pair is never grandfathered: its ids were minted under a rule that left the completeness proof outside the identity, so re-issue is required and every manifest citation is rewritten."
+  }
+}
