@@ -150,13 +150,17 @@ def test_cross_context_potency_needs_an_explicit_sourced_link():
                                 [link()])
     assert r.status == "computed"
     assert r.potency_context_link_id == "LNK-1"
-    assert any("sourced relevance link" in c for c in r.caveats)
+    assert "potency_applied_via_sourced_relevance_link" in r.caveats
 
 
 def test_csf_measurement_is_flagged_as_not_neb():
     r = compute_exposure_margin(measurement(matrix="csf", enhancement_context="not_applicable"), potency(), CTX)
-    assert any("CSF is not non-enhancing brain" in c for c in r.caveats)
-    assert any("cannot satisfy an NEBPI branch" in c for c in r.caveats)
+    assert "csf_is_not_non_enhancing_brain" in r.caveats
+    # the SENTENCE for the code is method data (method/stage4_prose_v1.json), so it is bound
+    # into the release identity rather than typed into the engine
+    from analysis.method_config import load_method_bundle
+    text = load_method_bundle().prose["exposure"]["caveat_codes"]["csf_is_not_non_enhancing_brain"]
+    assert "cannot satisfy an NEBPI branch" in text
 
 
 def test_kp_uu_brain_can_never_be_attached_to_a_csf_measurement():
@@ -195,7 +199,7 @@ def test_enhancing_tissue_measurement_is_flagged():
     r = compute_exposure_margin(
         measurement(matrix="brain_tissue_enhancing", enhancement_context="enhancing"), potency(), CTX
     )
-    assert any("Not NEB evidence" in c for c in r.caveats)
+    assert "measured_in_enhancing_tissue" in r.caveats
 
 
 def test_no_potency_record_means_no_margin():

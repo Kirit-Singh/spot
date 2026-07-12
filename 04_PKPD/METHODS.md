@@ -298,3 +298,73 @@ source response hash and the deterministic transform that produced it.
    `pip-compile --generate-hashes` is a **maintainer follow-up**.
 9. **Not reviewed by a clinician or pharmacologist.** The NEBPI transcription and the two
    interpretation calls flagged in §3 need domain review before any real use.
+
+---
+
+## Reason codes — the sentence behind each code
+
+Stage 4 emits **typed codes**, not sentences, wherever an explanation would otherwise be free
+prose. A sentence that lives only in the emitter is bound by nothing: a resealed release could
+rewrite the reason a branch failed, or the reason a property was refused, while the machine
+state beside it stayed honest. Every code below is reconstructed by the independent verifier;
+the sentence is here, and in `method/stage4_prose_v1.json` (hashed into `scorecard_set_id`).
+
+### NEBPI — why a Part-II branch did not fire (`branch_proof[].blocking_code`)
+
+| code | meaning |
+|---|---|
+| `pk_level_is_not_the_required_level` | the derived PK level is not the level this branch requires |
+| `pk_not_derivable` | no PK level could be derived (see pk_blocked_code) |
+| `pk_has_no_potency_context` | PK was measured but no MEC/potency context binds it (Table 2 footnote a) |
+| `context_incomplete` | the evidence context is incomplete (route/formulation/dose/schedule/tumour) |
+| `state_is_not_observed_present` | the criterion was not observed present |
+| `state_is_not_observed_absent` | the criterion was not observed absent by an adequate assessment |
+| `absence_claim_inadequate` | an absence was claimed but no adequate assessment looked for it |
+| `conflicting_observations` | two distinct observations of this criterion disagree |
+
+### NEBPI — context caveats (`nebpi[].context_caveats[].code`)
+
+| code | meaning |
+|---|---|
+| `context_incomplete` | NEBPI is context-dependent; part of the route/formulation/dose/schedule/tumour context is missing |
+| `no_potency_context` | no MEC/potency record binds the PK observations in this context |
+
+### NEBPI — why a negative class is blocked (`counterfactual.negative_classes_blocked_because[].code`)
+
+| code | meaning |
+|---|---|
+| `pk_not_measured_in_neb` | no PK was measured in non-enhancing brain |
+| `pd_absence_not_established` | 'No relevant PD in NEB' is not established |
+| `radiographic_absence_not_established` | 'No radiographic response in NEB' is not established |
+
+### Exposure — margin caveats (`exposure_evidence.caveats[]`)
+
+| code | meaning |
+|---|---|
+| `csf_is_not_non_enhancing_brain` | CSF is not non-enhancing brain: the blood-CSF barrier is more permeable than the BBB (Grossman 2026). A CSF margin says nothing about NEB exposure and cannot satisfy an NEBPI branch. |
+| `measured_in_enhancing_tissue` | Measured in contrast-enhancing tissue, where the BBB is disrupted. Not NEB evidence. |
+| `potency_applied_via_sourced_relevance_link` | The potency was measured in a different tumour context and applied here via a sourced relevance link. |
+
+### Exposure — why a margin was not computed (`margin_reason_code`)
+
+`context_disagreement`, `no_potency_record`, `active_moiety_mismatch`, `candidate_mismatch`, `potency_metric_not_a_target_concentration`, `binding_state_unspecified`, `free_total_mismatch`, `dosing_context_unknown`, `potency_context_not_relevant`, `no_quantified_concentration`, `unit_family_mismatch`, `margin_undefined`, `ambiguous_potency_records`
+
+### Delivery — why a requirement was not assigned (`delivery_evidence.reason_code`)
+
+`assigned`, `no_assignment`, `conflicting_assignments`, `explicitly_uncertain`, `assigner_not_accepted`, `immune_target_is_not_evidence_of_systemic_priming`, `no_evidence_binding`, `unknown_delivery_requirement`
+
+A delivery `rationale` is present ONLY when it came from the input assignment (and is
+therefore bound by the evidence-input digest). A decision Stage 4 generated carries a code
+and no sentence.
+
+### CNS-MPO — why a property was not used (`property_evidence.rejection_reason_code`)
+
+`absent`, `disallowed_calculator`, `ambiguous_multiple_sources`, `requirements_unmet`, `unlisted`, `forbidden`
+
+### Production eligibility (`production_eligible.reason_code`)
+
+`eligible`, `fixture_namespace`, `research_only_namespace`, `direction_incompatible`, `direction_unknown`, `non_public_source_in_evidence`, `not_evaluated`
+
+**None of these codes is a clinical conclusion.** `no_evidence_found` is a statement about a
+SEARCH, not a finding of safety; `not_evaluated` is not `observed_absent`; and an incomplete
+CNS-MPO is not brain exposure.

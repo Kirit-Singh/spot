@@ -26,7 +26,7 @@ class DeliveryResult:
     assigned_by: Optional[str]
     rule_id: Optional[str]
     rule_version: Optional[str]
-    rationale: str
+    rationale: Optional[str]
     basis: Optional[str]
     evidence_source_record_id: Optional[str]
     evidence_sha256: Optional[str]
@@ -58,7 +58,13 @@ def _uncertain(
     context_id: str,
     rules: dict[str, Any],
     reason_code: str,
-    rationale: str,
+    # The generated cases carry NO rationale sentence. `reason_code` is the claim, and the
+    # sentence for each code lives in method/stage4_prose_v1.json and METHODS.md. A sentence
+    # emitted from here would be bound by nothing: a resealed release could rewrite "no
+    # assignment was supplied" into "the reviewer confirmed local CNS engagement" while the
+    # code beside it stayed honest. A rationale that IS present came from the input row and is
+    # bound by the evidence-input digest.
+    rationale: Optional[str] = None,
     downgraded_from: Optional[str] = None,
     assignment_id: Optional[str] = None,
     conflicting_assignment_ids: tuple[str, ...] = (),
@@ -96,14 +102,7 @@ def resolve_delivery_requirement(
     reduction = reduce_assignments(assignments, candidate_id, context_id)
 
     if reduction.state == NO_ASSIGNMENT:
-        return _uncertain(
-            candidate_id,
-            context_id,
-            rules,
-            "no_assignment",
-            "No delivery-requirement assignment was supplied for this candidate/context. "
-            "Stage 4 does not infer one.",
-        )
+        return _uncertain(candidate_id, context_id, rules, "no_assignment")
 
     if reduction.state == CONFLICTING:
         # Two distinct assignments for one context are not merged, not majority-voted and
@@ -114,10 +113,6 @@ def resolve_delivery_requirement(
             context_id,
             rules,
             "conflicting_assignments",
-            f"{reduction.n_distinct_rows} distinct delivery-requirement assignments for the "
-            "same candidate/context: "
-            + ", ".join(reduction.conflicting_assignment_ids)
-            + ". Stage 4 will not choose one.",
             conflicting_assignment_ids=reduction.conflicting_assignment_ids,
         )
 
@@ -133,28 +128,16 @@ def resolve_delivery_requirement(
     for pat in _llm_assigner_patterns(rules):
         if re.search(rf"\b{re.escape(pat)}\b", assigner) or pat in assigner.replace("-", " ").split():
             return _uncertain(
-                candidate_id,
-                context_id,
-                rules,
-                "assigner_not_accepted",
-                f"assigned_by={a.assigned_by!r} looks like model/LLM output. Model output is not a "
-                "scientific source and cannot assign a delivery requirement.",
-                downgraded_from=a.requirement.value,
-                assignment_id=a.assignment_id,
+                candidate_id, context_id, rules, "assigner_not_accepted",
+                downgraded_from=a.requirement.value, assignment_id=a.assignment_id,
             )
 
     # The named bad inference: immune target biology alone.
     if a.basis == DeliveryBasis.TARGET_BIOLOGY_ONLY:
         return _uncertain(
-            candidate_id,
-            context_id,
-            rules,
+            candidate_id, context_id, rules,
             "immune_target_is_not_evidence_of_systemic_priming",
-            "The assignment rests on target biology alone. An immune-related target does not "
-            "establish a systemic-priming delivery requirement (the same target may need to be "
-            "engaged on lymphocytes inside non-enhancing brain).",
-            downgraded_from=a.requirement.value,
-            assignment_id=a.assignment_id,
+            downgraded_from=a.requirement.value, assignment_id=a.assignment_id,
         )
 
     # An unevidenced assignment is downgraded, not refused: "nobody cited anything" is a
@@ -164,13 +147,8 @@ def resolve_delivery_requirement(
     # requirement, and never reaches this function.
     if a.evidence is None:
         return _uncertain(
-            candidate_id,
-            context_id,
-            rules,
-            "no_evidence_binding",
-            f"Assignment {a.requirement.value!r} has no evidence source record + hash binding.",
-            downgraded_from=a.requirement.value,
-            assignment_id=a.assignment_id,
+            candidate_id, context_id, rules, "no_evidence_binding",
+            downgraded_from=a.requirement.value, assignment_id=a.assignment_id,
         )
 
     return DeliveryResult(

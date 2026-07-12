@@ -57,10 +57,14 @@ __all__ = [
 class BranchProof:
     branch_id: str
     class_id: str
+    # `required` is the branch's requirement TEXT, read from method/stage4_prose_v1.json —
+    # never typed here. `blocking_code` replaces what used to be a free sentence: a resealed
+    # release could rewrite "an adequate assessment looked and found none" into its opposite
+    # while the machine state beside it stayed honest, and nothing would notice.
     required: str
     observed: str
     satisfied: bool
-    blocking_reason: Optional[str]
+    blocking_code: Optional[str]
     supporting_observation_ids: list[str] = field(default_factory=list)
 
 
@@ -79,7 +83,7 @@ class NebpiResult:
     branch_proof: list[BranchProof]
     counterfactual: dict[str, Any]
     reason_codes: list[str]
-    context_caveats: list[str]
+    context_caveats: list[dict[str, Any]]
     method_id: str
     method_version: str
     evidence_observation_ids: list[str]
@@ -98,7 +102,7 @@ def evaluate_nebpi(
 ) -> NebpiResult:
     obs = [o for o in observations if o.candidate_id == candidate_id and o.context_id == context.context_id]
     reason_codes: list[str] = []
-    caveats: list[str] = []
+    caveats: list[dict[str, Any]] = []
 
     pk = derive_pk_level(obs, context, list(measurements or []),
                          [p for p in potencies if p.candidate_id == candidate_id],
@@ -127,29 +131,25 @@ def evaluate_nebpi(
     missing_ctx = context.context_completeness()
     if missing_ctx:
         reason_codes.append("context_incomplete")
-        caveats.append(
-            "NEBPI is context-dependent (route/formulation/dose/schedule/tumour). Missing: "
-            + ", ".join(missing_ctx)
-        )
+        # A CODE plus the bound slot, not a sentence. The sentence is in the prose catalog and
+        # in METHODS.md; a free sentence here would be bound by nothing.
+        caveats.append({"code": "context_incomplete", "missing_context_fields": missing_ctx})
 
     if pk.blocked_code:
         reason_codes.append(f"pk_not_derivable:{pk.blocked_code}")
     for reduction, name in ((pd, "pd_in_neb"), (rad, "radiographic_response_in_neb")):
         if reduction.state == CONFLICTING:
             reason_codes.append(f"conflicting_observations:{name}")
-            caveats.append(
-                f"{reduction.n_distinct_rows} distinct observations of {name!r} in this context "
-                f"({', '.join(reduction.conflicting_observation_ids)}). Stage 4 has no sourced "
-                "rule for aggregating two observations of one criterion, so the criterion is "
-                "conflicting and satisfies no Part-II branch."
-            )
+            caveats.append({
+                "code": "conflicting_observations",
+                "criterion_id": name,
+                "n_distinct_rows": reduction.n_distinct_rows,
+                "observation_ids": list(reduction.conflicting_observation_ids),
+            })
 
     potency_ids = {p.potency_id for p in potencies if p.candidate_id == candidate_id}
     if not potency_ids:
-        caveats.append(
-            "No MEC/potency record for this candidate. Part I grades 'Known MEC (potency)' as "
-            "importance A, and the Part-II PK branches are defined relative to it."
-        )
+        caveats.append({"code": "no_potency_context"})
 
     # A PK level exists only if it was actually derived from a bound comparison. For a
     # censored measurement that means a source-declared LOD/LLOQ strictly below the MEC.
@@ -157,6 +157,16 @@ def evaluate_nebpi(
     pk_has_potency = bool(pk.potency_id)
     pk_usable = pk_derived and not missing_ctx
     ctx_ok = not missing_ctx
+
+    # Every requirement SENTENCE comes from method/stage4_prose_v1.json, never from a literal
+    # in this file: a sentence that lives only in the emitter is bound by nothing.
+    prose = method["prose"]
+    req = prose["nebpi"]["branch_requirements"]
+
+    # Every requirement SENTENCE comes from method/stage4_prose_v1.json, never a literal here:
+    # a sentence that lives only in the emitter is bound by nothing.
+    prose = method["prose"]
+    req = prose["nebpi"]["branch_requirements"]
 
     # --- Part II, sufficiently permeable (OR) ----------------------------------
     proof: list[BranchProof] = []
@@ -166,12 +176,12 @@ def evaluate_nebpi(
         BranchProof(
             branch_id="pk_therapeutic_in_neb",
             class_id="sufficiently_permeable",
-            required="PK with therapeutic levels in NEB (accounting for potency)",
+            required=req["pk_therapeutic_in_neb"],
             observed=pk_level,
             satisfied=pk_therapeutic,
-            blocking_reason=None
+            blocking_code=None
             if pk_therapeutic
-            else _pk_block_reason(pk_level, pk, missing_ctx, PkNebLevel.THERAPEUTIC.value),
+            else _pk_block_code(pk_level, pk, missing_ctx, PkNebLevel.THERAPEUTIC.value),
             supporting_observation_ids=[pk_obs.observation_id] if pk_obs and pk_therapeutic else [],
         )
     )
@@ -181,10 +191,10 @@ def evaluate_nebpi(
         BranchProof(
             branch_id="pd_in_neb",
             class_id="sufficiently_permeable",
-            required="Relevant PD effect in NEB",
+            required=req["pd_in_neb"],
             observed=pd_state,
             satisfied=pd_present,
-            blocking_reason=None if pd_present else _positive_block_reason(pd_state, missing_ctx),
+            blocking_code=None if pd_present else _positive_block_code(pd_state, missing_ctx),
             supporting_observation_ids=[pd_obs.observation_id] if pd_obs and pd_present else [],
         )
     )
@@ -194,10 +204,10 @@ def evaluate_nebpi(
         BranchProof(
             branch_id="radiographic_response_in_neb",
             class_id="sufficiently_permeable",
-            required="Radiographic response in NEB",
+            required=req["radiographic_response_in_neb"],
             observed=rad_state,
             satisfied=rad_present,
-            blocking_reason=None if rad_present else _positive_block_reason(rad_state, missing_ctx),
+            blocking_code=None if rad_present else _positive_block_code(rad_state, missing_ctx),
             supporting_observation_ids=[rad_obs.observation_id] if rad_obs and rad_present else [],
         )
     )
@@ -217,16 +227,12 @@ def evaluate_nebpi(
             BranchProof(
                 branch_id=f"{class_id}::{required_pk}",
                 class_id=class_id,
-                required=(
-                    "Low PK levels in NEB (accounting for potency)"
-                    if required_pk == PkNebLevel.LOW.value
-                    else "Little to no drug in NEB (accounting for potency)"
-                ),
+                required=req[f"{class_id}::{required_pk}"],
                 observed=pk_level,
                 satisfied=pk_ok,
-                blocking_reason=None
+                blocking_code=None
                 if pk_ok
-                else _pk_block_reason(pk_level, pk, missing_ctx, required_pk),
+                else _pk_block_code(pk_level, pk, missing_ctx, required_pk),
                 supporting_observation_ids=[pk_obs.observation_id] if pk_obs and pk_ok else [],
             )
         )
@@ -234,10 +240,10 @@ def evaluate_nebpi(
             BranchProof(
                 branch_id=f"{class_id}::no_relevant_pd_in_neb",
                 class_id=class_id,
-                required="No relevant PD in NEB (observed absent by an adequate assessment)",
+                required=req[f"{class_id}::no_relevant_pd_in_neb"],
                 observed=pd_state,
                 satisfied=pd_absent,
-                blocking_reason=None if pd_absent else _absence_block_reason(pd_state, "PD in NEB"),
+                blocking_code=None if pd_absent else _absence_block_code(pd_state),
                 supporting_observation_ids=[pd_obs.observation_id] if pd_obs and pd_absent else [],
             )
         )
@@ -245,12 +251,10 @@ def evaluate_nebpi(
             BranchProof(
                 branch_id=f"{class_id}::no_radiographic_response_in_neb",
                 class_id=class_id,
-                required="No radiographic response in NEB (observed absent by an adequate assessment)",
+                required=req[f"{class_id}::no_radiographic_response_in_neb"],
                 observed=rad_state,
                 satisfied=rad_absent,
-                blocking_reason=None
-                if rad_absent
-                else _absence_block_reason(rad_state, "radiographic response in NEB"),
+                blocking_code=None if rad_absent else _absence_block_code(rad_state),
                 supporting_observation_ids=[rad_obs.observation_id] if rad_obs and rad_absent else [],
             )
         )
@@ -271,11 +275,7 @@ def evaluate_nebpi(
         reason_codes.append("no_complete_part_ii_logic")
 
     if nebpi_class == "sufficiently_permeable" and not pk_has_potency and (pd_present or rad_present):
-        caveats.append(
-            "Class rests on an observed PD/radiographic response in NEB rather than on a PK-vs-MEC "
-            "comparison. Per the source, that is a qualifying Part-II branch in its own right "
-            "(temozolomide is classified this way), but no potency context was supplied."
-        )
+        caveats.append({"code": "class_rests_on_pd_or_radiographic_without_potency_context"})
 
     return NebpiResult(
         candidate_id=candidate_id,
@@ -287,7 +287,8 @@ def evaluate_nebpi(
         criterion_states=dict(sorted(criterion_states.items())),
         criterion_observation_ids=dict(sorted(criterion_observation_ids.items())),
         branch_proof=proof,
-        counterfactual=_counterfactual(status, nebpi_class, pk_level, pd_state, rad_state, pk_has_potency, missing_ctx),
+        counterfactual=_counterfactual(status, nebpi_class, pk_level, pd_state, rad_state,
+                                       pk_has_potency, missing_ctx, prose),
         reason_codes=sorted(set(reason_codes)),
         context_caveats=caveats,
         method_id=method["method_id"],
@@ -297,52 +298,39 @@ def evaluate_nebpi(
     )
 
 
-def _pk_block_reason(
+def _pk_block_code(
     pk_level: str,
     pk: "PkDerivation",
     missing_ctx: list[str],
     required: str,
 ) -> str:
-    if pk.blocked_reason:
-        return pk.blocked_reason
+    """Why this PK branch did not fire — as a CODE, declared in the prose catalog."""
+    if pk.blocked_code:
+        return "pk_not_derivable"
     if pk_level == PkNebLevel.NOT_EVALUATED.value:
-        return "No PK measurement in non-enhancing brain. Absent evidence satisfies no branch."
+        return "pk_not_derivable"
     if missing_ctx:
-        return "Evidence context is incomplete (" + ", ".join(missing_ctx) + ")."
-    return f"Derived PK level is {pk_level!r}, not {required!r}."
+        return "context_incomplete"
+    return "pk_level_is_not_the_required_level"
 
 
-def _positive_block_reason(state: str, missing_ctx: list[str]) -> str:
-    if state == ObservationState.NOT_EVALUATED.value:
-        return "Not evaluated in non-enhancing brain."
-    if state == ObservationState.OBSERVED_ABSENT.value:
-        return "An adequate assessment looked in NEB and found none."
+def _positive_block_code(state: str, missing_ctx: list[str]) -> str:
     if state == "absent_claim_inadequate":
-        return "An absence was claimed but the assessment was not adequate."
-    if state == "conflicting":
-        return "Conflicting observations for this context."
+        return "absence_claim_inadequate"
+    if state == CONFLICTING:
+        return "conflicting_observations"
     if missing_ctx:
-        return "Evidence context is incomplete (" + ", ".join(missing_ctx) + ")."
-    return f"State is {state!r}."
+        return "context_incomplete"
+    return "state_is_not_observed_present"
 
 
-def _absence_block_reason(state: str, what: str) -> str:
-    if state == ObservationState.NOT_EVALUATED.value:
-        return (
-            f"{what} was never evaluated. 'Not evaluated' is not 'observed absent' — absent "
-            "evidence can never satisfy a 'no effect' conjunct, and therefore can never make a "
-            "drug insufficiently permeable or impermeable."
-        )
+def _absence_block_code(state: str) -> str:
+    """Why a 'no effect' conjunct did not fire. `not_evaluated` is NOT `observed_absent`."""
     if state == "absent_claim_inadequate":
-        return (
-            f"An absence of {what} was claimed, but assessment_adequate was not asserted. An "
-            "inadequate look is not evidence of absence."
-        )
-    if state == ObservationState.OBSERVED_PRESENT.value:
-        return f"{what} was observed — this is a qualifying positive, not an absence."
-    if state == "conflicting":
-        return "Conflicting observations for this context."
-    return f"State is {state!r}."
+        return "absence_claim_inadequate"
+    if state == CONFLICTING:
+        return "conflicting_observations"
+    return "state_is_not_observed_absent"
 
 
 def _counterfactual(
@@ -353,49 +341,45 @@ def _counterfactual(
     rad_state: str,
     pk_has_potency: bool,
     missing_ctx: list[str],
+    prose: dict[str, Any],
 ) -> dict[str, Any]:
-    """Exactly what would have to be observed to change the outcome."""
+    """Exactly what would have to be observed to change the outcome.
+
+    Every SENTENCE here comes from method/stage4_prose_v1.json; every explanation of WHY a
+    negative class is blocked is a CODE plus its bound slots. The interpolated sentences this
+    used to emit were bound by nothing — a resealed release could rewrite "'No relevant PD in
+    NEB' is not established" into its opposite and every hash in the release would still agree.
+    """
+    texts = prose["nebpi"]["counterfactual"]
     cf: dict[str, Any] = {
         "current_status": status,
         "current_class": nebpi_class,
-        "observed": {"pk_in_neb": pk_level, "pd_in_neb": pd_state, "radiographic_response_in_neb": rad_state},
+        "observed": {"pk_in_neb": pk_level, "pd_in_neb": pd_state,
+                     "radiographic_response_in_neb": rad_state},
     }
     if status == "classified" and nebpi_class == "sufficiently_permeable":
-        cf["would_lose_class_if"] = (
-            "the qualifying positive branch (therapeutic PK in NEB, relevant PD in NEB, or "
-            "radiographic response in NEB) were retracted"
-        )
+        cf["would_lose_class_if"] = texts["would_lose_class_if"]
         return cf
 
-    to_sufficient = [
-        "observe therapeutic PK in NEB with a bound MEC/potency context",
-        "observe a relevant PD effect in NEB",
-        "observe a radiographic response in NEB",
-    ]
-    cf["to_reach_sufficiently_permeable_any_one_of"] = to_sufficient
+    cf["to_reach_sufficiently_permeable_any_one_of"] = list(
+        texts["to_reach_sufficiently_permeable_any_one_of"])
 
-    blockers: list[str] = []
+    blockers: list[dict[str, Any]] = []
     if missing_ctx:
-        blockers.append("evidence context incomplete: " + ", ".join(missing_ctx))
+        blockers.append({"code": "context_incomplete",
+                         "missing_context_fields": list(missing_ctx)})
     if pk_level == PkNebLevel.NOT_EVALUATED.value:
-        blockers.append("no PK measured in NEB")
+        blockers.append({"code": "pk_not_measured_in_neb"})
     elif not pk_has_potency:
-        blockers.append("PK in NEB has no MEC/potency context bound (Table 2 footnote a)")
+        blockers.append({"code": "pk_has_no_potency_context"})
     if pd_state != ObservationState.OBSERVED_ABSENT.value:
-        blockers.append(f"'No relevant PD in NEB' is not established (state={pd_state})")
+        blockers.append({"code": "pd_absence_not_established", "state": pd_state})
     if rad_state != ObservationState.OBSERVED_ABSENT.value:
-        blockers.append(f"'No radiographic response in NEB' is not established (state={rad_state})")
+        blockers.append({"code": "radiographic_absence_not_established", "state": rad_state})
 
     cf["negative_classes_blocked_because"] = blockers
-    cf["to_reach_insufficiently_permeable_all_of"] = [
-        "observe LOW PK in NEB (below MEC, with potency context)",
-        "adequately assess PD in NEB and observe none",
-        "adequately assess radiographic response in NEB and observe none",
-    ]
-    cf["to_reach_impermeable_all_of"] = [
-        "observe LITTLE-TO-NO drug in NEB (with potency context)",
-        "adequately assess PD in NEB and observe none",
-        "adequately assess radiographic response in NEB and observe none",
-    ]
-    cf["hard_rule"] = "Absent or unknown evidence is never 'impermeable'."
+    cf["to_reach_insufficiently_permeable_all_of"] = list(
+        texts["to_reach_insufficiently_permeable_all_of"])
+    cf["to_reach_impermeable_all_of"] = list(texts["to_reach_impermeable_all_of"])
+    cf["hard_rule"] = texts["hard_rule"]
     return cf

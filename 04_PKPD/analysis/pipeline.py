@@ -255,7 +255,7 @@ def run_pipeline(inputs: Stage4Inputs, method: MethodBundle) -> Stage4Result:
                 delivery=deliveries,
                 nebpi=nebpis,
                 exposure=exposures,
-                transporters=transporter_summary(inputs.transporters, cid),
+                transporters=transporter_summary(inputs.transporters, cid, method.prose),
                 safety_rows=safety_rows,
                 scenario_matrix=scenario_matrix(cid, safety_rows),
                 production_eligible=elig.production_eligible,
@@ -266,7 +266,7 @@ def run_pipeline(inputs: Stage4Inputs, method: MethodBundle) -> Stage4Result:
 
     return Stage4Result(
         candidates=results,
-        calculator_mixing=cross_candidate_calculator_mixing(selections),
+        calculator_mixing=cross_candidate_calculator_mixing(selections, method.prose),
         property_selections=selections,
     )
 
@@ -274,7 +274,7 @@ def run_pipeline(inputs: Stage4Inputs, method: MethodBundle) -> Stage4Result:
 # ------------------------------------------------------------------- provenance chain
 
 
-def build_provenance_chain(cr: CandidateResult) -> list[dict[str, Any]]:
+def build_provenance_chain(cr: CandidateResult, prose: dict[str, Any]) -> list[dict[str, Any]]:
     """Every displayed scientific field -> the response hash and transform behind it."""
     chain: list[dict[str, Any]] = []
 
@@ -310,7 +310,7 @@ def build_provenance_chain(cr: CandidateResult) -> list[dict[str, Any]]:
                 "method_id": cr.cns_mpo.method_id,
                 "source_record_id": None,
                 "raw_response_sha256": None,
-                "note": "A transform of the six component rows above; it has no source of its own.",
+                "note": prose["provenance_chain"]["cns_mpo_total_note"],
             }
         )
 
@@ -339,7 +339,7 @@ def build_provenance_chain(cr: CandidateResult) -> list[dict[str, Any]]:
                 "supporting_observation_ids": n.evidence_observation_ids,
                 "source_record_id": None,
                 "raw_response_sha256": None,
-                "note": "Derived from the NEBPI observation rows; each of those rows carries its own source hash.",
+                "note": prose["provenance_chain"]["nebpi_class_note"],
             }
         )
 
@@ -386,7 +386,8 @@ def build_provenance_chain(cr: CandidateResult) -> list[dict[str, Any]]:
                 "field_path": f"candidates.{cr.candidate_id}.lanes.safety.{s.evidence_id}",
                 "value": s.evidence_state.value,
                 **render_evidence_state(s.evidence_state.value),
-                "transform": s.provenance.extraction_transform if s.provenance else "no source: state is about the search, not the drug",
+                "transform": (s.provenance.extraction_transform if s.provenance
+                              else prose["provenance_chain"]["safety_no_source_transform"]),
                 "source_record_id": s.provenance.source_record_id if s.provenance else None,
                 "raw_response_sha256": s.provenance.raw_response_sha256 if s.provenance else None,
                 "search_id": s.search_id,

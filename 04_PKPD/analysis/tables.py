@@ -192,6 +192,12 @@ DRUG_FORM_SCHEMA = pa.schema([
     ("mapping_source_record_id", _STR), ("namespace", _STR),
     ("chembl_id", _STR), ("pubchem_cid", _STR), ("drugbank_id", _STR), ("rxcui", _STR),
     ("target", _STR), ("mechanism", _STR), ("direction_compatibility", _STR),
+    # The candidate row is hashed WHOLE into candidate_rows_sha256 -> scorecard_set_id, so the
+    # release must carry it WHOLE or the verifier cannot recompute that hash. It used to carry a
+    # lossy projection: a resealed release could have rewritten a candidate's UNII, target or
+    # mechanism and nothing would have noticed.
+    ("program_direction", _STR), ("drug_effect_direction", _STR),
+    ("stage3_evidence_source_record_ids", _LIST_STR),
     ("production_eligible", _BOOL), ("eligibility_reason_code", _STR),
 ])
 
@@ -254,7 +260,7 @@ NEBPI_DECISION_SCHEMA = pa.schema([
     ("pk_censored_bound_canonical_decimal", _STR), ("pk_censored_bound_units", _STR),
     ("pk_censored_bound_over_mec_canonical_decimal", _STR),
     ("pk_censored_bound_below_mec", _BOOL),
-    ("pk_transform", _STR), ("pk_blocked_code", _STR), ("pk_blocked_reason", _STR),
+    ("pk_transform", _STR), ("pk_blocked_code", _STR),
     ("pd_state", _STR), ("radiographic_state", _STR),
     ("satisfied_branches", _LIST_STR), ("reason_codes", _LIST_STR),
     ("method_id", _STR), ("method_version", _STR),

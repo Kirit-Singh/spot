@@ -104,6 +104,9 @@ def _drug_form_rows(inputs: Stage4Inputs, result: Stage4Result) -> list[dict[str
             "drugbank_id": ids.drugbank_id, "rxcui": ids.rxcui,
             "target": c.target, "mechanism": c.mechanism,
             "direction_compatibility": c.direction_compatibility.value,
+            "program_direction": c.program_direction,
+            "drug_effect_direction": c.drug_effect_direction,
+            "stage3_evidence_source_record_ids": list(c.stage3_evidence_source_record_ids),
             "production_eligible": cr.production_eligible if cr else False,
             "eligibility_reason_code": cr.eligibility_reason_code if cr else "not_evaluated",
         })
@@ -183,7 +186,6 @@ def _nebpi_decision_rows(result: Stage4Result) -> list[dict[str, Any]]:
                 "pk_censored_bound_below_mec": d.get("censored_bound_below_mec"),
                 "pk_transform": d.get("transform"),
                 "pk_blocked_code": d.get("blocked_code"),
-                "pk_blocked_reason": d.get("blocked_reason"),
                 "pd_state": n.criterion_states.get("pd_in_neb"),
                 "radiographic_state": n.criterion_states.get("radiographic_response_in_neb"),
                 "satisfied_branches": sorted(b.branch_id for b in n.branch_proof if b.satisfied),

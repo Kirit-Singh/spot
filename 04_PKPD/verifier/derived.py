@@ -218,36 +218,21 @@ def check_property_derived(rows: list[dict], method: dict) -> list[str]:
 
 def _caveats(m: dict, ctx: Optional[dict], link_id: Optional[str],
              potency: Optional[dict]) -> list[str]:
-    """The gate caveats, in the order the engine appends them: CSF, enhancing, then link."""
+    """The caveat CODES the gates entail, in the order the engine appends them.
+
+    These used to be sentences, and the check used to match them by keyword — so a subtly
+    rewritten "CSF is not non-enhancing brain" would still have contained the word "csf" and
+    still have passed. They are codes now and this is an exact comparison: no missing warning,
+    no invented one, no rewritten one.
+    """
     out: list[str] = []
     if m.get("matrix") == "csf":
-        out.append("CSF")
+        out.append("csf_is_not_non_enhancing_brain")
     if m.get("enhancement_context") == "enhancing":
-        out.append("ENHANCING")
+        out.append("measured_in_enhancing_tissue")
     if link_id:
-        out.append("LINK")
+        out.append("potency_applied_via_sourced_relevance_link")
     return out
-
-
-def _caveat_kinds(caveats: list[str]) -> list[str]:
-    """Classify the emitted prose caveats into the kinds the gates can produce.
-
-    The caveat TEXT is the engine's prose; what is checkable independently is that the set of
-    caveats present is exactly the set the gates entail — no missing warning, and no invented
-    one. A dropped "CSF is not non-enhancing brain" caveat is a scientific claim changing.
-    """
-    kinds = []
-    for c in caveats or []:
-        low = str(c).lower()
-        if "csf" in low:
-            kinds.append("CSF")
-        elif "enhancing tissue" in low or "contrast-enhancing" in low:
-            kinds.append("ENHANCING")
-        elif "relevance link" in low:
-            kinds.append("LINK")
-        else:
-            kinds.append(f"UNKNOWN:{c[:40]}")
-    return kinds
 
 
 def check_exposure_derived(tables: dict[str, list[dict]]) -> list[str]:
@@ -341,7 +326,7 @@ def check_exposure_derived(tables: dict[str, list[dict]]) -> list[str]:
 
         # caveats: exactly the ones the gates entail — none dropped, none invented
         want_caveats = _caveats(m, ctx, m.get("potency_context_link_id"), potency)
-        got_caveats = _caveat_kinds(list(m.get("caveats") or []))
+        got_caveats = list(m.get("caveats") or [])
         if sorted(want_caveats) != sorted(got_caveats):
             bad.append(f"{mid}: caveats={got_caveats}, recomputed {want_caveats}")
 

@@ -112,17 +112,14 @@ def matrix_caveats(m: ExposureMeasurement) -> list[str]:
     the margin gates only, so a CSF measurement with no admissible MEC — exactly the case
     where a reader has least to go on — was emitted with NO caveat at all.
     """
+    # CODES, not sentences. The sentence for each is declared in method/stage4_prose_v1.json
+    # (and in METHODS.md); a sentence emitted from here would be bound by nothing, and a
+    # resealed release could rewrite "CSF is not non-enhancing brain" into its opposite.
     caveats: list[str] = []
     if m.matrix == "csf":
-        caveats.append(
-            "CSF is not non-enhancing brain: the blood-CSF barrier is more permeable than the "
-            "BBB (Grossman 2026). A CSF margin says nothing about NEB exposure and cannot "
-            "satisfy an NEBPI branch."
-        )
+        caveats.append("csf_is_not_non_enhancing_brain")
     if m.enhancement_context == "enhancing":
-        caveats.append(
-            "Measured in contrast-enhancing tissue, where the BBB is disrupted. Not NEB evidence."
-        )
+        caveats.append("measured_in_enhancing_tissue")
     return caveats
 
 
@@ -223,10 +220,7 @@ def _shared_gates(
                         f"context is {context.tumor_context!r}, and no sourced relevance link "
                         "was supplied.")
         link_id = link.link_id
-        caveats.append(
-            f"Potency measured in {potency.biological_context!r} applied to "
-            f"{context.tumor_context!r} via sourced relevance link {link.link_id!r}."
-        )
+        caveats.append("potency_applied_via_sourced_relevance_link")
 
     return GateResult(None, link_id, caveats)
 

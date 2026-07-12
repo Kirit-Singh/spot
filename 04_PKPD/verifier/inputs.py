@@ -131,6 +131,7 @@ METHOD_FILES = {
     "delivery_rules": "delivery_rules_v1.json",
     "safety_taxonomy": "safety_taxonomy_v1.json",
     "sources": "sources.json",
+    "prose": "stage4_prose_v1.json",
 }
 
 
@@ -179,6 +180,41 @@ def method_file_sha256(method_dir: str) -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
+# The candidate row, reassembled from `drug_forms.parquet` into the exact nested shape the
+# Stage-3 row hash is taken over. The release carries the WHOLE row (it used to carry a lossy
+# projection), so this hash can be recomputed and compared with the one bound into the id.
+def candidate_rows_sha256(tables: dict[str, list[dict]]) -> str:
+    rows = []
+    for f in tables.get("drug_forms", []):
+        rows.append({
+            "candidate_id": f["candidate_id"],
+            "active_moiety": {
+                "active_moiety_id": f["active_moiety_id"],
+                "active_moiety_name": f["active_moiety_name"],
+                "unii": f["unii"],
+                "inchikey": f["inchikey"],
+                "administered_form": f["administered_form"],
+                "administered_form_name": f["administered_form_name"],
+                "maps_to_active_moiety_id": f["maps_to_active_moiety_id"],
+                "mapping_source_record_id": f["mapping_source_record_id"],
+            },
+            "compound_ids": {
+                "chembl_id": f["chembl_id"], "pubchem_cid": f["pubchem_cid"],
+                "drugbank_id": f["drugbank_id"], "rxcui": f["rxcui"],
+            },
+            "target": f["target"],
+            "mechanism": f["mechanism"],
+            "program_direction": f["program_direction"],
+            "drug_effect_direction": f["drug_effect_direction"],
+            "direction_compatibility": f["direction_compatibility"],
+            "namespace": f["namespace"],
+            "stage3_evidence_source_record_ids": list(
+                f["stage3_evidence_source_record_ids"] or []),
+        })
+    rows.sort(key=lambda r: r["candidate_id"])
+    return canon.chash_strict(rows)
+
+
 def rederive_scorecard_set_id(id_key: dict[str, Any]) -> str:
     """short_id(chash_strict(key)) — the generator's rule, restated."""
     return canon.chash_strict(id_key)[:16]
@@ -186,7 +222,7 @@ def rederive_scorecard_set_id(id_key: dict[str, Any]) -> str:
 
 def load_input_tables(out_dir: str) -> dict[str, list[dict]]:
     tables: dict[str, list[dict]] = {}
-    for table in list(INPUT_COLUMNS) + ["source_catalog"]:
+    for table in list(INPUT_COLUMNS) + ["source_catalog", "drug_forms"]:
         path = os.path.join(out_dir, f"{table}.parquet")
         if os.path.exists(path):
             tables[table] = pq.read_table(path).to_pylist()

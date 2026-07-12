@@ -345,8 +345,11 @@ def test_calculator_policy_requires_are_enforced():
 
 
 def test_score_is_never_promoted_to_permeability_or_probability():
-    r = score_cns_mpo("C1", "M1", select_properties(_six(), POLICY), CNS_MPO)
-    guard = r.interpretation_guard.lower()
+    """The guard is METHOD DATA (method/stage4_prose_v1.json), hashed into the
+    scorecard_set_id — not a literal in the scorer, where it was bound by nothing. This is the
+    sentence that stops a design-space score being read as brain exposure, so it is exactly the
+    sentence a resealed release would want to rewrite."""
+    guard = METHOD.prose["cns_mpo"]["interpretation_guard"].lower()
     assert "not measured brain permeability" in guard
     assert "not a probability" in guard
     assert "not an nebpi class" in guard

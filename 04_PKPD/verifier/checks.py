@@ -28,6 +28,7 @@ from . import inputs as vinputs
 from . import derived
 from .columns import DELIVERY_REBUILT_FIELDS, REQUIRED_COLUMNS
 from .criteria import check_criteria
+from .prose import required_prose_failures, unbound_prose
 from .delivery import rebuild_delivery
 from .reconstruct import (
     load_method,
@@ -187,6 +188,14 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
            recomputed_method == dict(sorted((id_key.get("method_file_sha256") or {}).items())),
            "the method files on disk are the ones bound into the id")
 
+        # The candidate rows are hashed WHOLE into the id. The release now carries them whole,
+        # so this recomputes that hash from the release rather than trusting it.
+        recomputed_rows = vinputs.candidate_rows_sha256(input_tables)
+        declared_rows = (id_key.get("stage3") or {}).get("candidate_rows_sha256")
+        _c(checks, "candidate_rows_sha256_recomputed_from_the_release",
+           recomputed_rows == declared_rows,
+           f"recomputed={recomputed_rows} declared={declared_rows}")
+
         rederived_id = vinputs.rederive_scorecard_set_id(id_key)
         declared_id = manifest.get("scorecard_set_id")
         _c(checks, "scorecard_set_id_rederived_from_its_own_inputs",
@@ -213,6 +222,24 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
         ):
             _c(checks, f"derived_cells_recomputed::{label}", not problems,
                f"every derived cell is reproduced from the bound inputs: {problems}")
+
+        # --- 2a-ter. NO UNBOUND PROSE ---------------------------------------------------
+        # Every SENTENCE in the release is declared in a method file (hashed into the id), is a
+        # bound evidence cell, is part of the identity, or is reconstructed. A sentence that is
+        # none of those could be rewritten in a resealed release — "CNS-MPO is not measured brain
+        # permeability" inverted, "no evidence found is NOT a finding of safety" deleted — while
+        # every hash still agreed. There are no exemptions.
+        prose_problems = unbound_prose(out_dir, method_dir)
+        _c(checks, "no_unbound_prose", not prose_problems,
+           "every sentence in the release is bound into identity or reconstructed: "
+           f"{prose_problems}")
+
+        # ...and the guards must be PRESENT. `no_unbound_prose` catches a rewrite; it cannot
+        # catch a DELETION, and in a resealed release the artifact hashes would agree. Silence
+        # is the cheapest way to lie.
+        missing = required_prose_failures(out_dir, method_dir)
+        _c(checks, "required_guards_present_verbatim", not missing,
+           f"every guard sentence is present, exactly as the method declares it: {missing}")
 
     # --- 2b. PROVENANCE BINDING: every result-affecting row rests on acquired bytes -----
         # Re-derived here from the emitted tables + source_catalog, independently of the

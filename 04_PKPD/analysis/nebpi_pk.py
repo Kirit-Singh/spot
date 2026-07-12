@@ -62,7 +62,6 @@ class PkDerivation:
     margin_canonical_decimal: Optional[str] = None
     detection_status: Optional[str] = None
     transform: Optional[str] = None
-    blocked_reason: Optional[str] = None
     blocked_code: Optional[str] = None
     # The censored branch: what bounded the non-detect, and whether it cleared the MEC.
     censored_bound_kind: Optional[str] = None
@@ -82,7 +81,6 @@ class PkDerivation:
             "detection_status": self.detection_status,
             "transform": self.transform,
             "blocked_code": self.blocked_code,
-            "blocked_reason": self.blocked_reason,
             "censored_bound_kind": self.censored_bound_kind,
             "censored_bound_source_string": self.censored_bound_source_string,
             "censored_bound_units": self.censored_bound_units,
@@ -100,7 +98,7 @@ class PkDerivation:
 
 def _blocked(level: str, o: Optional[NebpiObservation], code: str, reason: str,
              **kw: Any) -> PkDerivation:
-    return PkDerivation(level, o, blocked_code=code, blocked_reason=reason, **kw)
+    return PkDerivation(level, o, blocked_code=code, **kw)
 
 
 def derive_pk_level(

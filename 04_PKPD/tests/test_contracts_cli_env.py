@@ -74,15 +74,23 @@ def test_stage3_schema_file_carries_the_contract_status():
 
 
 def test_emitted_artifacts_carry_the_stage3_contract_status(tmp_path):
+    """The Stage-3 contract status is METHOD DATA now, so it is bound into the release id.
+
+    It used to be a dict of sentences in `contracts.py` — emitted into scorecards.json, hashed
+    into nothing. A resealed release could have rewritten "Stage 3 is NOT frozen" to say it was.
+    """
     from analysis.emit import emit
 
     inputs = stage4_inputs()
     out, manifest = emit(inputs, run_pipeline(inputs, METHOD), METHOD, str(tmp_path))
-    assert manifest["upstream"]["stage3_contract_status"] == STAGE3_CONTRACT_STATUS
+    declared = METHOD.prose["stage3_contract_status"]
+    assert manifest["upstream"]["stage3_contract_status"] == declared
     with open(os.path.join(out, "scorecards.json"), encoding="utf-8") as fh:
         status = json.load(fh)["upstream"]["stage3_contract_status"]
-    assert status["stage3_implementation_landed"] is True
-    assert status["production_stage3_producible_today"] is False
+    assert status == declared
+    # and it still says the two things that matter
+    assert status["stage3_frozen"] is False
+    assert "not biological promotion" in status["assessment_is_not_promotion"]
 
 
 # --------------------------------------------------------------- CLI, fail-closed

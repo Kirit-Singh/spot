@@ -23,19 +23,21 @@ from .evidence_records import (
 )
 from .label_adapters import EMA_LABEL_SUPPORTED_ALLOWED, ParsedLabel
 
-EVIDENCE_STATE_DISPLAY: dict[str, str] = {
-    "label_supported": "Stated in the cited section of the cited label version.",
-    "literature_supported": "Stated in the cited publication.",
-    "signal_only": (
-        "Spontaneous-report / disproportionality signal only. Hypothesis-generating. Cannot "
-        "establish incidence, causality, safety or a contraindication."
-    ),
-    "no_evidence_found": (
-        "The named sources were searched and returned nothing for this item. This is a statement "
-        "about the search, NOT a finding of safety. Absence of evidence is not evidence of absence."
-    ),
-    "not_evaluated": "Not searched in any source. Nothing is known either way.",
-}
+# The text a reader sees beside a safety finding. Declared in method/stage4_prose_v1.json and
+# loaded from there — NOT typed here. Rewriting `no_evidence_found` to read like a clean bill of
+# health is the most dangerous edit available on a release, so it is method data, hashed into the
+# scorecard_set_id, and re-read cell-for-cell by the independent verifier.
+def _load_display() -> dict[str, str]:
+    import json
+    import os
+
+    from .method_config import METHOD_DIR
+
+    with open(os.path.join(METHOD_DIR, "stage4_prose_v1.json"), encoding="utf-8") as fh:
+        return dict(json.load(fh)["safety"]["evidence_state_display"])
+
+
+EVIDENCE_STATE_DISPLAY: dict[str, str] = _load_display()
 
 
 class ForbiddenFieldError(AssertionError):

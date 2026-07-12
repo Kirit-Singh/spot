@@ -24,6 +24,7 @@ METHOD_FILES = {
     "delivery_rules": "delivery_rules_v1.json",
     "safety_taxonomy": "safety_taxonomy_v1.json",
     "sources": "sources.json",
+    "prose": "stage4_prose_v1.json",
 }
 
 
@@ -35,6 +36,10 @@ class MethodBundle:
     delivery_rules: dict[str, Any]
     safety_taxonomy: dict[str, Any]
     sources: dict[str, Any]
+    # Every SENTENCE Stage 4 emits, declared as method DATA. A sentence that lives only in
+    # the emitter is bound by nothing; declared here it is hashed into method_file_sha256 and
+    # therefore into the scorecard_set_id, so it cannot be rewritten without moving identity.
+    prose: dict[str, Any]
     method_file_sha256: dict[str, str]  # raw file bytes — any edit at all moves this
     bundle_sha256: str
 
@@ -52,6 +57,12 @@ def load_method_bundle(method_dir: str = METHOD_DIR) -> MethodBundle:
             raw = fh.read()
         hashes[key] = sha256_bytes(raw)
         loaded[key] = json.loads(raw.decode("utf-8"))
+    # The prose catalog is reachable from the nebpi method dict, because `evaluate_nebpi` is
+    # handed that dict and every requirement SENTENCE it emits must come from the catalog
+    # rather than from a literal in the code. The raw-file hashes above are taken from the
+    # BYTES, so this in-memory convenience cannot affect method_file_sha256.
+    loaded["nebpi"]["prose"] = loaded["prose"]
+
     return MethodBundle(
         cns_mpo=loaded["cns_mpo"],
         nebpi=loaded["nebpi"],
@@ -59,6 +70,7 @@ def load_method_bundle(method_dir: str = METHOD_DIR) -> MethodBundle:
         delivery_rules=loaded["delivery_rules"],
         safety_taxonomy=loaded["safety_taxonomy"],
         sources=loaded["sources"],
+        prose=loaded["prose"],
         method_file_sha256=hashes,
         bundle_sha256=content_sha256(hashes),
     )

@@ -244,7 +244,7 @@ def test_pk_branch_without_potency_context_satisfies_nothing():
     assert r.nebpi_status == "not_classifiable"
     assert any(c.startswith("pk_not_derivable:potency_not_found") for c in r.reason_codes)
     blocked = [b for b in r.branch_proof if b.branch_id == "pk_therapeutic_in_neb"]
-    assert "does not exist" in blocked[0].blocking_reason
+    assert blocked[0].blocking_code == "pk_not_derivable"
 
 
 def test_pk_observation_cannot_assert_its_own_level():
@@ -357,8 +357,9 @@ def test_unknown_evidence_never_completes_a_negative_conjunction(missing):
     r = run(rows, measurements=[NONE_DETECTED])
     assert r.nebpi_status == "not_classifiable"
     assert r.nebpi_class is None
-    blockers = " ".join(r.counterfactual["negative_classes_blocked_because"])
-    assert "not established" in blockers
+    # typed CODES now, not sentences: the sentence for each is method data
+    codes = {b["code"] for b in r.counterfactual["negative_classes_blocked_because"]}
+    assert codes & {"pd_absence_not_established", "radiographic_absence_not_established"}
 
 
 def test_inadequate_absence_claim_does_not_count_as_observed_absent():
@@ -372,7 +373,7 @@ def test_inadequate_absence_claim_does_not_count_as_observed_absent():
     ], measurements=[NONE_DETECTED])
     assert r.nebpi_status == "not_classifiable"
     proof = {b.branch_id: b for b in r.branch_proof}
-    assert "inadequate look is not evidence of absence" in proof["impermeable::no_relevant_pd_in_neb"].blocking_reason
+    assert proof["impermeable::no_relevant_pd_in_neb"].blocking_code == "absence_claim_inadequate"
 
 
 def test_observed_absent_requires_an_adequacy_assertion_at_the_record_level():
@@ -456,7 +457,7 @@ def test_uncertain_delivery_is_not_silently_treated_as_either():
 def test_branch_proof_explains_every_branch_and_offers_a_counterfactual():
     r = run([obs(NebpiCriterionId.CSF_DRUG_LEVELS, ObservationState.OBSERVED_PRESENT)])
     assert len(r.branch_proof) == 9  # 3 positive OR-branches + 2 classes x 3 conjuncts
-    assert all(b.blocking_reason for b in r.branch_proof if not b.satisfied)
+    assert all(b.blocking_code for b in r.branch_proof if not b.satisfied)
     cf = r.counterfactual
     assert len(cf["to_reach_sufficiently_permeable_any_one_of"]) == 3
     assert cf["to_reach_impermeable_all_of"] and cf["to_reach_insufficiently_permeable_all_of"]
@@ -474,4 +475,4 @@ def test_conflicting_pk_observations_are_not_averaged():
     assert r.nebpi_status == "not_classifiable"
     assert r.criterion_states["pk_in_neb"] == "pk_conflicting"
     proof = {b.branch_id: b for b in r.branch_proof}
-    assert "does not average" in proof["pk_therapeutic_in_neb"].blocking_reason
+    assert proof["pk_therapeutic_in_neb"].blocking_code == "pk_not_derivable"

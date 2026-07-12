@@ -252,7 +252,7 @@ def select_properties(records: list[PropertyRecord], policy: dict[str, Any]) -> 
 
 
 def cross_candidate_calculator_mixing(
-    selections: dict[str, PropertySelection]
+    selections: dict[str, PropertySelection], prose: dict[str, Any]
 ) -> dict[str, Any]:
     """Two candidates scored with two different ClogD packages are not comparable on
     ClogD. We do not silently rank them against each other."""
@@ -266,10 +266,7 @@ def cross_candidate_calculator_mixing(
         "calculator_mixed_across_candidates": bool(mixed),
         "mixed_properties": mixed,
         "not_comparable_properties": sorted(mixed),
-        "note": (
-            "Per-candidate scores remain valid. Cross-candidate comparison of the listed "
-            "properties is explicitly disclaimed because the values come from different calculators."
-        )
-        if mixed
-        else "All candidates used the same calculator for each property.",
+        # Both sentences are declared in method/stage4_prose_v1.json, never typed here.
+        "note": (prose["set_level"]["calculator_mixing_present"] if mixed
+                 else prose["set_level"]["calculator_mixing_none"]),
     }

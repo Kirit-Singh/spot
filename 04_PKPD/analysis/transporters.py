@@ -17,7 +17,7 @@ from .evidence_records import TransporterObservation
 REQUIRED_TRANSPORTERS = ("ABCB1_Pgp", "ABCG2_BCRP")
 
 
-def transporter_summary(observations: list[TransporterObservation], candidate_id: str) -> dict[str, Any]:
+def transporter_summary(observations: list[TransporterObservation], candidate_id: str, prose: dict[str, Any]) -> dict[str, Any]:
     """Per-transporter evidence, never reduced to a single unqualified state."""
     rows = [o for o in observations if o.candidate_id == candidate_id]
     by_t: dict[str, list[TransporterObservation]] = defaultdict(list)
@@ -35,10 +35,7 @@ def transporter_summary(observations: list[TransporterObservation], candidate_id
                 "observed_states": states,
                 "state_is_ambiguous": len(states) > 1,
                 "unqualified_boolean": None,
-                "unqualified_boolean_note": (
-                    "Deliberately null. A transporter interaction is qualified by assay, species, "
-                    "biological system and concentration; Stage 4 does not emit an unqualified boolean."
-                ),
+                "unqualified_boolean_note": prose["transporters"]["unqualified_boolean_note"],
                 "observations": [
                     {
                         "observation_id": o.observation_id,
@@ -65,9 +62,7 @@ def transporter_summary(observations: list[TransporterObservation], candidate_id
     return {
         "candidate_id": candidate_id,
         "transporters": per_transporter,
-        "not_evaluated": [t for t in REQUIRED_TRANSPORTERS if t not in covered],
-        "interpretation_guard": (
-            "Efflux liability is suggestive of restricted CNS exposure; it is not a measurement of "
-            "brain exposure and cannot satisfy an NEBPI Part-II branch."
-        ),
+        "not_evaluated": [t for t in prose["transporters"]["required_transporters"]
+                          if t not in covered],
+        "interpretation_guard": prose["transporters"]["interpretation_guard"],
     }

@@ -71,11 +71,10 @@ class CnsMpoResult:
     input_provenance: list[dict[str, Any]]
     method_id: str
     method_version: str
-    interpretation_guard: str = (
-        "CNS-MPO is a physicochemical design-space desirability score (Wager 2010). It is not "
-        "measured brain permeability, not a probability of CNS exposure, and not an NEBPI class. "
-        "It cannot satisfy any NEBPI Part-II branch."
-    )
+    # Declared in method/stage4_prose_v1.json, not typed here: a guard that lives only in the
+    # emitter is bound by nothing, and this is the guard that stops a design-space score being
+    # read as brain exposure.
+    interpretation_guard: str = ""
     warnings: list[str] = field(default_factory=list)
 
 

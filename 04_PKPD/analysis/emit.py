@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .canonical import content_sha256, sha256_bytes, sha256_file
-from .contracts import STAGE3_CONTRACT_STATUS, STAGE4_METHOD_VERSION
+from .contracts import STAGE4_METHOD_VERSION
 from .emit_rows import (
     _delivery_rows,
     _drug_form_rows,
@@ -188,10 +188,11 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
                 "mechanism": c.mechanism,
                 "namespace": c.namespace.value,
                 "direction_compatibility": c.direction_compatibility.value,
+                # reason_code only — the sentence it used to carry was bound by nothing, and
+                # the code IS reconstructed by the independent verifier (rebuild_eligibility).
                 "production_eligible": {
                     "eligible": cr.production_eligible,
                     "reason_code": cr.eligibility_reason_code,
-                    "reason": cr.eligibility_reason,
                 },
                 "lanes": {
                     "delivery": [d.__dict__ for d in cr.delivery],
@@ -201,11 +202,16 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
                         "property_values": mpo.property_values,
                         "total_raw": mpo.total_raw,
                         "total_published": mpo.total_published,
-                        "missing_inputs": [m.__dict__ for m in mpo.missing_inputs],
+                        # reason_code only. The `detail` sentence was free prose bound by nothing; the
+                        # code IS reconstructed, and its sentence lives in METHODS.md.
+                        "missing_inputs": [
+                            {"property_id": m.property_id, "reason_code": m.reason_code}
+                            for m in mpo.missing_inputs
+                        ],
                         "input_provenance": mpo.input_provenance,
                         "method_id": mpo.method_id,
                         "method_version": mpo.method_version,
-                        "interpretation_guard": mpo.interpretation_guard,
+                        "interpretation_guard": method.prose["cns_mpo"]["interpretation_guard"],
                         "warnings": mpo.warnings,
                     },
                     "transporters": cr.transporters,
@@ -233,7 +239,6 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
                             "margin": mg.margin,
                             "margin_canonical_decimal": mg.margin_canonical_decimal,
                             "margin_reason_code": mg.reason_code,
-                            "margin_reason": mg.reason,
                             "margin_transform": mg.transform,
                             "potency_id": mg.potency_id,
                             "potency_context_link_id": mg.potency_context_link_id,
@@ -263,12 +268,12 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
                         "scenario_matrix": cr.scenario_matrix,
                     },
                 },
-                "provenance_chain": build_provenance_chain(cr),
+                "provenance_chain": build_provenance_chain(cr, method.prose),
             }
         )
 
     doc = {
-        "schema_id": "spot.stage04_scorecard_set.v1",
+        "schema_id": method.prose["schema_ids"]["scorecard_set"],
         "scorecard_set_id": scorecard_set_id,
         "stage4_method_version": STAGE4_METHOD_VERSION,
         "upstream": {
@@ -278,20 +283,17 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
             "candidate_rows_sha256": inputs.candidate_set.candidate_rows_sha256,
             "namespace": inputs.candidate_set.namespace.value,
             "is_fixture": inputs.candidate_set.is_fixture,
-            "stage3_contract_status": STAGE3_CONTRACT_STATUS,
+            "stage3_contract_status": method.prose["stage3_contract_status"],
         },
         "ordering": {
             "by": "candidate_id",
             "ascending": True,
             "is_ranking": False,
-            "note": "Candidates are listed side by side in a non-evaluative order. Stage 4 does not rank.",
+            "note": method.prose["set_level"]["ordering_note"],
         },
         "set_level": {
             "calculator_mixing": result.calculator_mixing,
-            "lanes_are_independent": (
-                "delivery, cns_mpo, transporters, exposure, nebpi and safety are separate lanes. "
-                "There is no combined score, and none is derivable from this document."
-            ),
+            "lanes_are_independent": method.prose["set_level"]["lanes_are_independent"],
         },
         "candidates": candidates,
         "guards": [
@@ -304,22 +306,24 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
     return doc
 
 
-def build_selection(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4Result) -> dict[str, Any]:
-    """The Stage-5 hand-off. This pass emits NO selection, by design."""
+def build_selection(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4Result,
+                    method: MethodBundle) -> dict[str, Any]:
+    """The Stage-5 hand-off. This pass emits NO selection, by design.
+
+    Every sentence comes from method/stage4_prose_v1.json — including "Stage 4 does not compute
+    a composite score", which is exactly the kind of sentence a resealed release would want to
+    quietly delete.
+    """
+    sel = method.prose["selection"]
     return {
-        "schema_id": "spot.stage04_selection.v1",
+        "schema_id": method.prose["schema_ids"]["selection"],
         "scorecard_set_id": scorecard_set_id,
-        "selection_status": "no_selection_emitted",
+        "selection_status": sel["selection_status_no_selection"],
         "selected": [],
-        "reason": (
-            "Fixture pass. Stage 4 is an evidence engine, not a ranker: a selection would require "
-            "real, independently reviewed public-source evidence, and none of the evidence in this "
-            "run is real. No drug is asserted to be safe, brain-permeable, NEBPI-classified or "
-            "clinically suitable."
-        ),
+        "reason": sel["reason_fixture_pass"],
         "selection_basis_when_enabled": {
-            "basis": "explicit human review of the separate evidence lanes",
-            "not_basis": "any composite or automated score — Stage 4 does not compute one",
+            "basis": sel["basis_when_enabled"],
+            "not_basis": sel["not_basis_when_enabled"],
         },
         "candidates_considered": [
             {
@@ -388,7 +392,7 @@ def emit(inputs: Stage4Inputs, result: Stage4Result, method: MethodBundle,
         ]
 
         scorecards = build_scorecards(scorecard_set_id, inputs, result, method)
-        selection = build_selection(scorecard_set_id, inputs, result)
+        selection = build_selection(scorecard_set_id, inputs, result, method)
         for name, doc in (("scorecards.json", scorecards), ("selection.json", selection)):
             path = os.path.join(tmp_dir, name)
             _write_json(path, doc)
