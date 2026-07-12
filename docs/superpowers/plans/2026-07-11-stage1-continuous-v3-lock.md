@@ -295,9 +295,16 @@ condition** — do NOT retune markers, seeds, or thresholds afterward.
   program (report residual shared-control + co-expression correlation). Donor = **LODO n=4**. Overlay
   fidelity per 7a. Descriptive **v2→v3 change report** replaces the old "all-marker-excluded comparison"
   (v3 is already all-marker-excluded).
-- [ ] Emit `stage01_validation.json` with pass/fail per gate keyed to `gate_spec` + all input/output
-  canonical hashes.
-- [ ] **Verify (lead):** re-run two sensitivities independently; pass/fail states agree.
+- [ ] Emit `stage01_validation.json` — **required contents:** (a) exact hashes run against (gate_spec,
+  `stage01_bins_v3.csv` raw+content, `stage01_controls_v3.csv`, input h5ad raw+canonical, method_bundle
+  `stage1-continuous-v3.0.1`); (b) results for **every** program×condition incl. failures + undefined
+  metrics; (c) worst marker/donor/seed per hard gate; (d) `stage1_selectable_by_condition` and
+  `stage2_base_portability` as **separate** fields; (e) pair_redundancy / off_axis / donor_sensitivity
+  as **advisory only**; (f) overlay release status **separate** from selectability; (g) no
+  threshold/seed/panel/overlay change after seeing results (emit every failure as-is).
+- [ ] **Verify (lead, independent):** independently recompute **representative passing AND failing
+  gates** (not just re-run CS's script) and confirm the pass/fail verdicts — **before** any registry
+  update (T8) or declaring Stage-1 locked.
 
 ## Task 8: Selectability + frozen selection rules + identifiers
 **Executor:** lead (from 7b) with CS.
