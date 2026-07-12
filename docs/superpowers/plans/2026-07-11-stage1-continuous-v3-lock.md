@@ -195,7 +195,7 @@ scorer VIEW** (`stage01_stage2_registry_view.json` canonical content, `5d1d8c36â
 binds and `stage2_run_id` descends from.
 
 **Tier-2 â€” DISPLAY / PRESENTATION** (cheap; never touches Tier-1, never re-derives): program **display
-labels** (e.g. `Checkpoint+`), the page `SHORT` map, human-facing copy. Display labels live ONLY in the
+labels** (e.g. `Checkpoint`), the page `SHORT` map, human-facing copy. Display labels live ONLY in the
 seed `stage01_umap_seed.json` `meta.programs[].display_label` (the UI source of truth); the seed is not
 hash-gated. `display_label` is **excluded from the registry**: `gen_stage1_provenance.py::_strip_display_only()`
 drops `DISPLAY_ONLY_FIELDS` before `registry_sha256` is computed, and the scorer projection strips it too

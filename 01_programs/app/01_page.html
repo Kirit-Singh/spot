@@ -670,7 +670,7 @@ function buildProgramTimeGrid(){
   const grid=document.getElementById('timeGrid'); if(!grid||!cells.length)return;
   const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
   // short labels for this compact grid only (full '-like' names stay in the tooltip + everywhere else)
-  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint+',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
+  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint',treg_like_score:'Treg-like',cd4_ctl_like_score:'CD4 CTL-like',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
   // modular nomenclature descriptors — NAMING only, not functional-state calls. RNA compatibility does
   // not demonstrate exhaustion or cytotoxicity, so those read 'checkpoint-associated' / 'cytotoxic-like'.
   const MOD={diff_naive_score:'naïve',diff_activated_score:'activated',diff_memory_score:'memory',diff_checkpoint_score:'checkpoint-associated',treg_like_score:'regulatory',cd4_ctl_like_score:'cytotoxic-like',th1_like_score:'type-1 helper',th2_like_score:'type-2 helper',th17_like_score:'type-17 helper',tfh_like_score:'follicular helper',th9_like_score:'type-9 helper'};
