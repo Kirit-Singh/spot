@@ -812,11 +812,13 @@ function preflight(){
   const A=regByField[axisA.field],B=regByField[axisB.field];
   if(!A||!B)return{ok:false,reason:'Program registry incomplete for a selected axis'};
   if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,reason:'A sensitivity field cannot be a contrast axis'};
-  if(axisA.condition!==axisB.condition)return{ok:false,reason:''};                 // different timepoints = display-only cross-subset view (no error message)
-  if(axisA.condition==='All')return{ok:false,reason:''};                           // research analysis requires ONE concrete timepoint — never pooled 'All' (display-only)
-  if(A.program_id===B.program_id&&axisA.direction===axisB.direction)return{ok:false,reason:'From and To are identical — pick distinct programs or opposite directions'};
-  if(!BASE_PORTABLE[A.program_id])return{ok:false,reason:stage2Reason(A)};          // Stage-2 base portability (A) from frozen validation: excludes Th9 / nonportable
-  if(!BASE_PORTABLE[B.program_id])return{ok:false,reason:stage2Reason(B)};          // Stage-2 base portability (B) from frozen validation
+  // v3 selection routing → typed inline reason (mirrors src/stage1/routingReason.ts). Never
+  // silently grey: a non-executable selection shows WHY, derived from execution_status.
+  if(A.program_id===B.program_id&&axisA.direction===axisB.direction)return{ok:false,status:'refused',reason:'From and To are identical — pick distinct programs or opposite directions.'};   // objective_incompatible_same_pole
+  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,status:'refused',reason:'Pick a concrete timepoint (Rest / Stim8hr / Stim48hr) — pooled “All” is display-only.'};   // within-condition needs one concrete timepoint
+  if(axisA.condition!==axisB.condition)return{ok:false,status:'awaiting_estimator',reason:'Cross-condition (temporal) analysis awaits the temporal estimator — pick the same condition for both programs to run within-condition.'};   // temporal => awaiting_estimator (never ready)
+  if(!BASE_PORTABLE[A.program_id])return{ok:false,status:'refused',reason:stage2Reason(A)};          // effect_projection unavailable (A) — panel_below_effect_universe_min
+  if(!BASE_PORTABLE[B.program_id])return{ok:false,status:'refused',reason:stage2Reason(B)};          // effect_projection unavailable (B)
   if(!hashesOk())return{ok:false,reason:'Unknown dataset or method hash — cannot build a verifiable contrast'};
   return{ok:true,reason:''};
 }
@@ -824,7 +826,7 @@ function preflight(){
 // primary (Th9) has no panel genes in the effect universe.
 function stage2Reason(p){
   if(p.role==='sensitivity')return `${p.display_label} is display-only`;
-  return `${p.display_label} has no panel genes in the effect universe`;
+  return `${p.display_label} has no panel genes in the effect universe (panel_below_effect_universe_min).`;
 }
 function condShort(k){return k==='All'?'All times':(CONDLAB[k]||k);}
 // reflect preflight into the button + inline functional state (no banner); kick async contrast_id compute
