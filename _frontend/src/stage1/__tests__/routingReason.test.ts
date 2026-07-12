@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveRouting, TEMPORAL_AWAITING_REASON } from '../routingReason';
+import { deriveRouting, TEMPORAL_AWAITING_REASON, IDENTICAL_REASON } from '../routingReason';
 
 const base = {
   aProgram: 'treg_like',
@@ -37,10 +37,28 @@ describe('selection routing → typed inline reason (button state)', () => {
     expect(r.reason).toMatch(/effect universe/);
   });
 
-  it('objective incompatible (same pole) → refused + typed reason', () => {
-    const r = deriveRouting({ ...base, bProgram: 'treg_like', bDirection: 'low' });
+  it('same pole + SAME condition → refused + identical (objective_incompatible_same_pole)', () => {
+    // same program + same direction + same timepoint = truly identical → unchanged by the fix.
+    const r = deriveRouting({
+      ...base, bProgram: 'treg_like', bDirection: 'low', conditionA: 'Rest', conditionB: 'Rest',
+    });
     expect(r.execution_status).toBe('refused');
+    expect(r.executable).toBe(false);
     expect(r.reason_code).toBe('objective_incompatible_same_pole');
+    expect(r.reason).toBe(IDENTICAL_REASON);
+  });
+
+  it('same program + direction but DIFFERENT condition → temporal cross-condition, not identical (f656d6d)', () => {
+    // the bugfix: same program+direction across DIFFERENT timepoints is a temporal comparison,
+    // NOT an identical selection — routes to awaiting_estimator (refused → awaiting_estimator).
+    const r = deriveRouting({
+      ...base, bProgram: 'treg_like', bDirection: 'low', conditionA: 'Rest', conditionB: 'Stim8hr',
+    });
+    expect(r.reason_code).not.toBe('objective_incompatible_same_pole');
+    expect(r.analysis_mode).toBe('temporal_cross_condition');
+    expect(r.execution_status).toBe('awaiting_estimator');
+    expect(r.executable).toBe(false);
+    expect(r.reason).toBe(TEMPORAL_AWAITING_REASON);
   });
 
   it('pooled All condition → refused (needs a concrete within-condition timepoint)', () => {

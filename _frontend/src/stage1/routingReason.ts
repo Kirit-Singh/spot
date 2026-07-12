@@ -43,8 +43,10 @@ export function deriveRouting(s: RoutingInput): Routing {
   if (!s.aProgram || !s.bProgram) {
     return { analysis_mode: null, execution_status: 'incomplete', executable: false, reason: '' };
   }
-  // Objective incompatible: same pole (same program + same direction).
-  if (s.aProgram === s.bProgram && s.aDirection === s.bDirection) {
+  // Objective incompatible: same pole — same program AND direction AND condition. When the
+  // programs+directions match but the CONDITIONS differ, it is a temporal cross-condition
+  // comparison (falls through to the cross-condition branch below), not an identical selection.
+  if (s.aProgram === s.bProgram && s.aDirection === s.bDirection && s.conditionA === s.conditionB) {
     return {
       analysis_mode: null, execution_status: 'refused', executable: false,
       reason: IDENTICAL_REASON, reason_code: 'objective_incompatible_same_pole',
