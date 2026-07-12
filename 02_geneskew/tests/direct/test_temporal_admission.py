@@ -112,6 +112,74 @@ class TestTheDisguisedPQFirewall:
         assert "empirical_fdr" in detail
 
 
+class TestTheQShapedHoleTheReAuditWalkedThrough:
+    """B4 residual — the SIX fields an independent re-audit injected and got ADMITTED.
+
+    The pattern caught ``pvalue`` (via ``pval``) but had nothing for the q-spellings,
+    nothing for ``significance``, and nothing for a key that is just ``p``. Each of these
+    was injected into ``provenance.estimator`` and came back verdict=admit.
+
+    They are parametrised at the exact injection site the auditor used, so this test is
+    the demonstration, not a paraphrase of it.
+    """
+
+    DEMONSTRATED = [
+        ("qval", 0.4),
+        ("adj_qval", 0.4),
+        ("q_val_adjusted", 0.4),
+        ("qvalue", 0.4),
+        ("bh_significance", 0.01),
+        ("p", 0.01),
+    ]
+
+    @pytest.mark.parametrize("key,value", DEMONSTRATED)
+    def test_the_firewall_now_catches_it(self, key, value):
+        assert admission.forbidden_keys({key: value}) == [key]
+
+    @pytest.mark.parametrize("key,value", DEMONSTRATED)
+    def test_injected_into_provenance_estimator_the_artifact_is_REJECTED(
+            self, artifact, key, value):
+        out, prov = artifact
+
+        def mutate(p):
+            p["estimator"][key] = value
+            return p
+
+        r = reverify(out, prov, mutate_prov=mutate)
+        assert r["verdict"] == verify_temporal.REJECT
+        assert "no_forbidden_key_at_any_depth" in failed(r)
+
+    @pytest.mark.parametrize("key,value", DEMONSTRATED)
+    def test_it_is_caught_at_ANY_nesting_depth_too(self, key, value):
+        obj = {"estimator": {"calibration": [{"per_program": {key: value}}]}}
+        hits = admission.forbidden_keys(obj)
+        assert hits == [f"estimator.calibration[0].per_program.{key}"]
+
+    def test_the_docstring_no_longer_claims_more_than_the_code_delivers(self):
+        # The original docstring asserted q_val_adjusted was caught. It was not. A
+        # firewall documented as stricter than it is, is the one nobody re-checks.
+        import inspect
+        doc = inspect.getdoc(admission)
+        for spelling in ("qval", "q_val", "significance", "adj_"):
+            assert spelling in doc
+        for claimed in ("q_val_adjusted", "bh_significance"):
+            assert admission.forbidden_keys({claimed: 1}) == [claimed]
+
+
+class TestTheBareScalarKeys:
+    def test_a_bare_p_and_a_bare_q_are_refused(self):
+        assert admission.forbidden_keys({"p": 0.01}) == ["p"]
+        assert admission.forbidden_keys({"q": 0.05}) == ["q"]
+        assert admission.forbidden_keys({"P": 0.01}) == ["P"]
+
+    def test_they_are_matched_EXACTLY_and_never_as_a_substring(self):
+        # A substring rule for "p" would refuse every key with a p in it, and a firewall
+        # that refuses everything is a firewall somebody turns off.
+        for innocent in ("program_id", "pathway_run_id", "n_panel_surviving",
+                         "comparison_id", "target_symbol", "peak_rank", "coverage"):
+            assert admission.forbidden_keys({innocent: 1}) == []
+
+
 class TestTheCombinedObjectiveFirewall:
     @pytest.mark.parametrize("column", [
         "combined_did", "balanced_skew", "weighted_did", "combined_temporal_score",
@@ -218,12 +286,41 @@ class TestTheNegativeDeclarationIsExemptOnlyWhileItForbids:
         assert admission.forbidden_keys({"evidence_lines_are_combined": True}) == \
             ["evidence_lines_are_combined"]
 
+    def test_the_reliability_declaration_is_exempt_only_while_it_denies(self):
+        # "the reliability badge is NOT a significance test" — the broadened pattern now
+        # matches it (via /significance/), and it is exempt only while it says so.
+        assert admission.forbidden_keys(
+            {"reliability_is_a_significance_test": False}) == []
+        assert admission.forbidden_keys(
+            {"reliability_is_a_significance_test": True}) == \
+            ["reliability_is_a_significance_test"]
+
     def test_every_negative_declaration_is_a_prohibition_and_defaults_to_false(self):
         # An exemption list is only auditable if everything on it is the same KIND of
         # thing. Each of these is a rule saying "this is forbidden".
         assert set(admission.NEGATIVE_DECLARATIONS) == {
-            "combined_objective_permitted", "evidence_lines_are_combined"}
+            "combined_objective_permitted", "evidence_lines_are_combined",
+            "reliability_is_a_significance_test"}
         assert all(v is False for v in admission.NEGATIVE_DECLARATIONS.values())
+
+
+class TestTheBroadenedPatternDoesNotRefuseHonestArtifacts:
+    """A firewall that refuses everything is a firewall somebody turns off."""
+
+    def test_a_clean_temporal_artifact_still_admits(self, artifact):
+        out, prov = artifact
+        assert verify_temporal.verify(
+            out_dir=out, provenance=prov)["verdict"] == verify_temporal.ADMIT
+
+    def test_the_honest_emitted_keys_do_not_fire(self, artifact):
+        # every key the real artifacts ship, against the broadened pattern
+        out, prov = artifact
+        df = pd.read_parquet(os.path.join(out, "temporal.parquet"))
+        ends = pd.read_parquet(os.path.join(out, "endpoints.parquet"))
+        hits = (admission.forbidden_keys({c: None for c in df.columns})
+                + admission.forbidden_keys({c: None for c in ends.columns})
+                + admission.forbidden_keys(prov))
+        assert hits == []
 
     def test_a_flipped_prohibition_in_a_real_artifact_is_rejected(self, artifact):
         out, prov = artifact

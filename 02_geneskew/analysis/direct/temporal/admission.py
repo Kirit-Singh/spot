@@ -21,6 +21,29 @@ sneak it past a list. So admission is now two independent, fail-closed gates:
      provenance JSON — at ANY nesting depth, case-insensitively. If a key name matches
      the forbidden pattern anywhere in the artifact, the artifact is refused.
 
+THE Q-SHAPED HOLE, AND WHY THE DOCSTRING IS NOW WRITTEN FROM THE FAILURE
+-----------------------------------------------------------------------
+The first version of gate 2 had a pattern gap, and an independent re-audit walked
+through it: it injected ``qval``, ``adj_qval``, ``q_val_adjusted``, ``qvalue``,
+``bh_significance`` and a bare ``p`` into the provenance, and ADMITTED all six. The
+pattern caught ``pvalue`` (via ``pval``) but had nothing for the q-spellings, nothing for
+``significance``, and nothing for a key that is just ``p``.
+
+The paragraph above USED TO CLAIM ``q_val_adjusted`` was caught. It was not. A firewall
+documented as stricter than it is, is the most dangerous kind there is, because the
+documentation is what stops anybody re-checking it. So what follows is a statement of what
+the code actually does, and ``test_temporal_admission`` asserts every line of it:
+
+  CAUGHT (substring, case-insensitive):
+    p_value  q_value  q_val  qval          — every p/q spelling, separators or not
+    fdr  pval  padj  adj_                  — and every adjusted form of them
+    significance                           — including bh_significance
+    combined  balanced  weighted  score    — the combined-objective family
+
+  CAUGHT (exact key, case-insensitive):
+    p  q                                   — a bare p or q. A substring rule for these
+                                             would fire on every key containing the letter.
+
 THE EXCEPTIONS ARE ENUMERATED, NOT IMPLIED
 ------------------------------------------
 Two kinds, both exact-named and both short enough to audit in one glance.
@@ -44,12 +67,32 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# The pattern, exactly as the remediation specifies it. Case-insensitive, matched as a
-# SUBSTRING of a key name, so ``did_pval`` and ``empirical_fdr`` are caught along with
-# the bare spellings.
+# THE PATTERN. Case-insensitive, matched as a SUBSTRING of a key name.
+#
+# The first cut had a Q-SHAPED HOLE, and an independent re-audit walked straight through
+# it: ``pval`` caught ``pvalue``, but NOTHING caught ``qval``, ``qvalue``, ``q_val``,
+# ``adj_qval``, ``q_val_adjusted``, ``bh_significance`` or a bare ``p``. Six disguised
+# inference fields were injected into the provenance and all six were ADMITTED. Worse,
+# the docstring CLAIMED ``q_val_adjusted`` was caught — a firewall that is documented as
+# stricter than it is, is the most dangerous kind, because nobody re-checks it.
+#
+# So the pattern is written from the failure, not from memory:
+#
+#   p_value  q_value  q_val  qval   the p/q spellings, with and without separators
+#   fdr  pval  padj  adj_                 and every adjusted form of them
+#   significance                          ...including bh_significance
+#   combined  balanced  weighted  score   the combined-objective family
+#
+# and separately, keys that ARE a bare p or q (below): a substring rule for those would
+# fire on every key containing the letter.
 FORBIDDEN_KEY_PATTERN = (
-    r"p_value|q_value|fdr|pval|padj|combined|balanced|weighted|score")
+    r"p_value|q_value|q_val|qval|fdr|pval|padj|adj_|significance"
+    r"|combined|balanced|weighted|score")
 FORBIDDEN_KEY_RE = re.compile(FORBIDDEN_KEY_PATTERN, re.IGNORECASE)
+
+# A key that IS ``p`` or ``q``. Matched EXACTLY (case-insensitively), never as a
+# substring — ``p`` as a substring rule would refuse every key with a p in it.
+BARE_FORBIDDEN_KEYS = frozenset({"p", "q"})
 
 # The ONLY names exempt from the firewall, by exact spelling. See the module docstring.
 KEY_FIREWALL_EXCEPTIONS = frozenset({"away_from_A_zscore", "toward_B_zscore"})
@@ -58,15 +101,18 @@ KEY_FIREWALL_EXCEPTIONS = frozenset({"away_from_A_zscore", "toward_B_zscore"})
 # artifact has to be able to write down its own prohibition; it does not get to keep the
 # exemption after flipping the prohibition off.
 #
-#   combined_objective_permitted   the direct lane's ban on a combined arm objective
-#   evidence_lines_are_combined    the pathway lane's ban on fusing enrichment with
-#                                  convergence into one "pathway score"
+#   combined_objective_permitted        the direct lane's ban on a combined arm objective
+#   evidence_lines_are_combined         the pathway lane's ban on fusing enrichment with
+#                                       convergence into one "pathway score"
+#   reliability_is_a_significance_test  the temporal lane's statement that the reliability
+#                                       badge is a PRECISION statement and not a test
 #
-# Both are `False` in every honest artifact, and the moment either becomes `True` the
+# All three are `False` in every honest artifact, and the moment any becomes `True` the
 # firewall fires — which is exactly the event it exists to catch.
 NEGATIVE_DECLARATIONS = {
     "combined_objective_permitted": False,
     "evidence_lines_are_combined": False,
+    "reliability_is_a_significance_test": False,
 }
 
 REQUIRED_FILES = ("temporal.parquet", "endpoints.parquet", "temporal_provenance.json")
@@ -167,13 +213,18 @@ def forbidden_keys(obj: Any, path: str = "") -> list[str]:
     if isinstance(obj, dict):
         for key, value in obj.items():
             here = f"{path}.{key}" if path else str(key)
-            if FORBIDDEN_KEY_RE.search(str(key)) and not _exempt(str(key), value):
+            if _forbidden(str(key)) and not _exempt(str(key), value):
                 hits.append(here)
             hits.extend(forbidden_keys(value, here))
     elif isinstance(obj, list):
         for i, value in enumerate(obj):
             hits.extend(forbidden_keys(value, f"{path}[{i}]"))
     return hits
+
+
+def _forbidden(key: str) -> bool:
+    """The pattern, plus the bare ``p``/``q`` keys a substring rule cannot express."""
+    return bool(FORBIDDEN_KEY_RE.search(key)) or key.lower() in BARE_FORBIDDEN_KEYS
 
 
 def _exempt(key: str, value: Any) -> bool:
