@@ -1,0 +1,113 @@
+{
+  "schema": "spot.stage01_current.v3",
+  "method_version": "stage1-continuous-v3.0.1",
+  "pointer_state": "candidate",
+  "pointer_state_reason_codes": [
+    "overlay_release_blocked",
+    "panel_provenance_bounded"
+  ],
+  "stage1_kind": "continuous_measurement_and_generic_selector",
+  "selection_routing": {
+    "schema": "spot.stage01_selection.v3",
+    "emitter": "stage2_bridge/emit_selection_contract.py",
+    "execution_statuses": [
+      "ready",
+      "refused",
+      "awaiting_estimator"
+    ],
+    "within_condition_estimator_id": "within_condition_v1",
+    "within_condition_estimator_status": "available",
+    "temporal_cross_condition_estimator_id": "temporal_cross_condition_v1",
+    "temporal_cross_condition_estimator_status": "not_implemented",
+    "current_served_selection": null
+  },
+  "release_statuses": {
+    "measurement_bundle_status": "lockable",
+    "measurement_bundle_lockable": true,
+    "measurement_bundle_blocker_codes": [],
+    "panel_provenance_status": "PRIMARY_LOCATORS_VERIFIED_BOUNDED",
+    "overlay_release_ok": false,
+    "overlay_deployment_status": "blocked_overlay_gate_false",
+    "app_deployment_ready": false
+  },
+  "historical_validation_source": {
+    "artifact": "stage01_selectability_v3.json",
+    "raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+    "self_canonical_sha256": "eb18d499037a7f2e18198f29393bcf8f7d15e4a1e13bffda8342a1c4e7c37253",
+    "kind": "frozen_lomo_within_condition_validation_v3",
+    "active_gate": false
+  },
+  "validation_semantics_source": {
+    "artifact": "stage01_validation_semantics.json",
+    "raw_sha256": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026",
+    "self_canonical_sha256": "d4734a7b882c2406a3fc577cd59b86d15378fb72a1ae041ab554ff310b432669"
+  },
+  "bound_validation_raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+  "v3_registry_source": {
+    "artifact": "stage01_program_registry_v3.json",
+    "location": "release_staging_not_served",
+    "raw_sha256": "91ba78dfeb2d8cf739fd683fb8368fb3993e38254d4d55a4496af1ced870e646",
+    "present": true
+  },
+  "v2_registry": {
+    "file": "stage01_program_registry.json",
+    "raw_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
+    "method_version": "stage1-continuous-v2",
+    "status": "HISTORICAL_NOT_CURRENT",
+    "status_reason_code": "superseded_by_v3_measurement_provenance"
+  },
+  "measurement_display_release": {
+    "kind": "v3_measurement_display_release",
+    "method_version": "stage1-continuous-v3.0.1",
+    "join_rule": "coordinates_from_seed_scores_from_overlay_by_exact_barcode",
+    "registry": {
+      "file": "stage01_program_registry_v3.json",
+      "raw_sha256": "91ba78dfeb2d8cf739fd683fb8368fb3993e38254d4d55a4496af1ced870e646",
+      "registry_sha256": "2493896a98395250c91f2050a941059a5353b449133864e2f3711feff13b021b"
+    },
+    "overlay": {
+      "file": "stage01_umap_overlay_v3.json",
+      "raw_sha256": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
+      "coordinates_sha256": "c3d3a0a752614470693a0148ba37a45cf20aba290a6e54b4f7fa0bc468a6605b",
+      "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
+      "n_cells": 40000,
+      "score_fields": [
+        "th1_like_score",
+        "th2_like_score",
+        "th17_like_score",
+        "tfh_like_score",
+        "treg_like_score",
+        "cd4_ctl_like_score",
+        "th9_like_score",
+        "diff_naive_score",
+        "diff_activated_score",
+        "diff_memory_score",
+        "diff_checkpoint_score",
+        "cd4_ctl_like_score_actadj"
+      ]
+    },
+    "summary": {
+      "file": "stage01_summary_v3.json",
+      "raw_sha256": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
+      "scoring_universe_n": 396000
+    },
+    "validation_raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+    "source_h5ad_raw_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43",
+    "base_portable_programs": [
+      "cd4_ctl_like",
+      "diff_activated",
+      "diff_checkpoint",
+      "diff_memory",
+      "diff_naive",
+      "tfh_like",
+      "th17_like",
+      "th1_like",
+      "th2_like",
+      "treg_like"
+    ],
+    "n_base_portable": 10,
+    "base_portability_source_field": "stage2_base_portability.stage2_base_portable",
+    "frozen_coordinate_shell": "stage01_umap_seed.json"
+  },
+  "self_canonical_sha256": "3056ccc6ba903db2dc3ee5c0c122896ecff2dea4af48beef764f41ae7e927a66"
+}

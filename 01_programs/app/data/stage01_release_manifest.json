@@ -1,0 +1,184 @@
+{
+  "schema": "spot.stage01_release_manifest.v2",
+  "method_version": "stage1-continuous-v3.0.1",
+  "bound_validation_raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+  "bound_evidence": {
+    "semantics_amendment": "stage1-validation-semantics-definedness-v1",
+    "constituent_evidence": {
+      "main": {
+        "artifact": "stage01_gate_constituents_v1.json.gz",
+        "content_canonical_sha256": "1813cab50df528391d5e07dc2503afd65c1d30cbdb2fa1934e2e25840bd2076a",
+        "raw_sha256": "66166c1e5f8fc88c60cd730e0bbd5f1e0b1be497506d46bd125f7b3a69aa1e2c",
+        "row_count": 6849,
+        "manifest_raw_sha256": "7e6658717222606b2c974378d1b283e230014f35e2dff9b22162ac980a28919d"
+      },
+      "overlay_donor": {
+        "artifact": "stage01_gate_constituents_overlay_donor_v1.json.gz",
+        "content_canonical_sha256": "10e76d83cb76ca7316a0578bba95f7f311685a25feb9e2b772beb1cd610d67df",
+        "raw_sha256": "595fed635e339b168be991c4f1a0b25649d188e2a67f9430b5530cb53c07b8d1",
+        "row_count": 264,
+        "manifest_raw_sha256": "5891c760a510f1b1029ef8120f5f7ada5d5b9893f64483a84a9a2ea1602d3799"
+      },
+      "note": "Per-metric definedness is read from these hash-bound constituent tables (aggregate is defined iff every expected constituent is defined); the deleted zero-value/name heuristic is not used anywhere."
+    },
+    "stage2_registry_view_raw_sha256": "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f",
+    "marker_diagnostics_raw_sha256": "b43936167b2903f283a35970b2708d93b1ff78a11e2e83a0995adca7fe7ec56c",
+    "generic_selection_schema": "spot.stage01_selection.v3",
+    "selection_current_served": null
+  },
+  "release_gates": {
+    "measurement_bundle_lockable": true,
+    "panel_provenance_status": "PRIMARY_LOCATORS_VERIFIED_BOUNDED",
+    "overlay_release_ok": false,
+    "app_deployment_ready": false
+  },
+  "not_lockable_reason_codes": [
+    "overlay_release_blocked"
+  ],
+  "missing_required_artifacts": [],
+  "artifacts": {
+    "stage01_validation.json": {
+      "raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_validation_semantics.json": {
+      "raw_sha256": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_selectability_v3.json": {
+      "raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_current.json": {
+      "raw_sha256": "dbf57101de611040a67eab0a51bcffa71688cf37904b3f247d41892296f6aece",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_gate_spec.json": {
+      "raw_sha256": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_input_manifest.json": {
+      "raw_sha256": "3b13488716a366676813bff567da91f216a426c94bd1fe43c22824f73b26d521",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_control_method.json": {
+      "raw_sha256": "02a94b07a19901ec41e9e26c25ce156b80c0cf67b35a17f00cf8ca6087699971",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_controls_v3.csv": {
+      "raw_sha256": "79764283a3429a103ed87a41b88a0c094fac84a7f46eebcb034d156e8573de75",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_bins_v3.csv": {
+      "raw_sha256": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_control_eligible_pool.json": {
+      "raw_sha256": "70072addb7c8c323eda8b110d1efe6d2670f8a00dfe6138e36a5ea7f79db541a",
+      "present": true,
+      "location": "served"
+    },
+    "stage01_validation_independent_check.json": {
+      "raw_sha256": "e139d5f7565f529fc43b7ea55c205bf719ceff75036762ac24d8f068eeed9dba",
+      "present": true,
+      "location": "served"
+    },
+    "gen_stage1_t8.py": {
+      "raw_sha256": "2422b3cc762fca1112a78ac56cebd3ff181453d018a9456654a3ccedd03ad141",
+      "present": true,
+      "location": "analysis"
+    },
+    "stage1_t8_derive.py": {
+      "raw_sha256": "28c196f6de7f9c42454e8fc33064b72a6cc00d99be152ed968e3e39e53ecf44a",
+      "present": true,
+      "location": "analysis"
+    },
+    "verify_stage1_t8.py": {
+      "raw_sha256": "6c18ab7098ea87a18d3bf75ab443fd80cd031d2d23667817019499df212652ad",
+      "present": true,
+      "location": "analysis"
+    },
+    "stage1_t8_preflight.py": {
+      "raw_sha256": "3aa41dc18b0846163f9a9a92dbe01fbc34c50723c766a0f27e832a3f9fdb4591",
+      "present": true,
+      "location": "analysis"
+    },
+    "test_stage1_t8.py": {
+      "raw_sha256": "d02676361b8ca0634686dd75a5dc09bc8c6ebbe35b0bc12ce3eb3c376458ebf0",
+      "present": true,
+      "location": "analysis"
+    },
+    "requirements.txt": {
+      "raw_sha256": "3b630c2c0f1ded6d527d6d3aedd62c7ea519705f337dbf6ca3fec305a21bfc8c",
+      "present": true,
+      "location": "analysis"
+    },
+    "gen_stage1_provenance.py": {
+      "raw_sha256": "7081f2395685b2012b508f34ef371f5a1febcc3b304d754cecf0e21d6b1c5c20",
+      "present": true,
+      "location": "analysis"
+    },
+    "verify_stage1_provenance.py": {
+      "raw_sha256": "8328c047a1f9da260b393ccc54acfa162a3722ce511b03b66b26c1fe81c7aee0",
+      "present": true,
+      "location": "analysis"
+    },
+    "test_stage1_provenance.py": {
+      "raw_sha256": "ab7ee5cc9c9893a5211355a33d89cf8e5e0bf9c179d729256613bf07343771c7",
+      "present": true,
+      "location": "analysis"
+    },
+    "stage01_program_registry_v3.json": {
+      "file": "stage01_program_registry_v3.candidate.json",
+      "location": "release_staging_not_served",
+      "raw_sha256": "91ba78dfeb2d8cf739fd683fb8368fb3993e38254d4d55a4496af1ced870e646",
+      "present": true
+    },
+    "stage01_scores_full.parquet": {
+      "file": "stage01_scores_full.candidate.parquet",
+      "location": "release_staging_not_served",
+      "raw_sha256": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
+      "present": true
+    },
+    "stage01_summary.json": {
+      "file": "stage01_summary.v3.json",
+      "location": "release_staging_not_served",
+      "raw_sha256": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
+      "present": true
+    },
+    "stage01_umap_coordinates.json": {
+      "file": "stage01_umap_coordinates.json",
+      "location": "release_staging_not_served",
+      "raw_sha256": "a7164168aaf61466ca699e1b00633c37ecef88705db443fb7fb0d00a86ccbbf6",
+      "present": true
+    },
+    "stage01_umap_overlay.json": {
+      "file": "stage01_umap_overlay_v3.json",
+      "location": "release_staging_not_served",
+      "raw_sha256": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
+      "present": true
+    },
+    "stage01_v3_recovery_verification.json": {
+      "file": "stage01_v3_recovery_verification.json",
+      "location": "analysis",
+      "raw_sha256": "9a73316f8e31f7f067a87eb558b3c39dded1c6d1b6c0afdab78608e0d8fcc565",
+      "present": true
+    },
+    "stage01_solver_lock.txt": {
+      "file": "stage01_solver_lock.txt",
+      "location": "analysis",
+      "raw_sha256": "d394692d839e248a3823e6bb5f16acd9bbad9cc876b713820b68f126195dc7e3",
+      "present": true
+    }
+  },
+  "self_canonical_sha256": "6d723d76aedfb9ef76a2348ee8552c80b3d8662dfb5a5dbcd750fd22b27dae11"
+}

@@ -105,3 +105,62 @@ donors × Rest/Stim8hr/Stim48hr — public on the **CZI Virtual Cells Platform**
 follows Masopust et al., *Guidelines for T cell nomenclature*, Nat Rev Immunol 2026;26:298-313 —
 the naming consensus the program labels follow. The gene panels themselves are **curated canonical
 markers** (restricted to genes measurable in this dataset), not gene lists taken from that paper.
+
+## Stage-1 v3 T8 production contract (fail-closed) + measurement bundle
+The frozen T7b validation (`app/data/stage01_validation.json`, raw SHA-256 `1c14cd28…`) yields
+**0 of 33 program×condition pairs passing** the pre-registered Stage-1 production gate. The T8 layer
+makes that outcome machine-enforced — via **independent re-derivation**, not trust-by-self-hash —
+without altering the immutable validation or any pre-registered gate/panel/score/seed/threshold.
+
+**Separate release statuses** (never conflated): a reproducible *measurement bundle* can be lockable
+while *production selection* stays fail-closed and *overlay/app deployment* stays blocked.
+- `measurement_bundle_lockable` — **true**: v3 registry (`91ba78df…`), full 396k×15 scores
+  (`de63b496…`, canonical content `43c4296d…`), regenerated `by_program_condition` summary, scoring
+  code, independent verifier + mutation suite, and a real Linux solver lock are all present and
+  independently verified. This implies **nothing** about selectability or identity.
+- `production_stage2_ready` — **false** (0/33). `panel_provenance_status` —
+  **`PRIMARY_LOCATORS_VERIFIED_BOUNDED`**: all 53 measured marker-program pairs now carry a bounded
+  primary-source locator in the registry `marker_provenance`/`panel_provenance` (18 prior-ledger + 14
+  lineage + 21 state/CTL completions, source SHAs pinned and enforced by `verify_stage1_provenance.py`;
+  Masopust stays naming-only). This is bounded/association-level provenance, not a scorer change and not
+  a production/overlay/app promotion. `overlay_release_ok` — **false** (the built v3 overlay is proven
+  `overlay==full` but **not** deployed). `app_deployment_ready` — **false**. The current pointer is
+  therefore a **`candidate`**, never `current`/`locked`.
+
+Artifacts (served contracts in `app/data/`):
+- `stage01_selectability_v3.json` — 33 records, all `production_selectable=false`, each with the exact
+  failing/undefined hard-gate **multiset** (base portability never confers selectability).
+- `stage01_validation_semantics.json` — **row-identifiable** interpretation of every one of the 841
+  results (`source_result_index` + `source_row_canonical_sha256`), preserving **two dimensions**
+  (`metric_predicate_met`/`metric_defined`/`undefined_reason` vs `gate_outcome`/`flagged`); a false
+  hard-gate is never reinterpreted as advisory; Th9 zero-IQR / observed-None stay **undefined**.
+- `stage01_current.json` — fail-closed `candidate` pointer with the separate statuses above; the v2
+  registry is `HISTORICAL_NOT_CURRENT`; the v3 registry is bound for provenance (not a served selectability source).
+- `stage01_release_manifest.json` — distinct release gates + raw hashes of every artifact (served,
+  analysis, and gitignored release-staging bound by hash).
+
+Code + verification (in `analysis/`):
+- `stage1_t8_derive.py` — pure derivation used **only** by the generator `gen_stage1_t8.py`.
+- `verify_stage1_t8.py` — **independent** verifier (re-implements the derivation from scratch;
+  re-derives the 33 records + 841 semantics rows from the raw validation and **exact-multiset**-compares,
+  recomputes all declared counts, checks every cross-pointer). Generator ≠ verifier.
+- `test_stage1_t8.py` — mutation/forgery suite: even a **fully-resealed** forgery (self-hashes +
+  manifest bookkeeping recomputed) is caught by the independent re-derivation.
+- `stage1_t8_preflight.py` — fail-closed selection preflight: verifies the whole bundle **before**
+  reading selectability, then requires the complete binding set (validation/gate-spec/input-manifest/
+  selectability/current-pointer/method + v3 registry namespace), `namespace=production`, one shared real
+  timepoint, allowed direction + selectable primary role, and per-pole `production_selectable`. Every
+  current A/B pair is non-executable.
+- `stage01_v3_recovery_verification.json` (receipt), `stage01_solver_lock.txt` (conda `--explicit` +
+  in-env pip freeze), `stage01_full_release_verification.json` (outer attestation binding code/env/
+  inputs/outputs + scope). `stage01_validation_independent_check.json` remains an intentionally **limited**
+  sampled observation and is not broadened.
+- `reproduce_t8.sh` — regenerates the layer from pinned inputs (gen → independent verify → mutation
+  suite → full-release attestation) **without** overwriting historical v2 or deploying the v3 overlay.
+
+The Stage-1 app (`01_page.html`) and the Stage-2 direct CLI (`02_geneskew/analysis/direct/run_screen.py`)
+both load this fail-closed contract and **cannot** emit a production selection (0/33) — the app shows a
+muted inline reason (no banner, appearance unchanged); the CLI rejects before any computation.
+
+This records only that **no current program-condition pair cleared the frozen production gate** — not
+that any program is biologically invalid, nor that panel provenance is confirmed.
