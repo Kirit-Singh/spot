@@ -1,217 +1,238 @@
-# Stage-2 Direct — handoff after the code-only audit NO-GO
+# Stage-2 Direct — handoff
 
-Answers the audit checkpoint
-`~/.spot-runs/20260712T021343Z/DIRECT_CODEONLY_AUDIT_CHECKPOINT.md`
-(sha256 `3a1c30f2fa636bf7e99e034a04065f9aebecaec0bdd14afdd3f76ed8d359e73c`), which was
-verified byte-for-byte before any edit, alongside its stream
-(sha256 `4fb9a97c2a410999b99607dd83843565d45d7fcf8d4501cf69d3f5a0e487c3a0`).
+Branch `agent/stage2-direct-v3`. Checkpoint-committed, **not pushed**. No deploy, no PR.
 
-Both blockers are closed. **No independent GO has been obtained, so nothing downstream
-has started** — see *Deliberately not done*.
+**READY-FOR-REAL-RUN** — code + fixtures only. No real data was touched: no DE, no
+pseudobulk, no tcefold. The real run and the content-addressed bundle freeze are a
+separate gated dispatch.
+
+```
+tests/            959 passed,  6 skipped
+tests/direct      930 passed,  5 skipped   (shuffled seeds 1 / 7 / 20260712: identical)
+ruff              clean          compileall  clean
+modules           all <= 500     schemas     3, all valid
+```
+
+Skips are opt-in only: 5 real-release tests (`SPOT_STAGE2_RELEASE_TESTS` unset) + 1
+pre-existing `pert2state_model` import skip.
 
 ---
 
-## P0 — determined evidence could be downgraded to ambiguous
+## Where this started
 
-### What was actually wrong
+An independent audit returned **NO-GO** on two blockers. Both are closed and re-audited
+to a fresh **GO** (`~/.spot-runs/20260712T021343Z/DIRECT_CODEONLY_AUDIT_2.md`).
 
-The lane verified contributor COMPLETENESS (a determined scope names every guide the
-source kept for it) and then took `evidence_state` itself entirely on trust. A scope
-labelled `ambiguous` was examined by nothing on either side. "The identity is unknown"
-was treated as a confession no source could contradict.
+**P0 — determined evidence could be downgraded to ambiguous.** The lane checked
+contributor *completeness* but took `evidence_state` itself on trust: an `ambiguous` label
+was examined by nothing, on either side. Collapse one determined scope's rows to a single
+ambiguous row, let the honest producer regenerate the records and report, and every count
+balances, every hash is correct — while the raw source goes on holding that scope's kept
+targeting guides. The victim silently loses its mask, score and rank.
 
-The forgery was free, and it needed no hand-editing at all:
-
-1. collapse one determined scope's manifest rows to a single ambiguous row citing
-   nothing;
-2. let the **honest producer** regenerate the record table and the replay report.
-
-Every count then balances by construction (determined−1, ambiguous+1, named unchanged,
-complete == determined, records == offsets_proven) and every hash is correct, because
-the producer computed them. The manifest and the report agree perfectly. And the raw
-source is still holding that scope's two kept targeting guides.
-
-The victim loses its mask, its score and its rank; the screen ships one fewer ranked
-target. The audit built exactly this and the standalone verifier exited 0, 31/31 green.
-
-My previous remediation missed it because it derived the determined/ambiguous split from
-the **manifest rows** — which is the document under attack.
-
-### The rule now enforced
+The source now classifies, and only the source:
 
 ```
-provable(scope) = { g : the raw source kept a row for this (target, condition)
-                        whose guide_type is TARGETING }
-
-provable non-empty  ->  DETERMINABLE. `determined` is mandatory, and the named guide
-                        set must be exactly provable(scope)  (completeness, next door).
-provable empty      ->  genuinely non-determinable. `ambiguous` is the only honest label.
+provable(scope) = { g : source kept a row for (target, condition), guide_type == TARGETING }
+non-empty -> `determined` mandatory.   empty -> `ambiguous` is the only honest label.
 ```
 
-Two failure classes, named separately because they are different acts: a **downgrade**
-deletes evidence the source holds; an **overclaim** invents evidence it does not.
+Runtime derives it (`replay.py`); the standalone verifier restates it independently
+(`verify_classification.py`). A fully resealed downgrade is invisible to every document
+the producer wrote — *including the pinned report* — and is caught only by fresh strict
+replay. That is why release lanes may not skip it, and there is now a test asserting the
+non-strict verifier **passes** the forged run.
 
-### Where
+**P1 — P2S called the retired combined ranking API.** Fixed without restoring it.
 
-| file | what |
-|---|---|
-| `analysis/direct/replay.py:172` | `source_provable_guides` — the source rule, guide_type-filtered |
-| `analysis/direct/replay.py:198` | `classify_scopes` — claimed state vs source state |
-| `analysis/direct/replay.py:340` | wired into `check_completeness`; a downgrade forces `INCOMPLETE` |
-| `analysis/direct/verify_classification.py` | **new** — the standalone restatement (independent, not shared) |
-| `analysis/direct/verify_source.py:279` | strict path calls it; both partition halves bound separately |
-| `analysis/direct/verify_source.py:412` | pinned-report path requires the rule id and zero downgrades |
-| `analysis/direct/manifest_replay.py` | **new** — the release gate, split out of `manifest_validate` |
-| `analysis/direct/manifest_schema.py:117` | rule id + 5 report fields now **required** |
-| `analysis/direct/preflight.py:95` | fresh-vs-pinned agreement now includes the classification |
-| `analysis/direct/schemas/stage02_contributor_evidence.schema.json` | `n_scopes_downgraded`/`n_scopes_overclaimed` pinned to `const: 0` |
-
-Runtime and standalone are **independent implementations**, as the checkpoint required.
-The generator derives it in `replay.py`; the verifier restates it in
-`verify_classification.py` and imports nothing from the generator (enforced — below).
-
-### Only the raw source can catch it
-
-A fully resealed downgrade is invisible to every document the producer wrote, *including
-the pinned report* — a forger with the old code simply emits `n_scopes_downgraded: 0`.
-`tests/direct/test_source_classification.py::test_the_forged_run_is_INTERNALLY_PERFECT`
-asserts the non-strict verifier **passes** the forged run. That is not a gap; it is the
-reason strict replay is the release gate and why `production` / `research_only` may not
-skip it.
-
-### Mutation proof (not vacuous)
-
-The forger in the tests is the **pre-fix producer itself** (`_manifest_trusting_classify`),
-so the run under test is sealed by an honest program and is malformed in no way a
-consistency check can reach. Reverting the two classification call-sites and re-running:
-
-```
-tests/direct/test_source_classification.py + test_manifest_attacks.py
-  pre-fix code : 11 failed, 33 passed
-  fixed code   : 44 passed
-```
-
-The refusals are asserted **by named check**, and asserted *not* to be incidental
-(no sha256 / run_id / schema / directory-name failure among them).
-
-Covered: downgrade of any scope · overclaim · genuinely-unprovable scope (no false
-positive) · non-targeting controls never make a scope determinable · victim really loses
-its rank · fresh-replay refusal in both release lanes · the two rules leave no gap
-(relabel → source refutes the *label*; drop a guide → source refutes the *set*).
-
-### Diagnostic ordering (found while fixing this)
-
-`verdict` folds completeness in, so it can never be a record-level diagnosis: a report
-with one shrunken scope said *"refused, 0 failed records"* — a sentence that names the
-wrong thing and then contradicts itself. Causes are now diagnosed specific-first
-(classification → n_failed → non-targeting → incomplete scopes), and the summary last.
-
-### Summary-verdict consistency (per your mid-turn note)
-
-`manifest_replay.py::_require_summary_is_derived` requires the top-level verdicts to be
-what the report's own fields **derive**, as an equivalence in both directions:
-
-```
-complete  <->  no incomplete scope, no non-targeting citation, no downgrade,
-               no overclaim, every offset proof confirmed
-replayed  <->  no failed record AND complete
-```
-
-A forged *or omitted* summary fails here even when every field underneath is honest.
-Mutations: `test_replay_arithmetic.py::test_an_OMITTED_top_level_verdict_is_refused`,
-`test_a_WRONG_top_level_verdict_is_refused_by_summary_consistency` (5 values).
+The re-audit wrote 37 of its own attacks, reverted the fix and reproduced the mutation
+counts, and found two defects of mine in the module splits (a `NameError` under
+`get_type_hints`, seven dead imports). Both fixed; GO re-pinned to the new digest.
 
 ---
 
-## P1 — Perturb2State integration regression
+## What was built
 
-`tests/perturb2state/test_stability_integration.py:72` called the retired
-`direct.projection.rank_rows(..., "balanced_a_to_b")`, and ranked a `balanced_skew`
-column. Both are gone; Direct publishes two independent rankings and no combined
-objective.
+### 1. Gate B — Stage-1 v3 selection adapter (`stage1_v3.py`)
 
-**No combined ranking API was restored.** The test now asserts the contract the
-checkpoint specified:
+Validates against the **pinned** schema (`f4c2c2cc…`, checked before use — a schema that
+can be swapped validates whatever the swapper wanted). Routes `within_condition`; refuses
+`temporal_cross_condition` as `awaiting_estimator`.
 
-- both arms' **score and rank columns are byte-identical** across the P2S merge
-  (`pd.testing.assert_series_equal`, dtype-checked, row order asserted first);
-- P2S gives the *opposed, bottom-ranked* target its strongest support and it **stays
-  last in both arms** — the promotion a combined objective would have allowed;
-- P2S adds **only** `perturb2state_*` fields, and no combined/headline column re-enters;
-- `rank_rows` is asserted **absent**, `rank_arm` present, `COMBINED_OBJECTIVE_PERMITTED`
-  and `HEADLINE_ARM_PERMITTED` both `False`.
+That refusal is the most important thing in the module. The two estimators answer
+different questions, and the within-condition projection would happily consume a temporal
+selection and return numbers. **The numbers would look exactly like an answer.** There
+would be nothing wrong with them except that they answer a question nobody asked.
+
+Generic by construction — no program id, no condition, asserted by an AST scan over
+executable tokens. Both poles validated against the current effect universe; an
+unavailable pole is refused with its *own* reason codes and counts, never summarised into
+"failed". Combined Stage-1 objective refused. The historical selectability artifact is
+provenance and can never become a live gate.
+
+**Identifier hierarchy:** `selection_id -> stage2_run_id`, binding `direct_method_version`,
+`direct_config_sha256`, `effect_universe_sha256`, `perturbation_source_hashes`,
+`mask_method_version`, `pathway_method_version`.
+
+45 mutation tests, each failing at a **named** gate.
+
+### 2. Direct two-arm effects — confirmed, plus row identity
+
+The screen already satisfied the two-arm contract. What it could not do was **describe
+itself**: a row carried only `run_id`, so you had to join back to provenance before you
+could say what produced it. Added, per row: `direct_method_version`,
+`direct_config_sha256`, `effect_source_sha256`, `mask_method_version`, and
+`estimate_mask_sha256` — *this* estimate's own masked gene set, null when unresolved (an
+absent mask and an empty one are opposite claims).
+
+The verifier re-derives all five, computing the config hash from its **own** restated
+policy — so a run that loosened a threshold and honestly hashed the loosened policy is
+caught by the row, not merely by the binding.
+
+Screen is now 99 columns.
+
+### 3. Pareto joint ordering (`pareto.py`, `spot.stage02.pareto.two_arm.v1`)
+
+Pre-registered before any real ranking was inspected.
+
+The requirement pulls against itself — an explicit joint ordering that does *not* erase
+the components — and every easy way to satisfy the first violates the second. A weighted
+sum, a mean, a balanced skew: any single number answering both arms must fix an exchange
+rate between "moved away from A" and "moved toward B" that nobody has. Fix it wrongly, and
+there is no way to fix it rightly, and a target that moves hard away from A while
+**opposing B** outranks one that genuinely moves toward B.
+
+Dominance needs no exchange rate. Tier 1 is the non-dominated frontier; peel and repeat.
+A tier is an *order*, not a score: no units, not averageable, and two targets in one tier
+are **incomparable**, not tied. Only jointly-evaluable targets are tiered; everything else
+is `null` — not tier 0, not last, not a sentinel. `joint_status` is derived from the arm
+*directions*, independently of the tier; deriving one from the other would make the pair
+circular and destroy their only cross-check.
+
+The tier is the one field a downstream consumer has an obvious motive to rewrite — one
+cell edit promotes a target to the frontier, breaks no arithmetic, contradicts no other
+column. So `verify_pareto.py` **re-derives it from the emitted arm values**.
+
+38 tests: dominance, exact ties, float-boundary (the next float above 1.0 is not a tie),
+one-arm-missing, opposed-on-frontier, row-permutation invariance over all 120 orderings,
+numeric combined-field injection (rejected), downstream tier-rewrite (rejected by name).
+Both arms proven byte-identical with and without the joint fields, by building the run
+twice with `assign_tiers` replaced by a no-op.
+
+### 4. Pathway layer
+
+Built on the **full target-masked perturbation signatures**, not the marker panels. That
+distinction is the design: the panels *are* the axis the arms are scored on, so two
+targets that both move the program agree on the panel **by construction** — agreement
+there is close to circular.
+
+- **(A) Ranked-arm enrichment** (`enrichment.py`) — a weighted running-sum statistic over
+  one arm's ranking, with the **leading edge**: the members actually responsible. "Pathway
+  P is enriched" is not checkable; "these six of its genes are the ones at the top" is.
+  Once per arm, never summed across arms.
+
+  **No p/q/FDR.** There is no calibrated null here, and permuting targets would test a
+  hypothesis about the ranking's *shape* while producing a number that looks like a
+  p-value and would be read as one within a week.
+
+- **(B) Signature convergence** (`convergence.py`) — cosine on the **shared unmasked
+  support**. Each signature has its own mask, so two targets have different holes, and the
+  size of the intersection ships with every pair: a similarity over 11 shared genes is not
+  the same claim as one over 11,000. Clusters are connected components over a frozen
+  threshold — no seed, no k, no resolution, three knobs that would each be a place to tune
+  the answer after seeing it.
+
+  **A convergence claim requires ≥2 measured perturbations.** One target is one
+  experiment, and calling it a pathway result launders an observation into a mechanism.
+  Such sets are still emitted, flagged `single_target_support` — deleting them would hide
+  how thin the evidence is. The rule is pinned in the schema, not only in the code.
+
+Every set is emitted, including untestable ones, with a named reason: a pathway missing
+from the table is indistinguishable from one that was tested and found nothing.
+
+Gene sets are pinned (`source` + `release_id` + raw sha256 — "Reactome" is not a version),
+namespace-enforced (a symbol-keyed set against an Ensembl universe overlaps in nothing,
+and the "no enrichment" it returns is a failed join wearing a null result), and **bound to
+the exact effect universe** the statistic is relative to. Parameterised by release +
+universe, so the real Reactome/GO-BP bundle drops in unchanged.
+
+Schema `stage02_pathway_record.v1`: `additionalProperties: false` throughout; typed Science
+evidence refs `{science_evidence_id, sha256, record_type}` — free text is not a citation;
+and **no primary-rank field may be written into a pathway record**. Claude Science may
+interpret; an interpretation that can quietly edit its own evidence is not an
+interpretation.
+
+### 5. Perturb2State — `combined_A_to_B` resolved
+
+P2S judged support on `combined_A_to_B`, which is `z(away) + z(toward)`: a combined
+objective by another name. P2S never *ranked* with it, so neither audit flagged it — but it
+was worse in one specific way. A single `perturb2state_support_status` cannot say **which
+arm** it supports, and "supported" on a target whose support is entirely away-arm while its
+toward arm is actively **opposed** is a sentence that means the opposite of what it looks
+like.
+
+Both remedies: support is **split** per arm (`perturb2state_away_from_A_*`,
+`perturb2state_toward_B_*`, with an explicit per-arm `_opposed` flag — there is no unarmed
+status left to misread), and the combined lane is **quarantined** as a reconstruction
+diagnostic, excluded from the integration lane by name and carrying
+`is_a_combined_objective: true` / `may_rank_or_gate: false` in the artifact itself.
+
+Found on the way: the P2S lane was spelled `toward_b` (the **retired v2 casing**) while
+Direct says `toward_B`. Nothing joined them, so nothing noticed — and the first code to
+merge P2S onto the screen by lane name would have matched zero rows for that arm and
+reported no support where support existed. Fixed and asserted.
 
 ---
 
-## Verification
+## Honest boundaries — read these before the real run
+
+1. **Gate B cannot re-derive `selection_id`.** The frozen contract does not publish
+   Stage-1's derivation rule. Stage-2 carries it verbatim as a *citation* and keys its own
+   results on `selection_biology_sha256` — the biology it actually read — so two different
+   selections can never share a `stage2_run_id`. But a biology change that is fully
+   resealed *and* leaves `selection_id` stale is correctly keyed by Stage-2 and **not
+   flagged as stale**. Stage-1 publishing the derivation would close this. Recorded in the
+   artifact as `selection_id_rule_id`.
+
+2. **The `guide_type == "targeting"` assumption is untested against real data.** The entire
+   P0 fix rests on that column meaning what we think it means in the real 44 GB source.
+
+3. **The real 33,977 / 6 determined-ambiguous partition is untested.** If any of the 6
+   released ambiguous scopes *does* have kept targeting guides, the run will refuse — and
+   that would be a **finding**, not a bug.
+
+4. **Strict replay is untested for tractability at 44 GB.** `source_provable_guides` is a
+   Python loop over `np.flatnonzero(keep)`. Profile it before the first real run.
+
+5. **The pathway thresholds are frozen but arbitrary.** `SIMILARITY_THRESHOLD = 0.5`,
+   `MIN_SHARED_GENES = 10`, set sizes 3–500. They were frozen before any real signature was
+   seen, which is the point — but they have not been sanity-checked against real data, and
+   they should be reviewed *before* the run, not after.
+
+6. **`STAGE2_PLAN.md` has no §7.6.** The pathway record was built to the field list given
+   in the dispatch. If a newer plan exists, reconcile.
+
+7. **Pre-existing mypy debt: 56 errors in 9 files** (`selection`, `trust`, `sources`,
+   `manifest_validate`, `verify_source`, …), none of them mine. All 8 modules authored this
+   session are mypy-clean. Cleaning the rest is a real task, not a lint pass.
+
+8. **Ruff ceiling is 100 chars**, not the lane's ~88 house style — chosen so lint is
+   genuinely clean without reflowing 27 lines of already-audited code. Stated in
+   `ruff.toml`, not hidden.
+
+---
+
+## Commits (branch `agent/stage2-direct-v3`, not pushed)
 
 ```
-python -m pytest tests/           ->  823 passed,   6 skipped   (was 779 passed, 1 FAILED, 6 skipped)
-python -m pytest tests/direct     ->  803 passed,   5 skipped
-shuffled tests/direct, seeds 1 / 7 / 20260712  ->  803 passed, 5 skipped  (each)
+fbd52d6  close audit P0 (evidence downgrade) + P1 (P2S two-arm), lint clean
+082c933  Pareto joint ordering (pre-registered) + self-describing screen rows
+089a321  resolve combined_A_to_B — support PER ARM, combined lane quarantined
+646c201  pathway layer — per-arm enrichment + signature convergence, never fused
+5ce2d98  Gate B — Stage-1 v3 selection adapter, generic, method-aware run id
 ```
 
-Skips are opt-in only: 5 real-release tests (`SPOT_STAGE2_RELEASE_TESTS` unset) and 1
-pre-existing `pert2state_model` import skip. Flag confirmed unset.
+## Next gated dispatch
 
-Structural: `compileall` clean · every module ≤ 500 lines · both JSON schemas valid ·
-canonical fixture conforms · no debris.
-
-Systematic proofs (AST, docstrings excluded):
-- no executable remnant of the retired pinned-preflight gate anywhere (`verify_binding`
-  names it only to refuse it);
-- every `balanced_skew` / `combined_*` occurrence in Direct is a **denylist entry or a
-  refusal flag** — nothing restored;
-- the verifier's only dense layer read is `read_pooled` (the pooled-main DE, required);
-  no support layer is ever opened;
-- **independence hardened** (checkpoint's low-priority item): the scan now *discovers*
-  every `verify_*` module (9) and every producer module (24) instead of hardcoding six
-  and eighteen, and asserts no verifier imports any producer. It previously omitted
-  `verify_method`, `verify_project` — and would have omitted `verify_classification`.
-
----
-
-## Deliberately NOT done — blocked on independent code-only GO
-
-Per the stated order, **none** of this has begun, and I am the sole writer:
-
-- pathway layer (gene sets, enrichment, convergence clustering);
-- generic typed Stage-1 selection contract (A / direction_A / B / direction_B / analysis
-  mode; same-condition vs cross-condition temporal estimator);
-- explicit Stage-2 combined ordering (frozen rule or Pareto over the two arms);
-- Stage-1 bridge materialization;
-- strict preflight and any real tcefold run. No real DE / pseudobulk file was opened;
-  everything ran on synthetic fixtures.
-
----
-
-## For the next auditor
-
-1. **P2S keeps an internal `combined_A_to_B` signature lane** (`analysis/perturb2state/
-   config.py:49`, `SUPPORT_LANE`). It feeds `perturb2state_support_status` — a secondary
-   support field — and is **not** a Direct rank. The audit did not flag it and I did not
-   change it, but it is the nearest thing to a combined objective still in the tree and
-   you should decide about it explicitly rather than inherit it.
-2. `manifest_validate.py` was split into `manifest_validate.py` (sources + rows) and
-   `manifest_replay.py` (the release gate); `verify_source.py` was split to extract
-   `verify_classification.py`. Both splits were forced by the 500-line limit and are
-   purely structural.
-3. The strongest single thing to re-attack: build a downgraded run with
-   `_manifest_trusting_classify` patched in, then confirm **strict** verification fails
-   on the named source-classification check and **non-strict** still passes. If
-   non-strict ever starts passing a *fresh* release lane, the gate has been bypassed.
-
-## Files changed (18)
-
-`analysis/direct/`: `replay.py` · `manifest_schema.py` · `manifest_validate.py` ·
-`manifest_replay.py` (new) · `manifest.py` · `preflight.py` · `verify_source.py` ·
-`verify_classification.py` (new) · `verify_evidence.py` ·
-`schemas/stage02_contributor_evidence.schema.json`
-
-`tests/direct/`: `test_source_classification.py` (new) · `test_manifest_attacks.py` ·
-`test_determinism.py` · `test_source_replay.py` · `test_replay_arithmetic.py` ·
-`test_contributor_schema.py` · `test_audit_probes.py`
-
-`tests/perturb2state/`: `test_stability_integration.py`
-
-No commit, push, reset or clean. No other worktree touched.
+Real tcefold run + content-addressed bundle freeze. Preconditions: methods freeze, the
+pinned Reactome/GO-BP bundle, and an independent code-only GO on this build.
