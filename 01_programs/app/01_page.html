@@ -476,9 +476,9 @@ let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
 // program_id + method provenance come from the v3.0.1 registry; base portability comes from the frozen validation
 let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
-// Production Stage-2 promotion status (frozen T7b: 0/33). READ-ONLY provenance surfaced in Methods —
-// it NEVER gates the research workflow. Research readiness is decided by base portability only.
-let PROD_READY=false,PROD_N_SELECTABLE=null,PROD_STATUS_LOADED=false;
+// v3 truthful current pointer (schema spot.stage01_current.v3): carries selection_routing +
+// measurement_display_release. No production/research split; the historical 0/33 gate is not active here.
+let CURRENT=null,MARKER_DIAG=null;
 // each axis carries its own condition (enables cross-subset display comparisons); when both share one
 // REAL condition that value is the executable analysis_condition. Different timepoints render as a
 // display-only view (no screen — a screen needs one timepoint). donor scope is fixed to all.
@@ -486,8 +486,8 @@ let curContrastId=null,pfSeq=0;
 const DATASET_ID='marson2025_gwcd4_perturbseq';
 const EFFECT_UNIVERSE_ID='marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad';
 const DONOR_SCOPE='all';
-// ── v3.0.1 research-preview bindings, cross-bound through stage01_current.json (no hard-coded v2 hashes) ──
-// V3 = the research_preview_v3 block; BASE_PORTABLE = set of base-portable program_ids from the frozen
+// ── v3.0.1 measurement-display bindings, cross-bound through stage01_current.json (no hard-coded v2 hashes) ──
+// V3 = the measurement_display_release block; BASE_PORTABLE = set of base-portable program_ids from the frozen
 // validation; V3_SUMMARY = the 396k full-universe summary that drives the Programs-over-time grid.
 let V3=null,V3_OK=false,BASE_PORTABLE={},V3_SUMMARY=null;
 // pan/zoom view transform, layered on top of the fit transform (default = fit view)
@@ -558,14 +558,14 @@ function computeV3Domains(cellArr,fields){
 // hash-mismatch / cross-binding mismatch stops initialization; there is NO fallback to v2 scores/registry/40k.
 async function strictLoadV3(){
   const T=async(u)=>{const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status+' '+u);return await r.text();};
-  const sha=async(t)=>{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');};
+  const sha=sha256hex;   // crypto.subtle in secure contexts; pure-JS fallback for non-secure (Tailscale HTTP) origins
   const d=JSON.parse(await T('./data/stage01_umap_seed.json'));                                 // frozen coordinate/design shell (required)
   const cur=JSON.parse(await T('./data/stage01_current.json'));                                 // v3 binding hub (required)
-  if(cur.schema!=='spot.stage01_current.v2')throw new Error('current schema != spot.stage01_current.v2');
+  if(cur.schema!=='spot.stage01_current.v3')throw new Error('current schema != spot.stage01_current.v3');
   if(cur.method_version!==V3_METHOD_ID)throw new Error('current method != '+V3_METHOD_ID);
-  const v3=cur.research_preview_v3;
-  if(!v3||!v3.registry||!v3.overlay||!v3.summary||!v3.validation_raw_sha256||!Array.isArray(v3.base_portable_programs))throw new Error('research_preview_v3 binding incomplete');
-  if(v3.method_version!==V3_METHOD_ID)throw new Error('research_preview_v3 method != '+V3_METHOD_ID);
+  const v3=cur.measurement_display_release;
+  if(!v3||!v3.registry||!v3.overlay||!v3.summary||!v3.validation_raw_sha256||!Array.isArray(v3.base_portable_programs))throw new Error('measurement_display_release binding incomplete');
+  if(v3.method_version!==V3_METHOD_ID)throw new Error('measurement_display_release method != '+V3_METHOD_ID);
   const regT=await T('./data/stage01_program_registry_v3.json'),regv3=JSON.parse(regT);         // v3 registry (required, verified)
   if(regv3.schema_version!=='spot.stage01_program_registry.v3')throw new Error('registry schema_version != spot.stage01_program_registry.v3');
   if(await sha(regT)!==v3.registry.raw_sha256)throw new Error('v3 registry raw-sha mismatch');
@@ -611,8 +611,11 @@ function joinV3Scores(cells,ovl3,regv3){
 }
 strictLoadV3().then(({d,cur,v3,regv3,ovl3,sum3,val})=>{
   DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
-  PROD_STATUS_LOADED=true;PROD_READY=cur.global_stage2_selectable===true;
-  PROD_N_SELECTABLE=((cur.release_statuses||{}).n_selectable_program_conditions);V3=v3;
+  CURRENT=cur;V3=v3;
+  // bind marker diagnostics v2 (neutral, selected-condition + donor stratified; NOT an eligibility gate)
+  fetch('./data/stage01_marker_diagnostics_v2.json').then(r=>r.ok?r.json():null).then(md=>{
+    if(md&&md.use_for_eligibility===false){MARKER_DIAG=md;buildMethods();}
+  }).catch(()=>{});
   // ── join verified v3.0.1 scores onto the frozen coordinate shell by EXACT barcode ──
   const sf=joinV3Scores(cells,ovl3,regv3);
   V3_OK=true;meta.method_version=ovl3.method_version;V3_SUMMARY=sum3;
@@ -758,9 +761,34 @@ function canonicalJSON(v){
   if(Array.isArray(v))return '['+v.map(canonicalJSON).join(',')+']';
   return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonicalJSON(v[k])).join(',')+'}';
 }
+// Pure-JS SHA-256 fallback. crypto.subtle exists only in secure contexts (HTTPS or localhost); served over
+// plain HTTP on a Tailscale IP it is undefined, so we hash the same UTF-8 bytes in-page. Validated
+// byte-identical to crypto.subtle (known vectors + the served v3 artifacts). Preserves the verified-load
+// guarantee off-localhost.
+function _sha256utf8(s){return unescape(encodeURIComponent(s));}
+function _sha256js(ascii){
+  function R(v,a){return (v>>>a)|(v<<(32-a));}
+  const mp=Math.pow,mw=mp(2,32);let i,j,result='',words=[];
+  const bitLen=ascii.length*8;let hash=[],k=[];const isC={};
+  for(let c=2,pc=0;pc<64;c++){if(!isC[c]){for(i=0;i<313;i+=c)isC[i]=c;hash[pc]=(mp(c,.5)*mw)|0;k[pc++]=(mp(c,1/3)*mw)|0;}}
+  ascii+='\x80';while(ascii.length%64-56)ascii+='\x00';
+  for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return null;words[i>>2]|=j<<((3-i)%4)*8;}
+  words[words.length]=((bitLen/mw)|0);words[words.length]=(bitLen);
+  for(j=0;j<words.length;){let w=words.slice(j,j+=16),oldHash=hash;hash=hash.slice(0,8);
+    for(i=0;i<64;i++){const w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4];
+      const t1=hash[7]+(R(e,6)^R(e,11)^R(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(R(w15,7)^R(w15,18)^(w15>>>3))+w[i-7]+(R(w2,17)^R(w2,19)^(w2>>>10)))|0);
+      const t2=(R(a,2)^R(a,13)^R(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(t1+t2)|0].concat(hash);hash[4]=(hash[4]+t1)|0;}
+    for(i=0;i<8;i++)hash[i]=(hash[i]+oldHash[i])|0;}
+  for(i=0;i<8;i++)for(j=3;j+1;j--){const b=(hash[i]>>(j*8))&255;result+=((b<16)?0:'')+b.toString(16);}
+  return result;
+}
 async function sha256hex(str){
-  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
-  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  if(typeof crypto!=='undefined'&&crypto.subtle){
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  return _sha256js(_sha256utf8(str));
 }
 // scientific content ONLY (no timestamps / display labels / UI ordering) — the hashed body.
 // Binds v3.0.1 exclusively: v3 registry raw+canonical, v3 method, frozen validation raw, source h5ad
@@ -906,9 +934,13 @@ function buildMethods(){
   document.getElementById('pScope').textContent=meta.methods_and_scope;
   const ps=document.getElementById('pProdStatus');
   if(ps){
-    const n=(PROD_N_SELECTABLE==null?'0':PROD_N_SELECTABLE);
-    const facts=[['Method',METHOD_VERSION||'—'],['Namespace','research_only'],
-                 ['Production promotion',PROD_READY?'yes':'no'],['Production-selectable pairs',`${n}/33`]];
+    const sr=(CURRENT&&CURRENT.selection_routing)||{},mdr=(CURRENT&&CURRENT.measurement_display_release)||{};
+    const facts=[['Method',METHOD_VERSION||'—'],
+                 ['Selection schema',sr.schema||'—'],
+                 ['Within-condition estimator',sr.within_condition_estimator_status||'—'],
+                 ['Temporal estimator',sr.temporal_cross_condition_estimator_status||'—'],
+                 ['Base-portable programs',(mdr.n_base_portable!=null?mdr.n_base_portable:'—')],
+                 ['Marker diagnostics',MARKER_DIAG?'v2 · not an eligibility gate':'—']];
     ps.innerHTML=facts.map(([k,v])=>`${k}: <b style="color:var(--ink)">${v}</b>`).join('<br>');
   }
   document.getElementById('paperMarson').href=PAPERS.marson.url;
