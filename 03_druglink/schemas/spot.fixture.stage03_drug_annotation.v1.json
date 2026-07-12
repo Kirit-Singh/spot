@@ -1,0 +1,766 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot.fixture.stage03_drug_annotation.v1",
+  "title": "spot Stage-3 drug annotation (fixture)",
+  "description": "A drug annotation derived from a VERIFIED Stage-2 Direct run. The two Direct arms (away_from_A, toward_B) are authoritative arm evidence and are carried independently; this schema provides NO field for a combined, balanced, best-of, primary, headline or overall score or rank. It provides NO promotion, eligibility or recommendation field: production_candidate, production_promotion_eligible, may_write_production_pointer, production_pointer_written, research_pk_annotation_eligible and namespace are RETIRED and are refused structurally. Stage 3 reports scientific workflow states only.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "bundle_id",
+    "canonical_content_sha256",
+    "document_sha256",
+    "upstream",
+    "acquisition",
+    "pathway_hypotheses",
+    "stage2_joint_context",
+    "method",
+    "desired_arms",
+    "arms_are_independent",
+    "combined_objective_permitted",
+    "headline_arm_permitted",
+    "origin_types",
+    "gene_and_pathway_evidence_are_never_merged",
+    "directional_evidence_statuses",
+    "drug_mapping_statuses",
+    "stage4_assessment_statuses",
+    "stage4_assessment_note",
+    "data_status",
+    "inference_status",
+    "deferred_lanes",
+    "table_hashes",
+    "counts",
+    "candidates",
+    "stage3_evidence_classes",
+    "evidence_classes_are_unordered",
+    "inverse_direction_hypothesis_is_never_observed_gain_of_function",
+    "stage3_never_alters_direct_ranks_or_stage2_pareto_tiers",
+    "science_evidence_registry",
+    "disease_context_review",
+    "rounding_rule_id",
+    "rounding_rule",
+    "canonical_form"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "spot.fixture.stage03_drug_annotation.v1"
+    },
+    "artifact_class": {
+      "const": "fixture"
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^fx_[0-9a-f]{16}$"
+    },
+    "canonical_content_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "document_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "upstream": {
+      "type": "object",
+      "required": [
+        "direct_run_id",
+        "direct_file_sha256",
+        "direct_verifier",
+        "upstream_gate_context"
+      ],
+      "properties": {
+        "direct_verifier": {
+          "type": "object",
+          "required": [
+            "exit_code",
+            "n_checks",
+            "n_failed",
+            "report_sha256"
+          ],
+          "properties": {
+            "exit_code": {
+              "const": 0
+            },
+            "n_failed": {
+              "const": 0
+            },
+            "n_checks": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "upstream_gate_context": {
+          "type": "object",
+          "description": "Stage-1/2 gate fields, VERBATIM context. Stage 3 gates on none of them."
+        }
+      }
+    },
+    "acquisition": {
+      "type": "object",
+      "required": [
+        "acquisition_id",
+        "top_per_arm",
+        "frozen_target_queue_sha256",
+        "verification"
+      ],
+      "properties": {
+        "top_per_arm": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verification": {
+          "type": "object",
+          "description": "The acquisition was independently re-derived from the raw bytes BEFORE this bundle was built.",
+          "required": [
+            "all_pass"
+          ],
+          "properties": {
+            "all_pass": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "pathway_hypotheses": {
+      "type": "object",
+      "required": [
+        "pathway_lane"
+      ],
+      "description": "OWNED AND EMITTED BY STAGE 2. Stage 3 is the consumer; the contract is a consumer proposal and is NOT frozen.",
+      "properties": {
+        "pathway_lane": {
+          "enum": [
+            "evaluated",
+            "not_evaluated"
+          ]
+        },
+        "pathway_contract_status": {
+          "type": "string"
+        },
+        "n_pathways": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_nodes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "stage2_joint_context": {
+      "type": "object",
+      "description": "joint_status / pareto_tier / joint_ordering_method_id republished VERBATIM. Never read by the direction engine, and never rewritten by Stage 3. pareto_tier IS numeric \u2014 a positive-integer tier LABEL from 1, or null when not jointly evaluable. That is not a combined score; numeric combined_score / balanced_skew / weighted sums remain refused.",
+      "properties": {
+        "used_to_infer_drug_direction": {
+          "const": false
+        },
+        "used_to_rank_or_filter_arms": {
+          "const": false
+        },
+        "rewritten_by_stage3": {
+          "const": false
+        },
+        "joint_status": {
+          "oneOf": [
+            {
+              "enum": [
+                "both_arms",
+                "away_from_A_only",
+                "toward_B_only",
+                "opposed",
+                "not_evaluable"
+              ]
+            },
+            {
+              "const": "not_provided"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pareto_tier": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "description": "A positive-integer tier label starting at 1. NOT a score."
+            },
+            {
+              "const": "not_provided"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "joint_ordering_method_id": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "method": {
+      "type": "object"
+    },
+    "desired_arms": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "away_from_A",
+          "toward_B"
+        ]
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "arms_are_independent": {
+      "const": true
+    },
+    "combined_objective_permitted": {
+      "const": false
+    },
+    "headline_arm_permitted": {
+      "const": false
+    },
+    "origin_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "direct_target",
+          "pathway_node"
+        ],
+        "description": "direct_target = the gene was PERTURBED. pathway_node = the gene was INFERRED from a pathway and never perturbed."
+      }
+    },
+    "gene_and_pathway_evidence_are_never_merged": {
+      "const": true
+    },
+    "directional_evidence_statuses": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "observed_perturbation",
+          "inverse_direction_hypothesis",
+          "pathway_hypothesis",
+          "opposed",
+          "unresolved"
+        ],
+        "description": "observed_perturbation is the only status backed by a measurement. inverse_direction_hypothesis = knockdown moved the arm the UNDESIRED way AND a real sourced activation/agonism mechanism exists on the exact single-protein target; it is a labelled HYPOTHESIS, never observed gain of function and never observed support. pathway_hypothesis = an inference about a gene nobody perturbed. unresolved = fail-closed."
+      }
+    },
+    "drug_mapping_statuses": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "mapped",
+          "unmapped",
+          "refused"
+        ],
+        "description": "refused means entities matched but every one was a complex/family; a complex is never translated into a component gene. That is a different fact from 'nothing matched'."
+      }
+    },
+    "stage4_assessment_statuses": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "queued",
+          "not_queued"
+        ],
+        "description": "Whether Stage 4 is asked to ASSESS this candidate. A Stage-4 assessment is NOT biological promotion and NOT a recommendation."
+      }
+    },
+    "stage4_assessment_note": {
+      "type": "string"
+    },
+    "data_status": {
+      "enum": [
+        "no_sources_acquired",
+        "acquired_public_responses",
+        "synthetic_fixture_only"
+      ]
+    },
+    "inference_status": {
+      "const": "not_calibrated"
+    },
+    "deferred_lanes": {
+      "type": "object",
+      "additionalProperties": {
+        "const": "not_evaluated"
+      }
+    },
+    "table_hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "counts": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "stage3_evidence_classes": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "measured_perturbation",
+          "inverse_direction_hypothesis",
+          "pathway_hypothesis",
+          "no_supporting_evidence"
+        ],
+        "description": "A LABEL, not a tier. Deliberately UNORDERED. An inverse-direction hypothesis can never be filed under a measurement's evidence class, and this is never comparable to (or allowed to alter) a Direct arm evidence tier, a Direct rank, or a Stage-2 Pareto tier."
+      }
+    },
+    "evidence_classes_are_unordered": {
+      "const": true
+    },
+    "inverse_direction_hypothesis_is_never_observed_gain_of_function": {
+      "const": true
+    },
+    "stage3_never_alters_direct_ranks_or_stage2_pareto_tiers": {
+      "const": true
+    },
+    "science_evidence_registry": {
+      "type": "object",
+      "description": "Every referenced Claude Science record is RESOLVED and its bytes RE-HASHED against this registry. A missing or altered record fails closed before anything is emitted.",
+      "properties": {
+        "science_registry": {
+          "enum": [
+            "provided",
+            "not_provided"
+          ]
+        },
+        "science_registry_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "n_records": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "disease_context_review": {
+      "type": "object",
+      "description": "An ingestible RESULT contract, not a one-way pending flag.",
+      "properties": {
+        "disease_context_review": {
+          "enum": [
+            "provided",
+            "not_provided"
+          ]
+        },
+        "a_pending_review_can_never_become_favourable": {
+          "const": true
+        },
+        "a_substantive_result_requires_resolvable_evidence": {
+          "const": true
+        }
+      }
+    },
+    "rounding_rule_id": {
+      "const": "spot.stage03.canonical_number.v1",
+      "description": "ONE frozen canonical numeric representation. Every number that enters a hash goes through it."
+    },
+    "rounding_rule": {
+      "type": "string"
+    },
+    "canonical_form": {
+      "const": "exact_decimal_string"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "desired_arm": {
+      "enum": [
+        "away_from_A",
+        "toward_B"
+      ]
+    },
+    "origin_type": {
+      "enum": [
+        "direct_target",
+        "pathway_node"
+      ],
+      "description": "direct_target = the gene was PERTURBED. pathway_node = the gene was INFERRED from a pathway and never perturbed."
+    },
+    "directional_evidence_status": {
+      "enum": [
+        "observed_perturbation",
+        "inverse_direction_hypothesis",
+        "pathway_hypothesis",
+        "opposed",
+        "unresolved"
+      ],
+      "description": "observed_perturbation is the only status backed by a measurement. inverse_direction_hypothesis = knockdown moved the arm the UNDESIRED way AND a real sourced activation/agonism mechanism exists on the exact single-protein target; it is a labelled HYPOTHESIS, never observed gain of function and never observed support. pathway_hypothesis = an inference about a gene nobody perturbed. unresolved = fail-closed."
+    },
+    "drug_mapping_status": {
+      "enum": [
+        "mapped",
+        "unmapped",
+        "refused"
+      ],
+      "description": "refused means entities matched but every one was a complex/family; a complex is never translated into a component gene. That is a different fact from 'nothing matched'."
+    },
+    "stage4_assessment_status": {
+      "enum": [
+        "queued",
+        "not_queued"
+      ],
+      "description": "Whether Stage 4 is asked to ASSESS this candidate. A Stage-4 assessment is NOT biological promotion and NOT a recommendation."
+    },
+    "intervention_effect": {
+      "enum": [
+        "abundance_reduction",
+        "functional_inhibition",
+        "functional_activation",
+        "unknown"
+      ],
+      "description": "What the DRUG does. A functional inhibitor asserts NOTHING about target abundance; a degrader does."
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "active_moiety_id",
+        "identity_status",
+        "arm_evidence_states",
+        "observed_perturbation_arms",
+        "pathway_hypothesis_arms",
+        "opposed_arms",
+        "potency_state",
+        "stage4_assessment_status",
+        "stage4_assessment_reason",
+        "inverse_direction_hypothesis_arms",
+        "inverse_direction_support",
+        "stage3_evidence_classes",
+        "disease_context_review_status",
+        "disease_context_review_result",
+        "disease_context_review_reason",
+        "disease_context_review_evidence_refs"
+      ],
+      "properties": {
+        "identity_status": {
+          "enum": [
+            "resolved",
+            "unresolved",
+            "ambiguous",
+            "multi_ingredient"
+          ]
+        },
+        "arm_evidence_states": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "One entry per (desired_arm, origin_type). A measurement and an inference never share a cell.",
+          "items": {
+            "type": "object",
+            "required": [
+              "desired_arm",
+              "origin_type",
+              "arm_evidence_state"
+            ],
+            "properties": {
+              "desired_arm": {
+                "enum": [
+                  "away_from_A",
+                  "toward_B"
+                ]
+              },
+              "origin_type": {
+                "enum": [
+                  "direct_target",
+                  "pathway_node"
+                ],
+                "description": "direct_target = the gene was PERTURBED. pathway_node = the gene was INFERRED from a pathway and never perturbed."
+              },
+              "arm_evidence_state": {
+                "enum": [
+                  "observed_perturbation",
+                  "inverse_direction_hypothesis",
+                  "pathway_hypothesis",
+                  "opposed",
+                  "conflicting",
+                  "unresolved",
+                  "not_annotated"
+                ]
+              }
+            }
+          }
+        },
+        "observed_perturbation_arms": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "away_from_A",
+              "toward_B"
+            ]
+          },
+          "description": "Arms with MEASURED evidence. Only a perturbed direct target can appear here."
+        },
+        "pathway_hypothesis_arms": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "away_from_A",
+              "toward_B"
+            ]
+          },
+          "description": "Arms where the evidence is an INFERENCE about a gene nobody perturbed."
+        },
+        "opposed_arms": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "away_from_A",
+              "toward_B"
+            ]
+          }
+        },
+        "potency_state": {
+          "enum": [
+            "reported",
+            "not_evaluated"
+          ],
+          "description": "Absent potency is not_evaluated. Never zero, never absence of activity."
+        },
+        "stage4_assessment_status": {
+          "enum": [
+            "queued",
+            "not_queued"
+          ],
+          "description": "Whether Stage 4 is asked to ASSESS this candidate. A Stage-4 assessment is NOT biological promotion and NOT a recommendation."
+        },
+        "stage4_assessment_reason": {
+          "type": "string"
+        },
+        "inverse_direction_hypothesis_arms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/desired_arm"
+          },
+          "description": "Arms where knockdown moved the arm the UNDESIRED way AND a real activation mechanism exists. A labelled hypothesis \u2014 never observed support."
+        },
+        "inverse_direction_support": {
+          "type": "array",
+          "description": "The EXACT supporting arm and source mechanism behind each inverse-direction hypothesis. Preserved so a reader never has to guess what the hypothesis rests on.",
+          "items": {
+            "type": "object",
+            "required": [
+              "desired_arm",
+              "target_ensembl",
+              "action_type_sources",
+              "intervention_effect",
+              "assertion_ids"
+            ],
+            "properties": {
+              "desired_arm": {
+                "$ref": "#/$defs/desired_arm"
+              },
+              "intervention_effect": {
+                "const": "functional_activation"
+              },
+              "arm_rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Direct's own rank, verbatim. Stage 3 never alters it."
+              }
+            }
+          }
+        },
+        "stage3_evidence_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "measured_perturbation",
+              "inverse_direction_hypothesis",
+              "pathway_hypothesis",
+              "no_supporting_evidence"
+            ],
+            "description": "A LABEL, not a tier. Deliberately UNORDERED. An inverse-direction hypothesis can never be filed under a measurement's evidence class, and this is never comparable to (or allowed to alter) a Direct arm evidence tier, a Direct rank, or a Stage-2 Pareto tier."
+          }
+        },
+        "disease_context_review_status": {
+          "enum": [
+            "pending",
+            "completed",
+            "not_required"
+          ]
+        },
+        "disease_context_review_result": {
+          "oneOf": [
+            {
+              "enum": [
+                "supportive",
+                "contradictory",
+                "mixed",
+                "insufficient"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Only ever set when review_status=completed. A substantive result (supportive/contradictory/mixed) MUST carry evidence bindings that resolve in the registry; one that cites nothing is DOWNGRADED to insufficient \u2014 never favourable by default. A pending review has no result and no path to one."
+        },
+        "disease_context_review_reason": {
+          "enum": [
+            "completed_with_resolved_evidence_bindings",
+            "downgraded_to_insufficient_no_evidence_bindings",
+            "awaiting_claude_science_disease_context_review",
+            "no_inverse_direction_hypothesis_to_review"
+          ]
+        },
+        "disease_context_review_evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "science_evidence_id",
+              "science_evidence_sha256",
+              "record_type"
+            ],
+            "description": "The FULL typed evidence triple. An id alone is not a binding: it is carried end to end, and every one is RESOLVED and RE-HASHED against the science-evidence registry.",
+            "properties": {
+              "science_evidence_id": {
+                "type": "string"
+              },
+              "science_evidence_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "record_type": {
+                "enum": [
+                  "literature_support",
+                  "mechanistic_rationale",
+                  "contradiction",
+                  "uncertainty_note",
+                  "disease_context_review"
+                ]
+              }
+            }
+          }
+        },
+        "disease_context_reviewed_by": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "session_id",
+                "model_id",
+                "method_id"
+              ],
+              "properties": {
+                "session_id": {
+                  "type": "string"
+                },
+                "model_id": {
+                  "type": "string"
+                },
+                "method_id": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "stage3_evidence_class": {
+      "enum": [
+        "measured_perturbation",
+        "inverse_direction_hypothesis",
+        "pathway_hypothesis",
+        "no_supporting_evidence"
+      ],
+      "description": "A LABEL, not a tier. Deliberately UNORDERED. An inverse-direction hypothesis can never be filed under a measurement's evidence class, and this is never comparable to (or allowed to alter) a Direct arm evidence tier, a Direct rank, or a Stage-2 Pareto tier."
+    },
+    "claude_science_review_status": {
+      "enum": [
+        "pending_claude_science_inverse_direction_plausibility",
+        "not_required"
+      ],
+      "description": "An inverse-direction hypothesis awaits a Claude Science biological-plausibility review. Stage 3 flags it; Stage 3 does not judge it."
+    },
+    "science_evidence_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "science_evidence_id",
+        "science_evidence_sha256",
+        "record_type"
+      ],
+      "description": "The FULL typed evidence triple. An id alone is not a binding: it is carried end to end, and every one is RESOLVED and RE-HASHED against the science-evidence registry.",
+      "properties": {
+        "science_evidence_id": {
+          "type": "string"
+        },
+        "science_evidence_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "record_type": {
+          "enum": [
+            "literature_support",
+            "mechanistic_rationale",
+            "contradiction",
+            "uncertainty_note",
+            "disease_context_review"
+          ]
+        }
+      }
+    },
+    "disease_context_review_status": {
+      "enum": [
+        "pending",
+        "completed",
+        "not_required"
+      ]
+    },
+    "disease_context_review_result": {
+      "oneOf": [
+        {
+          "enum": [
+            "supportive",
+            "contradictory",
+            "mixed",
+            "insufficient"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Only ever set when review_status=completed. A substantive result (supportive/contradictory/mixed) MUST carry evidence bindings that resolve in the registry; one that cites nothing is DOWNGRADED to insufficient \u2014 never favourable by default. A pending review has no result and no path to one."
+    }
+  }
+}

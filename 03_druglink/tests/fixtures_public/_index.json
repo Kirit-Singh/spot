@@ -1,0 +1,403 @@
+{
+  "chembl_mechanism_CHEMBL1778": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 3026,
+    "file": "pinned_chembl_mechanism_CHEMBL1778.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "6f3e5776f28f54b40d32edf9cdb1fb13ad0810f96f6305bc485fa3629a771bd5",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/mechanism",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/mechanism.json?limit=1000&target_chembl_id=CHEMBL1778"
+  },
+  "chembl_mechanism_CHEMBL2364164": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 4616,
+    "file": "pinned_chembl_mechanism_CHEMBL2364164.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "57f998d1ca91efdd9cf8d8d2aa1c029fe545c1cbbfa664686c96313499865ec5",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/mechanism",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/mechanism.json?limit=1000&target_chembl_id=CHEMBL2364164"
+  },
+  "chembl_mechanism_CHEMBL2364164_limit2_p0": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 1735,
+    "file": "pinned_chembl_mechanism_CHEMBL2364164_limit2_p0.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "786e9061697f6e714db5c5522843db78760434aca97c87cac0e3d74be1dbae33",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/mechanism",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/mechanism.json?limit=2&target_chembl_id=CHEMBL2364164"
+  },
+  "chembl_mechanism_CHEMBL2364164_limit2_p1": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 1937,
+    "file": "pinned_chembl_mechanism_CHEMBL2364164_limit2_p1.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "a08a4181e35dac1e6cd51bbd166035d969970bc03925842893e8b08fa099430c",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/mechanism",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/mechanism.json?limit=2&offset=2&target_chembl_id=CHEMBL2364164"
+  },
+  "chembl_mechanism_CHEMBL2364164_limit2_p2": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 1461,
+    "file": "pinned_chembl_mechanism_CHEMBL2364164_limit2_p2.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "328df13fe10baaf9124d57f52c09d6fac35706055ea39b60c65af185aed6bbf9",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/mechanism",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/mechanism.json?limit=2&offset=4&target_chembl_id=CHEMBL2364164"
+  },
+  "chembl_molecule_chunk0": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 24637,
+    "file": "pinned_chembl_molecule_chunk0.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "6857dc59c04f1fd07b9e6c73f7d0e6a1d16b672ee75f4483a538bc1a7c269bf7",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/molecule",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/molecule.json?limit=1000&molecule_chembl_id__in=CHEMBL1789844%2CCHEMBL2108370%2CCHEMBL2108658%2CCHEMBL2109366%2CCHEMBL2109367%2CCHEMBL4297871%2CCHEMBL4297876%2CCHEMBL4594456%2CCHEMBL4650419%2CCHEMBL4650483"
+  },
+  "chembl_status": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 212,
+    "file": "pinned_chembl_status.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "29dc1fb09487a8d2962253a4d0d92c4ded0aa0d831effab42445d0c3483d4740",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/status",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/status.json"
+  },
+  "chembl_target_A0A8Q3SIR7": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 108,
+    "file": "pinned_chembl_target_A0A8Q3SIR7.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "644c06fff3f8091885fde2355d689839183b497466be9911535dd7305736248f",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=A0A8Q3SIR7"
+  },
+  "chembl_target_A0A8Q3WKZ2": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 108,
+    "file": "pinned_chembl_target_A0A8Q3WKZ2.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "644c06fff3f8091885fde2355d689839183b497466be9911535dd7305736248f",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=A0A8Q3WKZ2"
+  },
+  "chembl_target_A0A8V8TMM2": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 108,
+    "file": "pinned_chembl_target_A0A8V8TMM2.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "644c06fff3f8091885fde2355d689839183b497466be9911535dd7305736248f",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=A0A8V8TMM2"
+  },
+  "chembl_target_H0Y5Z0": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 108,
+    "file": "pinned_chembl_target_H0Y5Z0.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "644c06fff3f8091885fde2355d689839183b497466be9911535dd7305736248f",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=H0Y5Z0"
+  },
+  "chembl_target_P01589": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 27453,
+    "file": "pinned_chembl_target_P01589.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "85de95f9cea440f4ba64bc257c962a196514e752a3758e3bd0bf763cf564d916",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=P01589"
+  },
+  "chembl_target_P16410": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 7951,
+    "file": "pinned_chembl_target_P16410.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "c70a57bf608881aa7c67b96b1d87c181d5a172652117318724286a59829023da",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=P16410"
+  },
+  "chembl_target_Q5W005": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 108,
+    "file": "pinned_chembl_target_Q5W005.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "644c06fff3f8091885fde2355d689839183b497466be9911535dd7305736248f",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=Q5W005"
+  },
+  "chembl_target_Q5W006": {
+    "attribution": "ChEMBL, EMBL-EBI (https://www.ebi.ac.uk/chembl/). Data licensed CC BY-SA 3.0.",
+    "bytes": 108,
+    "file": "pinned_chembl_target_Q5W006.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "license": "CC BY-SA 3.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "644c06fff3f8091885fde2355d689839183b497466be9911535dd7305736248f",
+    "source": "chembl",
+    "source_endpoint": "/chembl/api/data/target",
+    "source_release": "ChEMBL_37",
+    "status": 200,
+    "url": "https://www.ebi.ac.uk/chembl/api/data/target.json?limit=1000&target_components__accession=Q5W006"
+  },
+  "uniprot_search_ENSG00000000200_empty": {
+    "attribution": "UniProtKB, UniProt Consortium (https://www.uniprot.org). Database content is licensed CC BY 4.0.",
+    "bytes": 14,
+    "file": "pinned_uniprot_search_ENSG00000000200_empty.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json",
+      "x-total-results": "0",
+      "x-uniprot-release": "2026_02",
+      "x-uniprot-release-date": "10-June-2026"
+    },
+    "license": "CC BY 4.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "5021e624e752b001ce3e3846e8f158ed4aeb93a4c9a72fdb35a0c5b14a0eea84",
+    "source": "uniprot",
+    "source_endpoint": "/uniprotkb/search",
+    "source_release": "2026_02",
+    "source_release_date": "10-June-2026",
+    "status": 200,
+    "url": "https://rest.uniprot.org/uniprotkb/search?fields=accession%2Creviewed%2Corganism_name%2Corganism_id%2Cxref_ensembl&format=json&query=xref%3Aensembl-ENSG00000000200%20AND%20organism_id%3A9606&size=500"
+  },
+  "uniprot_search_ENSG00000134460": {
+    "attribution": "UniProtKB, UniProt Consortium (https://www.uniprot.org). Database content is licensed CC BY 4.0.",
+    "bytes": 3519,
+    "file": "pinned_uniprot_search_ENSG00000134460.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json",
+      "x-total-results": "5",
+      "x-uniprot-release": "2026_02",
+      "x-uniprot-release-date": "10-June-2026"
+    },
+    "license": "CC BY 4.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "83dc013e9277edb6fb7e88f5c52d49e387a072086ebbcc91f596dba30d6ca552",
+    "source": "uniprot",
+    "source_endpoint": "/uniprotkb/search",
+    "source_release": "2026_02",
+    "source_release_date": "10-June-2026",
+    "status": 200,
+    "url": "https://rest.uniprot.org/uniprotkb/search?fields=accession%2Creviewed%2Corganism_name%2Corganism_id%2Cxref_ensembl&format=json&query=xref%3Aensembl-ENSG00000134460%20AND%20organism_id%3A9606&size=500"
+  },
+  "uniprot_search_ENSG00000163599": {
+    "attribution": "UniProtKB, UniProt Consortium (https://www.uniprot.org). Database content is licensed CC BY 4.0.",
+    "bytes": 2442,
+    "file": "pinned_uniprot_search_ENSG00000163599.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json",
+      "x-total-results": "3",
+      "x-uniprot-release": "2026_02",
+      "x-uniprot-release-date": "10-June-2026"
+    },
+    "license": "CC BY 4.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "2822eac48f94d1ac589161796ba64f960e2b38cbcf8613b625fccce06bcd9f22",
+    "source": "uniprot",
+    "source_endpoint": "/uniprotkb/search",
+    "source_release": "2026_02",
+    "source_release_date": "10-June-2026",
+    "status": 200,
+    "url": "https://rest.uniprot.org/uniprotkb/search?fields=accession%2Creviewed%2Corganism_name%2Corganism_id%2Cxref_ensembl&format=json&query=xref%3Aensembl-ENSG00000163599%20AND%20organism_id%3A9606&size=500"
+  },
+  "uniprot_search_ENSG00000163599_size2_p0": {
+    "attribution": "UniProtKB, UniProt Consortium (https://www.uniprot.org). Database content is licensed CC BY 4.0.",
+    "bytes": 1706,
+    "file": "pinned_uniprot_search_ENSG00000163599_size2_p0.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json",
+      "link": "<https://rest.uniprot.org/uniprotkb/search?format=json&fields=accession,reviewed,organism_name,organism_id,xref_ensembl&query=xref%3Aensembl-ENSG00000163599%20AND%20organism_id%3A9606&cursor=w1rlf0m31jn5nsbk9akvwf4nlu3n9usof21i39kru6ua7x&size=2>; rel=\"next\"",
+      "x-total-results": "3",
+      "x-uniprot-release": "2026_02",
+      "x-uniprot-release-date": "10-June-2026"
+    },
+    "license": "CC BY 4.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "9a5b44c9a50c936ba71342061890a5888faf8c102c5b90fd74d1d7f327fa5cb2",
+    "source": "uniprot",
+    "source_endpoint": "/uniprotkb/search",
+    "source_release": "2026_02",
+    "source_release_date": "10-June-2026",
+    "status": 200,
+    "url": "https://rest.uniprot.org/uniprotkb/search?fields=accession%2Creviewed%2Corganism_name%2Corganism_id%2Cxref_ensembl&format=json&query=xref%3Aensembl-ENSG00000163599%20AND%20organism_id%3A9606&size=2"
+  },
+  "uniprot_search_ENSG00000163599_size2_p1": {
+    "attribution": "UniProtKB, UniProt Consortium (https://www.uniprot.org). Database content is licensed CC BY 4.0.",
+    "bytes": 748,
+    "file": "pinned_uniprot_search_ENSG00000163599_size2_p1.json",
+    "fixture_namespace": "fixture",
+    "headers": {
+      "content-type": "application/json",
+      "x-total-results": "3",
+      "x-uniprot-release": "2026_02",
+      "x-uniprot-release-date": "10-June-2026"
+    },
+    "license": "CC BY 4.0",
+    "not_a_scientific_result": true,
+    "retrieval_note": "exact unmodified public response bytes, fetched via the canonical URL druglink.acquire_public builds",
+    "retrieved_at": "2026-07-12T00:00:00Z",
+    "sha256": "c19fb4ff6a6cbf383dc6d229baf8a25811fb28b6499d19206721247b6981a14e",
+    "source": "uniprot",
+    "source_endpoint": "/uniprotkb/search",
+    "source_release": "2026_02",
+    "source_release_date": "10-June-2026",
+    "status": 200,
+    "url": "https://rest.uniprot.org/uniprotkb/search?format=json&fields=accession,reviewed,organism_name,organism_id,xref_ensembl&query=xref%3Aensembl-ENSG00000163599%20AND%20organism_id%3A9606&cursor=w1rlf0m31jn5nsbk9akvwf4nlu3n9usof21i39kru6ua7x&size=2"
+  }
+}

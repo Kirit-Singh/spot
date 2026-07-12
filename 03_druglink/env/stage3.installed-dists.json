@@ -1,0 +1,43 @@
+{
+  "WARNING": "record_sha256 binds the files installed IN THIS ENVIRONMENT. It is NOT a hash of the upstream wheel artifact and is NOT a supply-chain guarantee. A fresh install could still resolve different transitive dependencies. See the UNRESOLVED portability gap in the lock header.",
+  "distributions": {
+    "h5py": {
+      "installed": true,
+      "record_sha256": "750ad8faa6a605a13c06b817b4f70aa7e1041107b68a0242ef4585a56e43470f",
+      "version": "3.15.1"
+    },
+    "jsonschema": {
+      "installed": true,
+      "record_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "4.10.3"
+    },
+    "numpy": {
+      "installed": true,
+      "record_sha256": "1d67dd3d3205efdb5a6de7aeb393c3c2d1abf684f4ce55d89bf34d05d41ba021",
+      "version": "2.4.2"
+    },
+    "pandas": {
+      "installed": true,
+      "record_sha256": "ffb9de79cd2b938b347d4fcc8eaf96413d1cadcba49f6eb178eb7f069660c55f",
+      "version": "2.3.3"
+    },
+    "pyarrow": {
+      "installed": true,
+      "record_sha256": "c751526bdc88421fe50e6dcd5a1c722e12765bf4c21d32f1ddf7c2a19c68d869",
+      "version": "23.0.0"
+    },
+    "pytest": {
+      "installed": true,
+      "record_sha256": "491bc681bf23ace0ff7f3696c35005b3f65cb04dcba4a2c25cf47fc425a8c268",
+      "version": "9.0.2"
+    },
+    "ruff": {
+      "installed": true,
+      "record_sha256": "697cf248aec6c3dbc1d1babe2cd9ac24f76601a67b27da10b8110e2b2add9f6f",
+      "version": "0.15.6"
+    }
+  },
+  "platform": "linux",
+  "python": "3.12.3",
+  "schema_version": "spot.stage03_installed_dists.v1"
+}

@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot.stage02_pathway_hypotheses.v1",
+  "title": "Stage-2 pathway-node hypotheses \u2014 STAGE-3 CONSUMER PROPOSAL (not frozen)",
+  "description": "OWNED AND EMITTED BY STAGE 2. Stage 3 is the CONSUMER. This is a consumer PROPOSAL pending the Stage-2 owner's agreement \u2014 NOT a frozen contract, and Stage 3 does not freeze Stage-2 contracts. A pathway node is INFERRED, never perturbed: it has no measured arm value, rank or evidence tier, it can never be an observed_perturbation, and it is never merged with a measured direct target. Each node states its OWN desired direction. Pathway evidence is ARM-SPECIFIC. Computed enrichment is NUMERIC and carries its statistic name, method, rounding rule, gene-set release/hash and universe binding; p/q are ABSENT unless a calibrated method is independently justified (inference_status=not_calibrated). Claude Science output is referenced by TYPED evidence record ID + hash \u2014 never embedded as a free-form object or string.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "direct_run_id",
+    "direct_run_binding_sha256",
+    "pathways"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "spot.stage02_pathway_hypotheses.v1"
+    },
+    "artifact_class": {
+      "enum": [
+        "analysis",
+        "fixture"
+      ]
+    },
+    "direct_run_id": {
+      "type": "string",
+      "description": "A document naming a different run answers a different question and is refused."
+    },
+    "direct_run_binding_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Must equal the binding hash Stage 3 independently derives from the Direct run. A resealed hash is refused."
+    },
+    "method": {
+      "type": "object",
+      "description": "How the nodes were derived. Carried into provenance verbatim; Stage 3 does not interpret it."
+    },
+    "pathways": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pathway_id",
+          "pathway_source_release",
+          "pathway_source_sha256",
+          "computed_enrichment",
+          "nodes"
+        ],
+        "properties": {
+          "pathway_id": {
+            "type": "string"
+          },
+          "pathway_source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "e.g. GO, Reactome"
+          },
+          "pathway_source_release": {
+            "type": "string",
+            "description": "REQUIRED. A pathway term's MEMBERSHIP changes between releases."
+          },
+          "pathway_source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "computed_enrichment": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "method_id",
+              "statistic_name",
+              "enrichment_value",
+              "inference_status",
+              "rounding_rule",
+              "gene_set_release",
+              "gene_set_sha256",
+              "universe_binding"
+            ],
+            "description": "The COMPUTED enrichment. NUMERIC by design \u2014 a programmatically computed statistic is a number, and stringifying it would destroy it. Only this may support a node.",
+            "properties": {
+              "method_id": {
+                "type": "string"
+              },
+              "statistic_name": {
+                "type": "string",
+                "description": "REQUIRED. Names WHAT the number is (e.g. hypergeometric_odds_ratio, gsea_normalized_enrichment_score). A bare number with no statistic name is uninterpretable."
+              },
+              "enrichment_value": {
+                "type": "number",
+                "description": "The computed statistic, NUMERIC. Not stringified."
+              },
+              "inference_status": {
+                "const": "not_calibrated",
+                "description": "No calibrated null exists for this statistic, so no p/q may be emitted. See p_value/q_value below."
+              },
+              "rounding_rule": {
+                "type": "string",
+                "description": "REQUIRED and EXPLICIT (e.g. 'ieee754_float64_no_rounding', 'round_half_even_6dp'). Stage 3 reproduces the value under this rule; an unstated rounding rule makes the number irreproducible."
+              },
+              "gene_set_release": {
+                "type": "string",
+                "description": "REQUIRED. The gene-set release the statistic was computed against."
+              },
+              "gene_set_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "universe_binding": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "universe_id",
+                  "universe_sha256",
+                  "n_genes"
+                ],
+                "description": "REQUIRED. An enrichment statistic is meaningless without the gene UNIVERSE it was computed against; the same overlap in a different universe is a different result.",
+                "properties": {
+                  "universe_id": {
+                    "type": "string"
+                  },
+                  "universe_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "n_genes": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              "p_value": {
+                "type": "number",
+                "description": "ABSENT unless a later CALIBRATED method is independently justified. inference_status=not_calibrated means no calibrated null exists, and a p-value without one is not a p-value."
+              },
+              "q_value": {
+                "type": "number",
+                "description": "ABSENT unless a later CALIBRATED method is independently justified."
+              }
+            }
+          },
+          "science_evidence_refs": {
+            "type": "array",
+            "description": "TYPED references to Claude Science evidence records, by ID and content hash. Claude Science output is NEVER embedded as a free-form object or string in the computed artifact: an interpretation is not a computation, and an un-hashed blob cannot be verified or attributed. It never supports a node and never sets a direction.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "science_evidence_id",
+                "science_evidence_sha256",
+                "record_type"
+              ],
+              "properties": {
+                "science_evidence_id": {
+                  "type": "string"
+                },
+                "science_evidence_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "record_type": {
+                  "enum": [
+                    "literature_support",
+                    "mechanistic_rationale",
+                    "contradiction",
+                    "uncertainty_note"
+                  ]
+                }
+              }
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "One inferred gene, on ONE arm. It is not a measurement.",
+              "required": [
+                "target_ensembl",
+                "desired_arm",
+                "desired_target_modulation",
+                "evidence_status",
+                "programmatic_evidence",
+                "contributing_perturbations"
+              ],
+              "properties": {
+                "target_ensembl": {
+                  "type": "string",
+                  "pattern": "^ENSG[0-9]+$",
+                  "description": "An exact Ensembl accession. A gene symbol is not an accession and is refused."
+                },
+                "desired_arm": {
+                  "enum": [
+                    "away_from_A",
+                    "toward_B"
+                  ]
+                },
+                "desired_target_modulation": {
+                  "enum": [
+                    "decrease",
+                    "increase",
+                    "no_direction_evidence",
+                    "not_evaluated"
+                  ],
+                  "description": "The direction THIS node wants, stated explicitly. NEVER inherited from the pathway, never copied from a sibling: two nodes of one pathway may want OPPOSITE directions."
+                },
+                "target_symbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "evidence_status": {
+                  "enum": [
+                    "computed_enrichment_member",
+                    "computed_enrichment_leading_edge",
+                    "curated_pathway_member",
+                    "network_propagation_neighbour"
+                  ],
+                  "description": "CLOSED enum. What kind of computed evidence puts this gene in the pathway. A node with no stated evidence is a guess."
+                },
+                "programmatic_evidence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "method_id",
+                    "desired_arm",
+                    "statistic_name",
+                    "enrichment_value",
+                    "inference_status",
+                    "rounding_rule"
+                  ],
+                  "description": "ARM-SPECIFIC computed evidence for THIS node on THIS arm. Enrichment computed on one arm can NEVER support a node on the other.",
+                  "properties": {
+                    "method_id": {
+                      "type": "string"
+                    },
+                    "desired_arm": {
+                      "allOf": [
+                        {
+                          "enum": [
+                            "away_from_A",
+                            "toward_B"
+                          ]
+                        }
+                      ],
+                      "description": "MUST equal the node's desired_arm."
+                    },
+                    "statistic_name": {
+                      "type": "string"
+                    },
+                    "enrichment_value": {
+                      "type": "number",
+                      "description": "NUMERIC. A programmatically computed statistic is a number."
+                    },
+                    "inference_status": {
+                      "const": "not_calibrated"
+                    },
+                    "rounding_rule": {
+                      "type": "string"
+                    },
+                    "p_value": {
+                      "type": "number",
+                      "description": "ABSENT unless a calibrated method is independently justified."
+                    },
+                    "q_value": {
+                      "type": "number",
+                      "description": "ABSENT unless a calibrated method is independently justified."
+                    },
+                    "gene_set_release": {
+                      "type": "string",
+                      "description": "Inline alternative to parent_enrichment_ref: repeat the COMPLETE gene-set release + universe binding here."
+                    },
+                    "gene_set_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "universe_binding": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "universe_id",
+                        "universe_sha256"
+                      ],
+                      "properties": {
+                        "universe_id": {
+                          "type": "string"
+                        },
+                        "universe_sha256": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "n_genes": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  }
+                },
+                "science_evidence_refs": {
+                  "type": "array",
+                  "description": "TYPED references to Claude Science evidence records, by ID and content hash. Claude Science output is NEVER embedded as a free-form object or string in the computed artifact: an interpretation is not a computation, and an un-hashed blob cannot be verified or attributed. It never supports a node and never sets a direction.",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "science_evidence_id",
+                      "science_evidence_sha256",
+                      "record_type"
+                    ],
+                    "properties": {
+                      "science_evidence_id": {
+                        "type": "string"
+                      },
+                      "science_evidence_sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "record_type": {
+                        "enum": [
+                          "literature_support",
+                          "mechanistic_rationale",
+                          "contradiction",
+                          "uncertainty_note"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "contributing_perturbations": {
+                  "type": "array",
+                  "minItems": 1,
+                  "description": "The MEASURED Direct perturbations supporting this node ON THIS ARM. A node that cites none \u2014 or cites only perturbations absent from this screen or on the OTHER arm \u2014 is retained with an explicit disposition and barred from every drug edge.",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "target_ensembl"
+                    ],
+                    "properties": {
+                      "target_ensembl": {
+                        "type": "string",
+                        "pattern": "^ENSG[0-9]+$",
+                        "description": "A gene the Direct screen actually perturbed."
+                      },
+                      "desired_arm": {
+                        "allOf": [
+                          {
+                            "enum": [
+                              "away_from_A",
+                              "toward_B"
+                            ]
+                          }
+                        ],
+                        "description": "MUST match the node's arm. Wrong-arm inheritance is refused."
+                      }
+                    }
+                  }
+                },
+                "parent_enrichment_ref": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pathway_record_id",
+                    "gene_set_release_id",
+                    "gene_set_sha256",
+                    "universe_id",
+                    "universe_sha256"
+                  ],
+                  "description": "HASH-BOUND reference to the parent computed enrichment. Either give this, OR repeat the complete gene-set release + universe binding inline in programmatic_evidence. A node with NEITHER has a dangling parent and is REFUSED \u2014 a claim with nothing behind it is not a hypothesis. Every field must match the parent enrichment record exactly; a partial or mismatched reference is refused.",
+                  "properties": {
+                    "pathway_record_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "gene_set_release_id": {
+                      "type": "string"
+                    },
+                    "gene_set_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "universe_id": {
+                      "type": "string"
+                    },
+                    "universe_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "desired_arm": {
+      "enum": [
+        "away_from_A",
+        "toward_B"
+      ]
+    },
+    "evidence_status": {
+      "enum": [
+        "computed_enrichment_member",
+        "computed_enrichment_leading_edge",
+        "curated_pathway_member",
+        "network_propagation_neighbour"
+      ],
+      "description": "CLOSED enum. What kind of computed evidence puts this gene in the pathway. A node with no stated evidence is a guess."
+    }
+  }
+}

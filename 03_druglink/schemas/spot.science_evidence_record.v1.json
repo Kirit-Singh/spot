@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot.science_evidence_record.v1",
+  "title": "Claude Science evidence record (content-addressed)",
+  "description": "One Science evidence record, content-addressed by canonical_sha256 over its own content (excluding record_sha256). THAT hash is the science_evidence_sha256 a reference must carry. Both byte streams \u2014 the raw record as Claude Science emitted it, and the structured typed form \u2014 are hashed and re-verified on resolve. A missing record, an altered record, altered bytes, or a type mismatch is a typed refusal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "science_evidence_id",
+    "record_type",
+    "provenance",
+    "raw_sha256",
+    "raw_bytes",
+    "raw_media_type",
+    "structured_sha256",
+    "structured_bytes",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "spot.science_evidence_record.v1"
+    },
+    "science_evidence_id": {
+      "type": "string"
+    },
+    "record_type": {
+      "enum": [
+        "literature_support",
+        "mechanistic_rationale",
+        "contradiction",
+        "uncertainty_note",
+        "disease_context_review"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "model_id",
+        "method_id",
+        "source_chain"
+      ],
+      "description": "Who produced this record, with what method, from what sources. A record that cannot say cannot be attributed.",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "method_id": {
+          "type": "string"
+        },
+        "source_chain": {
+          "type": "array"
+        }
+      }
+    },
+    "raw_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "raw_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "raw_media_type": {
+      "type": "string"
+    },
+    "structured_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "structured_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "record_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

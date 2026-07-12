@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot.stage03_acquisition_manifest.v1",
+  "title": "Stage-3 acquisition manifest (the ONLY authority on source status)",
+  "description": "A response is public because a trusted acquisition step says so here -- never because a payload envelope labelled itself. The manifest is namespace-typed: a fixture manifest can only declare synthetic_fixture entries, and a production run can only consume acquired_public entries parsed by production-ready adapters. Entries with acquisition_status=not_acquired carry no bytes and become dispositions; that is the state of every real public source in this pass.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "manifest_id",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "spot.stage03_acquisition_manifest.v1"
+    },
+    "manifest_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "acquisition_run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "acquisition_id": {
+      "description": "Bound BEFORE any response was inspected: policy + verified Direct run + the frozen target queue. It cannot be re-derived from the responses, so it cannot be tuned to them.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "acquisition_binding": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "request_groups": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
+    },
+    "releases": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "counts": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "derived": {
+      "description": "Facts re-derivable from the retained raw bytes (gene->accessions, single-protein targets). Recorded for inspection; the offline verifier re-derives them from the bytes rather than trusting them.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "content_sha256": {
+      "description": "Canonical hash of the whole manifest with retrieval timestamps excluded: deterministic across re-runs of the same acquisition.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "artifact_class": {
+      "type": "string",
+      "enum": [
+        "analysis",
+        "fixture"
+      ]
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "adapter",
+        "source_release",
+        "source_endpoint",
+        "retrieval_url",
+        "query",
+        "license",
+        "acquisition_status",
+        "raw_file",
+        "raw_sha256",
+        "raw_bytes",
+        "access_record"
+      ],
+      "properties": {
+        "request_group_id": {
+          "description": "All pages of one logical query share this ID; page_index orders them.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "page_index": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source_release_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_context": {
+          "description": "Which frozen queue item caused this request (gene, accession, ChEMBL target, molecule chunk).",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "response_headers": {
+          "description": "Retained verbatim from the wire. Release strings are read from here, never copied from a document.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "pagination": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "page_index",
+                "n_pages_in_group",
+                "predecessor_url",
+                "successor_url",
+                "is_first_page",
+                "is_last_page",
+                "expected_total_count",
+                "observed_count"
+              ],
+              "properties": {
+                "page_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "n_pages_in_group": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "predecessor_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "successor_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "declared_next_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "declared_previous_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "is_first_page": {
+                  "type": "boolean"
+                },
+                "is_last_page": {
+                  "type": "boolean"
+                },
+                "expected_total_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "observed_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cumulative_observed_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "group_observed_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "open_targets",
+            "chembl",
+            "pubchem",
+            "uniprot",
+            "rxnorm",
+            "lincs",
+            "gbm_atlas"
+          ]
+        },
+        "adapter": {
+          "type": "string",
+          "minLength": 3
+        },
+        "source_release": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retrieval_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "type": "object"
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "acquisition_status": {
+          "type": "string",
+          "enum": [
+            "acquired_public",
+            "not_acquired",
+            "synthetic_fixture"
+          ]
+        },
+        "not_acquired_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "raw_media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "access_record": {
+          "description": "What the acquisition step actually observed. Null is only legal for not_acquired entries and synthetic fixtures.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "retrieved_at",
+                "http_status"
+              ],
+              "properties": {
+                "retrieved_at": {
+                  "type": "string",
+                  "minLength": 4
+                },
+                "http_status": {
+                  "type": "integer"
+                },
+                "content_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "etag": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last_modified": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "acquired_by": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

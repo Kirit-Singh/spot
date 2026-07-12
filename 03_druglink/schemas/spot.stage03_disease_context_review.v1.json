@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot.stage03_disease_context_review.v1",
+  "title": "Claude Science disease-context review \u2014 ingestible RESULT contract",
+  "description": "A COMPLETED review carries a typed result. supportive/contradictory/mixed are SUBSTANTIVE findings and must pay for themselves: each must carry evidence bindings that RESOLVE and RE-HASH in the science-evidence registry. A substantive result citing nothing is DOWNGRADED to insufficient \u2014 never favourable by default. Unresolvable or altered bindings are a typed REFUSAL, not a warning: the verdict is not kept while the evidence under it is dropped. A pending review has no result and no code path to one; it stays pending.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "direct_run_id",
+    "reviews"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "spot.stage03_disease_context_review.v1"
+    },
+    "artifact_class": {
+      "enum": [
+        "analysis",
+        "fixture"
+      ]
+    },
+    "direct_run_id": {
+      "type": "string"
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "review_status"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "review_status": {
+            "enum": [
+              "pending",
+              "completed",
+              "not_required"
+            ]
+          },
+          "review_result": {
+            "oneOf": [
+              {
+                "enum": [
+                  "supportive",
+                  "contradictory",
+                  "mixed",
+                  "insufficient"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ONLY on a completed review. A pending review declaring a result is claiming a finding it has not made, and is refused."
+          },
+          "review_evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "science_evidence_id",
+                "science_evidence_sha256",
+                "record_type"
+              ],
+              "properties": {
+                "science_evidence_id": {
+                  "type": "string"
+                },
+                "science_evidence_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "record_type": {
+                  "enum": [
+                    "literature_support",
+                    "mechanistic_rationale",
+                    "contradiction",
+                    "uncertainty_note",
+                    "disease_context_review"
+                  ]
+                }
+              }
+            }
+          },
+          "reviewed_by": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "session_id",
+              "model_id",
+              "method_id"
+            ],
+            "properties": {
+              "session_id": {
+                "type": "string"
+              },
+              "model_id": {
+                "type": "string"
+              },
+              "method_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
