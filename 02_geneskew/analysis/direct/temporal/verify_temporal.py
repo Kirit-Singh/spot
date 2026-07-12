@@ -23,17 +23,17 @@ from typing import Any
 import pandas as pd
 
 from ..config import ARM_A, ARM_B, ARMS
-from . import estimand, policy
+from ..hashing import content_hash, file_sha256
+from . import admission, estimand, policy
 from .records import comparison_id
 
-PASS = "pass"
+# The verdict is an ADMISSION decision, and it fails CLOSED: anything this verifier does
+# not positively recognise is refused. "pass"/"fail" were the wrong words for it — they
+# read like a test result, and a test that does not know about a defect simply passes.
+ADMIT = "admit"
+REJECT = "reject"
+PASS = "pass"       # a single check's outcome (not the artifact's verdict)
 FAIL = "fail"
-
-# A combined temporal objective would reintroduce the retired balanced-skew score in a
-# new coordinate. There is no such column, and the verifier refuses one if it appears.
-FORBIDDEN_SUBSTRINGS = ("combined", "balanced", "mean_did", "average_did",
-                        "overall_did", "headline", "composite")
-FORBIDDEN_INFERENCE = ("pvalue", "p_value", "qvalue", "q_value", "fdr", "padj")
 
 
 def _fails(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -48,14 +48,82 @@ def _num(v: Any) -> Any:
     return None if v is None or (isinstance(v, float) and v != v) or pd.isna(v) else v
 
 
+def _artifact_identity(out_dir: str) -> dict[str, Any]:
+    """Bind the artifact: every required file, and the directory as a whole.
+
+    A verifier that admits an artifact without naming the exact bytes it admitted has
+    admitted nothing in particular — the file can be swapped afterwards and the report
+    still reads as a clean bill of health.
+    """
+    files = {}
+    for name in admission.REQUIRED_FILES:
+        path = os.path.join(out_dir, name)
+        files[name] = file_sha256(path) if os.path.exists(path) else None
+    return {"files": files,
+            "artifact_sha256": content_hash(files),
+            "required_files": list(admission.REQUIRED_FILES)}
+
+
 def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
-    """Re-derive every claim in ``temporal.parquet`` from the bytes that shipped."""
+    """Re-derive every claim in ``temporal.parquet`` from the bytes that shipped.
+
+    FAIL-CLOSED. If a required file is absent, if a column is not on its file's exact
+    allowlist, or if any key ANYWHERE in the artifact matches the forbidden pattern, the
+    artifact is REJECTED — before a single scientific claim is re-derived. There is no
+    branch here that admits something it does not recognise.
+    """
+    identity = _artifact_identity(out_dir)
+    checks: list[dict[str, Any]] = []
+
+    # ---- 0. THE ARTIFACT EXISTS, IN FULL. An absent file is a reject, not a skip. ----
+    absent = [n for n, sha in identity["files"].items() if sha is None]
+    checks.append(_check("every_required_file_is_present", not absent,
+                         f"absent: {absent}"))
+    if absent:
+        return _report(provenance, identity, checks, n_records=0, n_endpoint_rows=0,
+                       n_comparisons=0)
+
     df = pd.read_parquet(os.path.join(out_dir, "temporal.parquet"))
     ends = pd.read_parquet(os.path.join(out_dir, "endpoints.parquet"))
     pol = policy.load()
     k = provenance["temporal_policy"]["reliability_k"]
 
-    checks: list[dict[str, Any]] = []
+    # ---- 0a. THE EXACT COLUMN ALLOWLIST. Unknown column -> REJECT (B4). ----
+    for name, cols in (("temporal.parquet", list(df.columns)),
+                       ("endpoints.parquet", list(ends.columns))):
+        v = admission.column_violations(cols, name)
+        checks.append(_check(
+            ("temporal_columns_match_the_exact_allowlist"
+             if name == "temporal.parquet"
+             else "endpoint_columns_match_the_exact_allowlist"),
+            not v["unknown"] and not v["missing"],
+            f"{name}: unknown={v['unknown']} missing={v['missing']}"))
+
+    # ---- 0b. THE RECURSIVE KEY FIREWALL, over EVERY emitted object (B4). ----
+    # Column names AND the whole provenance document, at any nesting depth. A p-value
+    # buried three levels down in a diagnostics list is the shape a disguised one takes.
+    hits = (admission.forbidden_keys({c: None for c in df.columns})
+            + admission.forbidden_keys({c: None for c in ends.columns})
+            + admission.forbidden_keys(provenance))
+    checks.append(_check("no_forbidden_key_at_any_depth", not hits,
+                         f"forbidden keys: {sorted(set(hits))[:8]}"))
+
+    # ---- 0c. THE IDENTITY BINDING: the records ARE this run's, by this method. ----
+    run_ids = set(df["temporal_run_id"].unique())
+    method_shas = set(df["temporal_method_sha256"].unique())
+    bound = (run_ids == {provenance["temporal_run_id"]}
+             and method_shas == {provenance["temporal_method_sha256"]})
+    checks.append(_check(
+        "records_are_bound_to_the_run_and_the_method", bound,
+        f"run_ids={sorted(run_ids)} method_shas={sorted(method_shas)}"))
+
+    # FAIL-CLOSED: the structural gates come FIRST and they are final. If the artifact is
+    # not the shape the contract describes, it is refused here — re-deriving scientific
+    # claims from a table whose columns we do not recognise would be re-deriving claims
+    # from something else, and a crash midway would be an unhandled reject at best.
+    if _fails(checks):
+        return _report(provenance, identity, checks, n_records=len(df),
+                       n_endpoint_rows=len(ends), n_comparisons=0)
 
     # ---- 1. the DiD is the difference of the endpoint values the record published ----
     bad = []
@@ -149,13 +217,9 @@ def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
                                                               r.to_condition)
                              for _, r in df.iterrows())))
 
-    # ---- 6. no combined objective, no calibrated inference ----
-    combined = [c for c in df.columns
-                if any(s in c.lower() for s in FORBIDDEN_SUBSTRINGS)]
-    checks.append(_check("no_combined_temporal_objective", not combined,
-                         f"forbidden columns: {combined}"))
-    pq = [c for c in df.columns if c.lower() in FORBIDDEN_INFERENCE]
-    checks.append(_check("no_p_or_q_emitted", not pq, f"forbidden columns: {pq}"))
+    # ---- 6. no calibrated inference ----
+    # (the no-p/q and no-combined-objective refusals are the allowlist + firewall above,
+    # at checks 0a/0b: they run BEFORE any claim is re-derived, and they fail closed.)
     checks.append(_check("inference_status_is_not_calibrated",
                          set(df["inference_status"].unique()) == {"not_calibrated"}))
 
@@ -181,17 +245,36 @@ def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
     checks.append(_check("endpoints_are_the_within_condition_arm_values", not bad,
                          "; ".join(bad[:5])))
 
+    return _report(provenance, identity, checks, n_records=len(df),
+                   n_endpoint_rows=len(ends), n_comparisons=len(pairs))
+
+
+def _report(provenance: dict[str, Any], identity: dict[str, Any],
+            checks: list[dict[str, Any]], *, n_records: int, n_endpoint_rows: int,
+            n_comparisons: int) -> dict[str, Any]:
+    """The admission decision. ANY failed check refuses the artifact — fail-closed."""
     failures = _fails(checks)
     return {
-        "schema_version": "spot.stage02_temporal_verification.v1",
+        "schema_version": "spot.stage02_temporal_verification.v2",
         "temporal_run_id": provenance["temporal_run_id"],
         "temporal_method_sha256": provenance["temporal_method_sha256"],
-        "verifier_id": "spot.stage02.temporal.verifier.v1",
+        # v2: the verifier fails CLOSED — exact column allowlist + a recursive key-name
+        # firewall at any depth + a bound artifact identity (B4).
+        "verifier_id": "spot.stage02.temporal.verifier.v2",
         "generator_is_not_verifier": True,
-        "n_records": int(len(df)),
-        "n_endpoint_rows": int(len(ends)),
-        "n_comparisons": len(pairs),
+        "fail_closed": True,
+        "admission_policy": {
+            "exact_column_allowlist": True,
+            "unknown_column_is_a_reject": True,
+            "forbidden_key_pattern": admission.FORBIDDEN_KEY_PATTERN,
+            "key_firewall_is_recursive": True,
+            "key_firewall_exceptions": sorted(admission.KEY_FIREWALL_EXCEPTIONS),
+        },
+        "artifact_identity": identity,
+        "n_records": int(n_records),
+        "n_endpoint_rows": int(n_endpoint_rows),
+        "n_comparisons": int(n_comparisons),
         "checks": checks,
         "n_failed": len(failures),
-        "verdict": PASS if not failures else FAIL,
+        "verdict": ADMIT if not failures else REJECT,
     }

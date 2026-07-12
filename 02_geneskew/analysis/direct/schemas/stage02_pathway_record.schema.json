@@ -70,11 +70,8 @@
               }
             },
             "properties": {
-              "cluster_id": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
+              "convergence_definition": {
+                "type": "string"
               },
               "convergence_refused_reason": {
                 "type": [
@@ -85,19 +82,36 @@
               "convergent": {
                 "type": "boolean"
               },
+              "intra_set_components": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "type": "array"
+              },
               "measured_perturbations": {
                 "items": {
                   "type": "string"
                 },
                 "type": "array"
               },
+              "membership_restriction": {
+                "type": "string"
+              },
               "method_id": {
-                "const": "spot.stage02.pathway.signature_convergence.v1"
+                "const": "spot.stage02.pathway.signature_convergence.v2"
               },
               "min_perturbations_for_convergence": {
                 "const": 2
               },
               "min_shared_unmasked_genes": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "n_intra_set_components": {
                 "minimum": 0,
                 "type": "integer"
               },
@@ -156,6 +170,9 @@
               "single_target_support": {
                 "type": "boolean"
               },
+              "support_may_route_through_non_members": {
+                "const": false
+              },
               "supporting_perturbations": {
                 "items": {
                   "type": "string"
@@ -171,7 +188,6 @@
               "supporting_perturbations",
               "single_target_support",
               "min_perturbations_for_convergence",
-              "cluster_id",
               "n_supportive_pairs",
               "pairwise_support",
               "similarity_metric",
@@ -179,7 +195,12 @@
               "min_shared_unmasked_genes",
               "method_id",
               "rounding_rule",
-              "convergence_refused_reason"
+              "convergence_refused_reason",
+              "n_intra_set_components",
+              "intra_set_components",
+              "convergence_definition",
+              "membership_restriction",
+              "support_may_route_through_non_members"
             ],
             "then": {
               "properties": {
@@ -273,8 +294,17 @@
                     },
                     "type": "array"
                   },
+                  "leading_edge_convention": {
+                    "type": "string"
+                  },
+                  "leading_edge_side": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "method_id": {
-                    "const": "spot.stage02.pathway.ranked_arm_enrichment.v1"
+                    "const": "spot.stage02.pathway.ranked_arm_enrichment.v2"
                   },
                   "n_hits_in_ranking": {
                     "minimum": 0,
@@ -326,7 +356,9 @@
                   "testable",
                   "undefined_reason",
                   "inference_status",
-                  "no_pq_reason"
+                  "no_pq_reason",
+                  "leading_edge_side",
+                  "leading_edge_convention"
                 ],
                 "type": "object"
               },
@@ -392,8 +424,17 @@
                     },
                     "type": "array"
                   },
+                  "leading_edge_convention": {
+                    "type": "string"
+                  },
+                  "leading_edge_side": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "method_id": {
-                    "const": "spot.stage02.pathway.ranked_arm_enrichment.v1"
+                    "const": "spot.stage02.pathway.ranked_arm_enrichment.v2"
                   },
                   "n_hits_in_ranking": {
                     "minimum": 0,
@@ -445,7 +486,9 @@
                   "testable",
                   "undefined_reason",
                   "inference_status",
-                  "no_pq_reason"
+                  "no_pq_reason",
+                  "leading_edge_side",
+                  "leading_edge_convention"
                 ],
                 "type": "object"
               }

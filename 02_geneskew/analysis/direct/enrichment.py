@@ -21,10 +21,24 @@ ranked target list:
     a MISS               subtracts  1 / (N - N_hits)
     ES = the running sum's greatest deviation from zero, keeping its sign.
 
-The LEADING EDGE is the set of hit genes at or before the rank where that peak occurs —
-the members actually responsible for the score. It is emitted in full, because "pathway P
-is enriched" is not a claim anyone can check, whereas "these six of its genes are the
-ones at the top" is.
+The LEADING EDGE is the set of members actually responsible for the score. It is emitted
+in full, because "pathway P is enriched" is not a claim anyone can check, whereas "these
+six of its genes are the ones at the top" is.
+
+THE EDGE IS DIRECTION-AWARE, AND IT HAS TO BE
+---------------------------------------------
+A POSITIVE score is produced by members at the TOP: its edge is the hits at or before the
+positive peak.
+
+A NEGATIVE score is produced by members at the BOTTOM, and taking "the hits at or before
+the peak" there is exactly wrong. The running sum descends to its trough on a run of
+MISSES, so at the trough no hit has been seen yet and that rule returns an EMPTY edge —
+the layer reports a score of -1.0 with no gene behind it. A negative enrichment's edge is
+its TRAILING edge: the hits that fall AFTER the trough, which are the members sitting at
+the bottom of the ranking and the reason the sum went there.
+
+The invariant, either way: a DEFINED enrichment always names the members responsible for
+it. A score nobody is standing behind is a score nobody can check or refute.
 
 NO P-VALUE. NO q. NO FDR.
 -------------------------
@@ -45,8 +59,23 @@ from typing import Any, Optional
 
 from . import config
 
-METHOD_ID = "spot.stage02.pathway.ranked_arm_enrichment.v1"
+# v2, not v1: the leading edge is now direction-aware. A negative enrichment that used to
+# come back with an empty edge now names the members at the bottom that produced it, so
+# the emitted record genuinely changes and the method changes with it.
+METHOD_ID = "spot.stage02.pathway.ranked_arm_enrichment.v2"
 STATISTIC_NAME = "weighted_running_sum_enrichment_score"
+
+# WHICH END of the ranking an edge is taken from. Emitted per record and bound into the
+# method hash: two runs that disagree about this disagree about which genes a pathway
+# result is made of.
+EDGE_TOP = "top_leading_edge_at_or_before_the_positive_peak"
+EDGE_BOTTOM = "bottom_trailing_edge_after_the_negative_trough"
+EDGE_SIDES = (EDGE_TOP, EDGE_BOTTOM)
+LEADING_EDGE_CONVENTION = (
+    "positive_enrichment -> hits at or before the positive peak (top leading edge); "
+    "negative_enrichment -> hits after the negative trough (bottom trailing edge). A "
+    "defined enrichment always names a non-empty edge.")
+EDGE_IS_DIRECTION_AWARE = True
 
 # The exponent on the score magnitude in the running sum. w = 1 weights a hit by how far
 # the target actually moved; w = 0 would make it a plain hit-count and throw the effect
@@ -99,8 +128,8 @@ def enrich_one(ranked: list[tuple[str, float]], set_genes: set[str]) -> dict[str
         # No ranking, no members in it, or nothing BUT members: in each case the statistic
         # is undefined rather than zero, and saying zero would claim "no enrichment".
         return {"enrichment_value": None, "leading_edge": [],
-                "n_leading_edge": 0, "n_hits_in_ranking": n_hits,
-                "n_ranked": n, "peak_rank": None,
+                "n_leading_edge": 0, "leading_edge_side": None,
+                "n_hits_in_ranking": n_hits, "n_ranked": n, "peak_rank": None,
                 "undefined_reason": ("empty_ranking" if n == 0 else
                                      "no_set_gene_in_ranking" if n_hits == 0 else
                                      "every_ranked_target_is_a_set_gene")}
@@ -108,7 +137,8 @@ def enrich_one(ranked: list[tuple[str, float]], set_genes: set[str]) -> dict[str
     hit_mass = sum(abs(v) ** SCORE_WEIGHT for _g, v in hits)
     if hit_mass == 0:
         return {"enrichment_value": None, "leading_edge": [], "n_leading_edge": 0,
-                "n_hits_in_ranking": n_hits, "n_ranked": n, "peak_rank": None,
+                "leading_edge_side": None, "n_hits_in_ranking": n_hits, "n_ranked": n,
+                "peak_rank": None,
                 "undefined_reason": "every_set_gene_scored_exactly_zero"}
 
     miss_step = 1.0 / (n - n_hits)
@@ -125,14 +155,29 @@ def enrich_one(ranked: list[tuple[str, float]], set_genes: set[str]) -> dict[str
             running -= miss_step
         if abs(running) > abs(peak):
             peak, peak_rank = running, i
+            # the TOP edge: the hits seen at or before this rank
             edge_at_peak = list(seen_hits)
+
+    # THE DIRECTION-AWARE EDGE (M1). A positive score is made by the members at the top,
+    # so its edge is the hits at or before the peak. A negative score is made by the
+    # members at the BOTTOM: the sum reached its trough on a run of misses, so no hit has
+    # been seen there and the top-edge rule returns an empty list. Its edge is the
+    # TRAILING edge — the hits after the trough, which are the reason it went down.
+    if peak < 0:
+        edge = [g for i, (g, _v) in enumerate(ranked, start=1)
+                if g in set_genes and i > peak_rank]
+        side = EDGE_BOTTOM
+    else:
+        edge = edge_at_peak
+        side = EDGE_TOP
 
     return {
         "enrichment_value": _round(peak),
         # The members actually responsible for the score. "Pathway P is enriched" is not
-        # checkable; "these are its genes at the top, in order" is.
-        "leading_edge": edge_at_peak,
-        "n_leading_edge": len(edge_at_peak),
+        # checkable; "these are its genes at the bottom, in rank order" is.
+        "leading_edge": edge,
+        "n_leading_edge": len(edge),
+        "leading_edge_side": side,
         "n_hits_in_ranking": n_hits,
         "n_ranked": n,
         "peak_rank": peak_rank,
@@ -156,6 +201,7 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
             # EMITTED, not dropped. Silently omitting a set hides which pathways were
             # never tested, and a reader cannot tell "not enriched" from "never asked".
             result = {"enrichment_value": None, "leading_edge": [], "n_leading_edge": 0,
+                      "leading_edge_side": None,
                       "n_hits_in_ranking": 0, "n_ranked": len(ranked),
                       "peak_rank": None,
                       "undefined_reason": ("set_too_small_to_test"
@@ -172,6 +218,8 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
             "method_id": METHOD_ID,
             "rounding_rule": ROUNDING_RULE,
             "score_weight": SCORE_WEIGHT,
+            "leading_edge_convention": LEADING_EDGE_CONVENTION,
+            "edge_is_direction_aware": EDGE_IS_DIRECTION_AWARE,
             "n_genes_in_set": s["n_genes"],
             "n_genes_in_universe": s["n_genes_in_universe"],
             "coverage": s["coverage"],

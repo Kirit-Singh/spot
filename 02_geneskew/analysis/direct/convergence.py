@@ -44,14 +44,41 @@ convergent; it is one experiment, and calling it a pathway result launders a sin
 observation into a mechanism. Such pathways are still EMITTED — with
 ``n_supporting_perturbations = 1`` and ``single_target_support = true`` — because deleting
 them would hide how thin the evidence is. They are simply never called convergent.
+
+SUPPORT IS INTRA-PATHWAY. IT MAY NEVER ROUTE THROUGH A NON-MEMBER
+-----------------------------------------------------------------
+The retired version clustered ALL perturbations globally and then asked which of a
+pathway's members shared a global connected component. That is a different question, and
+a false one: two members can land in the same global component while being connected ONLY
+through a gene that is not in the pathway at all. The pathway is then reported convergent
+on the strength of a similarity that neither member has to the other — a mechanism
+fabricated out of a bridge.
+
+So convergence is computed on the subgraph INDUCED BY THE SET'S OWN MEASURED MEMBERS.
+Only supportive pairs whose BOTH endpoints are members of the set are edges. A non-member
+is not evidence about the set, however similar it is to one of them, and there is no
+global component anywhere in this module for one to hide in.
 """
 from __future__ import annotations
 
 import math
 from typing import Any, Optional
 
-METHOD_ID = "spot.stage02.pathway.signature_convergence.v1"
+# v2, not v1: convergence is now the induced intra-pathway component, not a global one.
+# That changes which pathways are called convergent, so it changes the method.
+METHOD_ID = "spot.stage02.pathway.signature_convergence.v2"
 SIMILARITY_METRIC = "cosine_on_shared_unmasked_support"
+
+# THE DEFINITION, and the restriction that makes it honest. Both enter the method hash:
+# a run that quietly went back to global components would be answering a different
+# question under the same id.
+CONVERGENCE_DEFINITION = (
+    "intra_pathway_largest_connected_component_over_supportive_pairs_in_the_subgraph_"
+    "induced_by_the_gene_set_s_own_measured_members")
+MEMBERSHIP_RESTRICTION = (
+    "an_edge_counts_only_when_both_endpoints_are_members_of_the_set; a supportive pair "
+    "to a non_member carries no support into the set and can never link two members")
+SUPPORT_MAY_ROUTE_THROUGH_NON_MEMBERS = False
 
 # A pair is SUPPORTIVE at or above this similarity. Frozen before any real signature was
 # looked at; it is a threshold on a descriptive metric, not a significance cut.
@@ -111,19 +138,24 @@ def pairwise(signatures: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
     return out
 
 
-def clusters(pairs: list[dict[str, Any]],
-             targets: list[str]) -> dict[str, Optional[int]]:
-    """Connected components over the SUPPORTIVE pairs. target -> cluster id (or None).
+def induced_components(members: list[str],
+                       supportive_pairs: list[dict[str, Any]]
+                       ) -> list[list[str]]:
+    """Connected components over the subgraph INDUCED BY ``members``, largest first.
+
+    Every edge here already has both endpoints in ``members`` — the caller selects them —
+    so no component can be joined by a gene outside the set. That is the whole of the B1
+    fix, and it is why this takes a member list rather than a global target list.
 
     Deterministic and seedless on purpose. k-means, Leiden and friends all need a seed, a
     k, or a resolution — three more knobs that change which pathways look convergent, and
     every one of them is a place to tune the answer after seeing it. Connected components
     over a frozen threshold has no such freedom: the graph is the graph.
 
-    A target with no supportive partner is in no cluster (``None``), not in a cluster of
-    one. A cluster of one is not a cluster; it is a target.
+    Singletons are not components. A member with no supportive partner INSIDE the set is
+    not a cluster of one; it is a target.
     """
-    parent = {t: t for t in targets}
+    parent = {m: m for m in members}
 
     def find(x):
         while parent[x] != x:
@@ -131,37 +163,36 @@ def clusters(pairs: list[dict[str, Any]],
             x = parent[x]
         return x
 
-    for p in pairs:
-        if not p["supportive"]:
+    for p in supportive_pairs:
+        a, b = p["target_a"], p["target_b"]
+        if a not in parent or b not in parent:      # belt and braces: never a non-member
             continue
-        ra, rb = find(p["target_a"]), find(p["target_b"])
+        ra, rb = find(a), find(b)
         if ra != rb:
             parent[ra if ra > rb else rb] = rb if ra > rb else ra
 
     groups: dict[str, list[str]] = {}
-    for t in targets:
-        groups.setdefault(find(t), []).append(t)
+    for m in members:
+        groups.setdefault(find(m), []).append(m)
 
-    out: dict[str, Optional[int]] = {t: None for t in targets}
-    cid = 1
-    for root in sorted(groups, key=lambda r: sorted(groups[r])[0]):
-        members = groups[root]
-        if len(members) < MIN_PERTURBATIONS_FOR_CONVERGENCE:
-            continue                       # a cluster of one is a target, not a cluster
-        for t in members:
-            out[t] = cid
-        cid += 1
-    return out
+    components = [sorted(g) for g in groups.values()
+                  if len(g) >= MIN_PERTURBATIONS_FOR_CONVERGENCE]
+    # largest first; ties broken on the smallest member id, so the choice is total
+    return sorted(components, key=lambda c: (-len(c), c[0]))
 
 
 def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]],
-                  pairs: list[dict[str, Any]],
-                  cluster_of: dict[str, Optional[int]]) -> list[dict[str, Any]]:
+                  pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Per gene set: which of its members were MEASURED, and did they converge?
 
-    ``n_supporting_perturbations`` counts the set's members that share a cluster — i.e.
-    that were shown to do the same thing. A set with exactly one measured member can
-    never reach two, and is flagged ``single_target_support`` rather than dropped.
+    ``n_supporting_perturbations`` counts the members of the set's LARGEST INTRA-PATHWAY
+    component — members shown to do the same thing as each other. A set with exactly one
+    measured member can never reach two, and is flagged ``single_target_support`` rather
+    than dropped.
+
+    There is no global cluster here to consult. A supportive pair between a member and a
+    non-member is not an edge of this graph, so it cannot make two members look connected
+    when their only link is a gene the pathway does not contain.
     """
     by_pair = {(p["target_a"], p["target_b"]): p for p in pairs}
     out = []
@@ -169,8 +200,9 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
     for set_id in sorted(bundle["sets"]):
         s = bundle["sets"][set_id]
         measured = sorted(g for g in s["genes"] if g in signatures)
+        member_set = set(measured)
 
-        # the set's own supportive pairs, and the clusters its members fall into
+        # THE INDUCED SUBGRAPH: only pairs whose BOTH endpoints are members of this set.
         internal = []
         for i, a in enumerate(measured):
             for b in measured[i + 1:]:
@@ -178,16 +210,12 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
                 if p is not None:
                     internal.append(p)
         supportive = [p for p in internal if p["supportive"]]
+        assert all(p["target_a"] in member_set and p["target_b"] in member_set
+                   for p in supportive), "an edge escaped the membership restriction"
 
-        member_clusters: dict[int, list[str]] = {}
-        for t in measured:
-            c = cluster_of.get(t)
-            if c is not None:
-                member_clusters.setdefault(c, []).append(t)
-        best: tuple[Optional[int], list[str]] = max(
-            member_clusters.items(), key=lambda kv: (len(kv[1]), -kv[0]),
-            default=(None, []))
-        n_supporting = len(best[1])
+        components = induced_components(measured, supportive)
+        best: list[str] = components[0] if components else []
+        n_supporting = len(best)
 
         convergent = n_supporting >= MIN_PERTURBATIONS_FOR_CONVERGENCE
         single = len(measured) == 1
@@ -199,12 +227,19 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             "similarity_threshold": SIMILARITY_THRESHOLD,
             "min_shared_unmasked_genes": MIN_SHARED_GENES,
             "rounding_rule": ROUNDING_RULE,
+            # WHAT convergence means here, on the record that claims it
+            "convergence_definition": CONVERGENCE_DEFINITION,
+            "membership_restriction": MEMBERSHIP_RESTRICTION,
+            "support_may_route_through_non_members":
+                SUPPORT_MAY_ROUTE_THROUGH_NON_MEMBERS,
             "n_genes_in_set": s["n_genes"],
             "n_measured_perturbations": len(measured),
             "measured_perturbations": measured,
             "n_supporting_perturbations": n_supporting,
-            "supporting_perturbations": sorted(best[1]),
-            "cluster_id": best[0],
+            "supporting_perturbations": list(best),
+            # the set's OWN component structure. Not a global cluster id: there is none.
+            "n_intra_set_components": len(components),
+            "intra_set_components": components,
             "n_supportive_pairs": len(supportive),
             "pairwise_support": [
                 {"target_a": p["target_a"], "target_b": p["target_b"],

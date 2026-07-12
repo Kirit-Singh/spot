@@ -163,7 +163,11 @@ def test_an_excluded_target_does_not_shift_the_frontier_of_the_others():
     (1.0, 0.0, pareto.JOINT_AWAY_ONLY),
     (0.0, 1.0, pareto.JOINT_TOWARD_ONLY),
     (0.0, 0.0, pareto.JOINT_NOT_EVALUABLE),     # evaluable, but no direction either way
-    (-1.0, -1.0, pareto.JOINT_NOT_EVALUABLE),   # both opposing: no favorable arm at all
+    # M4: both arms were EVALUATED and both moved the wrong way. That is a measured
+    # negative result — `opposed` — not the bucket for data we do not have.
+    (-1.0, -1.0, pareto.JOINT_OPPOSED),
+    (-1.0, 0.0, pareto.JOINT_OPPOSED),          # one arm opposes, the other says nothing
+    (0.0, -1.0, pareto.JOINT_OPPOSED),
 ])
 def test_joint_status_is_derived_from_the_arm_directions(away, toward, expected):
     assert pareto.joint_status(row("T", away, toward)) == expected

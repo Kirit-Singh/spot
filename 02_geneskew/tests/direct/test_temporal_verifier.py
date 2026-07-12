@@ -22,7 +22,7 @@ def artifact(temporal_run):
     out = res["out_dir"]
     with open(os.path.join(out, "temporal_provenance.json")) as fh:
         prov = json.load(fh)
-    assert res["verification"]["verdict"] == verify_temporal.PASS
+    assert res["verification"]["verdict"] == verify_temporal.ADMIT
     return out, prov
 
 
@@ -42,7 +42,7 @@ class TestTheVerifierIsNotVacuous:
     def test_a_clean_artifact_passes_every_check(self, artifact):
         out, prov = artifact
         report = verify_temporal.verify(out_dir=out, provenance=prov)
-        assert report["verdict"] == verify_temporal.PASS
+        assert report["verdict"] == verify_temporal.ADMIT
         assert report["n_failed"] == 0
         assert len(report["checks"]) >= 11
 
@@ -55,7 +55,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "did_equals_to_minus_from" in failed(report)
 
     def test_a_broken_antisymmetry_is_caught(self, artifact):
@@ -73,7 +73,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "reversing_the_pair_negates_the_did" in failed(report)
 
     def test_a_reverse_record_that_was_dropped_is_caught(self, artifact):
@@ -85,7 +85,7 @@ class TestTheVerifierIsNotVacuous:
             return df[~m]
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "reversing_the_pair_negates_the_did" in failed(report)
 
     def test_a_forged_reliability_badge_is_caught(self, artifact):
@@ -96,7 +96,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "reliability_badge_rederives_from_policy" in failed(report)
 
     def test_a_loosened_threshold_is_caught_even_if_the_badge_agrees_with_it(
@@ -109,7 +109,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "reliability_badge_rederives_from_policy" in failed(report)
 
     def test_a_confounded_pair_quietly_relabelled_clean_is_caught(self, artifact):
@@ -122,7 +122,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "batch_verdict_rederives_from_composition" in failed(report)
 
     def test_a_comparison_that_was_refused_is_caught(self, artifact):
@@ -133,7 +133,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "no_comparison_was_refused" in failed(report)
 
     def test_a_whole_comparison_dropped_from_the_artifact_is_caught(self, artifact):
@@ -144,7 +144,7 @@ class TestTheVerifierIsNotVacuous:
                         & (df.to_condition == T.STIM48))]
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "all_ordered_pairs_both_directions_present" in failed(report)
 
     def test_a_combined_temporal_objective_is_caught(self, artifact):
@@ -157,8 +157,11 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
-        assert "no_combined_temporal_objective" in failed(report)
+        assert report["verdict"] == verify_temporal.REJECT
+        # B4: refused at the ADMISSION gate now — the exact-column allowlist and the
+        # recursive key firewall both catch it, before any claim is re-derived.
+        assert failed(report) & {"temporal_columns_match_the_exact_allowlist",
+                                 "no_forbidden_key_at_any_depth"}
 
     def test_a_smuggled_p_value_is_caught(self, artifact):
         out, prov = artifact
@@ -168,8 +171,9 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
-        assert "no_p_or_q_emitted" in failed(report)
+        assert report["verdict"] == verify_temporal.REJECT
+        assert failed(report) & {"temporal_columns_match_the_exact_allowlist",
+                                 "no_forbidden_key_at_any_depth"}
 
     def test_an_endpoint_that_does_not_match_the_within_condition_screen_is_caught(
             self, artifact):
@@ -184,7 +188,7 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "endpoints_are_the_within_condition_arm_values" in failed(report)
 
     def test_a_did_asserted_where_the_arm_was_never_estimated_is_caught(self,
@@ -197,5 +201,5 @@ class TestTheVerifierIsNotVacuous:
             return df
 
         report = reverify(out, prov, mutate)
-        assert report["verdict"] == verify_temporal.FAIL
+        assert report["verdict"] == verify_temporal.REJECT
         assert "did_equals_to_minus_from" in failed(report)

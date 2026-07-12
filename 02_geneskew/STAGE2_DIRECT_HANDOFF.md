@@ -109,6 +109,19 @@ is `null` — not tier 0, not last, not a sentinel. `joint_status` is derived fr
 *directions*, independently of the tier; deriving one from the other would make the pair
 circular and destroy their only cross-check.
 
+**How to read `joint_status` (corrected — M4).** `opposed` means **at least one evaluable
+arm moved below `-sign_eps`**: the target was measured and it moves the wrong way. That
+includes the bidirectional case (one arm favourable, the other opposing), which is the
+same finding stated more strongly. `not_evaluable` means **no directional claim can be
+made** — an arm that could not be scored (missing / non-finite / not evaluable), or two
+arms that are both *neutral*, inside the sign tolerance and pointing nowhere.
+
+Previously `away=-1,toward=-1` and `away=-1,toward=0` were labelled `not_evaluable`
+although both arms had been scored. That merged a measured negative result into the
+missing-data bucket, which is precisely where a reader stops looking. **This is a
+label-only correction:** arm values, arm ranks and Pareto tiers are byte-identical —
+`dominates()` reads the raw values and never the label.
+
 The tier is the one field a downstream consumer has an obvious motive to rewrite — one
 cell edit promotes a target to the frontier, breaks no arithmetic, contradicts no other
 column. So `verify_pareto.py` **re-derives it from the emitted arm values**.

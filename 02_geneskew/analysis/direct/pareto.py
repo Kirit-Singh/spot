@@ -62,6 +62,19 @@ JOINT_NOT_EVALUABLE = "not_evaluable"
 JOINT_STATUSES = (JOINT_BOTH, JOINT_AWAY_ONLY, JOINT_TOWARD_ONLY, JOINT_OPPOSED,
                   JOINT_NOT_EVALUABLE)
 
+# What each of the two non-obvious labels is RESERVED for (M4). Stated here because the
+# difference between them is the difference between "we measured this and it moved the
+# wrong way" and "we could not measure this" — and a reader who confuses the two will
+# throw away a real negative result.
+OPPOSED_MEANS = (
+    "at least one EVALUABLE arm moved below -sign_eps: the target was measured and it "
+    "moves undesirably. Includes the bidirectional case (one arm favourable, the other "
+    "opposing), which is the same finding stated more strongly.")
+NOT_EVALUABLE_MEANS = (
+    "no directional claim can be made: an arm that could not be scored (missing, "
+    "non-finite, or not evaluable), or two arms that are both neutral — inside the sign "
+    "tolerance, pointing nowhere. It is NOT the bucket for an arm that opposed.")
+
 # Emitted columns. A tier and a label — no combined magnitude anywhere, by construction:
 # there is no field here a consumer could sort as a score.
 TIER_COLUMN = "pareto_tier"
@@ -106,11 +119,19 @@ def joint_status(row: dict[str, Any], eps: float = config.SIGN_EPS) -> str:
     below the negative tolerance. Between those it has no direction, and no direction is
     not a weak yes.
 
-    ``not_evaluable`` is the honest bucket for "no joint directional claim can be made" —
-    an arm that was never evaluable, or two arms that both sit inside the tolerance. It
-    does NOT mean the target was dropped: every target is emitted, and both raw arm
-    values and both evaluability flags travel with this label, so nothing this bucket
-    merges is lost to a reader.
+    ``opposed`` is the label for ANY evaluable arm that moved the wrong way (M4). It used
+    to be reachable only when one arm was favourable AND the other opposed, so a target
+    whose arms were both scored and both moved undesirably — or moved undesirably on one
+    arm and nowhere on the other — fell through to ``not_evaluable``. That is a false
+    statement about the measurement: both arms WERE evaluated, and what they said was
+    "the wrong way". Merging that into the missing-data bucket buries a real negative
+    result exactly where nobody looks.
+
+    ``not_evaluable`` now means what it says, and only that: an arm that could not be
+    scored (missing / non-finite / not evaluable), or two arms that both sat inside the
+    sign tolerance and therefore pointed nowhere. It does NOT mean the target was
+    dropped: every target is emitted, and both raw arm values and both evaluability
+    flags travel with this label.
     """
     favorable, opposing = {}, {}
     for arm in config.ARMS:
@@ -120,10 +141,14 @@ def joint_status(row: dict[str, Any], eps: float = config.SIGN_EPS) -> str:
         opposing[arm] = evaluable and value is not None and value < -eps
 
     a, b = config.ARM_A, config.ARM_B
-    if (favorable[a] and opposing[b]) or (favorable[b] and opposing[a]):
-        return JOINT_OPPOSED
+    # the two FAVOURABLE-side labels first: they are the more specific claims
     if favorable[a] and favorable[b]:
         return JOINT_BOTH
+    # any evaluable arm pointing the wrong way makes the target opposed — including the
+    # bidirectional case (one arm favourable, the other opposing), which is the same
+    # finding stated more strongly
+    if opposing[a] or opposing[b]:
+        return JOINT_OPPOSED
     if favorable[a]:
         return JOINT_AWAY_ONLY
     if favorable[b]:

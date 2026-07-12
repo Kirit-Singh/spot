@@ -276,9 +276,8 @@ def test_a_FLAT_signature_has_no_direction_and_no_similarity():
 def test_a_pathway_with_ONE_measured_perturbation_is_NEVER_convergent(bundle, sigs):
     """THE RULE. One target is one experiment, however strong it looks."""
     pairs = convergence.pairwise(sigs)
-    cl = convergence.clusters(pairs, sorted(sigs))
     conv = {c["set_id"]: c
-            for c in convergence.converge_sets(bundle, sigs, pairs, cl)}
+            for c in convergence.converge_sets(bundle, sigs, pairs)}
 
     single = conv["FX:SINGLE"]
     assert single["n_measured_perturbations"] == 1
@@ -291,9 +290,8 @@ def test_a_pathway_with_ONE_measured_perturbation_is_NEVER_convergent(bundle, si
 
 def test_a_pathway_whose_members_AGREE_is_convergent(bundle, sigs):
     pairs = convergence.pairwise(sigs)
-    cl = convergence.clusters(pairs, sorted(sigs))
     conv = {c["set_id"]: c
-            for c in convergence.converge_sets(bundle, sigs, pairs, cl)}
+            for c in convergence.converge_sets(bundle, sigs, pairs)}
 
     c = conv["FX:CONVERGENT"]
     assert c["convergent"] is True
@@ -308,9 +306,8 @@ def test_a_pathway_whose_members_AGREE_is_convergent(bundle, sigs):
 
 def test_a_pathway_whose_members_DISAGREE_is_not_convergent(bundle, sigs):
     pairs = convergence.pairwise(sigs)
-    cl = convergence.clusters(pairs, sorted(sigs))
     conv = {c["set_id"]: c
-            for c in convergence.converge_sets(bundle, sigs, pairs, cl)}
+            for c in convergence.converge_sets(bundle, sigs, pairs)}
 
     d = conv["FX:DIVERGENT"]
     assert d["n_measured_perturbations"] == 3
@@ -319,30 +316,32 @@ def test_a_pathway_whose_members_DISAGREE_is_not_convergent(bundle, sigs):
     assert d["convergence_refused_reason"] == "fewer_than_two_perturbations_converge"
 
 
-def test_a_cluster_of_ONE_is_not_a_cluster(sigs):
+def test_a_component_of_ONE_is_not_a_component(bundle, sigs):
+    """A member with no supportive partner INSIDE its set is not a cluster of one."""
     pairs = convergence.pairwise(sigs)
-    cl = convergence.clusters(pairs, sorted(sigs))
-    from collections import Counter
-    sizes = Counter(c for c in cl.values() if c is not None)
-    assert all(n >= convergence.MIN_PERTURBATIONS_FOR_CONVERGENCE
-               for n in sizes.values())
-    # the lone strong target is in no cluster at all
-    assert cl[TARGET_GENES[3]] is None
+    conv = {c["set_id"]: c for c in convergence.converge_sets(bundle, sigs, pairs)}
+    for c in conv.values():
+        for comp in c["intra_set_components"]:
+            assert len(comp) >= convergence.MIN_PERTURBATIONS_FOR_CONVERGENCE
+    # the lone strong target's set has no component at all
+    assert conv["FX:SINGLE"]["intra_set_components"] == []
 
 
-def test_the_clustering_is_deterministic_and_order_invariant(sigs):
+def test_the_clustering_is_deterministic_and_order_invariant(bundle, sigs):
     """No seed, no k, no resolution — three knobs that would each be a place to tune
     the answer after seeing it."""
     import random
 
-    base = convergence.clusters(convergence.pairwise(sigs), sorted(sigs))
+    def components(signatures):
+        pairs = convergence.pairwise(signatures)
+        return {c["set_id"]: c["intra_set_components"]
+                for c in convergence.converge_sets(bundle, signatures, pairs)}
+
+    base = components(sigs)
     for seed in (1, 7, 20260712):
-        shuffled = dict(sigs)
-        keys = list(shuffled)
+        keys = list(sigs)
         random.Random(seed).shuffle(keys)
-        reordered = {k: sigs[k] for k in keys}
-        again = convergence.clusters(convergence.pairwise(reordered), sorted(reordered))
-        assert again == base
+        assert components({k: sigs[k] for k in keys}) == base
 
 
 def test_the_mask_is_what_makes_two_supports_differ():

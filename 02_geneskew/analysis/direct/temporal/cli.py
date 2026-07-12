@@ -80,7 +80,8 @@ def main(argv=None):
         "inference_status": "not_calibrated",
         "estimand": "population_level_program_projection_shift_not_per_cell_fate",
     }, indent=2))
-    return 0 if v["verdict"] == verify_temporal.PASS else 1
+    # A REJECTED artifact is an exit code, not a log line.
+    return 0 if v["verdict"] == verify_temporal.ADMIT else 1
 
 
 def _comparisons(out_dir: str) -> list[dict]:

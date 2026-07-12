@@ -76,6 +76,16 @@ def method_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         "min_shared_unmasked_genes": convergence.MIN_SHARED_GENES,
         "min_perturbations_for_convergence":
             convergence.MIN_PERTURBATIONS_FOR_CONVERGENCE,
+        # B1: WHAT convergence means, and the restriction that keeps it honest. Bound
+        # into the hash so a run cannot go back to global components under this id.
+        "convergence_definition": convergence.CONVERGENCE_DEFINITION,
+        "convergence_membership_restriction": convergence.MEMBERSHIP_RESTRICTION,
+        "convergence_support_may_route_through_non_members":
+            convergence.SUPPORT_MAY_ROUTE_THROUGH_NON_MEMBERS,
+        # M1: which end of the ranking a leading edge is taken from, and in which
+        # direction. A negative enrichment's edge is its TRAILING edge.
+        "enrichment_leading_edge_convention": enrichment.LEADING_EDGE_CONVENTION,
+        "enrichment_edge_is_direction_aware": enrichment.EDGE_IS_DIRECTION_AWARE,
         "evidence_lines": list(EVIDENCE_LINES),
         "evidence_lines_are_combined": False,
         "inference_status": enrichment.INFERENCE_STATUS,
@@ -100,9 +110,10 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
     per_arm = {arm: {e["set_id"]: e for e in enrichment.enrich_arm(rows, bundle, arm)}
                for arm in config.ARMS}
     pairs = convergence.pairwise(signatures)
-    cluster_of = convergence.clusters(pairs, sorted(signatures))
+    # NO global clustering. Each set's convergence is computed on the subgraph induced by
+    # its OWN members, so a non-member can never bridge two of them (B1).
     conv = {c["set_id"]: c
-            for c in convergence.converge_sets(bundle, signatures, pairs, cluster_of)}
+            for c in convergence.converge_sets(bundle, signatures, pairs)}
 
     records = []
     for set_id in sorted(bundle["sets"]):
@@ -150,6 +161,11 @@ def _enrichment_block(e: dict[str, Any]) -> dict[str, Any]:
         "rounding_rule": e["rounding_rule"],
         "leading_edge": e["leading_edge"],
         "n_leading_edge": e["n_leading_edge"],
+        # M1: WHICH end of the ranking this edge came from. A negative enrichment's
+        # members are at the bottom, and the record says so rather than shipping an
+        # empty list beside a real score.
+        "leading_edge_side": e["leading_edge_side"],
+        "leading_edge_convention": e["leading_edge_convention"],
         "n_hits_in_ranking": e["n_hits_in_ranking"],
         "n_ranked": e["n_ranked"],
         "peak_rank": e["peak_rank"],
@@ -169,7 +185,13 @@ def _convergence_block(c: dict[str, Any]) -> dict[str, Any]:
         "supporting_perturbations": c["supporting_perturbations"],
         "single_target_support": c["single_target_support"],
         "min_perturbations_for_convergence": c["min_perturbations_for_convergence"],
-        "cluster_id": c["cluster_id"],
+        # the set's OWN component structure. There is no global cluster id, by design.
+        "n_intra_set_components": c["n_intra_set_components"],
+        "intra_set_components": c["intra_set_components"],
+        "convergence_definition": c["convergence_definition"],
+        "membership_restriction": c["membership_restriction"],
+        "support_may_route_through_non_members":
+            c["support_may_route_through_non_members"],
         "n_supportive_pairs": c["n_supportive_pairs"],
         "pairwise_support": c["pairwise_support"],
         "similarity_metric": c["similarity_metric"],
