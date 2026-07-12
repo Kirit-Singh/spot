@@ -40,6 +40,7 @@ from .contracts import (
     Stage3DrugCandidateSet,
 )
 from .firewall import Rejection, compute_candidate_rows_sha256
+from .stage3_admission import NOT_RUN, admit
 from .stage3_contract_v2 import (
     ACQUISITION_STATUSES,
     ADAPTER_ID,
@@ -107,6 +108,11 @@ class AnnotationAdmission:
     not_queued_reasons: dict[str, str] = field(default_factory=dict)
     source_records: dict[str, SourceRecord] = field(default_factory=dict)
     refusal_reason: Optional[str] = None
+    # Which gates actually ran. `external_verifier` is PASSED only when Stage-3's own
+    # verifier really executed and exited 0 — `not_run` is not a pass, and no integration-GO
+    # may be claimed on a bundle it never saw. See `stage3_admission`.
+    external_verifier: str = NOT_RUN
+    gates: tuple[str, ...] = ("stage4_restatement",)
 
 
 # --------------------------------------------------------------------------- admission
@@ -172,9 +178,17 @@ def _access_date(doc: dict[str, Any]) -> str:
     return "1970-01-01"
 
 
-def adapt_annotation_bundle(bundle_dir: str) -> AnnotationAdmission:
-    """Verify, then admit ONLY the rows Stage 3 queued for a Stage-4 assessment."""
-    doc, tables = verify_annotation_bundle(bundle_dir)
+def adapt_annotation_bundle(bundle_dir: str, *,
+                            require_external_verifier: bool = False) -> AnnotationAdmission:
+    """Verify, then admit ONLY the rows Stage 3 queued for a Stage-4 assessment.
+
+    Admission runs through `stage3_admission.admit`, which is BOTH gates: Stage-4's own
+    restatement of the bytes AND Stage-3's independent `verifier.verify_stage3`. Set
+    `require_external_verifier=True` for a data-bound run — it refuses a bundle that Stage-3's
+    verifier has not actually passed.
+    """
+    admission_gates = admit(bundle_dir, require_external_verifier=require_external_verifier)
+    doc, tables = admission_gates.document, admission_gates.tables
 
     candidates = tables["candidates"]
     moieties = {m["active_moiety_id"]: m for m in tables["active_moieties"]}
@@ -233,6 +247,8 @@ def adapt_annotation_bundle(bundle_dir: str) -> AnnotationAdmission:
         queued=carried,
         not_queued_reasons=not_queued,
         source_records=_source_records(tables["source_records"], _access_date(doc)),
+        external_verifier=admission_gates.external_verifier,
+        gates=admission_gates.gates,
     )
 
     if not queued:

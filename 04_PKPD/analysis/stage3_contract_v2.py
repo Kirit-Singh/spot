@@ -27,11 +27,17 @@ WHAT IS VERIFIED before a single row is believed — recomputed from the bytes, 
   1. `schema_version == spot.stage03_drug_annotation.v1` and `artifact_class == analysis`;
   2. no RETIRED key anywhere in the document, at any depth — including set to `false`, because
      the point of a relabel is to ADD the field;
+  2b. no COMBINED/HEADLINE OBJECTIVE (`overall_rank`, `combined_score`, …) anywhere — in the
+     document, the manifest, or ANY signed parquet table, as a column or nested in a cell. A
+     different firewall from the retired-key scan, and the one the hashes cannot enforce (a
+     combined objective is not canonical content, so a bundle carrying one keeps its bundle_id);
   3. `manifest_sha256` recomputed from the manifest's own content;
   4. `document_sha256` recomputed from the document's own content;
   5. `canonical_content_sha256` re-derived by restating Stage-3's canonical composition, and
      `bundle_id` re-derived from it;
-  6. every table's content hash recomputed from the parquet ROWS;
+  6. the content hash of each CONSUMED table (the 11 in READ_TABLES) recomputed from its ROWS.
+     The other signed tables are bound by their file sha256 (7) and banned-scanned (2b), but
+     Stage 4 does not consume their rows and does not restate their content sort keys here;
   7. every file's sha256 recomputed against the manifest;
   8. no production-pointer file, under any of its names.
 
@@ -62,6 +68,7 @@ from typing import Any
 
 from .firewall import Rejection
 from .stage3_contract import content_hash, table_hash
+from .stage3_frozen import banned_in_table, banned_keys_in
 
 ADAPTER_ID = "spot.stage34_annotation_adapter.v1"
 ADAPTER_VERSION = "1.0.0"
@@ -214,6 +221,8 @@ def _find_retired(node: Any, path: str, hits: list[str]) -> None:
 
 def verify_annotation_bundle(bundle_dir: str) -> tuple[dict[str, Any], dict[str, list[dict]]]:
     """Independently establish that this bundle is what it says it is. -> (document, tables)."""
+    import pyarrow.parquet as pq
+
     if not os.path.isdir(bundle_dir):
         raise Rejection("stage3_bundle_missing",
                         f"no Stage-3 bundle directory at {bundle_dir!r}")
@@ -266,6 +275,19 @@ def verify_annotation_bundle(bundle_dir: str) -> tuple[dict[str, Any], dict[str,
         if os.path.exists(os.path.join(bundle_dir, name)):
             raise Rejection("stage3_carries_a_production_pointer",
                             f"the bundle contains {name!r}")
+
+    # 3b. a COMBINED/HEADLINE OBJECTIVE, at any depth. This is a different firewall from the
+    #     retired-key scan above and it is the one the hashes cannot enforce: `overall_rank`
+    #     is not canonical content, so a bundle carrying it keeps its own bundle_id and every
+    #     hash in it can be re-sealed. The scan is the only thing standing here.
+    banned = banned_keys_in(doc) + banned_keys_in(manifest)
+    if banned:
+        raise Rejection(
+            "stage3_combined_objective_present",
+            f"a combined/headline objective key is present at {sorted(banned)}. Stage 3 emits "
+            "per-arm evidence states and NO cross-arm objective; Stage 4 computes none either. "
+            "A bundle carrying one is refused however well-sealed it is — re-sealing the "
+            "hashes is exactly what an injected objective would do.")
 
     # 4. manifest self-hash
     want = content_hash({k: v for k, v in manifest.items()
@@ -339,6 +361,50 @@ def verify_annotation_bundle(bundle_dir: str) -> tuple[dict[str, Any], dict[str,
                 f"{table}.parquet: the content hash recomputed from the actual rows ({got}) is "
                 f"not the one the document declares ({declared[table]}). The rows on disk are "
                 "not the rows Stage 3 hashed.")
+
+    # 7b. a combined objective hides in a table as easily as in the document. Scan EVERY
+    #     declared parquet, not only the 11 Stage 4 consumes: the bundle signs 18 tables, and
+    #     a firewall that only reads the consumed ones lets a banned objective ride into a
+    #     signed-but-unscanned table (its file_sha256 is checked in step 8, but a legitimately
+    #     re-sealed file with a banned column passes that). Read the SCHEMA so an EMPTY table's
+    #     column name is still seen, and read the ROWS so a struct/list cell is scanned too.
+    declared_parquet = sorted(str(e.get("file", "")) for e in manifest.get("files", [])
+                              if str(e.get("file", "")).endswith(".parquet"))
+    banned_cols: list[str] = []
+    for name in declared_parquet:
+        table = name[: -len(".parquet")]
+        path = os.path.join(bundle_dir, name)
+        if not os.path.exists(path):
+            raise Rejection("stage3_table_missing",
+                            f"the manifest declares {name!r}, which is absent")
+        columns = list(pq.read_schema(path).names)
+        # The 11 consumed tables are already parsed. For the other signed tables, read RAW —
+        # `_cell` narrowing validates content-column dtypes Stage 4 does not consume here and
+        # would wrongly reject a real bundle's legitimate float (e.g. a potency value). A
+        # banned-key scan only walks the structure; it needs no narrowing.
+        scan_rows: list[dict[str, Any]] = tables.get(table) or pq.read_table(path).to_pylist()
+        banned_cols += banned_in_table(table, columns, scan_rows)
+    # ...and in every OTHER signed JSON. Step 3b scans the document and the manifest; a bundle
+    #    that signs a THIRD json file could otherwise carry a banned objective in it. Nothing
+    #    consumes such a file today, so this is defense-in-depth — but the firewall's claim is
+    #    "in ANY signed surface", and that has to include one Stage 4 does not yet read.
+    for entry in manifest.get("files", []):
+        name = str(entry.get("file", ""))
+        if not name.endswith(".json") or name == ANNOTATION_DOC:
+            continue  # ANNOTATION_DOC is the document, already scanned in step 3b
+        path = os.path.join(bundle_dir, name)
+        if not os.path.exists(path):
+            raise Rejection("stage3_bundle_incomplete",
+                            f"the manifest declares {name!r}, which is absent")
+        banned_cols += [f"{name}{p[1:]}" for p in banned_keys_in(_read_json(path))]
+
+    if banned_cols:
+        raise Rejection(
+            "stage3_combined_objective_present",
+            f"a combined/headline objective is present in a signed file at "
+            f"{sorted(set(banned_cols))}. Stage 3 emits per-arm evidence and NO cross-arm "
+            "objective; a bundle carrying one in ANY signed surface is refused, however "
+            "well-sealed the file is.")
 
     # 8. every file is the file the manifest signed
     for entry in manifest.get("files", []):
