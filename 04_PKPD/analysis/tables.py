@@ -264,6 +264,30 @@ NEBPI_DECISION_SCHEMA = pa.schema([
 # source record those bytes belong to. `response_sha256` IS the binding's hash, not a number
 # the caller may assert: the audit appended a second manifest under the same search_id with
 # an invented endpoint and an invented hash, and both were kept.
+# NEBPI is a CRITERION-LEVEL evidence model, and this is the table that says so. One row per
+# (candidate, context, criterion): its status, the evidence lane it consumes, whether the source
+# lets it satisfy a Part-II branch at all, and whether it did.
+#
+# The alternative — reporting NEBPI as one class and hiding the nine criteria behind it — is
+# exactly the "decorative score" the method exists to prevent: it would make an agent with NO
+# NEB evidence and an agent with MEASURED sub-therapeutic NEB exposure look the same from the
+# outside. A criterion nobody evaluated reads `not_evaluated` here, forever, and that is never
+# a favourable state.
+NEBPI_CRITERIA_SCHEMA = pa.schema([
+    ("candidate_id", _STR), ("context_id", _STR), ("criterion_id", _STR),
+    ("status", _STR),
+    ("importance", _STR),
+    ("in_part_i_table", _BOOL),
+    ("can_satisfy_part_ii_branch", _BOOL),
+    ("carried_the_assigned_class", _BOOL),
+    ("evidence_lane_consumed", _STR),
+    ("requires_potency_context", _BOOL),
+    ("n_observations", pa.int64()),
+    ("observation_ids", _LIST_STR),
+    ("source_verbatim", _STR),
+    ("method_id", _STR),
+])
+
 SEARCH_MANIFEST_SCHEMA = pa.schema([
     ("search_id", _STR), ("source", _STR), ("endpoint", _STR), ("query_canonical", _STR),
     ("search_scope", _STR), ("executed_date", _STR), ("source_release", _STR),
@@ -287,6 +311,7 @@ TABLE_SCHEMAS: dict[str, pa.Schema] = {
     "exposure_evidence": EXPOSURE_SCHEMA,
     "safety_evidence": SAFETY_SCHEMA,
     "nebpi_decisions": NEBPI_DECISION_SCHEMA,
+    "nebpi_criteria": NEBPI_CRITERIA_SCHEMA,
     # the canonical input bundle every derived lane is reconstructable from
     "contexts": CONTEXT_SCHEMA,
     "drug_forms": DRUG_FORM_SCHEMA,
@@ -309,6 +334,7 @@ SORT_KEYS: dict[str, tuple[str, ...]] = {
     "exposure_evidence": ("measurement_id", "potency_id"),
     "safety_evidence": ("evidence_id",),
     "nebpi_decisions": ("candidate_id", "context_id"),
+    "nebpi_criteria": ("candidate_id", "context_id", "criterion_id"),
     "contexts": ("context_id",),
     "drug_forms": ("candidate_id",),
     "property_evidence": ("property_record_id",),

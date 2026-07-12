@@ -73,6 +73,9 @@ class NebpiResult:
     nebpi_primary_gate: Optional[bool]
     delivery_requirement: str
     criterion_states: dict[str, str]
+    # Which observations backed EACH criterion. Without this the criterion table could only
+    # say "not_evaluated" without being able to show what was (or was not) looked at.
+    criterion_observation_ids: dict[str, list[str]]
     branch_proof: list[BranchProof]
     counterfactual: dict[str, Any]
     reason_codes: list[str]
@@ -111,9 +114,12 @@ def evaluate_nebpi(
     rad_state, rad_obs = rad.state, rad.row
 
     criterion_states: dict[str, str] = {}
+    criterion_observation_ids: dict[str, list[str]] = {}
     for spec in method["part_i_criteria"]:
         cid = spec["criterion_id"]
         criterion_states[cid] = reduce_criterion(obs, NebpiCriterionId(cid)).state
+        criterion_observation_ids[cid] = sorted(
+            o.observation_id for o in obs if o.criterion_id.value == cid)
     # The PK criterion state is the DERIVED level, not anything the row asserted.
     criterion_states[NebpiCriterionId.PK_IN_NEB.value] = pk_level
 
@@ -279,6 +285,7 @@ def evaluate_nebpi(
         nebpi_primary_gate=delivery.nebpi_primary_gate,
         delivery_requirement=delivery.requirement,
         criterion_states=dict(sorted(criterion_states.items())),
+        criterion_observation_ids=dict(sorted(criterion_observation_ids.items())),
         branch_proof=proof,
         counterfactual=_counterfactual(status, nebpi_class, pk_level, pd_state, rad_state, pk_has_potency, missing_ctx),
         reason_codes=sorted(set(reason_codes)),

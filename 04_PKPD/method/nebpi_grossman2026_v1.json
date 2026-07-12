@@ -1,36 +1,274 @@
 {
   "schema_id": "spot.stage04_method_nebpi.v1",
   "method_id": "nebpi_grossman2026_v1",
-  "method_version": "1.1.0",
+  "method_version": "1.2.0",
   "description": "Non-Enhancing Brain Permeability Index (NEBPI): a criterion-level evidence model transcribed from Grossman et al., Neuro-Oncology 2026 (ABTC/FDA workshop). Part I is a checklist of evaluation criteria graded by level of importance. Part II classifies an agent IN A GIVEN EVIDENCE CONTEXT into one of three Brain Permeability Classes.",
   "primary_source": "grossman2026_nebpi",
-
   "importance_scale": {
     "source_quote": "Levels of importance are graded from A (best) to F (worst).",
     "location": "Table 1 footnote a",
-    "levels": ["A", "B", "C", "D", "E", "F"],
+    "levels": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F"
+    ],
     "best": "A"
   },
-
   "part_i_criteria": [
-    {"criterion_id": "physical_characteristics",             "label": "Physical characteristics of drug",                          "importance": "A", "can_satisfy_part_ii_branch": false},
-    {"criterion_id": "permeability_normal_animal_brain",     "label": "Permeability data in normal animal brain",                  "importance": "A", "can_satisfy_part_ii_branch": false},
-    {"criterion_id": "known_mec_potency",                    "label": "Known minimum effective concentration (MEC—potency)",       "importance": "A", "can_satisfy_part_ii_branch": false, "role": "context_gate", "note": "Not a Part-II branch on its own, but REQUIRED context for the PK branches (Table 2 footnote a: 'Accounting for potency')."},
-    {"criterion_id": "pk_in_neb",                            "label": "Pharmacokinetic data demonstrating MEC in non-enhancing brain", "importance": "A", "can_satisfy_part_ii_branch": true},
-    {"criterion_id": "pd_in_neb",                            "label": "Relevant pharmacodynamic effects in non-enhancing brain",   "importance": "A", "can_satisfy_part_ii_branch": true},
-    {"criterion_id": "csf_drug_levels",                      "label": "CSF drug levels from normal animals or humans",             "importance": "C", "can_satisfy_part_ii_branch": false},
-    {"criterion_id": "response_in_enhancing_lesions",        "label": "Responses in contrast-enhancing lesions in animals or humans", "importance": "C", "can_satisfy_part_ii_branch": false},
-    {"criterion_id": "in_vitro_bbb_permeability",            "label": "Permeability data from in vitro blood-brain barrier models", "importance": "D", "can_satisfy_part_ii_branch": false},
-    {"criterion_id": "radiographic_response_in_neb",         "label": "Radiographic responses in non-enhancing brain",             "importance": null, "can_satisfy_part_ii_branch": true,
-      "interpretation_note": "INTERPRETATION (flagged for review): 'Radiographic responses in NEB' is a Part-II branch in Table 2 but is NOT one of the eight rows of Table 1, so the source assigns it no Part-I importance letter. Stage 4 models it as its own criterion with importance=null rather than silently folding it into 'relevant PD in NEB' or into the Part-I 'responses in contrast-enhancing lesions' row (importance C), which is a DIFFERENT criterion (enhancing, not non-enhancing)."}
+    {
+      "criterion_id": "physical_characteristics",
+      "source_verbatim": "Physical characteristics of drug",
+      "importance": "A",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 0
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "property_evidence",
+        "evidence_types": [
+          "in_silico"
+        ],
+        "matrix_constraint": null,
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": false,
+        "note": "Physicochemical descriptors (the CNS-MPO inputs). Table 1 grades this as a criterion to EVALUATE, and Table 2 gives it no branch: it can never, alone or in combination, establish a permeability class."
+      },
+      "can_satisfy_part_ii_branch": false,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "permeability_normal_animal_brain",
+      "source_verbatim": "Permeability data in normal animal brain",
+      "importance": "A",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 1
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "exposure_evidence",
+        "evidence_types": [
+          "in_vivo_animal"
+        ],
+        "matrix_constraint": [
+          "normal_animal_brain"
+        ],
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": false,
+        "note": "Normal animal brain is not non-enhancing TUMOUR-bearing brain. No Part-II branch."
+      },
+      "can_satisfy_part_ii_branch": false,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "known_mec_potency",
+      "source_verbatim": "Known minimum effective concentration (MEC—potency)",
+      "importance": "A",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 2
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "potency_evidence",
+        "evidence_types": [
+          "in_vitro",
+          "in_vivo_animal",
+          "human_clinical"
+        ],
+        "matrix_constraint": null,
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": false,
+        "role": "context_gate",
+        "note": "Not a branch on its own, but REQUIRED context for every PK branch (Table 2 footnote a, 'Accounting for potency'). A PK observation with no MEC satisfies no PK branch."
+      },
+      "can_satisfy_part_ii_branch": false,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "pk_in_neb",
+      "source_verbatim": "Pharmacokinetic data demonstrating MEC in non-enhancing brain",
+      "importance": "A",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 3
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "exposure_evidence",
+        "evidence_types": [
+          "human_clinical",
+          "in_vivo_animal"
+        ],
+        "matrix_constraint": [
+          "brain_tissue_non_enhancing",
+          "microdialysate_brain_isf"
+        ],
+        "enhancement_context": "non_enhancing",
+        "requires_potency_context": true,
+        "can_satisfy_part_ii_branch": true,
+        "note": "The measured NEB concentration, graded AGAINST THE MEC into therapeutic / low / little-to-none. Stage 4 derives the level from the comparison; the observation never asserts its own level."
+      },
+      "can_satisfy_part_ii_branch": true,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "pd_in_neb",
+      "source_verbatim": "Relevant pharmacodynamic effects in non-enhancing brain",
+      "importance": "A",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 4
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "nebpi_observations",
+        "evidence_types": [
+          "human_clinical",
+          "in_vivo_animal"
+        ],
+        "matrix_constraint": null,
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": true,
+        "note": "A pharmacodynamic effect measured in NEB. 'No relevant PD in NEB' is satisfied ONLY by observed_absent with an adequate assessment — never by absence of the row."
+      },
+      "can_satisfy_part_ii_branch": true,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "csf_drug_levels",
+      "source_verbatim": "CSF drug levels from normal animals or humans",
+      "importance": "C",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 5
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "exposure_evidence",
+        "evidence_types": [
+          "human_clinical",
+          "in_vivo_animal"
+        ],
+        "matrix_constraint": [
+          "csf"
+        ],
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": false,
+        "note": "The blood-CSF barrier is not the BBB. CSF is graded C and has no Part-II branch: a CSF level can never stand in for a NEB level."
+      },
+      "can_satisfy_part_ii_branch": false,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "response_in_enhancing_lesions",
+      "source_verbatim": "Responses in contrast-enhancing lesions in animals or humans",
+      "importance": "C",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 6
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "nebpi_observations",
+        "evidence_types": [
+          "human_clinical",
+          "in_vivo_animal"
+        ],
+        "matrix_constraint": null,
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": false,
+        "note": "ENHANCING lesions have a disrupted BBB. Graded C, no Part-II branch. This is a DIFFERENT criterion from 'radiographic responses in NEB'."
+      },
+      "can_satisfy_part_ii_branch": false,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "in_vitro_bbb_permeability",
+      "source_verbatim": "Permeability data from in vitro blood-brain barrier models",
+      "importance": "D",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 1",
+        "passage_id": "noag051-T1",
+        "passage_offset": 41552,
+        "row_index": 7
+      },
+      "in_part_i_table": true,
+      "consumes": {
+        "stage4_lane": "nebpi_observations",
+        "evidence_types": [
+          "in_vitro"
+        ],
+        "matrix_constraint": null,
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": false,
+        "note": "Graded D (the weakest level in the table). No Part-II branch."
+      },
+      "can_satisfy_part_ii_branch": false,
+      "default_status": "not_evaluated"
+    },
+    {
+      "criterion_id": "radiographic_response_in_neb",
+      "source_verbatim": null,
+      "importance": null,
+      "in_part_i_table": false,
+      "not_in_part_i_table": "STAGE-4 INTERPRETATION, flagged. 'Radiographic responses in NEB' is a Part-II branch in Table 2 (all three class definitions turn on it) but is NOT one of the eight rows of Table 1, so the source assigns it no Part-I level of importance. Stage 4 models it as its own criterion with importance=null rather than silently folding it into 'Relevant pharmacodynamic effects in non-enhancing brain' (a different measurement) or into 'Responses in contrast-enhancing lesions' (importance C — ENHANCING, not non-enhancing, and therefore a different criterion entirely).",
+      "source_locator": {
+        "source_id": "grossman2026_nebpi",
+        "table": "Table 2",
+        "passage_id": "noag051-T2",
+        "passage_offset": 44607,
+        "appears_in_definitions_of": [
+          "Sufficiently permeable",
+          "Insufficiently permeable",
+          "Impermeable"
+        ]
+      },
+      "consumes": {
+        "stage4_lane": "nebpi_observations",
+        "evidence_types": [
+          "human_clinical"
+        ],
+        "matrix_constraint": null,
+        "requires_potency_context": false,
+        "can_satisfy_part_ii_branch": true,
+        "note": "A Part-II branch that Table 1 does not list. See not_in_part_i_table below."
+      },
+      "can_satisfy_part_ii_branch": true,
+      "default_status": "not_evaluated"
+    }
   ],
-
   "part_i_table_transcription": {
     "source_id": "grossman2026_nebpi",
     "table": "Table 1 (NEBI part I): criteria to evaluate the 'brain permeability' of systemically administered drugs in non-enhancing brain",
     "verbatim": "Evaluation criteria | Level of importance :: Physical characteristics of drug | A :: Permeability data in normal animal brain | A :: Known minimum effective concentration (MEC—potency) | A :: Pharmacokinetic data demonstrating MEC in non-enhancing brain | A :: Relevant pharmacodynamic effects in non-enhancing brain | A :: CSF drug levels from normal animals or humans | C :: Responses in contrast-enhancing lesions in animals or humans | C :: Permeability data from in vitro blood-brain barrier models | D"
   },
-
   "part_ii_table_transcription": {
     "source_id": "grossman2026_nebpi",
     "table": "Table 2 (NEBI Part II): criteria to evaluate the 'brain permeability' of systemically administered drugs in non-enhancing brain",
@@ -38,7 +276,6 @@
     "footnote_a": "Accounting for potency.",
     "footnote_a_consequence": "Every PK-in-NEB branch (therapeutic / low / little-to-none) is defined RELATIVE TO THE MEC for the tumour being treated. A PK observation without a known MEC/potency context therefore cannot satisfy any Part-II PK branch."
   },
-
   "observation_states": {
     "description": "Explicit evidence semantics. 'Absent evidence' and 'evidence of absence' are different and must never collapse.",
     "not_evaluated": "No qualifying observation exists in the evidence set. Cannot satisfy ANY branch — neither a positive branch nor a 'no PD' / 'no radiographic response' conjunct.",
@@ -51,39 +288,68 @@
       "pk_not_evaluated": "No NEB PK measurement. Satisfies nothing."
     }
   },
-
   "part_ii_classes": [
     {
       "class_id": "sufficiently_permeable",
       "logic": "OR",
-      "branches": ["pk_therapeutic_in_neb", "pd_in_neb__observed_present", "radiographic_response_in_neb__observed_present"],
-      "requires_potency_context_for": ["pk_therapeutic_in_neb"],
+      "branches": [
+        "pk_therapeutic_in_neb",
+        "pd_in_neb__observed_present",
+        "radiographic_response_in_neb__observed_present"
+      ],
+      "requires_potency_context_for": [
+        "pk_therapeutic_in_neb"
+      ],
       "source_quote": "PK with therapeutic levels in NEB or Relevant PD effect in NEB or Radiographic responses in NEB",
-      "potential_uses_per_source": ["Prevention of CNS metastases", "Treatment of non-enhancing primary brain tumor", "Treatment of enhancing tumors"]
+      "potential_uses_per_source": [
+        "Prevention of CNS metastases",
+        "Treatment of non-enhancing primary brain tumor",
+        "Treatment of enhancing tumors"
+      ]
     },
     {
       "class_id": "insufficiently_permeable",
       "logic": "AND",
-      "conjuncts": ["pk_low_in_neb", "pd_in_neb__observed_absent", "radiographic_response_in_neb__observed_absent"],
-      "requires_potency_context_for": ["pk_low_in_neb"],
+      "conjuncts": [
+        "pk_low_in_neb",
+        "pd_in_neb__observed_absent",
+        "radiographic_response_in_neb__observed_absent"
+      ],
+      "requires_potency_context_for": [
+        "pk_low_in_neb"
+      ],
       "source_quote": "Low PK levels in NEB and No relevant PD in NEB and No radiographic response in NEB",
-      "potential_uses_per_source": ["Contrast-enhancing metastases", "Contrast-enhancing primary brain tumor"]
+      "potential_uses_per_source": [
+        "Contrast-enhancing metastases",
+        "Contrast-enhancing primary brain tumor"
+      ]
     },
     {
       "class_id": "impermeable",
       "logic": "AND",
-      "conjuncts": ["pk_little_to_none_in_neb", "pd_in_neb__observed_absent", "radiographic_response_in_neb__observed_absent"],
-      "requires_potency_context_for": ["pk_little_to_none_in_neb"],
+      "conjuncts": [
+        "pk_little_to_none_in_neb",
+        "pd_in_neb__observed_absent",
+        "radiographic_response_in_neb__observed_absent"
+      ],
+      "requires_potency_context_for": [
+        "pk_little_to_none_in_neb"
+      ],
       "source_quote": "Little to no drug in NEB and No relevant PD in NEB and No radiographic response in NEB",
-      "potential_uses_per_source": ["Contrast-enhancing metastases", "Contrast-enhancing primary brain tumor"]
+      "potential_uses_per_source": [
+        "Contrast-enhancing metastases",
+        "Contrast-enhancing primary brain tumor"
+      ]
     }
   ],
-
   "class_precedence": {
-    "order": ["sufficiently_permeable", "insufficiently_permeable", "impermeable"],
+    "order": [
+      "sufficiently_permeable",
+      "insufficiently_permeable",
+      "impermeable"
+    ],
     "rationale": "Table 2 'Sufficiently permeable' is an OR over three qualifying positives, so a single qualifying positive establishes it even when PK in NEB is low — the source's own temozolomide example: 'Temozolomide would be included in this category as responses have been reported in NEB even though drug levels in the brain are only 20% of those in the blood.' The insufficiently/impermeable conjunctions each require 'No relevant PD' AND 'No radiographic response', so they are mutually exclusive with any qualifying positive by construction; precedence is defensive, not a tie-break."
   },
-
   "not_classifiable_rule": {
     "status": "not_classifiable",
     "class": null,
@@ -94,40 +360,61 @@
       "A PK branch without a known MEC/potency context is context_incomplete and satisfies nothing."
     ]
   },
-
   "insufficient_evidence_types": {
     "description": "Criteria that are informative Part-I inputs but can NEVER on their own produce a positive Part-II class.",
-    "criteria": ["physical_characteristics", "permeability_normal_animal_brain", "csf_drug_levels", "response_in_enhancing_lesions", "in_vitro_bbb_permeability"],
+    "criteria": [
+      "physical_characteristics",
+      "permeability_normal_animal_brain",
+      "csf_drug_levels",
+      "response_in_enhancing_lesions",
+      "in_vitro_bbb_permeability"
+    ],
     "source_quote": "Less helpful information includes CSF drug levels in animals or humans, radiographic or clinical responses in contrast-enhancing lesions in animals or humans, and permeability data from traditional in vitro BBB models.",
     "csf_source_quote": "As the BCB is inherently more permeable than the BBB drugs that reach detectable concentrations in the CSF may not cross an intact BBB.",
     "consequence": "CNS-MPO / physicochemical descriptors, in-vitro BBB models, CSF levels, normal-animal-brain permeability, and responses in enhancing lesions are recorded as evidence but are structurally incapable of satisfying a Part-II branch."
   },
-
   "context_dependence": {
     "source_quote": "The NEBPI has the potential to be flexible depending upon how the drug is administered, the sensitivity of the tumor to the drug, and the ability of the drug to cross the BBB. For example, methotrexate would be classified as an impermeable agent when it is given to treat glial neoplasms in a standard dose and schedule. However, it would be classified as sufficiently permeable when administered intravenously in high doses to treat primary CNS lymphomas (PCNSL).",
     "consequence": "An NEBPI class is a property of (active moiety x route x formulation x dose x schedule x tumour sensitivity/potency x evidence context) — NOT an intrinsic drug label. Stage 4 keys every NEBPI result on an evidence_context_id and refuses to emit a drug-level class.",
-    "required_context_fields": ["active_moiety_id", "route", "formulation", "dose", "schedule", "tumor_context", "potency_context"]
+    "required_context_fields": [
+      "active_moiety_id",
+      "route",
+      "formulation",
+      "dose",
+      "schedule",
+      "tumor_context",
+      "potency_context"
+    ]
   },
-
   "delivery_requirement_gate": {
     "source_quote": "This workshop specifically addressed brain permeability requirements for agents requiring direct tumor penetration for therapeutic effect ... this discussion may be less relevant for: (1) enhancing primary brain tumors or brain metastases ... or (2) for technologies, agents or approaches where local drug concentrations in the brain are less important, such as immunotherapies that activate systemic lymphocytes that travel to the brain or anti-angiogenesis drugs that primarily target vasculature rather than intraparenchymal tumor.",
     "rules": {
-      "local_CNS_target_engagement_required": {"nebpi_primary_gate": true},
-      "systemic_immune_priming": {"nebpi_primary_gate": false, "note": "NEB evidence is still retained and displayed, but it is NOT a primary gate: a systemic-priming agent must not be failed solely for low direct NEB exposure."},
-      "delivery_requirement_uncertain": {"nebpi_primary_gate": null, "note": "Undetermined. Must NOT be silently treated as either. Consumers must surface the uncertainty."}
+      "local_CNS_target_engagement_required": {
+        "nebpi_primary_gate": true
+      },
+      "systemic_immune_priming": {
+        "nebpi_primary_gate": false,
+        "note": "NEB evidence is still retained and displayed, but it is NOT a primary gate: a systemic-priming agent must not be failed solely for low direct NEB exposure."
+      },
+      "delivery_requirement_uncertain": {
+        "nebpi_primary_gate": null,
+        "note": "Undetermined. Must NOT be silently treated as either. Consumers must surface the uncertainty."
+      }
     }
   },
-
   "potency_coupling": {
     "source_quote": "In the drug development paradigm, potency and permeability need to be evaluated together (Figure 3), since an extremely potent compound may not need robust BBB permeability to be efficacious.",
     "consequence": "Low Kp does not by itself imply insufficiency; the comparison is always concentration-in-NEB vs MEC for the tumour being treated."
   },
-
   "evidence_reduction_policy": {
     "policy_id": "nebpi_evidence_reduction_v1",
     "status": "spot_implementation_rule_not_a_source_rule",
     "why": "Grossman states Part-II branch logic over criteria, but says nothing about how to combine two observations of the SAME criterion in the SAME context. An implementation must choose. Choosing 'first row wins' made the class depend on the order the evidence list happened to be in, so the same evidence multiset produced two different classes under one scorecard_set_id.",
-    "reduction_key": ["candidate_id", "context_id", "criterion_id"],
+    "reduction_key": [
+      "candidate_id",
+      "context_id",
+      "criterion_id"
+    ],
     "identity": "Two observation rows are the SAME row if and only if the canonical JSON of the whole record is byte-identical (every field, including observation_id, assessment_adequate, evidence_type and the full provenance block).",
     "dedupe_rule": "Byte-identical duplicates collapse to one row. They are literally the same record — the same observation_id bound to the same source response and extraction transform — so they cannot add evidence.",
     "multiple_distinct_rows": "conflicting",
@@ -137,7 +424,6 @@
     "adequacy": "A single `observed_absent` row whose assessment_adequate is not true reduces to `absent_claim_inadequate`, which satisfies no conjunct. An adequacy disagreement between two distinct rows is `conflicting` under the rule above, in either order.",
     "criterion_states_use_the_same_reducer": "criterion_states is built by the same reducer as the branch logic. There is no separate last-row-wins path."
   },
-
   "censored_pk_policy": {
     "policy_id": "nebpi_censored_pk_v1",
     "status": "spot_implementation_rule_bounding_a_source_rule",
@@ -151,9 +437,11 @@
     "fail_closed": "If no compatible numeric bound exists, or any gate fails, or the bound is not strictly below the MEC, the PK level is `pk_not_evaluated` and the context is `not_classifiable`. It is never `pk_little_to_none_in_neb`, and therefore never `impermeable`.",
     "no_mec_from_ic50": "An MEC is never derived from an IC50/IC90/EC50/Ki. That transform needs an unbound fraction and a declared pharmacodynamic model, and Stage 4 supplies neither silently."
   },
-
   "paper_worked_examples": {
-    "provenance": {"source_id": "grossman2026_nebpi", "location": "Discussion paragraph introducing NEBPI Parts I and II"},
+    "provenance": {
+      "source_id": "grossman2026_nebpi",
+      "location": "Discussion paragraph introducing NEBPI Parts I and II"
+    },
     "not_a_spot_claim": "These are the SOURCE AUTHORS' OWN illustrative classifications, quoted for logic testing only. Spot asserts no independent brain-permeability class for any real drug in this implementation pass, and emits none.",
     "examples": [
       {
@@ -177,5 +465,39 @@
         "logic_point": "Route/dose/potency context flips the class for the SAME active moiety."
       }
     ]
+  },
+  "source_binding": {
+    "source_id": "grossman2026_nebpi",
+    "raw_sha256": "8bb0324def170ae1f9aa26e906c8b7327690b8c6eebcd3d3e29f5e5a88b23f47",
+    "content_sha256": "90ffdf2a07f742f58128bdafeeebedb3d3779640884142783152113fc6473937",
+    "content_hash_rule": "sha256 over the response with the PMC BioC envelope's <date> (the RETRIEVAL date, not the article) blanked. The raw byte hash changes every day the endpoint is re-fetched, because the API stamps the fetch date into the envelope; the content hash does not. content_sha256 is the scientific identity a reviewer can pin.",
+    "part_i_locator": {
+      "passage_id": "noag051-T1",
+      "offset": 41552,
+      "section_type": "TABLE"
+    },
+    "part_ii_locator": {
+      "passage_id": "noag051-T2",
+      "offset": 44607,
+      "section_type": "TABLE"
+    },
+    "part_i_footnote_verbatim": "Levels of importance are graded from A (best) to F (worst).",
+    "part_ii_footnotes_verbatim": [
+      "CNS = central nervous system; NEB = non-enhancing brain; NEBPI = Non-Enhancing Brain Permeability Index; PD = pharmacodynamic; PK = pharmacokinetic.",
+      "Accounting for potency."
+    ],
+    "extraction": "analysis/nebpi_source.py (parsed from the cached bytes, never typed)",
+    "independent_reread": "verifier/nebpi_source.py (imports no analysis code)"
+  },
+  "part_i_criteria_count_in_source": 8,
+  "part_ii_branch_criterion": {
+    "_note": "Which CRITERION each Part-II branch token rests on. Declared as method data so the emitter and the independent verifier read the same map instead of both guessing at a branch id with string matching.",
+    "pk_therapeutic_in_neb": "pk_in_neb",
+    "pk_low_in_neb": "pk_in_neb",
+    "pk_little_to_none_in_neb": "pk_in_neb",
+    "pd_in_neb": "pd_in_neb",
+    "no_relevant_pd_in_neb": "pd_in_neb",
+    "radiographic_response_in_neb": "radiographic_response_in_neb",
+    "no_radiographic_response_in_neb": "radiographic_response_in_neb"
   }
 }

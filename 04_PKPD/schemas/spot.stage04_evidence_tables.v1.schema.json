@@ -257,6 +257,45 @@
         "potency_id"
       ]
     },
+    "nebpi_criteria": {
+      "columns": [
+        "candidate_id",
+        "context_id",
+        "criterion_id",
+        "status",
+        "importance",
+        "in_part_i_table",
+        "can_satisfy_part_ii_branch",
+        "carried_the_assigned_class",
+        "evidence_lane_consumed",
+        "requires_potency_context",
+        "n_observations",
+        "observation_ids",
+        "source_verbatim",
+        "method_id"
+      ],
+      "dtypes": [
+        "string",
+        "string",
+        "string",
+        "string",
+        "string",
+        "bool",
+        "bool",
+        "bool",
+        "string",
+        "bool",
+        "int64",
+        "list<element: string>",
+        "string",
+        "string"
+      ],
+      "sort_key": [
+        "candidate_id",
+        "context_id",
+        "criterion_id"
+      ]
+    },
     "nebpi_decisions": {
       "columns": [
         "candidate_id",

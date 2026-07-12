@@ -58,6 +58,10 @@ def test_cached_bytes_are_re_hashed_and_verified(tmp_path):
     for s in sources["sources"]:
         if s["source_id"] == "grossman2026_nebpi":
             s["raw_sha256"] = digest
+            # This source declares a CONTENT hash too (the raw bytes carry the PMC BioC
+            # retrieval-date envelope and are not stable across re-fetches). The stand-in
+            # payload has no envelope, so its content hash is its raw hash.
+            s["content_sha256"] = digest
     method_dir = tmp_path / "method"
     method_dir.mkdir()
     with open(method_dir / "sources.json", "w", encoding="utf-8") as fh:

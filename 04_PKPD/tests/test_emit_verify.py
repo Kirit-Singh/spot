@@ -197,7 +197,8 @@ def test_manifest_records_row_order_dtypes_float_rules_and_environment(emitted):
     tables = {a["table"]: a for a in manifest["artifacts"] if a["table"]}
     assert set(tables) == {
         "delivery_evidence", "transporter_evidence", "exposure_evidence", "safety_evidence",
-        "nebpi_decisions", "contexts", "drug_forms", "property_evidence", "potency_evidence",
+        "nebpi_decisions", "nebpi_criteria",
+        "contexts", "drug_forms", "property_evidence", "potency_evidence",
         # `delivery_assignments` is the INPUT the delivery decision is reduced from. Without
         # it in the release the verifier could only re-read the generator's reduced answer.
         "potency_context_links", "delivery_assignments", "nebpi_observations",

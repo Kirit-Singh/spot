@@ -14,10 +14,13 @@
       "retrieved_representation": "BioC XML (PMC full text)",
       "raw_sha256": "8bb0324def170ae1f9aa26e906c8b7327690b8c6eebcd3d3e29f5e5a88b23f47",
       "access_date": "2026-07-11",
-      "volatility": "stable",
-      "role": "Authoritative source for the NEBPI Part I / Part II criteria. Supplied to Stage 4 by the orchestrator; hash independently re-verified on 2026-07-11.",
+      "volatility": "raw_bytes_volatile_daily__content_stable — the article is stable; the API envelope is not. Pin content_sha256.",
+      "role": "Authoritative source for the NEBPI Part I / Part II criteria. Tables 1 and 2 are parsed out of these bytes by analysis/nebpi_source.py and independently re-read cell-for-cell by verifier/nebpi_source.py.",
       "cache_filename": "PMC13338342.bioc.xml",
-      "retrieval_url": "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_xml/PMC13338342/unicode"
+      "retrieval_url": "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_xml/PMC13338342/unicode",
+      "content_sha256": "90ffdf2a07f742f58128bdafeeebedb3d3779640884142783152113fc6473937",
+      "content_hash_rule": "sha256 over the response with the PMC BioC envelope's <date> element blanked (<date></date>). That element is the RETRIEVAL date, not the article: the endpoint stamps the day of the fetch into every response, so the raw bytes of an UNCHANGED paper differ by exactly one byte each day. Verified 2026-07-12: a live re-fetch gave raw_sha256=0862ac394a040ab9595dbd17f36e53dc2773ad873fd58d36658cdde6f8e5422d (different) with an IDENTICAL content_sha256 and byte-identical Table 1/Table 2 cells. content_sha256 is the scientific identity; raw_sha256 is a snapshot of one fetch and is NOT re-verifiable on a later day.",
+      "raw_sha256_snapshot_date": "2026-07-11"
     },
     {
       "source_id": "wager2010_cnsmpo_jats",

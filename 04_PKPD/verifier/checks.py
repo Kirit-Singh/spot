@@ -26,6 +26,8 @@ from .bindings import (
 )
 from . import inputs as vinputs
 from . import derived
+from .columns import DELIVERY_REBUILT_FIELDS, REQUIRED_COLUMNS
+from .criteria import check_criteria
 from .delivery import rebuild_delivery
 from .reconstruct import (
     load_method,
@@ -45,68 +47,6 @@ FORBIDDEN_FIELD_DEFAULT = (
 
 def _c(checks: list[dict], cid: str, ok: bool, detail: str) -> None:
     checks.append({"check_id": cid, "status": "pass" if ok else "fail", "detail": detail})
-
-
-# The columns reconstruction actually reads. Declared here so a release from a different
-# Stage-4 version is reported as unverifiable rather than crashing the verifier.
-REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
-    "contexts": ("context_id", "candidate_id", "active_moiety_id", "route", "formulation",
-                 "dose", "schedule", "tumor_context"),
-    "drug_forms": ("candidate_id", "namespace", "direction_compatibility"),
-    "property_evidence": ("property_record_id", "candidate_id", "property_id",
-                          "value_source_string", "units", "calculator_id", "accepted",
-                          "source_record_id", "raw_response_sha256"),
-    "potency_evidence": ("potency_id", "candidate_id", "active_moiety_id", "metric",
-                         "value_source_string", "units", "binding_state",
-                         "biological_context", "source_record_id", "raw_response_sha256"),
-    # Every field the source binding is checked on. A link is the only way a potency from
-    # one tumour context may be used in another, so it rests on acquired bytes like any
-    # other evidence row.
-    "potency_context_links": ("link_id", "potency_id", "tumor_context",
-                              "source_record_id", "raw_response_sha256"),
-    # Every field the delivery reducer takes identity from. Without these the verifier could
-    # only re-read the generator's reduced answer, which is not a check.
-    "delivery_assignments": ("assignment_id", "candidate_id", "context_id", "requirement",
-                             "basis", "assigned_by", "rule_id", "rule_version", "rationale",
-                             "evidence_source_record_id", "evidence_source_url",
-                             "evidence_access_date", "evidence_release_version",
-                             "evidence_sha256", "evidence_extraction_transform"),
-    "search_manifests": ("search_id", "source", "endpoint", "query_canonical",
-                         "search_scope", "executed_date", "n_results", "response_sha256",
-                         "source_record_id"),
-    "exposure_evidence": ("measurement_id", "candidate_id", "active_moiety_id", "context_id",
-                          "matrix", "enhancement_context", "binding_state",
-                          "detection_status", "concentration_source_string",
-                          "concentration_units", "quantitation_limit_kind",
-                          "quantitation_limit_source_string", "quantitation_limit_units",
-                          "margin_status", "margin_canonical_decimal",
-                          "margin_reason_code"),
-    # Every field the reducer takes identity from. A release that omits one of them cannot
-    # be reduced the way the generator reduced it, and is unverifiable rather than passing.
-    "nebpi_observations": ("observation_id", "candidate_id", "context_id", "criterion_id",
-                           "state", "assessment_adequate", "adequacy_rationale",
-                           "measurement_id", "potency_id", "evidence_type",
-                           "source_record_id", "source_url", "access_date",
-                           "release_version", "raw_response_sha256", "extraction_transform"),
-    "nebpi_decisions": ("candidate_id", "context_id", "nebpi_status", "nebpi_class",
-                        "derived_pk_level", "pd_state", "radiographic_state",
-                        "pk_censored_bound_kind", "pk_censored_bound_below_mec",
-                        "satisfied_branches"),
-    "safety_evidence": ("evidence_id", "candidate_id", "evidence_state", "finding_text",
-                        "search_id"),
-    "source_catalog": ("source_record_id", "acquisition_status", "raw_sha256"),
-    "delivery_evidence": ("candidate_id", "context_id", "delivery_requirement",
-                          "nebpi_primary_gate", "reason_code", "assignment_id",
-                          "conflicting_assignment_ids", "evidence_source_record_id",
-                          "evidence_sha256"),
-}
-
-# Every delivery_evidence field the independent reducer reproduces. The generator's reduced
-# answer is the thing being checked, so every one of them must agree.
-DELIVERY_REBUILT_FIELDS = (
-    "delivery_requirement", "nebpi_primary_gate", "reason_code", "downgraded_from",
-    "assignment_id", "evidence_source_record_id", "evidence_sha256",
-)
 
 
 def _missing_required_columns(tables: dict[str, list[dict]]) -> dict[str, list[str]]:
@@ -357,6 +297,14 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
                 _c(checks, f"margin_reason::{mid}",
                    mine["reason_code"] == row["margin_reason_code"],
                    f"rebuilt={mine['reason_code']} claimed={row['margin_reason_code']}")
+
+        # --- 4b. RECONSTRUCTION: the criterion-level NEBPI table ---------------------------
+        # NEBPI is a criterion-level evidence model, not a score. The table that says so is
+        # rebuilt from the observations + the method, never read back from the generator.
+        criteria_problems = check_criteria(tables, method)
+        _c(checks, "nebpi_criteria_reconstructed", not criteria_problems,
+           "every criterion's status, importance, branch capability and contribution is "
+           f"reproduced from the evidence: {criteria_problems}")
 
         # --- 5. RECONSTRUCTION: NEBPI decision path ---------------------------------------
         rebuilt_nebpi = rebuild_nebpi(tables, method)
