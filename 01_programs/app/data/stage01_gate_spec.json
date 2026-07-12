@@ -1,5 +1,5 @@
 {
-  "schema": "spot.stage01_gate_spec.v1",
+  "schema": "spot.stage01_gate_spec.v2",
   "method_version": "stage1-continuous-v3",
   "pre_registered": true,
   "authored_before_scores": true,
@@ -12,44 +12,95 @@
     "396k cells are not biological replicates",
     "on failure: record nonselectable for that condition; do NOT retune markers/seeds/thresholds afterward"
   ],
+  "implementation": {
+    "spearman": {"ranks": "average", "cells": "finite_only", "p_value": false},
+    "iqr": {"formula": "Q75 - Q25", "quantile_method": "numpy_linear"},
+    "hard_gate_undefined": {"iqr_zero": "fail", "undefined_correlation": "fail"},
+    "pair_and_offaxis_conditions": ["Rest", "Stim8hr", "Stim48hr"],
+    "pair_and_offaxis_note": "run for all three real conditions, NOT a post-selection 'selected condition'",
+    "overlay_standardized_error": "abs(median_overlay - median_full) / IQR_full <= 0.10",
+    "no_reseed_resample_substitute": true,
+    "emit_every_failure": "T7b emits every failure as-is; no reseeding, resampling, or marker substitution",
+    "result_record_fields": ["gate_id", "stratum_instance", "metric", "observed_value", "operator", "threshold", "pass", "worst_donor", "worst_marker", "worst_seed", "consequence"]
+  },
+  "overlay_expected_counts": {
+    "D1|Rest": 3420, "D1|Stim8hr": 3273, "D1|Stim48hr": 3294,
+    "D2|Rest": 3305, "D2|Stim8hr": 3442, "D2|Stim48hr": 3372,
+    "D3|Rest": 3270, "D3|Stim8hr": 3323, "D3|Stim48hr": 3317,
+    "D4|Rest": 3336, "D4|Stim8hr": 3286, "D4|Stim48hr": 3362,
+    "TOTAL": 40000
+  },
+  "control_draw_alt_seeds": [12346, 12347, 12348, 12349, 12350, 12351, 12352, 12353, 12354, 12355, 12356, 12357, 12358, 12359, 12360, 12361, 12362, 12363, 12364, 12365],
   "gates": [
-    {"id": "global_coverage", "stratum": "program",
-     "rule": "n_panel_genes_used >= 3", "consequence": "else globally nonselectable"},
+    {"id": "global_coverage", "stratum": "program", "rule": "n_panel_genes_used >= 3",
+     "checks": [{"metric": "n_panel_genes_used", "operator": ">=", "threshold": 3, "aggregation": "single", "conditions": null, "equality": "inclusive", "undefined": "fail", "consequence": "program_globally_nonselectable"}]},
+
     {"id": "stage2_base_portability", "stratum": "program",
      "rule": "n_panel_in_effect_universe >= 3 AND n_control_in_effect_universe >= 10; record retained panel/control coefficient fractions",
-     "consequence": "else stage2_unavailable (separate from stage-1 validity); target-specific masking remains a stage-2 gate"},
-    {"id": "condition_measurability", "stratum": "program x condition (per donor)",
+     "records": ["retained_panel_coefficient_fraction", "retained_control_coefficient_fraction"],
+     "note": "separate from stage-1 measurement validity; target-specific masking remains a stage-2 gate",
+     "checks": [
+       {"metric": "n_panel_in_effect_universe", "operator": ">=", "threshold": 3, "aggregation": "single", "conditions": null, "equality": "inclusive", "undefined": "fail", "consequence": "stage2_unavailable"},
+       {"metric": "n_control_in_effect_universe", "operator": ">=", "threshold": 10, "aggregation": "single", "conditions": null, "equality": "inclusive", "undefined": "fail", "consequence": "stage2_unavailable"}
+     ]},
+
+    {"id": "condition_measurability", "stratum": "program x condition x donor",
      "rule": "in every donor at condition C: panel-score IQR > 0 AND >=2 panel genes detected in >=1% of cells",
-     "consequence": "fail only program x condition"},
+     "checks": [
+       {"metric": "panel_score_iqr", "operator": ">", "threshold": 0, "aggregation": "all_donors", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "exclusive", "undefined": "fail", "consequence": "program_condition_nonselectable"},
+       {"metric": "n_panel_genes_detected_ge_1pct_cells", "operator": ">=", "threshold": 2, "aggregation": "all_donors", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "program_condition_nonselectable"}
+     ]},
+
     {"id": "lomo_panel_robustness", "stratum": "program x condition x removed_marker x donor",
-     "rule": "controls FIXED; compare panel_mean_full vs panel_mean_minus_gene (NOT the control-sharing scores); for every removed marker and donor at C: Spearman rho >= 0.80 AND median(|delta_panel|)/IQR(panel_mean_full) <= 0.25",
-     "consequence": "fail program x condition; undefined metric fails"},
+     "rule": "controls FIXED; compare panel_mean_full vs panel_mean_minus_gene (NOT the control-sharing scores)",
+     "checks": [
+       {"metric": "spearman_rho(panel_mean_full, panel_mean_minus_gene)", "operator": ">=", "threshold": 0.80, "aggregation": "all_markers_all_donors", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "program_condition_nonselectable"},
+       {"metric": "median(abs(delta_panel))/iqr(panel_mean_full)", "operator": "<=", "threshold": 0.25, "aggregation": "all_markers_all_donors", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "program_condition_nonselectable"}
+     ]},
+
     {"id": "control_draw_sensitivity", "stratum": "program x condition x seed x donor",
-     "rule": "20 alternative master seeds 12346..12365; for every seed and donor x condition: primary-vs-alternative score rho >= 0.90 AND |median_alt - median_primary|/IQR_primary <= 0.25",
-     "consequence": "fail program x condition"},
+     "rule": "20 alt master seeds (control_draw_alt_seeds); for every seed and donor x condition",
+     "checks": [
+       {"metric": "spearman_rho(score_primary, score_alt_seed)", "operator": ">=", "threshold": 0.90, "aggregation": "all_seeds_all_donors", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "program_condition_nonselectable"},
+       {"metric": "abs(median_alt - median_primary)/iqr_primary", "operator": "<=", "threshold": 0.25, "aggregation": "all_seeds_all_donors", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "program_condition_nonselectable"}
+     ]},
+
     {"id": "selection_preflight", "stratum": "selection",
-     "rule": "both programs pass at the selected condition; same real condition; all four donors; no sensitivity lane; no All; reject identical program+direction",
-     "consequence": "hard structural gate"},
-    {"id": "pair_redundancy", "stratum": "pair x donor",
-     "rule": "per-donor Spearman rho(A,B) within the selected condition; pair_redundant=true if |rho| >= 0.90 in >=3 of 4 donors; store all four signed rho",
-     "consequence": "advisory pair-level flag only; never blocks selection or invalidates a program"},
-    {"id": "off_axis_association", "stratum": "axis x program_C x donor",
-     "rule": "for every other evaluable primary program C, per-donor rho(A,C) and rho(B,C) separately; record in off_axis_associations if |rho| >= 0.90 in >=3 of 4 donors; exclude sensitivity lanes; never construct A-B; undefined rho -> not_evaluable",
-     "consequence": "record/flag only; never a selection block or program failure"},
+     "rule": "structural gate at selection time",
+     "structural_conditions": ["both_programs_selectable_at_condition", "same_real_condition", "all_four_donors", "no_sensitivity_lane", "not_all_times", "A_program_or_direction_differs_from_B"],
+     "checks": [{"metric": "structural_preflight_all_true", "operator": "==", "threshold": true, "aggregation": "all", "conditions": null, "equality": "exact", "undefined": "fail", "consequence": "reject_selection"}]},
+
+    {"id": "pair_redundancy", "stratum": "pair x donor x condition", "advisory": true,
+     "rule": "per-donor Spearman rho(A,B) in EACH real condition; pair_redundant if |rho| >= 0.90 in >=3 of 4 donors (per condition); store all four signed rho per condition",
+     "checks": [{"metric": "abs(spearman_rho(A,B))", "operator": ">=", "threshold": 0.90, "aggregation": "donor_consensus_ge_3_of_4", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "not_evaluable", "consequence": "flag_pair_redundant"}],
+     "records": ["signed_rho_per_donor_per_condition"]},
+
+    {"id": "off_axis_association", "stratum": "axis x program_C x donor x condition", "advisory": true,
+     "rule": "for every other evaluable primary program C: per-donor rho(A,C) and rho(B,C) separately in EACH real condition; exclude sensitivity lanes; never construct A-B",
+     "exclude_sensitivity_lanes": true, "never_construct_A_minus_B": true,
+     "checks": [{"metric": "abs(spearman_rho(axis_program, C))", "operator": ">=", "threshold": 0.90, "aggregation": "donor_consensus_ge_3_of_4", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "not_evaluable", "consequence": "record_off_axis_association"}]},
+
     {"id": "overlay_composition", "stratum": "overlay",
-     "rule": "EXACT frozen donor x condition barcode counts (not +-1 percentage point)",
-     "consequence": "failure blocks overlay release"},
+     "rule": "EXACT frozen donor x condition barcode counts (see overlay_expected_counts)",
+     "checks": [{"metric": "donor_condition_counts", "operator": "==", "threshold": "overlay_expected_counts", "aggregation": "all_cells", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "exact", "undefined": "fail", "consequence": "block_overlay_release"}]},
+
     {"id": "overlay_distributions", "stratum": "program x donor x condition",
-     "rule": "IQR-standardized median error <= 0.10 * full-data IQR AND ECDF sup-distance D <= 0.05 (no KS p-value)",
-     "consequence": "blocks overlay release, not program selectability"},
+     "rule": "IQR-standardized median error <= 0.10 AND ECDF sup-distance D <= 0.05 (no KS p-value)",
+     "checks": [
+       {"metric": "abs(median_overlay - median_full)/iqr_full", "operator": "<=", "threshold": 0.10, "aggregation": "all", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "block_overlay_release"},
+       {"metric": "ecdf_sup_distance_D(overlay, full)", "operator": "<=", "threshold": 0.05, "aggregation": "all", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "block_overlay_release"}
+     ]},
+
     {"id": "overlay_correlations", "stratum": "condition",
-     "rule": "max pairwise Spearman difference between overlay and full data <= 0.10",
-     "consequence": "failure blocks overlay release"},
-    {"id": "donor_sensitivity", "stratum": "program x condition",
-     "rule": "max_LODO |median_3donor - median_4donor| / IQR_4donor > 0.25",
-     "consequence": "set donor_sensitive=true (flag only)"},
-    {"id": "cp10k_v2_comparison", "stratum": "program",
+     "rule": "per condition: max pairwise Spearman difference between overlay and full data <= 0.10",
+     "checks": [{"metric": "max_pairwise_spearman_diff(overlay, full)", "operator": "<=", "threshold": 0.10, "aggregation": "all_pairs", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "inclusive", "undefined": "fail", "consequence": "block_overlay_release"}]},
+
+    {"id": "donor_sensitivity", "stratum": "program x condition", "advisory": true,
+     "rule": "max_LODO abs(median_3donor - median_4donor)/iqr_4donor > 0.25 -> flag",
+     "checks": [{"metric": "max_lodo(abs(median_3donor - median_4donor)/iqr_4donor)", "operator": ">", "threshold": 0.25, "aggregation": "max_over_lodo_folds", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": "exclusive", "undefined": "not_evaluable", "consequence": "flag_donor_sensitive"}]},
+
+    {"id": "cp10k_v2_comparison", "stratum": "program", "descriptive": true,
      "rule": "report stratified rank concordance + IQR-standardized shifts",
-     "consequence": "descriptive only"}
+     "checks": [{"metric": "stratified_rank_concordance_and_iqr_std_shift", "operator": "report", "threshold": null, "aggregation": "report", "conditions": ["Rest", "Stim8hr", "Stim48hr"], "equality": null, "undefined": "not_evaluable", "consequence": "descriptive_only"}]}
   ]
 }

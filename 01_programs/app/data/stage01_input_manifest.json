@@ -3,7 +3,7 @@
   "method_version": "stage1-continuous-v3",
   "input_object": "ntc_clustered.h5ad",
   "hf_source": "KiritSingh/spot-CD4-Marson",
-  "host_path": "/mnt/tcenas/models/spot_scvi/ntc_clustered.h5ad",
+  "hf_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6",
   "raw_file_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43",
   "canonical_content_sha256": "4ba50ccdf759115297b92bdfb7ad65c5c952b84093314245d21fe9af19d0f714",
   "var_order_sha256": "c53793d91022c1d756ee972b470734a29717ae5522af179d5f1fcad0dda0e49f",
