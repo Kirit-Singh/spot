@@ -9,6 +9,20 @@
                "estimator_status", "estimator", "selection_id", "selection_full_sha256", "canonical_content", "poles",
                "trust_bindings", "provenance_bindings", "historical_validation_provenance",
                "full_contract_content_sha256"],
+  "allOf": [
+    {"$comment": "ready requires an available estimator; a not_implemented estimator can never be ready",
+     "if": {"required": ["execution_status"], "properties": {"execution_status": {"const": "ready"}}},
+     "then": {"properties": {"estimator_status": {"const": "available"}}}},
+    {"$comment": "temporal_cross_condition + not_implemented must be awaiting_estimator",
+     "if": {"required": ["analysis_mode", "estimator_status"],
+            "properties": {"analysis_mode": {"const": "temporal_cross_condition"}, "estimator_status": {"const": "not_implemented"}}},
+     "then": {"properties": {"execution_status": {"const": "awaiting_estimator"}}}},
+    {"$comment": "the estimator must match the mode — a temporal mode may never borrow the within-condition estimator",
+     "if": {"required": ["analysis_mode"], "properties": {"analysis_mode": {"const": "within_condition"}}},
+     "then": {"properties": {"estimator_id": {"const": "within_condition_v1"}}}},
+    {"if": {"required": ["analysis_mode"], "properties": {"analysis_mode": {"const": "temporal_cross_condition"}}},
+     "then": {"properties": {"estimator_id": {"const": "temporal_cross_condition_v1"}}}}
+  ],
   "properties": {
     "schema_version": {"const": "spot.stage01_selection.v3"},
     "selection_origin": {"enum": ["user_selected", "fixture"]},
