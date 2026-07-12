@@ -2,10 +2,14 @@ import { createRoot } from 'react-dom/client';
 import '../index.css';
 import { StageIsland } from '../mpa/StageIsland';
 import { MPA_SCAFFOLDS } from '../mpa/scaffolds';
+import { evidenceFromProvenance } from '../mpa/ScienceEvidence';
 import { createDemoRepository } from '../repository/repository';
 import { Stage3View } from '../stages/stage3/Stage3View';
 
 const sc = MPA_SCAFFOLDS.drugs;
+const slot = createDemoRepository().getStage3();
+const artifact = slot.status === 'loaded' ? slot.artifact : null;
+
 createRoot(document.getElementById('root')!).render(
   <StageIsland
     page="drugs"
@@ -13,9 +17,7 @@ createRoot(document.getElementById('root')!).render(
     purpose={sc.purpose}
     regions={sc.regions}
     enqueueTarget="stage03_review"
-    renderDemo={() => {
-      const s = createDemoRepository().getStage3();
-      return s.status === 'loaded' ? <Stage3View artifact={s.artifact} /> : null;
-    }}
+    renderDemo={() => (artifact ? <Stage3View artifact={artifact} /> : null)}
+    demoEvidence={artifact ? evidenceFromProvenance(artifact.provenance) : null}
   />,
 );
