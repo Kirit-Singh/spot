@@ -3,15 +3,23 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// The deployable entry is `02_page.html` (copied into spot-dist next to the
-// unchanged `01_page.html`). `base: './'` keeps asset URLs relative so the bundle
-// works from any document root. Assets are content-hashed under `assets/`.
+// Hybrid MPA: four downstream stage pages are React HTML entries sharing ONE bundle.
+// The Programs page (public/01_page.html) is the migrated hand-written Stage-1 page,
+// copied verbatim from publicDir along with its data/. Entry point is /01_page.html.
+// base: './' keeps asset URLs relative so the dist serves from any document root.
+const entry = (name: string) => fileURLToPath(new URL(`./${name}.html`, import.meta.url))
+
 export default defineConfig({
   base: './',
   plugins: [react()],
   build: {
     rollupOptions: {
-      input: fileURLToPath(new URL('./02_page.html', import.meta.url)),
+      input: {
+        targets: entry('targets'),
+        pathways: entry('pathways'),
+        drugs: entry('drugs'),
+        pksafety: entry('pksafety'),
+      },
     },
   },
   test: {
