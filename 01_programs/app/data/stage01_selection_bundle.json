@@ -1,0 +1,153 @@
+{
+  "schema": "spot.stage01_selection_bundle.v1",
+  "for_selection_schema": "spot.stage01_selection.v3",
+  "stage1_method_version": "stage1-continuous-v3.0.1",
+  "dataset_id": "marson2025_gwcd4_perturbseq",
+  "donor_scope": "all",
+  "effect_universe_id": "marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad",
+  "source_h5ad_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43",
+  "source_hf_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6",
+  "registry_scorer_view_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
+  "real_conditions": [
+    "Rest",
+    "Stim8hr",
+    "Stim48hr"
+  ],
+  "directions": [
+    "high",
+    "low"
+  ],
+  "implemented_estimators": [
+    "within_condition_v1",
+    "temporal_cross_condition_v1"
+  ],
+  "estimator_for_mode": {
+    "within_condition": "within_condition_v1",
+    "temporal_cross_condition": "temporal_cross_condition_v1"
+  },
+  "estimator_registry": {
+    "temporal_cross_condition_v1": {
+      "estimator_id": "temporal_cross_condition_v1",
+      "analysis_mode": "temporal_cross_condition",
+      "n_conditions": 2,
+      "method_id": "spot.stage02.temporal_cross_condition.v1",
+      "method_version": "stage2-temporal-cross-condition-v1-did-on-program-projections",
+      "estimand_id": "spot.stage02.temporal.estimand.population_program_projection_shift.v1",
+      "estimand_level": "population",
+      "estimand_is_per_cell_fate": false,
+      "inference_status": "not_calibrated",
+      "method_sha256": "c05baa8f847f284a6cb187df24668ac0e5197dfdf2d238ced04c7847b7226e77"
+    }
+  },
+  "poles": {
+    "th1_like": {
+      "program_id": "th1_like",
+      "effect_projection_status": "available",
+      "n_measured": 4,
+      "n_panel_in_effect_universe": 4,
+      "n_control_in_effect_universe": 138,
+      "reason_codes": []
+    },
+    "th2_like": {
+      "program_id": "th2_like",
+      "effect_projection_status": "available",
+      "n_measured": 4,
+      "n_panel_in_effect_universe": 4,
+      "n_control_in_effect_universe": 114,
+      "reason_codes": []
+    },
+    "th17_like": {
+      "program_id": "th17_like",
+      "effect_projection_status": "available",
+      "n_measured": 6,
+      "n_panel_in_effect_universe": 5,
+      "n_control_in_effect_universe": 59,
+      "reason_codes": []
+    },
+    "tfh_like": {
+      "program_id": "tfh_like",
+      "effect_projection_status": "available",
+      "n_measured": 3,
+      "n_panel_in_effect_universe": 3,
+      "n_control_in_effect_universe": 134,
+      "reason_codes": []
+    },
+    "treg_like": {
+      "program_id": "treg_like",
+      "effect_projection_status": "available",
+      "n_measured": 5,
+      "n_panel_in_effect_universe": 5,
+      "n_control_in_effect_universe": 231,
+      "reason_codes": []
+    },
+    "cd4_ctl_like": {
+      "program_id": "cd4_ctl_like",
+      "effect_projection_status": "available",
+      "n_measured": 6,
+      "n_panel_in_effect_universe": 6,
+      "n_control_in_effect_universe": 212,
+      "reason_codes": []
+    },
+    "th9_like": {
+      "program_id": "th9_like",
+      "effect_projection_status": "unavailable",
+      "n_measured": 2,
+      "n_panel_in_effect_universe": 0,
+      "n_control_in_effect_universe": 20,
+      "reason_codes": [
+        "panel_below_effect_universe_min"
+      ]
+    },
+    "diff_naive": {
+      "program_id": "diff_naive",
+      "effect_projection_status": "available",
+      "n_measured": 6,
+      "n_panel_in_effect_universe": 6,
+      "n_control_in_effect_universe": 187,
+      "reason_codes": []
+    },
+    "diff_activated": {
+      "program_id": "diff_activated",
+      "effect_projection_status": "available",
+      "n_measured": 5,
+      "n_panel_in_effect_universe": 5,
+      "n_control_in_effect_universe": 140,
+      "reason_codes": []
+    },
+    "diff_memory": {
+      "program_id": "diff_memory",
+      "effect_projection_status": "available",
+      "n_measured": 6,
+      "n_panel_in_effect_universe": 6,
+      "n_control_in_effect_universe": 138,
+      "reason_codes": []
+    },
+    "diff_checkpoint": {
+      "program_id": "diff_checkpoint",
+      "effect_projection_status": "available",
+      "n_measured": 6,
+      "n_panel_in_effect_universe": 6,
+      "n_control_in_effect_universe": 227,
+      "reason_codes": []
+    }
+  },
+  "trust_bindings": {
+    "validation_raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+    "validation_semantics_raw_sha256": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026",
+    "validation_semantics_self_canonical_sha256": "d4734a7b882c2406a3fc577cd59b86d15378fb72a1ae041ab554ff310b432669",
+    "gate_spec_raw_sha256": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
+    "constituent_main_content_canonical_sha256": "1813cab50df528391d5e07dc2503afd65c1d30cbdb2fa1934e2e25840bd2076a",
+    "constituent_overlay_donor_content_canonical_sha256": "10e76d83cb76ca7316a0578bba95f7f311685a25feb9e2b772beb1cd610d67df",
+    "marker_diagnostics_content_sha256": "c93a151a66de7cf19c9176c72ce9aa94847f53b9e06f94fec7084d52ae7775b9",
+    "scoring_view_raw_sha256": "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f",
+    "scoring_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c"
+  },
+  "provenance_bindings": {
+    "primary_registry_v3_raw_sha256": "04ce0a25e16c4b3eea74817f01fb986134a0baec36a3464455f049803089e72d"
+  },
+  "historical_validation_provenance": {
+    "kind": "frozen_lomo_within_condition_validation_v3",
+    "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+    "active_gate": false
+  }
+}

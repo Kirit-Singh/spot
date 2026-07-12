@@ -203,7 +203,16 @@ def test_hard_refusals_raise_typed():
 
 def test_no_selection_served_as_current():
     assert not os.path.exists(os.path.join(DATA, "stage01_selection_demo_treg_th1_stim48hr.json"))
-    assert [f for f in os.listdir(DATA) if f.startswith("stage01_selection")] == []
+    # the served selection BUNDLE (constants for the browser v3 build) is allowed; it is NOT a materialized
+    # selection contract — no served file is an actual spot.stage01_selection.v3 handoff.
+    served = [f for f in os.listdir(DATA)
+              if f.startswith("stage01_selection") and f != "stage01_selection_bundle.json"]
+    assert served == [], served
+    bundle = os.path.join(DATA, "stage01_selection_bundle.json")
+    if os.path.exists(bundle):
+        b = json.load(open(bundle))
+        assert b["schema"] == "spot.stage01_selection_bundle.v1"
+        assert "selection_id" not in b and "execution_status" not in b   # constants only, not a selection
     if os.path.isdir(sc.FIXTURES):
         for f in os.listdir(sc.FIXTURES):
             if f.endswith(".json"):
