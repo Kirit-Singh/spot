@@ -6,7 +6,7 @@ object whose gene universe is deliberately SMALLER than the pooled one.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 
 import h5py
 import numpy as np
@@ -30,19 +30,30 @@ def _write_categorical(obs: h5py.Group, name: str, values: list[str]) -> None:
     grp.create_dataset("codes", data=codes)
 
 
+def _scope_rows(specs: list[TargetSpec], conditions: Sequence[str],
+                present: Optional[list[str]] = None) -> list[tuple[TargetSpec, str]]:
+    """The released (target, condition) scopes this object ships, in emission order.
+
+    Condition-major, so a single-condition object is byte-for-byte what it always was.
+    """
+    return [(s, c) for c in conditions for s in specs
+            if present is None or s.target in present]
+
+
 def _write_obs(grp: h5py.Group, specs: list[TargetSpec], n_guides_by_target=None,
-               present: Optional[list[str]] = None) -> None:
-    rows = [s for s in specs if present is None or s.target in present]
+               present: Optional[list[str]] = None,
+               conditions: Sequence[str] = (CONDITION,)) -> None:
+    rows = _scope_rows(specs, conditions, present)
     obs = grp.create_group("obs")
     obs.attrs["_index"] = "target_condition"
     obs.create_dataset("target_condition",
-                       data=np.array([s.released_estimate_id for s in rows],
+                       data=np.array([s.released_estimate_id_at(c) for s, c in rows],
                                      dtype="S64"))
-    _write_categorical(obs, "culture_condition", [CONDITION] * len(rows))
-    _write_categorical(obs, "target_contrast", [s.target for s in rows])
+    _write_categorical(obs, "culture_condition", [c for _, c in rows])
+    _write_categorical(obs, "target_contrast", [s.target for s, _ in rows])
     # the spec owns the released identity; obs publishes it
     _write_categorical(obs, "target_contrast_gene_name",
-                       [s.target_symbol for s in rows])
+                       [s.target_symbol for s, _ in rows])
 
     def ng(s: TargetSpec) -> float:
         if n_guides_by_target is not None:
@@ -50,8 +61,8 @@ def _write_obs(grp: h5py.Group, specs: list[TargetSpec], n_guides_by_target=None
         return np.nan if s.n_guides is None else s.n_guides
 
     numeric = {
-        "n_cells_target": [s.n_cells for s in rows],
-        "n_guides": [ng(s) for s in rows],
+        "n_cells_target": [s.n_cells for s, _ in rows],
+        "n_guides": [ng(s) for s, _ in rows],
         "ontarget_effect_size": [-1.0] * len(rows),
         "target_baseMean": [100.0] * len(rows),
         "guide_correlation_all": [0.5] * len(rows),
@@ -62,17 +73,17 @@ def _write_obs(grp: h5py.Group, specs: list[TargetSpec], n_guides_by_target=None
     for name, vals in numeric.items():
         obs.create_dataset(name, data=np.array(vals, dtype=np.float64))
     booleans = {
-        "ontarget_significant": [s.ontarget_significant for s in rows],
-        "low_target_gex": [s.low_target_gex for s in rows],
+        "ontarget_significant": [s.ontarget_significant for s, _ in rows],
+        "low_target_gex": [s.low_target_gex for s, _ in rows],
         "distal_offtarget_flag": [False] * len(rows),
         "neighboring_gene_KD": [True] * len(rows),
-        "single_guide_estimate": [(s.n_guides or 0) <= 1 for s in rows],
+        "single_guide_estimate": [(s.n_guides or 0) <= 1 for s, _ in rows],
     }
     for name, vals in booleans.items():
         obs.create_dataset(name, data=np.array(vals, dtype=bool))
 
 
-def _effect_matrix(rows: list[TargetSpec], a_values: list[float],
+def _effect_matrix(rows: list[tuple[TargetSpec, str]], a_values: list[float],
                    b_values: list[float], genes: list[str] = None) -> np.ndarray:
     """A-panel genes carry a_effect, B-panel genes b_effect, everything else 0."""
     genes = genes or UNIVERSE
@@ -86,14 +97,17 @@ def _effect_matrix(rows: list[TargetSpec], a_values: list[float],
     return mat
 
 
-def _write_main(path: str, specs: list[TargetSpec]) -> None:
+def _write_main(path: str, specs: list[TargetSpec],
+                conditions: Sequence[str] = (CONDITION,)) -> None:
     with h5py.File(path, "w") as f:
         var = f.create_group("var")
         var.create_dataset("gene_ids", data=np.array(UNIVERSE, dtype="S64"))
         var.create_dataset("gene_name", data=np.array(UNIVERSE, dtype="S64"))
-        _write_obs(f, specs)
-        mat = _effect_matrix(specs, [s.a_effect for s in specs],
-                             [s.b_effect for s in specs])
+        _write_obs(f, specs, conditions=conditions)
+        rows = _scope_rows(specs, conditions)
+        # THE TEMPORAL SIGNAL: each scope carries its OWN condition's effect.
+        mat = _effect_matrix(rows, [s.effects_at(c)[0] for s, c in rows],
+                             [s.effects_at(c)[1] for s, c in rows])
         layers = f.create_group("layers")
         layers.create_dataset("log_fc", data=mat)
         layers.create_dataset("zscore", data=mat * 2.0)
@@ -101,19 +115,22 @@ def _write_main(path: str, specs: list[TargetSpec]) -> None:
 
 def _write_modality(f: h5py.File, name: str, specs: list[TargetSpec],
                     values: dict[str, float], n_guides: dict[str, float],
-                    genes: list[str]) -> None:
+                    genes: list[str],
+                    conditions: Sequence[str] = (CONDITION,)) -> None:
     present = [s.target for s in specs if s.target in values]
-    rows = [s for s in specs if s.target in values]
+    rows = _scope_rows(specs, conditions, present)
     mod = f.create_group(f"mod/{name}")
     var = mod.create_group("var")
     var.create_dataset("_index", data=np.array(genes, dtype="S64"))
-    _write_obs(mod, specs, n_guides_by_target=n_guides, present=present)
-    mat = _effect_matrix(rows, [values[s.target] for s in rows],
-                         [s.b_effect for s in rows], genes=genes)
+    _write_obs(mod, specs, n_guides_by_target=n_guides, present=present,
+               conditions=conditions)
+    mat = _effect_matrix(rows, [values[s.target] for s, _ in rows],
+                         [s.effects_at(c)[1] for s, c in rows], genes=genes)
     mod.create_group("layers").create_dataset("log_fc", data=mat)
 
 
-def _write_by_guide(path: str, specs: list[TargetSpec]) -> None:
+def _write_by_guide(path: str, specs: list[TargetSpec],
+                    conditions: Sequence[str] = (CONDITION,)) -> None:
     with h5py.File(path, "w") as f:
         for slot in ("guide_1", "guide_2"):
             values = {s.target: s.guide_slot_effects[slot] for s in specs
@@ -121,10 +138,12 @@ def _write_by_guide(path: str, specs: list[TargetSpec]) -> None:
             ng = {s.target: s.guide_slot_n_guides.get(
                 slot, np.nan if s.n_guides is None else s.n_guides)
                 for s in specs}
-            _write_modality(f, slot, specs, values, ng, UNIVERSE)
+            _write_modality(f, slot, specs, values, ng, UNIVERSE,
+                            conditions=conditions)
 
 
-def _write_by_donors(path: str, specs: list[TargetSpec]) -> None:
+def _write_by_donors(path: str, specs: list[TargetSpec],
+                     conditions: Sequence[str] = (CONDITION,)) -> None:
     with h5py.File(path, "w") as f:
         for pair in DONOR_PAIRS:
             values = {s.target: s.donor_pair_effects[pair] for s in specs
@@ -133,7 +152,8 @@ def _write_by_donors(path: str, specs: list[TargetSpec]) -> None:
                 pair, np.nan if s.n_guides is None else s.n_guides)
                 for s in specs}
             # deliberately a SMALLER gene universe than the pooled object
-            _write_modality(f, pair, specs, values, ng, DONOR_UNIVERSE)
+            _write_modality(f, pair, specs, values, ng, DONOR_UNIVERSE,
+                            conditions=conditions)
 
 
 def _write_sgrna(path: str, specs: list[TargetSpec]) -> None:

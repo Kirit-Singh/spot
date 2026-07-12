@@ -60,12 +60,21 @@ RELEASE_CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 
 @dataclass
 class TargetSpec:
-    """One synthetic target: its library guides, its declared n_guides, its effects."""
+    """One synthetic target: its library guides, its declared n_guides, its effects.
+
+    ``condition_effects`` is what makes a TEMPORAL fixture possible: a target may carry
+    a DIFFERENT (a_effect, b_effect) at each culture condition, which is exactly the
+    thing a cross-condition difference-in-differences is a difference of. A spec that
+    names no condition effects has the same effect everywhere — the negative-control
+    shape, whose DiD must be exactly zero.
+    """
     target: str
     lib_guides: list[str]                 # sgRNA ids in the library
     n_guides: Optional[float]             # what the source says contributed
     a_effect: float                       # log_fc on the A panel (drives away_from_A)
     b_effect: float = 0.0
+    # condition -> (a_effect, b_effect); falls back to the flat pair above
+    condition_effects: dict[str, tuple[float, float]] = field(default_factory=dict)
     n_cells: float = 500.0
     ontarget_significant: bool = True
     low_target_gex: bool = False
@@ -84,9 +93,20 @@ class TargetSpec:
     # target may carry an ENSG-looking key that belongs to another gene.
     released_key_prefix: Optional[str] = None
 
+    def effects_at(self, condition: str) -> tuple[float, float]:
+        """This target's (a_effect, b_effect) at ONE condition."""
+        return self.condition_effects.get(condition, (self.a_effect, self.b_effect))
+
+    def released_estimate_id_at(self, condition: str) -> str:
+        return f"{self.released_key_prefix or self.target}_{condition}"
+
+    def identity_at(self, condition: str) -> dict:
+        return dict(self.identity,
+                    released_estimate_id=self.released_estimate_id_at(condition))
+
     @property
     def released_estimate_id(self) -> str:
-        return f"{self.released_key_prefix or self.target}_{CONDITION}"
+        return self.released_estimate_id_at(CONDITION)
 
     # ---- the RELEASED target identity this spec publishes ----
     # One source of truth: the h5ad writer puts these in obs, and the contributor

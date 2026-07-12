@@ -1,0 +1,98 @@
+{
+  "additive_batch": {
+    "cancels_in_did": true,
+    "correction_applied": false,
+    "max_variance_fraction": 0.0042,
+    "median_abs_smd_range": [
+      0.084,
+      0.13
+    ],
+    "min_variance_fraction": 0.0012,
+    "reason": "the additive/main batch shift explains 0.12-0.42% of program-projection variance, is sign-inconsistent across programs, and cancels in the DiD",
+    "sign_consistent_across_programs": false
+  },
+  "condition_composition": {
+    "Rest": {
+      "donor_replicate": {
+        "D1": "R1",
+        "D2": "R1",
+        "D3": "R2",
+        "D4": "R2"
+      }
+    },
+    "Stim48hr": {
+      "donor_replicate": {
+        "D1": "R2",
+        "D2": "R2",
+        "D3": "R2",
+        "D4": "R2"
+      }
+    },
+    "Stim8hr": {
+      "donor_replicate": {
+        "D1": "R1",
+        "D2": "R1",
+        "D3": "R2",
+        "D4": "R2"
+      }
+    }
+  },
+  "confound_rule": {
+    "derived_not_declared": true,
+    "rule_id": "spot.stage02.temporal.rule.donor_replicate_flip.v1",
+    "statement": "a pair is batch_partially_confounded exactly when at least one donor sits in a different replicate at the two endpoints; when every donor keeps its replicate the batch offset attaches to the same donors at both endpoints and cancels in the difference-of-differences"
+  },
+  "donor_code_map": {
+    "CE0006864": "D4",
+    "CE0008162": "D1",
+    "CE0008678": "D3",
+    "CE0010866": "D2"
+  },
+  "interaction_floor_source": {
+    "condition": "Rest",
+    "split": "split1_batchAligned",
+    "statistic": "std_inter",
+    "why": "the batch-aligned split is the one that carries the batch contrast, so its target x half interaction spread is the floor a confounded temporal call has to clear; the batch-crossed splits carry donor heterogeneity only"
+  },
+  "interaction_std": {
+    "cd4_ctl_like": 0.7557968633401351,
+    "diff_activated": 0.22701118338646412,
+    "diff_checkpoint": 0.47111311413536155,
+    "diff_memory": 0.08161082425816302,
+    "diff_naive": 0.15679664768292012,
+    "tfh_like": 0.41157822170599284,
+    "th17_like": 0.4347512278313763,
+    "th1_like": 0.22937640483028768,
+    "th2_like": 0.49076494360319656,
+    "treg_like": 0.3569502998059832
+  },
+  "not_identifiable": {
+    "consequence": "the batch bias on a Stim48hr endpoint can never be measured directly, only bounded by transfer from Rest/Stim8hr",
+    "identifiable": false,
+    "quantity": "pure_batch_effect",
+    "reason": "batch is perfectly aliased with donor-half in every condition (R1 == {D1,D2}, R2 == {D3,D4} in Rest/Stim8hr) and Stim48hr is all-R2, so no donor is measured in both replicates within a condition; a pure batch effect, and a pure batch x perturbation interaction separated from donor, cannot be isolated in this design - only bounded"
+  },
+  "policy_id": "spot.stage02.temporal.batch_policy.gwcd4i.v1",
+  "provenance": {
+    "dataset": "Marson GWCD4i CRISPRi perturb-seq (public release)",
+    "diagnostic_run_id": "20260712T021343Z/temporal-batch-diagnostic",
+    "effect_layer": "log_fc",
+    "measured_on": "2026-07-12",
+    "projection_reused_from": "analysis/direct/projection.py (config.FORMULA_EXPR)",
+    "report": "REPORT.md",
+    "report_sha256": "9f1146211f50dc0994a97d9ad56f9d590c2338359cadac766db9580d3f202287",
+    "results": "proj_results.json",
+    "results_sha256": "4a5f9003237ee9403c704e0156049f6c2aa3759060353ed2be6b696b0040c099",
+    "structure": "structure.json",
+    "structure_sha256": "1fb9d6e4ff52292432ae10d057326a1f4059252e0bfa4ff54375b3ba14be713c"
+  },
+  "schema_version": "spot.stage02_temporal_batch_policy.v1",
+  "sparse_panel_caution_programs": [
+    "th17_like",
+    "th2_like",
+    "tfh_like",
+    "th9_like"
+  ],
+  "sparse_panel_caution_reason": "sparse effective panels and near-zero cross-half reproducibility (r ~ 0.0-0.15); th9_like is not stage2-selectable and is listed so it cannot re-enter unflagged",
+  "verdict": "MODERATE"
+}

@@ -94,8 +94,10 @@ def synthetic_run(tmp_path):
                source_records_fn=None, source_records_recite=False,
                source_replay_fn=None, source_rows_fn=None,
                source_replay_report=None, strict_replay=None,
+               conditions=(CONDITION,),
                **selection_overrides) -> RunArgs:
         specs = specs or default_specs()
+        conditions = tuple(conditions)
         counter["n"] += 1
         d = os.path.join(str(tmp_path), f"run{counter['n']}")
         os.makedirs(d, exist_ok=True)
@@ -108,7 +110,8 @@ def synthetic_run(tmp_path):
         names = F.program_names(prefix, program_ids)
         # Stage-1 gate evidence: the hard gates are RE-DERIVED from these rows.
         val_path, gate_path = write_stage1_gates(
-            d, selectable=stage1_selectable, program_ids=names)
+            d, selectable=stage1_selectable, program_ids=names,
+            conditions=conditions)
 
         # THE contributor evidence, built in the one order the identity rule permits:
         # raw source -> its kept offset proof -> the records that carry it -> the ids
@@ -120,7 +123,8 @@ def synthetic_run(tmp_path):
             replay_fn=source_replay_fn,
             source_rows_fn=source_rows_fn, manifest_sources=manifest_sources,
             source_record_table=source_record_table,
-            source_replay_report=source_replay_report)
+            source_replay_report=source_replay_report,
+            conditions=conditions)
 
         release_path, release_hashes = None, None
         if lane in ("production", "research_only"):
@@ -157,9 +161,9 @@ def synthetic_run(tmp_path):
         by_guide = os.path.join(d, "by_guide.h5mu")
         by_donors = os.path.join(d, "by_donors.h5mu")
         sgrna = os.path.join(d, "sgrna.csv")
-        _write_main(de_main, specs)
-        _write_by_guide(by_guide, specs)
-        _write_by_donors(by_donors, specs)
+        _write_main(de_main, specs, conditions)
+        _write_by_guide(by_guide, specs, conditions)
+        _write_by_donors(by_donors, specs, conditions)
         _write_sgrna(sgrna, specs)
 
         # THE RELEASE GATE. production / research_only are release-grade lanes: they may
@@ -181,6 +185,27 @@ def synthetic_run(tmp_path):
                        strict_replay=bool(strict),
                        pseudobulk=evidence.source_path,
                        out_root=os.path.join(d, "out"))
+    return _build
+
+
+@pytest.fixture
+def temporal_run(synthetic_run):
+    """A three-condition run bound to two REAL registry programs.
+
+    Everything else is the ordinary synthetic lane: same evidence bundle, same manifest
+    contract, same release gate. The only difference is that the release ships three
+    culture conditions instead of one, which is the thing a cross-condition estimator
+    needs and the single-condition fixture cannot express.
+    """
+    import fixtures_temporal as T
+
+    def _build(specs=None, *, conditions=T.TEMPORAL_CONDITIONS,
+               analysis_condition=T.REST, **kwargs):
+        return synthetic_run(
+            specs if specs is not None else T.temporal_specs(),
+            conditions=conditions,
+            program_ids=(T.PROGRAM_A, T.PROGRAM_B), program_prefix="",
+            analysis_condition=analysis_condition, **kwargs)
     return _build
 
 

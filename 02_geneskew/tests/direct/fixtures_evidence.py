@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from fixtures_spec import CONDITION, TargetSpec
 
@@ -86,34 +86,41 @@ def main_ambiguous(spec: TargetSpec) -> bool:
 # --------------------------------------------------------------------------- #
 # 1. THE RAW SOURCE — pinned FIRST. Everything downstream is derived from it.
 # --------------------------------------------------------------------------- #
-def raw_source_rows(specs: list[TargetSpec]) -> list[dict[str, Any]]:
+def raw_source_rows(specs: list[TargetSpec],
+                    conditions: Sequence[str] = (CONDITION,)) -> list[dict[str, Any]]:
     """The rows the SOURCE itself holds, structurally faithful to the release.
 
     obs.guide_id is the literal per-guide identity column, obs.perturbed_gene_id names
     the target in ITS OWN namespace, obs.culture_condition / obs.keep_for_DE /
     obs.guide_type are the release's own columns, and the obs index NAMES each row.
+
+    A contributor set is per (target, CONDITION): the release fits each condition
+    separately, so a multi-condition source holds the contributor rows once per
+    condition and the offset proof is condition-scoped.
     """
     rows: list[dict[str, Any]] = []
 
-    def emit(target, guide, keep, sample, gtype=TARGETING):
+    def emit(target, guide, cond, keep, sample, gtype=TARGETING):
         rows.append({
-            "pseudobulk_id": f"{target}|{guide}|{CONDITION}|{sample}",
+            "pseudobulk_id": f"{target}|{guide}|{cond}|{sample}",
             "guide_id": guide, "perturbed_gene_id": target,
-            "culture_condition": CONDITION, "keep_for_DE": keep,
+            "culture_condition": cond, "keep_for_DE": keep,
             "guide_type": gtype})
 
-    for spec in sorted(specs, key=lambda s: s.target):
-        if main_ambiguous(spec):
-            continue                      # an unproven scope shows no contributor rows
-        for guide in contributing_guides(spec):
-            emit(spec.target, guide, True, KEPT_SAMPLES[0])
-            # NOT kept for DE. It sits INSIDE the contributor's row span, so the proof
-            # is [i, i+2] — an offset array that only a keep_for_DE filter produces.
-            emit(spec.target, guide, False, "dropped")
-            emit(spec.target, guide, True, KEPT_SAMPLES[1])
+    for cond in conditions:
+        for spec in sorted(specs, key=lambda s: s.target):
+            if main_ambiguous(spec):
+                continue                  # an unproven scope shows no contributor rows
+            for guide in contributing_guides(spec):
+                emit(spec.target, guide, cond, True, KEPT_SAMPLES[0])
+                # NOT kept for DE. It sits INSIDE the contributor's row span, so the
+                # proof is [i, i+2] — an offset array only a keep_for_DE filter produces.
+                emit(spec.target, guide, cond, False, "dropped")
+                emit(spec.target, guide, cond, True, KEPT_SAMPLES[1])
 
-    for guide in NON_TARGETING_GUIDES:    # controls: kept, but never a contributor
-        emit(NON_TARGETING_TARGET, guide, True, KEPT_SAMPLES[0], NON_TARGETING)
+        for guide in NON_TARGETING_GUIDES:   # controls: kept, but never a contributor
+            emit(NON_TARGETING_TARGET, guide, cond, True, KEPT_SAMPLES[0],
+                 NON_TARGETING)
     return rows
 
 
@@ -135,7 +142,8 @@ def kept_proof(raw: list[dict[str, Any]]) -> dict[tuple, dict[str, list]]:
     return proof
 
 
-def write_source_file(d: str, specs: list[TargetSpec], source_rows_fn=None
+def write_source_file(d: str, specs: list[TargetSpec], source_rows_fn=None,
+                      conditions: Sequence[str] = (CONDITION,)
                       ) -> tuple[str, str, dict[tuple, dict]]:
     """Write the pinned raw source; return its path, its sha256 and the TRUE proof.
 
@@ -148,7 +156,7 @@ def write_source_file(d: str, specs: list[TargetSpec], source_rows_fn=None
     from direct.hashing import file_sha256
     from fixtures_io import _write_categorical
 
-    raw = raw_source_rows(specs)
+    raw = raw_source_rows(specs, conditions)
     proof = kept_proof(raw)                       # from the PRISTINE rows
     if source_rows_fn is not None:
         raw = source_rows_fn(raw)
@@ -170,9 +178,14 @@ def write_source_file(d: str, specs: list[TargetSpec], source_rows_fn=None
 # --------------------------------------------------------------------------- #
 # 2. THE MANIFEST ROWS — pooled-main scopes only, citations not yet minted.
 # --------------------------------------------------------------------------- #
-def manifest_rows(specs: list[TargetSpec], source_sha: str = "a" * 64
-                  ) -> list[dict[str, Any]]:
-    """One pooled-main scope per target: the GLOBAL evidence domain, and nothing else.
+def manifest_rows(specs: list[TargetSpec], source_sha: str = "a" * 64,
+                  conditions: Sequence[str] = (CONDITION,)) -> list[dict[str, Any]]:
+    """One pooled-main scope per (target, CONDITION): the GLOBAL evidence domain.
+
+    The domain is all-condition by construction (``domain.py``), so a multi-condition
+    release ships one pooled-main scope per condition and the manifest must cover every
+    one of them — a manifest that covered only the analysis condition would not match
+    the universe it is checked against.
 
     A determined row leaves ``source_record_id`` null until ``link_citations`` mints it
     — the id is a hash of a proof this row does not hold.
@@ -182,20 +195,22 @@ def manifest_rows(specs: list[TargetSpec], source_sha: str = "a" * 64
     released target identity, because it is still a real target.
     """
     rows: list[dict[str, Any]] = []
-    for spec in specs:
-        base = {"estimate_type": "main", "estimate_id": "main",
-                **spec.identity,
-                "condition": CONDITION, "donor_pair": None,
-                "n_guides": spec.n_guides, "n_cells": spec.n_cells,
-                "included": True}
-        if main_ambiguous(spec):
-            rows.append(dict(base, guide_id=None, evidence_state="ambiguous",
-                             source_record_id=None))
-            continue
-        for guide in contributing_guides(spec):
-            rows.append(dict(base, guide_id=guide, evidence_state="determined",
-                             identity_method=IDENTITY_METHOD, source_id=SOURCE_NAME,
-                             source_sha256=source_sha, source_record_id=None))
+    for cond in conditions:
+        for spec in specs:
+            base = {"estimate_type": "main", "estimate_id": "main",
+                    **spec.identity_at(cond),
+                    "condition": cond, "donor_pair": None,
+                    "n_guides": spec.n_guides, "n_cells": spec.n_cells,
+                    "included": True}
+            if main_ambiguous(spec):
+                rows.append(dict(base, guide_id=None, evidence_state="ambiguous",
+                                 source_record_id=None))
+                continue
+            for guide in contributing_guides(spec):
+                rows.append(dict(base, guide_id=guide, evidence_state="determined",
+                                 identity_method=IDENTITY_METHOD,
+                                 source_id=SOURCE_NAME,
+                                 source_sha256=source_sha, source_record_id=None))
     return rows
 
 
@@ -368,7 +383,8 @@ def write_evidence(d: str, specs: list[TargetSpec], *, manifest_rows_fn=None,
                    manifest_final_fn=None, records_fn=None, recite=False,
                    replay_fn=None, source_rows_fn=None,
                    manifest_sources=None, source_record_table=None,
-                   source_replay_report=None) -> Evidence:
+                   source_replay_report=None,
+                   conditions: Sequence[str] = (CONDITION,)) -> Evidence:
     """Build the whole bundle in the one order the identity rule permits.
 
     THE TWO MANIFEST HOOKS run on either side of the citation minting, and which one a
@@ -402,9 +418,10 @@ def write_evidence(d: str, specs: list[TargetSpec], *, manifest_rows_fn=None,
     """
     from direct.hashing import file_sha256
 
-    source_path, source_sha, proof = write_source_file(d, specs, source_rows_fn)
+    source_path, source_sha, proof = write_source_file(d, specs, source_rows_fn,
+                                                       conditions)
 
-    rows = manifest_rows(specs, source_sha)
+    rows = manifest_rows(specs, source_sha, conditions)
     if manifest_rows_fn is not None:
         rows = manifest_rows_fn(rows)          # forge the CLAIM, before it is minted
     records = source_records(rows, proof)

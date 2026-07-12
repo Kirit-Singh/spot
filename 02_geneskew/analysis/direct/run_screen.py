@@ -195,57 +195,39 @@ def prepare(args) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Main build.
+# THE within-condition pass. ONE implementation, two callers.
+#
+# ``build_screen`` runs it for the analysis condition. The temporal cross-condition
+# estimator (``direct.temporal``) runs it for each endpoint of an ordered condition
+# pair. There is deliberately no second copy: an endpoint value that could drift from
+# the value the screen published for the same condition would make the difference
+# between them a difference between two implementations, not a difference between two
+# conditions.
 # --------------------------------------------------------------------------- #
-def build_screen(args) -> dict:
-    created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
+def support_ids_for(args, ctx: dict, cond: str) -> tuple[dict, dict]:
+    """The released support estimates AT ONE CONDITION. Metadata only, never projected.
 
-    # PRODUCTION FIREWALL, Stage-1 binding, the pooled-main evidence domain, the
-    # manifest and the gene universe — all bound BEFORE any dense layer is read, by the
-    # same ``prepare`` the preflight runs.
-    ctx = prepare(args)
+    ``prepare`` binds these for the analysis condition; a temporal endpoint at another
+    condition needs its OWN denominators, and reusing the analysis condition's would
+    report one condition's accounting under another condition's name.
+    """
+    guide_ids = {m: io_data.load_support_identities(args.by_guide, m, cond)
+                 for m in ctx["guide_mods"]}
+    donor_ids = {p: io_data.load_support_identities(args.by_donors, p, cond)
+                 for p in ctx["donor_mods"]}
+    return guide_ids, donor_ids
 
-    # ...and then the SAME gate the preflight applies, over the SAME ctx, BEFORE the
-    # dense read and before a single artifact exists. A build that could skip this
-    # would make ``--preflight-only`` an advisory notice rather than a gate: the two
-    # would answer different questions about identical inputs, and the one that writes
-    # the science would be the weaker of them.
-    from . import preflight  # imported here: preflight imports this module
-    verdict = preflight.assess(args, ctx)
-    if verdict["verdict"] != preflight.GO:
-        # The failure text is carried through verbatim, not summarised into check names.
-        # A refusal is the one place prose earns its keep: whoever has to fix this needs
-        # to know WHICH contract failed and what to do about it.
-        detail = "; ".join(f"[{f['check']}] {f['error']}" for f in verdict["failures"])
-        raise gate.GateError(
-            f"release gate refused this run; no result artifact was written. {detail}",
-            report=verdict)
-    release_gate = verdict["release_gate"]
 
-    lane, selection, axis = ctx["lane"], ctx["selection"], ctx["axis"]
-    cond, identities = ctx["cond"], ctx["identities"]
+def condition_rows(*, ctx: dict, args, cond: str, identity_hashes: dict[str, Any],
+                   guide_ids: Optional[dict] = None,
+                   donor_ids: Optional[dict] = None) -> dict[str, Any]:
+    """Every within-condition row for ONE condition: scores, ranks and joint tiers."""
+    axis, splits = ctx["axis"], ctx["splits"]
     library, manifest_index = ctx["library"], ctx["manifest_index"]
-    manifest_doc, gene_universe = ctx["manifest_doc"], ctx["gene_universe"]
-    splits, support = ctx["splits"], ctx["support_contract"]
-    universe_ids = gene_universe["gene_ids"]
-
-    # ---- the input pins, taken BEFORE the loop so a row can name its own source ----
-    # Hashed once. Computing this after the loop and then re-hashing the DE object to
-    # stamp the rows would read the pinned ~16 GB source twice for one number.
-    manifest = emit.input_manifest({
-        "GWCD4i.DE_stats.h5ad": args.de_main,
-        "GWCD4i.DE_stats.by_guide.h5mu": args.by_guide,
-        "GWCD4i.DE_stats.by_donors.h5mu": args.by_donors,
-        "sgrna_library_metadata.suppl_table.csv": args.sgrna,
-        "stage01_program_registry.json": args.registry,
-        "stage01_selection_contract.json": args.selection,
-    })
-    identity_hashes = {
-        "direct_method_version": config.METHOD_VERSION,
-        "direct_config_sha256": runid.config_sha256(),
-        "effect_source_sha256": next(
-            e["sha256"] for e in manifest if e["name"] == "GWCD4i.DE_stats.h5ad"),
-    }
+    universe_ids = ctx["gene_universe"]["gene_ids"]
+    identities = ctx["identities_by_condition"][cond]
+    if guide_ids is None or donor_ids is None:
+        guide_ids, donor_ids = support_ids_for(args, ctx, cond)
 
     # ---- the ONLY dense read in the lane: the pooled main effect layers ----
     main = io_data.load_main(args.de_main, cond)
@@ -295,11 +277,11 @@ def build_screen(args) -> dict:
             target_identity_resolved=ident.ensembl_resolved)
 
         # SUPPORT: enumerated, explicitly unavailable, never projected, never masked.
-        g_contrib, slots = support_lanes.guide_lane(ident, cond, ctx["guide_ids"])
+        g_contrib, slots = support_lanes.guide_lane(ident, cond, guide_ids)
         contrib_rows += g_contrib
         guide_rows += arms.guide_support_rows(target, cond, slots, run_id=None)
 
-        d_contrib, pair_values = support_lanes.donor_lane(ident, cond, ctx["donor_ids"])
+        d_contrib, pair_values = support_lanes.donor_lane(ident, cond, donor_ids)
         contrib_rows += d_contrib
         donor_rows += arms.donor_support_rows(target, cond, pair_values,
                                               splits["splits"], scores,
@@ -324,6 +306,80 @@ def build_screen(args) -> dict:
     # so neither arm's value nor either arm's rank can move because a joint field exists.
     # The verifier re-derives both arms from the inputs and would see it if they did.
     pareto.assign_tiers(screen_rows)
+
+    return {"screen": screen_rows, "contrib": contrib_rows, "masks": mask_rows,
+            "guide": guide_rows, "donor": donor_rows,
+            "n_source_targets": len(targets)}
+
+
+def identity_hashes_of(manifest: list[dict[str, Any]]) -> dict[str, Any]:
+    """What produced a row, ON the row: method, frozen config, pinned effect source."""
+    return {
+        "direct_method_version": config.METHOD_VERSION,
+        "direct_config_sha256": runid.config_sha256(),
+        "effect_source_sha256": next(
+            e["sha256"] for e in manifest if e["name"] == "GWCD4i.DE_stats.h5ad"),
+    }
+
+
+def stage2_input_manifest(args) -> list[dict[str, Any]]:
+    """The pinned Stage-2 inputs. Hashed ONCE: the effect object is ~16 GB."""
+    return emit.input_manifest({
+        "GWCD4i.DE_stats.h5ad": args.de_main,
+        "GWCD4i.DE_stats.by_guide.h5mu": args.by_guide,
+        "GWCD4i.DE_stats.by_donors.h5mu": args.by_donors,
+        "sgrna_library_metadata.suppl_table.csv": args.sgrna,
+        "stage01_program_registry.json": args.registry,
+        "stage01_selection_contract.json": args.selection,
+    })
+
+
+# --------------------------------------------------------------------------- #
+# Main build.
+# --------------------------------------------------------------------------- #
+def build_screen(args) -> dict:
+    created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+    # PRODUCTION FIREWALL, Stage-1 binding, the pooled-main evidence domain, the
+    # manifest and the gene universe — all bound BEFORE any dense layer is read, by the
+    # same ``prepare`` the preflight runs.
+    ctx = prepare(args)
+
+    # ...and then the SAME gate the preflight applies, over the SAME ctx, BEFORE the
+    # dense read and before a single artifact exists. A build that could skip this
+    # would make ``--preflight-only`` an advisory notice rather than a gate: the two
+    # would answer different questions about identical inputs, and the one that writes
+    # the science would be the weaker of them.
+    from . import preflight  # imported here: preflight imports this module
+    verdict = preflight.assess(args, ctx)
+    if verdict["verdict"] != preflight.GO:
+        # The failure text is carried through verbatim, not summarised into check names.
+        # A refusal is the one place prose earns its keep: whoever has to fix this needs
+        # to know WHICH contract failed and what to do about it.
+        detail = "; ".join(f"[{f['check']}] {f['error']}" for f in verdict["failures"])
+        raise gate.GateError(
+            f"release gate refused this run; no result artifact was written. {detail}",
+            report=verdict)
+    release_gate = verdict["release_gate"]
+
+    lane, selection, axis = ctx["lane"], ctx["selection"], ctx["axis"]
+    cond = ctx["cond"]
+    manifest_doc, gene_universe = ctx["manifest_doc"], ctx["gene_universe"]
+    splits, support = ctx["splits"], ctx["support_contract"]
+
+    # ---- the input pins, taken BEFORE the pass so a row can name its own source ----
+    # Hashed once. Computing this after the pass and then re-hashing the DE object to
+    # stamp the rows would read the pinned ~16 GB source twice for one number.
+    manifest = stage2_input_manifest(args)
+    identity_hashes = identity_hashes_of(manifest)
+
+    # ---- the within-condition pass, by the one code path the temporal layer reuses ----
+    built = condition_rows(ctx=ctx, args=args, cond=cond,
+                           identity_hashes=identity_hashes,
+                           guide_ids=ctx["guide_ids"], donor_ids=ctx["donor_ids"])
+    screen_rows = built["screen"]
+    contrib_rows, mask_rows = built["contrib"], built["masks"]
+    guide_rows, donor_rows = built["guide"], built["donor"]
     ordered = proj.emit_order(screen_rows)
 
     # ---- identifiers: masks and inputs are bound BEFORE the run is named ----
@@ -392,7 +448,8 @@ def build_screen(args) -> dict:
     verification = emit.verification(
         out_dir=out_dir, run_id=run_id, run_sha256=run_sha, rows=ordered,
         mask_sha256=mask_sha, contributor_rows=contrib_rows, provenance_doc=prov,
-        n_source_targets=len(targets), gene_universe=gene_universe, lane=lane)
+        n_source_targets=built["n_source_targets"], gene_universe=gene_universe,
+        lane=lane)
     emit.write_json(os.path.join(out_dir, "verification.json"), verification)
 
     return {"run_id": run_id, "out_dir": out_dir, "n_rows": len(ordered),

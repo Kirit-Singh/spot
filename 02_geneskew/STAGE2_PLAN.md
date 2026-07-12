@@ -409,6 +409,63 @@ The **1.7-TB cell-level pass is I/O-bound** and may require a shortlist if a one
 cannot finish; if shortlist-only confirmation is used, acknowledge ascertainment and do **not**
 call the full screen cell-supported.
 
+## 17b. Temporal cross-condition estimator (implemented — full method: `STAGE2_TEMPORAL_METHOD.md`)
+
+The descriptive cross-timepoint lane §18 reserved ("48→8h only as descriptive sensitivity"), now
+with an explicit estimand, an explicit confound policy and an independent verifier.
+`estimator_id: spot.stage02.temporal_cross_condition.v1`; `inference_status: not_calibrated`.
+
+**Estimand.** For a target and an **ordered** condition pair, per arm independently:
+`temporal_did(arm) = arm_value(arm, to_cond) − arm_value(arm, from_cond)`, where `arm_value` is
+**exactly** the within-condition arm value from §6 — the same masked program projection, computed
+by the same code path (`run_screen.condition_rows`). The within-condition value is already a
+difference (panel mean − control mean after `M_X`), so this is a **difference-in-differences on
+program projections**.
+
+It is a **population-level** change in a program projection between two condition populations. It
+is explicitly **not** lineage tracing, **not** fate mapping, **not** a per-cell transition
+probability and **not** a rate — the release fits each condition as a separate cell population.
+No rate, velocity or slope is emitted, and no function exists that could produce one. Both arms
+stay separate: **no combined temporal objective, no headline temporal rank.**
+
+**Coverage.** All **six directed comparisons** over {Rest, Stim8hr, Stim48hr}, both directions.
+**None is refused** — a confounded pair is flagged and badged, never withheld.
+
+**Batch policy** (locked from the `20260712T021343Z` batch diagnostic; verdict MODERATE; hashes
+pinned in `analysis/direct/temporal/batch_policy.v1.json`). Batch is perfectly aliased with donor
+(R1={D1,D2}, R2={D3,D4} in Rest/Stim8hr; Stim48hr is R2-only). The **additive** batch effect is
+negligible (0.12–0.42 % of variance), sign-inconsistent, and **cancels in the DiD** — **no
+correction is applied**. The flag is **derived, not declared**: a pair is
+`batch_partially_confounded` exactly when some donor sits in a different replicate at the two
+endpoints. This reproduces the locked verdict without naming a condition:
+
+- **Rest ↔ Stim8hr — CLEAN.** Identical composition; batch cancels; no flag.
+- **Any Stim48hr pair — `batch_partially_confounded`.** D1,D2 flip R1→R2; D3,D4 do not.
+
+A **pure batch effect is not identifiable** (aliased with donor; no R1 Stim48hr exists) — it can
+only be bounded, never measured. Every record carries that note.
+
+**Reliability threshold.** The interaction noise floor is 0.6×–2.0× the temporal signal, so
+per-target Stim48hr calls are fragile. Per arm, from that arm's own program:
+`|temporal_did| ≥ k × interaction_std(program)`, **k = 2.0** (frozen before any result), with
+`interaction_std` the diagnostic's per-program batch-aligned split value (≈0.16 `diff_naive`,
+0.08 `diff_memory`, 0.47 `diff_checkpoint`, 0.76 `cd4_ctl_like`). The badge is a **precision
+statement, not a significance test**; the exact threshold, k and ratio ship on every record. An
+unmeasured floor yields `interaction_floor_unavailable_for_program` — never a pass by default.
+Extra-caution: `th17_like`, `th2_like`, `tfh_like` (sparse panels, r≈0–0.15); `th9_like` listed
+though non-selectable.
+
+**Display policy — METHODS-ONLY.** These are machine fields for provenance. The UI renders **no
+inline batch flag and no reliability badge**, applies **no hard filter**, and shows **all
+comparisons plainly**. The 48-hour confound and the precision limitation are documented **once**
+(here / `STAGE2_TEMPORAL_METHOD.md`) and surfaced via the **methods/provenance drawer** — never as
+a per-comparison caveat in the main canvas. The policy is bound into the method hash.
+
+**Additivity.** `code_tree_sha256` lists only the `.py` files directly in the direct package, so
+the `temporal` subpackage is invisible to it and the dependency is one-way. **No temporal code can
+move a within-condition score, rank, tier or `run_id`** — enforced structurally and numerically
+against a golden screen hash captured before any temporal code existed.
+
 ## 18. Unresolved preregistration decisions, and the prior-defect disposition
 
 **Preregistration still required (record the choice before inspecting hits):** exact
@@ -423,7 +480,7 @@ version, and SHA-256, or its removal.
 
 | Prior claim / defect | Disposition |
 |---|---|
-| Default `induced-Treg(48h) → Th1(8h)` sold as a transition | **plan corrected; impl. pending** — same-timepoint Stim48 default; 48→8h only as descriptive sensitivity |
+| Default `induced-Treg(48h) → Th1(8h)` sold as a transition | **closed (§17b, implemented)** — same-timepoint default stands; the cross-timepoint lane ships as an explicit **population-level difference-in-differences on program projections**, `inference_status: not_calibrated`, declared **not** lineage/fate/rate, with a derived batch-confound flag and a per-program reliability floor |
 | "natural / tumor Treg" language | **plan corrected; impl. pending** — "activation-induced FOXP3⁺ regulatory-like" only |
 | `~3,341` gene knockdowns / screen family | **plan corrected; impl. pending** — 3,341 is a post-hoc outcome filter (1,860 genes); family is the 11,281 Stim48 rows under pre-outcome eligibility |
 | NTC-guide empirical null from `DE_stats` | **plan corrected; impl. pending** — DE_stats has no NTC-guide DE vectors; §9(A) rerun-the-model or §9(B) `not_calibrated`; no undefined parametric fallback |

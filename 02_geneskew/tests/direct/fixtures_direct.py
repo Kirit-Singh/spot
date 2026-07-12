@@ -63,11 +63,16 @@ from fixtures_spec import (
 
 
 def write_stage1_gates(d: str, selectable: bool = True,
-                       program_ids=("fx_program_a", "fx_program_b")) -> tuple[str, str]:
+                       program_ids=("fx_program_a", "fx_program_b"),
+                       conditions=(CONDITION,)) -> tuple[str, str]:
     """A Stage-1 validation + gate spec whose hard gates are RE-DERIVED, not stored.
 
     ``selectable=False`` reproduces the frozen reality: 0 pairs pass, so nothing
     is production-selectable.
+
+    Selectability is per PROGRAM-CONDITION, so a release that ships three conditions
+    carries validation rows for all three: Stage-1 validated each one separately, and a
+    gate that could only be re-derived at one of them would refuse the other two.
     """
     gate_spec = {
         "schema_version": "spot.stage01_gate_spec.v1",
@@ -81,12 +86,13 @@ def write_stage1_gates(d: str, selectable: bool = True,
     failing = {"separability": 0.10, "donor_stability": 0.05}
     values = passing if selectable else failing
     rows = []
-    for pid in program_ids:
-        for gate, value in values.items():
-            rows.append({"program_id": pid, "condition": CONDITION,
-                         "gate_id": gate, "value": value,
-                         # a STORED verdict that the loader must ignore entirely
-                         "passed": True, "stage2_selectable": True})
+    for cond in conditions:
+        for pid in program_ids:
+            for gate, value in values.items():
+                rows.append({"program_id": pid, "condition": cond,
+                             "gate_id": gate, "value": value,
+                             # a STORED verdict that the loader must ignore entirely
+                             "passed": True, "stage2_selectable": True})
     validation = {"schema_version": "spot.stage01_validation.v1", "rows": rows}
 
     gpath = os.path.join(d, "stage01_gate_spec.json")
@@ -207,9 +213,13 @@ def write_selection(path: str, registry_sha: str, *,
     if lane == "production":
         # a production contract must bind EXACTLY the verified release
         contract["hashes"].update(release_hashes or {})
-    contract["ids"] = derived_ids(contract)
+    forged = overrides.pop("ids", None)
     drop_lane = overrides.pop("lane_delete", False)
     contract.update(overrides)
+    # Derive from the FINAL content, so a legitimate override (A/B, condition) still
+    # produces a self-consistent contract; an explicit ``ids=`` is a forgery attack and
+    # is written verbatim. Same rule as the research bridge, for the same reason.
+    contract["ids"] = forged if forged is not None else derived_ids(contract)
     if drop_lane:
         contract.pop("lane", None)
     with open(path, "w") as fh:
