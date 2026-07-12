@@ -6,7 +6,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "selection_origin", "execution_status", "analysis_mode", "estimator_id",
-               "estimator_status", "selection_id", "selection_full_sha256", "canonical_content", "poles",
+               "estimator_status", "estimator", "selection_id", "selection_full_sha256", "canonical_content", "poles",
                "trust_bindings", "provenance_bindings", "historical_validation_provenance",
                "full_contract_content_sha256"],
   "properties": {
@@ -16,6 +16,24 @@
     "analysis_mode": {"enum": ["within_condition", "temporal_cross_condition"]},
     "estimator_id": {"enum": ["within_condition_v1", "temporal_cross_condition_v1"]},
     "estimator_status": {"enum": ["available", "not_implemented"]},
+    "estimator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimator_id", "analysis_mode", "n_conditions", "status"],
+      "properties": {
+        "estimator_id": {"enum": ["within_condition_v1", "temporal_cross_condition_v1"]},
+        "analysis_mode": {"enum": ["within_condition", "temporal_cross_condition"]},
+        "n_conditions": {"type": "integer", "minimum": 1, "maximum": 2},
+        "status": {"enum": ["available", "not_implemented"]},
+        "method_id": {"type": "string"},
+        "method_version": {"type": "string"},
+        "method_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "estimand_id": {"type": "string"},
+        "estimand_level": {"enum": ["population"]},
+        "estimand_is_per_cell_fate": {"const": false},
+        "inference_status": {"enum": ["not_calibrated"]}
+      }
+    },
     "selection_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
     "selection_full_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "full_contract_content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

@@ -219,7 +219,7 @@ def main():
             "within_condition_estimator_id": "within_condition_v1",
             "within_condition_estimator_status": "available",
             "temporal_cross_condition_estimator_id": "temporal_cross_condition_v1",
-            "temporal_cross_condition_estimator_status": "not_implemented",
+            "temporal_cross_condition_estimator_status": "available",   # W18: temporal estimator implemented + verified; contract binds its method identity (a word cannot pass Stage-2's re-verify)
             "current_served_selection": None,
         },
         "release_statuses": statuses,

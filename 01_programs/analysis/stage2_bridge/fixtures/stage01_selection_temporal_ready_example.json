@@ -1,10 +1,23 @@
 {
   "schema_version": "spot.stage01_selection.v3",
   "selection_origin": "fixture",
-  "execution_status": "awaiting_estimator",
+  "execution_status": "ready",
   "analysis_mode": "temporal_cross_condition",
   "estimator_id": "temporal_cross_condition_v1",
-  "estimator_status": "not_implemented",
+  "estimator_status": "available",
+  "estimator": {
+    "estimator_id": "temporal_cross_condition_v1",
+    "analysis_mode": "temporal_cross_condition",
+    "n_conditions": 2,
+    "method_id": "spot.stage02.temporal_cross_condition.v1",
+    "method_version": "stage2-temporal-cross-condition-v1-did-on-program-projections",
+    "estimand_id": "spot.stage02.temporal.estimand.population_program_projection_shift.v1",
+    "estimand_level": "population",
+    "estimand_is_per_cell_fate": false,
+    "inference_status": "not_calibrated",
+    "method_sha256": "c05baa8f847f284a6cb187df24668ac0e5197dfdf2d238ced04c7847b7226e77",
+    "status": "available"
+  },
   "selection_id": "7a77f6b314b9c0f3",
   "selection_full_sha256": "7a77f6b314b9c0f3fd9bd9732d12b12174cf11d57904cf2fe841057d20aed4a2",
   "canonical_content": {
@@ -72,5 +85,5 @@
     "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "active_gate": false
   },
-  "full_contract_content_sha256": "ed5951f926fdc2dac2841ed937c42e3c9a34cae66dbbab663c435593e9b59c85"
+  "full_contract_content_sha256": "b4d55ad210449f73e5a4556586a624cdfda71011eba75964917b59bf53dbef16"
 }

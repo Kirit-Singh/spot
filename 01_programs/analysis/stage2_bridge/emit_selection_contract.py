@@ -16,9 +16,10 @@ Active routing is compact + typed:
 Routing rules:
   * within_condition is `ready` ONLY when BOTH poles' effect projection is available (the required
     projection inputs exist); otherwise `refused` (a well-formed contract that refuses cleanly).
-  * temporal_cross_condition is `awaiting_estimator` until Stage-2 implements + verifies the temporal
-    estimator; Stage-1 never calls it executable and never runs the within-condition formula across
-    conditions.
+  * temporal_cross_condition is `ready` when its estimator (temporal_cross_condition_v1) is implemented +
+    bound (estimator_status `available`); `awaiting_estimator` (NOT a hard refusal) when it is absent. The
+    temporal method identity is bound (contract `estimator` block) so Stage-2 can re-verify — a contract
+    cannot vote itself an estimator; Stage-1 never runs the within-condition formula across conditions.
 Hard structural refusals (objective incompatibility / missing input) RAISE — they are not selections.
 Effect-universe unavailability is NOT a raise; it is a clean `refused` contract.
 
@@ -50,8 +51,49 @@ DONOR_SCOPE = "all"
 DIRECTIONS = ("high", "low")
 REAL_CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 SELECTION_ORIGINS = ("user_selected", "fixture")
-ESTIMATOR = {"within_condition": ("within_condition_v1", "available"),
-             "temporal_cross_condition": ("temporal_cross_condition_v1", "not_implemented")}
+# Estimators Stage-1 will route as executable. temporal_cross_condition_v1 is now implemented + verified on
+# the Stage-2 side (W18, agent/stage2-direct-v3). Membership here means "Stage-1 emits ready/available";
+# Stage-2 INDEPENDENTLY re-verifies the method exists (a contract cannot vote itself an estimator), so a
+# stale/spoofed membership fails closed downstream (estimator_declared_available_but_stage2_has_not_built_it).
+# The absent case is exercised in tests by monkeypatching IMPLEMENTED_ESTIMATORS.
+IMPLEMENTED_ESTIMATORS = ("within_condition_v1", "temporal_cross_condition_v1")
+ESTIMATOR_FOR_MODE = {"within_condition": "within_condition_v1",
+                      "temporal_cross_condition": "temporal_cross_condition_v1"}
+# Bound METHOD identity per estimator: a contract that says "available" while naming no method hash has
+# admitted only a word. Mirror of the Stage-2 stage1_v3.estimator_registry() entry (handoff W18->W13 §4).
+# method_sha256 covers the temporal method + the within-condition method it differences + the batch-confound
+# policy + k + the display policy + BOTH code trees. CROSS-LANE PIN: re-sync when the Stage-2 temporal method
+# moves — Stage-2's gate fail-closes on a mismatch. Live value as of Stage-2 commit 5001e36.
+ESTIMATOR_REGISTRY = {
+    "temporal_cross_condition_v1": {
+        "estimator_id": "temporal_cross_condition_v1",
+        "analysis_mode": "temporal_cross_condition",
+        "n_conditions": 2,
+        "method_id": "spot.stage02.temporal_cross_condition.v1",
+        "method_version": "stage2-temporal-cross-condition-v1-did-on-program-projections",
+        "estimand_id": "spot.stage02.temporal.estimand.population_program_projection_shift.v1",
+        "estimand_level": "population",
+        "estimand_is_per_cell_fate": False,
+        "inference_status": "not_calibrated",
+        "method_sha256": "c05baa8f847f284a6cb187df24668ac0e5197dfdf2d238ced04c7847b7226e77",
+    },
+}
+
+
+def _estimator_binding(mode, ordered_conditions):
+    """Derive (estimator_id, status, binding) for a mode. status FOLLOWS from IMPLEMENTED_ESTIMATORS and is
+    never asserted independently. A present estimator binds its full method identity; an absent one names NO
+    method hash — relabelling can never manufacture existence."""
+    estimator_id = ESTIMATOR_FOR_MODE[mode]
+    present = estimator_id in IMPLEMENTED_ESTIMATORS
+    status = "available" if present else "not_implemented"
+    if present and estimator_id in ESTIMATOR_REGISTRY:
+        binding = {**ESTIMATOR_REGISTRY[estimator_id], "status": status,
+                   "n_conditions": len(ordered_conditions)}
+    else:
+        binding = {"estimator_id": estimator_id, "analysis_mode": mode,
+                   "n_conditions": len(ordered_conditions), "status": status}
+    return estimator_id, status, binding
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ANALYSIS = os.path.dirname(HERE)
@@ -139,17 +181,17 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
             raise SelectionError("unknown_program", f"{side}={pid!r} (not a selectable primary)")
 
     ordered_conditions, mode = _norm_conditions(conditions)
-    estimator_id, estimator_status = ESTIMATOR[mode]
+    estimator_id, estimator_status, estimator = _estimator_binding(mode, ordered_conditions)
     min_panel, min_ctrl = _effect_universe_thresholds()
     pole_a, a_avail = _pole(primaries[a_program_id], a_direction, min_panel, min_ctrl)
     pole_b, b_avail = _pole(primaries[b_program_id], b_direction, min_panel, min_ctrl)
 
-    if mode == "temporal_cross_condition":
-        execution_status = "awaiting_estimator"      # estimator not implemented yet
+    if mode == "temporal_cross_condition" and estimator_status != "available":
+        execution_status = "awaiting_estimator"      # temporal estimator not implemented -> NOT a hard refusal
     elif a_avail and b_avail:
-        execution_status = "ready"                   # within-condition projection inputs exist
+        execution_status = "ready"                   # estimator present (within or temporal) + both poles project
     else:
-        execution_status = "refused"                 # effect-universe projection unavailable
+        execution_status = "refused"                 # effect-universe projection unavailable for a pole
 
     cc = {
         "A": {"program_id": a_program_id, "score_field": f"{a_program_id}_score", "direction": a_direction},
@@ -177,6 +219,7 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
         "analysis_mode": mode,
         "estimator_id": estimator_id,
         "estimator_status": estimator_status,
+        "estimator": estimator,
         "selection_id": sel_id[:16],
         "selection_full_sha256": sel_id,
         "canonical_content": cc,
@@ -216,8 +259,8 @@ FIXTURE_CASES = [
                           b_direction="high", conditions=["Stim48hr"])),
     ("within_refused", dict(a_program_id="th9_like", a_direction="low", b_program_id="th1_like",
                             b_direction="high", conditions=["Rest"])),
-    ("temporal_awaiting", dict(a_program_id="treg_like", a_direction="high", b_program_id="th1_like",
-                               b_direction="high", conditions=["Stim8hr", "Stim48hr"])),
+    ("temporal_ready", dict(a_program_id="treg_like", a_direction="high", b_program_id="th1_like",
+                            b_direction="high", conditions=["Stim8hr", "Stim48hr"])),
 ]
 
 

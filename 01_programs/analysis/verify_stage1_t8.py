@@ -388,8 +388,11 @@ def main(data_dir=None):
     check("routing_within_available_ready", ready.get("bundle_verified") is True and ready.get("execution_status") == "ready")
     temporal = route_selection({"A": {"program_id": "treg_like", "direction": "high"},
                                 "B": {"program_id": "th1_like", "direction": "high"}, "conditions": ["Stim8hr", "Stim48hr"]}, d)
-    check("routing_temporal_awaiting_estimator",
-          temporal.get("execution_status") == "awaiting_estimator" and temporal.get("estimator_status") == "not_implemented")
+    _te = (temporal.get("contract") or {}).get("estimator", {})
+    check("routing_temporal_ready_estimator_bound",
+          temporal.get("execution_status") == "ready" and temporal.get("estimator_status") == "available"
+          and _te.get("estimator_id") == "temporal_cross_condition_v1"
+          and isinstance(_te.get("method_sha256"), str) and len(_te.get("method_sha256", "")) == 64)
     unavail = route_selection({"A": {"program_id": "th9_like", "direction": "low"},
                                "B": {"program_id": "th1_like", "direction": "high"}, "conditions": ["Rest"]}, d)
     check("routing_effect_unavailable_refused", unavail.get("execution_status") == "refused")

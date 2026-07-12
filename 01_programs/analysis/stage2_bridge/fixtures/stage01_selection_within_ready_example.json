@@ -5,6 +5,12 @@
   "analysis_mode": "within_condition",
   "estimator_id": "within_condition_v1",
   "estimator_status": "available",
+  "estimator": {
+    "estimator_id": "within_condition_v1",
+    "analysis_mode": "within_condition",
+    "n_conditions": 1,
+    "status": "available"
+  },
   "selection_id": "4af0fbbbd3f7dd04",
   "selection_full_sha256": "4af0fbbbd3f7dd0473a9bba5e71525e5faca264c7577f086e723c3ee5102b4d0",
   "canonical_content": {
@@ -71,5 +77,5 @@
     "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "active_gate": false
   },
-  "full_contract_content_sha256": "5cd8b43d45bbd098a6b2e6abdf85bb930b3debd3f590144e0b543140f0ba7d7e"
+  "full_contract_content_sha256": "43035f477501b6d928c875d13a0ea8f987cdd6496b9d8a4326b3a11d49133890"
 }

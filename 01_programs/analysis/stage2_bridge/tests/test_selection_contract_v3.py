@@ -1,8 +1,9 @@
 """Generic Stage-1 selection contract tests (spot.stage01_selection.v3).
 
 No production/research split and no 0-of-33 gating anywhere in the active contract; routing is typed
-(execution_status / estimator / per-pole effect_projection_status); temporal is not executable before
-its estimator exists; effect-universe-unavailable poles refuse cleanly; the frozen selectability is
+(execution_status / estimator / per-pole effect_projection_status); temporal_cross_condition is READY once
+its estimator (temporal_cross_condition_v1) is implemented + bound, and awaiting_estimator (never a hard
+refused) when it is absent; effect-universe-unavailable poles refuse cleanly; the frozen selectability is
 bound only as historical provenance (bytes unchanged); NO selection is served as current."""
 import hashlib
 import json
@@ -51,12 +52,54 @@ def test_no_production_research_or_0of33_fields():
 def test_execution_status_routing():
     assert sc.build_contract(**READY)["execution_status"] == "ready"
     assert sc.build_contract(**REFUSED)["execution_status"] == "refused"
+    # temporal_cross_condition_v1 is now implemented + admitted -> ready / available (was awaiting / not_implemented)
     t = sc.build_contract(**TEMPORAL)
-    assert t["execution_status"] == "awaiting_estimator"          # NOT ready/executable
-    assert t["execution_status"] != "ready"
-    assert t["estimator_id"] == "temporal_cross_condition_v1" and t["estimator_status"] == "not_implemented"
+    assert t["execution_status"] == "ready"
+    assert t["analysis_mode"] == "temporal_cross_condition"
+    assert t["estimator_id"] == "temporal_cross_condition_v1" and t["estimator_status"] == "available"
     w = sc.build_contract(**READY)
     assert w["estimator_id"] == "within_condition_v1" and w["estimator_status"] == "available"
+
+
+def test_temporal_awaiting_when_estimator_absent(monkeypatch):
+    """Estimator genuinely absent (simulated): temporal is awaiting_estimator — NOT a hard refused, NOT
+    ready — and still names its OWN estimator (never borrows within-condition). within-condition unaffected."""
+    monkeypatch.setattr(sc, "IMPLEMENTED_ESTIMATORS", ("within_condition_v1",))
+    t = sc.build_contract(**TEMPORAL)
+    assert t["execution_status"] == "awaiting_estimator"
+    assert t["execution_status"] not in ("ready", "refused")
+    assert t["estimator_id"] == "temporal_cross_condition_v1" and t["estimator_status"] == "not_implemented"
+    assert sc.build_contract(**READY)["execution_status"] == "ready"
+
+
+def test_temporal_binds_method_identity_when_present():
+    """A ready temporal contract binds a REAL method identity (id + estimand + a 64-hex method_sha256) at a
+    population-level, not-calibrated, not-per-cell-fate estimand — a bound method, not a word."""
+    e = sc.build_contract(**TEMPORAL)["estimator"]
+    assert e["estimator_id"] == "temporal_cross_condition_v1" and e["status"] == "available"
+    assert e["analysis_mode"] == "temporal_cross_condition" and e["n_conditions"] == 2
+    assert e["method_id"] == "spot.stage02.temporal_cross_condition.v1"
+    assert isinstance(e["method_sha256"], str) and len(e["method_sha256"]) == 64
+    assert e["estimand_level"] == "population" and e["estimand_is_per_cell_fate"] is False
+    assert e["inference_status"] == "not_calibrated"
+
+
+def test_relabelling_does_not_manufacture_an_estimator(monkeypatch):
+    """Anti-spoof (kept): estimator_status FOLLOWS from IMPLEMENTED_ESTIMATORS. With the estimator absent no
+    input relabelling yields available/ready, and the contract names NO method hash — relabelling != existence."""
+    monkeypatch.setattr(sc, "IMPLEMENTED_ESTIMATORS", ("within_condition_v1",))
+    t = sc.build_contract(**TEMPORAL)
+    assert t["estimator_status"] != "available" and t["execution_status"] != "ready"
+    assert "method_sha256" not in t["estimator"]
+
+
+def test_temporal_never_borrows_within_condition_estimator():
+    """A temporal mode is answered by the temporal estimator, never the within-condition one — the single
+    most dangerous confusion this gate prevents (borrowed numbers would look exactly like an answer)."""
+    t = sc.build_contract(**TEMPORAL)
+    assert t["estimator_id"] == "temporal_cross_condition_v1" and t["estimator_id"] != "within_condition_v1"
+    assert t["estimator"]["estimator_id"] == "temporal_cross_condition_v1"
+    assert t["estimator"]["analysis_mode"] == "temporal_cross_condition"
 
 
 def test_effect_projection_status_and_reasons():

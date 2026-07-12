@@ -14,7 +14,7 @@ SCHEMA_PATH = os.path.join(HERE, "schemas", "spot.stage01_selection.v3.schema.js
 CASES = [
     dict(a_program_id="treg_like", a_direction="high", b_program_id="th1_like", b_direction="high", conditions=["Stim48hr"]),   # ready
     dict(a_program_id="th9_like", a_direction="low", b_program_id="th1_like", b_direction="high", conditions=["Rest"]),         # refused
-    dict(a_program_id="treg_like", a_direction="high", b_program_id="th1_like", b_direction="high", conditions=["Stim8hr", "Stim48hr"]),  # awaiting
+    dict(a_program_id="treg_like", a_direction="high", b_program_id="th1_like", b_direction="high", conditions=["Stim8hr", "Stim48hr"]),  # temporal — ready when estimator present
     dict(a_program_id="cd4_ctl_like", a_direction="low", b_program_id="diff_memory", b_direction="high", conditions=["Rest"]),
 ]
 
@@ -52,7 +52,12 @@ def test_historical_active_gate_false_enforced(schema):
         jsonschema.validate(bad, schema)
 
 
-def test_within_ready_temporal_awaiting_refused_statuses(schema):
-    assert sc.build_contract(**CASES[0])["execution_status"] == "ready"
-    assert sc.build_contract(**CASES[1])["execution_status"] == "refused"
-    assert sc.build_contract(**CASES[2])["execution_status"] == "awaiting_estimator"
+def test_within_ready_temporal_ready_refused_statuses(schema, monkeypatch):
+    assert sc.build_contract(**CASES[0])["execution_status"] == "ready"      # within-condition
+    assert sc.build_contract(**CASES[1])["execution_status"] == "refused"    # unavailable pole
+    assert sc.build_contract(**CASES[2])["execution_status"] == "ready"      # temporal, estimator present
+    # estimator genuinely absent -> temporal is awaiting_estimator (NOT a hard refusal), still schema-valid
+    monkeypatch.setattr(sc, "IMPLEMENTED_ESTIMATORS", ("within_condition_v1",))
+    awaiting = sc.build_contract(**CASES[2])
+    assert awaiting["execution_status"] == "awaiting_estimator"
+    jsonschema.validate(awaiting, schema)

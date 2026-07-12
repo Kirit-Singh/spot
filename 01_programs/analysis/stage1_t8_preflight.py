@@ -3,9 +3,10 @@
 
 Stage-1 is a continuous measurement system + generic selector. `route_selection` verifies the hash-bound
 bundle integrity, then emits the generic selection contract (spot.stage01_selection.v3). Routing is typed:
-execution_status is `ready` (within-condition with both poles' effect projection available), `refused`
-(effect-universe projection unavailable), or `awaiting_estimator` (temporal, until Stage-2 implements the
-estimator). Hard structural refusals (objective incompatibility / missing input) surface as a typed
+execution_status is `ready` (within-condition, or temporal once its estimator is implemented + bound, with
+both poles' effect projection available), `refused` (effect-universe projection unavailable), or
+`awaiting_estimator` (temporal, when its estimator is absent). Hard structural refusals (objective
+incompatibility / missing input) surface as a typed
 reason. The frozen selectability is verified only as HISTORICAL provenance (active_gate:false); it is
 never a live gate.
 """

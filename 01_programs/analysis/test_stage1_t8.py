@@ -227,8 +227,15 @@ def _route(a="treg_like", ad="high", b="th1_like", bd="high", conds=("Stim48hr")
                             "B": {"program_id": b, "direction": bd},
                             "conditions": list(conds) if not isinstance(conds, str) else [conds]})
 
-def test_route_temporal_awaiting_estimator():
-    out = _route(conds=["Stim8hr", "Stim48hr"])
+def test_route_temporal_ready_when_estimator_present():
+    out = _route(conds=["Stim8hr", "Stim48hr"])   # temporal_cross_condition_v1 implemented -> ready/available
+    assert out["execution_status"] == "ready" and out["estimator_status"] == "available"
+    assert out["analysis_mode"] == "temporal_cross_condition"
+
+def test_route_temporal_awaiting_when_estimator_absent(monkeypatch):
+    import emit_selection_contract as sc
+    monkeypatch.setattr(sc, "IMPLEMENTED_ESTIMATORS", ("within_condition_v1",))
+    out = _route(conds=["Stim8hr", "Stim48hr"])   # estimator absent -> awaiting_estimator (NOT a hard refusal)
     assert out["execution_status"] == "awaiting_estimator" and out["estimator_status"] == "not_implemented"
 
 def test_route_effect_unavailable_refused():

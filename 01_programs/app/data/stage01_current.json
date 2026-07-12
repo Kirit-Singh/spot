@@ -18,7 +18,7 @@
     "within_condition_estimator_id": "within_condition_v1",
     "within_condition_estimator_status": "available",
     "temporal_cross_condition_estimator_id": "temporal_cross_condition_v1",
-    "temporal_cross_condition_estimator_status": "not_implemented",
+    "temporal_cross_condition_estimator_status": "available",
     "current_served_selection": null
   },
   "release_statuses": {
@@ -109,5 +109,5 @@
     "base_portability_source_field": "stage2_base_portability.stage2_base_portable",
     "frozen_coordinate_shell": "stage01_umap_seed.json"
   },
-  "self_canonical_sha256": "7af7b623fcb1672456ecf9e948cd1dd6adbfd21c8d3fea2e4b83a6059fc20dea"
+  "self_canonical_sha256": "3efe2d6154cafcfd9398de853615066e8662f102355a3bb5cdcfff0a707bc3ee"
 }
