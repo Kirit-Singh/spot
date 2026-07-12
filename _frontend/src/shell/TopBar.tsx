@@ -11,11 +11,11 @@ export function TopBar({
   return (
     <header className="flex h-[50px] flex-none items-center gap-3 border-b border-line bg-surface px-5">
       <div className="flex min-w-0 items-baseline gap-3">
-        <span className="font-editorial text-[20px] font-medium">
+        <span className="font-editorial text-[20px] font-medium leading-none">
           spot<b className="text-accent">·</b>
         </span>
-        <span className="flex items-baseline gap-2 border-l border-line pl-3">
-          <span className="font-editorial text-[16px] font-medium text-ink">{subtitle}</span>
+        <span className="flex items-baseline gap-2 border-l border-line pl-3 leading-none">
+          <span className="font-editorial text-[16px] font-medium leading-none text-ink">{subtitle}</span>
         </span>
       </div>
       <div className="ml-auto flex items-center gap-2.5">

@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import '../index.css';
 import { StageIsland } from '../mpa/StageIsland';
 import { MPA_SCAFFOLDS } from '../mpa/scaffolds';
-import { evidenceFromProvenance } from '../mpa/ScienceEvidence';
+import { evidenceFromProvenance } from '../mpa/evidence';
 import { createDemoRepository } from '../repository/repository';
 import { Stage3View } from '../stages/stage3/Stage3View';
 

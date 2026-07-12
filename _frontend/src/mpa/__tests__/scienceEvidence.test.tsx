@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ScienceEvidence, evidenceFromProvenance } from '../ScienceEvidence';
+import { ScienceEvidence } from '../ScienceEvidence';
+import { evidenceFromProvenance } from '../evidence';
 import type { Provenance } from '../../domain/common';
 
 afterEach(cleanup);

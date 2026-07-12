@@ -1,15 +1,15 @@
 // Compact relationship strip making the linkage legible:
 // gene → target entity → mechanism → active moiety → form.
+// Nodes wrap (rather than a single crushed/scrolling row) and keep a readable minimum
+// width, and values wrap instead of ellipsizing — so nothing truncates to "Compound A (ac…".
 
 import type { DrugCandidate } from '../../domain/stage3';
 
-// Each node keeps a readable minimum width and never shrinks; the strip scrolls
-// horizontally instead of crushing the evidence chain into `G… / IN…` fragments.
 function Node({ kind, value }: { kind: string; value: string }) {
   return (
-    <span className="flex w-[96px] flex-none flex-col">
+    <span className="flex min-w-[130px] max-w-[240px] flex-1 flex-col">
       <span className="font-mono text-[9px] uppercase tracking-wide text-muted">{kind}</span>
-      <span className="truncate text-[11.5px] font-semibold text-ink" title={value}>
+      <span className="text-[11.5px] font-semibold leading-tight text-ink [overflow-wrap:anywhere]" title={value}>
         {value}
       </span>
     </span>
@@ -17,7 +17,11 @@ function Node({ kind, value }: { kind: string; value: string }) {
 }
 
 function Arrow() {
-  return <span className="flex-none px-1 font-mono text-[11px] text-line-strong">→</span>;
+  return (
+    <span aria-hidden="true" className="flex-none self-center px-1 font-mono text-[11px] text-line-strong">
+      →
+    </span>
+  );
 }
 
 export function MechanismStrip({ candidate }: { candidate: DrugCandidate }) {
@@ -25,7 +29,7 @@ export function MechanismStrip({ candidate }: { candidate: DrugCandidate }) {
   return (
     <div
       data-testid="mechanism-strip"
-      className="flex items-center gap-1 overflow-x-auto rounded-lg border border-line bg-sunken/50 px-3 py-2"
+      className="flex flex-wrap items-stretch gap-x-1 gap-y-2 rounded-lg border border-line bg-sunken/50 px-3 py-2"
     >
       <Node kind="gene" value={candidate.source_lever_gene_id} />
       <Arrow />

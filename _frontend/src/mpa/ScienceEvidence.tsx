@@ -4,23 +4,10 @@
 // computes any value — the enqueue button records intent locally and drives nothing.
 
 import { useState } from 'react';
-import type { Provenance } from '../domain/common';
 import { StatePill } from '../shell/chips';
+import type { ScienceEvidenceRecord } from './evidence';
 
-export interface ScienceEvidenceRecord {
-  science_evidence_id: string;
-  sha256: string;
-  record_type: string;
-}
-
-/** Derive the frozen evidence-record view from an artifact's provenance (display only). */
-export function evidenceFromProvenance(prov: Provenance): ScienceEvidenceRecord {
-  return {
-    science_evidence_id: prov.artifact_id,
-    sha256: prov.hashes.canonical_sha256,
-    record_type: `${prov.namespace} · ${prov.schema_version}`,
-  };
-}
+export type { ScienceEvidenceRecord } from './evidence';
 
 export function ScienceEvidence({
   record,

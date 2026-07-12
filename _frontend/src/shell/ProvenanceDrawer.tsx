@@ -121,6 +121,7 @@ export function ProvenanceDrawer({
         aria-modal="true"
         aria-label={title}
         aria-hidden={!open}
+        inert={!open}
         className={`fixed right-0 top-0 z-50 flex h-full w-[560px] max-w-[94vw] flex-col rounded-l-2xl bg-surface shadow-drawer transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-[102%]'
         }`}
@@ -136,7 +137,7 @@ export function ProvenanceDrawer({
             ref={closeRef}
             onClick={onClose}
             aria-label="Close methods and provenance"
-            className="h-7 w-7 flex-none rounded-lg bg-sunken text-ink-2 hover:text-ink"
+            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg border border-line bg-sunken text-ink-2 transition-colors hover:border-line-strong hover:bg-line hover:text-ink"
           >
             ✕
           </button>

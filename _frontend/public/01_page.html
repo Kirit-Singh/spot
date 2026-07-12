@@ -463,8 +463,7 @@ let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
 // program_id + method provenance come from the v3.0.1 registry; base portability comes from the frozen validation
 let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
-// Production Stage-2 promotion status (frozen T7b: 0/33). READ-ONLY provenance surfaced in Methods —
-// it NEVER gates the research workflow. Research readiness is decided by base portability only.
+// Research readiness is decided by base portability only (the retired production/research split is gone).
 // v3 truthful current pointer (schema spot.stage01_current.v3) — retains selection_routing +
 // measurement_display_release; the retired production/research 0-of-33 gate is GONE.
 let CURRENT=null,MARKER_DIAG=null;
@@ -475,8 +474,8 @@ let curContrastId=null,pfSeq=0;
 const DATASET_ID='marson2025_gwcd4_perturbseq';
 const EFFECT_UNIVERSE_ID='marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad';
 const DONOR_SCOPE='all';
-// ── v3.0.1 research-preview bindings, cross-bound through stage01_current.json (no hard-coded v2 hashes) ──
-// V3 = the research_preview_v3 block; BASE_PORTABLE = set of base-portable program_ids from the frozen
+// ── v3.0.1 measurement bindings, cross-bound through stage01_current.json ──
+// V3 = the measurement_display_release block; BASE_PORTABLE = base-portable program_ids from the frozen
 // validation; V3_SUMMARY = the 396k full-universe summary that drives the Programs-over-time grid.
 let V3=null,V3_OK=false,BASE_PORTABLE={},V3_SUMMARY=null;
 // pan/zoom view transform, layered on top of the fit transform (default = fit view)
@@ -803,9 +802,8 @@ async function computeContrast(){
 }
 // verify the v3.0.1 bindings are present + internally consistent (cross-bound through stage01_current.json)
 function hashesOk(){return !!(V3_OK&&V3&&METHOD_VERSION===V3.method_version&&REGISTRY_SHA===(V3.registry||{}).registry_sha256&&H5AD_SHA===V3.source_h5ad_raw_sha256);}
-// RESEARCH-only readiness gate — Identify-genes is enabled ONLY when this returns ok:true.
-// It decides research readiness from base portability + a concrete shared timepoint. It does NOT
-// consult the frozen 0/33 PRODUCTION-selectability flag (that governs production promotion only).
+// Readiness gate — Identify-genes is enabled ONLY when this returns ok:true. It decides readiness
+// from base portability + a concrete shared timepoint, per the v3 selection routing.
 function preflight(){
   if(!REGISTRY_OK)return{ok:false,reason:'Program registry unavailable — cannot resolve program IDs'};
   if(!axisA.field||!axisB.field)return{ok:false,reason:'Choose a From and a To program'};

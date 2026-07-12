@@ -21,15 +21,16 @@ describe('Stage 3 — direction-compatible drug linkage', () => {
     expect(screen.getAllByText('mechanism').length).toBeGreaterThan(0);
   });
 
-  it('gives mechanism nodes a readable min width and scrolls the strip (no crushing)', () => {
+  it('gives mechanism nodes a readable min width and wraps (no crushed/ellipsized values)', () => {
     renderWithProvenance(<Stage3View artifact={artifact()} />);
     const strips = screen.getAllByTestId('mechanism-strip');
     expect(strips.length).toBeGreaterThan(0);
-    strips.forEach((s) => expect(s.className).toMatch(/overflow-x-auto/));
-    // Each labelled node keeps a fixed, non-shrinking width — never G… / IN… fragments.
+    // The strip wraps rather than crushing/ellipsizing into a single scrolling row.
+    strips.forEach((s) => expect(s.className).toMatch(/flex-wrap/));
     const geneNode = within(strips[0]).getAllByText('gene')[0].parentElement as HTMLElement;
-    expect(geneNode.className).toMatch(/flex-none/);
-    expect(geneNode.className).toMatch(/w-\[96px\]/);
+    expect(geneNode.className).toMatch(/min-w-\[130px\]/);
+    // Values wrap instead of truncating — never "Compound A (ac…".
+    expect(geneNode.className).not.toMatch(/\btruncate\b/);
   });
 
   it('traces candidate origin, supporting arm and mechanism direction', () => {
