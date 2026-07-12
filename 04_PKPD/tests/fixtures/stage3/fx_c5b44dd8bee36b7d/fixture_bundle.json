@@ -1,0 +1,1121 @@
+{
+  "annotation_only": true,
+  "canonical_content_sha256": "c5b44dd8bee36b7d47f54160a5de5a6684ab9f7f07f5b4250b80fb1773cfc2ed",
+  "counts": {
+    "n_active_moieties": 12,
+    "n_direct_gene_edges": 10,
+    "n_dispositions": 7,
+    "n_edges": 12,
+    "n_forms": 16,
+    "n_inspectable": 6,
+    "n_levers": 3,
+    "n_levers_stage3_eligible": 3,
+    "n_matched_edges": 4,
+    "n_mechanism_assertions": 12,
+    "n_opposed_edges": 2,
+    "n_potency_rows": 6,
+    "n_ranked": 3,
+    "n_target_entities": 4,
+    "n_unknown_edges": 6
+  },
+  "created_at": null,
+  "data_status": "synthetic_fixture_only",
+  "document_sha256": "ed6daf5280e50b2b1d46ccf5828bd0e38a453c467206ab8e0091781fda93bc99",
+  "fixture_bundle_id": "fx_c5b44dd8bee36b7d",
+  "fixture_candidates": [
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHAAAAAAAAA-BBBBBBBBBB-N",
+      "candidate_id": "AM:INCHIKEY:SYNTHAAAAAAAAA-BBBBBBBBBB-N",
+      "development_state_aggregate": "approved",
+      "directness_state": "conflicting",
+      "directness_states": [
+        "conflicting"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000001"
+      ],
+      "gbm_context_state": "supported",
+      "gbm_denominators": "n_total=1;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_ranked",
+      "lane_reasons": [
+        "matched_resolved_no_opposed_or_conflicting_edge"
+      ],
+      "levers_matched": [
+        "ENSG09999900001"
+      ],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=2;n_supporting=1;n_contradicting=1;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "conflicting",
+      "matched_edge_ids": [
+        "1ea82b5f1d4660c0"
+      ],
+      "mechanism_direction_state": "matched",
+      "n_potency_rows": 6,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=1;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "perturb2state_state": "supported",
+      "preferred_name": "SYNTHADRUGIB",
+      "production_candidate": false,
+      "rank": 1,
+      "rank_labels": [
+        "matched",
+        "tier1_directional_guide_donor",
+        "conflicting",
+        "supported",
+        "supported",
+        "conflicting",
+        "approved"
+      ],
+      "rank_tuple": [
+        0,
+        0,
+        4,
+        0,
+        0,
+        3,
+        0
+      ],
+      "source_record_ids": [
+        "15643c0880558bba5f9b9c5e5f9bfe7c1ec6cef59f1255cdab86a444eb75c0de",
+        "5150e6a4a637621bc927fda490b4e9826bad39de839809aad28121b87f9c5faa",
+        "7cd0ca8146b2bb0af3efbf176de6996933f883c93f26e9fbc8d18e662413f977",
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "89c6fda7ee3063ccfc8aab1a8de9ec2cae87da12fbd913aa6fdbd6510d313e0b",
+        "915aca0b03f5b77b3363f2829ca21b87f655072e5c53a81bae2bb60f2137b61f",
+        "9b1f1aad64b5720600089a15f838712e70bc8dc56f899c0b6b8d727bbb50b379",
+        "bd408736b1de4e7280faf2956e166b5880da36ed07185e86756883d2bcdc1eda",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier1_directional_guide_donor",
+      "stage2_tiers": [
+        "tier1_directional_guide_donor"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": []
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHMETABAAAA-BBBBBBBBBB-P",
+      "candidate_id": "AM:INCHIKEY:SYNTHMETABAAAA-BBBBBBBBBB-P",
+      "development_state_aggregate": "investigational",
+      "directness_state": "direct_single_protein",
+      "directness_states": [
+        "direct_single_protein"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000030"
+      ],
+      "gbm_context_state": "unsupported",
+      "gbm_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=1;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_ranked",
+      "lane_reasons": [
+        "matched_resolved_no_opposed_or_conflicting_edge"
+      ],
+      "levers_matched": [
+        "ENSG09999900003"
+      ],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [
+        "a030aeca936dcc40"
+      ],
+      "mechanism_direction_state": "matched",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=1",
+      "perturb2state_state": "not_evaluated",
+      "preferred_name": "SYNTHAPRODRUGIN METABOLITE",
+      "production_candidate": false,
+      "rank": 2,
+      "rank_labels": [
+        "matched",
+        "tier3_screen_only",
+        "direct_single_protein",
+        "unsupported",
+        "not_evaluated",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        0,
+        2,
+        0,
+        4,
+        2,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier3_screen_only",
+      "stage2_tiers": [
+        "tier3_screen_only"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": []
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHWDRWAAAAA-BBBBBBBBBB-X",
+      "candidate_id": "AM:INCHIKEY:SYNTHWDRWAAAAA-BBBBBBBBBB-X",
+      "development_state_aggregate": "approved_withdrawn_conflict",
+      "directness_state": "direct_single_protein",
+      "directness_states": [
+        "direct_single_protein"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000080"
+      ],
+      "gbm_context_state": "unsupported",
+      "gbm_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=1;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_ranked",
+      "lane_reasons": [
+        "matched_resolved_no_opposed_or_conflicting_edge"
+      ],
+      "levers_matched": [
+        "ENSG09999900003"
+      ],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [
+        "0c45e1b6341a9764"
+      ],
+      "mechanism_direction_state": "matched",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=1",
+      "perturb2state_state": "not_evaluated",
+      "preferred_name": "SYNTHAWITHDRAWIN",
+      "production_candidate": false,
+      "rank": 3,
+      "rank_labels": [
+        "matched",
+        "tier3_screen_only",
+        "direct_single_protein",
+        "unsupported",
+        "not_evaluated",
+        "not_evaluated",
+        "approved_withdrawn_conflict"
+      ],
+      "rank_tuple": [
+        0,
+        2,
+        0,
+        4,
+        2,
+        2,
+        3
+      ],
+      "source_record_ids": [
+        "1ca7b9c3b2914c1194928bdb0848e02b76788ef1445f2ed204b5986c3e74bd70",
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier3_screen_only",
+      "stage2_tiers": [
+        "tier3_screen_only"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": []
+    }
+  ],
+  "fixture_inspectable_candidates": [
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHCPLXAAAAA-BBBBBBBBBB-W",
+      "candidate_id": "AM:INCHIKEY:SYNTHCPLXAAAAA-BBBBBBBBBB-W",
+      "development_state_aggregate": "investigational",
+      "directness_state": "complex_or_family_target",
+      "directness_states": [
+        "complex_or_family_target"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000070"
+      ],
+      "gbm_context_state": "conflicting",
+      "gbm_denominators": "n_total=2;n_supporting=1;n_contradicting=0;n_negative=1;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_inspectable",
+      "lane_reasons": [
+        "no_matched_direct_gene_edge_direction_unknown"
+      ],
+      "levers_matched": [],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [],
+      "mechanism_direction_state": "unknown",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=2;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=1",
+      "perturb2state_state": "mixed",
+      "preferred_name": "SYNTHACOMPLEXIB",
+      "production_candidate": false,
+      "rank": 1,
+      "rank_labels": [
+        "unknown",
+        "tier1_directional_guide_donor",
+        "complex_or_family_target",
+        "conflicting",
+        "mixed",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        1,
+        0,
+        3,
+        3,
+        1,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier1_directional_guide_donor",
+      "stage2_tiers": [
+        "tier1_directional_guide_donor",
+        "tier3_screen_only"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": [
+        "2379555803dd1ef0",
+        "cfdf67c13d3f8d04"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHACTVAAAAA-BBBBBBBBBB-S",
+      "candidate_id": "AM:INCHIKEY:SYNTHACTVAAAAA-BBBBBBBBBB-S",
+      "development_state_aggregate": "investigational",
+      "directness_state": "direct_single_protein",
+      "directness_states": [
+        "direct_single_protein"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000040"
+      ],
+      "gbm_context_state": "not_evaluated",
+      "gbm_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_inspectable",
+      "lane_reasons": [
+        "no_matched_direct_gene_edge_direction_unknown"
+      ],
+      "levers_matched": [],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [],
+      "mechanism_direction_state": "unknown",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=1",
+      "perturb2state_state": "not_evaluated",
+      "preferred_name": "SYNTHAUGMENTIL",
+      "production_candidate": false,
+      "rank": 2,
+      "rank_labels": [
+        "unknown",
+        "tier2_directional_guide",
+        "direct_single_protein",
+        "not_evaluated",
+        "not_evaluated",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        1,
+        1,
+        0,
+        2,
+        2,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier2_directional_guide",
+      "stage2_tiers": [
+        "tier2_directional_guide"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": [
+        "b3b9c7a69f626412"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHDUALAAAAA-BBBBBBBBBB-V",
+      "candidate_id": "AM:INCHIKEY:SYNTHDUALAAAAA-BBBBBBBBBB-V",
+      "development_state_aggregate": "investigational",
+      "directness_state": "direct_single_protein",
+      "directness_states": [
+        "direct_single_protein"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000060"
+      ],
+      "gbm_context_state": "unsupported",
+      "gbm_denominators": "n_total=2;n_supporting=0;n_contradicting=0;n_negative=2;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_inspectable",
+      "lane_reasons": [
+        "no_matched_direct_gene_edge_direction_unknown"
+      ],
+      "levers_matched": [],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [],
+      "mechanism_direction_state": "unknown",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=2;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=2",
+      "perturb2state_state": "not_evaluated",
+      "preferred_name": "SYNTHADUALOL",
+      "production_candidate": false,
+      "rank": 3,
+      "rank_labels": [
+        "unknown",
+        "tier3_screen_only",
+        "direct_single_protein",
+        "unsupported",
+        "not_evaluated",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        1,
+        2,
+        0,
+        4,
+        2,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier3_screen_only",
+      "stage2_tiers": [
+        "tier3_screen_only"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": [
+        "a3b1367e8b8d180a",
+        "d3679d5763996579"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHBINDAAAAA-BBBBBBBBBB-R",
+      "candidate_id": "AM:INCHIKEY:SYNTHBINDAAAAA-BBBBBBBBBB-R",
+      "development_state_aggregate": "investigational",
+      "directness_state": "indirect",
+      "directness_states": [
+        "indirect"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000020"
+      ],
+      "gbm_context_state": "unsupported",
+      "gbm_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=1;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_inspectable",
+      "lane_reasons": [
+        "no_matched_direct_gene_edge_direction_unknown"
+      ],
+      "levers_matched": [],
+      "levers_opposed": [],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [],
+      "mechanism_direction_state": "unknown",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [],
+      "perturb2state_denominators": "n_total=1;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=1",
+      "perturb2state_state": "not_evaluated",
+      "preferred_name": "SYNTHABINDAL",
+      "production_candidate": false,
+      "rank": 4,
+      "rank_labels": [
+        "unknown",
+        "tier3_screen_only",
+        "indirect",
+        "unsupported",
+        "not_evaluated",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        1,
+        2,
+        2,
+        4,
+        2,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier3_screen_only",
+      "stage2_tiers": [
+        "tier3_screen_only"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": [
+        "2f95ac4f1daffb6c"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHCONFAAAAA-BBBBBBBBBB-T",
+      "candidate_id": "AM:INCHIKEY:SYNTHCONFAAAAA-BBBBBBBBBB-T",
+      "development_state_aggregate": "investigational",
+      "directness_state": "direct_single_protein",
+      "directness_states": [
+        "direct_single_protein"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000050"
+      ],
+      "gbm_context_state": "supported",
+      "gbm_denominators": "n_total=1;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_inspectable",
+      "lane_reasons": [
+        "opposed_edge_against_locked_lever",
+        "matched_and_opposed_edges_conflict"
+      ],
+      "levers_matched": [
+        "ENSG09999900001"
+      ],
+      "levers_opposed": [
+        "ENSG09999900003"
+      ],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [
+        "6a2037929040be6a"
+      ],
+      "mechanism_direction_state": "conflicting",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [
+        "366e2230f8286976"
+      ],
+      "perturb2state_denominators": "n_total=1;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "perturb2state_state": "supported",
+      "preferred_name": "SYNTHACONFLICTOL",
+      "production_candidate": false,
+      "rank": 5,
+      "rank_labels": [
+        "conflicting",
+        "tier1_directional_guide_donor",
+        "direct_single_protein",
+        "supported",
+        "supported",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier1_directional_guide_donor",
+      "stage2_tiers": [
+        "tier1_directional_guide_donor"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": []
+    },
+    {
+      "active_moiety_id": "AM:INCHIKEY:SYNTHAGONAAAAA-BBBBBBBBBB-Q",
+      "candidate_id": "AM:INCHIKEY:SYNTHAGONAAAAA-BBBBBBBBBB-Q",
+      "development_state_aggregate": "investigational",
+      "directness_state": "direct_single_protein",
+      "directness_states": [
+        "direct_single_protein"
+      ],
+      "form_ids": [
+        "CHEMBL:CHEMBL9000010"
+      ],
+      "gbm_context_state": "supported",
+      "gbm_denominators": "n_total=1;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "identity_status": "resolved",
+      "lane": "fixture_inspectable",
+      "lane_reasons": [
+        "no_matched_direct_gene_edge_direction_opposed",
+        "opposed_edge_against_locked_lever"
+      ],
+      "levers_matched": [],
+      "levers_opposed": [
+        "ENSG09999900001"
+      ],
+      "lincs_denominators": "n_total=0;n_supporting=0;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "lincs_state": "not_evaluated",
+      "matched_edge_ids": [],
+      "mechanism_direction_state": "opposed",
+      "n_potency_rows": 0,
+      "opposed_edge_ids": [
+        "66c23b99688c473a"
+      ],
+      "perturb2state_denominators": "n_total=1;n_supporting=1;n_contradicting=0;n_negative=0;n_weak=0;n_not_evaluated=0",
+      "perturb2state_state": "supported",
+      "preferred_name": "SYNTHAGONIL",
+      "production_candidate": false,
+      "rank": 6,
+      "rank_labels": [
+        "opposed",
+        "tier1_directional_guide_donor",
+        "direct_single_protein",
+        "supported",
+        "supported",
+        "not_evaluated",
+        "investigational"
+      ],
+      "rank_tuple": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        2,
+        1
+      ],
+      "source_record_ids": [
+        "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+        "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742"
+      ],
+      "stage2_evidence_tier": "tier1_directional_guide_donor",
+      "stage2_tiers": [
+        "tier1_directional_guide_donor"
+      ],
+      "stage3_eligible": false,
+      "stage4_eligible": false,
+      "unknown_edge_ids": []
+    }
+  ],
+  "inference_status": "not_calibrated",
+  "method": {
+    "adapters_sha256": "2500d2ac58086016a4118d2179cf8119ddc1b00958cebfb51cd102de54595aa4",
+    "aggregation_policy_version": "stage3-aggregate-v1",
+    "code_tree_sha256": "20b2878a80bffc7f35897703167e451e910a869fe040f142e43dd6d35ef2e220",
+    "direction_policy_version": "stage3-direction-v2",
+    "env_lock_sha256": "088a1ea1c3421872ff6408a0af817df740028b4c45a3f70dab273248619cee20",
+    "identity_policy_version": "stage3-identity-v2",
+    "primary_set_policy": "primary_requires_matched_direct_gene_edge_and_resolved_moiety_and_no_opposed_or_conflicting_edge_and_stage3_eligible_lever_v2",
+    "rank_keys": [
+      "mechanism_direction_state",
+      "stage2_evidence_tier",
+      "directness_state",
+      "gbm_context_state",
+      "perturb2state_state",
+      "lincs_state",
+      "development_state_aggregate"
+    ],
+    "rank_tuple_version": "stage3-rank-v2",
+    "schemas_sha256": "dc63c184e94706111db5641349bb84207a25744456e14e1def35bd132a9aaf20",
+    "stage3_method_version": "stage3-druglink-v2",
+    "vocabularies_sha256": "871955d9baeca6047ab6537e31fa0179ec787fcf9f0aa0e423d4fec9f05c62c7"
+  },
+  "namespace": "fixture",
+  "production_candidate": false,
+  "production_eligible": false,
+  "schema_version": "spot.fixture.stage03_bundle.v1",
+  "source_records": [
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "rxnorm_dose_form",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "rxnorm-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "86ff815ee42130ddc9e8b7f8517dba79030274a7dc5887e7720662e77f4a8a79",
+      "raw_bytes": 421,
+      "raw_media_type": "application/json",
+      "raw_sha256": "dba23010940a64061f181df48ec4ab83c49ff584a9ea8b8af1ac6fc1294f8bd8",
+      "retrieval_url": null,
+      "source": "rxnorm",
+      "source_endpoint": "/REST/rxcui/9990003/related.json?tty=DF+DFG",
+      "source_record_id": "15643c0880558bba5f9b9c5e5f9bfe7c1ec6cef59f1255cdab86a444eb75c0de",
+      "source_release": "RxNorm 2026-07-06"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "chembl_molecule",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "chembl-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "c8db796e2e171f5fea0ca6e363decbb54d188161cd002989b6d9533c610128ff",
+      "raw_bytes": 466,
+      "raw_media_type": "application/json",
+      "raw_sha256": "acbfe29187f563335e479f86adae036c5450eae6c84cec5b87c8a35bdfd93b66",
+      "retrieval_url": null,
+      "source": "chembl",
+      "source_endpoint": "/chembl/api/data/molecule",
+      "source_record_id": "1ca7b9c3b2914c1194928bdb0848e02b76788ef1445f2ed204b5986c3e74bd70",
+      "source_release": "CHEMBL_35"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "open_targets_known_drugs",
+      "adapter_status": "not_ready_no_pinned_response",
+      "adapter_version": "open_targets-adapter-v0-unready",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": "adapter open_targets_known_drugs is not_ready_no_pinned_response; fixture requires ('fixture_shaped',)",
+      "parse_status": "adapter_not_ready",
+      "query_canonical": "ea0eed3ed708de2cb23ed6e31c3036c0aa12a1a17713afefbfb967aa3d2ffa5e",
+      "raw_bytes": 263,
+      "raw_media_type": "application/json",
+      "raw_sha256": "c36a65a35197c7cb13848981446f54fefdf32e0d11aafc7f82e715ac5af5848b",
+      "retrieval_url": null,
+      "source": "open_targets",
+      "source_endpoint": "graphql:target.knownDrugs",
+      "source_record_id": "387935df749f78e648a133e13f2bea4c80053fa846cfcbc8cc00335629b7e949",
+      "source_release": "26.06"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "lincs_signature_support",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "lanes-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "366268e9f075bc978b3a940420d1b3d8b75e4d0e4aefc2e2e851be0e4c68246d",
+      "raw_bytes": 1338,
+      "raw_media_type": "application/json",
+      "raw_sha256": "03a9d08ea209b2a8a755776e37877c09844821a093c019b454a8fb9a8ae82218",
+      "retrieval_url": null,
+      "source": "lincs",
+      "source_endpoint": "frozen signature-level export",
+      "source_record_id": "3f57912d657a4dc63f0a29bdd05676d65fa2e1f863379f53e778ba07c6e1c6bf",
+      "source_release": "GSE-synthetic"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "gbm_method_manifest",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "lanes-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "264cf5f1ea0d5ad76197c5a426432a0db20ca39ce3bd0cd7aae966acdd4ef7d7",
+      "raw_bytes": 574,
+      "raw_media_type": "application/json",
+      "raw_sha256": "f302cbb91cf7283abc4ff36b33acdbb6a8e57cbf620cb5f221d1e18e0909c704",
+      "retrieval_url": null,
+      "source": "gbm_atlas",
+      "source_endpoint": "frozen method manifest",
+      "source_record_id": "40da660fbcbffc3124f79fbd9ccf678cbe9a3a36889123ba3a31ab8f48cc9c34",
+      "source_release": "v0-synthetic"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "chembl_target",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "chembl-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "45e013369c086fd86851acd2c2ef183ff382612c49409f84755eb53d68b52e37",
+      "raw_bytes": 1465,
+      "raw_media_type": "application/json",
+      "raw_sha256": "145052afb36ef9f9d457d5c0cec9bc17b01f4a6f6bd91985846670696a839c3e",
+      "retrieval_url": null,
+      "source": "chembl",
+      "source_endpoint": "/chembl/api/data/target",
+      "source_record_id": "43fc95de208664b352904863b3da3a8c5733cd6631af26633b1b1ca66b273e20",
+      "source_release": "CHEMBL_35"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "gbm_method_manifest",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "lanes-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "20cf73f129108584c2bc7d4c38cdc55e4278aec3c0d19da07f1071ac1b4c1703",
+      "raw_bytes": 375,
+      "raw_media_type": "application/json",
+      "raw_sha256": "0ee0c49785071c4171f91a7f587cfcff39b9e57c1ef3844b020d2f329b213d30",
+      "retrieval_url": null,
+      "source": "gbm_atlas",
+      "source_endpoint": "frozen method manifest",
+      "source_record_id": "48d8ee2de939d164c7f1680dd2c9aa721fdfcb9b8f7e4488cafb4383f0e0907d",
+      "source_release": "v0-synthetic"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "pubchem_parent_cid",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "pubchem-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "599703ff96217f3c1f6b6827288a89136598396f6d69e34403a3ce14e9dddc5b",
+      "raw_bytes": 63,
+      "raw_media_type": "application/json",
+      "raw_sha256": "a52b111a1d65f282b69a2c3acf16df47c7721649f87144445e35082d83680c59",
+      "retrieval_url": null,
+      "source": "pubchem",
+      "source_endpoint": "/rest/pug/compound/cid/90000002/cids/JSON?cids_type=parent",
+      "source_record_id": "5150e6a4a637621bc927fda490b4e9826bad39de839809aad28121b87f9c5faa",
+      "source_release": "PUG-REST 2026-07"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "lincs_method_manifest",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "lanes-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "f7551b672fdd09c3f460e85a4d9da859b55ad86b75d1a4da87f6496182fbea39",
+      "raw_bytes": 602,
+      "raw_media_type": "application/json",
+      "raw_sha256": "41edc124c0211f7f892eecf5971f35e3a562fa4244fc10d4002a762cc95dbf4b",
+      "retrieval_url": null,
+      "source": "lincs",
+      "source_endpoint": "frozen method manifest",
+      "source_record_id": "72f197ed73eef41d63fcb5791b742bed8c5eceeb31b770310ea721178a8597c8",
+      "source_release": "GSE-synthetic"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "pubchem_property",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "pubchem-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "39d5c559dd3b1e798cf5b56ad92954bff26aed12a53641e1f5398de91198c887",
+      "raw_bytes": 317,
+      "raw_media_type": "application/json",
+      "raw_sha256": "4e2d0905d0fd63fa678e25e6316091dad3664d25c40b8675d24c4ca1e4970555",
+      "retrieval_url": null,
+      "source": "pubchem",
+      "source_endpoint": "/rest/pug/compound/cid/90000001,90000002/property/InChIKey,Title/JSON",
+      "source_record_id": "7cd0ca8146b2bb0af3efbf176de6996933f883c93f26e9fbc8d18e662413f977",
+      "source_release": "PUG-REST 2026-07"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "chembl_molecule",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "chembl-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "bc46aca7027a43870967df171e432d1216df3d0bec88bc436a18855bc20ef61d",
+      "raw_bytes": 5283,
+      "raw_media_type": "application/json",
+      "raw_sha256": "3cf26c1bf43373c279f25006a29b53aa0cd652bb4abd0254e3d45f6606af1dd9",
+      "retrieval_url": null,
+      "source": "chembl",
+      "source_endpoint": "/chembl/api/data/molecule",
+      "source_record_id": "80b08f632157aa9af733ef0ca316bb113f01f2c3be31d9e2ff460283f7fc3974",
+      "source_release": "CHEMBL_35"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "chembl_activity",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "chembl-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "57d89855f0621c8d8b2ae6b0f10b17c5c4c895cfad87a99593344bc23e1d7497",
+      "raw_bytes": 3638,
+      "raw_media_type": "application/json",
+      "raw_sha256": "87f65c89310679ee9df3db2a221d1994453dfee5d96c5cc0bab4430d56d9f615",
+      "retrieval_url": null,
+      "source": "chembl",
+      "source_endpoint": "/chembl/api/data/activity",
+      "source_record_id": "812ae379bba2cd8812b4f1af1a74d5076a6abc2c5ffef61f3844c99ea650b922",
+      "source_release": "CHEMBL_35"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "chembl_mechanism",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "chembl-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "b711729c260aa3b851bbc19ad093b948480059e28e07972047e03b776d2784a8",
+      "raw_bytes": 438,
+      "raw_media_type": "application/json",
+      "raw_sha256": "f1880630e8f67014dbecc5dd33a8378782db15fe619834e9872e575092526402",
+      "retrieval_url": null,
+      "source": "chembl",
+      "source_endpoint": "/chembl/api/data/mechanism",
+      "source_record_id": "89c6fda7ee3063ccfc8aab1a8de9ec2cae87da12fbd913aa6fdbd6510d313e0b",
+      "source_release": "CHEMBL_35"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "rxnorm_property",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "rxnorm-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "8e63ee9adb7ee643c1577ecc2e90131f62b2748855ace53e8c8ed799e97550bc",
+      "raw_bytes": 175,
+      "raw_media_type": "application/json",
+      "raw_sha256": "61b6d8f873eb32a060988c6a1dcb34bf14875e02a4617f9a1e98b4e07da3e7ce",
+      "retrieval_url": null,
+      "source": "rxnorm",
+      "source_endpoint": "/REST/rxcui/9990001/property.json?propName=UNII_CODE",
+      "source_record_id": "915aca0b03f5b77b3363f2829ca21b87f655072e5c53a81bae2bb60f2137b61f",
+      "source_release": "RxNorm 2026-07-06"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "rxnorm_allrelated",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "rxnorm-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "477707e3db67abe62080c9184826f9a1357fc8fea39b084a8edd41e54945d281",
+      "raw_bytes": 1037,
+      "raw_media_type": "application/json",
+      "raw_sha256": "70b8bb98b859861c588f72085ebe39b871c84859a3b1e77cd9489ff13e919677",
+      "retrieval_url": null,
+      "source": "rxnorm",
+      "source_endpoint": "/REST/rxcui/9990003/allrelated.json",
+      "source_record_id": "9b1f1aad64b5720600089a15f838712e70bc8dc56f899c0b6b8d727bbb50b379",
+      "source_release": "RxNorm 2026-07-06"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "gbm_patient_summary",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "lanes-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "87c1be6df333c4f1101875a58f01db5bbb1b8824f2cfb947cbb137274fbbaec5",
+      "raw_bytes": 1239,
+      "raw_media_type": "application/json",
+      "raw_sha256": "5e24221fd1f4fd8328600ff18c7425d557b67545eecaa2dee765fc54980c4a75",
+      "retrieval_url": null,
+      "source": "gbm_atlas",
+      "source_endpoint": "frozen patient-level summary export",
+      "source_record_id": "ab4d4f52d0e372b466e30f33b0e942891587fed627c5ccefee8a6d86a11db649",
+      "source_release": "v0-synthetic"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "rxnorm_allrelated",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "rxnorm-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "3c0f201d392b4fe9782604b229577d534caefcb0ebd7596589bb99642183dd31",
+      "raw_bytes": 1292,
+      "raw_media_type": "application/json",
+      "raw_sha256": "c33b528a4bfb02ee4ba41963020b0ceddcb37f384d17a8bd1e18c13ed74a95b7",
+      "retrieval_url": null,
+      "source": "rxnorm",
+      "source_endpoint": "/REST/rxcui/9990010/allrelated.json",
+      "source_record_id": "bd408736b1de4e7280faf2956e166b5880da36ed07185e86756883d2bcdc1eda",
+      "source_release": "RxNorm 2026-07-06"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "uniprot_search",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "uniprot-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "3cbc73ebd178bcccd4eda9a93bdd47288bcee31fe170f89eb44d20551c5315bd",
+      "raw_bytes": 1380,
+      "raw_media_type": "application/json",
+      "raw_sha256": "6a6c23df7bddd97d7a10e1b7c89333185990fcd0f4981c62a02a7d89053d151f",
+      "retrieval_url": null,
+      "source": "uniprot",
+      "source_endpoint": "/uniprotkb/search",
+      "source_record_id": "ef76e2341aeb651bc4f882bd52410300e30461b49b7a907f64b2b2270dde7b72",
+      "source_release": "2026_02"
+    },
+    {
+      "access_record_sha256": null,
+      "acquisition_status": "synthetic_fixture",
+      "adapter": "chembl_mechanism",
+      "adapter_status": "fixture_shaped",
+      "adapter_version": "chembl-adapter-v2",
+      "attribution": null,
+      "license": "synthetic fixture (no license: not real data)",
+      "namespace": "fixture",
+      "parse_detail": null,
+      "parse_status": "parsed",
+      "query_canonical": "45e013369c086fd86851acd2c2ef183ff382612c49409f84755eb53d68b52e37",
+      "raw_bytes": 4475,
+      "raw_media_type": "application/json",
+      "raw_sha256": "f38414fc1e1c707823faa292564257a2fb03aad33053fd74abbd64243f1b4e23",
+      "retrieval_url": null,
+      "source": "chembl",
+      "source_endpoint": "/chembl/api/data/mechanism",
+      "source_record_id": "ff020b5f7e34c796c16e289737b1a836789c8697fe199a779c5842d77e460742",
+      "source_release": "CHEMBL_35"
+    }
+  ],
+  "source_status": {
+    "n_acquired_public": 0,
+    "n_not_acquired": 0,
+    "n_synthetic_fixture": 19
+  },
+  "stage3_eligible": false,
+  "stage4_eligible": false,
+  "table_hashes": {
+    "active_moieties": "2964895f2747709b31c4eb2682ebb5d9803587979e19c842af20d9020d3debee",
+    "candidates": "dda03a8734f56e78ed46211ad572f5c64937cf0838d70c1248d2d5dc7709767c",
+    "dispositions": "18b65bc4622c446c5e16cd24573e025996f8cdfb56a40c160aba955295894000",
+    "drug_form_relations": "f268f3318d587b91f83f078b01c107765d9ac43bbf8f67d34f28ec9592e1722a",
+    "drug_forms": "b8eec638ee68d151a3e3ed23a70abfd3f71d7bd21bf46d7252ece17bba591f00",
+    "drug_identifiers": "075f82e6836efe5b22a9d5a9bab1e9ed01fd0e8b02ccb33c8ea4b0899a7bb087",
+    "gbm_context": "0f31530aef6ff6793db371825649d5623c75b11175563d67b7f3690f519cd286",
+    "lincs_support": "6724b1be1556d0b0bbd387afe9f258e007609d577138d8d1c4695bca819df33b",
+    "mechanism_assertions": "b9c732cf77110c839703440677da01cdab6823616a964b401d8491df0968f484",
+    "method_manifests": "504119a5feb9414bf975a5405e85cf579852396112789f2a8051232c1aca647a",
+    "potency_evidence": "9790eef8a2547d331ac5f0747d5ea8c23fd8f38518f8602e9c8165abeaec0952",
+    "source_records": "9d863160b5330884f305448ab911f55fb8c71837ab13e8c5564b49d53755f095",
+    "target_drug_edges": "ad26daf68e75d2400924b7b9f2237127982ab10e41e676589a099bdbdf4f9036",
+    "target_entities": "98fc03996cbebb9a31dee64989ba3bcb62df5c7db76180723d8358bbff91b8ac",
+    "target_entity_components": "4bc9720a16ef1536b7cd8e46fccd70df8e2c2c76ff9f15ae74adba58bf34d5f6"
+  },
+  "upstream": {
+    "context": {
+      "cell_ontology_id": null,
+      "compartment_id": "fx_compartment_synthetic_lymphocyte",
+      "compartment_label": "synthetic lymphocyte compartment",
+      "context_id": "fx_ctx_synthetic_compartment_v1",
+      "context_sha256": "4141414141414141414141414141414141414141414141414141414141414141",
+      "disease_context_id": "fx_disease_synthetic"
+    },
+    "desired_signature": {
+      "direction_label": "away_from_A_toward_B",
+      "gene_universe_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "signature_id": "fx_sig_away_a_toward_b",
+      "signature_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "lever_rows_sha256": "b3b5c580dd48241aaae0601e1c10fee14b60c53addf67ea14871a628d2fa6009",
+    "lever_set_sha256": "7390d20b2756f1dc437a34d437ce428c423a1380931180051bea1f02efe4b76b",
+    "namespace": "fixture",
+    "perturbation_modality": "crispri",
+    "question_id": "fx_q_synthetic",
+    "run_id": "fx_run_synthetic",
+    "selection_id": "fx_sel_synthetic",
+    "stage1_gate": {
+      "input_manifest_sha256": "5353535353535353535353535353535353535353535353535353535353535353",
+      "n_evaluated_pairs": 1,
+      "n_selectable_pairs": 1,
+      "program_registry_sha256": "5252525252525252525252525252525252525252525252525252525252525252",
+      "selectability_sha256": "5151515151515151515151515151515151515151515151515151515151515151",
+      "selectable_pairs": [
+        "fx_pair_1"
+      ],
+      "selected_pair_id": "fx_pair_1",
+      "validation_reasons": [],
+      "validation_report_sha256": "5454545454545454545454545454545454545454545454545454545454545454",
+      "validation_status": "pass"
+    },
+    "stage2_method": {
+      "contributor_sha256": "3434343434343434343434343434343434343434343434343434343434343434",
+      "gene_universe_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "inference_status": "not_calibrated",
+      "mask_sha256": "3232323232323232323232323232323232323232323232323232323232323232",
+      "method_sha256": "3131313131313131313131313131313131313131313131313131313131313131",
+      "method_version": "stage2-direct-v1",
+      "screen_sha256": "3535353535353535353535353535353535353535353535353535353535353535"
+    }
+  }
+}

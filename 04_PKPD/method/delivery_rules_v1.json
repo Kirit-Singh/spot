@@ -1,0 +1,54 @@
+{
+  "schema_id": "spot.stage04_method_delivery.v1",
+  "method_id": "delivery_rules_v1",
+  "method_version": "1.0.0",
+  "description": "Assignment of the delivery requirement for a (candidate x context). Exactly one value per candidate/context. This decides whether NEBPI is a PRIMARY evidence gate — it is the single most consequential switch in Stage 4, so it is never inferred from a target's biology.",
+  "source_anchor": {
+    "source_id": "grossman2026_nebpi",
+    "quote": "This workshop specifically addressed brain permeability requirements for agents requiring direct tumor penetration for therapeutic effect ... this discussion may be less relevant for ... technologies, agents or approaches where local drug concentrations in the brain are less important, such as immunotherapies that activate systemic lymphocytes that travel to the brain or anti-angiogenesis drugs that primarily target vasculature rather than intraparenchymal tumor."
+  },
+  "values": [
+    {
+      "value": "local_CNS_target_engagement_required",
+      "definition": "The therapeutic effect requires the active moiety to engage its target within brain parenchyma (including infiltrative tumour in non-enhancing brain).",
+      "nebpi_primary_gate": true
+    },
+    {
+      "value": "systemic_immune_priming",
+      "definition": "The therapeutic effect is expected to be initiated outside the CNS (e.g. priming/activating lymphocytes that then traffic to the brain), so local brain drug concentration is not the primary determinant of effect.",
+      "nebpi_primary_gate": false,
+      "protection": "A candidate with this delivery requirement MUST NOT be failed, downranked or marked inadequate solely because direct NEB exposure is low or unmeasured. NEB evidence is retained and displayed with nebpi_primary_gate=false."
+    },
+    {
+      "value": "delivery_requirement_uncertain",
+      "definition": "The delivery requirement has not been established by an accepted assigner with a rationale and evidence binding.",
+      "nebpi_primary_gate": null,
+      "protection": "Must NOT be silently treated as either of the other two. Every downstream consumer must surface the uncertainty."
+    }
+  ],
+  "default": "delivery_requirement_uncertain",
+  "assignment_rules": [
+    {
+      "rule_id": "explicit_assignment_required",
+      "version": "1.0.0",
+      "statement": "local_CNS_target_engagement_required and systemic_immune_priming may ONLY be set by an explicit assignment record carrying: assigned_by (a named human reviewer or a named rule id — never 'the model'), rule_id, rule_version, rationale (free text), evidence_source_id and evidence_sha256. Anything else defaults to delivery_requirement_uncertain."
+    },
+    {
+      "rule_id": "no_inference_from_immune_target",
+      "version": "1.0.0",
+      "statement": "The fact that the upstream Stage-2/Stage-3 target is immune-related (e.g. a T-cell gene, a cytokine receptor, a checkpoint) is NEVER sufficient to assign systemic_immune_priming. An immune target may still require local CNS target engagement (e.g. engaging tumour-infiltrating lymphocytes inside non-enhancing brain). If the only offered justification is target biology, the engine returns delivery_requirement_uncertain with reason_code='immune_target_is_not_evidence_of_systemic_priming'.",
+      "test": "test_delivery.py::test_immune_target_alone_does_not_assign_systemic_priming"
+    },
+    {
+      "rule_id": "llm_is_not_an_assigner",
+      "version": "1.0.0",
+      "statement": "assigned_by values matching an LLM/model/agent identity are rejected. Model output is not a scientific source.",
+      "rejected_assigner_patterns": ["claude", "gpt", "llm", "model", "agent", "ai", "copilot", "gemini"]
+    },
+    {
+      "rule_id": "one_value_per_context",
+      "version": "1.0.0",
+      "statement": "Exactly one delivery requirement per (candidate_id, evidence_context_id). Two conflicting assignments for the same context are a firewall rejection, not a merge."
+    }
+  ]
+}

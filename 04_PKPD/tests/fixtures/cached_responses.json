@@ -1,0 +1,79 @@
+{
+  "_fixture_notice": "FIXTURE. Synthetic cached 'responses' for the non-label evidence lanes. Each entry is hashed as bytes (canonical JSON) to give a real raw_response_sha256, so the provenance chain and the mutation tests operate on real hashes of real bytes — the bytes are simply fixture bytes. Every value is INVENTED. No real drug, assay, study or measurement is represented.",
+  "responses": {
+    "src.fixture.stage3": {
+      "kind": "fixture_stage3_provenance",
+      "note": "stands in for the Stage-3 evidence response that produced these candidate rows"
+    },
+    "src.fixture.moiety_map": {
+      "kind": "fixture_salt_to_active_moiety_map",
+      "records": [{"administered": "fixturazole hydrochloride", "active_moiety": "fixturazole", "active_moiety_id": "FXM-004"}]
+    },
+    "src.fixture.props.biobyte": {
+      "kind": "fixture_property_calculation",
+      "calculator": "biobyte_clogp",
+      "records": [
+        {"active_moiety_id": "FXM-001", "clogp": 2.5},
+        {"active_moiety_id": "FXM-004", "clogp": 3.8}
+      ]
+    },
+    "src.fixture.props.acd": {
+      "kind": "fixture_property_calculation",
+      "calculator": "acd_labs",
+      "records": [
+        {"active_moiety_id": "FXM-001", "clogd_74": 1.8, "pka_most_basic": 7.2},
+        {"active_moiety_id": "FXM-003", "clogd_74": 3.0},
+        {"active_moiety_id": "FXM-004", "pka_most_basic": 9.0}
+      ]
+    },
+    "src.fixture.props.pubchem": {
+      "kind": "fixture_property_lookup",
+      "calculator": "pubchem",
+      "records": [
+        {"active_moiety_id": "FXM-001", "mw": 342.4, "tpsa": 65.0, "hbd": 1},
+        {"active_moiety_id": "FXM-002", "mw": 145000.0},
+        {"active_moiety_id": "FXM-003", "mw": 410.5, "tpsa": 95.0, "hbd": 2, "clogp": 3.4},
+        {"active_moiety_id": "FXM-004", "mw": 298.3, "tpsa": 45.0, "hbd": 1}
+      ]
+    },
+    "src.fixture.props.rdkit": {
+      "kind": "fixture_property_calculation",
+      "calculator": "rdkit",
+      "note": "deliberately offers a ClogD value, which the calculator policy forbids: RDKit implements no pH-dependent logD",
+      "records": [{"active_moiety_id": "FXM-004", "clogd_74": 2.2}]
+    },
+    "src.fixture.potency": {
+      "kind": "fixture_potency_study",
+      "records": [
+        {"potency_id": "POT-001", "active_moiety_id": "FXM-001", "metric": "MEC", "value": 100.0, "units": "nM", "binding_state": "free", "biological_context": "GBM_fixture"},
+        {"potency_id": "POT-003", "active_moiety_id": "FXM-003", "metric": "IC50", "value": 50.0, "units": "nM", "binding_state": "free", "biological_context": "GBM_fixture"}
+      ]
+    },
+    "src.fixture.transporter": {
+      "kind": "fixture_transporter_assays",
+      "records": [
+        {"observation_id": "TRP-001", "transporter": "ABCB1_Pgp", "assay": "MDCKII-MDR1 bidirectional", "efflux_ratio": 4.2},
+        {"observation_id": "TRP-002", "transporter": "ABCG2_BCRP", "assay": "Caco-2 bidirectional", "efflux_ratio": 1.1},
+        {"observation_id": "TRP-003", "transporter": "ABCB1_Pgp", "assay": "Abcb1a/b knockout mouse brain Kp", "result": "inconclusive"}
+      ]
+    },
+    "src.fixture.exposure": {
+      "kind": "fixture_clinical_pk_study",
+      "records": [
+        {"measurement_id": "EXP-001A", "matrix": "brain_tissue_non_enhancing", "concentration": 40.0, "units": "nM", "binding_state": "free"},
+        {"measurement_id": "EXP-001B", "matrix": "brain_tissue_non_enhancing", "concentration": 900.0, "units": "nM", "binding_state": "total"},
+        {"measurement_id": "EXP-001C", "matrix": "brain_tissue_non_enhancing", "concentration": 5000.0, "units": "nM", "binding_state": "free"},
+        {"measurement_id": "EXP-002", "matrix": "plasma", "concentration": 1200.0, "units": "nM", "binding_state": "free"},
+        {"measurement_id": "EXP-003", "matrix": "csf", "concentration": 30.0, "units": "nM", "binding_state": "free"}
+      ]
+    },
+    "src.fixture.nebpi": {
+      "kind": "fixture_nebpi_criterion_observations",
+      "note": "stands in for the published studies that would supply each NEBPI criterion row"
+    },
+    "src.fixture.delivery": {
+      "kind": "fixture_delivery_requirement_evidence",
+      "note": "stands in for the pharmacology evidence supporting a delivery-requirement assignment"
+    }
+  }
+}

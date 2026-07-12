@@ -1,0 +1,87 @@
+{
+  "schema_id": "spot.stage04_method_safety.v1",
+  "method_id": "safety_taxonomy_v1",
+  "method_version": "1.0.0",
+  "description": "Label-safety and GBM treatment-scenario evidence taxonomy. Stage 4 emits EVIDENCE ROWS ONLY. It never emits a green/amber/red traffic light, a composite tolerability score, or a prescribing recommendation.",
+
+  "prohibited_outputs": {
+    "statement": "The following must never appear in any Stage-4 artifact. A test scans every emitted artifact for these keys and fails the build if one appears.",
+    "forbidden_field_names": ["traffic_light", "green_amber_red", "safety_score", "tolerability_score", "clinical_recommendation", "recommendation", "prescribe", "is_safe", "overall_safety", "composite_score", "risk_score"],
+    "reason": "Spot is decision-support, not a prescriber, a PK/tox oracle or a substitute for clinical/regulatory/safety expertise. A single combined clinical score would hide exactly the provenance this stage exists to preserve.",
+    "supersedes": "This replaces the 'safety / synergy sub-panel (traffic light)' sketch in the original 04_PKPD/README.md."
+  },
+
+  "evidence_states": {
+    "allowed": ["label_supported", "literature_supported", "signal_only", "no_evidence_found", "not_evaluated"],
+    "definitions": {
+      "label_supported": "Stated in a specific, cited section of a current regulatory label (SPL/openFDA/EMA), bound to setid/application + label version + effective date + raw response hash.",
+      "literature_supported": "Stated in a cited public publication, bound to a source record.",
+      "signal_only": "A disproportionality/spontaneous-report signal (e.g. FAERS). Hypothesis-generating ONLY.",
+      "no_evidence_found": "The named sources WERE searched and returned nothing for this item.",
+      "not_evaluated": "The item was not searched in any source."
+    },
+    "hard_rules": [
+      "no_evidence_found MUST NOT render as 'safe', 'no risk', 'negative' or a green state. It is a statement about the SEARCH, not about the drug. Every emitted row carries renders_as_safe=false and an explicit display_text saying so.",
+      "not_evaluated MUST NOT render as no_evidence_found.",
+      "signal_only can never establish incidence, causality, safety or a contraindication."
+    ]
+  },
+
+  "faers_policy": {
+    "accepted": false,
+    "if_ever_accepted": {
+      "evidence_state": "signal_only",
+      "cannot_establish": ["incidence", "causality", "safety", "contraindication", "labelled warning"],
+      "required_disclaimer": "Spontaneous-report disproportionality. Reporting rates are not incidence; no denominator; subject to reporting, indication and notoriety bias."
+    },
+    "note": "No FAERS adapter is implemented in this pass. The evidence state exists so that a future adapter cannot enter through any other door."
+  },
+
+  "label_sections": {
+    "source_id": "dailymed_spl_structure_probe",
+    "code_system": "2.16.840.1.113883.6.1",
+    "code_system_name": "LOINC",
+    "verified_against_live_spl": true,
+    "map": {
+      "boxed_warning":       {"loinc": "34066-1", "display_name": "Boxed Warning section",           "finding_type": "boxed_warning"},
+      "contraindications":   {"loinc": "34070-3", "display_name": "CONTRAINDICATIONS SECTION",       "finding_type": "contraindication"},
+      "warnings_precautions":{"loinc": "43685-7", "display_name": "WARNINGS AND PRECAUTIONS SECTION","finding_type": "warning_precaution"},
+      "drug_interactions":   {"loinc": "34073-7", "display_name": "DRUG INTERACTIONS SECTION",       "finding_type": "labeled_interaction"},
+      "adverse_reactions":   {"loinc": "34084-4", "display_name": "ADVERSE REACTIONS SECTION",       "finding_type": "adverse_reaction"}
+    },
+    "note": "LOINC codes were read from live DailyMed SPL responses (see sources.json: dailymed_spl_structure_probe), not from model memory. Only the codes and element paths were taken; no drug content from the probes is used as evidence."
+  },
+
+  "finding_types": ["boxed_warning", "contraindication", "warning_precaution", "labeled_interaction", "adverse_reaction"],
+
+  "gbm_scenarios": {
+    "description": "Named GBM treatment scenarios. Each is a SEPARATE evidence lane. They are never merged into one 'GBM safety' verdict.",
+    "values": [
+      {"scenario_id": "temozolomide",          "label": "Concomitant temozolomide"},
+      {"scenario_id": "radiation",             "label": "Concomitant radiotherapy"},
+      {"scenario_id": "corticosteroid_exposure","label": "Corticosteroid exposure (e.g. dexamethasone)"},
+      {"scenario_id": "antiseizure_therapy",   "label": "Antiseizure therapy"},
+      {"scenario_id": "perioperative_setting", "label": "Perioperative setting (craniotomy/resection)"}
+    ]
+  },
+
+  "interaction_types": {
+    "description": "Kept separate; never collapsed into one interaction flag.",
+    "values": [
+      {"interaction_type": "pk_interaction",                "label": "Pharmacokinetic interaction (e.g. CYP/UGT/transporter mediated)"},
+      {"interaction_type": "overlapping_toxicity",          "label": "Overlapping toxicity"},
+      {"interaction_type": "marrow_effects",                "label": "Myelosuppression / marrow effects"},
+      {"interaction_type": "infection_liability",           "label": "Infection liability"},
+      {"interaction_type": "immune_activation_autoimmunity","label": "Immune activation / autoimmunity liability"},
+      {"interaction_type": "bleeding",                      "label": "Bleeding"},
+      {"interaction_type": "qt_cardiac",                    "label": "QT / cardiac effects"},
+      {"interaction_type": "mechanistic_antagonism",        "label": "Mechanistic antagonism (e.g. an agent that would blunt the intended pharmacology)"}
+    ]
+  },
+
+  "hard_rules": [
+    "Never summarize a label from memory. Every label_supported row must quote/cite an exact labeled section of an exact label version, bound to a raw response hash.",
+    "One evidence row per finding. No aggregation across findings, scenarios or interaction types.",
+    "Stage 4 does not decide whether a scenario is acceptable. It reports what the sources say and what was not evaluated."
+  ]
+}

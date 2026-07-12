@@ -1,0 +1,930 @@
+{
+  "acquisition": {
+    "acquisition_id": "6bfc2ab3d2300a67a83ea141f5e07f86",
+    "acquisition_manifest_sha256": "4250981dcf03cb4a02502d501e6bbb7a8c8b26abbc25d912264cc4a1691fad86",
+    "acquisition_policy_version": "stage3-acquire-public-v1",
+    "adaptive_expansion_permitted": false,
+    "artifact_class": "analysis",
+    "chembl_activity_potency_state": "not_evaluated",
+    "deferred_sources": {
+      "depmap": "not_evaluated",
+      "lincs": "not_evaluated",
+      "open_targets": "not_evaluated",
+      "pubchem": "not_evaluated",
+      "rxnorm": "not_evaluated"
+    },
+    "direct_binding_sha256": "491c65aa59a1cea1b29068fc61c08afea855b6d4b50a6eb40609c4469d02780d",
+    "direct_run_id": "d25b236f2030c609",
+    "frozen_target_queue_sha256": "89310ee091966023570c6d8ea994b9b47e3e9a5e151c713041d949be6a251d07",
+    "licenses": {
+      "chembl": "CC BY-SA 3.0",
+      "uniprot": "CC BY 4.0"
+    },
+    "n_acquired_public": 23,
+    "n_not_acquired": 6,
+    "n_pages": 23,
+    "n_query_genes": 12,
+    "n_query_targets": 22,
+    "n_request_groups": 23,
+    "n_synthetic_fixture": 0,
+    "per_arm_target_counts": {
+      "away_from_A": 11,
+      "toward_B": 11
+    },
+    "source_releases": {
+      "chembl": "ChEMBL_37",
+      "uniprot": "2026_02"
+    },
+    "sources": [
+      "chembl",
+      "uniprot"
+    ],
+    "top_per_arm": 25,
+    "verification": {
+      "all_pass": true,
+      "n_checks": 41,
+      "n_failed": 0,
+      "report_sha256": "0ab1b4f9d45c2d797200dce237e0a8ac284b8c665afa06590e365d760cb13f7f",
+      "verifier": "druglink.verify_acquisition"
+    }
+  },
+  "arms_are_independent": true,
+  "artifact_class": "analysis",
+  "bundle_id": "s3_be0f05c07b3f6330",
+  "candidates": [
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL1789844",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL1789844",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "approved",
+      "form_ids": [
+        "CHEMBL:CHEMBL1789844"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "IPILIMUMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f109ce9a9a2330615394db7468fcc7259dd75d2b211921b53aedff112528f3f0"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000163599"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL2108370",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "opposed",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL2108370",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL2108370"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [
+        "toward_B"
+      ],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "INOLIMOMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f9f68ceb70853bd0ddd6d734f14a2d8fe49df431964e800802bed9953cebbcb2"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000134460"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL2108658",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL2108658",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "approved",
+      "form_ids": [
+        "CHEMBL:CHEMBL2108658"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "TREMELIMUMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f109ce9a9a2330615394db7468fcc7259dd75d2b211921b53aedff112528f3f0"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000163599"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL2109366",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL2109366",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL2109366"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "ANTI-TAC 90 Y-HAT",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f9f68ceb70853bd0ddd6d734f14a2d8fe49df431964e800802bed9953cebbcb2"
+      ],
+      "stage3_evidence_classes": [
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "no_direction_compatible_evidence",
+      "stage4_assessment_status": "not_queued",
+      "target_ensembls": [
+        "ENSG00000134460"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL2109367",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL2109367",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL2109367"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "LMB-2",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f9f68ceb70853bd0ddd6d734f14a2d8fe49df431964e800802bed9953cebbcb2"
+      ],
+      "stage3_evidence_classes": [
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "no_direction_compatible_evidence",
+      "stage4_assessment_status": "not_queued",
+      "target_ensembls": [
+        "ENSG00000134460"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL4297871",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL4297871",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL4297871"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "CAMIDANLUMAB TESIRINE",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f9f68ceb70853bd0ddd6d734f14a2d8fe49df431964e800802bed9953cebbcb2"
+      ],
+      "stage3_evidence_classes": [
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "no_direction_compatible_evidence",
+      "stage4_assessment_status": "not_queued",
+      "target_ensembls": [
+        "ENSG00000134460"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL4297876",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL4297876",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL4297876"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "ZALIFRELIMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f109ce9a9a2330615394db7468fcc7259dd75d2b211921b53aedff112528f3f0"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000163599"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL4594456",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL4594456",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL4594456"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "CADONILIMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f109ce9a9a2330615394db7468fcc7259dd75d2b211921b53aedff112528f3f0"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000163599"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL4650419",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL4650419",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL4650419"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "QUAVONLIMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f109ce9a9a2330615394db7468fcc7259dd75d2b211921b53aedff112528f3f0"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000163599"
+      ]
+    },
+    {
+      "active_moiety_id": "AM:CHEMBL:CHEMBL4650483",
+      "arm_evidence_states": [
+        {
+          "arm_evidence_state": "observed_perturbation",
+          "desired_arm": "away_from_A",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "away_from_A",
+          "origin_type": "pathway_node"
+        },
+        {
+          "arm_evidence_state": "unresolved",
+          "desired_arm": "toward_B",
+          "origin_type": "direct_target"
+        },
+        {
+          "arm_evidence_state": "not_annotated",
+          "desired_arm": "toward_B",
+          "origin_type": "pathway_node"
+        }
+      ],
+      "candidate_id": "AM:CHEMBL:CHEMBL4650483",
+      "claude_science_review_status": "not_required",
+      "development_state_aggregate": "investigational",
+      "form_ids": [
+        "CHEMBL:CHEMBL4650483"
+      ],
+      "identity_conflicts": [],
+      "identity_status": "resolved",
+      "inverse_direction_hypothesis_arms": [],
+      "inverse_direction_support": [],
+      "n_direct_gene_edges": 2,
+      "n_edges": 2,
+      "n_potency_rows": 0,
+      "observed_perturbation_arms": [
+        "away_from_A"
+      ],
+      "opposed_arms": [],
+      "pathway_hypothesis_arms": [],
+      "potency_state": "not_evaluated",
+      "preferred_name": "ERFONRILIMAB",
+      "source_record_ids": [
+        "83525b814c9b7bae84c8bb5d7ce600a57109fd4aafdcdcd474d9efa064857cee",
+        "f109ce9a9a2330615394db7468fcc7259dd75d2b211921b53aedff112528f3f0"
+      ],
+      "stage3_evidence_classes": [
+        "measured_perturbation",
+        "no_supporting_evidence"
+      ],
+      "stage4_assessment_reason": "direction_compatible_observed_perturbation",
+      "stage4_assessment_status": "queued",
+      "target_ensembls": [
+        "ENSG00000163599"
+      ]
+    }
+  ],
+  "canonical_content_sha256": "be0f05c07b3f6330693a6e64fdd2b8ceab4a2a9d074803f161f0c2dca2ed36a9",
+  "combined_objective_permitted": false,
+  "counts": {
+    "drug_mapping": {
+      "mapped": 4,
+      "refused": 0,
+      "unmapped": 32
+    },
+    "n_active_moieties": 10,
+    "n_arm_levers": 36,
+    "n_candidate_arm_summaries": 20,
+    "n_candidates": 10,
+    "n_dispositions": 46,
+    "n_edges": 20,
+    "n_forms": 10,
+    "n_mechanism_assertions": 10,
+    "n_pathway_nodes": 0,
+    "n_pending_claude_science_review": 0,
+    "n_potency_rows": 0,
+    "n_screen_rows": 18,
+    "n_stage4_not_queued": 3,
+    "n_stage4_queued": 7,
+    "n_target_entities": 3,
+    "n_unique_immutable_keys": 36,
+    "per_arm": {
+      "away_from_A": {
+        "direct_target": {
+          "n_edges": 10,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 7,
+          "n_opposed": 0,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 3
+        },
+        "n_arm_direction_measured": 11,
+        "n_edges": 10,
+        "n_ensembl_mapped": 14,
+        "n_evaluable": 11,
+        "n_ranked": 11,
+        "n_rows": 18,
+        "pathway_node": {
+          "n_edges": 0,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 0,
+          "n_opposed": 0,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 0
+        }
+      },
+      "toward_B": {
+        "direct_target": {
+          "n_edges": 10,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 0,
+          "n_opposed": 1,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 9
+        },
+        "n_arm_direction_measured": 11,
+        "n_edges": 10,
+        "n_ensembl_mapped": 14,
+        "n_evaluable": 11,
+        "n_ranked": 11,
+        "n_rows": 18,
+        "pathway_node": {
+          "n_edges": 0,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 0,
+          "n_opposed": 0,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 0
+        }
+      }
+    }
+  },
+  "created_at": null,
+  "data_status": "acquired_public_responses",
+  "deferred_lanes": {
+    "depmap": "not_evaluated",
+    "gbm_context": "not_evaluated",
+    "lincs": "not_evaluated",
+    "open_targets": "not_evaluated",
+    "perturb2state": "not_evaluated",
+    "pubchem": "not_evaluated",
+    "rxnorm": "not_evaluated"
+  },
+  "desired_arms": [
+    "away_from_A",
+    "toward_B"
+  ],
+  "directional_evidence_statuses": [
+    "observed_perturbation",
+    "inverse_direction_hypothesis",
+    "pathway_hypothesis",
+    "opposed",
+    "unresolved"
+  ],
+  "document_sha256": "db5d89731f75f57c4eed77d7bb3edd7ebacff78d9dc95d34ff6b63a8b540fbc3",
+  "drug_mapping_statuses": [
+    "mapped",
+    "unmapped",
+    "refused"
+  ],
+  "evidence_classes_are_unordered": true,
+  "gene_and_pathway_evidence_are_never_merged": true,
+  "headline_arm_permitted": false,
+  "inference_status": "not_calibrated",
+  "inverse_direction_hypothesis_is_never_observed_gain_of_function": true,
+  "method": {
+    "adapters_sha256": "aaa4935686c9c911c4f383b9b775c176ccfff21e6867c0b40937fecd4cc36304",
+    "armlever_policy_version": "stage3-armlever-v1-two-arm",
+    "candidate_rank_permitted": false,
+    "code_tree_sha256": "57139c846dbe5612d7f2e494959e929cf32b9840828d970a582f8a75f1117cd2",
+    "combined_objective_permitted": false,
+    "direction_policy_version": "stage3-direction-v4-workflow-states",
+    "env_lock_sha256": "838ed43a1de01944c6f7bca28464c5bde7f774c409f759927755b22efb7edec9",
+    "headline_arm_permitted": false,
+    "identity_policy_version": "stage3-identity-v2",
+    "joint_context_policy_version": "stage3-joint-context-v2-typed-pareto-tier",
+    "pathway_node_is_never_a_measurement": true,
+    "pathway_policy_version": "stage3-pathways-v2-numeric-enrichment-typed-science-refs",
+    "potency_policy_version": "stage3-potency-v2",
+    "promotion_and_eligibility_vocabulary_is_retired": true,
+    "schemas_sha256": "2d87cbe2cab38e4e929fb9d56b6c0a315b90dd583fb50db45462fda6cd7bdb74",
+    "stage2_joint_context_never_infers_drug_direction": true,
+    "stage3_method_version": "stage3-druglink-v4-workflow-states",
+    "stage4_assessment_is_not_promotion_or_recommendation": true,
+    "target_policy_version": "stage3-targets-v1",
+    "vocabularies_sha256": "ef7f1eabf185860900998c1bb196da08f7c8095a4f9987a02c1c1ac7435bd545",
+    "workflow_policy_version": "stage3-workflow-v1-states-not-promotion"
+  },
+  "origin_types": [
+    "direct_target",
+    "pathway_node"
+  ],
+  "pathway_hypotheses": {
+    "n_nodes": 0,
+    "n_pathways": 0,
+    "pathway_contract_status": "consumer_proposal_pending_stage2_owner_agreement",
+    "pathway_lane": "not_evaluated",
+    "reason": "no_stage2_pathway_document_supplied"
+  },
+  "schema_version": "spot.stage03_drug_annotation.v1",
+  "stage2_joint_context": {
+    "joint_context_policy_version": "stage3-joint-context-v2-typed-pareto-tier",
+    "joint_ordering_method_id": "not_provided",
+    "joint_status": "not_provided",
+    "joint_status_values": [
+      "both_arms",
+      "away_from_A_only",
+      "toward_B_only",
+      "opposed",
+      "not_evaluable"
+    ],
+    "pareto_tier": "not_provided",
+    "pareto_tier_is_a_tier_label_not_a_score": true,
+    "pareto_tier_rule": "positive_integer_from_1_or_null_when_not_jointly_evaluable",
+    "rewritten_by_stage3": false,
+    "stage2_joint_context": "not_provided",
+    "used_to_infer_drug_direction": false,
+    "used_to_rank_or_filter_arms": false
+  },
+  "stage3_evidence_classes": [
+    "measured_perturbation",
+    "inverse_direction_hypothesis",
+    "pathway_hypothesis",
+    "no_supporting_evidence"
+  ],
+  "stage3_never_alters_direct_ranks_or_stage2_pareto_tiers": true,
+  "stage4_assessment_note": "a stage-4 assessment computes PK/safety properties; it is not biological promotion and not a recommendation",
+  "stage4_assessment_statuses": [
+    "queued",
+    "not_queued"
+  ],
+  "table_hashes": {
+    "active_moieties": "feacc33e0d79b7d30a55345eac52d6537bcc71019f84d3c9f3ed012d23b6e1a7",
+    "arm_levers": "82c867c5a523fef97070ceb044ece2970b984d7ef02cf6865f60200ba19374ce",
+    "candidate_arm_summaries": "5fe755d5342d97748d4f24d2d66431a0d197cde17d6c813097f9dd5a47ba9b94",
+    "candidates": "6591e160c6350bd33294830f0aa20e6d920e7b673858e6861a85d7581c4dcd98",
+    "cross_arm": "fc218bf3379efc9b1dd27c4785ae58659ee8e8c4c124a6f76f93aafa41a79637",
+    "dispositions": "a823b55fbff55f3fcb04117b67886e6e784ef6de80c18a095362521b203d0fb6",
+    "drug_form_relations": "a8d5e1ff361d017bdbb3ff5f9adf9825da79a13387a70b382dcf5ac8c41725d1",
+    "drug_forms": "02c73bee29f9511a0069162bdf7481fa84281f329d33aed8bc5d6a3d754993a1",
+    "drug_identifiers": "4d51dc600f73fb7cb92b742f21cb887f5c9368f25919657db54bffad7286bb52",
+    "drug_mapping": "5fc81c33e9c99c6f1c72bbcc80d3e197f9312d13e0083b3c25b164a806a5c801",
+    "mechanism_assertions": "6e67054ac5d505481e03122ca78fe0de706f8bf6b0967a61077a560c292c0998",
+    "pathway_nodes": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "pathways": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "potency_evidence": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "source_records": "a5d56af642a0095ad12ba4f87b3fb35f1e1ffc1e6eb3342b8e02a7452345db2d",
+    "target_drug_edges": "6d74dd978ce13ed4377fb3c2a043dd504c6ec6d610d00f731e7184327caa577b",
+    "target_entities": "b5c46ce59647927a9a11b65584c9c4dd9b880f1f68963f5982eddc453290c5bf",
+    "target_entity_components": "c7fa9930f04e1cc348c4f444d02e339749f57c96d233c5e1182de7a32bb976c6"
+  },
+  "upstream": {
+    "direct_analysis_condition": "StimX",
+    "direct_file_sha256": {
+      "axis.json": "ab20dbfff81b3e31673708e66f073f3fea61958a67d27736144a881c97b9065e",
+      "contributing_guides.parquet": "74aa488489a3784864435723a8255a26e991d647c5dce866eb5bd294ecd4c735",
+      "donor_support.parquet": "66c722d9db7bc6eb7005d587a125f3bc2eda1f38a26fe1e4fbc29967ed421128",
+      "gene_universe.json": "9db5854a5d93e344f8060b2c35a2ad8b037122fd27421473f19657be9eff2049",
+      "guide_support.parquet": "227689aa9f251f68020d57ef0f4fd9808fbf1ddfd07d28638b26f97d2275239f",
+      "input_manifest.json": "7fe8ae0410629fa3986be0436f317f03d900984047e0a97ceacccc7b49a4f402",
+      "masks.parquet": "bf62b40a008a1b7c7ea25c7634a02b7899986acdde4a5599a54985c5c500a1dd",
+      "provenance.json": "56a21bd7de3e6858fa57b54783152f359b0973e85e1a1654b3403768055432d8",
+      "screen.parquet": "adc381a287d55d8621ba844647c088eb4627829d06fdf553cdb1adeb0468fc58",
+      "verification.json": "b394c1c784fbf3edfaac6f4fb3af3328af2a294f651d8d94dbb46be5de7c9a63"
+    },
+    "direct_gene_universe_sha256": "5e0599fe94a85a03b878cf31bd91a150b59766ed496489d43202daadaa6ac8b0",
+    "direct_lane": "research_only",
+    "direct_lane_declared": "research_only",
+    "direct_mask_sha256": "1649f28a9e05ba22747092537cd6c1c7f1204bd4cbfaaed8428ec172b0d8c110",
+    "direct_question_id": "rq_b760ca49d4ab59bc8d2d668efc61e6de",
+    "direct_row_count": 18,
+    "direct_run_binding_sha256": "d25b236f2030c609ea9d02c09dbe6b2c8e7cb59a1a096056a02cf0f32a855a3d",
+    "direct_run_id": "d25b236f2030c609",
+    "direct_selection_id": "rq_43d32f0d13d6b71b1ec4e078b8955462",
+    "direct_source_target_count": 18,
+    "direct_stage2_method": {
+      "arm_evaluable_column": {
+        "away_from_A": "A_evaluable",
+        "toward_B": "B_evaluable"
+      },
+      "arm_formula": {
+        "away_from_A": "-sign_A * delta_A",
+        "toward_B": "sign_B * delta_B"
+      },
+      "arm_rank_column": {
+        "away_from_A": "rank_away_from_A",
+        "toward_B": "rank_toward_B"
+      },
+      "arms": [
+        "away_from_A",
+        "toward_B"
+      ],
+      "combined_objective_permitted": false,
+      "effect_layer_primary": "log_fc",
+      "effect_layer_sensitivity": "zscore",
+      "formula_id": "spot.stage02.direct.formula.masked_program_delta.v1",
+      "headline_arm_permitted": false,
+      "method_id": "spot.stage02.direct.masked_program_projection",
+      "method_version": "stage2-direct-v5-pooled-main-two-arm",
+      "rank_dtype": "Int64",
+      "rank_population": "arm_evaluable_and_non_null_canonical_score",
+      "rank_tie_break": "target_id_ascending"
+    },
+    "direct_verifier": {
+      "exit_code": 0,
+      "n_checks": 147,
+      "n_failed": 0,
+      "report_sha256": "3bc06949748e4ac99c25a30d28db04407cc39a0fa564ee6a20a23aaf887022ce",
+      "verifier_argv": [
+        "python",
+        "-m",
+        "direct.verify_run",
+        "--run-dir",
+        "<run>",
+        "--inputs-root",
+        "<inputs>"
+      ],
+      "verifier_module": "direct.verify_run"
+    },
+    "stage1_release": {
+      "hashes": {
+        "code_canonical_sha256": "bac90579227fed0a18fc496e6be2cb38e5a7085284e979d422323b5fb81a123b",
+        "code_raw_sha256": "def5cbf734b7082b27755963bb9a96c5d48cc6a3ddc727aec6c84257a8144ca0",
+        "environment_canonical_sha256": "6db18ed83168e380b71141b7d2537af052110ff2dbbad20a69d8c56e7f5629ad",
+        "environment_raw_sha256": "6b9f0fffe632ca495a9b0e7d1b9dffe3800d7d0f931fd020020b0c6a7db9a2fa",
+        "gate_spec_canonical_sha256": "921727148eb5c31c1a7d651bda03e551af0c8f342335f0b681da31ba09945f9e",
+        "gate_spec_raw_sha256": "ad2c0765158a48537d82c21e5fbb463368219d8f1068f45652e75b5502585032",
+        "input_manifest_canonical_sha256": "ee83bfa557d477ccf5f2844e736c410a5951456b74251d640a9e97c189d005cb",
+        "input_manifest_raw_sha256": "9ff67242c9477d2cfdc7a25ce1d66c9ed985726d44677ffa77460bcc0dba9dd6",
+        "method_version": "stage1-continuous-v3.0.1",
+        "registry_canonical_sha256": "e3e0cb96bc127bf8209596f20edad87c28af3bc63f7a4a2b4ef4c01830124ef3",
+        "registry_raw_sha256": "01745a0c8ae8ebc6e4f036b00f410774a1a45c99fff081cdd03bae885cea7472",
+        "release_manifest_raw_sha256": "bf2613c70061129bd57d1e9c24c93ab3e81100ba0f89eeb92c0cd75d9c1802cd",
+        "scores_canonical_sha256": "ccdabdda13489109de38afa38d5c85e5083f5d117e4fe829340a71a17391a99a",
+        "scores_raw_sha256": "9afd04b20ac630dfd24905bd556d9a77cf9a0aa4dcfe638157123c4d9674a82b",
+        "validation_canonical_sha256": "86344b8715b62891601fda36db87da372725e7722d5d85501966241d77229f12",
+        "validation_raw_sha256": "0b6be2481aae9311b44a0c641f196a59804183a3b52a0b9000786d7ea82eeace"
+      },
+      "kind": "research",
+      "method_version": "stage1-continuous-v3.0.1",
+      "n_production_selectable": 0
+    },
+    "stage1_selection": {
+      "contract_sha256": "5ac4efa16f76a291024bb1eaf116fff80a2ea4460e9b4ee8bcb9abd5f3ad55ee",
+      "question_id": "rq_b760ca49d4ab59bc8d2d668efc61e6de",
+      "selection_id": "rq_43d32f0d13d6b71b1ec4e078b8955462",
+      "stage1_method_version": "stage1-continuous-v3.0.1",
+      "stage1_validation_sha256": "0b6be2481aae9311b44a0c641f196a59804183a3b52a0b9000786d7ea82eeace",
+      "stage1_validation_status": "bound"
+    },
+    "stage3_artifact_class": "analysis",
+    "upstream_gate_context": {
+      "direct_lane": "research_only",
+      "note": "upstream context only; Stage 3 does not gate on it",
+      "stage1_gate_passed": false,
+      "stage1_n_selectable": 0
+    }
+  }
+}

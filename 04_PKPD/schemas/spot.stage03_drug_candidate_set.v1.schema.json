@@ -1,0 +1,465 @@
+{
+  "$defs": {
+    "ActiveMoiety": {
+      "additionalProperties": false,
+      "description": "Identity of what is actually in the body.\n\nSalt / prodrug / metabolite mapping is explicit or the candidate is rejected: a\nsilent salt-vs-moiety mix-up corrupts MW, exposure and every join downstream.",
+      "properties": {
+        "active_moiety_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Active Moiety Id",
+          "type": "string"
+        },
+        "active_moiety_name": {
+          "title": "Active Moiety Name",
+          "type": "string"
+        },
+        "administered_form": {
+          "default": "active_moiety",
+          "enum": [
+            "active_moiety",
+            "salt",
+            "prodrug",
+            "ester",
+            "other"
+          ],
+          "title": "Administered Form",
+          "type": "string"
+        },
+        "administered_form_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Administered Form Name"
+        },
+        "inchikey": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{14}-[A-Z]{10}-[A-Z]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inchikey"
+        },
+        "mapping_source_record_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapping Source Record Id"
+        },
+        "maps_to_active_moiety_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maps To Active Moiety Id"
+        },
+        "unii": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z0-9]{10}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unii"
+        }
+      },
+      "required": [
+        "active_moiety_id",
+        "active_moiety_name"
+      ],
+      "title": "ActiveMoiety",
+      "type": "object"
+    },
+    "CompoundIds": {
+      "additionalProperties": false,
+      "properties": {
+        "chembl_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chembl Id"
+        },
+        "drugbank_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Drugbank Id"
+        },
+        "pubchem_cid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pubchem Cid"
+        },
+        "rxcui": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rxcui"
+        }
+      },
+      "title": "CompoundIds",
+      "type": "object"
+    },
+    "DirectionCompatibility": {
+      "enum": [
+        "compatible",
+        "incompatible",
+        "unknown"
+      ],
+      "title": "DirectionCompatibility",
+      "type": "string"
+    },
+    "Namespace": {
+      "description": "Preserved from Stage 3, never upgraded here.\n\n`fixture` matches Stage 3's third namespace: a synthetic engine exercise that is not\nevidence about anything and can never become production.",
+      "enum": [
+        "production",
+        "research_only",
+        "fixture"
+      ],
+      "title": "Namespace",
+      "type": "string"
+    },
+    "Stage3Binding": {
+      "additionalProperties": false,
+      "description": "The exact Stage-3 document this candidate set was adapted from.\n\nPopulated by `stage3_adapter.py` from a real Stage-3 emission. It is None only for\nthe engine's own internal fixtures, which are labelled as such.",
+      "properties": {
+        "adapter_id": {
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "adapter_version": {
+          "title": "Adapter Version",
+          "type": "string"
+        },
+        "canonical_content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Canonical Content Sha256",
+          "type": "string"
+        },
+        "document_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Document Sha256",
+          "type": "string"
+        },
+        "production_candidate": {
+          "title": "Production Candidate",
+          "type": "boolean"
+        },
+        "stage3_document_id": {
+          "title": "Stage3 Document Id",
+          "type": "string"
+        },
+        "stage3_eligible": {
+          "title": "Stage3 Eligible",
+          "type": "boolean"
+        },
+        "stage3_method": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Stage3 Method",
+          "type": "object"
+        },
+        "stage3_namespace": {
+          "$ref": "#/$defs/Namespace"
+        },
+        "stage3_schema_version": {
+          "title": "Stage3 Schema Version",
+          "type": "string"
+        },
+        "stage3_source_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Stage3 Source Status",
+          "type": "object"
+        },
+        "stage3_table_contract_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage3 Table Contract Sha256"
+        },
+        "stage3_table_contract_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage3 Table Contract Version"
+        },
+        "stage3_upstream": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Stage3 Upstream",
+          "type": "object"
+        },
+        "stage4_eligible": {
+          "title": "Stage4 Eligible",
+          "type": "boolean"
+        },
+        "table_hashes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Table Hashes",
+          "type": "object"
+        }
+      },
+      "required": [
+        "stage3_schema_version",
+        "stage3_document_id",
+        "stage3_namespace",
+        "canonical_content_sha256",
+        "document_sha256",
+        "stage3_eligible",
+        "stage4_eligible",
+        "production_candidate",
+        "adapter_id",
+        "adapter_version"
+      ],
+      "title": "Stage3Binding",
+      "type": "object"
+    },
+    "Stage3Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "active_moiety": {
+          "$ref": "#/$defs/ActiveMoiety"
+        },
+        "candidate_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "compound_ids": {
+          "$ref": "#/$defs/CompoundIds"
+        },
+        "direction_compatibility": {
+          "$ref": "#/$defs/DirectionCompatibility"
+        },
+        "drug_effect_direction": {
+          "enum": [
+            "up",
+            "down",
+            "unspecified"
+          ],
+          "title": "Drug Effect Direction",
+          "type": "string"
+        },
+        "mechanism": {
+          "title": "Mechanism",
+          "type": "string"
+        },
+        "namespace": {
+          "$ref": "#/$defs/Namespace"
+        },
+        "program_direction": {
+          "enum": [
+            "up",
+            "down",
+            "unspecified"
+          ],
+          "title": "Program Direction",
+          "type": "string"
+        },
+        "stage3_evidence_source_record_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Stage3 Evidence Source Record Ids",
+          "type": "array"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "active_moiety",
+        "compound_ids",
+        "target",
+        "mechanism",
+        "program_direction",
+        "drug_effect_direction",
+        "direction_compatibility",
+        "namespace"
+      ],
+      "title": "Stage3Candidate",
+      "type": "object"
+    }
+  },
+  "$id": "spot.stage03_drug_candidate_set.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "PROVISIONAL, ADAPTER-BOUND — authored unilaterally by Stage 4 and NOT agreed with Stage 3, which has not landed (03_druglink/ is scaffolding and emits nothing). This is what Stage 4 is willing to CONSUME, not a description of an existing producer. Expect reconciliation via a Stage-3 -> Stage-4 adapter plus a version bump here. Content-addressed: candidate_rows_sha256 is the sha256 of the canonical JSON of the candidate rows (sorted by candidate_id, sorted keys, no whitespace, floats rounded to 10 dp, timestamps/labels/paths excluded), and the Stage-4 firewall recomputes it rather than trusting it.",
+  "properties": {
+    "candidate_rows_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Rows Sha256",
+      "type": "string"
+    },
+    "candidate_set_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Set Id",
+      "type": "string"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/Stage3Candidate"
+      },
+      "minItems": 1,
+      "title": "Candidates",
+      "type": "array"
+    },
+    "is_fixture": {
+      "default": false,
+      "title": "Is Fixture",
+      "type": "boolean"
+    },
+    "namespace": {
+      "$ref": "#/$defs/Namespace"
+    },
+    "schema_id": {
+      "const": "spot.stage03_drug_candidate_set.v1",
+      "title": "Schema Id",
+      "type": "string"
+    },
+    "stage3_binding": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Stage3Binding"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "stage3_method_version": {
+      "title": "Stage3 Method Version",
+      "type": "string"
+    },
+    "stage3_run_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Stage3 Run Id",
+      "type": "string"
+    },
+    "upstream_contrast_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Upstream Contrast Id"
+    },
+    "upstream_gene_lever_set_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Upstream Gene Lever Set Sha256"
+    }
+  },
+  "required": [
+    "schema_id",
+    "stage3_run_id",
+    "candidate_set_id",
+    "candidate_rows_sha256",
+    "namespace",
+    "stage3_method_version",
+    "candidates"
+  ],
+  "title": "Stage3DrugCandidateSet",
+  "type": "object",
+  "x-spot-stage3-contract-status": {
+    "adapter": "analysis/stage3_adapter.py (spot.stage34_adapter.v1)",
+    "internal_form_note": "Stage3DrugCandidateSet is the Stage-4-internal normalized form, NOT Stage 3's wire format. Stage 3's real schemas live in 03_druglink/schemas/.",
+    "production_blocked_because": "Stage 3 reports 0 selectable Stage-1 pairs, so no production spot.stage03_drug_candidate_set.v1 instance exists yet.",
+    "production_stage3_producible_today": false,
+    "stage3_documents": [
+      "spot.stage03_drug_candidate_set.v1 (production)",
+      "spot.stage03_research_annotation.v1 (research_only)",
+      "spot.fixture.stage03_bundle.v1 (fixture)"
+    ],
+    "stage3_implementation_landed": true,
+    "stage3_location": "03_druglink/ (106 tests + independent verifier)",
+    "status": "reconciled_via_adapter",
+    "validated_against_real_stage3_output": true
+  }
+}

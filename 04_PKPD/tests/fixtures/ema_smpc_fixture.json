@@ -1,0 +1,25 @@
+{
+  "_fixture_notice": "FIXTURE. Synthetic cached EMA SmPC extract in the DECLARED shape accepted by analysis/label_adapters.py::parse_ema_product_information. That shape is NOT verified against a live EMA response (EMA_ADAPTER_STATUS = shape_declared_unverified_against_live_source) — see 04_PKPD/METHODS.md, Limitations. Invented product; no real claim.",
+  "product_name": "FIXTURIB 10 mg tablets (FIXTURE)",
+  "active_substances": ["fixturib"],
+  "procedure_number": "EMEA/H/C/FIXTURE0001",
+  "revision": "4",
+  "revision_date": "2026-02-20",
+  "sections": [
+    {
+      "section_number": "4.3",
+      "section_title": "Contraindications",
+      "items": ["FIXTURE: Hypersensitivity to the fixture active substance or to any of the fixture excipients."]
+    },
+    {
+      "section_number": "4.4",
+      "section_title": "Special warnings and precautions for use",
+      "items": ["FIXTURE: Fixture neutropenia has been observed; monitor fixture blood counts."]
+    },
+    {
+      "section_number": "4.5",
+      "section_title": "Interaction with other medicinal products",
+      "items": ["FIXTURE: Fixture enzyme-inducing antiseizure medicinal products may reduce fixturib plasma concentrations."]
+    }
+  ]
+}
