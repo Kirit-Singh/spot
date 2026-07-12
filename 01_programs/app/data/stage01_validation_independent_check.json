@@ -1,0 +1,48 @@
+{
+  "schema": "spot.stage01_validation_independent_check.v1",
+  "method_version": "stage1-continuous-v3.0.1",
+  "purpose": "Generator != verifier record for the T7b validation artifact. Provenance only: it records that the lead independently observed the artifact's integrity + representative gates. It contains NO gate reinterpretation and NO T8/selectability decision. It contains no host name, user name, absolute/home path, session/frame id, or workspace locator.",
+  "artifact_verified": {
+    "repo_path": "01_programs/app/data/stage01_validation.json",
+    "raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+    "byte_identical_across_all_lead_verified_copies": true,
+    "byte_identical_note": "verified identical by raw SHA-256 across every copy the lead inspected; the copy locations are internal and intentionally omitted from this release artifact.",
+    "artifact_self_hash_validation_canonical_sha256": "c849dd7caf58a6735812e18399404ae01cbb40a5d73c2efdb9182b7f4278f173",
+    "identity_note": "raw file SHA-256 is authoritative; the artifact's self-declared canonical hash is carried but not independently reproduced (its canonicalization recipe was not re-derived), consistent with pre-flight rule 2."
+  },
+  "hash_bundle_reconciliation": {
+    "reconciled_against": "committed frozen Stage-1 v3 artifacts (repo)",
+    "gate_spec_sha256": {"embedded": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3", "committed_file_raw_sha256": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3", "match": true},
+    "bins_v3_csv_raw_sha256": {"embedded": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8", "committed_file_raw_sha256": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8", "match": true},
+    "bins_v3_content_sha256": {"embedded": "32f926cace9322752aba10557b1bafe3e0c8f9d8f285551fcd2d3648bd335f78", "matches_committed": true},
+    "controls_v3_csv_raw_sha256": {"committed_file_raw_sha256": "79764283a3429a103ed87a41b88a0c094fac84a7f46eebcb034d156e8573de75", "provenance": "artifact loaded controls from the committed controls_v3.csv; confirmed by artifact integrity primary_redraw_matches_committed=true"},
+    "input_h5ad_raw_sha256": {"embedded": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43", "matches_committed": true, "authoritative_identity": true},
+    "input_h5ad_canonical_sha256": {"value": "4ba50ccdf759115297b92bdfb7ad65c5c952b84093314245d21fe9af19d0f714", "status": "ARCHIVED Phase-1 diagnostic (not a current verified hash)"},
+    "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
+    "coef_matrix_sha256": "ed1e26da9f255fdcddf56c5f4de113bb41147e34221a4faac35d79bf665c6e8c"
+  },
+  "independent_recomputations": {
+    "reproducibility_status": "independently_observed_not_reproducible_from_release",
+    "reproducibility_note": "These checks were computed independently by the lead this session but are NOT reproducible from the committed release artifacts alone: they require the pinned input h5ad (raw SHA-256 in inputs_by_hash.h5ad_raw_sha256; fetchable at the pinned HF revision e5fcf98b56a9302921d402e97fc5a190bd88f9a6), a numpy/scipy/pandas/h5py/pyarrow environment, and non-trivial compute. The independent verifier code is NOT committed. This record therefore asserts INDEPENDENT OBSERVATION, not a from-release reproducibility guarantee.",
+    "environment_identity": {"python": "3.11.15", "numpy": "2.4.6", "scipy": "1.17.1", "pandas": "2.3.3", "h5py": "3.16.0", "pyarrow": "24.0.0", "captured_from": "the conda interpreter that actually ran the independent scripts this session"},
+    "inputs_by_hash": {"h5ad_raw_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43", "bins_raw_sha256": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8", "controls_raw_sha256": "79764283a3429a103ed87a41b88a0c094fac84a7f46eebcb034d156e8573de75", "gate_spec_raw_sha256": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3", "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316"},
+    "checks": [
+      {"name": "controls_reconstruct", "provenance": "LEAD independent recompute", "method_semantics": "recompute per-gene mean of the pinned pre-normalized/log1p .X matrix (author-provided median-total-normalized ~9819 + log1p; no raw-counts layer) via chunked float64 CSR column-sum over all 396k -> divN bins -> detected-minus-marker eligible pool -> keyed SHA-256 draws; compare to committed controls", "denominator": "2100 control rows across 11 primary programs + activation_predictor", "observed": "byte-identical (0 mismatches on program_id,bin,rank)"},
+      {"name": "bins_acceptance", "provenance": "LEAD independent recompute", "method_semantics": "load committed bins; compare marker-bin assignments and per-occupied-bin candidate_counts to the Phase-1 checkpoint; reconstruct all controls", "denominator": "53 marker genes; all occupied marker bins; 2100 controls", "observed": "marker_bins 0 mismatches; occupied-bin candidate_counts 0 mismatches; 2100 controls reconstruct"},
+      {"name": "scores_generator_integrity_artifact_reported", "provenance": "GENERATOR self-check reported by the artifact (field integrity.primary_score_exact_equal_after_5dp_round in stage01_validation.json); NOT an independent lead computation", "denominator": "396000 cells x 11 programs = 4356000 values", "observed": "4356000/4356000 exact after canonical 5dp rounding"},
+      {"name": "scores_lead_independent_sample", "provenance": "LEAD independent recompute from the pinned pre-normalized/log1p .X matrix (author-provided median-total-normalized ~9819 + log1p; no raw-counts layer) + committed controls (distinct from and much smaller than the generator check above)", "denominator": "250 unique cells x 11 programs = 2750 score values, plus 250 activation-adjusted residuals, plus 6000 overlay-vs-full value comparisons over 40000 overlay cells", "observed": "sampled scores max abs err vs emitted = 4.999999999949489e-06 (<= 5e-6 inclusive; consistent with exact-after-5dp because scores are stored at 5dp); actadj sample max abs err 4.999999999949489e-06; overlay==full max abs err 0.0; one summary median matched", "claim_scope": "this independent result claims ONLY the 2750 sampled score values (+250 actadj, +6000 overlay comparisons) it actually recomputed, NOT the full 4356000-value population"},
+      {"name": "gate_lomo_failing", "provenance": "LEAD independent recompute", "method_semantics": "cell-level LOMO (Spearman of panel_mean_full vs panel_mean_minus_gene, average ranks no p-value; median|delta|/IQR) per donor at a condition; report worst over markers x donors", "denominator": "th1_like (4 markers) and cd4_ctl_like (6 markers), each x 4 donors, at condition Rest", "observed": "th1_like|Rest worst rho=0.764173 (D1), ratio=0.584872, matching the artifact values 0.7641729607325386 and 0.5848723435562414 to 6 dp; cd4_ctl_like|Rest also FAIL independently"},
+      {"name": "gate_passing_and_advisory", "provenance": "LEAD independent recompute", "method_semantics": "condition_measurability (score IQR>0 and >=2 panel genes detected in >=1% cells per donor); pair_redundancy (|Spearman(A,B)|>=0.90 in >=3/4 donors)", "denominator": "cd4_ctl_like|Rest x 4 donors; th1_like~treg_like|Rest x 4 donors", "observed": "condition_measurability cd4_ctl_like|Rest PASS; pair_redundancy th1_like~treg_like|Rest |rho|>=0.90 in 0/4 -> not redundant (matches artifact)"}
+    ],
+    "follow_up_proposal": "To upgrade these to reproducible-from-pinned-input, commit a single clean, path-parameterized, no-leak verifier under 01_programs/analysis/ (inputs by argument, not hardcoded), record its code SHA-256 + exact environment lock + the input hashes above, as a separately reviewed step. Not done in this preservation commit."
+  },
+  "t7b_outcome_recorded_as_is": {
+    "stage1_selectable_by_condition": "0 of 33 (every program x condition fails the pre-registered cell-level LOMO gate)",
+    "stage2_base_portability": "10/11 pass; th9_like fails (0 panel genes in effect universe)",
+    "advisory_flags": "empty (pair/off-axis/donor)",
+    "overlay_release": "not_ok (1 overlay_distributions failure; blocks overlay release only, separate from selectability)",
+    "cp10k_v2_comparison": "undefined/descriptive",
+    "note": "This is the honest result of the pre-registered gate AS WRITTEN. No panel/threshold/control/seed retuning was performed. Any reclassification or additional test is a separate proposal and is NOT applied here."
+  },
+  "no_reinterpretation_assertion": "This record and the accompanying validation artifact preserve the pre-registered gate's output verbatim. No gate reinterpretation, no T8 decision, no manufactured selectable pair."
+}
