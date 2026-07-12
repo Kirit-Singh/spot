@@ -12,6 +12,9 @@ import type { ScienceEvidenceRecord } from './ScienceEvidence';
 import { isDemoGate } from './pages';
 import type { PageKey } from './pages';
 import type { ScaffoldRegion } from '../shell/StageScaffold';
+import { readStage1Selection, contrastTitle, clearStage1Selection, NO_SELECTION_TITLE } from './contrastTitle';
+import type { Stage1Selection } from './contrastTitle';
+import { selectionFixtureRaw } from '../fixtures/selection.fixture';
 
 export function StageIsland({
   page,
@@ -31,8 +34,40 @@ export function StageIsland({
   demoEvidence?: ScienceEvidenceRecord | null;
 }) {
   const demo = isDemoGate();
+  // Header title = the carried Stage-1 selection contrast (the nav already shows the stage
+  // name). Real selection via the validated storage bridge; demo falls back to the fixture.
+  const selection: Stage1Selection | null =
+    readStage1Selection() ?? (demo ? (selectionFixtureRaw as Stage1Selection) : null);
+  const contrast = contrastTitle(selection);
+  const headerTitle = contrast ?? NO_SELECTION_TITLE;
+  // no selection → only the word "Programs" is a link (persistent underline) back to Stage 1
+  const headerNode = contrast ? undefined : (
+    <>
+      Select populations in{' '}
+      <a
+        href="01_page.html"
+        className="underline decoration-ink underline-offset-[3px] hover:text-accent hover:decoration-accent"
+      >
+        Programs
+      </a>{' '}
+      →
+    </>
+  );
+  // offer Clear only when a selection is bound; clears the bridge and returns to Programs
+  const onClearSelection = contrast
+    ? () => {
+        clearStage1Selection();
+        window.location.assign('01_page.html');
+      }
+    : undefined;
+  void subtitle; // stage name now lives only in the nav tab
   return (
-    <PageShell page={page} subtitle={subtitle}>
+    <PageShell
+      page={page}
+      subtitle={headerTitle}
+      subtitleNode={headerNode}
+      onClearSelection={onClearSelection}
+    >
       {demo ? (
         <>
           <DemoBar />

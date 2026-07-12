@@ -23,6 +23,8 @@ interface DrawerState {
 export function PageShell({
   page,
   subtitle,
+  subtitleNode,
+  onClearSelection,
   selection = null,
   methodsProvenance = null,
   methodsNotes = [],
@@ -30,6 +32,8 @@ export function PageShell({
 }: {
   page: PageKey;
   subtitle: string;
+  subtitleNode?: React.ReactNode;
+  onClearSelection?: () => void;
   selection?: StageSelection | null;
   methodsProvenance?: Provenance | null;
   methodsNotes?: ProvNote[];
@@ -55,6 +59,8 @@ export function PageShell({
       <div data-shell-root className="flex h-screen flex-col overflow-hidden">
         <TopBar
           subtitle={subtitle}
+          subtitleNode={subtitleNode}
+          onClearSelection={onClearSelection}
           onOpenMethods={() => opener.open(`${subtitle} — methods`, methodsProvenance, methodsNotes)}
         />
         <MpaNav active={page} />

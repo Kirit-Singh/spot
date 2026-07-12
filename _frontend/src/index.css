@@ -54,14 +54,18 @@ input:focus-visible,
  */
 .stage-nav {
   font-size: clamp(10.5px, 1.2vw, 13px);
+  /* match the frozen Programs `.nav` line-height (normal, ~1.19) so the strip is the
+     same height as Programs — Tailwind/preflight would otherwise inherit 1.5 → +4px. */
+  line-height: normal;
   padding: 10px 20px;
-  column-gap: 2px;
+  /* match frozen `.nav{gap:3px}` — separator gets 3px on both sides (3px here + 3px wrapper gap in MpaNav) */
+  column-gap: 3px;
 }
 .stage-nav__step {
   padding: 6px 12px;
 }
 .stage-nav__sep {
-  padding: 0 2px;
+  padding: 0 1px;
 }
 @media (max-width: 1080px) {
   .stage-nav {

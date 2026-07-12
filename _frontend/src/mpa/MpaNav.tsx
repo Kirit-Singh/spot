@@ -25,15 +25,15 @@ export function MpaNav({ active }: { active: PageKey }) {
             {p.label}
           </>
         );
-        const base = 'stage-nav__step flex items-center gap-1.5 rounded-lg font-medium';
+        const base = 'stage-nav__step flex items-center gap-[7px] rounded-[9px]';
         return (
-          <div key={p.key} className="flex items-center">
+          <div key={p.key} className="flex items-center gap-[3px]">
             {on ? (
-              <div ref={activeRef} aria-current="page" className={`${base} text-ink shadow-[inset_0_0_0_1.5px_var(--accent)]`}>
+              <div ref={activeRef} aria-current="page" className={`${base} font-semibold text-ink shadow-[inset_0_0_0_1.5px_var(--accent)]`}>
                 {inner}
               </div>
             ) : (
-              <a href={hrefWithSearch(p.href)} className={`${base} text-muted hover:text-ink`}>
+              <a href={hrefWithSearch(p.href)} className={`${base} font-medium text-muted hover:text-ink`}>
                 {inner}
               </a>
             )}
