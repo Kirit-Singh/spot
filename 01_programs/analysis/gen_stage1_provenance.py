@@ -47,6 +47,14 @@ SOURCE_ARTIFACTS = [
 PROV_TOP = ("citations_provenance_note", "registry_sha256",
             "panel_provenance_schema_version", "panel_provenance")
 
+# ── Tiered hashing: Tier-2 DISPLAY-ONLY fields ──────────────────────────────────────────────────────
+# These are presentation-only and are deliberately EXCLUDED from the Tier-1 scientific registry content
+# hash. The UI display label lives in the seed (stage01_umap_seed.json) — that is the display source of
+# truth. Carrying a label inside the hashed registry would make a cosmetic relabel move registry_sha256
+# (+ the raw + scorer-projection hashes) and force a full scientific re-derivation, which is exactly the
+# Tier-1/Tier-2 leak the tiered model closes. They are stripped before registry_sha256 is computed/written.
+DISPLAY_ONLY_FIELDS = ("display_label",)
+
 
 def _raw(path):
     return hashlib.sha256(open(path, "rb").read()).hexdigest()
@@ -319,6 +327,8 @@ def integrate(reg, base, intended_only, actadj_inherited, predictor_inherited, c
         "lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). "
         "Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a "
         "naming framework only and is never attached to any marker as evidence.")
+    # Tier-2 display-only fields (labels) never enter the Tier-1 scientific content hash (see DISPLAY_ONLY_FIELDS)
+    _strip_display_only(reg)
     # move schema key next to schema_version, keep registry_sha256 last
     _reorder_top(reg)
     reg["registry_sha256"] = _registry_sha256(reg)
@@ -349,6 +359,15 @@ def _reorder_top(reg):
         if k not in out:
             out[k] = v
     reg.clear(); reg.update(out)
+
+
+def _strip_display_only(reg):
+    """Remove Tier-2 DISPLAY_ONLY_FIELDS from every program + sensitivity lane so a cosmetic relabel never
+    moves the Tier-1 registry_sha256 / raw / scorer-projection hashes. Idempotent (pop with default)."""
+    for grp in ("programs", "sensitivity_lanes"):
+        for p in reg.get(grp, []):
+            for f in DISPLAY_ONLY_FIELDS:
+                p.pop(f, None)
 
 
 def main():

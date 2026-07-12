@@ -208,7 +208,7 @@ SCORE_DOMAINS = {k: _domain(allcols[k]) for k in sorted(allcols)}
 # No argmax across fields anywhere; scores are compared only within a field.
 DISPLAY_LABEL = {
     "diff_naive_score": "Naïve-like", "diff_activated_score": "Activated",
-    "diff_memory_score": "Memory / adhesion-like", "diff_checkpoint_score": "Checkpoint-high",
+    "diff_memory_score": "Memory / adhesion-like", "diff_checkpoint_score": "Checkpoint+",
     "treg_like_score": "Treg-like", "cd4_ctl_like_score": "CD4 CTL-like",
     "th1_like_score": "Th1-like", "th2_like_score": "Th2-like", "th17_like_score": "Th17-like",
     "tfh_like_score": "Tfh-like", "th9_like_score": "Th9-like",

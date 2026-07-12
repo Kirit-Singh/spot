@@ -9,7 +9,7 @@
     "effect_universe": "d27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b",
     "gate_spec": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
     "input_manifest": "3b13488716a366676813bff567da91f216a426c94bd1fe43c22824f73b26d521",
-    "registry_v3": "91ba78dfeb2d8cf739fd683fb8368fb3993e38254d4d55a4496af1ced870e646",
+    "registry_v3": "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f",
     "requirements": "3b630c2c0f1ded6d527d6d3aedd62c7ea519705f337dbf6ca3fec305a21bfc8c",
     "scores_parquet_staged": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
     "selectability_v3": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
@@ -20,10 +20,10 @@
     "validation": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
     "validation_semantics": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026"
   },
-  "registry_direct_canonical_content_sha256": "6039875cd12274c90c4a01127580d36060a90912151ba104d6027dcb5ec2be48",
-  "registry_scorer_projection_sha256": "9621067b677c2a579839c5ef98ce093d20de521e4871128c883a3830d6ea2f78",
-  "registry_self_declared_sha256": "2493896a98395250c91f2050a941059a5353b449133864e2f3711feff13b021b",
-  "registry_selfrule_recomputed_sha256": "2493896a98395250c91f2050a941059a5353b449133864e2f3711feff13b021b",
+  "registry_direct_canonical_content_sha256": "b80889971965c4897db65f81ae5a5b864cf86c362b6b886ef118de3c90042dda",
+  "registry_scorer_projection_sha256": "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85",
+  "registry_self_declared_sha256": "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa",
+  "registry_selfrule_recomputed_sha256": "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa",
   "selectability_direct_canonical_content_sha256": "520c904003015af7a6074cf4311e654b259c638d22384e45ef5bad3ea6657edc",
   "validation_direct_canonical_content_sha256": "1ab6c0e0dc7537ca06d94e66d8067581a2690d2653bb7f7354907d1d23ed7dbf"
 }

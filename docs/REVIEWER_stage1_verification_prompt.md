@@ -55,7 +55,9 @@ overlay drives the UMAP.
    re-fire on the donor selector (a defensible summary — flag only if presented as donor-uniform).
    The activation-adjusted CD4 CTL-like lane is selectable under "Sensitivity — see Methods" and must
    read as a descriptive sensitivity check, never a primary program.
-5. **Labels don't overclaim.** `Checkpoint-high` (not `Checkpoint+`); the modular-definition column
+5. **Labels don't overclaim.** The program display label is `Checkpoint+` (user-authorized 2026-07-12,
+   superseding `Checkpoint-high`; it denotes a high continuous checkpoint-gene score, not a categorical
+   "+" call). The descriptive burden sits on the modular-definition column, which
    reads `checkpoint-associated` / `cytotoxic-like` (RNA compatibility does not demonstrate
    exhaustion or cytotoxicity); Th9 is correctly degenerate ("Too sparse to shade", `stage2_selectable=false`
    — IL9/SPI1 absent). The Treg-like program is a candidate transcriptional program, not a confirmed

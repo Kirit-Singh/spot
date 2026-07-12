@@ -144,7 +144,7 @@ and reported** (Task 7b), never asserted away.
 
 ### Registry v3 — per-program record schema
 ```
-{ "score_field","program_id","display_label","family","role",
+{ "score_field","program_id","family","role",   /* display_label is Tier-2 (lives in the seed) — see "Tiered hashing convention" below; NOT in the hashed registry as of 2026-07-12 */
   "panel_genes_intended":[...], "panel_genes_measured":[...], "gene_ids":{symbol:ensembl},
   "coverage":{"n_intended","n_measured","genes_absent":[...],"in_effect_universe":[...]},
   "selection_rationale":{symbol:"why"}, "citations":["module-specific primary"],
@@ -165,6 +165,10 @@ selection_id              : hash(question_id, registry_sha256, method_version, i
 stage2_run_id             : hash(selection_id, stage2_method/config/mask/Perturb2State versions)
 ```
 Never load cached results by the biology-only `contrast_id` alone.
+> Implemented binding (v3.0.1): `selection_id` binds the **scorer VIEW** canonical hash
+> (`registry_scorer_view_sha256`, `5d1d8c36…`), the executable projection of the registry that carries no
+> display/citation/provenance — so it is invariant to Tier-2 edits. It is NOT the full-registry
+> `registry_sha256`. See "Tiered hashing convention".
 
 ### Selection contract schema (frozen; placeholders — materialized only on "Identify genes")
 ```
@@ -176,6 +180,33 @@ Never load cached results by the biology-only `contrast_id` alone.
 ```
 Rules: `A.program_id ≠ B.program_id`; identical `analysis_condition` both poles; no sensitivity field;
 no nonselectable program. A literal example lives only in `stage01_selection_demo.json`.
+
+### Tiered hashing convention (Tier-1 scientific vs Tier-2 display) — amended 2026-07-12
+Two tiers, so a cosmetic relabel never triggers a scientific re-derivation:
+
+**Tier-1 — SCIENTIFIC CONTENT** (frozen; a change re-derives + re-verifies the chain): program ids, panels
+(`panel_genes_*`, `gene_ids`), controls (`controls_by_bin`, bins, `sampling`), `coefficients`,
+`normalization`, `scoring_method`, `scores_canonical_content_sha256` (`43c4296d…`), `coordinates_sha256`
+(`c3d3a0a7…`), validation (`1c14cd28…`), selectability (`7c326a86…`), summary, effect-universe, and the
+per-marker `marker_provenance`/`panel_provenance`. The registry's own integrity hashes are Tier-1: raw file
+sha (`20f91fdd…`), `registry_sha256` (`84da49c9…`), and the scorer-projection invariant
+`registry_scorer_projection_sha256` (`008c1da1…`). **The Stage-2-bound registry hash is the executable
+scorer VIEW** (`stage01_stage2_registry_view.json` canonical content, `5d1d8c36…`) — what `selection_id`
+binds and `stage2_run_id` descends from.
+
+**Tier-2 — DISPLAY / PRESENTATION** (cheap; never touches Tier-1, never re-derives): program **display
+labels** (e.g. `Checkpoint+`), the page `SHORT` map, human-facing copy. Display labels live ONLY in the
+seed `stage01_umap_seed.json` `meta.programs[].display_label` (the UI source of truth); the seed is not
+hash-gated. `display_label` is **excluded from the registry**: `gen_stage1_provenance.py::_strip_display_only()`
+drops `DISPLAY_ONLY_FIELDS` before `registry_sha256` is computed, and the scorer projection strips it too
+(`verify_stage1_provenance.PROV_PROG`). Renaming a program = a seed + `SHORT`-map edit; it moves NO Tier-1
+hash and requires NO Stage-2 re-binding.
+
+**One-time reseal (2026-07-12):** moving `display_label` out of the registry advanced the three
+registry-derived Tier-1 pins ONCE — raw `91ba78df→20f91fdd`, `registry_sha256` `2493896a→84da49c9`,
+scorer-projection `9621067b→008c1da1`. The Stage-2-bound scorer VIEW / `selection_id` did NOT move
+(`5d1d8c36…` / fixture `4af0fbbb…`), so Stage-2 (audited GO `5694444e`) is unaffected. Every future
+label/copy rename is Tier-2 and free.
 
 ---
 

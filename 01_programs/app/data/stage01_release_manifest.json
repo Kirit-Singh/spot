@@ -53,7 +53,7 @@
       "location": "served"
     },
     "stage01_current.json": {
-      "raw_sha256": "dbf57101de611040a67eab0a51bcffa71688cf37904b3f247d41892296f6aece",
+      "raw_sha256": "b9a97af98174d0c8a96c5020908d14979b5fd9f2f57c053ddb75b08acf0b1a7e",
       "present": true,
       "location": "served"
     },
@@ -123,12 +123,12 @@
       "location": "analysis"
     },
     "gen_stage1_provenance.py": {
-      "raw_sha256": "7081f2395685b2012b508f34ef371f5a1febcc3b304d754cecf0e21d6b1c5c20",
+      "raw_sha256": "282dc2909326102653ab019d6e87901f98c8b0867b2c3d93531c2304f352db1c",
       "present": true,
       "location": "analysis"
     },
     "verify_stage1_provenance.py": {
-      "raw_sha256": "8328c047a1f9da260b393ccc54acfa162a3722ce511b03b66b26c1fe81c7aee0",
+      "raw_sha256": "3a5ba17505e0fa325788ddb67295ed3bb217b19f139e3d36f1627ca6cc084d30",
       "present": true,
       "location": "analysis"
     },
@@ -140,7 +140,7 @@
     "stage01_program_registry_v3.json": {
       "file": "stage01_program_registry_v3.candidate.json",
       "location": "release_staging_not_served",
-      "raw_sha256": "91ba78dfeb2d8cf739fd683fb8368fb3993e38254d4d55a4496af1ced870e646",
+      "raw_sha256": "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f",
       "present": true
     },
     "stage01_scores_full.parquet": {
@@ -180,5 +180,5 @@
       "present": true
     }
   },
-  "self_canonical_sha256": "6d723d76aedfb9ef76a2348ee8552c80b3d8662dfb5a5dbcd750fd22b27dae11"
+  "self_canonical_sha256": "4eb0beacac43c62ea0c88742169f932d814133f6a481a72638fc9bf5af7adac2"
 }

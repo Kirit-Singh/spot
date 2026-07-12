@@ -14,7 +14,6 @@
   {
    "score_field": "th1_like_score",
    "program_id": "th1_like",
-   "display_label": "Th1-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -334,7 +333,6 @@
   {
    "score_field": "th2_like_score",
    "program_id": "th2_like",
-   "display_label": "Th2-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -654,7 +652,6 @@
   {
    "score_field": "th17_like_score",
    "program_id": "th17_like",
-   "display_label": "Th17-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -1024,7 +1021,6 @@
   {
    "score_field": "tfh_like_score",
    "program_id": "tfh_like",
-   "display_label": "Tfh-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -1318,7 +1314,6 @@
   {
    "score_field": "treg_like_score",
    "program_id": "treg_like",
-   "display_label": "Treg-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -1769,7 +1764,6 @@
   {
    "score_field": "cd4_ctl_like_score",
    "program_id": "cd4_ctl_like",
-   "display_label": "CD4 CTL-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -2243,7 +2237,6 @@
   {
    "score_field": "th9_like_score",
    "program_id": "th9_like",
-   "display_label": "Th9-like",
    "family": "functional",
    "role": "primary",
    "panel_genes_intended": [
@@ -2460,7 +2453,6 @@
   {
    "score_field": "diff_naive_score",
    "program_id": "diff_naive",
-   "display_label": "Na\u00efve-like",
    "family": "differentiation",
    "role": "primary",
    "panel_genes_intended": [
@@ -2890,7 +2882,6 @@
   {
    "score_field": "diff_activated_score",
    "program_id": "diff_activated",
-   "display_label": "Activated",
    "family": "differentiation",
    "role": "primary",
    "panel_genes_intended": [
@@ -3260,7 +3251,6 @@
   {
    "score_field": "diff_memory_score",
    "program_id": "diff_memory",
-   "display_label": "Memory / adhesion-like",
    "family": "differentiation",
    "role": "primary",
    "panel_genes_intended": [
@@ -3624,7 +3614,6 @@
   {
    "score_field": "diff_checkpoint_score",
    "program_id": "diff_checkpoint",
-   "display_label": "Checkpoint-high",
    "family": "differentiation",
    "role": "primary",
    "panel_genes_intended": [
@@ -4095,7 +4084,6 @@
   {
    "score_field": "cd4_ctl_like_score_actadj",
    "program_id": "cd4_ctl_like_actadj",
-   "display_label": "CD4 CTL-like \u00b7 activation-adjusted sensitivity",
    "family": "sensitivity",
    "role": "sensitivity",
    "panel_genes_intended": [
@@ -4294,5 +4282,5 @@
   "not_a_production_or_selectability_promotion": "Provenance-only. The frozen 0/33 production-selectability result, overlay/app deployment gates, and the candidate pointer are unchanged."
  },
  "citations_provenance_note": "Per-program `citations` remain program-level references; per-marker PRIMARY provenance is now carried in structured `marker_provenance` and summarized in `panel_provenance`. 53/53 measured marker-program pairs carry a bounded primary-source locator, independently completed by the lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a naming framework only and is never attached to any marker as evidence.",
- "registry_sha256": "2493896a98395250c91f2050a941059a5353b449133864e2f3711feff13b021b"
+ "registry_sha256": "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa"
 }

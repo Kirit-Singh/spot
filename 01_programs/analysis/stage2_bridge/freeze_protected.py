@@ -82,19 +82,22 @@ def compute_baseline() -> dict:
 
 
 def _self_check(base: dict) -> None:
-    """canonical.py must reproduce the two independently-known frozen values."""
+    """canonical.py must reproduce the independently-known frozen values.
+    One-time reseal 2026-07-12: display_label reclassified as a Tier-2 display field and dropped from the
+    registry, so the three registry-derived pins advanced ONCE (self 2493896a→84da49c9, scorer-projection
+    9621067b→008c1da1, raw 91ba78df→20f91fdd). The Stage-2-bound scorer VIEW / selection_id is unchanged."""
     assert base["registry_self_declared_sha256"] == \
-        "2493896a98395250c91f2050a941059a5353b449133864e2f3711feff13b021b", \
+        "84da49c9bc6508b845c6d8527f6e1f2abc01d4d3abe74fbb74e377401b0aa7fa", \
         "registry self-declared sha drift"
     # Validates canonical_json + content_hash (sort_keys, compact seps, ensure_ascii)
     # against the registry's own frozen rule.
     assert base["registry_selfrule_recomputed_sha256"] == base["registry_self_declared_sha256"], \
         "canonical.py content_hash != registry self-declared rule (canonical.py drift)"
     assert base["registry_scorer_projection_sha256"] == \
-        "9621067b677c2a579839c5ef98ce093d20de521e4871128c883a3830d6ea2f78", \
+        "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85", \
         "scorer-projection invariant drift"
     assert base["raw_sha256"]["registry_v3"] == \
-        "91ba78dfeb2d8cf739fd683fb8368fb3993e38254d4d55a4496af1ced870e646", \
+        "20f91fdd2c02335790cc580bab034fa83f422678442c0c0fc1472e6b25386d4f", \
         "served registry raw sha drift"
 
 
@@ -104,7 +107,7 @@ if __name__ == "__main__":
     with open(BASELINE_PATH, "w") as fh:
         json.dump(base, fh, indent=2, sort_keys=True)
         fh.write("\n")
-    print("canonical.py self-check PASSED (2493896a + 9621067b reproduced)")
+    print("canonical.py self-check PASSED (84da49c9 + 008c1da1 reproduced; Tier-2 display de-baked)")
     print("wrote", os.path.relpath(BASELINE_PATH, ANALYSIS))
     for k, v in base["raw_sha256"].items():
         print(f"  {k:26s} {v}")

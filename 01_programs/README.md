@@ -114,7 +114,7 @@ without altering the immutable validation or any pre-registered gate/panel/score
 
 **Separate release statuses** (never conflated): a reproducible *measurement bundle* can be lockable
 while *production selection* stays fail-closed and *overlay/app deployment* stays blocked.
-- `measurement_bundle_lockable` — **true**: v3 registry (`91ba78df…`), full 396k×15 scores
+- `measurement_bundle_lockable` — **true**: v3 registry (`20f91fdd…`), full 396k×15 scores
   (`de63b496…`, canonical content `43c4296d…`), regenerated `by_program_condition` summary, scoring
   code, independent verifier + mutation suite, and a real Linux solver lock are all present and
   independently verified. This implies **nothing** about selectability or identity.

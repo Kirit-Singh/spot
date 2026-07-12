@@ -28,8 +28,11 @@ REGISTRY = os.path.join(DATA, "stage01_program_registry_v3.json")
 
 METHOD_VERSION = "stage1-continuous-v3.0.1"
 PROVENANCE_STATUS = "PRIMARY_LOCATORS_VERIFIED_BOUNDED"
-# The scoring projection of the registry (provenance-only keys removed) must never move.
-PRE_SCORING_PROJECTION_SHA256 = "9621067b677c2a579839c5ef98ce093d20de521e4871128c883a3830d6ea2f78"
+# The scoring projection of the registry (provenance- + Tier-2 display-only keys removed) must never move.
+# One-time reseal 2026-07-12: display_label reclassified as Tier-2 (dropped from the projection + the
+# registry), so this scorer-core invariant advanced 9621067b… → 008c1da1… ONCE. Future cosmetic relabels
+# are Tier-2 and do NOT move it (nor registry_sha256, raw, or the Stage-2-bound scorer VIEW).
+PRE_SCORING_PROJECTION_SHA256 = "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85"
 
 PINNED_SOURCE_SHA = {
     "stage01_panel_provenance_ledger.csv": "596a4435cbd729dbcbfa68df2adef730b1807fa9c0e8c39f0f102c284c4f3461",
@@ -41,7 +44,10 @@ PINNED_SOURCE_SHA = {
 
 PROV_TOP = ("citations_provenance_note", "registry_sha256",
             "panel_provenance_schema_version", "panel_provenance")
-PROV_PROG = ("selection_rationale", "citations", "citations_verification_status", "marker_provenance")
+# per-program keys removed from the scorer projection: Tier-1 provenance/rationale (not scoring inputs)
+# + Tier-2 display-only fields (display_label) so a cosmetic relabel can never move the scorer-core invariant.
+PROV_PROG = ("selection_rationale", "citations", "citations_verification_status", "marker_provenance",
+             "display_label")
 
 
 def _raw(path):

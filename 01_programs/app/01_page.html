@@ -36,10 +36,19 @@
   .nav .nstep.on{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--accent)}
   .nav .nstep.on .n{opacity:1;color:var(--accent)}
   .nav .nstep.off{opacity:.5;cursor:not-allowed}
+  .nav a.nstep.step{text-decoration:none;cursor:pointer;transition:color .12s}
+  .nav a.nstep.step:hover{color:var(--ink)}
+  .nav a.nstep.step:hover .n{opacity:.85}
   .nav .nsep{color:#D9D3C8;padding:0 1px}
   /* body */
   .body{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
   .plot{position:relative;border-right:1px solid var(--line);min-height:0;overflow:hidden}
+  /* grey loading state over the map while the 40k-cell shell parses/joins/draws (~250ms); the header + nav
+     stay interactive during the async fetch. Shown by default in HTML, hidden after the first resize()/draw. */
+  #maploading{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;gap:9px;background:var(--sunken);color:var(--muted);font-family:var(--mono);font-size:12px;letter-spacing:.02em}
+  #maploading .mlspin{width:13px;height:13px;border-radius:50%;border:2px solid rgba(0,0,0,.10);border-top-color:var(--accent);animation:mlspin .7s linear infinite}
+  @keyframes mlspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){#maploading .mlspin{animation:none}}
   canvas{width:100%;height:100%;display:block;cursor:grab}
   canvas.grabbing{cursor:grabbing}
   /* plot title now lives inline in the top-of-plot contrast toolbar (.ctbar) */
@@ -124,14 +133,21 @@
   .idbtn.ready{color:#fff;background:var(--accent);border-color:var(--accent);cursor:pointer}
   .idbtn.ready:hover{filter:brightness(1.06)}
   .idbtn.ready .pend{background:rgba(255,255,255,.22);color:#fff}
-  /* inline functional state (NOT a banner): preflight reason / display-vs-analysis mismatch / Stage-2-ready + contrast_id */
-  .ctstate{font-size:10px;line-height:1.4;max-width:236px;margin-top:1px}
+  /* ONE fixed status box under #lastrun ("Map generated"): every contrast-bar state renders here, one font,
+     coloured text + a leading severity icon — ✓ ready (accent) · ⊘ unable (amber) · ! error (red). It spans
+     the button pair (idbtn.left → clear.right), centred beneath "Map generated". white-space:pre-line lets a
+     forced \n put a second line under the first. */
+  .ctstate{font-size:10px;line-height:1.4;margin-top:1px;margin-left:calc(var(--chipw) + 6px);width:calc(var(--progw) + 12px + var(--dirw) + var(--condw));text-align:center;white-space:pre-line}
   .ctstate:empty{display:none}
-  .ctstate.warn{color:#B9770E}
-  /* the identical-programs error sits BELOW last run, red + centred */
+  .ctstate.warn{color:#B9770E;font-weight:600}
+  .ctstate.err{color:#C0392B;font-weight:600}
+  .ctstate.ok{color:var(--accent);font-weight:600}
+  .ctstate.ok::before{content:"✓ "}
+  .ctstate.warn::before{content:"⊘ "}
+  .ctstate.err::before{content:"! "}
+  /* legacy #ctErr slot retained in the DOM but unused — all states now render in the single #ctstate box */
   .cterr{font-size:10.5px;color:#C0392B;text-align:center;font-weight:500;line-height:1.35;margin-top:5px}
   .cterr:empty{display:none}
-  .ctstate.ok{color:var(--accent);font-family:var(--mono);font-size:9.5px;word-break:break-all}
   /* A→B conveyor belt on the plot (display-only; anchors are score-weighted centroids, no membership) */
   #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
   #skewline .skl{fill:none;stroke:rgba(30,27,22,.12);stroke-width:8;stroke-linecap:round}
@@ -256,7 +272,7 @@
     .nav{overflow-x:auto;white-space:nowrap;padding:8px 12px}
     .ctbar{left:8px;top:8px;--chipw:36px;--dirw:48px;--progw:98px;--condw:70px}
     .axsel.obj{max-width:88px}
-    .ctstate{max-width:200px}
+    .ctstate{max-width:none}
     .rail{padding:12px 14px}
   }
   /* contrast rail: active A and B fields, their swatches/scopes, and the encoding legend */
@@ -300,9 +316,9 @@
 <div class="top"><div class="hleft"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2026)</a></span></div><span class="dstools"><div class="lkwrap"><button id="linksBtn" class="methodstab" aria-expanded="false" aria-label="Data links"><span class="lkic">🔗</span><span class="tlbl">Links</span></button><div id="linksMenu" class="lkmenu"><a id="dsSrc" target="_blank" rel="noopener"></a><a id="dsHf" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></div></div><button id="provbtn" class="methodstab"><span class="ic">i</span><span class="tlbl">Methods &amp; provenance</span></button></span></div>
 <div class="nav">
   <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
-  <div class="nstep off"><span class="n">02</span>Skewing genes</div><span class="nsep">›</span>
-  <div class="nstep off"><span class="n">03</span>Drug link</div><span class="nsep">›</span>
-  <div class="nstep off"><span class="n">04</span>PK / PD · brain</div><span class="nsep">›</span>
+  <a class="nstep step" href="/02_page.html#/stage-2"><span class="n">02</span>Skewing genes</a><span class="nsep">›</span>
+  <a class="nstep step" href="/02_page.html#/stage-3"><span class="n">03</span>Drug link</a><span class="nsep">›</span>
+  <a class="nstep step" href="/02_page.html#/stage-4"><span class="n">04</span>PK / PD · brain</a><span class="nsep">›</span>
   <div class="nstep off"><span class="n">05</span>Trial</div>
 </div>
 
@@ -314,12 +330,13 @@
       <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" aria-label="From condition"></select></div>
       <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" aria-label="To condition"></select></div>
       <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">ID program skew genes →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">✕ Clear</button></div>
-      <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
       <div id="lastrun"></div>
+      <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
       <div id="ctErr" class="cterr" role="alert"></div>
       </div>
     </div>
     <canvas id="c"></canvas>
+    <div id="maploading" role="status" aria-live="polite"><span class="mlspin" aria-hidden="true"></span>Loading map…</div>
     <svg id="skewline" width="100%" height="100%" aria-hidden="true"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
     <div id="lblA" class="anchlbl"></div><div id="lblB" class="anchlbl"></div>
     <div class="viewctl" role="group" aria-label="Zoom and pan the map">
@@ -412,13 +429,17 @@
       <div class="regenrow">
         <div class="regenline">
           <button id="regenBtn" type="button" class="regenbtn">⟳ Regenerate overlay</button>
-          <span class="regenlast">Overlay last regenerated <b id="emittedAt" style="color:var(--ink2)">—</b>.</span>
+          <span class="regenlast">Map generated <b id="emittedAt" style="color:var(--ink2)">—</b>.</span>
         </div>
         <div id="regenHint" class="regenhint" hidden>
           <p>The workbench serves <b>static, content-addressed artifacts</b> — regeneration runs offline against the pinned Hugging Face revision, then <code>verify_reproduce.py</code> gates the SHA-256 (must reproduce <code>6e1665d1…</code>) before redeploy. Run:</p>
           <div class="regencmd"><code id="regenCmd">cd 01_programs/analysis && ./reproduce.sh</code><button id="regenCopy" type="button" class="regencopy">Copy</button></div>
         </div>
       </div>
+    </div></div>
+    <div class="pstep"><div class="pn">6</div><div class="pc">
+      <h4>Provenance &amp; status</h4>
+      <p id="pProdStatus" style="font-family:var(--mono);font-size:11px;line-height:1.75;color:var(--ink2)"></p>
     </div></div>
     <div class="ppapers">
       <div class="pph2">References</div>
@@ -453,17 +474,22 @@ let axisA={field:null,condition:'All',direction:'high',donor:'All'},
     axisB={field:null,condition:'All',direction:'high',donor:'All'};
 let sx,sy,ox,oy;
 // ── Stage-1 selection contract (spot.stage01_selection.v1) state + constants ──
-// program_id + stage2_selectable live in the program registry (NOT in the overlay meta.programs)
+// program_id + method provenance come from the v3.0.1 registry; base portability comes from the frozen validation
 let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
+// Production Stage-2 promotion status (frozen T7b: 0/33). READ-ONLY provenance surfaced in Methods —
+// it NEVER gates the research workflow. Research readiness is decided by base portability only.
+let PROD_READY=false,PROD_N_SELECTABLE=null,PROD_STATUS_LOADED=false;
 // each axis carries its own condition (enables cross-subset display comparisons); when both share one
 // REAL condition that value is the executable analysis_condition. Different timepoints render as a
 // display-only view (no screen — a screen needs one timepoint). donor scope is fixed to all.
-let objective='balanced_a_to_b',curContrastId=null,pfSeq=0;
+let curContrastId=null,pfSeq=0;
 const DATASET_ID='marson2025_gwcd4_perturbseq';
 const EFFECT_UNIVERSE_ID='marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad';
-const DONOR_SCOPE='all',STAGE1_METHOD_VERSION='stage1-continuous-v2';
-// acceptance anchors — preflight rejects the contrast if the live data drifts from these known-good hashes
-const EXPECT={registry:'1ac9f6b2c3a738e0f44119add5c4f72f61225372fedb3fa6dd8d5f6ae19e95fa',h5ad:'2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43',hf:'e5fcf98b56a9302921d402e97fc5a190bd88f9a6'};
+const DONOR_SCOPE='all';
+// ── v3.0.1 research-preview bindings, cross-bound through stage01_current.json (no hard-coded v2 hashes) ──
+// V3 = the research_preview_v3 block; BASE_PORTABLE = set of base-portable program_ids from the frozen
+// validation; V3_SUMMARY = the 396k full-universe summary that drives the Programs-over-time grid.
+let V3=null,V3_OK=false,BASE_PORTABLE={},V3_SUMMARY=null;
 // pan/zoom view transform, layered on top of the fit transform (default = fit view)
 let vk=1,vtx=0,vty=0;const VK_MIN=0.5,VK_MAX=12;
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -515,29 +541,97 @@ function swatchFor(f,v){
   return ramp(normScore(v,tf));
 }
 
-Promise.all([
-  fetch('./data/stage01_umap_seed.json').then(r=>{if(!r.ok)throw new Error('overlay HTTP '+r.status);return r.json();}),
-  fetch('./data/stage01_program_registry.json').then(r=>r.ok?r.json():null).catch(()=>null)
-]).then(([d,reg])=>{
+const V3_METHOD_ID='stage1-continuous-v3.0.1';
+// Deterministic display-only quantile domains recomputed from the JOINED 40k v3 score fields (NOT v2).
+// Per field: collect finite values, sort ascending, then percentile by linear interpolation on the rank
+// r=(p/100)*(n-1) — numpy 'linear' — with lo=floor(r), hi=ceil(r), value=v[lo]*(1-w)+v[hi]*w, w=r-lo.
+// Ties keep natural sorted order (a stable numeric sort). Changes color mapping only; no score is altered.
+function computeV3Domains(cellArr,fields){
+  const QS=[['p02',2],['p10',10],['p25',25],['p50',50],['p75',75],['p90',90],['p95',95],['p98',98],['p99',99]];
+  const pct=(s,p)=>{const n=s.length;if(!n)return null;const r=(p/100)*(n-1),lo=Math.floor(r),hi=Math.ceil(r);return lo===hi?s[lo]:s[lo]*(1-(r-lo))+s[hi]*(r-lo);};
+  const dom={};
+  fields.forEach(f=>{const vals=[];for(let i=0;i<cellArr.length;i++){const v=cellArr[i][f];if(v!=null&&!isNaN(v))vals.push(v);}
+    vals.sort((a,b)=>a-b);const d={};QS.forEach(([k,p])=>{d[k]=pct(vals,p);});dom[f]=d;});
+  return dom;
+}
+// STRICT loader — every v3 dependency is REQUIRED. Missing / wrong-schema / wrong-method / wrong-count /
+// hash-mismatch / cross-binding mismatch stops initialization; there is NO fallback to v2 scores/registry/40k.
+async function strictLoadV3(){
+  const T=async(u)=>{const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status+' '+u);return await r.text();};
+  const sha=async(t)=>{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');};
+  const d=JSON.parse(await T('./data/stage01_umap_seed.json'));                                 // frozen coordinate/design shell (required)
+  const cur=JSON.parse(await T('./data/stage01_current.json'));                                 // v3 binding hub (required)
+  if(cur.schema!=='spot.stage01_current.v2')throw new Error('current schema != spot.stage01_current.v2');
+  if(cur.method_version!==V3_METHOD_ID)throw new Error('current method != '+V3_METHOD_ID);
+  const v3=cur.research_preview_v3;
+  if(!v3||!v3.registry||!v3.overlay||!v3.summary||!v3.validation_raw_sha256||!Array.isArray(v3.base_portable_programs))throw new Error('research_preview_v3 binding incomplete');
+  if(v3.method_version!==V3_METHOD_ID)throw new Error('research_preview_v3 method != '+V3_METHOD_ID);
+  const regT=await T('./data/stage01_program_registry_v3.json'),regv3=JSON.parse(regT);         // v3 registry (required, verified)
+  if(regv3.schema_version!=='spot.stage01_program_registry.v3')throw new Error('registry schema_version != spot.stage01_program_registry.v3');
+  if(await sha(regT)!==v3.registry.raw_sha256)throw new Error('v3 registry raw-sha mismatch');
+  if(regv3.method_version!==V3_METHOD_ID||regv3.registry_sha256!==v3.registry.registry_sha256)throw new Error('v3 registry method/canonical mismatch');
+  if(!Array.isArray(regv3.programs)||regv3.programs.filter(p=>p.role!=='sensitivity').length<11)throw new Error('v3 registry program count');
+  const ovlT=await T('./data/stage01_umap_overlay_v3.json'),ovl3=JSON.parse(ovlT);              // v3 overlay (required, verified)
+  if(ovl3.schema!=='spot.stage01_umap_overlay.v3')throw new Error('overlay schema != spot.stage01_umap_overlay.v3');
+  if(await sha(ovlT)!==v3.overlay.raw_sha256)throw new Error('v3 overlay raw-sha mismatch');
+  if(ovl3.method_version!==V3_METHOD_ID||ovl3.n_cells!==40000||!Array.isArray(ovl3.cells)||ovl3.cells.length!==40000)throw new Error('v3 overlay method/count');
+  const sumT=await T('./data/stage01_summary_v3.json'),sum3=JSON.parse(sumT);                   // v3 summary (required, verified)
+  if(sum3.schema!=='spot.stage01_summary.v3')throw new Error('summary schema != spot.stage01_summary.v3');
+  if(await sha(sumT)!==v3.summary.raw_sha256)throw new Error('v3 summary raw-sha mismatch');
+  if(sum3.scoring_universe_n!==396000||!sum3.by_program_condition)throw new Error('v3 summary universe/shape');
+  if(sum3.method_version!==V3_METHOD_ID)throw new Error('v3 summary method != '+V3_METHOD_ID);
+  const valT=await T('./data/stage01_validation.json'),val=JSON.parse(valT);                    // frozen validation (required, verified)
+  if(val.schema!=='spot.stage01_validation.v1')throw new Error('validation schema != spot.stage01_validation.v1');
+  if(await sha(valT)!==v3.validation_raw_sha256)throw new Error('validation raw-sha mismatch');
+  if(!val.stage2_base_portability)throw new Error('validation stage2_base_portability missing');
+  if(val.method_version!==V3_METHOD_ID)throw new Error('validation method != '+V3_METHOD_ID);
+  return {d,cur,v3,regv3,ovl3,sum3,val};
+}
+// Join v3 scores onto the frozen coordinate shell by EXACT barcode. Requires: no duplicate barcodes in
+// either side, identical barcode sets, and EXACT x/y equality per barcode. Copies ONLY score fields;
+// seed x/y/donor/condition are preserved. Throws (fail-closed) on any violation. Returns the score fields.
+function joinV3Scores(cells,ovl3,regv3){
+  const sf=ovl3.score_fields||[],v3map={};ovl3.cells.forEach(c=>{v3map[c.barcode]=c;});
+  // fail-closed field-set gate (BEFORE any copy): never copy over a reserved seed/identity field, and require the
+  // overlay score fields to EXACTLY equal the primary+sensitivity score fields declared by the bound v3 registry.
+  const reserved=new Set(['barcode','x','y','donor','condition','cluster']);
+  sf.forEach(f=>{if(reserved.has(f))throw new Error('v3 overlay score field overlaps reserved seed field: '+f);});
+  if(new Set(sf).size!==sf.length)throw new Error('v3 overlay duplicate score fields');
+  const expected=new Set();
+  (regv3.programs||[]).forEach(p=>{if(p.score_field)expected.add(p.score_field);});
+  (regv3.sensitivity_lanes||[]).forEach(p=>{if(p.score_field)expected.add(p.score_field);});
+  if(sf.length!==expected.size||!sf.every(f=>expected.has(f)))throw new Error('v3 overlay score-field set != registry primary+sensitivity fields');
+  const seedUniq=new Set();cells.forEach(c=>seedUniq.add(c.barcode));
+  if(seedUniq.size!==cells.length)throw new Error('duplicate barcodes in coordinate shell');
+  if(Object.keys(v3map).length!==ovl3.cells.length)throw new Error('duplicate barcodes in v3 overlay');
+  if(cells.length!==ovl3.cells.length||!cells.every(c=>v3map[c.barcode]))throw new Error('v3 overlay barcode-set mismatch — refusing to join');
+  for(let i=0;i<cells.length;i++){const c=cells[i],s=v3map[c.barcode];if(s.x!==c.x||s.y!==c.y)throw new Error('v3 overlay coordinate mismatch at '+c.barcode);}
+  cells.forEach(c=>{const s=v3map[c.barcode];sf.forEach(f=>{c[f]=s[f];});});   // scores only; seed coordinates preserved
+  return sf;
+}
+strictLoadV3().then(({d,cur,v3,regv3,ovl3,sum3,val})=>{
   DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
-  // display-label overrides — cosmetic ONLY (never touch the frozen registry_sha256 / overlay hashes)
-  const LABEL_OVERRIDE={};  // map/pill labels use the frozen registry display_label (e.g. "Checkpoint-high"); no categorical "+" gate
-  programs.forEach(p=>{if(LABEL_OVERRIDE[p.score_field])p.display_label=LABEL_OVERRIDE[p.score_field];});
+  PROD_STATUS_LOADED=true;PROD_READY=cur.global_stage2_selectable===true;
+  PROD_N_SELECTABLE=((cur.release_statuses||{}).n_selectable_program_conditions);V3=v3;
+  // ── join verified v3.0.1 scores onto the frozen coordinate shell by EXACT barcode ──
+  const sf=joinV3Scores(cells,ovl3,regv3);
+  V3_OK=true;meta.method_version=ovl3.method_version;V3_SUMMARY=sum3;
+  meta.score_display_domains=computeV3Domains(cells,sf);                       // display domains from the joined v3 scores (NOT v2)
+  // base portability from the FROZEN validation (stage2_base_portable), NOT the registry boolean
+  Object.keys(val.stage2_base_portability).forEach(pid=>{BASE_PORTABLE[pid]=(val.stage2_base_portability[pid]||{}).stage2_base_portable===true;});
   programs.forEach(p=>progByField[p.score_field]=p);
-  programs.forEach(p=>transformFor(p.score_field));   // build + record each field's frozen display transform
-  // registry supplies program_id + stage2_selectable (absent from overlay meta.programs) + the frozen provenance hashes
-  if(reg&&Array.isArray(reg.programs)){reg.programs.forEach(p=>regByField[p.score_field]=p);
-    REGISTRY_SHA=reg.registry_sha256||'';
-    REGISTRY_OK=!!(REGISTRY_SHA&&programs.filter(p=>p.role!=='sensitivity').every(p=>regByField[p.score_field]&&regByField[p.score_field].program_id));}
-  METHOD_VERSION=meta.method_version||'';H5AD_SHA=(meta.source||{}).h5ad_sha256||'';HF_REV=(meta.source||{}).hf_revision||'';HF_REPO=(meta.source||{}).hf_repo||'';
-  // START EMPTY: no default contrast. From/To programs stay unset (placeholder) so the map shows the
-  // single-program gradient (default color-by = Naïve-like). Contrast + belt activate only once BOTH
-  // programs are chosen. The acceptance anchor (treg_like→th1_like@Stim48hr, balanced_a_to_b →
-  // 26b866f2ad813d71) is reproducible through the UI selections / __t.setContrast.
+  programs.forEach(p=>transformFor(p.score_field));   // display transform over the recomputed v3 domains
+  // program IDs + method provenance come from the v3.0.1 registry (keyed by score_field)
+  regv3.programs.forEach(p=>regByField[p.score_field]=p);
+  REGISTRY_SHA=regv3.registry_sha256||'';
+  REGISTRY_OK=!!(REGISTRY_SHA&&programs.filter(p=>p.role!=='sensitivity').every(p=>regByField[p.score_field]&&regByField[p.score_field].program_id));
+  METHOD_VERSION=V3.method_version;H5AD_SHA=V3.source_h5ad_raw_sha256;HF_REV=(meta.source||{}).hf_revision||'';HF_REPO=(meta.source||{}).hf_repo||'';
+  // START EMPTY: no default contrast; the map shows the single-program gradient (default = Naïve-like).
   buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildProgramTimeGrid();
   applyProgram();
   resize();
-}).catch(e=>{console.error('dataset load failed',e);var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ failed to load dataset</b>';});
+  var ml=document.getElementById('maploading');if(ml)ml.style.display='none';   // map drawn — drop the grey loading state
+}).catch(e=>{console.error('v3 load failed',e);var ml=document.getElementById('maploading');if(ml)ml.innerHTML='Map unavailable';var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ v3 load failed — analysis unavailable</b>';var b=document.getElementById('idgenes');if(b)b.disabled=true;});
 
 function buildHeader(){
   const s=meta.source;
@@ -573,17 +667,19 @@ function buildProgramTimeGrid(){
   const grid=document.getElementById('timeGrid'); if(!grid||!cells.length)return;
   const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
   // short labels for this compact grid only (full '-like' names stay in the tooltip + everywhere else)
-  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint-high',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
+  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint+',treg_like_score:'Treg',cd4_ctl_like_score:'CD4 CTL',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
   // modular nomenclature descriptors — NAMING only, not functional-state calls. RNA compatibility does
   // not demonstrate exhaustion or cytotoxicity, so those read 'checkpoint-associated' / 'cytotoxic-like'.
   const MOD={diff_naive_score:'naïve',diff_activated_score:'activated',diff_memory_score:'memory',diff_checkpoint_score:'checkpoint-associated',treg_like_score:'regulatory',cd4_ctl_like_score:'cytotoxic-like',th1_like_score:'type-1 helper',th2_like_score:'type-2 helper',th17_like_score:'type-17 helper',tfh_like_score:'follicular helper',th9_like_score:'type-9 helper'};
   const progs=programs.filter(p=>p.role!=='sensitivity');
-  const median=a=>{if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y);const m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
-  const vals={};progs.forEach(p=>vals[p.score_field]={Rest:[],Stim8hr:[],Stim48hr:[]});
-  cells.forEach(c=>{const cd=c.condition;if(!vals[progs[0].score_field][cd])return;progs.forEach(p=>vals[p.score_field][cd].push(c[p.score_field]));});
+  // medians come ONLY from the verified v3.0.1 396k full-universe summary (by_program_condition).
+  // There is NO 40k-overlay fallback: if the summary is unavailable the grid is unavailable — it must
+  // never silently change its scientific universe.
+  const bpc=(V3_SUMMARY&&V3_SUMMARY.by_program_condition)||null;
+  if(!bpc){grid.innerHTML='';return;}
   const med={},degen={};
   progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
-    med[p.score_field]={};conds.forEach(([k])=>{med[p.score_field][k]=median(vals[p.score_field][k]);});});
+    med[p.score_field]={};conds.forEach(([k])=>{const e=(bpc[p.score_field]||{})[k];med[p.score_field][k]=(e&&typeof e.median==='number')?e.median:null;});});
   // shared absolute scale across all non-degenerate medians → magnitude comparable across rows
   let gLo=Infinity,gHi=-Infinity;
   progs.forEach(p=>{if(degen[p.score_field])return;conds.forEach(([k])=>{const v=med[p.score_field][k];if(v<gLo)gLo=v;if(v>gHi)gHi=v;});});
@@ -612,8 +708,8 @@ function buildAxis(){
   const condOpts=conds.map(k=>`<option value="${k}">${CONDLAB[k]||k}</option>`).join('');
   document.querySelectorAll('.axsel.prog').forEach(s=>s.innerHTML=progOpts);
   document.querySelectorAll('.axsel.cond').forEach(s=>s.innerHTML=condOpts);
-  // Objective is fixed to balanced_a_to_b at selection time (pre-committed before results); the
-  // away-from-A decomposition + Perturb2State knockdown-informed support are presented on Stage 2.
+  // Stage 1 emits the two ordered arms (A, B) only — no combined objective is chosen or serialized here.
+  // Any away-from-A decomposition / Perturb2State support belongs to Stage 2, not this selection.
   document.querySelectorAll('.axsel.prog').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.field=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axsel.cond').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.condition=e.target.value;updateAxisMeta();});
   document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';setAxdir(e.target,ax.direction);updateAxisMeta();});
@@ -633,7 +729,6 @@ function syncAxisUI(){
   document.querySelectorAll('.axsel.prog').forEach(s=>s.value=(s.dataset.ax==='A'?axisA.field:axisB.field)||'');
   document.querySelectorAll('.axsel.cond').forEach(s=>s.value=s.dataset.ax==='A'?axisA.condition:axisB.condition);
   document.querySelectorAll('.axdir').forEach(b=>setAxdir(b,b.dataset.ax==='A'?axisA.direction:axisB.direction));
-  const ob=document.getElementById('objectiveSel');if(ob)ob.value=objective;
 }
 // Clear → reset A and B to the empty placeholder state → contrastActive() false → single-program gradient
 function clearContrast(){
@@ -667,41 +762,59 @@ async function sha256hex(str){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-// scientific content ONLY (no timestamps / display labels / UI ordering) — the hashed body
+// scientific content ONLY (no timestamps / display labels / UI ordering) — the hashed body.
+// Binds v3.0.1 exclusively: v3 registry raw+canonical, v3 method, frozen validation raw, source h5ad
+// raw, v3 overlay hash (display provenance), full-summary hash. NO v2 registry/method hash. A and B stay
+// separate arms; no combined objective.
 function canonicalContent(){
   const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{};
+  const v3=V3||{},reg=v3.registry||{},ovl=v3.overlay||{},sum=v3.summary||{};
   return {A:{program_id:A.program_id,score_field:axisA.field,direction:axisA.direction},
           B:{program_id:B.program_id,score_field:axisB.field,direction:axisB.direction},
           analysis_condition:axisA.condition,dataset_id:DATASET_ID,donor_scope:DONOR_SCOPE,
-          effect_universe_id:EFFECT_UNIVERSE_ID,objective:objective,
-          program_registry_sha256:REGISTRY_SHA,source_h5ad_sha256:H5AD_SHA,
-          source_hf_revision:HF_REV,stage1_method_version:METHOD_VERSION};
+          effect_universe_id:EFFECT_UNIVERSE_ID,
+          stage1_method_version:METHOD_VERSION,
+          program_registry_raw_sha256:reg.raw_sha256||null,
+          program_registry_sha256:reg.registry_sha256||REGISTRY_SHA,
+          validation_raw_sha256:v3.validation_raw_sha256||null,
+          source_h5ad_sha256:H5AD_SHA,
+          v3_overlay_raw_sha256:ovl.raw_sha256||null,
+          v3_summary_raw_sha256:sum.raw_sha256||null};
 }
 async function computeContrast(){
   const cc=canonicalContent(),cj=canonicalJSON(cc),full=await sha256hex(cj);
   return {canonical_content:cc,canonical_json:cj,canonical_contrast_sha256:full,contrast_id:full.slice(0,16)};
 }
-function hashesOk(){return REGISTRY_SHA===EXPECT.registry&&H5AD_SHA===EXPECT.h5ad&&HF_REV===EXPECT.hf&&METHOD_VERSION===STAGE1_METHOD_VERSION;}
-// preflight gate — Identify-genes is enabled ONLY when this returns ok:true
+// verify the v3.0.1 bindings are present + internally consistent (cross-bound through stage01_current.json)
+function hashesOk(){return !!(V3_OK&&V3&&METHOD_VERSION===V3.method_version&&REGISTRY_SHA===(V3.registry||{}).registry_sha256&&H5AD_SHA===V3.source_h5ad_raw_sha256);}
+// RESEARCH-only readiness gate — Identify-genes is enabled ONLY when this returns ok:true.
+// It decides research readiness from base portability + a concrete shared timepoint. It does NOT
+// consult the frozen 0/33 PRODUCTION-selectability flag (that governs production promotion only).
+// preflight → {ok, sev, reason}. sev drives the single #ctstate box: 'err' (red, hard fault) · 'warn'
+// (amber, correctable/advisory) · 'ok' (accent, ready) · '' (empty selection → box hidden).
 function preflight(){
-  if(!REGISTRY_OK)return{ok:false,reason:'Program registry unavailable — cannot resolve program IDs'};
-  if(!axisA.field||!axisB.field)return{ok:false,reason:'Choose a From and a To program'};
+  if(!REGISTRY_OK)return{ok:false,sev:'warn',reason:'Program registry unavailable — cannot resolve program IDs'};
+  if(!axisA.field||!axisB.field)return{ok:false,sev:'',reason:''};                 // partial selection: no advisory line yet
   const A=regByField[axisA.field],B=regByField[axisB.field];
-  if(!A||!B)return{ok:false,reason:'Program registry incomplete for a selected axis'};
-  if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,reason:'A sensitivity field cannot be a contrast axis'};
-  // "All" (both poles) = one pooled screen across the timecourse; a shared real timepoint = that timepoint.
-  if(axisA.condition!==axisB.condition)return{ok:false,reason:''};  // different timepoints = display-only cross-subset view (no error message)
-  if(A.program_id===B.program_id&&axisA.direction===axisB.direction)return{ok:false,reason:'From and To are identical — pick distinct programs or opposite directions'};
-  if(!A.stage2_selectable)return{ok:false,reason:stage2Reason(A)};
-  if(!B.stage2_selectable)return{ok:false,reason:stage2Reason(B)};
-  if(!hashesOk())return{ok:false,reason:'Unknown dataset or method hash — cannot build a verifiable contrast'};
-  return{ok:true,reason:''};
+  if(!A||!B)return{ok:false,sev:'warn',reason:'Program registry incomplete for a selected axis'};
+  if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,sev:'warn',reason:'A sensitivity field cannot be a contrast axis'};
+  // identical requires same program + direction + CONDITION. Same program/direction across DIFFERENT
+  // timepoints is a temporal cross-condition comparison (awaiting_estimator), NOT identical — this guard
+  // mirrors the routingReason.ts fix (f656d6d); without the condition term it wrongly refused as "identical".
+  if(A.program_id===B.program_id&&axisA.direction===axisB.direction&&axisA.condition===axisB.condition)return{ok:false,sev:'err',reason:'From and To are identical\nPick distinct programs or opposite directions'};
+  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,sev:'warn',reason:'Pick an analysis timepoint (Rest / Stim8hr / Stim48hr)\nPooled “All” is display only'};   // within-condition needs one concrete timepoint
+  if(axisA.condition!==axisB.condition)return{ok:false,sev:'warn',reason:'Cross-condition analysis feature in progress'};   // temporal cross-condition ⇒ awaiting_estimator (never ready)
+  if(!BASE_PORTABLE[A.program_id])return{ok:false,sev:'warn',reason:stage2Reason(A)};          // Stage-2 base portability (A) from frozen validation: excludes Th9 / nonportable
+  if(!BASE_PORTABLE[B.program_id])return{ok:false,sev:'warn',reason:stage2Reason(B)};          // Stage-2 base portability (B) from frozen validation
+  if(!hashesOk())return{ok:false,sev:'warn',reason:'Unknown dataset or method hash — cannot build a verifiable contrast'};
+  return{ok:true,sev:'ok',reason:''};
 }
+// base-portability reason (from frozen validation): sensitivity lanes are display-only; a nonportable
+// primary (Th9) has no panel genes in the effect universe.
 function stage2Reason(p){
-  const r=p.stage2_unavailable_reason;
-  if(r==='no_panel_genes_in_effect_universe')return `${p.display_label} has no panel genes in the effect universe`;
-  if(r==='role_sensitivity_display_only')return `${p.display_label} is display-only`;
-  return `${p.display_label} can’t be a contrast axis`;
+  const lbl=(progByField[p.score_field]||{}).display_label||p.program_id||p.score_field;   // Tier-2 display label lives in the seed, not the registry
+  if(p.role==='sensitivity')return `${lbl} is display-only`;
+  return `${lbl} has no panel genes in the effect universe`;
 }
 function condShort(k){return k==='All'?'All times':(CONDLAB[k]||k);}
 // reflect preflight into the button + inline functional state (no banner); kick async contrast_id compute
@@ -713,11 +826,9 @@ function runPreflightUI(){
   if(!pf.ok){
     curContrastId=null;btn.disabled=true;btn.classList.remove('ready');btn.title=pf.reason;
     pend.style.display='none';pend.textContent='';
-    // empty / partial selection shows no verbose helper line; a real conflict gets a short muted reason
-    const isIdentical=pf.reason&&pf.reason.indexOf('identical')>=0;
-    if(!axisA.field||!axisB.field){st.className='ctstate';st.textContent='';err.textContent='';}
-    else if(isIdentical){st.className='ctstate';st.textContent='';err.textContent=pf.reason;}
-    else{st.className='ctstate warn';st.textContent=pf.reason;err.textContent='';}
+    err.textContent='';   // legacy #ctErr retired — every non-ready state renders in the single #ctstate box
+    // one fixed status box: severity from preflight drives colour + leading icon (! err / ⊘ warn); '' = hidden
+    st.className='ctstate'+(pf.sev?' '+pf.sev:'');st.textContent=pf.reason||'';
     return;
   }
   err.textContent='';
@@ -727,43 +838,53 @@ function runPreflightUI(){
     else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.contrast_id;}
   });
 }
-// full emitted artifact — canonical body + the non-canonical mirrors/provenance (matches the reference shape)
+// RESEARCH-ONLY selection artifact — the exact spot.stage01_selection.v1 shape the Stage-2 shell adapter
+// consumes (selection.ts). Ordered two arms (A, B) only; no combined objective is computed or serialized.
+// namespace=research_only + production_gate_passed=false: it never claims to have passed the production gate.
 function buildSelectionArtifact(r){
   const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{};
-  return {schema_version:'spot.stage01_selection.v1',contrast_id:r.contrast_id,
-    canonical_contrast_sha256:r.canonical_contrast_sha256,canonical_content:r.canonical_content,
-    objective:objective,analysis_condition:axisA.condition,donor_scope:DONOR_SCOPE,
-    A_program_id:A.program_id,A_score_field:axisA.field,A_direction:axisA.direction,
-    B_program_id:B.program_id,B_score_field:axisB.field,B_direction:axisB.direction,
-    dataset_id:DATASET_ID,effect_universe_id:EFFECT_UNIVERSE_ID,stage1_method_version:METHOD_VERSION,
-    program_registry_sha256:REGISTRY_SHA,source_h5ad_sha256:H5AD_SHA,source_hf_repo:HF_REPO,
-    source_hf_revision:HF_REV,stage1_code_commit:null,
-    validation_status:'preflight_passed',
-    validation_reasons:['constructed by Stage-1 UI Identify-genes; preflight passed'],
-    created_at:new Date().toISOString()};
+  const la=(progByField[axisA.field]||{}).display_label||A.display_label||axisA.field;
+  const lb=(progByField[axisB.field]||{}).display_label||B.display_label||axisB.field;
+  const full=r.canonical_contrast_sha256;
+  return {
+    schema_version:'spot.stage01_selection.v1',
+    namespace:'research_only',
+    production_gate_passed:false,
+    source:'stage01_research_bridge',
+    question_id:'q_'+full.slice(0,16),
+    selection_id:'sel_'+full.slice(0,16),
+    contrast_id:r.contrast_id,
+    program_a:{program_id:A.program_id,score_field:axisA.field,display_label:la,direction:axisA.direction},
+    program_b:{program_id:B.program_id,score_field:axisB.field,display_label:lb,direction:axisB.direction},
+    analysis_condition:axisA.condition,
+    dataset_id:DATASET_ID,
+    donor_scope:DONOR_SCOPE,
+    artifact_status:'research-only',
+    // v3.0.1 provenance mirrors (ignored by the adapter; carried for traceability) — no combined objective,
+    // no v2 hashes, no nondeterministic timestamp (deterministic artifact — same selection → same bytes)
+    canonical_contrast_sha256:full,
+    canonical_content:r.canonical_content,
+    effect_universe_id:EFFECT_UNIVERSE_ID,
+    stage1_method_version:METHOD_VERSION,
+    program_registry_raw_sha256:((V3||{}).registry||{}).raw_sha256||null,
+    program_registry_sha256:REGISTRY_SHA,
+    validation_raw_sha256:(V3||{}).validation_raw_sha256||null,
+    v3_overlay_raw_sha256:((V3||{}).overlay||{}).raw_sha256||null,
+    v3_summary_raw_sha256:((V3||{}).summary||{}).raw_sha256||null,
+    source_h5ad_sha256:H5AD_SHA,source_hf_repo:HF_REPO,source_hf_revision:HF_REV};
 }
-function downloadArtifact(a){
-  const blob=new Blob([JSON.stringify(a,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),el=document.createElement('a');
-  el.href=url;el.download='stage01_selection.json';document.body.appendChild(el);el.click();el.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1500);
-}
-// Identify-genes → PROCEED TO STAGE 2 (persist the exact selection; never claims a gene was found)
+const SELECTION_LS_KEY='spot.stage01_selection.v1';   // one versioned localStorage key
+// Identify-genes → create the research-only selection, store it, expose it, and navigate to Stage 2.
 async function onIdentifyGenes(){
-  const btn=document.getElementById('idgenes');if(btn.disabled||!preflight().ok)return;
+  const btn=document.getElementById('idgenes');if(btn.disabled||!preflight().ok)return;   // research readiness required
   const r=await computeContrast(),art=buildSelectionArtifact(r);
-  window.__stage01SelectionArtifact=art;
-  const key='spot.stage01_selection.'+r.contrast_id;
-  try{localStorage.setItem(key,JSON.stringify(art));}catch(e){}
-  try{sessionStorage.setItem(key,JSON.stringify(art));}catch(e){}
-  downloadArtifact(art);
-  // attempt a verified immutable cached Stage-2 result (won't exist yet → 404 handled quietly)
-  let cached=null;
-  try{const resp=await fetch('./data/stage2/'+r.contrast_id+'/stage02_result.json',{cache:'no-store'});if(resp.ok)cached=await resp.json();}catch(e){}
-  // carry the contrast_id in the URL for Stage 2 (page not built yet — keep the param, don't hard-break the shell)
-  try{history.pushState({contrast:r.contrast_id},'', '?contrast='+r.contrast_id);}catch(e){}
+  window.__stage01SelectionArtifact=art;                                                  // browser-verifiable
+  try{localStorage.setItem(SELECTION_LS_KEY,JSON.stringify(art));}catch(e){}
+  try{sessionStorage.setItem(SELECTION_LS_KEY,JSON.stringify(art));}catch(e){}
   const st=document.getElementById('ctstate');st.className='ctstate ok';
-  st.textContent=cached?('Loaded cached result · contrast '+r.contrast_id)
-                       :('Selection saved · contrast '+r.contrast_id+' (no cached result yet)');
+  st.textContent='Research selection ready · '+r.contrast_id+' → Stage 2';
+  // hand off to the Stage-2/3/4 shell (separate app); the shell reads the versioned selection key
+  window.location.assign('/02_page.html#/stage-2');
 }
 // shrink #lastrun's font (10px → 7px floor) until its single line fits under the action buttons
 // (spans the Identify-button's left edge to the Clear-button's right edge)
@@ -777,12 +898,19 @@ function fitLastRun(){
   while(el.scrollWidth>avail&&fs>7){fs-=0.5;el.style.fontSize=fs+'px';}
 }
 function buildMethods(){
-  document.getElementById('lastrun').innerHTML=meta.emitted_at?('last run · <b>'+fmtLocal(meta.emitted_at)+'</b>'):'';
+  document.getElementById('lastrun').innerHTML=meta.emitted_at?('Map generated · <b>'+fmtLocal(meta.emitted_at)+'</b>'):'';
   requestAnimationFrame(fitLastRun);
   document.getElementById('emittedAt').textContent=fmtLocal(meta.emitted_at)||'—';
   const emb=meta.embedding||{};
   document.getElementById('pEmbed').innerHTML=`${emb.method||'scVI embedding then UMAP'}. Clustering: ${emb.clustering||'Leiden'}. ${emb.cluster_ids||'Numeric cluster ids are retained as technical provenance only — not named biological states.'}`;
   document.getElementById('pScope').textContent=meta.methods_and_scope;
+  const ps=document.getElementById('pProdStatus');
+  if(ps){
+    const n=(PROD_N_SELECTABLE==null?'0':PROD_N_SELECTABLE);
+    const facts=[['Method',METHOD_VERSION||'—'],['Namespace','research_only'],
+                 ['Production promotion',PROD_READY?'yes':'no'],['Production-selectable pairs',`${n}/33`]];
+    ps.innerHTML=facts.map(([k,v])=>`${k}: <b style="color:var(--ink)">${v}</b>`).join('<br>');
+  }
   document.getElementById('paperMarson').href=PAPERS.marson.url;
   document.getElementById('paperMasopust').href=PAPERS.masopust.url;
 }
@@ -1054,7 +1182,7 @@ window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),field:()=>field,set
   computeContrast,preflight,canonicalContent,canonicalJSON,
   contrastId:async()=>(await computeContrast()).contrast_id,
   artifact:async()=>buildSelectionArtifact(await computeContrast()),
-  setContrast:(af,ad,bf,bd,c,o)=>{const cc=c||'All';axisA={field:af,condition:cc,direction:ad||'high',donor:'All'};axisB={field:bf,condition:cc,direction:bd||'high',donor:'All'};if(o)objective=o;syncAxisUI();syncObjTitle();updateAxisMeta();}};
+  setContrast:(af,ad,bf,bd,c)=>{const cc=c||'All';axisA={field:af,condition:cc,direction:ad||'high',donor:'All'};axisB={field:bf,condition:cc,direction:bd||'high',donor:'All'};syncAxisUI();syncObjTitle();updateAxisMeta();}};
 </script>
 </body>
 </html>
