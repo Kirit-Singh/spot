@@ -83,5 +83,49 @@ the final Stage-3 **v2** schema, update the Drugs identity to the final v2 strin
 must stay byte-identical or the browser firewall rejects the manifest. This is a blocking pre-admitted-
 deploy item (the exact v2 identity string is W6's to publish — do not guess it).
 
+## UPDATE — binding gates now enforced (feed these exact shapes)
+
+The shell now REFUSES anything that isn't a complete, chained, same-release admitted result. When you
+provide native + receipts in these shapes, the packager binds and the browser renders; otherwise it stays
+unbound (never partial/stale).
+
+### results/current.json (packager-emitted; the browser fail-closes on all of it)
+- `stage1_binding.registry_scorer_view_sha256` MUST equal the active v3 selection's scorer binding —
+  a result from a different Stage-1 release is refused on every route (#1).
+- `chain = { stage2_run_id, stage3_bundle_id, stage4_scorecard_set_id }` — the browser binds a route only
+  if its projection's upstream ids match EXACTLY: Stage-2 `run_id`==stage2_run_id; Drugs
+  `upstream_stage2_run`==stage2_run_id & `bundle_id`==stage3_bundle_id; PK&Safety
+  `upstream_stage3_bundle`==stage3_bundle_id & `scorecard_set_id`==stage4_scorecard_set_id. The packager
+  derives the chain and REFUSES a receipt-A-over-data-B mismatch at pack time (#6).
+
+### Stage-2 native aggregate = the COMPLETE generic release (#2, W16)
+Provide the WHOLE release; a missing slot is refused (`incomplete_release`), never rendered empty:
+```jsonc
+{
+  "run_id": "<stage2 run id>",
+  "analysis_mode": "within_condition" | "temporal_cross_condition",
+  "release_conditions": ["Rest","Stim8hr","Stim48hr"],
+  "pathway_sources": ["reactome","go_bp"],
+  "pathway_source": "reactome",                     // active source for the view
+  "directByCondition":  { "<cond>": <direct bundle> },                 // one per condition (3)
+  "temporalByPair":     { "<from>__<to>": <temporal bundle> },         // one per ORDERED pair (6)
+  "pathwayByContext":   { "<cond>|<source>": <pathway bundle> }        // one per (condition,source) (6)
+}
+```
+Each bundle: native `base_records[]` + `arms[]` arrays (the packager keys them to objects by
+base_key/arm_key; `arm.records` stays an array). The browser SELECTS the requested condition/pair at join
+time and parses ONLY that slot (production namespace enforced). **Still to pin (W16):** Direct row values
+come from `arms.parquet` joined 1:1 to `target_identity.json` by immutable key — supply a JSON
+representation of those columns (or an agreed parquet→JSON extraction) so the packager reopens + hashes
+the admitted native bytes (#3/#7 rederivation, not scalar status).
+
+### Stage-3 v2 (#4, W6) + Stage-4 scorecard_set.v1 (#5, W1) — NEXT units, awaiting published fields
+The Drugs/PK&Safety native adapters currently map the documented §7/§8 fields. When the final schemas
+publish, provide: Stage-3 `spot.stage03_drug_annotation.v2` per-origin/arm-key candidate model + manifest
+(update `ROUTES.drugs.method_id` v1→v2 in both stageMethods.ts and the packager, re-pin the drugs hash);
+Stage-4 `spot.stage04_scorecard_set.v1` nested `active_moiety`, `production_eligible`, lane arrays/objects,
+and upstream binding. The strict adapters + fixtures are in place to pin against — no compact rows are
+hand-authored.
+
 _Deployment stays HELD until real admitted native artifacts + receipts exist. The packager writes nothing
 unless invoked with a real spec; production results are never committed._
