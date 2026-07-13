@@ -63,6 +63,11 @@ def verification_placeholder(bundle_run_id: str, doc: dict[str, Any],
         "verdict": VERDICT_PENDING,
         "admitted": False,
         "self_admitted": False,
+        # W18's explicit declarations, kept: an artifact with no verification file at all is
+        # indistinguishable from one whose verifier never ran, and a downstream reader would
+        # have to guess which. These say it out loud.
+        "generator_is_not_verifier": True,
+        "fail_closed": True,
         "produced_by": produced_by,
         "verified_paths": list(VERIFIED_PATHS),
         # what a verifier is expected to re-derive, stated by the producer as a CLAIM — never

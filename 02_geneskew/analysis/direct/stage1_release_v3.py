@@ -93,6 +93,14 @@ class Stage1V3Release(trust._Release):
     conditions: tuple = ()
     admitted_programs: tuple = ()
     scorer: dict = field(default_factory=dict)
+    # INTEGRATION: the release's OWN selector, exposed verbatim so that
+    # `scorer_view.cross_check_selector` — W18's INDEPENDENT re-derivation of the admitted set
+    # against the selector — actually fires on this release type. Without it that check reads
+    # `selector_present: False` and quietly passes, which is the worst outcome available: a
+    # gate that is present, green, and looking at nothing. This loader already refuses a
+    # selector disagreement at load time; the two checks are deliberately redundant, and they
+    # are derived independently of each other.
+    selector: dict = field(default_factory=dict)
 
 
 def is_v3_release(path: str) -> bool:
@@ -360,6 +368,11 @@ def load(release_path: str, *, root: str, lane: str) -> Stage1V3Release:
         "method_version": str(release.get("method_version", "")),
         "registry_scorer_view_canonical_sha256": view_canonical,
         "registry_scorer_projection_sha256": scorer["registry_scorer_projection_sha256"],
+        # INTEGRATION: the un-prefixed names `scorer_view.view()` reaches for when it emits the
+        # release's own scorer hashes. Same two values, published under the names the consumer
+        # asks by, so the view reports them instead of silently emitting null.
+        "scorer_view_canonical_sha256": view_canonical,
+        "scorer_projection_sha256": scorer["registry_scorer_projection_sha256"],
         "stage1_registry_sha256": release.get("stage1_registry_sha256"),
         "effect_universe_id": release.get("effect_universe_id"),
         "source_h5ad_sha256": release.get("source_h5ad_sha256"),
@@ -388,4 +401,5 @@ def load(release_path: str, *, root: str, lane: str) -> Stage1V3Release:
         conditions=tuple(conditions),
         admitted_programs=tuple(scorer["admitted_program_ids"]),
         scorer=scorer,
+        selector=dict(selector),
     )

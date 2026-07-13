@@ -37,6 +37,7 @@ PORTABLE_KEY = "base_portable"
 
 REFUSE_NO_ADMITTED = "the_bound_release_admits_no_base_portable_program"
 REFUSE_PORTABILITY_UNDECLARED = "the_bound_release_does_not_declare_base_portability"
+REFUSE_SELECTOR_DISAGREES = "the_derived_admitted_set_disagrees_with_the_releases_selector"
 
 
 class ScorerViewError(ValueError):
@@ -68,9 +69,47 @@ def admitted_programs(release) -> list[str]:
     return admitted
 
 
+def _release_attr(release, *names):
+    """Read a field the release MAY carry. Never invent one that does not exist."""
+    for n in names:
+        v = getattr(release, n, None)
+        if v is None and isinstance(getattr(release, "hashes", None), dict):
+            v = release.hashes.get(n)
+        if v is not None:
+            return v
+    return None
+
+
+def cross_check_selector(release, admitted: list[str]) -> dict[str, Any]:
+    """DERIVE the admitted set, then CHECK it against the release's own selector.
+
+    The scorer view (`spot.stage01_stage2_registry_view.v1`) carries `base_portable` per
+    program and nothing else: there is no `base_portable_programs` list, no `view_id` and no
+    per-program method hash. So the set is derived from `program.base_portable` and then
+    COMPARED to `release.selector.admitted_programs` — two independent statements of the same
+    fact, which is the only way a disagreement between them can ever surface. Reading the
+    selector alone would trust it; deriving alone would never notice it had drifted.
+    """
+    selector = _release_attr(release, "selector") or {}
+    declared = selector.get("admitted_programs") if isinstance(selector, dict) else None
+    if declared is None:
+        return {"selector_present": False, "selector_admitted_programs": None,
+                "derived_agrees_with_selector": None}
+    declared = sorted(str(p) for p in declared)
+    if declared != admitted:
+        raise ScorerViewError(
+            REFUSE_SELECTOR_DISAGREES,
+            f"base_portable derives {admitted}, but the release selector declares "
+            f"{declared}. One of them is wrong about what this release admits, and a run "
+            "that picked either without checking would not know which")
+    return {"selector_present": True, "selector_admitted_programs": declared,
+            "derived_agrees_with_selector": True}
+
+
 def view(release) -> dict[str, Any]:
     """The admitted set AND what it was derived from — hashable, and bound into identity."""
     admitted = admitted_programs(release)
+    selector = cross_check_selector(release, admitted)
     programs = release.programs
     # The panel/control each arm is projected on IS part of the view: two releases that
     # admit the same program ids but disagree about its panel are not the same scorer view,
@@ -88,9 +127,17 @@ def view(release) -> dict[str, Any]:
         for pid in admitted
     }
     return {
-        "view_id": VIEW_ID,
+        "view_id": VIEW_ID,                     # THIS RULE's id — not a field of the view
         "view_rule": VIEW_RULE,
         "release_kind": release.kind,
+        # THE RELEASE'S OWN hashes, bound as it publishes them. Absent in a fixture, and
+        # absent is emitted as absent — never as zero, and never quietly derived from
+        # something else.
+        "release_scorer_view_canonical_sha256": _release_attr(
+            release, "scorer_view_canonical_sha256"),
+        "release_scorer_projection_sha256": _release_attr(
+            release, "scorer_projection_sha256"),
+        **selector,
         "admitted_program_ids": admitted,
         "n_admitted_programs": len(admitted),
         "n_release_programs": len(programs),

@@ -532,6 +532,56 @@ def stage2_input_manifest(args) -> list[dict[str, Any]]:
     })
 
 
+def bundle_input_manifest(args) -> list[dict[str, Any]]:
+    """The pinned inputs of a REUSABLE bundle. The A/B SELECTION IS NOT ONE OF THEM.
+
+    W10 proved the defect: the all-arm runner bound ``stage2_input_manifest``, which hashes
+    ``stage01_selection_contract.json``. So two bundles with byte-identical arm content got
+    DIFFERENT ids purely because a pair the bundle does not contain, does not use and cannot
+    be affected by had changed. A reusable arm keyed on the question that happened to be
+    asked first is not reusable — it is a pair's run wearing a different name, and the cache
+    would miss every time.
+
+    A bundle's scientific identity is the DATA, the generic v3 release/scorer view and the
+    CONTEXT. Nothing else. The pair is not an input here; it is a JOIN performed later.
+
+    INTEGRATION (W18 name, W14 content): this delegates to ``arm_inputs``, which binds every
+    file the bundle actually reads — not only the four data objects and the registry, but the
+    guide manifest, the source registry, the target-identity map, the donor crosswalk, the
+    strict-replay source and the pseudobulk. An input the bundle consumed but did not bind is
+    an input that can be swapped underneath it. There is ONE implementation behind this name;
+    two would drift, and the drift would be invisible.
+    """
+    from . import arm_inputs
+    return arm_inputs.bundle_input_manifest(args)
+
+
+def contributor_manifest_identity(args, ctx: dict[str, Any]) -> dict[str, Any]:
+    """The contributor manifest, by RAW bytes and by CONTENT — not by its row count.
+
+    W10's second defect: the all-arm output recorded only COUNTS of the contributor evidence,
+    although EVERY delta in the bundle depends on those bytes — the manifest decides which
+    guides contributed, which decides the mask, which decides the projection. A bundle that
+    binds a count binds nothing: two different manifests with the same number of rows would
+    produce different science under the same id.
+
+    INTEGRATION (W18 name, both lines' content): the SEMANTIC block — `mf.binding_block`,
+    which is what run_id has always bound for the pair screen, so a reordered manifest is the
+    same manifest and does not move the id — PLUS the RAW bytes that actually arrived, and the
+    source-record/replay pins behind them. W18 bound raw+canonical; W14 bound the semantics.
+    Both are here, under one key, because two sibling keys for one fact can drift apart.
+    """
+    doc = ctx.get("manifest_doc")
+    path = getattr(args, "guide_manifest", None)
+    if doc is None:
+        return dict(mf.binding_block(None), raw_sha256=None, manifest_sha256=None)
+    return dict(
+        mf.binding_block(doc),
+        raw_sha256=(file_sha256(path) if path else None),
+        manifest_sha256=doc["manifest_sha256"],
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Main build.
 # --------------------------------------------------------------------------- #

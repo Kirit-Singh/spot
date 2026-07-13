@@ -23,11 +23,14 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-usage: run_stage2.sh [direct|temporal|pathway|all]
+usage: run_stage2.sh [step0|direct|temporal|pathway|all]
 Required environment (no defaults — an unset input is a refusal, not a guess):
   SEL_DIR  V3_SCHEMA  REGISTRY  STAGE1_RELEASE  DE  GUIDE  DONOR  SGRNA
   MANIFEST  SRCREG  PB  ENV_LOCK  OUT
-Optional: SPOT_DRY_RUN=1 (print argv, execute nothing), LANE (default: production)
+Also required for Step 0 (the shared signature matrix anchors its mask to Direct):
+  W10_REPORT_DIR   per-condition W10 external Direct mask reports
+Optional: SPOT_DRY_RUN=1 (print argv + the producer->consumer flow, execute nothing)
+          LANE (default: production)
 USAGE
   exit 2
 }
@@ -35,7 +38,7 @@ USAGE
 require_env() {
   local missing=()
   for name in SEL_DIR V3_SCHEMA REGISTRY STAGE1_RELEASE DE GUIDE DONOR SGRNA \
-              MANIFEST SRCREG PB ENV_LOCK OUT; do
+              MANIFEST SRCREG PB ENV_LOCK OUT W10_REPORT_DIR; do
     [[ -n "${!name:-}" ]] || missing+=("$name")
   done
   if (( ${#missing[@]} )); then
@@ -45,6 +48,19 @@ require_env() {
 }
 
 LANE="${LANE:-production}"
+
+# The BUNDLE-SCOPED producers take a CONTEXT, never an A/B pair: a reusable arm keyed on
+# whichever question happened to be asked first is not reusable. Only the temporal lane (W5)
+# still consumes a v3 selection contract.
+bundle_args() {
+  printf '%s\n' \
+    --registry "$REGISTRY" \
+    --stage1-release "$STAGE1_RELEASE" \
+    --de-main "$DE" --by-guide "$GUIDE" --by-donors "$DONOR" --sgrna "$SGRNA" \
+    --guide-manifest "$MANIFEST" --source-registry "$SRCREG" \
+    --lane "$LANE" --strict-replay --pseudobulk "$PB" \
+    --env-lock "$ENV_LOCK"
+}
 
 # ---- the CONCRETE selection contracts. One file per context. No name-building. ----
 declare -A SEL_WITHIN
@@ -67,6 +83,8 @@ init_selections() {
     [Stim48hr__Stim8hr]="$SEL_DIR/temporal_Stim48hr_to_Stim8hr.v3.json"
   )
 }
+
+SIGROOT=""   # set by main(): the shared signature artifacts live under $OUT/signatures
 
 CONDITIONS=(Rest Stim8hr Stim48hr)
 PAIRS=(Rest__Stim8hr Stim8hr__Rest Rest__Stim48hr Stim48hr__Rest
@@ -92,15 +110,40 @@ selection_for() {
 # Print the argv (dry run) or execute it. One argument per line, so a captured argv is
 # unambiguous about where each one ends — `echo "$*"` would lose exactly the boundaries a
 # quoting bug hides in.
+# WHAT a step produces and what it consumes. Declared, so the dry run can PROVE the flow
+# instead of a reader taking the ordering on trust.
+declare -a STEP_PRODUCES=()
+declare -a STEP_CONSUMES=()
+
+produces() { STEP_PRODUCES+=("$1"); }
+consumes() { STEP_CONSUMES+=("$1"); }
+
 run() {
   local label="$1"; shift
   if [[ -n "${SPOT_DRY_RUN:-}" ]]; then
     printf '=== BEGIN %s\n' "$label"
     printf '%s\n' "$@"
+    local x
+    for x in "${STEP_PRODUCES[@]:-}"; do [[ -n "$x" ]] && printf '=== PRODUCES %s\n' "$x"; done
+    for x in "${STEP_CONSUMES[@]:-}"; do [[ -n "$x" ]] && printf '=== CONSUMES %s\n' "$x"; done
     printf '=== END %s\n' "$label"
+    STEP_PRODUCES=(); STEP_CONSUMES=()
     return 0
   fi
+  STEP_PRODUCES=(); STEP_CONSUMES=()
   "$@"
+}
+
+# DISCOVER a content-addressed bundle. Its directory IS its run id, so it cannot be guessed —
+# and a guessed path either finds nothing or finds a STALE bundle from another run.
+direct_bundle_for() {
+  local cond="$1"
+  if [[ -n "${SPOT_DRY_RUN:-}" ]]; then
+    printf '%s' "<discovered:direct:$cond>"      # not produced yet in a dry run
+    return 0
+  fi
+  python -m analysis.direct.bundle_index \
+    --root "$OUT/direct" --condition "$cond" --kind direct
 }
 
 common_args() {
@@ -114,14 +157,46 @@ common_args() {
     --env-lock "$ENV_LOCK"
 }
 
-lane_direct() {
-  local cond sel
+# STEP 0 — the SHARED signature matrix + mandatory bitmap, ONCE per condition, BEFORE any
+# pathway bundle. Infrastructure, not a bundle: it does not count toward the 15 and it is not
+# completeness-bearing.
+# STEP 0 — the SHARED signature matrix + mandatory bitmap. Infrastructure, not a bundle: it
+# does not count toward the 15. It runs AFTER Direct, because it ANCHORS its mask to the Direct
+# bundle's shipped mask table and to W10's independent re-derivation of it. Without that anchor
+# the mask is only self-consistent, and a coherently forged mask is indistinguishable from a
+# real one.
+lane_step0() {
+  local cond dbundle report
   for cond in "${CONDITIONS[@]}"; do
-    sel="$(selection_for SEL_WITHIN "$cond")"
-    mapfile -t common < <(common_args)
-    run "direct:$cond" python -m analysis.direct.cli \
-      --stage1-v3-selection "$sel" \
-      "${common[@]}" \
+    dbundle="$(direct_bundle_for "$cond")"
+    report="$W10_REPORT_DIR/direct_mask_report_${cond}.md"
+    if [[ -z "${SPOT_DRY_RUN:-}" && ! -f "$report" ]]; then
+      printf 'no W10 Direct mask report for %s at %s\n' "$cond" "$report" >&2
+      exit 2
+    fi
+    consumes "direct:$cond"
+    consumes "w10_report:$cond"
+    produces "signatures:$cond"
+    run "step0:$cond" python -m analysis.direct.signature_matrix \
+      --condition "$cond" \
+      --de-main "$DE" --sgrna "$SGRNA" --guide-manifest "$MANIFEST" \
+      --source-registry "$SRCREG" \
+      --direct-bundle "$dbundle" \
+      --direct-mask-report "$report" \
+      --env-lock "$ENV_LOCK" \
+      --out-root "$SIGROOT"
+  done
+}
+
+# 3 of the 15. The ALL-ARM Direct bundles: every admitted program's two arms, per condition.
+lane_direct() {
+  local cond
+  for cond in "${CONDITIONS[@]}"; do
+    mapfile -t bargs < <(bundle_args)
+    produces "direct:$cond"
+    run "direct:$cond" python -m analysis.direct.run_arms \
+      --condition "$cond" \
+      "${bargs[@]}" \
       --out-root "$OUT/direct"
   done
 }
@@ -138,16 +213,19 @@ lane_temporal() {
   done
 }
 
+# 6 of the 15. The ALL-ARM pathway bundles, REFERENCING the shared Step-0 artifacts.
 lane_pathway() {
-  local cond src sel
+  local cond src
   for cond in "${CONDITIONS[@]}"; do
-    sel="$(selection_for SEL_WITHIN "$cond")"
     for src in "${SOURCES[@]}"; do
-      mapfile -t common < <(common_args)
-      run "pathway:$cond:$src" python -m analysis.direct.run_pathway \
-        --stage1-v3-selection "$sel" \
-        "${common[@]}" \
+      mapfile -t bargs < <(bundle_args)
+      consumes "signatures:$cond"
+      produces "pathway:$cond:$src"
+      run "pathway:$cond:$src" python -m analysis.direct.run_pathway_arms \
+        --condition "$cond" \
+        "${bargs[@]}" \
         --gene-sets "$SEL_DIR/genesets_${src}.ensembl.json" \
+        --signature-matrix-root "$SIGROOT" \
         --out-root "$OUT/pathway"
     done
   done
@@ -157,11 +235,17 @@ main() {
   local what="${1:-all}"
   require_env
   init_selections
+  SIGROOT="$OUT/signatures"
   case "$what" in
+    step0)    lane_step0 ;;
     direct)   lane_direct ;;
     temporal) lane_temporal ;;
     pathway)  lane_pathway ;;
-    all)      lane_direct; lane_temporal; lane_pathway ;;
+    # ORDER IS A DEPENDENCY, not a preference. Direct FIRST, because Step 0 anchors its mask to
+    # the Direct bundle and to W10's independent report over it. Step 0 before pathway, because
+    # a pathway bundle that rebuilt its own signatures would reintroduce the 29.5 GiB peak the
+    # shared matrix removes.
+    all)      lane_direct; lane_step0; lane_pathway; lane_temporal ;;
     *)        usage ;;
   esac
 }

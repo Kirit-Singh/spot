@@ -22,6 +22,7 @@ import os
 import fixtures_v3_release as V3
 import pytest
 from direct import arm_release, run_arms
+from fixtures_direct import _PINNED_LOCK
 
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 
@@ -144,6 +145,7 @@ class TestTheShippedCLIBuildsTheWholeRelease:
                                                              tmp_path):
         args = three_condition_run
         result = run_arms.main([
+            "--env-lock", _PINNED_LOCK,
             "--all-conditions", "--out-root", str(tmp_path / "cli"),
             "--de-main", args.de_main, "--by-guide", args.by_guide,
             "--by-donors", args.by_donors, "--sgrna", args.sgrna,
@@ -151,6 +153,9 @@ class TestTheShippedCLIBuildsTheWholeRelease:
             "--source-registry", args.source_registry,
             "--pseudobulk", args.pseudobulk,
             "--lane", "synthetic", "--allow-dirty-tree",
+            # THE PINNED SOLVER LOCK. Every invocation binds it and a run without it REFUSES,
+            # so a test that omitted it would be exercising a path production cannot take.
+            "--env-lock", args.env_lock,
             "--stage1-release", args.stage1_release,
             "--stage1-release-root", args.stage1_release_root])
         assert result["n_physical_bundles"] == 3

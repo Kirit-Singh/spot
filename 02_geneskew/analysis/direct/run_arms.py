@@ -39,13 +39,13 @@ from . import (
     config,
     disposition,
     emit,
+    envlock,
     gate,
     guides,
     identity,
     io_data,
     masks,
     preflight,
-    runid,
     scorer_view,
     support_lanes,
 )
@@ -106,8 +106,8 @@ def request_block(args, ctx: dict[str, Any], view: dict[str, Any]) -> dict[str, 
     return dict(body, request_sha256=content_hash(body))
 
 
-def scan(*, ctx: dict[str, Any], args, cond: str,
-         admitted: list[str]) -> dict[str, Any]:
+def scan(*, ctx: dict[str, Any], args, cond: str, admitted: list[str],
+         signature_targets: Optional[set] = None) -> dict[str, Any]:
     """ONE base delta per (program, target) — AND the evidence that produced it.
 
     The single dense read in the lane. The mask is the SAME mask the within-condition screen
@@ -128,6 +128,7 @@ def scan(*, ctx: dict[str, Any], args, cond: str,
     guide_ids, donor_ids = ctx["guide_ids"], ctx["donor_ids"]
 
     mask_rows: list[dict[str, Any]] = []
+    signatures: dict[str, dict[str, float]] = {}
     contrib_rows: list[dict[str, Any]] = []
     guide_rows: list[dict[str, Any]] = []
     donor_rows: list[dict[str, Any]] = []
@@ -169,6 +170,16 @@ def scan(*, ctx: dict[str, Any], args, cond: str,
         contrib_rows += guides.contributor_rows(est, contrib)
         mask_rows += masks.mask_rows_for_emit(est, mask, universe_ids, run_id=None)
 
+        # THE TARGET-MASKED SIGNATURE (W18), under the SAME mask the deltas are taken under.
+        # Step 0's shared signature matrix and the pathway lane read these; a signature masked
+        # differently from the numbers it explains would explain different numbers.
+        if (signature_targets is not None and target in signature_targets
+                and mask_set is not None):
+            row_values = main["log_fc"][i]
+            signatures[target] = {
+                g: float(row_values[gene_index[g]]) for g in universe_ids
+                if g in gene_index and g not in mask_set}
+
         # SUPPORT: enumerated for accounting, never projected, and carrying no pole — the
         # legacy support rows are keyed on the PAIR's arms, and a bundle that shipped them
         # would have smuggled the pair back in through its evidence files.
@@ -206,7 +217,15 @@ def scan(*, ctx: dict[str, Any], args, cond: str,
             })
     return {"base": out, "mask_rows": mask_rows, "contrib_rows": contrib_rows,
             "guide_rows": guide_rows, "donor_rows": donor_rows,
+            "signatures": signatures,
             "n_source_targets": len(targets)}
+
+
+def base_deltas(*, ctx: dict[str, Any], args, cond: str, admitted: list[str],
+                signature_targets: Optional[set] = None) -> dict[str, Any]:
+    """Compatibility name for `scan` (W18): the pathway lane and Step 0 call this."""
+    return scan(ctx=ctx, args=args, cond=cond, admitted=admitted,
+                signature_targets=signature_targets)
 
 
 def build_bundle(args) -> dict[str, Any]:
@@ -292,7 +311,12 @@ def build_bundle(args) -> dict[str, Any]:
         "release_gate": verdict["release_gate"],
         "code_identity": rs.code_identity_for(
             ctx["lane"], getattr(args, "allow_dirty_tree", False)),
-        "environment_lock": runid.env_lock_block(getattr(args, "env_lock", None)),
+        # THE SOLVER LOCK, VERIFIED against the pin and bound by its FULL sha256 (W18).
+        # `runid.env_lock_block` hashed whatever path it was handed and reported
+        # "not_supplied" when handed none — it never checked the file WAS the lock, and never
+        # refused. Recording a lock beside a run says which environment the producer HAD;
+        # binding a VERIFIED one into the run id says which environment the numbers CAME FROM.
+        "environment_lock": envlock.block(getattr(args, "env_lock", None)),
         "arm_rows_sha256": doc["arm_rows_sha256"],
     }
     full = sha256_hex(canonical_json(binding))

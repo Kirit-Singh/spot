@@ -26,6 +26,7 @@ import fixtures_v3_release as V3
 import pytest
 from direct import scorer_view, trust
 from direct import stage1_release_v3 as rel
+from fixtures_direct import _PINNED_LOCK
 
 # The frozen Stage-1 pins. Re-derived by the loader from bytes; asserted here so a drift in
 # either side is a loud test failure rather than a quiet re-attribution.
@@ -219,6 +220,7 @@ class TestABundleCanActuallyBeBuiltOnTheV3Release:
         from direct import run_arms
         args = synthetic_run()
         ns = run_arms.build_parser().parse_args([
+            "--env-lock", _PINNED_LOCK,
             "--condition", "StimX", "--out-root", str(tmp_path / "out"),
             "--de-main", args.de_main, "--by-guide", args.by_guide,
             "--by-donors", args.by_donors, "--sgrna", args.sgrna,
@@ -226,6 +228,8 @@ class TestABundleCanActuallyBeBuiltOnTheV3Release:
             "--source-registry", args.source_registry,
             "--pseudobulk", args.pseudobulk,
             "--lane", "synthetic", "--allow-dirty-tree",
+            # the pinned Stage-2 solver lock — bound by every invocation, or the run refuses
+            "--env-lock", args.env_lock,
             "--stage1-release", release_path, "--stage1-release-root", root])
         return run_arms.build_bundle(ns)
 
@@ -255,6 +259,7 @@ class TestABundleCanActuallyBeBuiltOnTheV3Release:
         path = V3.stage_release(root)
         args = synthetic_run()
         ns = run_arms.build_parser().parse_args([
+            "--env-lock", _PINNED_LOCK,
             "--condition", "StimX", "--out-root", str(tmp_path / "out"),
             "--de-main", args.de_main, "--lane", "synthetic", "--allow-dirty-tree",
             "--stage1-release", path])          # no --stage1-release-root
