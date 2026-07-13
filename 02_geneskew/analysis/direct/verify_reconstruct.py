@@ -244,16 +244,89 @@ def induced_components(members: list[str],
     return sorted(comps, key=lambda c: (-len(c), c[0]))
 
 
+# --------------------------------------------------------------------------- #
+# THE FROZEN CONVERGENCE-SIZE DOMAIN, REIMPLEMENTED FROM THE WRITTEN SPEC.
+#
+# A set whose MEASURED ENDPOINTS exceed the maximum is OUT OF DOMAIN: it is still emitted,
+# but it contributes ZERO pair computations and can therefore never be convergent. A giant
+# root may not consume O(n^2) compute or manufacture a convergence claim merely because it
+# contains most of the genome.
+#
+# THIS MATTERS TO THE VERIFIER, NOT ONLY THE PRODUCER. A verifier that recomputed pairs for
+# EVERY set would find real supportive pairs inside an oversized root that the producer
+# correctly never evaluated, and would then REFUSE AN HONEST PRODUCTION BUNDLE at
+# `convergence_support_rederives...`. The tiny fixture has no such set; Reactome and GO do.
+# So the domain is re-derived here, from the frozen constants, and never imported from the
+# producer — a verifier that took the generator's rule would ratify whatever the generator
+# currently believes, including a max quietly raised to make a root convergent.
+# --------------------------------------------------------------------------- #
+SPEC_MAX_CONVERGENCE_SET_SIZE = 500
+SPEC_CONVERGENCE_SIZE_POLICY_ID = (
+    "spot.stage02.pathway.convergence_size_governance.prospective.v1")
+SPEC_CONVERGENCE_SIZE_BASIS = (
+    "pathway_members_intersect_perturbation_target_universe_intersect_available_"
+    "perturbation_signature_targets")
+SIZE_EVALUABLE = "evaluable"
+SIZE_TOO_LARGE = "non_evaluable_set_too_large"
+
+
+def size_disposition(members: list[str],
+                     signatures: dict[str, dict[str, float]]) -> dict[str, Any]:
+    """Is this set inside the frozen convergence-size domain? The verifier's own answer.
+
+    The endpoints are the set's perturbation-target members that HAVE a signature — not its
+    gene count, and not its readout footprint. The basis id says exactly that, and is checked.
+    """
+    n_endpoints = sum(1 for g in members if g in signatures)
+    evaluable = n_endpoints <= SPEC_MAX_CONVERGENCE_SET_SIZE
+    return {
+        "convergence_size_policy_id": SPEC_CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": SPEC_CONVERGENCE_SIZE_BASIS,
+        "max_convergence_set_size": SPEC_MAX_CONVERGENCE_SET_SIZE,
+        "n_measured_convergence_endpoints": n_endpoints,
+        "convergence_size_disposition": SIZE_EVALUABLE if evaluable else SIZE_TOO_LARGE,
+        "convergence_evaluable": evaluable,
+    }
+
+
+def evaluated_pair_union(members_by_set: dict[str, list[str]],
+                        signatures: dict[str, dict[str, float]]
+                        ) -> set[tuple[str, str]]:
+    """Every intra-set pair the producer EVALUATES — the denominator behind n_intra_set_pairs.
+
+    OUT-OF-DOMAIN SETS CONTRIBUTE NOTHING. This is the whole subtlety: a union taken over
+    every set would count the pairs inside an oversized root that were never evaluated, and
+    the re-derived denominator would exceed the honest declared one — REFUSING A TRUE BUNDLE.
+    The pairs are a SET, not a list: a target pair shared by two sets is evaluated once.
+    """
+    pairs: set[tuple[str, str]] = set()
+    for members in members_by_set.values():
+        if not size_disposition(members, signatures)["convergence_evaluable"]:
+            continue
+        measured = sorted(g for g in members if g in signatures)
+        for i, a in enumerate(measured):
+            for b in measured[i + 1:]:
+                pairs.add((a, b))
+    return pairs
+
+
 def converge(members: list[str], signatures: dict[str, dict[str, float]]
              ) -> dict[str, Any]:
-    """Which of the set's members were MEASURED, and did they converge? Intra-set only."""
+    """Which of the set's members were MEASURED, and did they converge? Intra-set only.
+
+    OUT OF DOMAIN => ZERO PAIRS. The set is still measured and still reported; it simply
+    stands on nothing, because nothing was evaluated for it.
+    """
     measured = sorted(g for g in members if g in signatures)
+    size = size_disposition(members, signatures)
+
     supportive: list[tuple[str, str]] = []
-    for i, a in enumerate(measured):
-        for b in measured[i + 1:]:
-            sim, _n = cosine_on_shared(signatures[a], signatures[b])
-            if sim is not None and sim >= SIMILARITY_THRESHOLD:
-                supportive.append((a, b))
+    if size["convergence_evaluable"]:
+        for i, a in enumerate(measured):
+            for b in measured[i + 1:]:
+                sim, _n = cosine_on_shared(signatures[a], signatures[b])
+                if sim is not None and sim >= SIMILARITY_THRESHOLD:
+                    supportive.append((a, b))
     comps = induced_components(measured, supportive)
     best = comps[0] if comps else []
     return {
@@ -261,6 +334,7 @@ def converge(members: list[str], signatures: dict[str, dict[str, float]]
         "supporting": list(best), "n_supporting": len(best),
         "n_supportive_pairs": len(supportive),
         "convergent": len(best) >= MIN_PERTURBATIONS_FOR_CONVERGENCE,
+        "size": size,
     }
 
 
@@ -346,7 +420,13 @@ def _anchor_to_bundle(*, shipped_path: str, rel_path: str, cache_path: Optional[
     an auditor comparing the shipped copy against their own copy of the release — and it is
     never how the evidence is located.
     """
-    gs = binding.get("gene_sets") or {}
+    # The PINNED RELEASE IDENTITY, wherever the contract puts it. The legacy binding carried
+    # a top-level `gene_sets` block; the all-arm binding carries the same release identity
+    # inside the evidence artifact it shipped it with. SAME FIELD, SAME MEANING, SAME CHECK —
+    # this reads the pinned sha256 the run was given, and refuses if it cannot find one.
+    gs = (binding.get("gene_sets")
+          or (binding.get("evidence_artifacts") or {}).get(SOURCE_KEY)
+          or {})
     release = gs.get("gene_set_release") or {}
     # The PINNED SOURCE IDENTITY the run was given, and the raw hash the run bound for the
     # copy it shipped. Both must equal the bytes actually on disk: the copy IS the source.
@@ -392,8 +472,23 @@ def _anchor_to_bundle(*, shipped_path: str, rel_path: str, cache_path: Optional[
 
     # (2) THE RELEASE IS THE RELEASE: id, source, licence, namespace, size.
     bad = []
-    if bundle["canonical_sha256"] != gs.get("canonical_sha256"):
-        bad.append("the parsed memberships do not hash to the bound content id")
+    # THE MEMBERSHIP CONTENT ID. Not the same quantity as the source block's
+    # `canonical_sha256`, which hashes the whole shipped DOCUMENT: this is the digest of the
+    # PARSED MEMBERSHIPS — [set_id, genes_target, genes_readout] — and it is the thing every
+    # count is taken from. The legacy binding carried it under `gene_sets`; the all-arm
+    # binding carries it under `method.gene_sets`. Comparing the membership digest against
+    # the document hash would compare two different numbers and refuse every honest bundle;
+    # accepting a MISSING one would compare nothing at all. So it is resolved from either
+    # contract, and its ABSENCE is a refusal.
+    bound_canonical = ((binding.get("gene_sets") or {}).get("canonical_sha256")
+                       or ((binding.get("method") or {}).get("gene_sets") or {}).get(
+                           "canonical_sha256"))
+    if bound_canonical is None:
+        bad.append("the run binds no gene-set membership content id, so the memberships "
+                   "every count is taken from are anchored to nothing")
+    elif bundle["canonical_sha256"] != bound_canonical:
+        bad.append(f"the parsed memberships hash to {bundle['canonical_sha256'][:16]}…; the "
+                   f"run binds {str(bound_canonical)[:16]}…")
     if bundle["source"] != release.get("source"):
         bad.append(f"source {bundle['source']!r} != {release.get('source')!r}")
     if bundle["release_id"] != release.get("release_id"):
@@ -445,8 +540,152 @@ def _anchor_to_bundle(*, shipped_path: str, rel_path: str, cache_path: Optional[
 # --------------------------------------------------------------------------- #
 # THE RECONSTRUCTION
 # --------------------------------------------------------------------------- #
+SIGNATURE_REF_FILE = "signature_ref.json"
+
+GATE_SIGNATURE_REF_BOUND = "the_signature_reference_is_the_one_the_run_id_covers"
+GATE_SHARED_MATRIX_SUPPLIED = "the_shared_signature_matrix_was_supplied_to_the_verifier"
+GATE_SHARED_MATRIX_IDENTITY = (
+    "the_shared_signature_matrix_is_byte_for_byte_the_one_the_reference_names")
+
+
+def _signatures_from_shipped_parquet(sig_path, bound, written, checks):
+    """The LEGACY contract: the signatures shipped inside the bundle."""
+    sig_bound = bound.get(SIGNATURES_KEY) or {}
+    try:
+        sig_rows = load_signature_rows(sig_path)
+    except (ValueError, OSError) as exc:
+        checks.append(_check(GATE_SIGNATURES_BOUND, False,
+                             f"{SIGNATURES_FILE} does not load: {exc}"))
+        return None, None
+    sig_canon = R.content_sha256(sig_rows)
+    sig_raw_want = (written.get(SIGNATURES_KEY) or {}).get("raw_sha256")
+    ok = (sig_canon == sig_bound.get("canonical_sha256")
+          and (sig_raw_want is None or R.sha256_file(sig_path) == sig_raw_want))
+    checks.append(_check(
+        GATE_SIGNATURES_BOUND, ok,
+        f"the signature rows hash to {sig_canon[:16]}…; the run binding names "
+        f"{str(sig_bound.get('canonical_sha256'))[:16]}…"))
+    if not ok:
+        return None, None
+    signatures: dict[str, dict[str, float]] = {}
+    for row in sig_rows:
+        signatures.setdefault(row["target_id"], {})[row["gene_id"]] = row["value"]
+    return signatures, sig_canon
+
+
+def _vsm():
+    """The verifier's OWN arrow readers, loaded lazily.
+
+    `verify_signature_matrix` imports THIS module (package-relative), so importing it at
+    module scope is a cycle. It is only needed on the all-arm path, so it is loaded there.
+    """
+    try:
+        from direct import verify_signature_matrix as m
+    except ImportError:                       # loaded as a top-level module, not a package
+        import verify_signature_matrix as m
+    return m
+
+
+def _signatures_from_shared_matrix(out_dir, binding, root, checks):
+    """The ALL-ARM contract: the bundle ships a REFERENCE; the bytes live in one shared,
+    content-addressed per-condition matrix.
+
+    Every hash below is RECOMPUTED HERE, from the arrow bytes, with the verifier's own
+    readers — never read out of the manifest and never taken from the producer. The chain
+    is: the run id covers the reference; the reference names the matrix by content; the
+    matrix on disk hashes to exactly that. Break any link and this REFUSES.
+
+    Fail-closed on absence: a matrix the verifier was not given is a convergence claim that
+    cannot be recomputed, and what cannot be recomputed is not admitted.
+    """
+    VSM = _vsm()
+    ref_path = os.path.join(out_dir, SIGNATURE_REF_FILE)
+    if not os.path.exists(ref_path):
+        checks.append(_check(
+            GATE_SIGNATURES_BOUND, False,
+            f"neither {SIGNATURES_FILE} nor {SIGNATURE_REF_FILE} is present: this bundle "
+            "carries no signatures and names none, so no convergence claim in it can be "
+            "recomputed by anyone"))
+        return None, None
+    try:
+        with open(ref_path) as fh:
+            ref = json.load(fh)
+    except (ValueError, OSError) as exc:
+        checks.append(_check(GATE_SIGNATURES_BOUND, False,
+                             f"{SIGNATURE_REF_FILE} does not load: {exc}"))
+        return None, None
+    checks.append(_check(GATE_SIGNATURES_BOUND, True))
+
+    # (1) THE REFERENCE IS THE ONE THE RUN ID COVERS. A bundle whose shipped reference is
+    #     not the reference its binding hashed points at a matrix the id never covered.
+    bound_ref = binding.get("signature_ref") or {}
+    ok = bool(bound_ref) and R.content_sha256(ref) == R.content_sha256(bound_ref)
+    checks.append(_check(
+        GATE_SIGNATURE_REF_BOUND, ok,
+        f"the shipped {SIGNATURE_REF_FILE} hashes to {R.content_sha256(ref)[:16]}…; the run "
+        f"binding names {R.content_sha256(bound_ref)[:16] if bound_ref else 'nothing'}"))
+    if not ok:
+        return None, None
+
+    if not root:
+        checks.append(_check(
+            GATE_SHARED_MATRIX_SUPPLIED, False,
+            "this bundle ships no signature bytes — it references the SHARED per-condition "
+            "matrix — and no --signature-matrix-root was given. The convergence claim "
+            "therefore cannot be independently recomputed, and a claim that cannot be "
+            "recomputed is not admitted"))
+        return None, None
+    checks.append(_check(GATE_SHARED_MATRIX_SUPPLIED, True))
+
+    cond_dir = os.path.join(str(root), str(ref.get("condition")))
+    axis_path = os.path.join(str(root), VSM.GENE_AXIS_FILE)
+    matrix_path = os.path.join(cond_dir, VSM.MATRIX_FILE)
+    mask_path = os.path.join(cond_dir, VSM.MASK_FILE)
+    manifest_path = os.path.join(cond_dir, VSM.MANIFEST_FILE)
+    try:
+        gene_ids = VSM._read_gene_axis(axis_path)
+        n_genes = len(gene_ids)
+        targets, values = VSM._read_matrix(matrix_path, n_genes)
+        m_targets, bitmap = VSM._read_mask(mask_path, (n_genes + 7) // 8)
+        manifest = VSM._json(manifest_path)
+    except (OSError, ValueError, KeyError) as exc:
+        checks.append(_check(GATE_SHARED_MATRIX_IDENTITY, False,
+                             f"the shared matrix under {cond_dir!r} does not load: {exc}"))
+        return None, None
+
+    got = {
+        "matrix_values_sha256": VSM.values_sha256(values),
+        "mask_bits_sha256": VSM.bits_sha256(bitmap),
+        "gene_axis_raw_sha256": R.sha256_file(axis_path),
+        "matrix_raw_sha256": R.sha256_file(matrix_path),
+        "mask_raw_sha256": R.sha256_file(mask_path),
+        "signature_manifest_canonical_sha256": VSM.manifest_canonical(manifest),
+    }
+    got["matrix_canonical_sha256"] = VSM.matrix_canonical(
+        str(ref.get("condition")), targets, got["matrix_values_sha256"],
+        got["gene_axis_raw_sha256"], n_genes)
+    got["mask_canonical_sha256"] = VSM.mask_canonical(
+        str(ref.get("condition")), m_targets, got["matrix_values_sha256"],
+        got["mask_bits_sha256"], got["gene_axis_raw_sha256"], n_genes)
+    drift = sorted(k for k, v in got.items() if ref.get(k) != v)
+    if targets != m_targets:
+        drift.append("matrix_and_mask_target_order")
+    checks.append(_check(
+        GATE_SHARED_MATRIX_IDENTITY, not drift,
+        f"the matrix on disk disagrees with the reference the run id covers, at {drift}. "
+        "A signature artifact swapped underneath a bundle is the quietest way to change "
+        "what an experiment said while every hash inside the bundle still agrees"))
+    if drift:
+        return None, None
+
+    want = [str(t) for t in (ref.get("member_target_ids") or [])]
+    signatures = VSM.reconstruct_signatures(targets, values, bitmap, gene_ids, n_genes, want)
+    return signatures, got["matrix_canonical_sha256"]
+
+
 def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, Any],
-                gene_sets_path: Optional[str] = None
+                gene_sets_path: Optional[str] = None,
+                signature_matrix_root: Optional[str] = None
                 ) -> tuple[Optional[dict[str, Any]], list[dict[str, Any]]]:
     """Recount every claim from the bound bytes. ``None`` facts -> not reconstructible.
 
@@ -492,31 +731,21 @@ def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, A
         f"binding names {str(want_canon)[:16]}… and the provenance pins "
         f"{str(want_raw)[:16]}…. What the counts were counted from is part of what the run IS"))
 
-    # ---- the MASKED SIGNATURES (parquet, hashed over its ROWS) ----
+    # ---- the MASKED SIGNATURES ----
+    # TWO contracts, and the bundle says which. The legacy pair-scoped artifact SHIPPED its
+    # signatures as a parquet beside the records. The all-arm bundle ships NONE — one shared
+    # per-condition matrix serves all six bundles, and the bundle carries a REFERENCE to it.
+    # A verifier that only knew the first contract refused the second at
+    # `every_required_file_is_present` and could admit nothing at all.
     sig_path = os.path.join(out_dir, SIGNATURES_FILE)
-    signatures: dict[str, dict[str, float]] = {}
-    sig_bound = bound.get(SIGNATURES_KEY) or {}
-    if not os.path.exists(sig_path):
-        checks.append(_check(GATE_SIGNATURES_BOUND, False,
-                             f"{SIGNATURES_FILE} is absent; no convergence claim in this "
-                             "artifact can be recomputed"))
+    if os.path.exists(sig_path):
+        signatures, sig_canon = _signatures_from_shipped_parquet(
+            sig_path, bound, written, checks)
+    else:
+        signatures, sig_canon = _signatures_from_shared_matrix(
+            out_dir, binding, signature_matrix_root, checks)
+    if signatures is None:
         return None, checks
-    try:
-        sig_rows = load_signature_rows(sig_path)
-    except (ValueError, OSError) as exc:
-        checks.append(_check(GATE_SIGNATURES_BOUND, False,
-                             f"{SIGNATURES_FILE} does not load: {exc}"))
-        return None, checks
-    sig_canon = R.content_sha256(sig_rows)
-    sig_raw_want = (written.get(SIGNATURES_KEY) or {}).get("raw_sha256")
-    checks.append(_check(
-        GATE_SIGNATURES_BOUND,
-        sig_canon == sig_bound.get("canonical_sha256")
-        and (sig_raw_want is None or R.sha256_file(sig_path) == sig_raw_want),
-        f"the signature rows hash to {sig_canon[:16]}…; the run binding names "
-        f"{str(sig_bound.get('canonical_sha256'))[:16]}…"))
-    for row in sig_rows:
-        signatures.setdefault(row["target_id"], {})[row["gene_id"]] = row["value"]
 
     # ---- THE TWO UNIVERSES ----
     target_ids = [str(t) for t in (ev.get("target_universe") or [])]
@@ -585,12 +814,39 @@ def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, A
     # one it belongs to. Enrichment ranks PERTURBED targets; the signature vectors live in
     # the DE-READOUT space. A run that swapped them answered a different question.
     two_bad = []
-    if method.get("enrichment_membership_universe") != TARGET_MEMBERSHIP_UNIVERSE:
-        two_bad.append("enrichment does not declare the perturbation-target universe")
-    if method.get("convergence_signature_vector_space") != READOUT_VECTOR_SPACE:
-        two_bad.append("the signature vector space is not the DE readout")
-    if method.get("two_universes_are_bound_separately") is not True:
-        two_bad.append("the two universes are not bound separately")
+    declares = any(k in method for k in ("enrichment_membership_universe",
+                                         "convergence_signature_vector_space",
+                                         "two_universes_are_bound_separately"))
+    if declares:
+        # The LEGACY contract SAYS which universe is which. Take it at its word, and check it.
+        if method.get("enrichment_membership_universe") != TARGET_MEMBERSHIP_UNIVERSE:
+            two_bad.append("enrichment does not declare the perturbation-target universe")
+        if method.get("convergence_signature_vector_space") != READOUT_VECTOR_SPACE:
+            two_bad.append("the signature vector space is not the DE readout")
+        if method.get("two_universes_are_bound_separately") is not True:
+            two_bad.append("the two universes are not bound separately")
+    else:
+        # The ALL-ARM contract makes no such declaration — so the property is RE-DERIVED from
+        # the bound artifacts rather than read off a sentence the producer wrote about itself.
+        # That is STRONGER, not weaker: a declaration can be true while the run did the other
+        # thing, and this cannot.
+        #   (i)  the run binds BOTH universes, separately, BY CONTENT
+        if (binding.get("target_universe_sha256") != tu_hash
+                or binding.get("gene_universe_sha256") != ru_hash):
+            two_bad.append(
+                "the run does not bind the two universes separately by content: it binds "
+                f"target={str(binding.get('target_universe_sha256'))[:12]}… / "
+                f"readout={str(binding.get('gene_universe_sha256'))[:12]}…, and the bound "
+                f"evidence holds {tu_hash[:12]}… / {ru_hash[:12]}…")
+        #   (ii) the SIGNATURE COORDINATES actually live in the DE-readout space. This is the
+        #        substance of `convergence_signature_vector_space`, and it is a fact about the
+        #        bytes rather than a claim about them.
+        sig_genes = {g for vec in signatures.values() for g in vec}
+        outside = sorted(sig_genes - readout_set)
+        if outside:
+            two_bad.append(
+                f"{len(outside)} signature coordinates (e.g. {outside[:3]}) lie OUTSIDE the "
+                "bound DE-readout universe: the vector space is not the readout")
     if tu_hash == ru_hash:
         two_bad.append("the target and readout universes are the same population")
     checks.append(_check(GATE_TWO_UNIVERSES, not two_bad, "; ".join(two_bad)))
@@ -637,6 +893,14 @@ def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, A
     readout_by_set = {sid: s["genes_readout"] for sid, s in bundle["sets"].items()}
 
     facts: dict[str, Any] = {}
+    # THE EVALUATED-PAIR DENOMINATOR, re-derived. The producer no longer EMITS its
+    # non-supportive pair records — it streams only the supportive ones and keeps the count
+    # of all evaluated pairs alive through a list subclass whose __len__ lies. That count
+    # reaches disk as `n_intra_set_pairs`, and until now NOTHING re-derived it: a bundle
+    # could multiply its own denominator and every other number in it would still agree.
+    # It is the UNION of the intra-set pairs over measured members — the same set the
+    # producer evaluates — so it is recomputable here, from the signatures, exactly.
+    evaluated_pairs = evaluated_pair_union(members_by_set, signatures)
     for set_id, members in members_by_set.items():
         in_target = [g for g in members if g in target_set]
         n_in_target = len(in_target)
@@ -651,6 +915,8 @@ def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, A
                          {"value": None, "edge": [], "side": None, "n_hits": 0,
                           "n_ranked": len(ranked)})
 
+        conv = converge(members, signatures)
+
         facts[set_id] = {
             "n_source_symbols": source_by_set.get(set_id),
             "n_in_target_universe": n_in_target,
@@ -660,7 +926,7 @@ def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, A
             "n_genes_in_set": len(members),
             "testable": testable,
             "arms": arms,
-            "convergence": converge(members, signatures),
+            "convergence": conv,
         }
 
     identity = {
@@ -684,4 +950,5 @@ def reconstruct(*, out_dir: str, provenance: dict[str, Any], method: dict[str, A
                                     "release_id": bundle["release_id"],
                                     "license": bundle["license"],
                                     "n_sets": len(bundle["sets"])}
-    return {"sets": facts, "identity": identity}, checks
+    return {"sets": facts, "identity": identity,
+            "n_intra_set_pairs": len(evaluated_pairs)}, checks

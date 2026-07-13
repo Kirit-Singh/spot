@@ -115,7 +115,22 @@ FORBIDDEN_KEY_RE = re.compile(FORBIDDEN_KEY_PATTERN, re.IGNORECASE)
 FORBIDDEN_TOKEN_RE = re.compile(r"(^|_)[pq](_|$)", re.IGNORECASE)
 
 # The ONLY names exempt from the firewall, by exact spelling. See the module docstring.
-KEY_FIREWALL_EXCEPTIONS = frozenset({"away_from_A_zscore", "toward_B_zscore"})
+#
+# THE `scorer_view` NAMES ARE IDENTITY HASHES, NOT STATISTICS. The pattern bans the substring
+# "score", and "scorer_view_sha256" contains it — so the firewall fired on the honest Stage-1
+# SCORER VIEW identity that every all-arm bundle binds, and refused every true artifact. The
+# fix is the mechanism this module already provides: an EXACT-SPELLING exemption. The pattern
+# is untouched, so `pathway_score`, `combined_score`, `balanced_score` and every other
+# statistic-shaped key still fire — only these five exact names, which name WHICH scorer view
+# was bound and never a number computed from one, are let through.
+#
+# A substring ban with no allowlist is a firewall that refuses the truth, and a firewall that
+# refuses the truth is one somebody turns off.
+KEY_FIREWALL_EXCEPTIONS = frozenset({
+    "away_from_A_zscore", "toward_B_zscore",
+    "scorer_view", "scorer_view_id", "scorer_view_sha256",
+    "release_scorer_view_canonical_sha256", "release_scorer_projection_sha256",
+})
 
 # ...and the NEGATIVE DECLARATIONS: exempt ONLY while they still say "forbidden". The
 # artifact has to be able to write down its own prohibition; it does not get to keep the

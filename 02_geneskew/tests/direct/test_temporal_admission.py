@@ -349,12 +349,36 @@ class TestTheExactColumnAllowlist:
 
 
 class TestTheNamedFirewallExceptions:
-    def test_the_within_condition_zscore_columns_are_the_ONLY_exact_exceptions(self):
-        # They match /score/ but they are the within-condition sensitivity effect layer,
-        # not an objective. The exception is an explicit, enumerated, auditable list —
-        # not a silent hole in the pattern.
-        assert admission.KEY_FIREWALL_EXCEPTIONS == frozenset(
-            {"away_from_A_zscore", "toward_B_zscore"})
+    def test_the_exact_exceptions_are_EXACTLY_these(self):
+        """The list is EXACT, and widening it is a deliberate act that lands here first.
+
+        MIGRATION (all-arm pathway contract): the five `scorer_view` names were added. They
+        match /score/ because "scorer" contains "score", but they are IDENTITY HASHES — they
+        name WHICH Stage-1 scorer view a run bound — and never a number computed from one.
+        Without the exemption the firewall fired on every honest all-arm bundle and refused
+        the truth; a firewall that refuses the truth is one somebody turns off.
+
+        The PATTERN is untouched. `pathway_score`, `combined_score` and every other
+        statistic-shaped key still fire — see the two tests below, which is what makes this
+        an exemption and not a hole.
+        """
+        assert admission.KEY_FIREWALL_EXCEPTIONS == frozenset({
+            "away_from_A_zscore", "toward_B_zscore",
+            "scorer_view", "scorer_view_id", "scorer_view_sha256",
+            "release_scorer_view_canonical_sha256", "release_scorer_projection_sha256",
+        })
+
+    def test_the_scorer_view_exemption_is_not_a_hole_in_the_pattern(self):
+        """Every statistic-shaped key the exemption might have let through still fires."""
+        for key in ("pathway_score", "combined_score", "balanced_score", "score",
+                    "weighted_score", "scorer_view_score", "p_value", "q_value", "fdr",
+                    "nominal_p", "padj"):
+            assert admission.forbidden_keys({key: 1.0}) == [key], key
+
+    def test_the_exempt_names_pass_ONLY_at_their_exact_spelling(self):
+        assert admission.forbidden_keys({"scorer_view_sha256": "abc"}) == []
+        assert admission.forbidden_keys({"scorer_view_sha256_score": 1.0}) == [
+            "scorer_view_sha256_score"]
 
     def test_the_exception_does_not_license_a_lookalike(self, artifact):
         out, prov = artifact
