@@ -130,7 +130,7 @@ export interface PathwayNode {
   contributing_targets: string[];
   /** Which arm(s) the convergence is supported on. */
   arm_support: ArmSupport;
-  /** Reactome-style enrichment value as supplied; null when not evaluated. */
+  /** Overrepresentation enrichment value as supplied; null when not evaluated. */
   enrichment: number | null;
   /** True when the node itself is a druggable entity. */
   druggable: boolean;

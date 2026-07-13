@@ -44,8 +44,9 @@ const WAGER_RAW = '731fe2b7f7ce435de88a19f77dbd5e3b5482a12036574d6f378fbbb816113
 // Ensembl-rekeyed gene-set bundles (verified against the geneset-cache provenance emitted by builder
 // spot.stage02.geneset_rekey.symbol_to_ensembl.v1). raw = the on-disk *.genesets.json bytes;
 // canonical = the order-independent canonical hash. Replaces the earlier stale short hashes.
-const REACTOME_RAW = '81cf184f9c2697236c8bbc1b445ce8b28ecf17ca90a2f0aafe709d3028a36469';
-const REACTOME_CANONICAL = '9cc416d14a16ff4bdbf700780e67d40a6f88c5235690fadc79abab83fd68218e';
+// GO-BP-ONLY release: GO-BP is the one released gene-set source, so it is the one bundle pinned here.
+// (The Reactome V97 bundle hashes are deliberately NOT carried in the runtime manifest — see the
+// source_chain note in pathwaysRaw. Its licence/history record belongs in the repo, not on the page.)
 const GO_BP_RAW = '4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e5914d2a6';
 const GO_BP_CANONICAL = '5b62e8bc36cb798ec615c078bc1c8ee2d3331d61dafb24d80cac6b18ab3bc310';
 // Served Stage-1 v3 release identity (stage01_release_manifest.v2 self_canonical_sha256) — bound
@@ -290,7 +291,7 @@ function pathwaysRaw(): RawManifest {
     stage_label: STAGE_LABELS.pathways,
     methods: {
       data_input:
-        'Marson GWCD4i target-masked perturbation signatures + Ensembl-keyed gene-set bundles: Reactome V97 (2,868 sets, canonical 9cc416d1) and GO-BP (go-basic 2026-06-15 + goa_human 2026-05-21, 13,805 sets, canonical 5b62e8bc). Two gene universes, never conflated: perturbation-target (11,526 = 11,522 ENSG + 4 symbol-only) and DE-readout (10,282).',
+        'Marson GWCD4i target-masked perturbation signatures + the Ensembl-keyed GO-BP gene-set bundle (go-basic 2026-06-15 + goa_human GOC snapshot 2026-05-21, 13,805 sets, canonical 5b62e8bc). Two gene universes, never conflated: perturbation-target (11,526 = 11,522 ENSG + 4 symbol-only) and DE-readout (10,282).',
       source_tissue: SOURCE_TISSUE.pathways,
       estimand:
         "Target-ranked pathway convergence over the full target-masked perturbation signatures (not the marker panels): (A) per-arm ranked enrichment scored in the perturbation-target universe (11,526 = 11,522 ENSG + 4 symbol-only, with per-set namespace eligibility) — a weighted running-sum statistic over one arm's ranking with its leading edge, computed once per arm and never summed across arms, with per-arm coverage / headline eligibility; (B) signature convergence scored in the 10,282-gene DE-readout universe — cosine on the shared unmasked support, requiring ≥2 measured perturbations. No p / q / FDR — there is no calibrated null.",
@@ -300,7 +301,7 @@ function pathwaysRaw(): RawManifest {
         'Required upstream: an admitted Stage-2 Direct arm bundle (schema spot.stage02_screen.v3) bound to a generic spot.stage01_selection.v3 contract.',
       limitations: [
         'A convergence claim requires ≥2 measured perturbations; single-target sets are emitted flagged single_target_support, never dropped.',
-        'Source-coverage loss is reported per gene-set, per universe, never blended: ranked enrichment uses the 11,526-gene perturbation-target universe (Reactome loses 39.6069% of member slots, GO-BP 51.4288%); signature convergence uses the 10,282-gene DE-readout universe (Reactome 40.1817%, GO-BP 56.5884%).',
+        'Source-coverage loss is reported per gene-set, per universe, never blended: ranked enrichment uses the 11,526-gene perturbation-target universe (GO-BP loses 51.4288% of member slots); signature convergence uses the 10,282-gene DE-readout universe (GO-BP 56.5884%).',
       ],
       method_id: 'spot.stage02.pathway.ranked_arm_enrichment.v2 · spot.stage02.pathway.signature_convergence.v2',
       // Run-specific command UNAVAILABLE by policy: the production pathway pipeline is dependency-aware
@@ -321,15 +322,14 @@ function pathwaysRaw(): RawManifest {
         MARSON_SGRNA,
         MARSON_HF_MIRROR,
         MARSON_PREPRINT,
-        src('Reactome', 'V97 · 2,868 sets · derived-bundle hashes are reactome_ensembl.genesets.json (Ensembl-rekeyed), NOT the upstream ZIP', {
-          url: 'https://reactome.org/download/97/ReactomePathways.gmt.zip', // exact V97 archive
-          license: 'CC0-1.0',
-          raw_sha256: REACTOME_RAW,
-          canonical_sha256: REACTOME_CANONICAL,
-        }),
-        src('GO Biological Process', 'go-basic 2026-06-15 + goa_human 2026-05-21 (release IDs from cached file headers) · 13,805 sets · pins identify the derived go_bp_ensembl.genesets.json bytes', {
+        // GO-BP-ONLY release: GO-BP is the sole released gene-set source, so it is the sole gene-set
+        // record in this chain. A second source listed here — with a licence, a URL and bundle hashes —
+        // reads as a released co-input of the pathway method, which is exactly what the GO-BP-only rule
+        // forbids; the parked Reactome licence/history record lives in the repo's DATA_LICENSES, not in
+        // the runtime manifest a served page advertises.
+        src('GO Biological Process', 'go-basic 2026-06-15 + goa_human GOC snapshot 2026-05-21 (release IDs from cached file headers) · 13,805 sets · pins identify the derived go_bp_ensembl.genesets.json bytes', {
           url: 'https://geneontology.org/docs/go-citation-policy/', // HTTPS official citation/license (GO download URLs are mutable)
-          license: 'CC-BY-4.0',
+          license: 'CC BY 4.0',
           raw_sha256: GO_BP_RAW,
           canonical_sha256: GO_BP_CANONICAL,
         }),
@@ -453,7 +453,8 @@ export function stageMethodsRaw(page: PageKey): RawManifest {
  */
 export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string> = {
   targets: '90c11e80a8338443e2550581f89330e2de44a38eafa071d5158d354d7c8adabb',
-  pathways: '3d0294fe0b6d0beb618a477b65a0cd82a736fdd60ef875baf2f6eb9a3864f657',
+  // GO-BP-only Pathways manifest (Reactome removed from data_input / limitations / source_chain).
+  pathways: 'f2fd05dbd362ef03db516b5543df61d247fe36bb415ec300cee2fa5abdfcd29e',
   drugs: '9b4fea60d229dd04418ac67e0cf9ad48338fecb6d32814761e2934cf51f0c320',
   pksafety: '1b8e6ab3631f949f57c7998d9366d7c060d47d3dbcd6605257a2d6ac85ef3c5a',
 };

@@ -63,8 +63,17 @@ function compactStage2Metadata(v: unknown, path: string): CompactStage2ReleaseMe
     fail('unknown_schema_version', `${path}.schema_version must be spot.ui_compact_stage2_release.v1`);
   }
   const conditions = exactStrings(v.release_conditions, ['Rest', 'Stim8hr', 'Stim48hr'], `${path}.release_conditions`);
-  const sources = exactStrings(v.pathway_sources, ['reactome', 'go_bp'], `${path}.pathway_sources`);
+  // GO-BP-ONLY release rule, enforced at the trust boundary. The release declares exactly one pathway
+  // source. Reactome is PARKED: it stays in method-definition / license / history text, but a served
+  // current.json that DECLARES it — in pathway_sources or as the active source — is refused outright,
+  // so a stale packer spec can never re-enter a Reactome topology through the deploy.
+  const sources = exactStrings(v.pathway_sources, ['go_bp'], `${path}.pathway_sources`);
   const active = str(v.active_pathway_source, `${path}.active_pathway_source`);
+  if (active !== 'go_bp') {
+    // The message deliberately names no parked source: this string is SHIPPED in the bundle, and the
+    // GO-BP-only dist gate is zero-tolerance — even a refusal message must not advertise the token.
+    fail('malformed', `${path}.active_pathway_source must be "go_bp" (GO-BP-only release; no other pathway source may be declared)`);
+  }
   if (!sources.includes(active)) fail('malformed', `${path}.active_pathway_source is not in pathway_sources`);
   if (!isObject(v.independent_verifier)) fail('malformed', `${path}.independent_verifier must be an object`);
   const verifier = v.independent_verifier;

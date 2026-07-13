@@ -81,7 +81,10 @@ const STAGE2_METHOD = 'spot.stage02.display_projection.v2';
 const STAGE2_VERIFIER = 'spot.stage02.display_projection.independent_verifier.v1';
 const STAGE2_RECEIPT_PATH = 'stage02/display_projection.verification.json';
 const RELEASE_CONDITIONS = ['Rest', 'Stim8hr', 'Stim48hr'];
-const PATHWAY_SOURCES = ['reactome', 'go_bp'];
+// GO-BP-ONLY release rule: the packed release declares exactly ONE pathway source. Reactome is PARKED
+// (it survives only in method-definition / license / history text, never as a declared release source),
+// so a spec that still names it is REFUSED here rather than packed into a deployable current.json.
+const PATHWAY_SOURCES = ['go_bp'];
 const STAGE2_TOP_KEYS = ['analysis_mode', 'arms', 'authoritative_artifacts_are_the_native_ones',
   'bindings', 'cap_policy', 'combined_objective', 'cross_arm_score_or_order', 'method_version',
   'n_arms', 'projection_sha256', 'schema_version', 'selection_id', 'selection_independent'];

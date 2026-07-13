@@ -58,7 +58,7 @@ STAGE1_DATA_COMMIT="5eae9c9e1a28f7ebd949efad0b7873421943b541"
 STAGE1_PAGE_BASE_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"
 STAGE1_DATA_DIGEST="5fe59f99e33d1526e2ba4933dc210bd199917e306daf302f156b742926886cbb"
 STAGE1_PAGE_BASE_SHA="9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1"   # pin:01_page.html base @ 539431d (== import; question_id-emitting page keeps the classified UI + hash fallback)
-STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1}"  # nav-retargeted import — byte-identical to the 539431d canonical base
+STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-62588187f25d2c76b65f900c78b89b7ac7723a7d1c5f3da6467ce1bdc0a34498}"  # nav-retargeted import + the CTA selection-id fragment removal (classified below)
 INVARIANTS=(
   "data/stage01_selectability_v3.json:7c326a86"
   "data/stage01_validation.json:1c14cd28"
@@ -241,11 +241,18 @@ git -C "$SPOT_REPO" show "$STAGE1_PAGE_BASE_COMMIT:01_programs/app/01_page.html"
 [ "$(sha256_of "$BASE01")" = "$STAGE1_PAGE_BASE_SHA" ] || die "pinned base 01_page.html sha != $STAGE1_PAGE_BASE_SHA"
 [ "$(sha256_of "$PUBLIC_DIR/01_page.html")" = "$STAGE1_PAGE_IMPORT_SHA" ] || die "import 01_page.html sha != pinned $STAGE1_PAGE_IMPORT_SHA (re-review + update STAGE1_PAGE_IMPORT_SHA)"
 NAV_ALLOW='(nstep|nsep|window\.location\.assign|href="(01_page|targets|pathways|drugs|pksafety)\.html"|/02_page\.html#/stage-)'
+# CLASSIFIED: the CTA selection-id fragment removal. The selection_id stays INTERNAL — it still drives
+# curContrastId, the v3 contract, routing and the provenance hashes — it is only no longer TYPESET beside
+# the "ID program skew genes" button or in the inline success status. The hashes remain accountable in the
+# Methods/provenance artifacts. These are the ONLY lines this touches (#idpend write + the two statuses);
+# anything else in that region is still a NON-classified diff and still a hard NO-GO.
+IDFRAG_ALLOW="(pend\.style\.display|pend\.textContent|st\.textContent='Contrast ready|st\.textContent='Selection ready|curContrastId=r\.selection_id|selection_id is INTERNAL|provenance hashes|accountable: the Methods|selection_id stays internal|button reads as a value)"
 OFFENDING="$(diff -u "$BASE01" "$PUBLIC_DIR/01_page.html" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
   | grep -vE "$NAV_ALLOW" \
   | grep -vE 'class="cite"' \
   | grep -vE 'No production/research split|PRODUCTION-selectability flag' \
-  | grep -vE 'href="/01_notebook\.html"' || true)"
+  | grep -vE 'href="/01_notebook\.html"' \
+  | grep -vE "$IDFRAG_ALLOW" || true)"
 rm -f "$BASE01"
 [ -z "$OFFENDING" ] || { printf '%s\n' "$OFFENDING" | sed 's/^/         /' >&2; die "01_page.html diff vs $STAGE1_PAGE_BASE_COMMIT touches NON-classified lines (not nav/citation/0-33-retire)"; }
 say "       spot@$STAGE1_DATA_COMMIT · data digest $STAGE1_DATA_DIGEST · 22 invariants + classified 01_page diff OK"
@@ -291,6 +298,16 @@ command -v node >/dev/null 2>&1 || die "node required for the fixture-leak scan"
 node "$SCRIPT_DIR/scan_dist_no_fixtures.mjs" "$DIST_DIR" "$FRONTEND_DIR/src/fixtures" \
   || die "fixture/demo identifiers reachable in a served bundle — fixtures must stay test-only (see above)"
 say "       fixture-leak scan clean (served bundles are fixture-free)"
+# GO-BP-ONLY release gate: the critical path releases exactly ONE pathway source (go_bp). Reactome is
+# PARKED — its licence/history record stays in the repo, never in a served byte. This refuses BOTH the
+# built bundle (a Pathways method advertising Reactome as a live co-input: prose, coverage figures, a
+# source record with a CC0 URL + bundle hashes) AND the results tree (a current.json declaring it in
+# pathway_sources / active_pathway_source — the exact state a live audit found on :8347). HARD NO-GO.
+GOBP_SCAN=("$DIST_DIR")
+[ -n "$RESULTS_SRC" ] && [ -d "$RESULTS_SRC" ] && GOBP_SCAN+=("$RESULTS_SRC")
+node "$SCRIPT_DIR/scan_dist_no_reactome.mjs" "${GOBP_SCAN[@]}" \
+  || die "GO-BP-only release rule violated — Reactome is present in a deployable artifact (see above)"
+say "       GO-BP-only scan clean (no Reactome in dist${RESULTS_SRC:+ or results/})"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Resolve + validate the EXACT copy set (no dist/data, ever)

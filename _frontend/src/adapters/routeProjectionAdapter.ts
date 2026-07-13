@@ -55,7 +55,7 @@ export interface Stage2Projection {
   // NO top-level analysis_mode: the all-arm release serves BOTH within_condition and temporal selections;
   // the active v3 selection decides the mode at join time (resolveStage2Bundles).
   release_conditions: string[]; // the release's condition axis (e.g. Rest / Stim8hr / Stim48hr)
-  pathway_sources: string[]; // the release's pathway sources (e.g. reactome / go_bp)
+  pathway_sources: string[]; // the release's pathway sources — GO-BP-only release: ['go_bp']
   pathway_source: string; // the active source for the view (∈ pathway_sources)
   directByCondition: Record<string, unknown>; // raw per-condition Direct bundles (parsed lazily)
   temporalByPair: Record<string, unknown>; // raw per ORDERED "<from>__<to>" temporal bundles

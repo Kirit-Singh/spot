@@ -38,8 +38,8 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
     expect(view.effectRankFacets[0].increase.arm_key).toBe(directArmKey('prog_beta', 'increase', condition));
     expect(view.effectRankFacets[0].decrease.arm_key).toBe(directArmKey('prog_beta', 'decrease', condition));
     expect(view.effectRankFacets[1].program_id).toBe('prog_alpha');
-    expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', condition, 'reactome'));
-    expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', condition, 'reactome'));
+    expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', condition, 'go_bp'));
+    expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', condition, 'go_bp'));
     expect(view.pathway_context).toBe('condition_matched');
   });
 
@@ -91,7 +91,7 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
       selection('within_condition', ['Rest']))).toThrow(/condition axis/);
 
     const second = await release();
-    const path = second.projection.arms[pathwayArmKey('prog_alpha', 'increase', 'Rest', 'reactome')];
+    const path = second.projection.arms[pathwayArmKey('prog_alpha', 'increase', 'Rest', 'go_bp')];
     if (path.lane !== 'pathway') throw new Error('test fixture lane mismatch');
     path.context = { condition: 'Rest', gene_set_source: 'unknown_source' };
     expect(() => resolveCompactStage2Selection(second.projection, second.metadata,

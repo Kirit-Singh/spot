@@ -47,7 +47,7 @@ export interface MethodRef {
 }
 
 export interface PublicSource {
-  /** Human label, e.g. "ChEMBL", "DepMap", "Reactome". */
+  /** Human label, e.g. "ChEMBL", "DepMap", "GO Biological Process". */
   label: string;
   /** Stable record identifier within the source. */
   record_id: string;

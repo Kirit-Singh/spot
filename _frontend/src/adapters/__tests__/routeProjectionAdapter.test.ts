@@ -59,8 +59,10 @@ function pksafetyRaw() {
   };
 }
 const CONDS = ['Rest', 'Stim8hr', 'Stim48hr'];
-const SOURCES = ['reactome', 'go_bp'];
-/** Complete placeholder release: all 3 Direct + 6 ordered temporal + 6 pathway slots present. */
+const SOURCES = ['go_bp']; // GO-BP-only release
+/** Complete placeholder release: all 3 Direct + 6 ordered temporal + 3 pathway slots (3 conditions x
+ *  the ONE released GO-BP source) present. The completeness gate is derived from CONDS x SOURCES, so
+ *  dropping Reactome narrows the released axis without loosening the gate. */
 function completeMaps() {
   const direct: Record<string, unknown> = {};
   const temporal: Record<string, unknown> = {};
@@ -75,7 +77,7 @@ function stage2Raw() {
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route: 'targets',
     run_id: 'run_1',
-    release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome',
+    release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'go_bp',
     directByCondition: m.direct, temporalByPair: m.temporal, pathwayByContext: m.pathway,
   };
 }
@@ -139,12 +141,13 @@ describe('parsePkSafetyProjection — strict', () => {
 });
 
 describe('parseStage2Projection — complete generic release', () => {
-  it('accepts a complete release (3 Direct + 6 ordered temporal + 6 pathway slots)', () => {
+  it('accepts a complete release (3 Direct + 6 ordered temporal + 3 GO-BP pathway slots)', () => {
     const p = parseStage2Projection(stage2Raw());
-    expect(p.pathway_source).toBe('reactome'); // active source; the release itself is mode-agnostic
+    expect(p.pathway_source).toBe('go_bp'); // active source; the release itself is mode-agnostic
     expect(Object.keys(p.directByCondition).sort()).toEqual(['Rest', 'Stim48hr', 'Stim8hr']);
     expect(Object.keys(p.temporalByPair).length).toBe(6);
-    expect(Object.keys(p.pathwayByContext).length).toBe(6);
+    expect(Object.keys(p.pathwayByContext).length).toBe(CONDS.length * SOURCES.length); // 3 x go_bp
+    expect(Object.keys(p.pathwayByContext).every((k) => k.endsWith('|go_bp'))).toBe(true);
   });
   it('#2 completeness: a missing Direct/temporal/pathway slot FAILS (never renders empty)', () => {
     const m = completeMaps();

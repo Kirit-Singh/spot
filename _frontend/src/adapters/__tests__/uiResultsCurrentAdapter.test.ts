@@ -18,7 +18,7 @@ const CHAIN = { stage2_display_release_id: 'display_1', stage2_run_id: null,
 const ENTRY = { manifest_path: 'results/manifests/targets.ui_release.json', content_hash: H, projection_path: null, projection_content_hash: null, compact_stage2: null };
 const COMPACT = {
   schema_version: 'spot.ui_compact_stage2_release.v1', display_release_id: 'display_1',
-  release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'], pathway_sources: ['reactome', 'go_bp'], active_pathway_source: 'reactome',
+  release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'], pathway_sources: ['go_bp'], active_pathway_source: 'go_bp',
   projection_raw_sha256: 'd'.repeat(64), projection_canonical_sha256: H, projection_self_sha256: 'e'.repeat(64),
   independent_verifier: {
     verifier_id: 'spot.stage02.display_projection.independent_verifier.v1',
@@ -113,7 +113,9 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
     const base = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H };
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: {
       targets: { ...base, compact_stage2: COMPACT },
-      pathways: { ...base, compact_stage2: { ...COMPACT, active_pathway_source: 'go_bp' } },
+      // GO-BP-only leaves active_pathway_source with a single legal value, so the cross-route
+      // agreement gate is exercised on a field that CAN still legitimately differ.
+      pathways: { ...base, compact_stage2: { ...COMPACT, projection_raw_sha256: 'b'.repeat(64) } },
     } })).toThrow(/metadata disagree/);
   });
 });

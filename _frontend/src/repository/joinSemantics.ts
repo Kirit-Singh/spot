@@ -57,7 +57,7 @@ export interface JoinSelectionInput {
   B: JoinPole;
   /** 1 condition for within; 2 ordered [from, to] for temporal (order = DiD direction). */
   conditions: string[];
-  /** Gene-set source for the pathway panels (e.g. reactome / go_bp). */
+  /** Gene-set source for the pathway panels. GO-BP-only release: go_bp. */
   source: string;
 }
 

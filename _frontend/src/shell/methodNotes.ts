@@ -24,7 +24,7 @@ export const STAGE2_NOTES: ProvNote[] = [
   },
   {
     title: 'Pathway support',
-    body: 'Pathway rows are descriptive Reactome overrepresentation among lever genes — support, not causal confirmation.',
+    body: 'Pathway rows are descriptive GO-BP overrepresentation among lever genes — support, not causal confirmation.',
   },
   PRODUCTION_GATE_NOTE,
 ];

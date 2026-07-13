@@ -3,7 +3,8 @@ import { canonicalJson, sha256Hex } from '../stage1/canonical';
 import { directArmKey, pathwayArmKey, temporalArmKey } from '../repository/armKey';
 
 export const CONDITIONS = ['Rest', 'Stim8hr', 'Stim48hr'] as const;
-export const SOURCES = ['reactome', 'go_bp'] as const;
+/** GO-BP-only release rule: exactly one released pathway source. Reactome is parked, never declared. */
+export const SOURCES = ['go_bp'] as const;
 export const PROGRAMS = ['prog_alpha', 'prog_beta'] as const;
 export const CHANGES = ['increase', 'decrease'] as const;
 
@@ -129,7 +130,7 @@ export async function compactMetadata(projection: unknown, receipt: unknown): Pr
   const receiptText = JSON.stringify(receipt);
   return {
     schema_version: 'spot.ui_compact_stage2_release.v1', display_release_id: 'stage2-display-1',
-    release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES], active_pathway_source: 'reactome',
+    release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES], active_pathway_source: 'go_bp',
     projection_raw_sha256: await sha256Hex(projectionText),
     projection_canonical_sha256: await sha256Hex(canonicalJson(projection)),
     projection_self_sha256: (projection as { projection_sha256: string }).projection_sha256,

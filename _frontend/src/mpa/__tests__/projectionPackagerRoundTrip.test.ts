@@ -78,7 +78,7 @@ async function makeSpec(opts?: { projection?: Awaited<ReturnType<typeof compactP
   const display_verifier_receipt = await compactReceiptAdmitted(projection, text);
   const compact_release = {
     display_release_id: 'stage2-display-1', release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES],
-    active_pathway_source: 'reactome',
+    active_pathway_source: 'go_bp',
   };
   const stage2 = { projection_text: text, display_verifier_receipt, compact_release };
   return {
@@ -222,8 +222,18 @@ describe('packager refuses invented or inconsistent Stage-2 releases', () => {
     expect(() => pack({ ...base, routes: { targets: { ...target, display_verifier_receipt: { ...target.display_verifier_receipt, verdict: 'reject' } } } })).toThrow(/verifier receipt/);
     expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, release_conditions: ['Stim8hr', 'Rest', 'Stim48hr'] } } } })).toThrow(/exactly/);
     expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, display_release_id: 'other' } }, pathways: base.routes.pathways } })).toThrow(/display_release_id differs/);
-    expect(() => pack({ ...base, routes: { targets: target, pathways: { ...base.routes.pathways,
-      compact_release: { ...base.routes.pathways.compact_release, active_pathway_source: 'go_bp' } } } })).toThrow(/metadata disagrees/);
+    // GO-BP-only leaves active_pathway_source a single legal value, so the cross-route agreement gate is
+    // exercised where routes CAN still diverge: two routes packaging DIFFERENT projection bytes (same
+    // content, different serialization) must still be refused rather than silently packed.
+    const altProjection = await compactProjectionRaw();
+    const altText = JSON.stringify(altProjection); // compact serialization — identical content, different bytes
+    const altStage2 = {
+      projection_text: altText,
+      display_verifier_receipt: await compactReceiptAdmitted(altProjection, altText),
+      compact_release: target.compact_release,
+    };
+    expect(() => pack({ ...base, routes: { ...base.routes, targets: target,
+      pathways: { ...altStage2, receipt: base.routes.pathways.receipt } } })).toThrow(/disagrees/);
   });
 
   it('refuses hidden p/q/combined fields before writing the served tree', async () => {

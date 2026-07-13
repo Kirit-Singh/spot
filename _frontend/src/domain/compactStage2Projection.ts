@@ -109,8 +109,15 @@ export interface CompactStage2ReleaseMetadata {
   /** Content-addressed identity of the admitted selection-independent DISPLAY release; not an estimator run. */
   display_release_id: string;
   release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'];
-  pathway_sources: ['reactome', 'go_bp'];
-  active_pathway_source: 'reactome' | 'go_bp';
+  /**
+   * GO-BP-ONLY release rule. The critical path releases exactly ONE pathway source: go_bp. Reactome is
+   * PARKED: it is carried in NO runtime manifest the served page advertises (no data_input, no
+   * source_chain record, no coverage figure) and must NEVER be DECLARED as a released or active
+   * pathway source. A current.json naming it is refused by parseUiResultsCurrent; a dist or results
+   * tree containing it at all is refused by deploy/scan_dist_no_reactome.mjs.
+   */
+  pathway_sources: ['go_bp'];
+  active_pathway_source: 'go_bp';
   projection_raw_sha256: string;
   projection_canonical_sha256: string;
   projection_self_sha256: string;
@@ -155,7 +162,8 @@ export interface CompactDisplayVerificationReceipt {
 export interface CompactStage2SelectionView {
   schema_version: 'spot.ui_compact_stage2_selection_view.v1';
   display_release_id: string;
-  pathway_source: 'reactome' | 'go_bp';
+  /** The one released pathway source (GO-BP-only release rule); never Reactome. */
+  pathway_source: 'go_bp';
   mode: 'within_condition' | 'temporal_cross_condition';
   pathway_context: 'condition_matched' | 'awaiting_temporal_pathway_bundle';
   geneArmA: CompactTargetArm;

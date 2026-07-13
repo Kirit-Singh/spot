@@ -41,7 +41,6 @@ const DOWNSTREAM = ['targets', 'pathways', 'drugs', 'pksafety'] as const;
 // verified content addresses used in rendering assertions (from the geneset-cache provenance +
 // GWCD4i.DE_stats primary source; see stageMethods.ts constants)
 const MARSON_DE_RAW = 'c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62';
-const REACTOME_CANON = '9cc416d14a16ff4bdbf700780e67d40a6f88c5235690fadc79abab83fd68218e';
 const GO_CANON = '5b62e8bc36cb798ec615c078bc1c8ee2d3331d61dafb24d80cac6b18ab3bc310';
 
 function methodText(m: Awaited<ReturnType<typeof buildStageMethodsManifest>>): string {
@@ -65,8 +64,9 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
 
     const p = await buildStageMethodsManifest('pathways');
     expect(p.methods.method_id).toBe('spot.stage02.pathway.ranked_arm_enrichment.v2 · spot.stage02.pathway.signature_convergence.v2');
-    expect(p.provenance.source_chain.some((s) => s.label === 'Reactome' && s.license === 'CC0-1.0' && s.url)).toBe(true);
-    expect(p.provenance.source_chain.some((s) => /GO Biological/.test(s.label) && s.license === 'CC-BY-4.0' && s.url)).toBe(true);
+    expect(p.provenance.source_chain.some((s) => /GO Biological/.test(s.label) && s.license === 'CC BY 4.0' && s.url)).toBe(true);
+    // GO-BP-ONLY release: Reactome is NOT a released co-input, so it carries no source record at all.
+    expect(p.provenance.source_chain.some((s) => /reactome/i.test(s.label))).toBe(false);
 
     const d = await buildStageMethodsManifest('drugs');
     expect(d.methods.method_id).toBe('stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2');
@@ -141,13 +141,14 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(est).toMatch(/10,282-gene DE-readout universe/);
     const lims = p.methods.limitations.join(' ');
     // exact per-lane source-coverage denominators, not conflated
-    expect(lims).toMatch(/39\.6069%/); // Reactome, target-enrichment lane
     expect(lims).toMatch(/51\.4288%/); // GO-BP, target-enrichment lane
-    expect(lims).toMatch(/40\.1817%/); // Reactome, DE-readout convergence lane
     expect(lims).toMatch(/56\.5884%/); // GO-BP, DE-readout convergence lane
+    // GO-BP-ONLY release: the Reactome coverage figures are not advertised by the served method.
+    expect(lims).not.toMatch(/39\.6069%/);
+    expect(lims).not.toMatch(/40\.1817%/);
+    expect(lims).not.toMatch(/reactome/i);
     expect(lims).not.toMatch(/bounded by the 10,282-gene measured universe/);
     // the real, verified gene-set canonical hashes (moved from record_id text into the hash field)
-    expect(p.provenance.source_chain.find((s) => s.label === 'Reactome')?.canonical_sha256).toBe(REACTOME_CANON);
     expect(p.provenance.source_chain.find((s) => /GO Biological/.test(s.label))?.canonical_sha256).toBe(GO_CANON);
   });
 
@@ -219,14 +220,15 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(k.methods.source_tissue ?? '').not.toMatch(/are shown only from source-backed label evidence/);
   });
 
-  it('Reactome/GO/Wager/Grossman reference precision: derived-bundle labels, exact release URLs, dated raw snapshots', async () => {
+  it('GO/Wager/Grossman reference precision: derived-bundle labels, exact release URLs, dated raw snapshots', async () => {
     const p = await buildStageMethodsManifest('pathways');
-    const reactome = p.provenance.source_chain.find((s) => s.label === 'Reactome')!;
-    expect(reactome.url).toBe('https://reactome.org/download/97/ReactomePathways.gmt.zip');
-    expect(reactome.record_id).toMatch(/derived-bundle hashes .*NOT the upstream ZIP/i);
     const go = p.provenance.source_chain.find((s) => /GO Biological/.test(s.label))!;
     expect(go.url).toBe('https://geneontology.org/docs/go-citation-policy/');
     expect(go.record_id).toMatch(/release IDs from cached file headers/i);
+    // the EXACT verified GO release label (goa_human is a GOC snapshot, not a GO release)
+    expect(go.record_id).toContain('go-basic 2026-06-15 + goa_human GOC snapshot 2026-05-21');
+    expect(go.license).toBe('CC BY 4.0');
+    expect(go.url).toBe('https://geneontology.org/docs/go-citation-policy/');
 
     const k = await buildStageMethodsManifest('pksafety');
     expect(k.provenance.source_chain.find((s) => /Grossman/.test(s.label))!.record_id).toMatch(/dated 2026-07-11 response snapshot; canonical is reproducible/);
@@ -303,8 +305,8 @@ describe('content address is PINNED, not self-sealing — one-byte mutation atta
 
   it('ATTACK: mutating a bound source canonical hash is REJECTED', async () => {
     const raw = stageMethodsRaw('pathways');
-    const reactome = raw.provenance.source_chain.find((s) => s.label === 'Reactome')!;
-    reactome.canonical_sha256 = 'deadbeef' + (reactome.canonical_sha256 ?? '').slice(8);
+    const geneSet = raw.provenance.source_chain.find((s) => /GO Biological/.test(s.label))!;
+    geneSet.canonical_sha256 = 'deadbeef' + (geneSet.canonical_sha256 ?? '').slice(8);
     await expect(
       parseStageMethodsManifest(raw, STAGE_METHODS_HASHES.pathways, 'Pathways'),
     ).rejects.toMatchObject({ code: 'content_hash_mismatch' });
@@ -339,13 +341,14 @@ describe('content address is PINNED, not self-sealing — one-byte mutation atta
 describe('drawer renders verified source hashes; absent hash subfields are omitted (no filler)', () => {
   afterEach(() => cleanup());
 
-  it('pathways: the drawer shows the verified Reactome/GO canonical + Marson raw hashes', async () => {
+  it('pathways: the drawer shows the verified GO-BP canonical + Marson raw hashes (and NO Reactome)', async () => {
     const m = await buildStageMethodsManifest('pathways');
     render(<ProvenanceDrawer open title="Pathways" provenance={null} methods={m} onClose={() => {}} />);
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent(REACTOME_CANON);
     expect(dialog).toHaveTextContent(GO_CANON);
     expect(dialog).toHaveTextContent(MARSON_DE_RAW);
+    // GO-BP-ONLY release: the served drawer advertises no Reactome record, hash, URL or coverage figure.
+    expect(dialog.textContent ?? '').not.toMatch(/reactome/i);
   });
 
   it('pksafety: DailyMed/openFDA appear WITHOUT any fabricated hash and without "unavailable" filler', async () => {

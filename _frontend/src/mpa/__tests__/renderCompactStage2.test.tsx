@@ -217,7 +217,7 @@ describe('compact Stage-2 route rendering', () => {
     expect(canvas.querySelector('[data-route="pathways"]')).toBeTruthy();
     expect(within(canvas).getAllByText('set')).toHaveLength(2);
     expect(within(canvas).getAllByText('native order')).toHaveLength(2);
-    expect(canvas.textContent).toContain('reactome:1');
+    expect(canvas.textContent).toContain('go_bp:1');
     expect(canvas.textContent).toContain('50 shown');
     expect(canvas.textContent).toContain('51 sets');
     expect(canvas.textContent).toContain('first 50');

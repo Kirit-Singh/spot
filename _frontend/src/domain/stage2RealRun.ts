@@ -135,7 +135,7 @@ export interface PathwayConvergenceArtifact {
   provenance: Provenance;
   selection: StageSelection;
   condition: string;
-  /** Which annotation resource the gene sets came from (e.g. reactome / go_bp). */
+  /** Which annotation resource the gene sets came from. GO-BP-only release: go_bp. */
   gene_set_source: string;
   records: PathwayConvergenceRecord[];
 }

@@ -911,9 +911,14 @@ function runPreflightUI(){
   }
   err.textContent='';
   btn.disabled=false;btn.classList.add('ready');btn.title='ID program skew genes for this contrast';
-  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.selection_id;pend.style.display='';pend.textContent=r.selection_id.slice(0,8);
+  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.selection_id;
+    // The selection_id is INTERNAL: it keeps driving curContrastId, the v3 contract, routing and the
+    // provenance hashes. It is simply not TYPESET beside the call to action — a bare hash fragment on a
+    // button reads as a value the reader should act on. The hashes stay available where they are
+    // accountable: the Methods & provenance artifacts. #idpend keeps its slot and stays empty.
+    pend.style.display='none';pend.textContent='';
     if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes the contrast condition (analysis uses '+condShort(axisA.condition)+')';}
-    else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.selection_id;}
+    else{st.className='ctstate ok';st.textContent='Contrast ready';}
   });
 }
 // The emitted artifact IS the full spot.stage01_selection.v3 contract from computeContrast() (external
@@ -928,7 +933,7 @@ async function onIdentifyGenes(){
   try{localStorage.setItem(SELECTION_LS_KEY,JSON.stringify(art));}catch(e){}
   try{sessionStorage.setItem(SELECTION_LS_KEY,JSON.stringify(art));}catch(e){}
   const st=document.getElementById('ctstate');st.className='ctstate ok';
-  st.textContent='Selection ready · '+art.selection_id+' → Stage 2';
+  st.textContent='Selection ready → Stage 2';   // selection_id stays internal (Methods/provenance carries it)
   // hand off to the Stage-2/3/4 shell (separate app); the shell reads the versioned selection key
   window.location.assign('targets.html');
 }
