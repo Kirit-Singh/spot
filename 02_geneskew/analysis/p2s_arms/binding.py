@@ -332,7 +332,10 @@ def bound_block(bound: dict[str, Any]) -> dict[str, Any]:
         "solver_lock_sha256": bound["solver_lock"]["sha256"],
         "solver_lock_pinned_sha256": config.PINNED_SOLVER_LOCK_SHA256,
         "w10_verifier_id": a["w10_verifier_id"],
+        # WHICH CODE produced the verdict — pinned, not merely recorded. An honestly resealed
+        # report agrees with itself and still names no checker.
         "w10_verifier_code_sha256": a["w10_verifier_code_sha256"],
+        "w10_verifier_code_pinned": a["w10_verifier_code_pinned"],
         "w10_spec_sha256": a["w10_spec_sha256"],
         "w10_verdict": a["w10_verdict"],
         "w10_report_sha256": a["w10_report_sha256"],

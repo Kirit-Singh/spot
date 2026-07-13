@@ -59,6 +59,7 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     VERIFIER_ID,
     W10_SPEC_SHA256,
     W10_VERDICT_ADMIT,
+    W10_VERIFIER_CODE_SHA256,
     W10_VERIFIER_ID,
     canonical_coefficients,
     canonical_support,
@@ -189,6 +190,12 @@ def verify(out_dir: str) -> dict[str, Any]:
               f"got {method.get('w10_verifier_id')!r}")
     rep.check("W10's report was written against the pinned spec",
               method.get("w10_spec_sha256") == W10_SPEC_SHA256)
+    rep.check("the report names the PINNED W10 verifier CODE that produced it",
+              method.get("w10_verifier_code_sha256") == W10_VERIFIER_CODE_SHA256,
+              f"got {str(method.get('w10_verifier_code_sha256'))[:16]}...; an honestly "
+              "resealed report agrees with itself and still names no checker")
+    rep.check("the verifier code was PINNED, not merely recorded",
+              method.get("w10_verifier_code_pinned") is True)
     rep.check("W10's report hash was RE-DERIVED, not quoted",
               method.get("w10_report_sha256_rederived") is True
               and bool(method.get("w10_report_sha256")))

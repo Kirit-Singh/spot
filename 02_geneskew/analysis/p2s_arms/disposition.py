@@ -25,6 +25,7 @@ REFUSED = "refused"
 REFUSE_W10_REPORT_MISSING = "w10_report_not_supplied"
 REFUSE_W10_REPORT_UNREADABLE = "w10_report_is_not_readable_json"
 REFUSE_W10_WRONG_VERIFIER = "w10_report_is_not_from_the_pinned_verifier"
+REFUSE_W10_WRONG_CODE = "w10_report_does_not_name_the_pinned_verifier_code"
 REFUSE_W10_SPEC_DRIFT = "w10_report_was_written_against_a_different_spec"
 REFUSE_W10_NOT_ADMITTED = "w10_did_not_admit_this_bundle"
 REFUSE_W10_SELF_ADMITTED = "the_bundle_arrived_admitting_itself"
@@ -61,6 +62,7 @@ REFUSE_RELEASE_UNREADABLE = "the_bound_stage1_release_could_not_be_loaded"
 
 REFUSAL_REASONS = (
     REFUSE_W10_REPORT_MISSING, REFUSE_W10_REPORT_UNREADABLE, REFUSE_W10_WRONG_VERIFIER,
+    REFUSE_W10_WRONG_CODE,
     REFUSE_W10_SPEC_DRIFT, REFUSE_W10_NOT_ADMITTED, REFUSE_W10_SELF_ADMITTED,
     REFUSE_W10_NOT_INDEPENDENT, REFUSE_W10_REPORT_TAMPERED,
     REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE,

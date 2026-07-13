@@ -117,6 +117,31 @@ def check_identity(report: dict[str, Any]) -> None:
             "verifier is the property being relied on here; a report that will not assert "
             "it is not an independent admission")
 
+    # WHICH CODE ACTUALLY RAN. Without this, an HONESTLY RESEALED report passes: take a real
+    # ADMIT, blank `verifier_code_sha256` to 00...00, re-hash the body so `report_sha256`
+    # agrees with it again, and every other gate here is satisfied. The report is then
+    # perfectly self-consistent and says NOTHING about which checker produced the verdict —
+    # a weakened checker, or no checker at all, is indistinguishable from W10.
+    #
+    # Self-consistency is not authenticity. Only a pin refuses this.
+    code = report.get("verifier_code_sha256")
+    if not code:
+        raise D.RefusalError(
+            D.REFUSE_W10_WRONG_CODE,
+            "the report does not name the code that produced it (verifier_code_sha256 is "
+            f"{code!r}). A checker that will not name its own code is unfalsifiable, and a "
+            "verdict attributed to no code is a verdict nobody can re-run")
+
+    if code != config.W10_VERIFIER_CODE_SHA256:
+        raise D.RefusalError(
+            D.REFUSE_W10_WRONG_CODE,
+            f"the report was produced by verifier code {str(code)[:16]}..., not the pinned "
+            f"{config.W10_VERIFIER_CODE_SHA256[:16]}... (W10's {config.W10_VERIFIER_N_MODULES} "
+            f"modules at commit {config.W10_VERIFIER_COMMIT_HINT}). The verdict may be "
+            "honestly sealed and the report internally consistent — a resealed report agrees "
+            "with itself — but it was not produced by the checker this lane admits, and a "
+            "weakened checker admits whatever it likes")
+
 
 def check_verdict(report: dict[str, Any]) -> None:
     """ADMIT, or nothing. A REFUSE is not a weaker admit."""
@@ -334,7 +359,8 @@ def admit(*, bundle_dir: str, report_path: Optional[str], run_lock_sha256: str,
     bound = report.get("bound_artifact") or {}
     return {
         "w10_verifier_id": report["verifier_id"],
-        "w10_verifier_code_sha256": report.get("verifier_code_sha256"),
+        "w10_verifier_code_sha256": report["verifier_code_sha256"],
+        "w10_verifier_code_pinned": True,
         "w10_spec_sha256": report["spec_sha256"],
         "w10_verdict": report["verdict"],
         "w10_report_sha256": report_sha256,
