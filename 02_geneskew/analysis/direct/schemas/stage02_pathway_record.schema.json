@@ -91,7 +91,6 @@
               "convergence_size_disposition": {
                 "enum": [
                   "evaluable",
-                  "non_evaluable_set_too_small",
                   "non_evaluable_set_too_large"
                 ]
               },
@@ -122,9 +121,6 @@
               },
               "max_convergence_set_size": {
                 "const": 500
-              },
-              "min_convergence_set_size": {
-                "const": 2
               },
               "min_perturbations_for_convergence": {
                 "const": 2
@@ -207,7 +203,6 @@
               "convergence_claim_eligible",
               "convergence_evaluable",
               "convergence_size_policy_id",
-              "min_convergence_set_size",
               "max_convergence_set_size",
               "convergence_size_disposition",
               "n_measured_perturbations",

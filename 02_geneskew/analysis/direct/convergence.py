@@ -99,19 +99,16 @@ SINGLE_TARGET_SUPPORT = "single_target_support"
 FLOAT_DECIMALS = 6
 ROUNDING_RULE = "half_even_6dp"
 
-# A scientific domain rule, not an execution setting. It is repeated in the method block
-# and every emitted set record, so removing or changing it moves the method/run identity.
+# A scientific upper-bound rule, not an execution setting. It is repeated in the method
+# block and every emitted set record, so removing or changing it moves the method/run
+# identity. The convergence method's existing >=2 supporting-perturbation requirement is
+# preserved separately; the enrichment lane's MIN_SET_SIZE=3 is not imported here.
 CONVERGENCE_SIZE_POLICY_ID = (
     "spot.stage02.pathway.convergence_size_governance.prospective.v1")
-# Convergence itself has always required two distinct perturbations. The gene-set
-# enrichment lane's MIN_SET_SIZE=3 is a separate rule; importing it here would silently
-# invalidate the existing two-member intra-pathway control while fixing an upper-bound bug.
-MIN_CONVERGENCE_SET_SIZE = MIN_PERTURBATIONS_FOR_CONVERGENCE
 MAX_CONVERGENCE_SET_SIZE = genesets.MAX_SET_SIZE
 SIZE_EVALUABLE = "evaluable"
-SIZE_TOO_SMALL = "non_evaluable_set_too_small"
 SIZE_TOO_LARGE = "non_evaluable_set_too_large"
-SIZE_DISPOSITIONS = (SIZE_EVALUABLE, SIZE_TOO_SMALL, SIZE_TOO_LARGE)
+SIZE_DISPOSITIONS = (SIZE_EVALUABLE, SIZE_TOO_LARGE)
 
 # Execution only: changing these does not change the statistic, its order, or its bytes.
 # ``fork`` is required because the real signature dictionary is several GiB and pickling it
@@ -144,15 +141,12 @@ def convergence_size_disposition(gene_set: dict[str, Any]) -> dict[str, Any]:
     endpoints. Source size/coverage remain separate and are emitted on every set record.
     """
     n_members = len(_target_members(gene_set))
-    if n_members < MIN_CONVERGENCE_SET_SIZE:
-        disposition = SIZE_TOO_SMALL
-    elif n_members > MAX_CONVERGENCE_SET_SIZE:
+    if n_members > MAX_CONVERGENCE_SET_SIZE:
         disposition = SIZE_TOO_LARGE
     else:
         disposition = SIZE_EVALUABLE
     return {
         "convergence_size_policy_id": CONVERGENCE_SIZE_POLICY_ID,
-        "min_convergence_set_size": MIN_CONVERGENCE_SET_SIZE,
         "max_convergence_set_size": MAX_CONVERGENCE_SET_SIZE,
         "n_genes_in_target_universe": n_members,
         "convergence_size_disposition": disposition,

@@ -94,9 +94,13 @@ def _size_bundle(n: int, set_id: str = "GO:SIZE") -> dict:
 
 
 def test_convergence_size_boundary_is_inclusive_at_500_and_refuses_501():
+    one_member = convergence.convergence_size_disposition(_size_bundle(1)["sets"]["GO:SIZE"])
     at_boundary = convergence.convergence_size_disposition(_size_bundle(500)["sets"]["GO:SIZE"])
     over_boundary = convergence.convergence_size_disposition(_size_bundle(501)["sets"]["GO:SIZE"])
 
+    # Max-only policy: do not import enrichment's >=3 rule or rewrite the existing
+    # single-target refusal semantics while fixing giant roots.
+    assert one_member["convergence_evaluable"] is True
     assert at_boundary["convergence_evaluable"] is True
     assert at_boundary["convergence_size_disposition"] == convergence.SIZE_EVALUABLE
     assert over_boundary["convergence_evaluable"] is False
@@ -144,7 +148,6 @@ def test_size_policy_and_limits_are_bound_into_artifact_and_hash():
     assert doc["schema_version"] == "spot.stage02_pathway_convergence.v2"
     assert doc["convergence_method_id"] == convergence.METHOD_ID
     assert doc["convergence_size_policy_id"] == convergence.CONVERGENCE_SIZE_POLICY_ID
-    assert doc["min_convergence_set_size"] == 2
     assert doc["max_convergence_set_size"] == 500
     assert doc["n_convergence_evaluable_sets"] == 0
     assert doc["n_convergence_non_evaluable_sets"] == 1

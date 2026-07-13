@@ -77,7 +77,6 @@ def method_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         "min_perturbations_for_convergence":
             convergence.MIN_PERTURBATIONS_FOR_CONVERGENCE,
         "convergence_size_policy_id": convergence.CONVERGENCE_SIZE_POLICY_ID,
-        "min_convergence_set_size": convergence.MIN_CONVERGENCE_SET_SIZE,
         "max_convergence_set_size": convergence.MAX_CONVERGENCE_SET_SIZE,
         # B1: WHAT convergence means, and the restriction that keeps it honest. Bound
         # into the hash so a run cannot go back to global components under this id.
@@ -239,7 +238,6 @@ def _convergence_block(c: dict[str, Any]) -> dict[str, Any]:
         "convergence_claim_eligible": c["convergence_claim_eligible"],
         "convergence_evaluable": c["convergence_evaluable"],
         "convergence_size_policy_id": c["convergence_size_policy_id"],
-        "min_convergence_set_size": c["min_convergence_set_size"],
         "max_convergence_set_size": c["max_convergence_set_size"],
         "convergence_size_disposition": c["convergence_size_disposition"],
         "n_measured_perturbations": c["n_measured_perturbations"],
