@@ -53,3 +53,43 @@ REQUIRED_GATES = {
         "every bundle in the release was built by the SAME code",
     ),
 }
+
+
+# --------------------------------------------------------------------------- #
+# EXECUTION-COMPLETENESS PROFILES. Not a security feature — a provenance one: a PRODUCTION
+# admission must have run EXACTLY the gate inventory that invocation is defined to run, in
+# order. Pinning the ordered inventory hash + count means a report that quietly dropped ANY
+# gate — even a currently "non-critical" one like the p/q-absence or column-allowlist check —
+# no longer matches its profile and is refused. The counts and the ordered-hash are
+# RE-DERIVED by a test that re-runs the verifier with the canonical flags, so a deliberate
+# gate change in W10 fails loudly (refresh the profile) rather than silently refusing.
+#
+# The production BUNDLE invocation binds the Stage-1 v3 release, pins the H5AD object and
+# recomputes every target (--stage1-v3-release --expect-h5ad-sha256 --recompute all): 80
+# gates. The RELEASE invocation is 26 and does not vary with the H5AD pin (it flows that to
+# its per-bundle verifications). Fixture/synthetic reports are separately typed and LENIENT:
+# they satisfy the critical-gate SUBSET (REQUIRED_GATES), because a fixture is a test input,
+# not a production provenance record.
+PROFILE_BUNDLE_PRODUCTION = "spot.stage02.direct.bundle.production.v1"
+PROFILE_RELEASE_PRODUCTION = "spot.stage02.direct.release.production.v1"
+PROFILE_BUNDLE_FIXTURE = "spot.stage02.direct.bundle.fixture.v1"
+PROFILE_RELEASE_FIXTURE = "spot.stage02.direct.release.fixture.v1"
+
+GATE_PROFILES = {
+    PROFILE_BUNDLE_PRODUCTION: {
+        "gate_inventory_sha256":
+            "d98200175b528dec569655e558944d065c1280c19874c4e555ff0bbdb66c1cc4",
+        "n_gates": 80,
+        "match": "exact",
+    },
+    PROFILE_RELEASE_PRODUCTION: {
+        "gate_inventory_sha256":
+            "377ca01b7190608ccce260d61a7d022e1a91eed8f420986f1579cc65f0615a9b",
+        "n_gates": 26,
+        "match": "exact",
+    },
+    # Fixture profiles carry NO exact hash: they are lenient by design (subset match), so a
+    # test can hand-build a report without reproducing 77 gate names verbatim.
+    PROFILE_BUNDLE_FIXTURE: {"match": "subset"},
+    PROFILE_RELEASE_FIXTURE: {"match": "subset"},
+}
