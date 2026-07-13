@@ -34,7 +34,16 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from ...hashing import content_hash
+
 ADMISSION_RULE_ID = "spot.stage02.temporal.arm.program_admission.base_portable.v1"
+
+# The canonical per-program projection rule, DERIVED independently from the authoritative
+# Stage-1 scorer view (never copied across lanes): each portable program's id is the
+# SHA-256 of the canonical JSON of its ENTIRE emitted record — object keys canonically
+# sorted, array order preserved exactly as Stage-1 emitted it.
+PER_PROGRAM_PROJECTION_RULE_ID = (
+    "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1")
 ADMISSION_RULE = (
     "an admitted program is one the BOUND Stage-1 v3 release declares base_portable=true "
     "and ships a non-empty panel_ensembl and control_ensembl for; the set and its count "
@@ -80,6 +89,10 @@ def admitted_programs(release: Any) -> dict[str, dict[str, Any]]:
             "program_id": str(program_id),
             "panel": [str(g) for g in panel],
             "control": [str(g) for g in control],
+            # the per-program projection id, DERIVED HERE from the ENTIRE Stage-1 record —
+            # SHA-256 of its canonical JSON (keys sorted, array order preserved), the exact
+            # rule the independent verifier uses. Computed from the record, never trusted.
+            "projection_sha256": content_hash(prog),
         }
 
     if unprojectable:
@@ -170,19 +183,42 @@ STAGE1_REQUIRED_NONNULL = ("release_self_sha256", "scorer_view_raw_sha256",
                            "effect_universe_sha256", "effect_source_sha256")
 
 
+def derive_per_program_projection(
+        admitted: dict[str, dict[str, Any]]) -> dict[str, str]:
+    """The per-program projection MAP, DERIVED from the admitted records' own bytes.
+
+    ``admitted_programs`` already hashed each ENTIRE Stage-1 record by the canonical rule;
+    this collects those independently-derived ids, keyed EXACTLY on the base-portable
+    programs. It never reads a caller-supplied map — the whole point is that the producer
+    computes this itself, so a supplied value cannot be trusted into the artifact.
+    """
+    return {pid: entry["projection_sha256"] for pid, entry in sorted(admitted.items())}
+
+
 def stage1_binding_block(stage1: dict[str, Any], admitted: dict[str, dict[str, Any]], *,
                          effect_universe_sha256: Any,
                          effect_source_sha256: Any) -> dict[str, Any]:
     """The v3 release / scorer / program / condition identity, from the bound inputs.
 
     Built from what the producer actually read — never a fabricated value. The declared
-    selector sequence is carried verbatim; the per-program projection hash is carried for
-    every admitted program.
+    selector sequence is carried verbatim. The per-program projection MAP is DERIVED here
+    from the Stage-1 records (never a caller-supplied opaque map); if the caller also
+    supplies one, it must AGREE exactly or the bundle is refused — a disagreeing value, an
+    extra non-portable key, a missing portable key or any array reordering all change the
+    hash and are rejected.
     """
     stage1 = stage1 or {}
     programs = sorted(admitted)
     seq = [str(c) for c in (stage1.get("selector_condition_sequence") or [])]
-    per = stage1.get("per_program_projection_sha256") or {}
+    per = derive_per_program_projection(admitted)
+    supplied = stage1.get("per_program_projection_sha256")
+    if supplied is not None and dict(supplied) != per:
+        raise ProgramAdmissionError(
+            "the supplied per_program_projection_sha256 disagrees with the map DERIVED "
+            "from the Stage-1 records (a wrong value, an extra non-portable key, a missing "
+            "portable key, or a reordered record). The producer derives this itself; a "
+            f"supplied map is only admissible if it matches. derived={sorted(per)} "
+            f"supplied={sorted(dict(supplied))}")
     return {
         # the canonical scorer-view hash, under the name the independent verifier reads
         # (``registry_scorer_view_sha256``) AND the raw/canonical pair, so both consumers
@@ -201,7 +237,8 @@ def stage1_binding_block(stage1: dict[str, Any], admitted: dict[str, dict[str, A
         "n_programs": len(programs),
         # (b) the INDEPENDENTLY recomputed 10-key per-program projection MAP — distinct from
         # the scalar above, keyed EXACTLY on the admitted programs, never collapsed into it.
-        "per_program_projection_sha256": {p: per.get(p) for p in programs},
+        "per_program_projection_sha256": per,
+        "per_program_projection_rule_id": PER_PROGRAM_PROJECTION_RULE_ID,
         "effect_universe_sha256": effect_universe_sha256,
         "effect_source_sha256": effect_source_sha256,
         "programs_derived_from": "bound_stage1_v3_scorer_view",

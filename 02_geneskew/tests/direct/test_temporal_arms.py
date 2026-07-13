@@ -1307,6 +1307,40 @@ class TestAuditDefectsClosed:
         assert report["admitted"] is False
         assert any("stage1" in f or "projection" in f for f in report["failures"])
 
+    def test_1_the_per_program_map_is_DERIVED_by_the_canonical_record_rule(self):
+        # each value == SHA-256 of the canonical JSON of the ENTIRE Stage-1 record, the
+        # exact rule the independent verifier uses. Derived from the record, not supplied.
+        from direct.hashing import content_hash
+        reg = FX.programs_registry()
+        want = {pid: content_hash(reg[pid]) for pid in FX.PORTABLE_IDS}
+        s1 = FX.build()["stage1_binding"]
+        assert s1["per_program_projection_sha256"] == want
+        assert s1["per_program_projection_rule_id"] == \
+            "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1"
+
+    def test_1_a_supplied_map_that_disagrees_is_refused_at_build(self):
+        # the producer DERIVES the map; a supplied map that disagrees (here a reordered
+        # record's hash) is rejected rather than trusted into the artifact.
+        bad_map = {pid: "f" * 64 for pid in FX.PORTABLE_IDS}
+        with pytest.raises(arm_programs.ProgramAdmissionError, match="disagrees"):
+            FX.build(stage1={**FX.stage1(),
+                             "per_program_projection_sha256": bad_map})
+
+    def test_1_a_supplied_map_with_an_extra_nonportable_key_is_refused(self):
+        good = dict(FX.build()["stage1_binding"]["per_program_projection_sha256"])
+        good["TH9_nonportable"] = "a" * 64
+        with pytest.raises(arm_programs.ProgramAdmissionError, match="disagrees"):
+            FX.build(stage1={**FX.stage1(), "per_program_projection_sha256": good})
+
+    def test_1_a_reordered_record_array_changes_the_derived_hash(self):
+        # array order is PRESERVED in the canonical rule, so reversing panel_ensembl yields
+        # a DIFFERENT projection id — reordering cannot pass unnoticed.
+        from direct.hashing import content_hash
+        reg = FX.programs_registry()
+        rec = dict(reg[FX.PORTABLE_IDS[0]])
+        reordered = dict(rec, panel_ensembl=list(reversed(rec["panel_ensembl"])))
+        assert content_hash(rec) != content_hash(reordered)
+
     def test_2_stage2_inputs_is_a_fixed_keyed_object_not_a_role_list(self, tmp_path):
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
         paths = arm_emit.resolve_local_paths(str(tmp_path), addr)

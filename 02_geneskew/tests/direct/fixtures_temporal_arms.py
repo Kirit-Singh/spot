@@ -47,11 +47,13 @@ def _panel(i: int) -> list[str]:
 
 def programs_registry() -> dict[str, dict]:
     """The FIXTURE Stage-1 scorer view: 10 base-portable + 1 explicitly non-portable."""
+    # FIXTURE program RECORDS, mirroring the shape the producer hashes whole (the real
+    # stage01_stage2_registry_view.json record carries more fields; the producer derives the
+    # per-program projection id from the ENTIRE record, whatever its fields are).
     reg = {
         pid: {"program_id": pid, "panel_ensembl": _panel(i), "control_ensembl": CONTROLS,
               "base_portable": True, "primary": True, "stage2_selectable": True,
-              # FIXTURE per-program projection hash (the scorer view's method_hash)
-              "method_hash": f"{(i + 1):064x}"}
+              "coefficients": [round(0.1 * (i + 1) * (k + 1), 4) for k in range(3)]}
         for i, pid in enumerate(PORTABLE_IDS)
     }
     reg[NON_PORTABLE_ID] = {
@@ -89,9 +91,12 @@ def condition_universe(release=None):
 
 
 def stage1(release=None):
-    """The FIXTURE Stage-1 v3 release binding. Every hash is INVENTED, clearly-marked
-    fixture data — never a measurement — but complete (non-null) so the release is GO."""
-    reg = programs_registry() if release is None else release.programs
+    """The FIXTURE Stage-1 v3 release metadata. Every hash is INVENTED, clearly-marked
+    fixture data — never a measurement — but complete (non-null) so the release is GO.
+
+    Deliberately does NOT supply per_program_projection_sha256: the producer DERIVES that
+    map from the Stage-1 records itself. (A supplied map is only admissible if it matches.)
+    """
     return {
         "release_self_sha256": "b" * 64,                   # FIXTURE v3 release self-hash
         "scorer_view_raw_sha256": "a" * 64,                # FIXTURE scorer view raw
@@ -101,9 +106,6 @@ def stage1(release=None):
         "registry_scorer_projection_sha256": "c0" * 32,
         # the DECLARED selector sequence — carried verbatim, NOT canonical-sorted away
         "selector_condition_sequence": list(CONDITIONS),
-        # (b) the 10-key per-program projection MAP — one hash per admitted program
-        "per_program_projection_sha256": {
-            pid: reg[pid]["method_hash"] for pid in PORTABLE_IDS},
     }
 
 
