@@ -1,0 +1,38 @@
+{
+ "files": {
+  "arm_bundle.json": "b3c6e6535d5e24852d4fdbd247f68b1b15a5c96ef5f6f3f43686ee9009a5544d",
+  "rankings/FIXTURE_PROG_00__decrease.json": "081ca5eb6a70b84d99bedeff5689543276623f86f4de54699e83606e08493216",
+  "rankings/FIXTURE_PROG_00__increase.json": "533d0be671ee98e374681e59b1d974c1313148d44fb3045f5fb4bb1864e6938e",
+  "rankings/FIXTURE_PROG_01__decrease.json": "05e88779633c10adc2de3daa8a3255eb01a6dffad1be8a34608aca5aad0c706d",
+  "rankings/FIXTURE_PROG_01__increase.json": "403347a8b1ea0dc23d427da1388737f77a294ab5353fc0143ab602dbaf72425d",
+  "rankings/FIXTURE_PROG_02__decrease.json": "991411fa67ee9843f4762f9fd44b8ca31f7df594f4e98ceb84e91445d33065bc",
+  "rankings/FIXTURE_PROG_02__increase.json": "86bcba36a49c1772c35fe6b8a7b3bec76a1b5e79086644a0008970e6961e25ab",
+  "rankings/FIXTURE_PROG_03__decrease.json": "b5b25da0c02f29263900055104ca0d4c71c8839f73c95460f9873e9962a589b2",
+  "rankings/FIXTURE_PROG_03__increase.json": "13729b126bab13595007a0510bbf381c4918d8cb3bea5aa387ddabd2f8541f83",
+  "rankings/FIXTURE_PROG_04__decrease.json": "fe9461e92f7dd39be842547a764b5a1fe34ce9905091aebe755c9a6b83cb25cc",
+  "rankings/FIXTURE_PROG_04__increase.json": "8770516d0d2840f91004fa7ad232bbfbe6e3fa422a282da6eb403fe34cb8a5b1",
+  "rankings/FIXTURE_PROG_05__decrease.json": "18551d886d816537bda36c5f29e5a4daa54fd9712f8b51f0c217adc82ebaac40",
+  "rankings/FIXTURE_PROG_05__increase.json": "8734397f0ecda5e868e87bff3abc9a376b20539befba9347d6c6ae558746b2ae",
+  "rankings/FIXTURE_PROG_06__decrease.json": "6392d7e3644e643b6e5d20e0d572e1d39fcbd53e07f7cc1122b084288bc4d917",
+  "rankings/FIXTURE_PROG_06__increase.json": "a4bc2cf5aa82d032fb6e215671a70c530f9f58b42e5e86dafb3977e20cefca0f",
+  "rankings/FIXTURE_PROG_07__decrease.json": "771b965a88a9444c8cd438eafaf5f6c0fa38fcbbd16aee60b817e444478c655b",
+  "rankings/FIXTURE_PROG_07__increase.json": "f4d0342e7e1c24fe31852e401e618a2bd9520de5a411ee72ee68c8d7603c1393",
+  "rankings/FIXTURE_PROG_08__decrease.json": "de7afae091a3603bf92dc1276d5fd7b8625d3424f33837187173439d5f696a05",
+  "rankings/FIXTURE_PROG_08__increase.json": "77d66d04d1abb2547c85a55e1592fec07ede6c559028e37f7d5c2edfb53a2cd5",
+  "rankings/FIXTURE_PROG_09__decrease.json": "0ae89dc03aefac0ec9a4cba4e452094834351022eef11ff5fa5661373dd1b1ba",
+  "rankings/FIXTURE_PROG_09__increase.json": "eb79b3d7c56026a19bc83429e438bf78254d945c39fd9cc0559f1f733e54791f",
+  "temporal_provenance.json": "dda7d121522335adde06b00446900a049e860d51a702f846b119880dd2d31f61",
+  "temporal_verification.json": "1115bc4f0ef45eeab50aee4bb1958a91e8c7936bbf3329b71a988b065add3728"
+ },
+ "fixture_set_sha256": "d2d7aaaf68cdbf9143b453e568b157a2ccc80ea1d5804876f75cf9383d351ed2",
+ "n_files": 23,
+ "note": "EXACT emitted bytes from W5's committed producer. NOT hand-authored. Stage-3 v2 is finished only after W11 independently admits cc82599; this fixture is then re-verified against the W11-admitted bytes.",
+ "transcribed_from": {
+  "branch": "agent/stage2-temporal-arms",
+  "commit": "cc82599",
+  "emitter": "direct.temporal.arms.arm_emit.emit_bundle",
+  "producer_suite": "148 passed",
+  "source_fixture": "tests/direct/fixtures_temporal_arms.FX.build()",
+  "worktree": "spot-stage2-temporal-arms"
+ }
+}
