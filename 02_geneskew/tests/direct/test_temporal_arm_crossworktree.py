@@ -166,6 +166,16 @@ def _verify_from_this_checkout(w5: str, release_root: str, bundle_root: str, *ex
     return proc.returncode, json.loads(proc.stdout)
 
 
+def _contract() -> dict:
+    """The contract, as the CLI actually emits it — read from the tool, never transcribed."""
+    env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+    proc = subprocess.run(
+        [sys.executable, "-m", "verify_temporal_arms.cli", "--print-contract"],
+        capture_output=True, text=True, env=env, cwd=_W11_REPO)
+    assert proc.returncode == 0, proc.stderr[-500:]
+    return json.loads(proc.stdout)
+
+
 def _stage(w5, tmp_path):
     """Emit from the producer's checkout. The bytes are its own; nothing is repaired."""
     sys.path.insert(0, _HERE)
@@ -525,6 +535,78 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
             hashlib.sha256(inv_raw).hexdigest()
         assert envelope["binds"]["producer_release_id"] == json.loads(inv_raw)["release_id"]
 
+    def test_the_CONTRACT_matches_what_the_verifier_ACTUALLY_DOES_in_both_modes(
+            self, producer_checkout, tmp_path):
+        """A contract is only worth what its claims are worth. So both write-modes are RUN,
+        and the producer's native root is hashed before and after each, and reality is
+        checked against what the contract SAYS reality is.
+
+        The two modes make DIFFERENT claims — default adds a file under the producer root,
+        ``--admission-out`` does not — and "modifies nothing" and "writes nothing there" are
+        not the same claim. Collapsing them is how a contract starts lying."""
+        import hashlib
+
+        c = _contract()
+        w = c["writes"]
+        name = w["external_admission_file"]
+
+        def run(bundle_root, release_root, lock, direct, w10, out=None):
+            env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+            argv = [sys.executable, "-m", "verify_temporal_arms.cli",
+                    "--stage1-release-root", release_root, "--bundle-root", bundle_root,
+                    "--producer-checkout", producer_checkout, "--env-lock", lock, "--sign"]
+            if out:
+                argv += ["--admission-out", out]
+            for cond, path in direct.items():
+                argv += ["--direct-bundle", f"{cond}:{path}"]
+            for cond, path in w10.items():
+                argv += ["--w10-report", f"{cond}:{path}"]
+            proc = subprocess.run(argv, capture_output=True, text=True, env=env,
+                                  cwd=_W11_REPO)
+            assert proc.returncode == 0, proc.stdout[-1200:] + proc.stderr[-400:]
+            return json.loads(proc.stdout)
+
+        def snap(root):
+            out = {}
+            for dirpath, _, names in os.walk(root):
+                for n in sorted(names):
+                    fp = os.path.join(dirpath, n)
+                    with open(fp, "rb") as fh:
+                        out[os.path.relpath(fp, root)] = hashlib.sha256(fh.read()).hexdigest()
+            return out
+
+        # ---- DEFAULT: the contract says it ADDS a file under the producer root ----
+        rr, br, lock, direct, w10 = _stage(producer_checkout, tmp_path / "a")
+        before = snap(br)
+        run(br, rr, lock, direct, w10)
+        after = snap(br)
+        added = sorted(set(after) - set(before))
+        assert (name in added) is w["default"]["adds_a_file_under_the_producer_root"]
+        assert added == [name]
+        kept = {k: v for k, v in after.items() if k in before}
+        assert (kept == before) is not (w["producer_bytes_modified"])   # nothing rewritten
+
+        # ---- OVERRIDE: the contract says it does NOT ----
+        rr2, br2, lock2, d2, w2 = _stage(producer_checkout, tmp_path / "b")
+        agg = os.path.dirname(os.path.abspath(br2))
+        out = os.path.join(agg, name)
+        before2 = snap(br2)
+        run(br2, rr2, lock2, d2, w2, out=out)
+        after2 = snap(br2)
+        assert ((name in after2) is
+                w["override"]["adds_a_file_under_the_producer_root"])
+        assert after2 == before2, "the producer's native root was touched"
+        assert os.path.exists(out)
+
+        # ...and the receipt still binds the release, from over there
+        with open(out) as fh:
+            env_doc = json.load(fh)
+        with open(os.path.join(br2, c["reads"]["producer_inventory_file"]), "rb") as fh:
+            inv = fh.read()
+        assert w["path_is_not_the_binding"] is True
+        assert env_doc["binds"]["producer_release_raw_sha256"] == \
+            hashlib.sha256(inv).hexdigest()
+
     def test_a_REJECT_is_a_nonzero_exit_code_from_the_production_cli(
             self, producer_checkout, tmp_path):
         """A rejected release is an exit code, not a log line an aggregate has to read."""
@@ -547,39 +629,57 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
             {x["gate"] for x in report["failures"]}
 
     def test_the_integration_CONTRACT_is_emitted_as_bytes_and_cannot_drift(self):
-        """An aggregate BINDS this instead of transcribing it. A contract copied by hand is
-        a contract that drifts, and the drift is invisible until a release is admitted
-        against the wrong thing — so every field here is asserted against the constants the
-        verifier actually runs on, not against a copy of them."""
-        from verify_temporal_arms import direct_source, schema, verify
+        """An aggregate BINDS this instead of transcribing it. Every field is asserted
+        against the constants the verifier actually runs on — a contract that could drift
+        from the code that honours it is a contract nobody can rely on."""
+        from verify_temporal_arms import schema, verify
 
-        env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
-        proc = subprocess.run(
-            [sys.executable, "-m", "verify_temporal_arms.cli", "--print-contract"],
-            capture_output=True, text=True, env=env, cwd=_W11_REPO)
-        assert proc.returncode == 0, proc.stderr[-500:]
-        c = json.loads(proc.stdout)
+        c = _contract()
 
         assert c["verifier_id"] == verify.VERIFIER_ID
-        # what it READS: the producer-native inventory, and nothing generic
+        # READS: the producer-native inventory, and nothing generic
         assert c["reads"]["producer_inventory_file"] == schema.INVENTORY_FILENAME
         assert c["reads"]["producer_inventory_schema"] == schema.SCHEMA_INVENTORY
         assert c["reads"]["producer_inventory_is_mandatory"] is True
         assert c["reads"]["generic_or_copied_inventory_accepted"] is False
-        # what it WRITES: one file, beside it, and nothing of the producer's
-        assert c["writes"]["external_admission_file"] == schema.ENVELOPE_FILENAME
-        assert c["writes"]["external_admission_schema"] == schema.SCHEMA_ENVELOPE
-        assert c["writes"]["producer_bytes_modified"] is False
-        assert c["writes"]["producer_root_written_into"] is False
-        assert c["writes"]["override_flag"] == "--admission-out FILE"
-        assert c["writes"]["path_is_not_the_binding"] is True
-        # what --w10-report must SAY
-        req = c["w10_admission_document"]["required_fields"]
-        assert req["admitted"] is True and req["self_admitted"] is False
-        assert direct_source.PENDING_VERDICT in req["verdict"]
-        assert c["w10_admission_document"]["must_not_be"]["path"].endswith(
-            direct_source.VERIFICATION_FILE)
+        # WRITES: one file; no producer byte is EVER rewritten
+        w = c["writes"]
+        assert w["external_admission_file"] == schema.ENVELOPE_FILENAME
+        assert w["external_admission_schema"] == schema.SCHEMA_ENVELOPE
+        assert w["producer_bytes_modified"] is False
+        assert w["path_is_not_the_binding"] is True
+        # ...and the two MODES are stated apart, because they are different claims
+        assert w["default"]["adds_a_file_under_the_producer_root"] is True
+        assert w["override"]["flag"] == "--admission-out FILE"
+        assert w["override"]["adds_a_file_under_the_producer_root"] is False
         assert c["exit_codes"] == {"0": "ADMIT", "1": "REJECT"}
+
+    def test_the_contract_says_the_W10_BOOLEANS_ARE_ABSENT_and_not_required(self):
+        """The report has no ``admitted`` and no ``self_admitted``. It never did. A contract
+        that asked for them would be asking for fields that do not exist — which is exactly
+        the false refusal this lane already made once."""
+        from verify_temporal_arms import direct_source
+
+        w10 = _contract()["w10_admission_document"]
+
+        assert w10["schema_version"] == direct_source.W10_REPORT_SCHEMA
+        assert w10["verifier_id"] == direct_source.W10_VERIFIER_ID
+        for flag in ("admitted", "self_admitted"):
+            assert "ABSENT" in w10["admission_booleans"][flag]
+        # the contract may not smuggle them back in as requirements anywhere
+        assert "admitted" not in w10.get("required_evidence", {})
+        assert "self_admitted" not in w10.get("required_evidence", {})
+
+        ev = w10["required_evidence"]
+        assert direct_source.W10_ADMIT in ev["verdict"]
+        assert ev["bound_artifact.solver_lock_sha256"] == \
+            direct_source.AUTHORITATIVE_ENV_LOCK_SHA256
+        for k in ("report_sha256", "gate_inventory_sha256", "bound_artifact.condition",
+                  "bound_artifact.arm_rows_sha256", "bound_artifact.artifact_sha256"):
+            assert ev[k]
+        assert w10["must_not_be"]["schema_version"] == \
+            direct_source.VERIFICATION_SLOT_SCHEMA
+        assert w10["must_not_be"]["verdict"] == direct_source.PENDING_VERDICT
 
     def test_the_print_flags_need_no_release_but_everything_else_does(self):
         """A missing root is an ERROR, not a default: a verifier that guessed one would bind

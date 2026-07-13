@@ -51,26 +51,36 @@ def integration_contract() -> dict[str, Any]:
             "generic_or_copied_inventory_accepted": False,
         },
 
-        # WHAT THIS LANE WRITES. Exactly one file, beside the inventory it admits. Nothing
-        # the producer wrote is modified.
-        # WHAT THIS LANE WRITES. Exactly one file. WHERE it lands is the caller's choice —
-        # WHAT IT SAYS is not. The verifier reads the producer's native root and writes
-        # NOTHING into it, wherever the receipt is filed.
+        # WHAT THIS LANE WRITES. Exactly one file, and it never rewrites an existing byte.
+        #
+        # WHERE it lands has TWO answers, and they are not the same answer. By default it is
+        # filed beside the inventory it admits — which ADDS A FILE UNDER THE PRODUCER'S ROOT.
+        # No producer byte is modified, but "modifies nothing" and "writes nothing there" are
+        # different claims, and collapsing them into one is how a contract starts lying.
+        # ``--admission-out`` is the way to leave that root untouched entirely.
         "writes": {
             "external_admission_file": schema.ENVELOPE_FILENAME,
             "external_admission_schema": schema.SCHEMA_ENVELOPE,
-            "default_location": "beside the producer inventory, under --bundle-root",
-            "override_flag": "--admission-out FILE",
-            "aggregate_usage": ("--bundle-root OUT/temporal  (the producer's NATIVE root, "
-                                "read-only) with --admission-out "
-                                "OUT/temporal_arm_external_admission.json"),
-            "producer_bytes_modified": False,
-            "producer_root_written_into": False,
             "report_id_rule": "sha256(canonical JSON excluding report_id)",
-            # THE PATH IS NOT THE BINDING, and it never was. The admission binds the
-            # producer's release id and the exact inventory bytes, so a reader holding the
-            # receipt can get back to the release it admits from anywhere in the tree.
+            # TRUE IN BOTH MODES: no byte the producer wrote is ever rewritten.
+            "producer_bytes_modified": False,
+            # THE PATH IS NOT THE BINDING, and never was. The admission binds the producer's
+            # release id and the exact inventory bytes, so a reader holding the receipt can
+            # get back to the release it admits from anywhere in the tree.
             "path_is_not_the_binding": True,
+            "default": {
+                "location": f"<bundle_root>/{schema.ENVELOPE_FILENAME}",
+                "adds_a_file_under_the_producer_root": True,
+                "producer_bytes_modified": False,
+            },
+            "override": {
+                "flag": "--admission-out FILE",
+                "aggregate_usage": (
+                    "--bundle-root OUT/temporal (the producer's NATIVE root, read-only) "
+                    "with --admission-out OUT/temporal_arm_external_admission.json"),
+                "adds_a_file_under_the_producer_root": False,
+                "producer_bytes_modified": False,
+            },
         },
 
         # WHAT --w10-report MUST BE. Not the producer's in-bundle verification.json (that
@@ -78,24 +88,50 @@ def integration_contract() -> dict[str, Any]:
         # a gate report that carries a verdict but no admission flags. An ADMISSION is a
         # document that says, in these exact fields, that an independent lane admitted it.
         "w10_admission_document": {
-            "required_fields": {
-                "admitted": True,
-                "self_admitted": False,
-                "verifier_id": "<non-null: the id of the lane that admitted it>",
-                "verdict": f"<any string except {direct_source.PENDING_VERDICT!r}>",
+            "schema_version": direct_source.W10_REPORT_SCHEMA,
+            "verifier_id": direct_source.W10_VERIFIER_ID,
+
+            # THERE ARE NO ADMISSION BOOLEANS, AND NONE ARE REQUIRED.
+            #
+            # W10's native report carries no ``admitted`` and no ``self_admitted``. It never
+            # did. Requiring them is requiring fields that do not exist — a false refusal of
+            # a sound report. And it does not need them: a boolean is a CLAIM, and this
+            # report ships the thing the claim would have stood for.
+            "admission_booleans": {
+                "admitted": "ABSENT from the native report — not required, not read",
+                "self_admitted": "ABSENT from the native report — not required, not read",
+                "why": ("a flag can be set by anyone about anything; the evidence below is "
+                        "checked against the bundle in hand, which a flag cannot be"),
             },
+
+            # THE EVIDENCE THAT IS REQUIRED, and what each of it rules out.
+            "required_evidence": {
+                "verdict": f"{direct_source.W10_ADMIT!r}",
+                "n_failed": "0, and failed_gates empty — an ADMIT with a failed gate is "
+                            "not an admit",
+                "independent_of_generator": "true — a report that imported the generator is "
+                                            "the generator's opinion of itself",
+                "report_sha256": "sha256(canonical JSON excluding report_sha256) — a report "
+                                 "editable after it was cited is a claim, not a result",
+                "gate_inventory_sha256": "sha256(canonical JSON of gate_inventory)",
+                "bound_artifact.condition": "the condition this endpoint asked for",
+                "bound_artifact.arm_rows_sha256": "the rows on disk",
+                "bound_artifact.solver_lock_sha256":
+                    direct_source.AUTHORITATIVE_ENV_LOCK_SHA256,
+                "bound_artifact.artifact_sha256":
+                    "a map of every file the report admitted; each must STILL hash to what "
+                    "it hashed to when the report was written",
+            },
+
             "must_not_be": {
                 "path": f"the Direct bundle's own {direct_source.VERIFICATION_FILE}",
-                "why": ("the producer's slot ships admitted=false / verifier_id=null / "
-                        "verdict=pending: it says in its own bytes that it is not an "
-                        "admission, and a producer that could admit itself by shipping a "
-                        "file with the right name in the right place would not be admitted "
-                        "by anybody"),
+                "schema_version": direct_source.VERIFICATION_SLOT_SCHEMA,
+                "verdict": direct_source.PENDING_VERDICT,
+                "why": ("the producer's slot ships PENDING and un-admitted: it says in its "
+                        "own bytes that it is not an admission, and a producer that could "
+                        "admit itself by shipping a file with the right name in the right "
+                        "place would not be admitted by anybody"),
             },
-            "note": ("a normalisation is acceptable ONLY if it is a lossless projection that "
-                     "carries these fields AND the aggregate binds the hash of the ORIGINAL "
-                     "report beside it; otherwise the admission is a claim about a document "
-                     "nobody can get back to"),
         },
 
         # HOW AN AGGREGATE BINDS THE RESULT. A POINTER, plus a re-derivation. Never a copy.
