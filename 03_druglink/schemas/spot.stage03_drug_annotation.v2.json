@@ -646,6 +646,14 @@
         "active_moiety_id": {
           "type": "string"
         },
+        "aggregate_verdict": {
+          "const": "admit"
+        },
+        "aggregate_verifier_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The Stage-2 aggregate verifier that admitted the release this edge stands on. The retired columns were `stage2_independent_verifier_id` / `stage2_independent_verdict` -- keys Stage-2's loader has NEVER emitted -- and the id carried `pattern: independent`. The real verifier is `spot.stage02.run_manifest.verifier.v1`, whose id contains no such substring, so that rule REFUSED every genuine release while ADMITTING any forgery that merely renamed itself '...independent...'. A name is not a binding. Independence is the STRUCTURED FIELD `generator_is_not_verifier`, which the loader checks against the report's own bytes; the schema requires only that this edge NAMES who admitted it."
+        },
         "arm_context_sha256": {
           "$ref": "#/$defs/sha256"
         },
@@ -797,13 +805,6 @@
         "stage1_release_sha256": {
           "$ref": "#/$defs/sha256"
         },
-        "stage2_independent_verdict": {
-          "const": "admit"
-        },
-        "stage2_independent_verifier_id": {
-          "pattern": "independent",
-          "type": "string"
-        },
         "stage2_manifest_canonical_sha256": {
           "$ref": "#/$defs/sha256"
         },
@@ -852,48 +853,48 @@
         }
       },
       "required": [
-        "edge_id",
-        "arm_key",
-        "lane",
-        "program_id",
-        "desired_change",
-        "arm_context_sha256",
-        "origin_type",
-        "origin_is_measured",
-        "target_id",
-        "target_id_namespace",
-        "arm_rank",
-        "arm_evaluable",
-        "desired_target_modulation",
-        "source_record_id",
-        "mec_id",
-        "molecule_chembl_id",
-        "target_chembl_id",
-        "active_moiety_id",
-        "assertion_lane",
-        "general_gene_rankable",
-        "action_type_source",
         "action_type_normalized",
-        "direction_vocabulary_digest",
-        "intervention_effect",
-        "intervention_effect_reason",
-        "directional_evidence_status",
-        "directional_evidence_reason",
-        "observed_perturbation_support",
-        "stage3_evidence_class",
-        "stage2_manifest_raw_sha256",
-        "stage2_manifest_canonical_sha256",
-        "stage2_manifest_self_hash",
-        "stage2_independent_verifier_id",
-        "stage2_independent_verdict",
-        "stage1_release_sha256",
+        "action_type_source",
+        "active_moiety_id",
+        "aggregate_verdict",
+        "aggregate_verifier_id",
+        "arm_context_sha256",
+        "arm_evaluable",
+        "arm_key",
+        "arm_rank",
+        "assertion_lane",
+        "bundle_canonical_sha256",
         "bundle_key",
         "bundle_raw_sha256",
-        "bundle_canonical_sha256",
-        "ranking_raw_sha256",
+        "desired_change",
+        "desired_target_modulation",
+        "direction_vocabulary_digest",
+        "directional_evidence_reason",
+        "directional_evidence_status",
+        "edge_id",
+        "general_gene_rankable",
+        "intervention_effect",
+        "intervention_effect_reason",
+        "lane",
+        "mec_id",
+        "molecule_chembl_id",
+        "observed_perturbation_support",
+        "origin_is_measured",
+        "origin_type",
+        "program_id",
         "ranking_canonical_sha256",
-        "universe_store_id",
-        "typed_universe_sha256"
+        "ranking_raw_sha256",
+        "source_record_id",
+        "stage1_release_sha256",
+        "stage2_manifest_canonical_sha256",
+        "stage2_manifest_raw_sha256",
+        "stage2_manifest_self_hash",
+        "stage3_evidence_class",
+        "target_chembl_id",
+        "target_id",
+        "target_id_namespace",
+        "typed_universe_sha256",
+        "universe_store_id"
       ],
       "type": "object"
     },

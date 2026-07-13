@@ -87,10 +87,10 @@ FROZEN_CONTRACT_SHA256 = \
 #     v2 contract  28a331b3… -> 6ad784ab…      (still NOT consumed by Stage 4)
 #     view schema  a652f4e0…  NEW              (W12 / W6 consume this)
 FROZEN_SCHEMA_SET_SHA256 = \
-    "3f23a9011d8ce4e7334b05ddcff5b7c2246b777243eb3603977c66c49b6a2cec"
+    "3541044d5a1d33b15cb658d6cf24375b4115a61899e8daab4a5d8e3b2047c1c8"
 FROZEN_V2_CONTRACT = "spot.stage03_drug_annotation.v2"
 FROZEN_V2_CONTRACT_SHA256 = \
-    "6ad784ab44d1aad9746ead1d112066d93000afd310d6d8e8fb15deace1f20597"
+    "e6b537d7ff23519bdef67d4078c0fd3782ade73b97e1ff6e802486b549aa8b61"
 FROZEN_VIEW_CONTRACT = "spot.stage03_selection_view.v1"
 FROZEN_VIEW_CONTRACT_SHA256 = \
     "a652f4e043c9235c42d1301a3bd7e53c7f2db0c2f57d5cbe4310d9fd2dd291ee"
