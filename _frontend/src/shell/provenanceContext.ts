@@ -4,6 +4,7 @@
 
 import { createContext, useContext } from 'react';
 import type { Provenance } from '../domain/common';
+import type { StageMethodsManifest } from '../domain/methodsManifest';
 
 /** A relocated method note / limitation: kept in the drawer, never on the canvas. */
 export interface ProvNote {
@@ -12,7 +13,12 @@ export interface ProvNote {
 }
 
 export interface ProvenanceOpener {
-  open: (title: string, provenance: Provenance | null, notes?: ProvNote[]) => void;
+  open: (
+    title: string,
+    provenance: Provenance | null,
+    notes?: ProvNote[],
+    methods?: StageMethodsManifest | null,
+  ) => void;
 }
 
 const ProvenanceContext = createContext<ProvenanceOpener | null>(null);

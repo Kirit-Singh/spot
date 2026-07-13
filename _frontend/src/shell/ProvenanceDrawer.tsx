@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'react';
 import type { Provenance } from '../domain/common';
 import type { Stage1Bindings, StageSelection } from '../domain/selection';
+import type { MethodsBlock, ProvenanceBlock, StageMethodsManifest } from '../domain/methodsManifest';
 import type { ProvNote } from './provenanceContext';
 import { NamespaceChip, EligibilityChip } from './chips';
 
@@ -78,6 +79,119 @@ function SelectionSection({ selection }: { selection: StageSelection }) {
   );
 }
 
+/** Render a value or an honest "unavailable" — never a fabricated placeholder. */
+function Val({ v, mono }: { v: string | null; mono?: boolean }) {
+  if (v === null || v === '') return <span className="text-muted">unavailable</span>;
+  return mono ? <Mono>{v}</Mono> : <>{v}</>;
+}
+
+function CopyCommand({ cmd }: { cmd: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <code className="break-all font-mono text-[11px] text-ink-2">{cmd}</code>
+      <button
+        type="button"
+        onClick={() => navigator.clipboard?.writeText(cmd)}
+        aria-label="Copy reproduce command"
+        className="flex-none rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted transition-colors hover:border-line-strong hover:text-ink"
+      >
+        copy
+      </button>
+    </div>
+  );
+}
+
+/** Methods content: exact data, estimand, masks/QC, upstream, factual limitations, hashes, run, reproduce. */
+function MethodsSection({ m }: { m: MethodsBlock }) {
+  return (
+    <section className="mb-3 border-b border-line pb-3">
+      <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-muted">Methods</div>
+      <Row label="Data / input"><Val v={m.data_input} /></Row>
+      <Row label="Estimand"><Val v={m.estimand} /></Row>
+      <Row label="Masks / QC"><Val v={m.masks_qc} /></Row>
+      <Row label="Upstream"><Val v={m.upstream_model} /></Row>
+      <Row label="Limitations">
+        {m.limitations.length === 0 ? (
+          <span className="text-muted">unavailable</span>
+        ) : (
+          <ul className="space-y-1">
+            {m.limitations.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        )}
+      </Row>
+      <Row label="Method"><Val v={m.method_id} mono /></Row>
+      <Row label="Code sha256"><Val v={m.method_code_sha256} mono /></Row>
+      <Row label="Environment"><Val v={m.environment} mono /></Row>
+      <Row label="Last run UTC"><Val v={m.last_run_utc} mono /></Row>
+      <Row label="Reproduce">
+        {m.reproduce_command ? <CopyCommand cmd={m.reproduce_command} /> : <span className="text-muted">unavailable</span>}
+      </Row>
+    </section>
+  );
+}
+
+/** Provenance content: content-addressed chain, release, hashes, generator/verifier, notebook, paths. */
+function ProvenanceManifestSection({ p }: { p: ProvenanceBlock }) {
+  return (
+    <section className="mb-3 border-b border-line pb-3">
+      <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-muted">Provenance</div>
+      <Row label="Release"><Val v={p.release_revision} mono /></Row>
+      <Row label="Raw sha256"><Val v={p.raw_sha256} mono /></Row>
+      <Row label="Canonical"><Val v={p.canonical_sha256} mono /></Row>
+      <Row label="Generator"><Val v={p.generator_status} /></Row>
+      <Row label="Verifier"><Val v={p.verifier_status} /></Row>
+      <Row label="CS notebook">
+        {p.cs_notebook_url ? (
+          <a href={p.cs_notebook_url} className="font-mono text-[11px] text-accent hover:underline">
+            {p.cs_notebook_url} ↗
+          </a>
+        ) : (
+          <span className="text-muted">unavailable</span>
+        )}
+      </Row>
+      <Row label="Artifacts">
+        {p.artifact_paths.length === 0 ? (
+          <span className="text-muted">unavailable</span>
+        ) : (
+          <ul className="space-y-1">
+            {p.artifact_paths.map((a) => (
+              <li key={a}><Mono>{a}</Mono></li>
+            ))}
+          </ul>
+        )}
+      </Row>
+      <div className="mb-1 mt-2 font-mono text-[10px] uppercase tracking-wide text-muted">Source chain</div>
+      {p.source_chain.length === 0 ? (
+        <p className="text-[12px] text-muted">unavailable</p>
+      ) : (
+        <ul className="space-y-2">
+          {p.source_chain.map((s) => (
+            <li key={`${s.label}:${s.record_id}`} className="text-[12px]">
+              <span className="font-semibold text-ink">{s.label}</span> <Mono>{s.record_id}</Mono>
+              <div className="text-[11px] text-muted">
+                {s.license ?? 'license unavailable'}
+                {s.retrieval_utc ? ` · ${s.retrieval_utc}` : ''}
+              </div>
+              {s.url && (
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[11px] text-accent hover:underline"
+                >
+                  {s.url} ↗
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export interface ProvenanceDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -85,6 +199,9 @@ export interface ProvenanceDrawerProps {
   provenance: Provenance | null;
   selection?: StageSelection | null;
   notes?: ProvNote[];
+  /** Stage Methods & Provenance manifest (the MPA per-tab content). When present it replaces
+   *  the raw provenance block; the App SPA passes none and keeps its existing rendering. */
+  methods?: StageMethodsManifest | null;
 }
 
 export function ProvenanceDrawer({
@@ -94,6 +211,7 @@ export function ProvenanceDrawer({
   provenance,
   selection,
   notes,
+  methods,
 }: ProvenanceDrawerProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -146,7 +264,17 @@ export function ProvenanceDrawer({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {selection && <SelectionSection selection={selection} />}
 
-          {provenance && (
+          {methods && (
+            <>
+              <div className="mb-3 text-[13px] font-semibold text-ink" data-stage-label>
+                {methods.stage_label}
+              </div>
+              <MethodsSection m={methods.methods} />
+              <ProvenanceManifestSection p={methods.provenance} />
+            </>
+          )}
+
+          {!methods && provenance && (
             <>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <NamespaceChip ns={provenance.namespace} />
@@ -251,7 +379,7 @@ export function ProvenanceDrawer({
             </section>
           )}
 
-          {provenance || selection || (notes && notes.length > 0) ? (
+          {methods || provenance || selection || (notes && notes.length > 0) ? (
             <section className="mt-4 border-t border-line pt-3">
               <Row label="Claude Science role">provenance trace</Row>
             </section>

@@ -5,6 +5,7 @@
 import { useMemo, useState } from 'react';
 import type { Provenance } from '../domain/common';
 import type { StageSelection } from '../domain/selection';
+import type { StageMethodsManifest } from '../domain/methodsManifest';
 import { TopBar } from '../shell/TopBar';
 import { ProvenanceDrawer } from '../shell/ProvenanceDrawer';
 import { ProvenanceProvider } from '../shell/provenanceContext';
@@ -18,6 +19,7 @@ interface DrawerState {
   provenance: Provenance | null;
   selection: StageSelection | null;
   notes: ProvNote[];
+  methods: StageMethodsManifest | null;
 }
 
 export function PageShell({
@@ -28,6 +30,7 @@ export function PageShell({
   selection = null,
   methodsProvenance = null,
   methodsNotes = [],
+  methodsManifest = null,
   children,
 }: {
   page: PageKey;
@@ -37,6 +40,7 @@ export function PageShell({
   selection?: StageSelection | null;
   methodsProvenance?: Provenance | null;
   methodsNotes?: ProvNote[];
+  methodsManifest?: StageMethodsManifest | null;
   children: React.ReactNode;
 }) {
   const [drawer, setDrawer] = useState<DrawerState>({
@@ -45,11 +49,16 @@ export function PageShell({
     provenance: null,
     selection: null,
     notes: [],
+    methods: null,
   });
   const opener = useMemo(
     () => ({
-      open: (title: string, provenance: Provenance | null, notes: ProvNote[] = []) =>
-        setDrawer({ open: true, title, provenance, selection, notes }),
+      open: (
+        title: string,
+        provenance: Provenance | null,
+        notes: ProvNote[] = [],
+        methods: StageMethodsManifest | null = null,
+      ) => setDrawer({ open: true, title, provenance, selection, notes, methods }),
     }),
     [selection],
   );
@@ -61,7 +70,9 @@ export function PageShell({
           subtitle={subtitle}
           subtitleNode={subtitleNode}
           onClearSelection={onClearSelection}
-          onOpenMethods={() => opener.open(`${subtitle} — methods`, methodsProvenance, methodsNotes)}
+          onOpenMethods={() =>
+            opener.open(`${subtitle} — methods`, methodsProvenance, methodsNotes, methodsManifest)
+          }
         />
         <MpaNav active={page} />
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
@@ -72,6 +83,7 @@ export function PageShell({
         provenance={drawer.provenance}
         selection={drawer.selection}
         notes={drawer.notes}
+        methods={drawer.methods}
         onClose={() => setDrawer((d) => ({ ...d, open: false }))}
       />
     </ProvenanceProvider>

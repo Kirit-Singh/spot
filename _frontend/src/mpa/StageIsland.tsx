@@ -15,6 +15,10 @@ import type { ScaffoldRegion } from '../shell/StageScaffold';
 import { readStage1Selection, contrastTitle, clearStage1Selection, NO_SELECTION_TITLE } from './contrastTitle';
 import type { Stage1Selection } from './contrastTitle';
 import { selectionFixtureRaw } from '../fixtures/selection.fixture';
+import { buildRepository } from '../repository/repository';
+import { browserSource } from '../repository/source';
+import { manifestFromProvenance, unavailableManifest } from '../domain/methodsManifest';
+import { demoMethodsManifest } from '../fixtures/methodsManifest.fixture';
 
 export function StageIsland({
   page,
@@ -60,13 +64,25 @@ export function StageIsland({
         window.location.assign('01_page.html');
       }
     : undefined;
-  void subtitle; // stage name now lives only in the nav tab
+  // Bind the header Methods/Provenance drawer to the content-addressed aggregate for this
+  // stage (targets/pathways→S2, drugs→S3, pksafety→S4). Fixtures only behind ?demo=1; in
+  // production a not-yet-generated arm yields an all-"unavailable" manifest (never invented).
+  const repo = buildRepository(browserSource(), { demo });
+  const slot = page === 'drugs' ? repo.getStage3() : page === 'pksafety' ? repo.getStage4() : repo.getStage2();
+  const stageProvenance = slot.status === 'loaded' ? slot.artifact.provenance : null;
+  const methodsManifest = demo
+    ? demoMethodsManifest(subtitle)
+    : stageProvenance
+      ? manifestFromProvenance(subtitle, stageProvenance)
+      : unavailableManifest(subtitle);
   return (
     <PageShell
       page={page}
       subtitle={headerTitle}
       subtitleNode={headerNode}
       onClearSelection={onClearSelection}
+      methodsProvenance={stageProvenance}
+      methodsManifest={methodsManifest}
     >
       {demo ? (
         <>
