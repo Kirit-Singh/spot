@@ -13,8 +13,8 @@ It reads the shipped bytes back off disk and re-derives, from them alone:
   * M1 — that a DEFINED enrichment always names a non-empty leading edge, that the edge
     contains only members of its set, and that its side follows the sign of the score;
   * that the two evidence lines were never FUSED: no combined pathway score exists;
-  * NO p, NO q, NO FDR — enforced by the same recursive key-name firewall the temporal
-    lane uses (``temporal.admission``), over the WHOLE document at any nesting depth.
+  * NO p, NO q, NO FDR — enforced by a recursive key-name firewall over the WHOLE document
+    at any nesting depth.
 
 Fail-closed: any failed check REJECTS the artifact.
 """

@@ -163,6 +163,20 @@ PROJECTION_ID_RULE = (
 # reusable bundle would be commentary travelling into every join that reuses the arm.
 BATCH_KEYS = ("batch", "confound")
 
+# --------------------------------------------------------------------------- #
+# WHAT IS NOT IN THE RELEASE, AND MUST NOT ENTER PRODUCER DISCOVERY OR CODE IDENTITY.
+#
+# The retired FLAT temporal lane produced one pair's two arms; the reusable topology needs
+# six all-arm bundles, so a scheduler that discovered `direct.temporal.cli` would build a
+# release this aggregate is obliged to refuse. `perturb2state` is a DEFERRED secondary
+# method and `temporal_exploration` is scratch analysis — neither is part of Stage-2's
+# science, and a code digest that swept them in would change the run identity every time
+# somebody edited a notebook that no result depends on.
+# --------------------------------------------------------------------------- #
+RETIRED_ENTRY_POINTS = ("direct.temporal.cli",)
+EXCLUDED_FROM_RELEASE = ("perturb2state", "temporal_exploration")
+EXCLUSION_RULE_ID = "spot.stage02.run_manifest.release_scope.v1"
+
 
 class RunManifestError(ValueError):
     """An arm cannot be bound. Refuse; never invent, never back-fill."""
@@ -432,73 +446,3 @@ def selection_capacity(n_programs: int, n_conditions: int) -> dict[str, Any]:
         "total_valid_ordered_selections": within + temporal,
         "refusal_rule": "only an exactly identical (program, pole, condition) is refused",
     }
-
-
-# --------------------------------------------------------------------------- #
-# THE EXACT PER-LANE CLI INVOCATION CONTRACT.
-#
-# WHAT produces each bundle, WHAT it writes, and WHERE its row count is supposed to come
-# from. No count is written here: a number in this file would be a number nobody measured.
-# The SOURCE of the count is named, so a reader can go and check it.
-# --------------------------------------------------------------------------- #
-CLI_CONTRACTS = {
-    LANE_DIRECT: {
-        "command": "python -m direct.cli",
-        "required_arguments": [
-            "--stage1-v3-selection", "--stage1-v3-schema", "--registry", "--de-main",
-            "--by-guide", "--by-donors", "--sgrna", "--guide-manifest",
-            "--source-registry", "--stage1-release", "--env-lock", "--lane",
-            "--out-root"],
-        "one_invocation_per": "condition",
-        "output_filenames": sorted(set(BUNDLE_FILES[LANE_DIRECT].values()) | {
-            "screen.parquet", "masks.parquet", "contributing_guides.parquet",
-            "guide_support.parquet", "donor_support.parquet", "axis.json",
-            "gene_universe.json", "input_manifest.json"}),
-        "expected_row_count_source":
-            "one screen row per released pooled-main estimate at the bundle's condition — "
-            "verification.json.source_target_count, re-derived by verify_run from the DE "
-            "release obs (culture_condition == the bundle's condition)",
-        "expected_arm_count_source":
-            "2 x the admitted set derived from program.base_portable in the release's "
-            "scorer view (cross-checked against release.selector.admitted_programs)",
-        "expected_exit_code": 0,
-    },
-    LANE_TEMPORAL: {
-        "command": "python -m direct.temporal.cli",
-        "required_arguments": [
-            "--stage1-v3-selection", "--stage1-v3-schema", "--registry", "--de-main",
-            "--by-guide", "--by-donors", "--sgrna", "--guide-manifest",
-            "--source-registry", "--stage1-release", "--batch-policy", "--out-root"],
-        "one_invocation_per": "ordered condition pair",
-        "output_filenames": sorted(set(BUNDLE_FILES[LANE_TEMPORAL].values()) | {
-            "temporal.parquet", "endpoints.parquet"}),
-        "expected_row_count_source":
-            "one temporal record per target in the UNION of the two endpoints' released "
-            "pooled-main targets — temporal_provenance.json.n_records",
-        "expected_arm_count_source":
-            "2 x the admitted set derived from program.base_portable in the release's "
-            "scorer view (cross-checked against release.selector.admitted_programs)",
-        "expected_exit_code": 0,
-    },
-    LANE_PATHWAY: {
-        "command": "python -m direct.run_pathway",
-        "required_arguments": [
-            "--stage1-v3-selection", "--stage1-v3-schema", "--registry", "--de-main",
-            "--by-guide", "--by-donors", "--sgrna", "--gene-sets", "--guide-manifest",
-            "--source-registry", "--stage1-release", "--out-root"],
-        "one_invocation_per": "condition x gene-set source",
-        "output_filenames": sorted(set(BUNDLE_FILES[LANE_PATHWAY].values()) | {
-            "pathway.json"}),
-        "expected_row_count_source":
-            "one pathway record per gene set in the PINNED bundle — "
-            "pathway_provenance.json.run_binding.gene_sets.gene_set_release.n_sets",
-        "expected_arm_count_source":
-            "2 x the admitted set derived from program.base_portable, every arm "
-            "referencing the ONE shared convergence artifact of this (condition, source)",
-        "expected_hit_count_source":
-            "RECONSTRUCTED, never declared: n_hits_in_ranking = |gene-set members (target "
-            "namespace) INTERSECT the ranked target ids of that arm's bound ranking|, both "
-            "read from the bundle's own bound bytes",
-        "expected_exit_code": 0,
-    },
-}

@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import verify_bundle_scan as S  # noqa: E402  (the per-bundle scan)
 import verify_invocation as I  # noqa: E402  (the W7 contract + dry run)
+import verify_lane_admission as LA  # noqa: E402  (native verdict -> typed disposition)
 import verify_manifest_rules as R  # noqa: E402
 import verify_release_envelope as E  # noqa: E402  (the inventory + the external envelope)
 import verify_release_rules as W  # noqa: E402  (the W5-audit rules)  (independent reimplementation)
@@ -89,6 +90,7 @@ G_STAGE1_NONNULL = "no_Stage1_release_projection_or_selector_field_is_NULL"
 G_PREFLIGHT = "the_PREFLIGHT_proves_the_FINAL_bytes_and_admits_NOTHING"
 G_INVENTORY_ARMS = "the_INVENTORY_binds_EXACTLY_the_rankings_the_ARMS_bind"
 G_ENV_LOCK = "every_bundle_binds_the_COMMITTED_env_lock_and_it_is_the_lock_supplied"
+G_LANE_ADMISSION = "each_lane_admission_is_the_NATIVE_verifier_verdict_typed_NOT_folded"
 
 
 def _one(rep, pairs, gate, what):
@@ -106,7 +108,6 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
            release_root_dir: str = None) -> dict[str, Any]:
     rep = R.Report()
     root = release_root_dir or bundles_root
-    # THE ENVIRONMENT LOCK, by its BYTES (see ``verify_release_rules.check_supplied_lock``).
     env_lock = (R.file_sha256(env_lock_path)
                 if env_lock_path and os.path.exists(env_lock_path) else None)
     expect_verifiers = R.load_json(expect_verifiers_path) or {}
@@ -117,14 +118,10 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
         return rep.doc(VERIFIER_ID, SCHEMA_VERSION, n_bundles=0, n_arm_slots=0)
 
     # ---- 0. THE INDEPENDENT EXPECTATION, from the AUTHORITATIVE Stage-1 v3 release ---- #
-    # The programs, the conditions and the pathway sources ALL come from the release. The
-    # batch policy is NOT an authority here: batch is out of the reusable temporal chain,
-    # and a confound diagnostic was never the right place to learn which conditions exist.
     release = R.load_json(release_path)
     release_canon = R.content_sha256(release) if release is not None else None
 
-    # THE PIN. A forged, truncated or REORDERED selector.conditions changes this hash —
-    # which is the whole reason the release is content-addressed and pinned outside the run.
+    # THE PIN. A forged, truncated or REORDERED selector.conditions changes this hash.
     rep.gate(G_RELEASE_PIN,
              bool(expect_release_sha256) and release_canon == expect_release_sha256,
              f"the staged release canonically hashes to {str(release_canon)[:16]}; the "
@@ -212,12 +209,9 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_BYTES, not bad_bytes, "; ".join(bad_bytes[:4]))
     rep.gate(G_ALL_ARM, not not_all_arm, "; ".join(not_all_arm[:3]))
     rep.gate(G_MAPPING, not bad_map, "; ".join(bad_map[:4]))
-    # THE STAGE-1 BINDING, verified against the release — NOT against a pair.
-    #
-    # A reusable arm is PAIR-AGNOSTIC: it carries no role, no pole and no pair-derived
-    # program id, and W3 must not require one. What it MUST bind is the Stage-1 identity
-    # its arms were projected on — the scorer view this release publishes, and the admitted
-    # program ids. Those are re-derived here from the release's own bytes.
+    # THE STAGE-1 BINDING, verified against the release — NOT against a pair. A reusable arm
+    # carries no role and no pole; what it MUST bind is the Stage-1 identity its arms were
+    # projected on, re-derived here from the release's own bytes.
     want_view = (release or {}).get("registry_scorer_view_canonical_sha256")
     for b in bundles:
         sel = b.get("selection_release") or {}
@@ -335,28 +329,24 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_CONVERGENCE, not bad_conv, "; ".join(bad_conv[:4]))
 
     # ---- 5b. THE PRODUCER INVENTORY + THE INDEPENDENT ADMISSION ENVELOPE ---- #
-    # A file cannot testify that some other process made it (``verify_release_envelope``).
-    # EVERY LANE'S RELEASE IS ADMITTED BY ITS OWN INDEPENDENT VERIFIER: one generic report
-    # cannot say which lane it admitted, and a release missing any lane's admission is not
-    # a release. 3 Direct + 6 temporal + 6 pathway = 15 bundles / 300 arms.
+    # EVERY LANE'S RELEASE IS ADMITTED BY ITS OWN INDEPENDENT VERIFIER.
     bad_inv, bad_env_adm, bad_binds = [], [], []
     inventories = {}
-    n_bundles_of = {lane: len(want[lane]) // (2 * len(programs)) if programs else 0
-                    for lane in R.LANES}
+    n_of = {lane: len(want[lane]) // (2 * len(programs)) if programs else 0
+            for lane in R.LANES}
     for lane in R.LANES:
-        inv, problems = E.check_inventory(
-            root, expect_bundles=n_bundles_of[lane],
-            expect_arms=len(want[lane]), lane=lane)
+        inv, problems = E.check_inventory(root, expect_bundles=n_of[lane],
+                                          expect_arms=len(want[lane]), lane=lane)
         inventories[lane] = inv
         bad_inv += [f"[{lane}] {p}" for p in problems]
 
         pinned_id = (expect_verifiers.get(lane) or {}).get("verifier_id")
         env, eprob = E.check_external_admission(root, inv, pinned_id, lane=lane)
-        binds_msgs = [p for p in eprob
-                      if "admission of something else" in p or "binds inventory bytes" in p]
-        bad_env_adm += [f"[{lane}] {p}" for p in eprob if p not in binds_msgs]
-        bad_binds += [f"[{lane}] {p}" for p in binds_msgs]
-        if env is None and not binds_msgs:
+        binds = [p for p in eprob
+                 if "admission of something else" in p or "binds inventory bytes" in p]
+        bad_env_adm += [f"[{lane}] {p}" for p in eprob if p not in binds]
+        bad_binds += [f"[{lane}] {p}" for p in binds]
+        if env is None and not binds:
             bad_binds.append(f"[{lane}] no external admission envelope to bind")
 
     rep.gate(G_INVENTORY, not bad_inv, "; ".join(bad_inv[:4]))
@@ -368,6 +358,15 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
         bad_inv_arms += W.inventory_matches_arms(inventories[lane],
                                                  found["bound_rankings"])
     rep.gate(G_INVENTORY_ARMS, not bad_inv_arms, "; ".join(bad_inv_arms[:3]))
+
+    # THE LANE ADMISSIONS, TYPED (``verify_lane_admission``). The native token is carried
+    # VERBATIM beside the aggregate's disposition; the mapping is explicit and CLOSED.
+    lane_admissions, bad_adm = {}, []
+    for lane in R.LANES:
+        block, problems = LA.adapt(root, lane)
+        lane_admissions[lane] = block
+        bad_adm += problems
+    rep.gate(G_LANE_ADMISSION, not bad_adm, "; ".join(bad_adm[:4]))
 
     # ---- 6. NO COMBINED OBJECTIVE, and COMPLETENESS ---- #
     rep.gate(G_COMBINED,
@@ -413,6 +412,9 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
                    else "refused_by_independent_aggregate_admission"),
         "granted_by": VERIFIER_ID,
         "topology_complete_is_an_admission": False,
+        # what each lane's OWN verifier said, verbatim, beside what the aggregate made of it
+        "lane_admissions": lane_admissions,
+        "mapping_rule_id": LA.MAPPING_RULE_ID,
     }
     return doc
 

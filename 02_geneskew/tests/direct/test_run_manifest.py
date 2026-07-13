@@ -397,3 +397,36 @@ class TestTheVerifierTopologyAgreesWithTheProducer:
         K = self._producer()
         for token in ("away_from_A", "toward_B", "high", "low"):
             assert token not in K.ARM_KEY_RULE.split("—")[0]
+
+
+class TestGate7TheReleaseScope:
+    """A scheduler must not discover a lane the aggregate is obliged to refuse."""
+
+    def test_the_temporal_command_is_the_PRODUCTION_all_arm_path(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        cmd = doc["cli_invocation_contracts"]["temporal"]["command"]
+        assert cmd == "python -m direct.temporal.arms.run_temporal_arms"
+        # the RETIRED flat lane emits one pair's two arms, not six all-arm bundles
+        assert "direct.temporal.cli" not in cmd
+
+    def test_NO_contract_names_a_RETIRED_entry_point(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        printed = json.dumps(doc["cli_invocation_contracts"])
+        for retired in T.RETIRED_ENTRY_POINTS:
+            assert retired not in printed, retired
+
+    def test_the_release_SAYS_what_it_is_NOT(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        scope = doc["release_scope"]
+        assert "direct.temporal.cli" in scope["retired_entry_points"]
+        # deferred secondary method + scratch analysis: neither is Stage-2's science, and a
+        # code digest that swept them in would move the run identity for nothing
+        assert "perturb2state" in scope["excluded_from_release"]
+        assert "temporal_exploration" in scope["excluded_from_release"]
+
+    def test_the_PINNED_lane_verifiers_are_published_for_W7(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        pins = doc["pinned_lane_verifiers"]
+        assert pins["temporal"]["verifier_id"] == (
+            "spot.stage02.temporal.arm.independent_verifier.v1")
+        assert pins["temporal"]["commit"] == "99eaa81"

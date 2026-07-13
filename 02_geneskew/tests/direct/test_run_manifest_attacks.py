@@ -1499,6 +1499,96 @@ class TestTheAUTHORITATIVELockIsTheSameAcrossEveryLane:
         assert V.G_ENV_LOCK in doc["failed_gates"]
 
 
+class TestGate20TheNativeVerdictIsTypedNotTransliterated:
+    """W10 says ``ADMIT``. The aggregate says ``admitted``. NEITHER is rewritten.
+
+    The tempting fix was ``str(verdict).upper()``. It would have made Gate20 green and it
+    would have been a bug: a case-fold accepts ``admit``, ``Admit``, ``aDmIt`` and anything
+    else a drifting producer or a broken serialiser emits, and it cannot tell a native ADMIT
+    from a lane that has quietly changed its mind. (This verifier DID fold, in
+    ``verify_release_envelope``; it has been removed.)
+    """
+
+    def test_the_NATIVE_uppercase_ADMIT_is_accepted_AS_IT_IS(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["verdict"] == V.R.ADMIT, doc["failed_gates"]
+
+        block = doc["admission"]["lane_admissions"]["direct"]
+        assert block["native_verdict"] == "ADMIT"            # verbatim, uppercase
+        assert block["aggregate_disposition"] == "admitted"  # the aggregate's own word
+        assert block["transliterated"] is False
+        assert block["native_verifier_id"] == (
+            "spot.stage02.direct.release.verifier.v1")
+        assert doc["admission"]["mapping_rule_id"] == (
+            "spot.stage02.run_manifest.lane_admission_map.v1")
+
+    @pytest.mark.parametrize("spelling", ["admit", "Admit", "aDmIt", "ADMITTED",
+                                          "ADMIT ", "OK"])
+    def test_any_OTHER_SPELLING_of_the_verdict_is_REFUSED(self, tmp_path, spelling):
+        run = F.complete_run(tmp_path)
+        F.write_native_admission(run, "direct", verdict=spelling)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_LANE_ADMISSION in doc["failed_gates"]
+
+    def test_the_MAPPING_is_CLOSED_an_unknown_token_maps_to_NOTHING(self):
+        import verify_lane_admission as LA
+
+        assert LA.disposition_of("ADMIT") == "admitted"
+        assert LA.disposition_of("REFUSE") == "refused"
+        # no folding, no defaulting: an unknown token has NO disposition
+        for unknown in ("admit", "Admit", "ADMITTED", "", None, 1):
+            assert LA.disposition_of(unknown) is None
+
+    def test_admitted_FALSE_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        F.write_native_admission(run, "direct", admitted=False)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_LANE_ADMISSION in doc["failed_gates"]
+
+    def test_a_SELF_ADMITTED_release_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        F.write_native_admission(run, "direct", self_admitted=True)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_LANE_ADMISSION in doc["failed_gates"]
+
+    def test_a_FOREIGN_verifier_id_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        F.write_native_admission(run, "direct",
+                                 verifier_id="spot.stage02.somebody.else.v1")
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_LANE_ADMISSION in doc["failed_gates"]
+
+    def test_a_BROKEN_bound_hash_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = F.write_native_admission(run, "direct")
+        doc_a = json.load(open(path))
+        doc_a["direct_release_sha256"] = "0" * 64      # no longer its own content
+        with open(path, "w") as fh:
+            json.dump(doc_a, fh, indent=2, sort_keys=True)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_LANE_ADMISSION in doc["failed_gates"]
+
+    def test_a_MISSING_lane_admission_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        os.remove(os.path.join(run["root"], "direct_release.json"))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_LANE_ADMISSION in doc["failed_gates"]
+
+
 class TestOneNativeFilenameSet:
     """The legacy ``temporal_arm_*`` names are not the native set and are refused.
 

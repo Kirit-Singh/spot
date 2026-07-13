@@ -157,7 +157,7 @@ def pinned_gene_sets(tmp_path, sources) -> str:
 # WHO may admit an arm, and WHAT they must have checked. Pinned OUTSIDE the run: a forger
 # writes the report, so the report cannot also be the authority on who wrote it.
 LANE_VERIFIERS = {
-    "direct": {"verifier_id": "FIXTURE.spot.stage02.direct.verifier.v1",
+    "direct": {"verifier_id": "spot.stage02.direct.release.verifier.v1",
                "schema_version": "FIXTURE.spot.stage02_direct_verification.v1",
                "required_gates": ["screen_rows_reconstruct_from_the_inputs",
                                   "every_arm_ranks_over_its_own_population"]},
@@ -167,7 +167,7 @@ LANE_VERIFIERS = {
                  "schema_version": "FIXTURE.spot.stage02_temporal_verification.v1",
                  "required_gates": ["endpoints_reconstruct",
                                     "the_did_is_a_difference_of_two_arm_values"]},
-    "pathway": {"verifier_id": "FIXTURE.spot.stage02.pathway.verifier.v1",
+    "pathway": {"verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
                 "schema_version": "FIXTURE.spot.stage02_pathway_verification.v1",
                 "required_gates": ["coverage_and_per_arm_eligibility_rederive",
                                    "no_convergence_claim_rests_on_a_non_member"]},
@@ -546,7 +546,8 @@ def write_external_admission(run: dict, release_id=None, verdict="ADMIT",
     doc = {
         "fixture": True,
         "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
-        "verifier_id": LANE_VERIFIERS[lane]["verifier_id"],
+        "verifier_id": NATIVE_ADMISSION[lane]["verifier_id"]
+                       if lane != "direct" else LANE_VERIFIERS[lane]["verifier_id"],
         "verdict": verdict,
         "binds": {
             # WHICH RELEASE was admitted (required)...
@@ -569,4 +570,64 @@ def seal_release(run: dict) -> dict:
     for lane in ("direct", "temporal", "pathway"):
         write_inventory(run, lane)
         write_external_admission(run, lane=lane)
+        write_native_admission(run, lane)      # the lane's NATIVE, typed admission
     return run
+
+
+# --------------------------------------------------------------------------- #
+# W10's NATIVE Direct lane admission (`direct_release.json`). The producer ships it
+# UN-ADMITTED; the independent verifier fills in verdict/admitted/self_admitted/verifier_id.
+# The native verdict is the exact uppercase token `ADMIT` — W3 reads it as it is.
+# --------------------------------------------------------------------------- #
+NATIVE_ADMISSION = {
+    "direct": {
+        "file": "direct_release.json",
+        "schema_version": "spot.stage02_direct_release.v1",
+        "verifier_id": "spot.stage02.direct.release.verifier.v1",
+        "self_hash_field": "direct_release_sha256",
+        "excludes": ("direct_release_sha256", "direct_release_run_id", "verdict",
+                     "admitted", "self_admitted", "verifier_id"),
+    },
+    "temporal": {
+        "file": "temporal_arm_external_admission.json",
+        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
+        "self_hash_field": "report_id", "excludes": ("report_id",),
+    },
+    "pathway": {
+        "file": "pathway_arm_external_admission.json",
+        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
+        "self_hash_field": "report_id", "excludes": ("report_id",),
+    },
+}
+
+
+def write_native_admission(run: dict, lane: str, *, verdict="ADMIT", admitted=True,
+                           self_admitted=False, verifier_id=None) -> str:
+    """The lane's NATIVE admission, in that lane's OWN vocabulary. Never transliterated."""
+    spec = NATIVE_ADMISSION[lane]
+    root = run["root"]
+    inv_path = os.path.join(root, INVENTORY_FILE_OF[lane])
+    inv = json.load(open(inv_path))
+
+    body = {
+        "fixture": True,
+        "schema_version": spec["schema_version"],
+        "binds": {
+            "producer_release_id": inv["release_id"],
+            "producer_release_raw_sha256": _raw(inv_path),
+            "inventory_raw_sha256": _raw(inv_path),
+            "stage1_release_sha256": run["staged"]["release_canonical_sha256"],
+        },
+    }
+    doc = dict(body,
+               direct_release_run_id=inv["release_id"][:16],
+               verdict=verdict, admitted=admitted, self_admitted=self_admitted,
+               verifier_id=verifier_id or spec["verifier_id"])
+    doc[spec["self_hash_field"]] = _canon(
+        {k: v for k, v in doc.items() if k not in spec["excludes"]})
+
+    path = os.path.join(root, spec["file"])
+    _write(path, doc)
+    return path

@@ -36,10 +36,12 @@ from .arm_topology import (
     BINDING_FIELDS,
     BUNDLE_BINDINGS,
     BUNDLE_FILES,
-    CLI_CONTRACTS,
     DESIRED_CHANGES,
+    EXCLUDED_FROM_RELEASE,
+    EXCLUSION_RULE_ID,
     LANES,
     PAIR_DERIVED_VIEW_POLICY,
+    RETIRED_ENTRY_POINTS,
     RunManifestError,
     expected_bundles,
     expected_slots,
@@ -49,6 +51,7 @@ from .arm_topology import (
     role_pole_map,
     selection_capacity,
 )
+from .cli_contracts import CLI_CONTRACTS
 from .hashing import content_hash, file_sha256
 
 SCHEMA_VERSION = "spot.stage02_run_manifest.v3_topology_only"
@@ -200,7 +203,7 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
 
 
 def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, Any],
-          allow_partial: bool = False,
+          allow_partial: bool = False, lane_admissions: Optional[dict] = None,
           code_identity: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The aggregate manifest over every ARM of one Stage-2 run.
 
@@ -285,6 +288,20 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
         "selection_capacity": selection_capacity(
             release["n_programs"], len(conditions)),
         "cli_invocation_contracts": CLI_CONTRACTS,
+        # WHAT THE RELEASE IS NOT. Named, so a scheduler cannot discover a retired lane and
+        # a code digest cannot sweep in scratch that no result depends on.
+        "release_scope": {
+            "retired_entry_points": list(RETIRED_ENTRY_POINTS),
+            "excluded_from_release": list(EXCLUDED_FROM_RELEASE),
+            "rule_id": EXCLUSION_RULE_ID,
+        },
+        # THE PINNED LANE VERIFIERS (W7 consumes these).
+        "pinned_lane_verifiers": {
+            "temporal": {"verifier_id":
+                         "spot.stage02.temporal.arm.independent_verifier.v1",
+                         "commit": "99eaa81"},
+            "direct": {"verifier_id": "spot.stage02.direct.release.verifier.v1"},
+        },
         "combined_objective": None,
         "combined_objective_permitted": config.COMBINED_OBJECTIVE_PERMITTED,
         "cross_arm_score_or_order": None,
@@ -298,6 +315,13 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
         # they bind one selection. A run can be perfectly shaped and still be nonsense.
         "topology_complete": topology_complete,
         "topology_complete_is_an_admission": False,
+        # WHAT EACH LANE'S OWN VERIFIER SAID, verbatim, beside the aggregate's disposition.
+        # Bound into the manifest's content hash: a native verdict that was quietly
+        # rewritten, or a disposition that does not follow from it, changes the manifest.
+        "lane_admissions": lane_admissions or {},
+        "lane_admission_mapping_rule_id":
+            "spot.stage02.run_manifest.lane_admission_map.v1",
+        "lane_verdicts_are_transliterated": False,
         # ---- RELEASE ADMISSION IS NOT THE PRODUCER'S TO GRANT ---- #
         # It used to be set from the topology alone, so a run whose lane reports were bare
         # verdict strings, or which bound inconsistent selections, was stamped

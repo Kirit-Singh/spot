@@ -219,8 +219,11 @@ def check_external_admission(root: str, inventory: Optional[dict],
     if expect_verifier_id and doc.get("verifier_id") != expect_verifier_id:
         bad.append(f"{ADMISSION_FILE}: signed {doc.get('verifier_id')!r}; the pinned "
                    f"independent verifier is {expect_verifier_id!r}")
-    if str(doc.get("verdict")).upper() != ADMIT:
-        bad.append(f"{ADMISSION_FILE}: verdict is {doc.get('verdict')!r}, not {ADMIT}")
+    # BYTE FOR BYTE. `str(...).upper()` accepted `admit`, `Admit`, `aDmIt` and any other
+    # spelling, and could not tell a native ADMIT from a lane that had drifted.
+    if doc.get("verdict") != ADMIT:
+        bad.append(f"{ADMISSION_FILE}: verdict is {doc.get('verdict')!r}, not {ADMIT!r} "
+                   "(exact token; the aggregate does not normalise a lane's verdict)")
 
     # THE BINDING. An envelope that admits a DIFFERENT release admits something else — and
     # a run that accepted it would be citing an admission it never received.
