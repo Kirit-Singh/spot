@@ -106,20 +106,30 @@ STAGE2_UPSTREAM_CONTRACT = {
 # `manifest.v2`, admitted through W16's own v2 external verifier and schema-set pins. Widening v1 to
 # swallow v2 is not an upgrade; it is the misreading this module exists to prevent.
 V2_PIN_BLOCKERS = (
-    "the NATIVE v2 documents: `drug_annotation.v2.json` + `manifest.v2`, admitted by a TRUE v2 "
-    "contract module. `analysis/stage3_contract_v2.py` is misleadingly named — it pins "
-    "spot.stage03_drug_annotation.v1 and restates the OLD candidate keys. It will not be silently "
-    "widened to accept v2.",
+    "the NATIVE v2 documents — `drug_annotation.v2.json` + `manifest.json` (the manifest keeps its "
+    "v1 FILENAME and declares spot.stage03_manifest.v2 INSIDE) — admitted by a TRUE v2 contract "
+    "module, `analysis/stage3_v2_contract.py`. `analysis/stage3_contract_v2.py` is misleadingly "
+    "named: it pins spot.stage03_drug_annotation.v1 and restates the OLD candidate keys, and it "
+    "will not be silently widened to accept v2.",
     "ONE canonical document filename. W16 currently emits `drug_annotation.v2.json` while its "
     "fixture uses an underscore variant. Stage 4 discovers by DECLARATION so it sees both — but "
     "the v2 ADAPTER must read a real file, and two names for one document is a contract with a "
     "hole in it.",
-    "the final schema-set sha256, PUBLISHED by W16. Stage 4 re-derives it from the bundle's own "
-    "bytes and compares. A hash Stage 4 computed for itself pins nothing.",
-    "the v2 external-verifier entry point. NOT `verifier.verify_stage3` — that is v1's, and "
-    "judging a v2 bundle by v1's rules reports PASS without having looked.",
+    "the PUBLISHED `method.schemas_sha256` — the identity of the SCHEMAS the bundle was written "
+    "against. NOT a digest of the document+manifest INSTANCES: that is a hash of one bundle's "
+    "contents, it changes with every bundle, and pinning it would pin a single emission while "
+    "wearing the name of a contract pin. A hash Stage 4 computed for itself pins nothing.",
+    "gate 2 wired: `verifier.verify_stage3_v2`, out-of-process, over ALL its inputs (bundle, "
+    "stage2 aggregate manifest + report, the 15-bundle root, stage1 release, universe store, "
+    "stage3 bridge, artifact_class). NOT `verifier.verify_stage3` — that is v1's, and judging a v2 "
+    "bundle by v1's rules reports PASS without having looked. A verifier run without its upstream "
+    "inputs confirms only that the bundle agrees with itself, which a forged bundle also does.",
     "W16's current fixture carries a stale `DISP_NON_RANKABLE_ASSERTION` constant. A fixture that "
     "disagrees with the contract it is meant to demonstrate will be believed over the contract.",
+    "W16's current uncommitted selection_v3 identity is a 64-hex ALTERNATE PAYLOAD — stale and "
+    "wrong. Stage 4 rejects any 64-hex/alternate question identity by name. Required: the 16-hex "
+    "BIOLOGY-ONLY question_id over the endpoint conditions (Stage-1 539431d), independently "
+    "re-derived and DISTINCT from selection_id.",
 )
 
 # What Stage 4 will CHECK of the Stage-3 v2 BUNDLE once the pin lands. Published so W16 can build

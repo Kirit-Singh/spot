@@ -19,6 +19,10 @@ So this file is the harness, armed and waiting. Drop a real, externally admitted
 
 Until then it SKIPS, loudly, naming exactly what is missing. A skip is not a pass, and this suite
 says so rather than reporting green on a chain nobody has run.
+
+**The moment W16's bytes land these tests are REQUIRED, not optional.** Set `SPOT_STAGE3_V2_BUNDLE`
+and they must pass — a real chain that has never been run end to end is not a chain anyone should
+trust, and "we could run it" is not "we ran it".
 """
 
 from __future__ import annotations

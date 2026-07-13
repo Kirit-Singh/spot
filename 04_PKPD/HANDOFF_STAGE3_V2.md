@@ -4,13 +4,31 @@
 not readiness. Stage 4's v2 tests prove exactly one thing — that the door is shut. They prove
 nothing about whether Stage 4 can *read* a v2 bundle, because no real one exists to read.
 
-The authority is code, not this file: `analysis/stage3_v2_seam.py`. If the two ever disagree,
-believe the code.
+The authority is code, not this file. If the two ever disagree, believe the code.
 
+**The v2 admission module is written and waiting.** It is a SECOND module — `stage3_contract_v2.py`
+is misleadingly named and pins **v1** (it reads `drug_annotation.json` and the old candidate keys),
+and widening it to swallow v2 would be the silent misreading this seam exists to prevent.
+
+```python
+# analysis/stage3_v2_contract.py — the TRUE v2 contract. Five pins, one line each.
+NATIVE_DOC        = None    # ← the document filename (drug_annotation.v2.json?)
+NATIVE_MANIFEST   = None    # ← the manifest filename
+MANIFEST_IDENTITY = None    # ← the manifest's own schema id
+SCHEMA_SET_SHA256 = None    # ← PUBLISHED by W16; Stage 4 re-derives and compares
+VERIFIER_ENTRY    = None    # ← W16's v2 verifier. NOT verifier.verify_stage3, which is v1's
+
+# analysis/stage3_v2_seam.py — the door, closed at every entrance
+STAGE3_V2_SCHEMA_SET_SHA256 = None
+STAGE3_V2_VERIFIER_ENTRY    = None
 ```
-STAGE3_V2_SCHEMA_SET_SHA256 = None     # analysis/stage3_v2_seam.py:53   ← unpinned = closed
-STAGE3_V2_VERIFIER_ENTRY    = None     # analysis/stage3_v2_seam.py:64   ← unnamed  = closed
-```
+
+Eight fail-closed tests (`tests/test_stage3_v2_contract.py`) prove the refusal is by construction,
+not by luck: each pin is checked individually, a partially pinned contract is still refused, the v1
+verifier is refused BY NAME, and the v1 door is asserted unchanged.
+
+The full request — including the minimal admitted fixture — is
+`W16_STAGE3_V2_SEAM_REQUEST.md` in the shared run root.
 
 ---
 
