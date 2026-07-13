@@ -495,6 +495,17 @@ class TestTheEnvironmentLock:
             "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe")
         assert FX.env_lock_sha256() == code_identity.FROZEN_STAGE2_ENV_LOCK_SHA256
 
+    def test_the_external_admission_BINDS_the_environment_it_admits(self, tmp_path):
+        """An admission that did not name the environment could be lifted onto a release
+        built by a different solver."""
+        release_root, bundle_root, _ = _staged(tmp_path)
+        rep = _verify(release_root, bundle_root, sign=True)
+        assert rep["verdict"] == verify.ADMIT, rep["failures"]
+        with open(os.path.join(bundle_root,
+                               "temporal_arm_external_admission.json")) as fh:
+            env = json.load(fh)
+        assert env["binds"]["env_lock_sha256"] == FX.env_lock_sha256()
+
     def test_the_release_binds_the_real_lock_verified_from_its_bytes(self, tmp_path):
         _, bundle_root, _ = _staged(tmp_path)
         lock = FX.read_bundle(bundle_root, *PAIR)["env_lock"]

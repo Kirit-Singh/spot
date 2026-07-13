@@ -354,7 +354,9 @@ def write_envelope(*, report: dict[str, Any], inventory: Optional[dict[str, Any]
                 .get("selector_condition_sequence"),
             "method": (docs[0]["doc"].get("method") if docs else None),
             "code_identity": (docs[0]["doc"].get("code_identity") if docs else None),
-            "env_lock_sha256": ((docs[0]["doc"].get("code_identity") or {})
+            # the env lock lives in its OWN block on the bundle, not inside code_identity:
+            # the code digest says WHAT was run, the lock says WHAT WITH.
+            "env_lock_sha256": ((docs[0]["doc"].get("env_lock") or {})
                                 .get("env_lock_sha256") if docs else None),
         },
         "temporal_arm_run_id": report["temporal_arm_run_id"],
