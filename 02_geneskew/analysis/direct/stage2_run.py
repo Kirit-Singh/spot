@@ -158,7 +158,7 @@ def build_run_identity(cfg: Cfg) -> dict:
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
                 "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",
-            "direct_verifier_head": "dd11300026d3bddcfdf108545d0b7553e7d05e9f0",  # W10 FINAL adapter (6 release cross-pins)
+            "direct_verifier_head": "dd1130026d3bddcfdf108545d0b7553e7d05e9f0",  # W10 FINAL adapter (6 release cross-pins)
             "direct_verifier_tree_sha256": (("tree:" + tree_sha256(cfg.direct_verifier))
                                             if (not DRY and os.path.isdir(cfg.direct_verifier))
                                             else "<unbound>"),
@@ -319,6 +319,12 @@ def verify_receipt(cfg, name):
         raise SchedulerError(f"verify_receipt: receipt {name!r} is tampered (self-hash mismatch)")
     if rec.get("run_identity_sha256") != json.load(open(identity_path(cfg)))["run_identity_sha256"]:
         raise SchedulerError(f"verify_receipt: receipt {name!r} was written under a different run identity")
+    if content_sha256(rec.get("argv", [])) != rec.get("argv_sha256"):
+        raise SchedulerError(f"verify_receipt: receipt {name!r} argv does not re-derive its argv_sha256 "
+                             "(argv changed with only receipt_sha256 resealed)")
+    for p, h in rec.get("input_sha256", {}).items():
+        if not os.path.exists(p) or _hash_path(p) != h:
+            raise SchedulerError(f"verify_receipt: input {p!r} of unit {name!r} was mutated/removed after its receipt")
     for p, h in rec.get("output_sha256", {}).items():
         if not os.path.exists(p) or _hash_path(p) != h:
             raise SchedulerError(f"verify_receipt: output {p!r} of unit {name!r} was mutated/removed after its receipt")

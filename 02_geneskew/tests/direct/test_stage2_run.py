@@ -209,6 +209,34 @@ def test_receipt_hardening(tmp_path, monkeypatch):
     (root / "bundle_stim8").mkdir(); (root / "bundle_stim8" / "arms.parquet").write_text("stim8")
     assert S.verify_receipt(C, "B.direct.Rest") is True     # Rest receipt stays valid after Stim8 added
 
+    # (input mutation) verify_receipt re-hashes INPUTS -> mutating a bound input after the receipt refuses
+    inp = tmp_path / "bound_input.txt"; inp.write_text("orig")
+    S._write_receipt(C, "U5", argv=["python", "-m", "x"], inputs=[str(inp)], outputs=[], prereqs=[])
+    assert S.verify_receipt(C, "U5") is True
+    inp.write_text("MUTATED")
+    with pytest.raises(S.SchedulerError):
+        S.verify_receipt(C, "U5")
+
+    # (argv reseal) changing argv + resealing ONLY receipt_sha256 -> argv_sha256 no longer re-derives
+    S._write_receipt(C, "U6", argv=["python", "-m", "direct.run_arms"], inputs=[], outputs=[], prereqs=[])
+    rp = sd / "U6.receipt.json"; rec6 = _j.loads(rp.read_text())
+    rec6["argv"] = ["python", "-m", "direct.TAMPERED"]      # change argv, keep the old argv_sha256
+    rec6["receipt_sha256"] = S.content_sha256({k: v for k, v in rec6.items() if k != "receipt_sha256"})
+    rp.write_text(_j.dumps(rec6))
+    with pytest.raises(S.SchedulerError):
+        S.verify_receipt(C, "U6")
+
+
+def test_verifier_head_pin_is_a_40char_hex_sha(monkeypatch):
+    import sys as _sys
+    _sys.path.insert(0, ANALYSIS)
+    from direct import stage2_run as S
+    monkeypatch.setattr(S, "DRY", True)
+    for k, v in DUMMY.items():
+        monkeypatch.setenv(k, v)
+    head = S.build_run_identity(S.Cfg())["verifier_pins"]["direct_verifier_head"]
+    assert len(head) == 40 and all(c in "0123456789abcdef" for c in head), head
+
 
 def test_preflight_refuses_over_a_tampered_stored_body(tmp_path):
     """Explicit re-preflight over a body-tampered stored manifest (declared scalar kept) must
