@@ -86,6 +86,12 @@
       "reason": "Package manager emitted this immutable build-origin URL in the solver lock."
     },
     {
+      "path": "01_programs/analysis/stage01_solver_lock.txt",
+      "line_sha256": "260be1f184a7571e1fbfd598728f87a4029bd4fc19ec024f6bc8213da06c092b",
+      "classification": "solver_or_build_provenance",
+      "reason": "An immutable nvidia-curand package version resembles a private IPv4 address but is not a network endpoint."
+    },
+    {
       "path": "01_programs/analysis/requirements.txt",
       "line_sha256": "8103fef5778a039823d324c5098c48eafb4a793e3a188eb7ce99167205a9dd72",
       "classification": "solver_or_build_provenance",

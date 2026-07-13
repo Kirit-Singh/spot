@@ -1,0 +1,31 @@
+{
+  "schema": "spot.release.public_external_artifacts.v1",
+  "provider": "Hugging Face",
+  "repository": "KiritSingh/spot-CD4-Marson",
+  "immutable_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6",
+  "verified_utc_date": "2026-07-13",
+  "artifacts": [
+    {
+      "path": "ntc_clustered.h5ad",
+      "role": "public Stage-1 source object",
+      "public": true,
+      "size_bytes": 3841088649,
+      "sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43"
+    },
+    {
+      "path": "stage01_umap_seed.json",
+      "role": "historical v2 40k display seed",
+      "public": true,
+      "size_bytes": 26104050,
+      "sha256": "7f9dabd9eef74d65ff9d8008bbaf1e4456a832a9d1598c0d37e8e8632a5a9913"
+    },
+    {
+      "path": "stage01_scores_full.parquet",
+      "role": "v3 full-score release candidate",
+      "public": false,
+      "status": "staged_not_public",
+      "sha256": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f"
+    }
+  ],
+  "rule": "An artifact is public only when this manifest records public=true at an immutable remote revision."
+}

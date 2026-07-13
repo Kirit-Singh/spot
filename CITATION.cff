@@ -12,9 +12,10 @@ abstract: >-
   An open, provenance-first workbench designed to connect continuous CD4 T-cell
   transcriptional programs to measured perturbation effects, pathway context,
   drug links, and brain pharmacokinetic and safety evidence. The current release
-  implements the transcriptional-program and perturbation-analysis stages; later
-  drug-link and pharmacokinetic/safety stages remain prospective until separately
-  released.
+  implements the Stage-1 transcriptional-program measurement system. Stage-2 analysis
+  code is preliminary and has no released production result in this branch; drug-link,
+  pharmacokinetic/safety, and trial-design stages remain prospective until separately
+  admitted and released.
 keywords:
   - perturb-seq
   - single-cell RNA sequencing

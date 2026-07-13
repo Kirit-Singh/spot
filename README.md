@@ -8,7 +8,8 @@ to end:
 
 Each stage locks a choice that feeds the next; the header breadcrumb builds as you go.
 
-**Status:** re-orienting (WIP) · **MIT** licensed
+**Release status:** Stage 1 implemented · Stage-2 code preliminary and unreleased ·
+Stages 3–5 prospective · **MIT** licensed
 
 ## The five stages
 1. **CD4 programs (UMAP)** — score CD4 cells into **continuous transcriptional-program
@@ -17,16 +18,17 @@ Each stage locks a choice that feeds the next; the header breadcrumb builds as y
    nomenclature guidelines. **Exploratory — not
    cell-type calls; RNA compatibility ≠ lineage/protein/function** (see
    `01_programs/REMEDIATION_STATEMENT.md`). Interactive score UMAP.
-2. **Skewing genes** — the reproducible gene levers that shift a program (v1 primary:
-   knockdowns that *reduce* the Treg-**like** program); robustness-scored. (GO enrichment
-   is unresolved — specified/pinned or omitted, not promised; see the Stage-2 plan.)
-3. **Drug link** — find drugs that perturb the immune program (reduce the regulatory-like program)
-   via target→drug (DGIdb/Open Targets/ChEMBL) + LINCS signature mimicry. (Glioma-cell
-   dependency deferred; brain-penetrance/exposure is the filter, next stage.)
-4. **PK/PD & brain penetrance** — CNS-MPO / NEBPI (ABTC–FDA neuro-oncology framework)
-   + exposure + half-life, plus a **safety/synergy traffic light** vs GBM standard of
-   care (TMZ/XRT/dexamethasone/Keppra) and peri-operative bleeding (green/amber/red).
-5. **Trial design** — light placeholder for v1 (decision-support synopsis; to refine).
+2. **Skewing genes (preliminary code; no released result)** — project measured
+   perturbation effects onto an ordered pair of Stage-1 program axes and keep the two
+   effect arms explicit. Direct, temporal and pathway analyses must pass their own
+   release contracts before any Stage-2 output is called current.
+3. **Drug link (prospective)** — link admitted gene/pathway hypotheses to versioned,
+   licensed target–drug evidence. No Stage-3 result or database extract is part of the
+   current release.
+4. **PK/PD & brain penetrance (prospective)** — evaluate brain exposure and safety from
+   separately admitted, source-bound evidence. No Stage-4 result is current.
+5. **Trial design (prospective)** — decision-support synopsis; not implemented or a
+   clinical recommendation.
 
 ## What it is / isn't
 spot is **decision-support** — it prioritizes hypotheses and shows its provenance
@@ -39,10 +41,13 @@ Full design in `docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design
 Conventions in `CLAUDE.md`.
 
 ## Data
-Public datasets only — Marson CD4 Perturb-seq, DepMap/CCLE (expression, DEMETER2,
-PRISM), LINCS, Open Targets/ChEMBL/DrugBank. **Source matrices are not bundled** in this
-repo; the small **derived display artifacts** that the workbench renders are tracked
-(~47 MB of JSON under `01_programs/app/data/`).
+The current scientific release is derived from the public Marson GWCD4i CD4
+Perturb-seq dataset. Sources mentioned for later stages are design candidates, not
+automatically licensed, admitted, queried, or bundled. The public Hugging Face state is
+recorded in `release/public_external_artifacts.json`; tracked legacy display artifacts
+and their exact sizes/hashes are recorded in
+`release/legacy_large_file_exceptions.json`. No hand-maintained aggregate-size claim is
+used here.
 
 ## License
 Code: **MIT** (`LICENSE`). Third-party data & reference sources: **`DATA_LICENSES.md`**.

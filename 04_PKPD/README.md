@@ -1,17 +1,20 @@
 # 04_PKPD — brain penetrance, exposure, safety, synergy
 
-Score each drug for CNS delivery + tolerability. **Locks:** the brain-penetrance /
-exposure score.
+**Status:** prospective design only. No Stage-4 PK, safety or clinical decision-support
+result is admitted in the current release.
 
-Runs as a Claude Science **specialist** (project `spot · 04 PKPD`): neuro-oncology PK/PD —
-**CNS-MPO / NEBPI** (Grossman et al., Neuro-Oncology 2026): ClogP, ClogD, TPSA, MW, HBD,
-pKa + P-gp/BCRP efflux, potency-adjusted → sufficiently / insufficiently / impermeable.
-Exposure + half-life (ChEMBL/DrugBank).
+The planned stage organizes source-bound evidence for CNS delivery, exposure and safety.
+**Proposed lock:** a brain-exposure evidence assessment, not proof of permeability or a
+clinical safety determination.
 
-**Safety / synergy sub-panel (traffic light):** score vs GBM standard-of-care concomitants
-— TMZ, XRT, dexamethasone, levetiracetam (Keppra) — plus peri-operative bleeding risk
-(FAERS/SIDER/DrugBank/DrugComb). Output: 🟢 green = okay · 🟡 amber = caution · 🔴 red =
-hard contraindication.
+Candidate fields include physicochemical descriptors, transporter evidence, measured
+exposure and half-life. Any NEBPI-based implementation must cite and encode the exact
+published method; candidate databases are not treated as current merely because they are
+named in a design document.
+
+The proposed safety lane would present evidence and unresolved conflicts against relevant
+concomitants. It must not convert spontaneous-report signals or database labels into
+"safe," incidence, causality or a hard contraindication.
 
 - `inputs/`  — the locked drug(s) from 03
 - `analysis/` — CS workbook: descriptor calc + DB queries

@@ -1,7 +1,7 @@
 # Spot stage UI — design contract
 
 Implementation contract extracted from the **approved live Stage-1 baseline** (`:8347/01_page.html`,
-SHA-256 `c0a84e2f…`, snapshot `~/.spot-runs/20260712T021343Z/ui-baseline-8347/`). The Stage-2/3/4 shell
+SHA-256 `c0a84e2f…`, snapshot `${SPOT_RUN_ROOT}/ui-baseline-8347/`). The Stage-2/3/4 shell
 (`/02_page.html`) must match these tokens and structural rules so the five stages read as one product.
 This is an engineering spec, not product copy.
 

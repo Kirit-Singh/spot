@@ -1,0 +1,13 @@
+{
+  "schema": "spot.release.policy.v1",
+  "machine_path_allowlist": {
+    "path": "release/machine_path_allowlist.json",
+    "raw_sha256": "4e19a284213d679bb76d7d148808561b16d4fefbcea3c7220fd850a8e0041498",
+    "rule": "Exceptions are valid only for the hard-coded immutable classification/path boundaries in release/test_release_hygiene.py."
+  },
+  "public_external_artifacts": {
+    "path": "release/public_external_artifacts.json",
+    "raw_sha256": "e648ab38aafdbb6f5b6da690880651e4ff59e1a0b2c03e83b0f9c9ac07d4dc48"
+  },
+  "review_rule": "Changing this policy requires updating the independent RELEASE_POLICY_SHA256 code pin and rerunning the mutation battery."
+}
