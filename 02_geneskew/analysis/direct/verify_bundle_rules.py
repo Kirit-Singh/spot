@@ -12,6 +12,7 @@ from verify_manifest_rules import (  # noqa: F401
     ADMIT,
     FORBIDDEN_IN_BUNDLE,
     PASS,
+    PRODUCER_MAY_NOT_ADMIT,
     _scan,
     content_sha256,
 )
@@ -232,6 +233,14 @@ def check_preflight(pre: Any, bundle_dir_files: set, lane: str, bundle_id: str,
         bad.append(f"{bundle_id}: the preflight signs itself with the INDEPENDENT "
                    f"verifier's id ({independent_id!r}). A producer cannot sign as the "
                    "verifier of its own output")
+
+    # A PRODUCER MAY NOT ADMIT ITSELF. Direct fc9bdcd says so in its own bytes:
+    # `pending_independent_verification`. Anything claiming `admit` here is a producer
+    # translating a verdict it had no standing to reach.
+    if str(pre.get("verdict", "")).lower() == PRODUCER_MAY_NOT_ADMIT:
+        bad.append(f"{bundle_id}: the in-bundle report claims verdict 'admit'. The producer "
+                   "does not admit its own output — the admission is the INDEPENDENT "
+                   "verifier's report, at the release root")
 
     binds = pre.get("binds") or {}
     if arm_raw and binds.get("arm_bundle_sha256") != arm_raw:

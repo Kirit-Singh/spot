@@ -350,3 +350,50 @@ class TestPairDerivedOrderingsAreJoinTimeOnly:
             json.dump(inv, fh)
         with pytest.raises(T.RunManifestError, match="JOIN-TIME"):
             run_manifest.bind_bundle(d)
+
+
+class TestTheVerifierTopologyAgreesWithTheProducer:
+    """generator != verifier — but they must reach the SAME arm keys.
+
+    ``arm_topology`` is VERIFIER-OWNED and carried by this commit: it derives the key
+    algebra independently, so it can disagree with the producer. That is only useful if the
+    two are then CHECKED against each other — an independent derivation nobody compares is
+    just a second opinion nobody asked for.
+
+    The producer's interface (``arm_keys``, authoritative at fc9bdcd) is imported here ONLY
+    to be compared. If it is absent — this branch predates it — the check skips rather than
+    silently passing.
+    """
+
+    @staticmethod
+    def _producer():
+        try:
+            from direct import arm_keys
+        except ImportError:
+            pytest.skip("the producer's arm_keys is not on this head")
+        return arm_keys
+
+    def test_the_four_role_x_pole_origins_map_IDENTICALLY(self):
+        K = self._producer()
+        for role in ("away_from_A", "toward_B"):
+            for pole in ("high", "low"):
+                assert (T.desired_change_for(role, pole)
+                        == K.DESIRED_CHANGE_BY_ROLE_AND_POLE[(role, pole)])
+
+    @pytest.mark.parametrize("dc", ["increase", "decrease"])
+    def test_every_lane_key_is_BYTE_IDENTICAL_to_the_producers(self, dc):
+        K = self._producer()
+        p = "treg_like"
+        assert (T.arm_key("direct", p, dc, {"condition": "Rest"})
+                == K.direct_arm_key(p, dc, "Rest"))
+        assert (T.arm_key("temporal", p, dc,
+                          {"from_condition": "Rest", "to_condition": "Stim8hr"})
+                == K.temporal_arm_key(p, dc, "Rest", "Stim8hr"))
+        assert (T.arm_key("pathway", p, dc,
+                          {"condition": "Rest", "gene_set_source": "Reactome"})
+                == K.pathway_arm_key(p, dc, "Rest", "Reactome"))
+
+    def test_the_key_carries_neither_pole_nor_role_on_EITHER_side(self):
+        K = self._producer()
+        for token in ("away_from_A", "toward_B", "high", "low"):
+            assert token not in K.ARM_KEY_RULE.split("—")[0]

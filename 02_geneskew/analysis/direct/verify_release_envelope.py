@@ -50,12 +50,30 @@ from typing import Any, Optional
 #     admission is over the ACTUAL W5 release, so the release identity is REQUIRED; the
 #     inventory hash is accepted alongside it and must agree.
 # --------------------------------------------------------------------------- #
-INVENTORY_FILE = "temporal_arm_release.json"
-ADMISSION_FILE = "temporal_arm_external_admission.json"
+# PER-LANE root artifacts. Each lane's release is admitted by ITS OWN independent verifier:
+# an admission is an admission OF ONE LANE'S RELEASE, and one generic report cannot say
+# which lane it admitted.
+INVENTORY_FILE_OF = {
+    "direct": "direct_arm_release.json",
+    "temporal": "temporal_arm_release.json",
+    "pathway": "pathway_arm_release.json",
+}
+ADMISSION_FILE_OF = {
+    "direct": "direct_arm_external_admission.json",
+    "temporal": "temporal_arm_external_admission.json",
+    "pathway": "pathway_arm_external_admission.json",
+}
+INVENTORY_FILE = INVENTORY_FILE_OF["temporal"]
+ADMISSION_FILE = ADMISSION_FILE_OF["temporal"]
 REPORT_ID_FIELD = "report_id"
 SHA256_LEN = 64
 
-INVENTORY_SCHEMA = "spot.stage02_temporal_arm_release.v1"
+INVENTORY_SCHEMA_OF = {
+    "direct": "spot.stage02_direct_arm_release.v1",
+    "temporal": "spot.stage02_temporal_arm_release.v1",
+    "pathway": "spot.stage02_pathway_arm_release.v1",
+}
+INVENTORY_SCHEMA = INVENTORY_SCHEMA_OF["temporal"]
 ADMISSION_SCHEMA = "spot.stage02_temporal_arm_external_admission.v1"
 
 PENDING = "pending"
@@ -90,9 +108,12 @@ def self_hash(doc: dict, id_field: str) -> str:
     return _canon({k: v for k, v in doc.items() if k != id_field})
 
 
-def check_inventory(root: str, expect_bundles: int, expect_arms: int) -> tuple:
+def check_inventory(root: str, expect_bundles: int, expect_arms: int,
+                    lane: str = "temporal") -> tuple:
     """The PRODUCER INVENTORY: present, self-hashing, byte-true, and only ever PENDING."""
     bad: list[str] = []
+    INVENTORY_FILE = INVENTORY_FILE_OF[lane]
+    INVENTORY_SCHEMA = INVENTORY_SCHEMA_OF[lane]
     path = os.path.join(root, INVENTORY_FILE)
     if not os.path.exists(path):
         return None, [
@@ -161,9 +182,12 @@ def _byte_check(root: str, rel_dir: str, name: str, entry: Any) -> list[str]:
 
 
 def check_external_admission(root: str, inventory: Optional[dict],
-                             expect_verifier_id: Optional[str]) -> tuple:
+                             expect_verifier_id: Optional[str],
+                             lane: str = "temporal") -> tuple:
     """The EXTERNAL ADMISSION: present, from the pinned verifier, BOUND TO THIS inventory."""
     bad: list[str] = []
+    INVENTORY_FILE = INVENTORY_FILE_OF[lane]
+    ADMISSION_FILE = ADMISSION_FILE_OF[lane]
     path = os.path.join(root, ADMISSION_FILE)
     if not os.path.exists(path):
         return None, [

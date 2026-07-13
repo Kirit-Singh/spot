@@ -152,14 +152,14 @@ def test_5_one_lane_bound_to_ANOTHER_SELECTION(tmp_path):
 # --------------------------------------------------------------------------- #
 # 6. AN UNADMITTED ARM.
 # --------------------------------------------------------------------------- #
-def test_6_a_verification_report_changed_to_REJECT(tmp_path):
+def test_6_an_external_admission_changed_to_REJECT(tmp_path):
+    """The in-bundle report is a PREFLIGHT. The admission is the per-lane root envelope."""
     run = F.complete_run(tmp_path)
-    _patch(run["direct"][1], "verification.json",
-           lambda d: d.update({"verdict": "reject", "n_failed": 1}))
+    F.write_external_admission(run, verdict="REJECT", lane="direct")
     doc = _verify(run, _manifest(tmp_path, run)["path"])
 
     assert doc["verdict"] == V.R.REJECT
-    assert V.G_VERDICT in doc["failed_gates"]
+    assert V.G_EXTERNAL_ADMISSION in doc["failed_gates"]
 
 
 # --------------------------------------------------------------------------- #
@@ -356,54 +356,42 @@ class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
 
 
 class TestAnAdmitStringIsNotAnIndependentAdmission:
-    """SEAM 2: ``report["verdict"] == "admit"`` was the whole check."""
+    """The admission is the per-lane ROOT envelope, not anything in the producer's dir."""
 
-    def test_a_two_line_ADMIT_STUB_is_REJECTED(self, tmp_path):
+    def test_a_PRODUCER_report_claiming_ADMIT_is_REJECTED(self, tmp_path):
+        # Direct fc9bdcd writes `pending_independent_verification`. Anything in a producer
+        # directory claiming `admit` is a verdict it had no standing to reach.
         run = F.complete_run(tmp_path)
-        with open(os.path.join(run["direct"][0], "verification.json"), "w") as fh:
-            json.dump({"verdict": "admit"}, fh)      # the bundle will bind these bytes
+        _patch(run["direct"][0], "verification.json",
+               lambda d: d.update({"verdict": "admit"}))
+        F.seal_release(run)
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
+        assert V.G_PREFLIGHT in doc["failed_gates"]
 
-    def test_a_report_from_the_WRONG_VERIFIER_is_REJECTED(self, tmp_path):
+    def test_a_two_line_ADMIT_STUB_envelope_is_REJECTED(self, tmp_path):
         run = F.complete_run(tmp_path)
-        _patch(run["pathway"][0], "pathway_verification.json",
-               lambda d: d.update({"verifier_id": "FIXTURE.a.verifier.nobody.pinned"}))
+        with open(os.path.join(run["root"], F.ADMISSION_FILE_OF["temporal"]), "w") as fh:
+            json.dump({"verdict": "ADMIT"}, fh)
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
+        assert V.G_EXTERNAL_ADMISSION in doc["failed_gates"]
 
-    def test_a_report_that_JUDGED_ANOTHER_BUNDLE_is_REJECTED(self, tmp_path):
+    def test_an_envelope_from_the_WRONG_VERIFIER_is_REJECTED(self, tmp_path):
         run = F.complete_run(tmp_path)
-        # a genuine, fully-typed ADMIT — for a different bundle. Copied across.
-        donor = json.load(open(os.path.join(run["direct"][1], "verification.json")))
-        with open(os.path.join(run["direct"][0], "verification.json"), "w") as fh:
-            json.dump(donor, fh, indent=2, sort_keys=True)
+        path = os.path.join(run["root"], F.ADMISSION_FILE_OF["pathway"])
+        doc_e = json.load(open(path))
+        doc_e["verifier_id"] = "nobody.pinned.this.v1"
+        doc_e["report_id"] = F._canon({k: v for k, v in doc_e.items()
+                                       if k != "report_id"})
+        with open(path, "w") as fh:
+            json.dump(doc_e, fh, indent=2, sort_keys=True)
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
-
-    def test_an_ADMIT_that_RAN_NO_GATES_is_REJECTED(self, tmp_path):
-        run = F.complete_run(tmp_path)
-        _patch(run["pathway"][0], "pathway_verification.json",
-               lambda d: d.update({"checks": []}))   # admitted, having checked nothing
-        doc = _verify(run, _manifest(tmp_path, run)["path"])
-
-        assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
-
-    def test_an_ADMIT_carrying_FAILED_GATES_is_REJECTED(self, tmp_path):
-        run = F.complete_run(tmp_path)
-        _patch(run["direct"][2], "verification.json",
-               lambda d: d.update({"n_failed": 2, "failed_gates": ["a", "b"]}))
-        doc = _verify(run, _manifest(tmp_path, run)["path"])
-
-        assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
+        assert V.G_EXTERNAL_ADMISSION in doc["failed_gates"]
 
 
 class TestCleanTreeIsNotSomethingTheRunGetsToAssert:
@@ -626,7 +614,7 @@ class TestTheProducerMayNotAdmitItsOwnRun:
         report = _verify(run, doc["path"])               # ...and the verifier refuses
         assert report["verdict"] == V.R.REJECT
         assert report["release_admissible"] is False
-        assert V.G_VERDICT in report["failed_gates"]
+        assert V.G_PREFLIGHT in report["failed_gates"]
 
     def test_an_INCONSISTENT_SELECTION_run_is_topology_complete_but_NOT_admitted(
             self, tmp_path):
@@ -1617,14 +1605,15 @@ class TestTheAdmissionMustComeFromTheINDEPENDENTVerifier:
         assert doc["verdict"] == V.R.REJECT
         assert V.G_PREFLIGHT in doc["failed_gates"]
 
-    def test_a_report_that_admits_ITSELF_is_REJECTED(self, tmp_path):
+    def test_a_PREFLIGHT_that_does_not_bind_the_FINAL_bundle_is_REJECTED(self, tmp_path):
         run = F.complete_run(tmp_path)
         _patch(run["direct"][0], "verification.json",
-               lambda d: d.update({"generator_is_not_verifier": False}))
+               lambda d: d["binds"].update({"arm_bundle_sha256": "0" * 64}))
+        F.seal_release(run)
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
+        assert V.G_PREFLIGHT in doc["failed_gates"]
 
 
 class TestTheVerifierIsIndependentOfTheProducer:

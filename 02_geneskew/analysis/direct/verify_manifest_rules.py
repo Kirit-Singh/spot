@@ -52,12 +52,27 @@ BUNDLE_FILES = {
                    "pathway_verification.json", "convergence.json"),
 }
 PROVENANCE_OF = {lane: files[1] for lane, files in BUNDLE_FILES.items()}
-# Only these lanes still carry a per-bundle report. Temporal's admission is the root envelope.
-REPORT_OF = {LANE_DIRECT: "verification.json",
-             LANE_PATHWAY: "pathway_verification.json"}
-PREFLIGHT_OF = {LANE_TEMPORAL: "temporal_preflight.json"}
+
+# NO LANE SHIPS AN ADMISSION IN ITS OWN DIRECTORY.
+#
+# Direct fc9bdcd writes `verification.json` with verdict `pending_independent_verification`;
+# temporal writes `temporal_preflight.json`. Both are the PRODUCER's self-check. Neither
+# admits anything, and the aggregate must consume the INDEPENDENT verifier's actual report —
+# the per-lane root envelope — rather than a verdict string translated out of a file the
+# producer wrote. So every lane's in-bundle report is a PREFLIGHT.
+REPORT_OF: dict = {}
+PREFLIGHT_OF = {LANE_DIRECT: "verification.json",
+                LANE_TEMPORAL: "temporal_preflight.json",
+                LANE_PATHWAY: "pathway_verification.json"}
+
+# A verdict a PRODUCER may not claim about its own output.
+PRODUCER_MAY_NOT_ADMIT = "admit"
+
 # A file that would be an EXTERNAL admission, sitting in the producer's own directory.
 FORBIDDEN_IN_BUNDLE = {LANE_TEMPORAL: "temporal_verification.json"}
+
+# THE SOLVER LOCK, as the producers' shared ``envlock`` module emits it (fc9bdcd).
+ENV_LOCK_ID = "spot.stage02.solver_lock.v1"
 
 # Bindings whose BYTES a pathway count must be reconstructible from.
 PATHWAY_BINDINGS = ("gene_set_membership", "target_universe", "masked_signatures",

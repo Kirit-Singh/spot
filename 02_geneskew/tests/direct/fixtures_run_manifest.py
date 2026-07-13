@@ -299,7 +299,7 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
 
     if lane == "direct":
         slug, prov_name, ver_name = (
-            ctx["condition"], "provenance.json", "verification.json")
+            ctx["condition"], "provenance.json", "verification.json")   # PENDING preflight
     elif lane == "temporal":
         slug = f"{ctx['from_condition']}__{ctx['to_condition']}"
         # W5's REAL set: a producer PREFLIGHT, and no verifier output in the bundle.
@@ -393,9 +393,13 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
             "code_identity": _code_identity(),
             # ...and WHICH SOLVED ENVIRONMENT it ran under. Two runs under different
             # environments are two different runs, however identical the code.
-            "environment_lock": {"name": os.path.basename(staged["env_lock"]),
-                                 "sha256": _raw(staged["env_lock"]),
-                                 "status": "locked"},
+            # the producers' shared ``envlock`` block (fc9bdcd)
+            "environment_lock": {
+                "lock_id": "spot.stage02.solver_lock.v1",
+                "name": os.path.basename(staged["env_lock"]),
+                "sha256": _raw(staged["env_lock"]),
+                "expected_sha256": _raw(staged["env_lock"]),
+                "verified": True, "status": "locked"},
             # ...and WHAT THE CODE DID, kept as a separate explicit role
             "temporal_method_sha256": _canon("FIXTURE-method"),
             "estimator_id": "FIXTURE.spot.stage02.arm.estimator.v1",
@@ -406,30 +410,20 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
     # A TYPED admission from the pinned lane verifier, BINDING THE BUNDLE IT JUDGED.
     # A file that merely says {"verdict": "admit"} is not an independent admission.
     pin = LANE_VERIFIERS[lane]
-    if lane == "temporal":
-        # The PRODUCER's preflight. It is signed by the PRODUCER, it binds the FINAL bytes,
-        # and it admits nothing: the admission is the one root envelope.
-        _write(os.path.join(out_dir, ver_name), {
-            "fixture": True,
-            "schema_version": "spot.stage02_temporal_arm_preflight.v1",
-            "verifier_id": "spot.stage02.temporal_arm.producer_preflight.v1",
-            "is_an_external_admission": False,
-            "bundle_id": inv["bundle_id"],
-            "binds": {"arm_bundle_sha256": arm_raw, "provenance_sha256": prov_raw},
-            "checks": [{"gate": g, "status": "pass"} for g in pin["required_gates"]],
-            "n_failed": 0,
-        })
-        return out_dir
+    # EVERY lane's in-bundle report is the PRODUCER's PREFLIGHT: signed by the producer,
+    # binding the FINAL bytes, and admitting NOTHING. Direct fc9bdcd says so in its own
+    # bytes — `pending_independent_verification`. The admission is the per-lane ROOT
+    # envelope, written by the independent verifier.
     _write(os.path.join(out_dir, ver_name), {
         "fixture": True,
-        "schema_version": pin["schema_version"],
-        "verifier_id": pin["verifier_id"],
-        "generator_is_not_verifier": True,
-        "fail_closed": True,
+        "schema_version": f"spot.stage02_{lane}_arm_preflight.v1",
+        "verifier_id": f"spot.stage02.{lane}_arm.producer_preflight.v1",
+        "is_an_external_admission": False,
+        "verdict": "pending_independent_verification",
         "bundle_id": inv["bundle_id"],
         "binds": {"arm_bundle_sha256": arm_raw, "provenance_sha256": prov_raw},
         "checks": [{"gate": g, "status": "pass"} for g in pin["required_gates"]],
-        "n_failed": 0, "failed_gates": [], "verdict": "admit",
+        "n_failed": 0,
     })
     return out_dir
 
@@ -458,8 +452,7 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
             "direct": direct, "temporal": temporal, "pathway": pathway,
             "conditions": list(conds), "sources": list(sources),
             "programs": list(staged["programs"])}
-    write_inventory(out)
-    write_external_admission(out)
+    seal_release(out)
     return out
 
 
@@ -467,17 +460,31 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
 # THE ROOT ARTIFACTS. The producer's per-bundle report is a PREFLIGHT; these are what an
 # admission actually rests on.
 # --------------------------------------------------------------------------- #
-INVENTORY_FILE = "temporal_arm_release.json"
-ADMISSION_FILE = "temporal_arm_external_admission.json"
+INVENTORY_FILE_OF = {"direct": "direct_arm_release.json",
+                     "temporal": "temporal_arm_release.json",
+                     "pathway": "pathway_arm_release.json"}
+ADMISSION_FILE_OF = {"direct": "direct_arm_external_admission.json",
+                     "temporal": "temporal_arm_external_admission.json",
+                     "pathway": "pathway_arm_external_admission.json"}
+INVENTORY_FILE = INVENTORY_FILE_OF["temporal"]
+ADMISSION_FILE = ADMISSION_FILE_OF["temporal"]
 INDEPENDENT_VERIFIER_ID = "spot.stage02.temporal.arm.independent_verifier.v1"
 
 
-def _bundle_entry(root: str, d: str) -> dict[str, Any]:
+PRODUCER_FILES_OF = {
+    "direct": ("arm_bundle.json", "provenance.json", "verification.json"),
+    "temporal": ("arm_bundle.json", "temporal_provenance.json",
+                 "temporal_preflight.json"),
+    "pathway": ("arm_bundle.json", "pathway_provenance.json",
+                "pathway_verification.json"),
+}
+
+
+def _bundle_entry(root: str, d: str, lane: str = "temporal") -> dict[str, Any]:
     rel_dir = os.path.relpath(d, root).replace(os.sep, "/")
     inv = json.load(open(os.path.join(d, "arm_bundle.json")))
     files, rankings = {}, {}
-    for name in ("arm_bundle.json", "temporal_provenance.json",
-                 "temporal_preflight.json"):
+    for name in PRODUCER_FILES_OF[lane]:
         p = os.path.join(d, name)
         files[name] = {"raw_sha256": _raw(p),
                        "canonical_sha256": _canon(json.load(open(p)))}
@@ -489,29 +496,29 @@ def _bundle_entry(root: str, d: str) -> dict[str, Any]:
         p = os.path.join(d, rel)
         rankings[rel] = {"raw_sha256": _raw(p),
                          "canonical_sha256": _canon(json.load(open(p)))}
-    return {"bundle_key": f"{inv['context']['from_condition']}->"
-                          f"{inv['context']['to_condition']}",
-            "bundle_id": inv["bundle_id"],
-            "from_condition": inv["context"]["from_condition"],
-            "to_condition": inv["context"]["to_condition"],
+    ctx = inv["context"]
+    return {"bundle_key": "|".join(f"{k}={v}" for k, v in sorted(ctx.items())),
+            "bundle_id": inv["bundle_id"], "context": dict(ctx),
             "relative_dir": rel_dir, "files": files, "rankings": rankings}
 
 
-def write_inventory(run: dict) -> str:
-    """W5's IMMUTABLE, CONTENT-ADDRESSED six-bundle inventory. status is always PENDING."""
+def write_inventory(run: dict, lane: str = "temporal") -> str:
+    """The IMMUTABLE, CONTENT-ADDRESSED per-lane inventory. status is always PENDING."""
     root = run["root"]
-    entries = [_bundle_entry(root, d) for d in run["temporal"]]
+    entries = [_bundle_entry(root, d, lane) for d in run[lane]]
     doc = {
         "fixture": True,
-        "schema_version": "spot.stage02_temporal_arm_release.v1",
+        "schema_version": f"spot.stage02_{lane}_arm_release.v1"
+                          if lane != "temporal"
+                          else "spot.stage02_temporal_arm_release.v1",
         "release_id_rule": "sha256(canonical JSON excluding release_id)",
         "analysis_mode": "temporal_cross_condition",
         "stage1_binding": {"release_canonical_sha256":
                            run["staged"]["release_canonical_sha256"]},
         "n_bundles": len(entries),
         "n_logical_arms": sum(len(json.load(open(os.path.join(d, "arm_bundle.json")))
-                                  ["arms"]) for d in run["temporal"]),
-        "arm_keys": sorted(a["arm_key"] for d in run["temporal"]
+                                  ["arms"]) for d in run[lane]),
+        "arm_keys": sorted(a["arm_key"] for d in run[lane]
                            for a in json.load(open(os.path.join(d, "arm_bundle.json")))
                            ["arms"]),
         "bundles": sorted(entries, key=lambda b: b["bundle_key"]),
@@ -525,20 +532,21 @@ def write_inventory(run: dict) -> str:
         },
     }
     doc["release_id"] = _canon(doc)
-    path = os.path.join(root, INVENTORY_FILE)
+    path = os.path.join(root, INVENTORY_FILE_OF[lane])
     _write(path, doc)
     return path
 
 
-def write_external_admission(run: dict, release_id=None, verdict="ADMIT") -> str:
-    """W11's SEPARATE envelope. The independent verifier alone emits this."""
+def write_external_admission(run: dict, release_id=None, verdict="ADMIT",
+                             lane: str = "temporal") -> str:
+    """The SEPARATE per-lane envelope. The independent verifier alone emits this."""
     root = run["root"]
-    inv_path = os.path.join(root, INVENTORY_FILE)
+    inv_path = os.path.join(root, INVENTORY_FILE_OF[lane])
     inv = json.load(open(inv_path))
     doc = {
         "fixture": True,
         "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
-        "verifier_id": INDEPENDENT_VERIFIER_ID,
+        "verifier_id": LANE_VERIFIERS[lane]["verifier_id"],
         "verdict": verdict,
         "binds": {
             # WHICH RELEASE was admitted (required)...
@@ -550,14 +558,15 @@ def write_external_admission(run: dict, release_id=None, verdict="ADMIT") -> str
         },
     }
     doc["report_id"] = _canon(doc)
-    path = os.path.join(root, ADMISSION_FILE)
+    path = os.path.join(root, ADMISSION_FILE_OF[lane])
     _write(path, doc)
     return path
 
 
 def seal_release(run: dict) -> dict:
-    """Re-derive the inventory from the bytes on disk, then re-admit it. Used after a
-    mutation, so an attack has to survive a FULLY consistent reseal."""
-    write_inventory(run)
-    write_external_admission(run)
+    """Re-derive every lane's inventory from the bytes on disk, then re-admit each. Used
+    after a mutation, so an attack has to survive a FULLY consistent reseal."""
+    for lane in ("direct", "temporal", "pathway"):
+        write_inventory(run, lane)
+        write_external_admission(run, lane=lane)
     return run

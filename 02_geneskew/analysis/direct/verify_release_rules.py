@@ -239,6 +239,7 @@ def inventory_matches_arms(inventory: Any, bound_rankings: dict) -> list[str]:
 # runs, however identical their code.
 # --------------------------------------------------------------------------- #
 ENV_LOCK_BLOCK = "environment_lock"
+ENV_LOCK_ID_EXPECTED = "spot.stage02.solver_lock.v1"
 ENV_LOCK_SCALAR = "env_lock_sha256"
 ENV_LOCK_LOCKED = "locked"
 
@@ -262,6 +263,20 @@ def check_env_lock(prov: Any, expected_sha256: Any, bundle_id: str) -> list[str]
     bad += [f"{bundle_id}: {p}" for p in problems]
 
     block = ((prov or {}).get("run_binding") or {}).get(ENV_LOCK_BLOCK) or {}
+    # The producers' shared ``envlock`` block (fc9bdcd) carries its own identity and its own
+    # expectation. Where they are present they are CHECKED: a block that verified itself
+    # against a different constant verified nothing that matters here.
+    if isinstance(block, dict):
+        if block.get("lock_id") and block["lock_id"] != ENV_LOCK_ID_EXPECTED:
+            bad.append(f"{bundle_id}: environment_lock.lock_id is {block['lock_id']!r}; the "
+                       f"Stage-2 solver lock is {ENV_LOCK_ID_EXPECTED!r}")
+        if block.get("expected_sha256") and \
+                block["expected_sha256"] != AUTHORITATIVE_ENV_LOCK_SHA256:
+            bad.append(f"{bundle_id}: the bundle verified its lock against "
+                       f"{str(block['expected_sha256'])[:16]}, not the authoritative "
+                       f"{AUTHORITATIVE_ENV_LOCK_SHA256[:16]}")
+        if block.get("verified") is False:
+            bad.append(f"{bundle_id}: environment_lock.verified is false")
     if isinstance(block, dict) and block.get("status") and \
             block["status"] != ENV_LOCK_LOCKED:
         bad.append(f"{bundle_id}: environment_lock.status is {block['status']!r} — a run "

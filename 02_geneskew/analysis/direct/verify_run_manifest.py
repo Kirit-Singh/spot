@@ -1,40 +1,30 @@
 """THE INDEPENDENT VERIFIER for the Stage-2 aggregate run manifest. Fail-closed.
 
 generator != verifier. This module imports NOTHING from the producer: the canonical hash,
-the desired-change table, the slot algebra and the key firewalls are reimplemented from
-the written spec in ``verify_manifest_rules``, so this can DISAGREE with ``run_manifest``.
-
-FROZEN AGAINST ``ROUND4_ADDENDUM.md`` sha256
-``c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f``.
+the desired-change table, the slot algebra and the key firewalls are reimplemented from the
+written spec, so this can DISAGREE with ``run_manifest``. Frozen against ROUND4_ADDENDUM.md
+sha256 c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f.
 
 WHAT IT REFUSES TO TAKE FROM THE MANIFEST UNDER TEST
 ----------------------------------------------------
 Everything that decides what COMPLETE means, WHO may admit an arm, and WHAT the run was
 built from — each loaded from a SEPARATE pinned artifact:
 
-    admitted programs / conditions / sources <- the release        (--release)
+    programs / conditions / sources <- the release                 (--release)
     the release itself   <- an independently pinned canonical hash (--expect-release-sha256)
     gene-set identities  <- the pinned source identities           (--expect-gene-sets)
     lane verifiers       <- the pinned verifier + gate inventory   (--expect-verifiers)
     code identity        <- the pinned checkout                    (--expected-code-identity)
-    the environment      <- the committed lock, by its BYTES       (--env-lock)
+    the environment      <- the lock, and the verifier's OWN pin   (--env-lock)
 
-The temporal BATCH POLICY is NOT an authority here: batch is out of the reusable chain. The
-manifest's own conditions, sources, counts, ``topology_complete`` and ``manifest_sha256``
-are CHECKED against the pins above. None is believed.
+The batch policy is NOT an authority here. The manifest's own conditions, sources, counts,
+``topology_complete`` and ``manifest_sha256`` are CHECKED against the pins above; none is
+believed. Seams closed by earlier reviews (see the git log): a gene-set source NAME is not
+an identity; a verdict string is not an admission; ``clean_tree`` is attested by an external
+pin, never by the artifact itself. Counts are RECONSTRUCTED, never read.
 
-Seams closed by earlier reviews (see the git log): a gene-set source NAME is not an
-identity; ``verdict == "admit"`` is a string, not an admission; ``clean_tree`` is attested
-by an external pin, never by the artifact itself.
-
-Counts are RECONSTRUCTED, never read: ``n_hits_in_ranking`` is recomputed from the bytes
-the bundle bound (its gene-set membership INTERSECT its arm's ranked target ids).
-
-Usage:
-    python -m direct.verify_run_manifest --manifest M --bundles-root R \\
-        --release REL --release-root ROOT --expect-release-sha256 SHA \\
-        --expect-gene-sets G --expect-verifiers V --expected-code-identity C
-Exit 0 = ADMIT; 1 = REJECT.
+Every input is explicit; no path is ever inferred. See ``verify_invocation`` for the
+machine-readable contract W7 consumes. Exit 0 = ADMIT; 1 = REJECT.
 """
 from __future__ import annotations
 
@@ -105,8 +95,8 @@ def _one(rep, pairs, gate, what):
     """Every bundle must agree about a binding that is supposed to be SHARED."""
     values = {v for _bid, v in pairs}
     rep.gate(gate, len(values) <= 1,
-             f"{len(values)} distinct {what} across the bundles; they do not agree, so "
-             "these outputs are not the same run")
+             f"{len(values)} distinct {what}; they do not agree, so these outputs are not "
+             "the same run")
 
 
 def verify(*, manifest_path: str, bundles_root: str, release_path: str,
@@ -345,30 +335,39 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_CONVERGENCE, not bad_conv, "; ".join(bad_conv[:4]))
 
     # ---- 5b. THE PRODUCER INVENTORY + THE INDEPENDENT ADMISSION ENVELOPE ---- #
-    # A file cannot testify that some other process made it. A release is admitted only on
-    # two artifacts the producer's preflight cannot supply (``verify_release_envelope``).
-    n_temporal_bundles = len(want[R.LANE_TEMPORAL]) // (2 * len(programs)) \
-        if programs else 0
-    inventory, bad_inv = E.check_inventory(
-        root, expect_bundles=n_temporal_bundles,
-        expect_arms=len(want[R.LANE_TEMPORAL]))
-    rep.gate(G_INVENTORY, not bad_inv, "; ".join(bad_inv[:4]))
-    bad_inv_arms = W.inventory_matches_arms(inventory, found["bound_rankings"])
-    rep.gate(G_INVENTORY_ARMS, not bad_inv_arms, "; ".join(bad_inv_arms[:3]))
+    # A file cannot testify that some other process made it (``verify_release_envelope``).
+    # EVERY LANE'S RELEASE IS ADMITTED BY ITS OWN INDEPENDENT VERIFIER: one generic report
+    # cannot say which lane it admitted, and a release missing any lane's admission is not
+    # a release. 3 Direct + 6 temporal + 6 pathway = 15 bundles / 300 arms.
+    bad_inv, bad_env_adm, bad_binds = [], [], []
+    inventories = {}
+    n_bundles_of = {lane: len(want[lane]) // (2 * len(programs)) if programs else 0
+                    for lane in R.LANES}
+    for lane in R.LANES:
+        inv, problems = E.check_inventory(
+            root, expect_bundles=n_bundles_of[lane],
+            expect_arms=len(want[lane]), lane=lane)
+        inventories[lane] = inv
+        bad_inv += [f"[{lane}] {p}" for p in problems]
 
-    pinned_temporal = (expect_verifiers.get(R.LANE_TEMPORAL) or {}).get("verifier_id")
-    envelope, bad_env = E.check_external_admission(root, inventory, pinned_temporal)
-    rep.gate(G_EXTERNAL_ADMISSION,
-             envelope is not None and not [b for b in bad_env if "binds" not in b],
-             "; ".join(bad_env[:3]))
-    rep.gate(G_EXTERNAL_BINDS,
-             envelope is not None and inventory is not None
-             and not [b for b in bad_env if "admission of something else" in b
-                      or "binds inventory bytes" in b],
-             "; ".join([b for b in bad_env
-                        if "admission of something else" in b
-                        or "binds inventory bytes" in b][:3])
-             or ("no external admission envelope to bind" if envelope is None else ""))
+        pinned_id = (expect_verifiers.get(lane) or {}).get("verifier_id")
+        env, eprob = E.check_external_admission(root, inv, pinned_id, lane=lane)
+        binds_msgs = [p for p in eprob
+                      if "admission of something else" in p or "binds inventory bytes" in p]
+        bad_env_adm += [f"[{lane}] {p}" for p in eprob if p not in binds_msgs]
+        bad_binds += [f"[{lane}] {p}" for p in binds_msgs]
+        if env is None and not binds_msgs:
+            bad_binds.append(f"[{lane}] no external admission envelope to bind")
+
+    rep.gate(G_INVENTORY, not bad_inv, "; ".join(bad_inv[:4]))
+    rep.gate(G_EXTERNAL_ADMISSION, not bad_env_adm, "; ".join(bad_env_adm[:3]))
+    rep.gate(G_EXTERNAL_BINDS, not bad_binds, "; ".join(bad_binds[:3]))
+
+    bad_inv_arms = []
+    for lane in R.LANES:
+        bad_inv_arms += W.inventory_matches_arms(inventories[lane],
+                                                 found["bound_rankings"])
+    rep.gate(G_INVENTORY_ARMS, not bad_inv_arms, "; ".join(bad_inv_arms[:3]))
 
     # ---- 6. NO COMBINED OBJECTIVE, and COMPLETENESS ---- #
     rep.gate(G_COMBINED,
@@ -383,9 +382,8 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
              f"{manifest.get('topology_complete')}; {n_filled}/{n_want} slots are filled "
              f"exactly once, so topology_complete={truly}")
 
-    # THE PRODUCER MAY NOT ADMIT ITS OWN RUN. A correctly-shaped run is not a verified
-    # one, and the shape is all the producer can see, so a manifest arriving with an
-    # admission already granted is refused outright — whatever else is true of it.
+    # THE PRODUCER MAY NOT ADMIT ITS OWN RUN: a correctly-shaped run is not a verified one,
+    # and the shape is all the producer can see.
     admission = manifest.get("admission") or {}
     rep.gate(G_NO_SELF_ADMISSION,
              manifest.get("release_admissible") is not True
