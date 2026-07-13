@@ -120,8 +120,10 @@ def _env_for(r):
         "SGRNA": str(r / "sgrna"), "MANIFEST": str(r / "manifest"), "SRCREG": str(r / "srcreg"),
         "PB": str(r / "pb"), "ENV_LOCK": str(r / "el"), "OUT": str(r / "out"),
         "W10_REPORT_DIR": str(r / "w"),
-        # decouple identity tests from the (concurrently-edited) real verifier worktree
+        # decouple identity tests from the (concurrently-edited) real verifier worktrees
         "DIRECT_VERIFIER_DIR": str(r / "no_verifier"),
+        "TEMPORAL_VERIFIER_DIR": str(r / "no_verifier"),
+        "PATHWAY_VERIFIER_DIR": str(r / "no_verifier"),
     }
 
 
@@ -234,15 +236,22 @@ def test_receipt_hardening(tmp_path, monkeypatch):
         S.verify_receipt(C, "U6")
 
 
-def test_verifier_head_pin_is_a_40char_hex_sha(monkeypatch):
-    import sys as _sys
+def test_verifier_binding_reads_live_head_not_a_frozen_scalar(monkeypatch):
+    """The verifier binding reads the checkout's LIVE 40-hex HEAD + clean-tree flag + .pyc-excluded
+    code-tree hash (never a frozen scalar). A missing dir binds <unbound> and never raises."""
+    import sys as _sys, os as _os
+    import pytest
     _sys.path.insert(0, ANALYSIS)
     from direct import stage2_run as S
-    monkeypatch.setattr(S, "DRY", True)
-    for k, v in DUMMY.items():
-        monkeypatch.setenv(k, v)
-    head = S.build_run_identity(S.Cfg())["verifier_pins"]["direct_verifier_head"]
-    assert len(head) == 40 and all(c in "0123456789abcdef" for c in head), head
+    monkeypatch.setattr(S, "DRY", False)
+    dv = "/home/tcelab/worktrees/spot-stage2-direct-verifier/02_geneskew/analysis/direct"
+    if not _os.path.isdir(dv):
+        pytest.skip("direct verifier checkout not present")
+    b = S._verifier_binding(dv)
+    assert len(b["head"]) == 40 and all(c in "0123456789abcdef" for c in b["head"]), b["head"]
+    assert isinstance(b["clean_tree"], bool)
+    assert b["tree_sha256"].startswith("tree:")
+    assert S._verifier_binding("/no/such/dir")["tree_sha256"] == "<unbound>"   # missing -> unbound, no raise
 
 
 def test_preflight_refuses_over_a_tampered_stored_body(tmp_path):
@@ -377,3 +386,27 @@ def test_completed_receipts_skip_on_resume(tmp_path, monkeypatch):
     monkeypatch.setattr(S, "require_admitted_direct", lambda cfg: None)
     S.lane_temporal(C)
     assert calls == [], "a completed D.temporal must skip — the producer run() must not be re-invoked"
+
+
+def test_run_identity_binds_all_three_external_verifiers(monkeypatch):
+    """The run identity binds direct/temporal/pathway verifiers each with head/clean_tree/tree_sha256
+    (not a frozen scalar), and self-hashes over the whole body — so a change in any verifier moves it."""
+    import sys as _sys
+    _sys.path.insert(0, ANALYSIS)
+    from direct import stage2_run as S
+    monkeypatch.setattr(S, "DRY", True)
+
+    class C:
+        de = guide = donor = sgrna = manifest = srcreg = pb = v3_schema = registry = env_lock = "/x"
+        stage1_release = stage1_release_root = stage1_view = "/x"
+        sel_dir = "/x"; lane = "production"; p2s_scores = "/x"; p2s_env_lock = ""
+        direct_verifier = "/dv"; temporal_verifier = "/tv"; pathway_verifier = "/pv"
+
+    m = S.build_run_identity(C)
+    vp = m["verifier_pins"]
+    for lane in ("direct", "temporal", "pathway"):
+        assert lane in vp and set(vp[lane]) >= {"head", "clean_tree", "tree_sha256"}, lane
+    # no frozen scalar head remains
+    assert "direct_verifier_head" not in vp
+    body = {k: v for k, v in m.items() if k != "run_identity_sha256"}
+    assert m["run_identity_sha256"] == S.content_sha256(body)

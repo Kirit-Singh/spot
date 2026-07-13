@@ -117,11 +117,55 @@ class Cfg:
         self.direct_verifier = os.environ.get(
             "DIRECT_VERIFIER_DIR",
             "/home/tcelab/worktrees/spot-stage2-direct-verifier/02_geneskew/analysis/direct")
+        self.temporal_verifier = os.environ.get(
+            "TEMPORAL_VERIFIER_DIR",
+            "/home/tcelab/worktrees/spot-stage2-temporal-verifier/02_geneskew/analysis/verify_temporal_arms")
+        self.pathway_verifier = os.environ.get(
+            "PATHWAY_VERIFIER_DIR",
+            "/home/tcelab/worktrees/spot-stage2-pathway-verifier/02_geneskew/analysis/direct")
         self.p2s_scores = os.environ.get("P2S_SCORES", P2S_SCORES_DEFAULT)
         self.p2s_env_lock = os.environ.get("P2S_ENV_LOCK", "")   # W15's SECOND env lock (P2S runtime)
 
 
 # ---- run-identity manifest (Phase A) ----------------------------------------------------
+def _git_out(d, *a):
+    import subprocess
+    r = subprocess.run(["git", "-C", d, *a], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+_UNBOUND_V = {"head": "<unbound>", "clean_tree": None, "tree_sha256": "<unbound>"}
+
+
+def _verifier_binding(path):
+    """Bind an EXTERNAL verifier checkout: exact HEAD commit, clean-tree flag, canonical code-tree
+    hash (.pyc/__pycache__ excluded). A verifier byte/head change MOVES the run identity. A missing
+    or non-git dir binds <unbound> (identity tests decouple from the concurrently-edited real
+    worktrees this way); production requires the real checkout and its clean HEAD at invocation."""
+    if DRY:
+        return {"head": "<head>", "clean_tree": True, "tree_sha256": f"<tree:{os.path.basename(path)}>"}
+    if not os.path.isdir(path):
+        return dict(_UNBOUND_V)
+    head = _git_out(path, "rev-parse", "HEAD")
+    if head is None:
+        return dict(_UNBOUND_V)
+    dirty = _git_out(path, "status", "--porcelain", "--untracked-files=no")
+    return {"head": head, "clean_tree": (dirty == ""), "tree_sha256": "tree:" + tree_sha256(path)}
+
+
+def _require_clean_verifier(cfg, lane, path):
+    """At the point a lane's EXTERNAL verifier is INVOKED it must be a REAL checkout at a CLEAN HEAD
+    (a dirty or unbound verifier cannot independently admit). Fail closed. DRY is a no-op."""
+    if DRY:
+        return
+    b = _verifier_binding(path)
+    if b["clean_tree"] is not True:
+        raise SchedulerError(
+            f"REFUSED: the {lane} verifier checkout {path} is not a clean pinned HEAD "
+            f"(clean_tree={b['clean_tree']}); an admission from a dirty/unbound verifier is not "
+            "independent — commit/clean the verifier checkout first")
+
+
 def build_run_identity(cfg: Cfg) -> dict:
     """Canonical, self-hashed identity: every scientific input, Stage-1 release/view, gene sets,
     the integrated producer code identity, verifier pins, and the scheduler version. A resume
@@ -155,15 +199,17 @@ def build_run_identity(cfg: Cfg) -> dict:
         "code_identity": code_identity,
         "env_lock_sha256": h(cfg.env_lock),
         "verifier_pins": {
+            # ALL THREE external verifier implementations, bound by exact HEAD + clean-tree flag +
+            # canonical code-tree hash (never a frozen scalar — the head is read LIVE from the
+            # checkout). A byte/head change in ANY of them moves this identity, voiding a prior
+            # admission on resume.
+            "direct": _verifier_binding(cfg.direct_verifier),
+            "temporal": _verifier_binding(cfg.temporal_verifier),
+            "pathway": _verifier_binding(cfg.pathway_verifier),
+            # the W10 NEUTRAL ADAPTER's own code identity (the admitting code inside the Direct
+            # verifier); re-derived and checked live in w10_admitted.
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
-            "direct_w10_verifier_code_sha256":
-                "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f",
-            "direct_verifier_head": "2c3031e00bd6df8d6683a0da1054197f01d8e449",  # W10 FINAL adapter (6 release cross-pins)
-            "direct_verifier_tree_sha256": (("tree:" + tree_sha256(cfg.direct_verifier))
-                                            if (not DRY and os.path.isdir(cfg.direct_verifier))
-                                            else "<unbound>"),
-            "temporal_verifier": "07a064c1b8c4f5a1c1693c306fd264c4ada6f49d",
-            "pathway_verifier": "53ac540",
+            "direct_w10_verifier_code_sha256": W10_VERIFIER_CODE,
         },
         "p2s": {
             "scores_full": cfg.p2s_scores,          # W15 preparer input (NOT a --cells NPZ)
@@ -224,14 +270,21 @@ def phaseA_preflight(cfg: Cfg):
 
 
 def _verify_external_verifier_tree(cfg, stored_body):
-    """Bind the external Direct verifier checkout to its exact tree hash — a verifier-dir swap or
-    a dirty verifier tree is refused."""
-    want = stored_body.get("verifier_pins", {}).get("direct_verifier_tree_sha256")
-    if want and want != "<unbound>" and os.path.isdir(cfg.direct_verifier):
-        got = "tree:" + tree_sha256(cfg.direct_verifier)
-        if got != want:
-            raise SchedulerError("RESUME REFUSED: the external Direct verifier checkout tree "
-                                 f"changed (swap/dirty) — got {got[:22]} != bound {str(want)[:22]}")
+    """On resume, BEFORE Phase E: each EXTERNAL verifier checkout (direct/temporal/pathway) must
+    still be at its exact bound HEAD + code tree. A swap or byte change is refused (the full-body
+    identity compare would already differ; this gives the precise lane). <unbound> pins are skipped
+    (decoupled/test)."""
+    pins = stored_body.get("verifier_pins", {})
+    for lane, path in (("direct", cfg.direct_verifier), ("temporal", cfg.temporal_verifier),
+                       ("pathway", cfg.pathway_verifier)):
+        want = pins.get(lane)
+        if not isinstance(want, dict) or want.get("tree_sha256") in (None, "<unbound>"):
+            continue
+        got = _verifier_binding(path)
+        if got["head"] != want.get("head") or got["tree_sha256"] != want.get("tree_sha256"):
+            raise SchedulerError(
+                f"RESUME REFUSED: the {lane} verifier checkout changed since preflight "
+                "(head/tree moved) — a prior admission from different verifier bytes is void")
 
 
 def verify_run_identity(cfg: Cfg):
@@ -531,6 +584,7 @@ def verify_direct_gate(cfg):
     _phase("C direct/W10 gate (EXTERNAL pinned verifier checkout)")
     if _completed(cfg, "C.direct_admitted"):
         return   # resume: W10 admission verifies -> skip (never re-invoke over admitted bytes)
+    _require_clean_verifier(cfg, "direct", cfg.direct_verifier)
     dv = cfg.direct_verifier
     for cond in CONDITIONS:
         nrep = native_report_path(cfg, cond)
@@ -667,6 +721,8 @@ def verify_lanes(cfg):
     _phase("E lane admissions (external temporal/pathway)")
     if _completed(cfg, "E.lane_admissions"):
         return
+    _require_clean_verifier(cfg, "temporal", cfg.temporal_verifier)
+    _require_clean_verifier(cfg, "pathway", cfg.pathway_verifier)
     if DRY:
         print("=== PHASE E: release_inventory --lane {temporal,pathway} (PENDING) → external "
               "W11/W4 admissions → {temporal,pathway}_arm_external_admission.json")
