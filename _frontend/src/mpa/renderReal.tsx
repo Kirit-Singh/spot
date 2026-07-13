@@ -24,6 +24,7 @@ import { joinRowIdentity, desiredDirectionDisposition } from '../repository/armI
 import { nativeTemporalIdentity } from '../adapters/nativeTemporalArmAdapter';
 import { StatePill } from '../shell/chips';
 import { renderCompactPathways, renderCompactTargets } from './renderCompactStage2';
+import type { AdmittedP2sSecondary } from '../p2s/p2sAdmission';
 
 /** A resolved, admission-gated real artifact the island renders, DISCRIMINATED by route. Never demo. */
 interface ResolutionCommon {
@@ -33,7 +34,9 @@ interface ResolutionCommon {
   manifest?: StageMethodsManifest | null;
 }
 export type RealRouteResolution =
-  | (ResolutionCommon & { route: 'targets'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles })
+  | (ResolutionCommon & { route: 'targets'; view: CompactStage2SelectionView | JoinedView;
+      bundles?: ResolvedBundles; p2s?: AdmittedP2sSecondary;
+      p2sPending?: Promise<AdmittedP2sSecondary | undefined> })
   | (ResolutionCommon & { route: 'pathways'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles })
   | (ResolutionCommon & { route: 'drugs'; artifact: Stage3UiArtifact })
   | (ResolutionCommon & { route: 'pksafety'; artifact: Stage4UiArtifact });
@@ -373,7 +376,7 @@ export function renderRouteReal(res: RealRouteResolution): React.ReactNode {
   switch (res.route) {
     case 'targets':
       return isCompactStage2(res.view)
-        ? renderCompactTargets(res.view)
+        ? renderCompactTargets(res.view, res.p2s?.support)
         : renderTargets(res.view, res.bundles ?? {});
     case 'pathways':
       return isCompactStage2(res.view) ? renderCompactPathways(res.view) : renderPathways(res.view);

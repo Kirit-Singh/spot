@@ -7,6 +7,7 @@
 // (parseUiReleaseManifest / the projection loader) against the hashes this pointer pins.
 
 import type { CompactStage2ReleaseMetadata } from '../domain/compactStage2Projection';
+import { P2S_RELEASE_SCHEMA, type P2sSecondaryReleaseMetadata } from '../p2s/types';
 import { COMPACT_STAGE2_VERIFIER } from '../domain/compactStage2Projection';
 import type { ResultChain, RouteReleaseEntry, Stage1Binding, UiResultsCurrent, ResultRouteKey } from '../domain/uiResultsCurrent';
 import { RESULT_ROUTE_KEYS, UI_RESULTS_CURRENT_SCHEMA } from '../domain/uiResultsCurrent';
@@ -92,6 +93,38 @@ function compactStage2Metadata(v: unknown, path: string): CompactStage2ReleaseMe
   };
 }
 
+function p2sSecondaryMetadata(v: unknown, path: string): P2sSecondaryReleaseMetadata {
+  if (!isObject(v)) fail('malformed', `${path} must be an object`);
+  exactKeys(v, ['arm_key', 'p2s_run_sha256', 'projection_canonical_sha256', 'projection_path',
+    'projection_raw_sha256', 'projection_rows_sha256', 'receipt_sha256', 'schema_version',
+    'sibling_arm_key', 'source_bundle', 'verification_canonical_sha256', 'verification_path',
+    'verification_raw_sha256', 'verification_self_sha256'], path);
+  if (str(v.schema_version, `${path}.schema_version`) !== P2S_RELEASE_SCHEMA) {
+    fail('unknown_schema_version', `${path}.schema_version must be ${P2S_RELEASE_SCHEMA}`);
+  }
+  const arm = reqStr(v.arm_key, `${path}.arm_key`);
+  const sibling = reqStr(v.sibling_arm_key, `${path}.sibling_arm_key`);
+  if (!arm.startsWith('direct|') || !sibling.startsWith('direct|') || arm === sibling) {
+    fail('malformed', `${path} must bind two distinct Direct arms`);
+  }
+  return {
+    schema_version: P2S_RELEASE_SCHEMA,
+    projection_path: relativePath(v.projection_path, `${path}.projection_path`),
+    projection_raw_sha256: hex64(v.projection_raw_sha256, `${path}.projection_raw_sha256`),
+    projection_canonical_sha256: hex64(v.projection_canonical_sha256, `${path}.projection_canonical_sha256`),
+    projection_rows_sha256: hex64(v.projection_rows_sha256, `${path}.projection_rows_sha256`),
+    verification_path: relativePath(v.verification_path, `${path}.verification_path`),
+    verification_raw_sha256: hex64(v.verification_raw_sha256, `${path}.verification_raw_sha256`),
+    verification_canonical_sha256: hex64(v.verification_canonical_sha256, `${path}.verification_canonical_sha256`),
+    verification_self_sha256: hex64(v.verification_self_sha256, `${path}.verification_self_sha256`),
+    receipt_sha256: hex64(v.receipt_sha256, `${path}.receipt_sha256`),
+    p2s_run_sha256: hex64(v.p2s_run_sha256, `${path}.p2s_run_sha256`),
+    arm_key: arm,
+    sibling_arm_key: sibling,
+    source_bundle: reqStr(v.source_bundle, `${path}.source_bundle`),
+  };
+}
+
 function routeEntry(v: unknown, path: string, route: ResultRouteKey, chain: ResultChain): RouteReleaseEntry {
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
   const projection_path = optStr(v.projection_path, `${path}.projection_path`);
@@ -102,11 +135,18 @@ function routeEntry(v: unknown, path: string, route: ResultRouteKey, chain: Resu
   }
   const stage2Route = route === 'targets' || route === 'pathways';
   const compact_stage2 = v.compact_stage2 == null ? null : compactStage2Metadata(v.compact_stage2, `${path}.compact_stage2`);
+  const p2s_secondary = v.p2s_secondary == null ? null : p2sSecondaryMetadata(v.p2s_secondary, `${path}.p2s_secondary`);
   if (stage2Route && projection_path !== null && compact_stage2 === null) {
     fail('malformed', `${path}.compact_stage2 is required for a bound compact Stage-2 route`);
   }
   if (!stage2Route && compact_stage2 !== null) {
     fail('malformed', `${path}.compact_stage2 is only valid on targets/pathways routes`);
+  }
+  if (p2s_secondary !== null && route !== 'targets') {
+    fail('malformed', `${path}.p2s_secondary is only valid on the targets route`);
+  }
+  if (p2s_secondary !== null && compact_stage2 === null) {
+    fail('malformed', `${path}.p2s_secondary requires the admitted compact Stage-2 release`);
   }
   if (compact_stage2) {
     if (compact_stage2.display_release_id !== chain.stage2_display_release_id) {
@@ -122,6 +162,7 @@ function routeEntry(v: unknown, path: string, route: ResultRouteKey, chain: Resu
     projection_path,
     projection_content_hash,
     compact_stage2,
+    p2s_secondary,
   };
 }
 

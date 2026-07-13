@@ -36,6 +36,7 @@ import { StatePill } from '../shell/chips';
 import { renderRouteReal } from './renderReal';
 import type { RealRouteResolution } from './renderReal';
 import type { SelectionDisplayContext } from '../domain/selectionDisplay';
+import { withP2sSecondaryMethods } from '../p2s/p2sAdmission';
 
 export interface StageIslandProps {
   page: PageKey;
@@ -153,6 +154,20 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
       // ADMISSION gate: a temporal artifact renders ONLY when admission === 'admitted'.
       const admitted = real && real.admission === 'admitted' ? real : null;
       setProd({ loading: false, selection, manifest, real: admitted, labels });
+      // P2S is explicitly secondary/non-gating. The primary Targets resolution above renders first;
+      // this separate continuation adds hover support + exact drawer provenance only if it later admits.
+      if (admitted?.route === 'targets' && admitted.p2sPending) {
+        void admitted.p2sPending.then((p2s) => {
+          if (cancelled || !p2s) return;
+          setProd((current) => {
+            if (current.real !== admitted) return current;
+            const boundManifest = admitted.manifest
+              ? withP2sSecondaryMethods(admitted.manifest, p2s)
+              : admitted.manifest;
+            return { ...current, real: { ...admitted, p2s, manifest: boundManifest } };
+          });
+        });
+      }
     })();
     return () => {
       cancelled = true;

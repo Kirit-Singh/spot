@@ -10,6 +10,8 @@
 
 export const P2S_PROJECTION_SCHEMA = 'spot.stage02.p2s_ui_support_projection.v1'
 export const P2S_LANE_ROLE = 'secondary_non_gating'
+export const P2S_VERIFICATION_SCHEMA = 'spot.stage02.p2s_ui_projection_verification.v3'
+export const P2S_RELEASE_SCHEMA = 'spot.ui_p2s_secondary_release.v1'
 
 export type PrimarySign = 'supportive' | 'opposed' | 'zero'
 export type Direction = 'increase' | 'decrease'
@@ -55,6 +57,7 @@ export interface P2sBinding {
     release_run_id: string
     bundle_run_id: string
     w10_verdict: string
+    w10_verifier_id: string
     w10_verifier_code_sha256: string
     scorer_view_sha256: string
   }
@@ -89,6 +92,51 @@ export interface P2sProjection {
   n_targets: number
   projection_rows_sha256: string
   rows: P2sSupportRow[]
+}
+
+/** Independent generator!=verifier receipt shipped beside the projection. */
+export interface P2sProjectionVerification {
+  schema_version: typeof P2S_VERIFICATION_SCHEMA
+  verifies: 'P2S_UI_SUPPORT_PROJECTION.json'
+  generator: 'emit_projection_v2.py'
+  verifier: 'verify_projection_v3.py'
+  verifier_is_independent_of_generator: true
+  projection_raw_file_sha256: string
+  projection_canonical_rows_sha256: string
+  clean_projection_admitted: true
+  clean_projection_failures: []
+  no_machine_local_path_proven: true
+  projection_identical_to_v2: true
+  firewall_token_coverage_complete: true
+  firewall_false_positives_on_legit_keys: []
+  firewall_token_coverage: Record<string, true>
+  supersedes: 'p2s-ui-seam-handoff-v2/P2S_UI_PROJECTION_VERIFICATION.json'
+  bound_direct_bundle_run_id: string
+  w10_verdict: 'ADMIT'
+  w10_verifier_code_sha256: string
+  mutation_tests: Array<{ attack: string; rejected: true }>
+  n_mutations: number
+  all_mutations_fail_closed: true
+  emitted_utc: string
+  receipt_sha256: string
+}
+
+/** Content-addressed pointer carried by results/current.json; the browser re-hashes both files. */
+export interface P2sSecondaryReleaseMetadata {
+  schema_version: typeof P2S_RELEASE_SCHEMA
+  projection_path: string
+  projection_raw_sha256: string
+  projection_canonical_sha256: string
+  projection_rows_sha256: string
+  verification_path: string
+  verification_raw_sha256: string
+  verification_canonical_sha256: string
+  verification_self_sha256: string
+  receipt_sha256: string
+  p2s_run_sha256: string
+  arm_key: string
+  sibling_arm_key: string
+  source_bundle: string
 }
 
 /** A per-(target, direction) view the UI renders. Note: NO rank, NO score, NO p-value. */

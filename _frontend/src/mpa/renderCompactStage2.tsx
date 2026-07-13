@@ -10,6 +10,7 @@ import type {
 } from '../domain/compactStage2Projection';
 import { StatePill } from '../shell/chips';
 import { EffectRankPlot } from './EffectRankPlot';
+import type { P2sSecondarySupport } from '../p2s/p2sSecondarySupport';
 
 const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
 const TD = 'px-2 py-1 font-mono text-[10.5px] text-ink-2';
@@ -137,12 +138,13 @@ function PathwayArmTable({ arm, context }: { arm: CompactPathwayArm; context: st
   );
 }
 
-export function renderCompactTargets(view: CompactStage2SelectionView): React.ReactNode {
+export function renderCompactTargets(view: CompactStage2SelectionView,
+  p2s?: P2sSecondarySupport): React.ReactNode {
   return (
     <div data-real-canvas data-route="targets" className={CANVAS}>
       <ReleaseStrip view={view} />
       <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2">
-        {view.effectRankFacets.map((facet) => <EffectRankPlot key={facet.role} facet={facet} />)}
+        {view.effectRankFacets.map((facet) => <EffectRankPlot key={facet.role} facet={facet} p2s={p2s} />)}
       </div>
       <GeneArmTable arm={view.geneArmA} />
       <GeneArmTable arm={view.geneArmB} />

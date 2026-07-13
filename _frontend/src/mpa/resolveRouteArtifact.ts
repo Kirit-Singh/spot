@@ -27,6 +27,7 @@ import { canonicalJson, sha256Hex } from '../stage1/canonical';
 import { STAGE1_SELECTION_SCHEMA_RAW_SHA256, STAGE1_V3_RELEASE_SELF_SHA256 } from '../stage1/contractBinding';
 import { readStage1SelectionV3 } from './contrastTitle';
 import { buildStageMethodsManifest } from './stageMethods';
+import { loadAdmittedP2sSecondary, type AdmittedP2sSecondary } from '../p2s/p2sAdmission';
 
 const RESULTS_ROOT = 'results/';
 const RESULTS_CURRENT_PATH = `${RESULTS_ROOT}current.json`;
@@ -36,7 +37,8 @@ const underResults = (relPath: string): string => `${RESULTS_ROOT}${relPath}`;
 
 /** A route's native canvas projection — a Stage-2 join view, or a Stage-3/Stage-4 UI artifact. */
 export type RouteProjection =
-  | { kind: 'stage2'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles }
+  | { kind: 'stage2'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles;
+      p2sPending?: Promise<AdmittedP2sSecondary | undefined> }
   | { kind: 'stage3'; artifact: Stage3UiArtifact }
   | { kind: 'stage4'; artifact: Stage4UiArtifact };
 
@@ -108,7 +110,8 @@ export async function loadRouteReleaseManifest(
 function toResolution(page: PageKey, projection: RouteProjection, manifest: StageMethodsManifest): RealRouteResolution | null {
   const routeKey = resultRouteKeyForPage(page);
   if (routeKey === 'targets' && projection.kind === 'stage2') {
-    return { route: 'targets', view: projection.view, bundles: projection.bundles, admission: 'admitted', manifest };
+    return { route: 'targets', view: projection.view, bundles: projection.bundles,
+      p2sPending: projection.p2sPending, admission: 'admitted', manifest };
   }
   if (routeKey === 'pathways' && projection.kind === 'stage2') {
     return { route: 'pathways', view: projection.view, bundles: projection.bundles, admission: 'admitted', manifest };
@@ -230,7 +233,21 @@ export async function loadProductionProjection(
       projection_self_sha256: meta.projection_self_sha256,
     });
 
-    return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection, routeKey) };
+    const view = resolveCompactStage2Selection(proj, meta, selection, routeKey);
+    // P2S is an optional, secondary/non-gating lane. Its own admission may fail without weakening or
+    // hiding the already-admitted Direct result; failure simply leaves this optional field absent.
+    let p2sPending: Promise<AdmittedP2sSecondary | undefined> | undefined;
+    if (routeKey === 'targets' && entry.p2s_secondary) {
+      // Start the optional sidecar in parallel but DO NOT await it: slow, absent, or malformed P2S
+      // bytes cannot delay the already-admitted Direct canvas. StageIsland hydrates it later.
+      p2sPending = loadAdmittedP2sSecondary(entry.p2s_secondary, fetchText, proj).then((candidate) => {
+        const displayedArms = new Set(view.effectRankFacets.flatMap((facet) =>
+          [facet.increase.arm_key, facet.decrease.arm_key]));
+        return displayedArms.has(candidate.support.armKey) &&
+          displayedArms.has(candidate.support.siblingArmKey) ? candidate : undefined;
+      }).catch(() => undefined);
+    }
+    return { kind: 'stage2', view, p2sPending };
   } catch {
     return null; // strict-parse rejection / view-resolution failure → unbound
   }

@@ -13,6 +13,7 @@ interface Packager {
   pack: (spec: unknown) => { tree: Record<string, string>; current: unknown };
   deriveCompactProjection: (route: string, native: unknown) => unknown;
   hydrateStage2FileInputs: (spec: any, baseDir: string, readText: (path: string) => string) => any;
+  validateP2sV3ReceiptAttestations: (receipt: unknown) => void;
 }
 async function importPack(): Promise<Packager> {
   const modPath: string = '../../../deploy/pack_ui_projections.mjs';
@@ -94,6 +95,30 @@ async function makeSpec(opts?: { projection?: Awaited<ReturnType<typeof compactP
       drugs: { native: drugsNative, receipt: receipt('drugs') },
       pksafety: { native: pksafetyNative, receipt: receipt('pksafety') },
     },
+  };
+}
+
+const P2S_COVERAGE = Object.fromEntries(['aggregate', 'aggregate_score', 'causal', 'combined',
+  'combined_score', 'discovery', 'empirical_p_value', 'empirical_q_value', 'false_discovery',
+  'false_discovery_rate', 'fdr', 'gating', 'nominal_p', 'overall_rank', 'p', 'p_adj',
+  'p_value', 'padj', 'padjusted', 'pareto', 'pval', 'pvalue', 'q', 'q_adj', 'q_value',
+  'qadj', 'qval', 'qvalue', 'rank', 'score', 'significance', 'validate', 'validation',
+  'weighted', 'weighted_score'].map((token) => [token, true]));
+
+function p2sV3Receipt() {
+  return {
+    schema_version: 'spot.stage02.p2s_ui_projection_verification.v3',
+    verifies: 'P2S_UI_SUPPORT_PROJECTION.json', generator: 'emit_projection_v2.py',
+    verifier: 'verify_projection_v3.py', verifier_is_independent_of_generator: true,
+    projection_raw_file_sha256: 'a'.repeat(64), projection_canonical_rows_sha256: 'b'.repeat(64),
+    clean_projection_admitted: true, clean_projection_failures: [],
+    no_machine_local_path_proven: true, bound_direct_bundle_run_id: 'a'.repeat(16),
+    w10_verdict: 'ADMIT', w10_verifier_code_sha256: 'c'.repeat(64), mutation_tests: [],
+    n_mutations: 0, all_mutations_fail_closed: true, emitted_utc: '2026-07-13T00:00:00Z',
+    receipt_sha256: 'd'.repeat(64), projection_identical_to_v2: true,
+    firewall_token_coverage_complete: true, firewall_false_positives_on_legit_keys: [],
+    firewall_token_coverage: { ...P2S_COVERAGE },
+    supersedes: 'p2s-ui-seam-handoff-v2/P2S_UI_PROJECTION_VERIFICATION.json',
   };
 }
 
@@ -207,6 +232,15 @@ describe('packager → browser loader round-trip', () => {
 });
 
 describe('packager refuses invented or inconsistent Stage-2 releases', () => {
+  it('requires the complete v3 P2S field-coverage attestation and relative supersedes path', async () => {
+    const { validateP2sV3ReceiptAttestations } = await importPack();
+    expect(() => validateP2sV3ReceiptAttestations(p2sV3Receipt())).not.toThrow();
+    const incomplete = p2sV3Receipt(); incomplete.firewall_token_coverage.qval = false;
+    expect(() => validateP2sV3ReceiptAttestations(incomplete)).toThrow(/coverage is incomplete/);
+    const localPath = p2sV3Receipt(); localPath.supersedes = '/home/user/private/receipt.json';
+    expect(() => validateP2sV3ReceiptAttestations(localPath)).toThrow(/supersedes path/);
+  });
+
   it('requires W3 projection + independent receipt, never the retired imagined aggregate', async () => {
     const { pack } = await importPack();
     const base = await makeSpec();

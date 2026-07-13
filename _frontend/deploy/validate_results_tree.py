@@ -72,9 +72,22 @@ def main() -> None:
             die('inventory lists a missing file (partial tree): %s' % path)
 
     for route_key, entry in (cur.get('routes') or {}).items():
-        manifest_path = (entry or {}).get('manifest_path')
-        if manifest_path not in listed:
-            die('route %s manifest_path not in inventory: %s' % (route_key, manifest_path))
+        entry = entry or {}
+        bound_paths = [('manifest_path', entry.get('manifest_path'))]
+        if entry.get('projection_path') is not None:
+            bound_paths.append(('projection_path', entry.get('projection_path')))
+        compact = entry.get('compact_stage2') or {}
+        verifier = compact.get('independent_verifier') or {}
+        if verifier.get('receipt_path') is not None:
+            bound_paths.append(('compact_stage2.independent_verifier.receipt_path',
+                                verifier.get('receipt_path')))
+        p2s = entry.get('p2s_secondary') or {}
+        for key in ('projection_path', 'verification_path'):
+            if p2s.get(key) is not None:
+                bound_paths.append(('p2s_secondary.' + key, p2s.get(key)))
+        for label, path in bound_paths:
+            if path not in listed:
+                die('route %s %s not in inventory: %s' % (route_key, label, path))
 
     print('OK')
     for rel in sorted(ondisk):

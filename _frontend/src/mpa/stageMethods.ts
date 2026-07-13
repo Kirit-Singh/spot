@@ -180,13 +180,10 @@ const MARSON_PREPRINT = src('Marson genome-scale CRISPRi perturb-seq · bioRxiv'
   url: 'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1',
   license: 'CC BY 4.0',
 });
-// Perturb2State — a SECONDARY arm-wise reconstruction-support lane on Targets. It is an IMPLEMENTED
-// lane, explicitly deferred_not_part_of_this_run in the complete Stage-2 run manifest, and its emitted
-// verification reports independent_verification: pending — so NO independently admitted P2S bundle is
-// bound (the pinned upstream repo/commit itself is not a draft). Only METHOD provenance is bound: the
-// pinned upstream commit, its git-archive hash (raw), and the full MIT-LICENSE file hash (in the
-// licence). No P2S run hash / result / reproduce command exists; it never modifies Direct ranks or
-// implies validation / causality / p / q.
+// Perturb2State — an OPTIONAL, separately admitted, SECONDARY arm-wise reconstruction-support lane on
+// Targets. The static definition records only the pinned upstream method. Exact run/projection hashes
+// are added to the drawer at runtime only when its independent receipt and Direct-arm binding admit.
+// It never modifies Direct ranks or implies validation / causality / p / q.
 const PERTURB2STATE = src(
   'Perturb2State',
   'emdann/pert2state_model @ 2c2e30959ffafadecc6af5d4d7b5bde868ab5313',
@@ -261,7 +258,7 @@ function targetsRaw(): RawManifest {
       masks_qc:
         "Target-masked: each estimate removes the target's own gene, its frozen 30-kb neighbourhood mask and its guides' off-target alignments before the panel and control means are taken; an absent mask and an empty mask are distinct claims (null when unresolved). Ranking eligibility consumes an UPSTREAM significance flag — obs.ontarget_significant (a per target×condition boolean at GWCD4i.DE_stats.h5ad:obs.ontarget_significant, computed by the Marson GWCD4i release's own DESeq2 DE model, not by spot): it is read as a released boolean verbatim, so spot re-thresholds nothing and emits no p / q / FDR of its own; a target flagged false is ranking-ineligible and a missing flag is a non-evaluable disposition (missing_qc:ontarget_significant).",
       upstream_model:
-        'Stage-1 binding: spot.stage01_selection.v3 generic program contrast (Stage-1 continuous v3.0.1 release). Secondary lane: Perturb2State (emdann/pert2state_model, MIT) — an arm-wise reconstruction-support model that never modifies Direct ranks and implies no validation, causality, or p / q. Spot integration status: an implemented secondary lane, explicitly deferred_not_part_of_this_run in the complete Stage-2 run manifest, whose emitted verification still reports independent_verification: pending — so no independently admitted P2S bundle is bound.',
+        'Stage-1 binding: spot.stage01_selection.v3 generic program contrast (Stage-1 continuous v3.0.1 release). Optional secondary lane: Perturb2State (emdann/pert2state_model, MIT) — arm-wise reconstruction support that never modifies Direct ranks or gates and implies no validation, causality, or p / q. Exact run identity is shown only when a separately verified projection is admitted.',
       limitations: [
         'One in-vitro primary-human-CD4 dataset (Marson GWCD4i); a gene-lever result is suggestive and requires external validation, not a confirmed target.',
       ],
@@ -452,7 +449,7 @@ export function stageMethodsRaw(page: PageKey): RawManifest {
  * test if a manifest's verified content legitimately changes.
  */
 export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string> = {
-  targets: '90c11e80a8338443e2550581f89330e2de44a38eafa071d5158d354d7c8adabb',
+  targets: 'a1542bc0990c758b05ac2871377b4175d9f4228023728ef01bad79ed9a559d00',
   pathways: '3d0294fe0b6d0beb618a477b65a0cd82a736fdd60ef875baf2f6eb9a3864f657',
   drugs: '9b4fea60d229dd04418ac67e0cf9ad48338fecb6d32814761e2934cf51f0c320',
   pksafety: '1b8e6ab3631f949f57c7998d9366d7c060d47d3dbcd6605257a2d6ac85ef3c5a',

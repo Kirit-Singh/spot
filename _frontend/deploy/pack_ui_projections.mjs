@@ -80,6 +80,11 @@ const UI_RELEASE_SCHEMA = 'spot.ui_release_manifest.v1';
 const STAGE2_METHOD = 'spot.stage02.display_projection.v2';
 const STAGE2_VERIFIER = 'spot.stage02.display_projection.independent_verifier.v1';
 const STAGE2_RECEIPT_PATH = 'stage02/display_projection.verification.json';
+const P2S_PROJECTION_PATH = 'stage02/p2s_secondary_support.json';
+const P2S_VERIFICATION_PATH = 'stage02/p2s_secondary_support.verification.json';
+const P2S_SCHEMA = 'spot.stage02.p2s_ui_support_projection.v1';
+const P2S_VERIFICATION_SCHEMA = 'spot.stage02.p2s_ui_projection_verification.v3';
+const P2S_RELEASE_SCHEMA = 'spot.ui_p2s_secondary_release.v1';
 const RELEASE_CONDITIONS = ['Rest', 'Stim8hr', 'Stim48hr'];
 const PATHWAY_SOURCES = ['reactome', 'go_bp'];
 const STAGE2_TOP_KEYS = ['analysis_mode', 'arms', 'authoritative_artifacts_are_the_native_ones',
@@ -91,6 +96,36 @@ const STAGE2_RECEIPT_KEYS = ['admitted_inputs', 'failures', 'generator_is_not_ve
 // verified — raw/canonical hashes + the projection's declared vs recomputed self-hash + their agreement.
 const STAGE2_SUBJECT_KEYS = ['projection_canonical_sha256', 'projection_file', 'projection_raw_sha256',
   'projection_self_sha256_declared', 'projection_self_sha256_recomputed', 'self_hash_agrees'];
+const P2S_TOP_KEYS = ['adapter', 'binding', 'columns', 'emitted_utc', 'lane_role', 'n_targets',
+  'projection_rows_sha256', 'rows', 'schema_version', 'semantics'];
+const P2S_VERIFICATION_KEYS = ['all_mutations_fail_closed', 'bound_direct_bundle_run_id',
+  'clean_projection_admitted', 'clean_projection_failures', 'emitted_utc', 'generator',
+  'firewall_false_positives_on_legit_keys', 'firewall_token_coverage',
+  'firewall_token_coverage_complete', 'mutation_tests', 'n_mutations',
+  'no_machine_local_path_proven', 'projection_identical_to_v2',
+  'projection_canonical_rows_sha256', 'projection_raw_file_sha256', 'receipt_sha256',
+  'schema_version', 'supersedes', 'verifier', 'verifier_is_independent_of_generator', 'verifies',
+  'w10_verdict', 'w10_verifier_code_sha256'];
+const P2S_COVERAGE_TOKENS = ['aggregate', 'aggregate_score', 'causal', 'combined',
+  'combined_score', 'discovery', 'empirical_p_value', 'empirical_q_value', 'false_discovery',
+  'false_discovery_rate', 'fdr', 'gating', 'nominal_p', 'overall_rank', 'p', 'p_adj',
+  'p_value', 'padj', 'padjusted', 'pareto', 'pval', 'pvalue', 'q', 'q_adj', 'q_value',
+  'qadj', 'qval', 'qvalue', 'rank', 'score', 'significance', 'validate', 'validation',
+  'weighted', 'weighted_score'];
+const P2S_SUPERSEDED_RECEIPT = 'p2s-ui-seam-handoff-v2/P2S_UI_PROJECTION_VERIFICATION.json';
+const P2S_MUTATIONS = ['abs_broken', 'admits_entering_rank', 'arm_key_non_canonical',
+  'binding_aggregate_score_key', 'claims_part_of_direct', 'concordance_for_zero_sign',
+  'denominators_broken', 'disguised_rank_key_overall_rank', 'extra_binding_key_combined_score',
+  'join_key_rank', 'lane_not_secondary', 'machine_path_in_binding', 'machine_path_mnt',
+  'n_targets_wrong', 'non_finite_coef', 'opposed_flipped', 'row_causal_key',
+  'row_combined_key', 'row_empirical_p_value_key', 'row_false_discovery_rate_key',
+  'row_fdr_key', 'row_padj_key', 'row_qval_key', 'row_validation_key', 'row_weighted_key',
+  'rows_unsorted', 'sibling_not_exact_negation', 'sibling_same_direction',
+  'sign_not_sign_of_coef', 'tampered_row_hash', 'tampered_w10_verdict',
+  'target_id_not_unique', 'wrong_bundle'].sort();
+const P2S_ROW_KEYS = ['target_id', 'primary_coefficient', 'primary_abs_coefficient', 'primary_sign',
+  'opposed', 'primary_available', 'n_runs', 'sens_log_fc_sign_concordance', 'n_log_fc',
+  'sens_pca_off_sign_concordance', 'n_pca_off', 'lodo_sign_concordance', 'n_lodo'];
 
 function fail(msg) {
   throw new Error('pack: ' + msg);
@@ -111,6 +146,24 @@ function rejectStage2ScientificKeys(value, path) {
       fail(`${path}.${key} is forbidden in the compact Stage-2 projection`);
     }
     rejectStage2ScientificKeys(child, `${path}.${key}`);
+  }
+}
+
+function rejectP2sDynamic(value, path) {
+  if (Array.isArray(value)) return value.forEach((item, i) => rejectP2sDynamic(item, `${path}[${i}]`));
+  if (typeof value === 'string') {
+    if (value.startsWith('/') || /^file:\/\//i.test(value) || /^[a-z]:[\\/]/i.test(value)) {
+      fail(`${path} carries a machine-local path`);
+    }
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    const k = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (/^(p|q)$/.test(k) || /(padj|pval|pvalue|qval|qvalue|fdr|falsediscovery|posteriorprob|nominalp|empiricalp|empiricalq|rank|aggregatescore|compositescore|overallscore|combined|balanced|weighted|significan|validat|causal|pareto)/.test(k)) {
+      fail(`${path}.${key} is forbidden in P2S dynamic provenance`);
+    }
+    rejectP2sDynamic(child, `${path}.${key}`);
   }
 }
 function reqStr(receipt, key, route) {
@@ -341,6 +394,159 @@ function compactStage2Input(routeInput) {
   return { projection, projectionText, displayReceipt, displayReleaseId, releaseConditions, pathwaySources, activeSource };
 }
 
+function canonicalDirectArm(key, path) {
+  const parts = nStr(key, path).split('|');
+  if (parts.length !== 4 || parts[0] !== 'direct' || !parts[1] ||
+      !['increase', 'decrease'].includes(parts[2]) || !parts[3]) {
+    fail(`${path} is not a canonical Direct arm key`);
+  }
+  return { program: parts[1], direction: parts[2], condition: parts[3] };
+}
+
+/** Exact v3-only receipt assertions, exported so the packager's release boundary has a direct test. */
+export function validateP2sV3ReceiptAttestations(verification) {
+  nObj(verification, 'targets P2S verification');
+  exactKeys(verification, P2S_VERIFICATION_KEYS, 'targets P2S verification');
+  if (verification.projection_identical_to_v2 !== true ||
+      verification.firewall_token_coverage_complete !== true ||
+      !Array.isArray(verification.firewall_false_positives_on_legit_keys) ||
+      verification.firewall_false_positives_on_legit_keys.length !== 0) {
+    fail('targets P2S verification does not attest unchanged projection bytes and complete clean field coverage');
+  }
+  if (verification.supersedes !== P2S_SUPERSEDED_RECEIPT ||
+      verification.supersedes.startsWith('/') || verification.supersedes.split('/').includes('..')) {
+    fail('targets P2S verification supersedes path is not the admitted relative v2 receipt');
+  }
+  const coverage = nObj(verification.firewall_token_coverage,
+    'targets P2S verification.firewall_token_coverage');
+  exactKeys(coverage, P2S_COVERAGE_TOKENS,
+    'targets P2S verification.firewall_token_coverage');
+  if (P2S_COVERAGE_TOKENS.some((token) => coverage[token] !== true)) {
+    fail('targets P2S verification field coverage is incomplete');
+  }
+}
+
+/** Strictly admit + bind the optional P2S sidecar before it can enter the served results tree. */
+function p2sSecondaryInput(routeInput, directProjection) {
+  const hasProjection = routeInput.p2s_projection_text !== undefined;
+  const hasReceipt = routeInput.p2s_verifier_receipt_text !== undefined;
+  if (!hasProjection && !hasReceipt) return null;
+  if (!hasProjection || !hasReceipt) fail('targets P2S projection and verifier receipt must both be present');
+  const projectionText = nStr(routeInput.p2s_projection_text, 'targets.p2s_projection_text');
+  const verificationText = nStr(routeInput.p2s_verifier_receipt_text,
+    'targets.p2s_verifier_receipt_text');
+  let projection, verification;
+  try { projection = JSON.parse(projectionText); } catch { fail('targets P2S projection is not valid JSON'); }
+  try { verification = JSON.parse(verificationText); } catch { fail('targets P2S verification is not valid JSON'); }
+  nObj(projection, 'targets P2S projection');
+  nObj(verification, 'targets P2S verification');
+  exactKeys(projection, P2S_TOP_KEYS, 'targets P2S projection');
+  validateP2sV3ReceiptAttestations(verification);
+  if (projection.schema_version !== P2S_SCHEMA || projection.lane_role !== 'secondary_non_gating') {
+    fail('targets P2S projection schema/lane is not admitted');
+  }
+  const semantics = nObj(projection.semantics, 'targets P2S projection.semantics');
+  if (semantics.is_part_of_admitted_direct_result !== false ||
+      semantics.p2s_fields_enter_primary_rank_or_order !== false ||
+      semantics.no_rank_no_pvalue_no_combined_score !== true ||
+      semantics.sibling_arm_is_exact_negation !== true) {
+    fail('targets P2S projection weakens the non-gating/no-statistic firewall');
+  }
+  const adapter = nObj(projection.adapter, 'targets P2S projection.adapter');
+  exactKeys(adapter, ['arm_key', 'condition', 'desired_change', 'display_fields',
+    'forbidden_ui_uses', 'join_key', 'program_id', 'robustness_fields', 'sibling_arm_key'],
+  'targets P2S projection.adapter');
+  if (adapter.join_key !== 'target_id') fail('targets P2S adapter join_key must be target_id');
+  const arm = canonicalDirectArm(adapter.arm_key, 'targets P2S adapter.arm_key');
+  const sibling = canonicalDirectArm(adapter.sibling_arm_key, 'targets P2S adapter.sibling_arm_key');
+  if (arm.program !== adapter.program_id || arm.condition !== adapter.condition ||
+      arm.direction !== adapter.desired_change || sibling.program !== arm.program ||
+      sibling.condition !== arm.condition || sibling.direction === arm.direction) {
+    fail('targets P2S adapter arm/sibling identity is inconsistent');
+  }
+  const binding = nObj(projection.binding, 'targets P2S projection.binding');
+  exactKeys(binding, ['arm_key', 'bound_direct_release', 'input_hashes', 'model', 'p2s_run_id',
+    'p2s_run_sha256', 'receipt_sha256', 'seed', 'sibling_arm_key',
+    'source_support_parquet_sha256', 'source_support_rows_sha256'], 'targets P2S projection.binding');
+  if (binding.arm_key !== adapter.arm_key || binding.sibling_arm_key !== adapter.sibling_arm_key ||
+      !HEX64.test(binding.p2s_run_sha256) || binding.p2s_run_id !== binding.p2s_run_sha256.slice(0, 16) ||
+      !HEX64.test(binding.receipt_sha256)) fail('targets P2S binding identity is malformed');
+  const direct = nObj(binding.bound_direct_release, 'targets P2S bound_direct_release');
+  exactKeys(direct, ['bundle_run_id', 'release_run_id', 'scorer_view_sha256', 'w10_verdict',
+    'w10_verifier_code_sha256', 'w10_verifier_id'], 'targets P2S bound_direct_release');
+  if (direct.w10_verdict !== 'ADMIT' ||
+      direct.w10_verifier_id !== 'spot.stage02.direct.arm_bundle.verifier.v1' ||
+      !HEX64.test(direct.w10_verifier_code_sha256) || !HEX64.test(direct.scorer_view_sha256)) {
+    fail('targets P2S is not bound to admitted W10 Direct evidence');
+  }
+  exactKeys(nObj(binding.model, 'targets P2S binding.model'),
+    ['l1_ratio_grid', 'n_pcs_primary', 'positive', 'random_state', 'upstream_commit', 'upstream_version'],
+  'targets P2S binding.model');
+  exactKeys(nObj(binding.input_hashes, 'targets P2S binding.input_hashes'),
+    ['de_main_raw_sha256', 'ntc_h5ad_raw_sha256', 'stage1_scores_canonical_sha256',
+      'stage1_scores_raw_sha256'], 'targets P2S binding.input_hashes');
+  rejectP2sDynamic(binding.model, 'targets P2S binding.model');
+  rejectP2sDynamic(binding.input_hashes, 'targets P2S binding.input_hashes');
+  for (const value of Object.values(binding.input_hashes)) if (!HEX64.test(value)) {
+    fail('targets P2S input hash is not 64-hex');
+  }
+  exactList(projection.columns, P2S_ROW_KEYS, 'targets P2S projection.columns');
+  const rows = nArr(projection.rows, 'targets P2S projection.rows');
+  if (!Number.isSafeInteger(projection.n_targets) || projection.n_targets < 1 ||
+      projection.n_targets !== rows.length || !HEX64.test(projection.projection_rows_sha256)) {
+    fail('targets P2S projection row count/hash is malformed');
+  }
+  const ids = rows.map((row, i) => {
+    nObj(row, `targets P2S rows[${i}]`); exactKeys(row, P2S_ROW_KEYS, `targets P2S rows[${i}]`);
+    const id = nStr(row.target_id, `targets P2S rows[${i}].target_id`);
+    if (!/^ENSG[0-9]{11}$/.test(id)) fail(`targets P2S rows[${i}].target_id is not canonical Ensembl`);
+    return id;
+  });
+  if (new Set(ids).size !== ids.length || ids.some((id, i) => i > 0 && ids[i - 1].localeCompare(id) >= 0)) {
+    fail('targets P2S target ids are duplicate or not ascending');
+  }
+
+  if (verification.schema_version !== P2S_VERIFICATION_SCHEMA ||
+      verification.verifies !== 'P2S_UI_SUPPORT_PROJECTION.json' ||
+      verification.generator !== 'emit_projection_v2.py' || verification.verifier !== 'verify_projection_v3.py' ||
+      verification.verifier_is_independent_of_generator !== true ||
+      verification.clean_projection_admitted !== true || verification.all_mutations_fail_closed !== true ||
+      verification.no_machine_local_path_proven !== true ||
+      !Array.isArray(verification.clean_projection_failures) || verification.clean_projection_failures.length !== 0 ||
+      verification.projection_raw_file_sha256 !== sha256Hex(projectionText) ||
+      verification.projection_canonical_rows_sha256 !== projection.projection_rows_sha256 ||
+      verification.bound_direct_bundle_run_id !== direct.bundle_run_id ||
+      verification.w10_verdict !== 'ADMIT' ||
+      verification.w10_verifier_code_sha256 !== direct.w10_verifier_code_sha256) {
+    fail('targets P2S independent receipt does not admit these exact bytes/bindings');
+  }
+  const mutations = nArr(verification.mutation_tests, 'targets P2S verification.mutation_tests')
+    .map((item, i) => { nObj(item, `targets P2S mutation[${i}]`);
+      exactKeys(item, ['attack', 'rejected'], `targets P2S mutation[${i}]`);
+      if (item.rejected !== true) fail(`targets P2S mutation[${i}] did not fail closed`);
+      return nStr(item.attack, `targets P2S mutation[${i}].attack`); }).sort();
+  if (verification.n_mutations !== P2S_MUTATIONS.length || mutations.length !== P2S_MUTATIONS.length ||
+      mutations.some((name, i) => name !== P2S_MUTATIONS[i])) {
+    fail('targets P2S mutation battery is incomplete or substituted');
+  }
+  if (!HEX64.test(verification.receipt_sha256)) fail('targets P2S receipt self hash is malformed');
+  const receiptBody = { ...verification }; delete receiptBody.receipt_sha256;
+  if (canonicalHash(receiptBody) !== verification.receipt_sha256) {
+    fail('targets P2S receipt self hash does not re-derive');
+  }
+
+  const expectedBundle = `direct/${direct.bundle_run_id}`;
+  const directArm = directProjection.arms?.[adapter.arm_key];
+  const directSibling = directProjection.arms?.[adapter.sibling_arm_key];
+  if (!directArm || !directSibling || directArm.lane !== 'direct' || directSibling.lane !== 'direct' ||
+      directArm.source_bundle !== expectedBundle || directSibling.source_bundle !== expectedBundle ||
+      directProjection.bindings?.native_bundles?.[expectedBundle]?.lane !== 'direct' ||
+      directArm.n_evaluable !== projection.n_targets || directSibling.n_evaluable !== projection.n_targets) {
+    fail('targets P2S sidecar does not bind the exact admitted Direct bundle/arms/count');
+  }
+  return { projection, projectionText, verification, verificationText, sourceBundle: expectedBundle };
+}
+
 /** Accumulate the admitted cross-stage chain ids from each route's derived projection. */
 function collectChain(route, projection, ids, displayReleaseId = null) {
   if (route === 'targets' || route === 'pathways') {
@@ -409,6 +615,11 @@ export function pack(spec) {
     const isStage2 = route === 'targets' || route === 'pathways';
     const compact = isStage2 ? compactStage2Input(routeInput) : null;
     const projection = compact ? compact.projection : deriveCompactProjection(route, native);
+    if (route !== 'targets' && (routeInput.p2s_projection_text !== undefined ||
+        routeInput.p2s_verifier_receipt_text !== undefined)) {
+      fail(`${route} cannot carry the Targets-only P2S secondary sidecar`);
+    }
+    const p2s = route === 'targets' && compact ? p2sSecondaryInput(routeInput, projection) : null;
     validateProjectionEnvelope(route, def, projection);
     collectChain(route, projection, chainIds, compact?.displayReleaseId ?? null);
 
@@ -427,6 +638,7 @@ export function pack(spec) {
     const content_hash = canonicalHash(manifest);
 
     let compact_stage2 = null;
+    let p2s_secondary = null;
     if (compact) {
       const displayReceiptText = JSON.stringify(compact.displayReceipt, null, 2);
       if (STAGE2_RECEIPT_PATH in tree && tree[STAGE2_RECEIPT_PATH] !== displayReceiptText) {
@@ -462,8 +674,28 @@ export function pack(spec) {
         fail(`${route} compact Stage-2 release metadata disagrees across targets/pathways`);
       }
     }
+    if (p2s) {
+      tree[P2S_PROJECTION_PATH] = p2s.projectionText;
+      tree[P2S_VERIFICATION_PATH] = p2s.verificationText;
+      p2s_secondary = {
+        schema_version: P2S_RELEASE_SCHEMA,
+        projection_path: P2S_PROJECTION_PATH,
+        projection_raw_sha256: sha256Hex(p2s.projectionText),
+        projection_canonical_sha256: canonicalHash(p2s.projection),
+        projection_rows_sha256: p2s.projection.projection_rows_sha256,
+        verification_path: P2S_VERIFICATION_PATH,
+        verification_raw_sha256: sha256Hex(p2s.verificationText),
+        verification_canonical_sha256: canonicalHash(p2s.verification),
+        verification_self_sha256: p2s.verification.receipt_sha256,
+        receipt_sha256: p2s.projection.binding.receipt_sha256,
+        p2s_run_sha256: p2s.projection.binding.p2s_run_sha256,
+        arm_key: p2s.projection.adapter.arm_key,
+        sibling_arm_key: p2s.projection.adapter.sibling_arm_key,
+        source_bundle: p2s.sourceBundle,
+      };
+    }
     routes[route] = { manifest_path, content_hash, projection_path: def.projection_path,
-      projection_content_hash, compact_stage2 };
+      projection_content_hash, compact_stage2, p2s_secondary };
   }
 
   // inventory: EVERY emitted file (results-relative), raw-file-bytes sha256, sorted — excludes current.json.
@@ -489,6 +721,14 @@ export function hydrateStage2FileInputs(spec, baseDir, readText = (path) => read
     }
     if (input.display_verifier_receipt === undefined && typeof input.display_verifier_receipt_file === 'string') {
       input.display_verifier_receipt = JSON.parse(readText(resolve(baseDir, input.display_verifier_receipt_file)));
+    }
+    if (route === 'targets' && input.p2s_projection_text === undefined &&
+        typeof input.p2s_projection_file === 'string') {
+      input.p2s_projection_text = readText(resolve(baseDir, input.p2s_projection_file));
+    }
+    if (route === 'targets' && input.p2s_verifier_receipt_text === undefined &&
+        typeof input.p2s_verifier_receipt_file === 'string') {
+      input.p2s_verifier_receipt_text = readText(resolve(baseDir, input.p2s_verifier_receipt_file));
     }
   }
   return spec;

@@ -25,6 +25,17 @@ const COMPACT = {
     receipt_path: 'stage02/display.verify.json', receipt_raw_sha256: 'f'.repeat(64), receipt_canonical_sha256: '1'.repeat(64),
   },
 };
+const P2S = {
+  schema_version: 'spot.ui_p2s_secondary_release.v1',
+  projection_path: 'stage02/p2s_secondary_support.json', projection_raw_sha256: H,
+  projection_canonical_sha256: H, projection_rows_sha256: H,
+  verification_path: 'stage02/p2s_secondary_support.verification.json',
+  verification_raw_sha256: H, verification_canonical_sha256: H,
+  verification_self_sha256: H, receipt_sha256: H, p2s_run_sha256: H,
+  arm_key: 'direct|treg_like|increase|Stim48hr',
+  sibling_arm_key: 'direct|treg_like|decrease|Stim48hr',
+  source_bundle: 'direct/bbc582a9c3096f9a',
+};
 
 describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   it('accepts a valid pointer and preserves route entries', () => {
@@ -107,6 +118,20 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: {
       targets: { ...base, compact_stage2: { ...COMPACT, independent_verifier: { ...COMPACT.independent_verifier, verdict: 'admit' } } },
     } })).toThrow(/fields/);
+  });
+
+  it('admits exact P2S secondary metadata on Targets only and rejects drift', () => {
+    const base = { ...ENTRY, projection_path: 'stage02/release.json',
+      projection_content_hash: H, compact_stage2: COMPACT, p2s_secondary: P2S };
+    const parsed = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1',
+      stage1_binding: BINDING, chain: CHAIN, routes: { targets: base } });
+    expect(parsed.routes.targets?.p2s_secondary?.source_bundle).toBe('direct/bbc582a9c3096f9a');
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1',
+      stage1_binding: BINDING, chain: CHAIN, routes: { pathways: base } })).toThrow(/targets route/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1',
+      stage1_binding: BINDING, chain: CHAIN, routes: { targets: {
+        ...base, p2s_secondary: { ...P2S, overall_rank: 1 },
+      } } })).toThrow(/fields/);
   });
 
   it('rejects different compact release metadata across targets and pathways', () => {

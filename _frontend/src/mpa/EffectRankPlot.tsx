@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import type { CompactEffectRankFacet, CompactTargetRow } from '../domain/compactStage2Projection';
 import { StatePill } from '../shell/chips';
+import type { P2sSecondarySupport } from '../p2s/p2sSecondarySupport';
+import type { P2sSupportView } from '../p2s/types';
 
 interface PlotPoint {
   id: string;
+  armKey: string;
   symbol: string;
   side: 'decrease' | 'increase';
   shift: number;
@@ -18,10 +21,12 @@ const M = { left: 53, right: 18, top: 18, bottom: 43 };
 const plotW = W - M.left - M.right;
 const plotH = H - M.top - M.bottom;
 
-function point(row: CompactTargetRow, side: PlotPoint['side'], nRanked: number): PlotPoint | null {
+function point(row: CompactTargetRow, side: PlotPoint['side'], armKey: string,
+  nRanked: number): PlotPoint | null {
   if (row.arm_value === null || nRanked < 1) return null;
   return {
     id: row.target_id,
+    armKey,
     symbol: row.target_symbol,
     side,
     shift: side === 'increase' ? row.arm_value : -row.arm_value,
@@ -33,8 +38,10 @@ function point(row: CompactTargetRow, side: PlotPoint['side'], nRanked: number):
 
 export function effectRankPoints(facet: CompactEffectRankFacet): PlotPoint[] {
   return [
-    ...facet.decrease.rows.map((row) => point(row, 'decrease', facet.decrease.n_ranked)),
-    ...facet.increase.rows.map((row) => point(row, 'increase', facet.increase.n_ranked)),
+    ...facet.decrease.rows.map((row) => point(row, 'decrease', facet.decrease.arm_key,
+      facet.decrease.n_ranked)),
+    ...facet.increase.rows.map((row) => point(row, 'increase', facet.increase.arm_key,
+      facet.increase.n_ranked)),
   ].filter((p): p is PlotPoint => p !== null);
 }
 
@@ -46,7 +53,19 @@ function hpaUrl(id: string): string | null {
   return /^ENSG\d{11}$/.test(id) ? `https://www.proteinatlas.org/${encodeURIComponent(id)}` : null;
 }
 
-function Tooltip({ point }: { point: PlotPoint | null }) {
+function SecondaryDetail({ support }: { support: P2sSupportView | null }) {
+  if (!support) return null;
+  const lodo = support.robustness.lodoSignConcordance;
+  return <>
+    <span className="text-muted">P2S reconstruction support · secondary/non-gating</span>
+    <span>{support.available && support.coefficient !== null ? `coef ${fmt(support.coefficient)}` : 'unavailable'}</span>
+    <span>reconstruction sign {support.sign}</span>
+    <span>{support.nRuns} runs</span>
+    {lodo !== null && <span>LODO sign {fmt(lodo)} ({support.robustness.nLodo})</span>}
+  </>;
+}
+
+function Tooltip({ point, p2s }: { point: PlotPoint | null; p2s?: P2sSecondarySupport }) {
   if (!point) return <div className="h-12 border-t border-line px-3 py-2" aria-live="polite" />;
   const href = hpaUrl(point.id);
   return (
@@ -57,12 +76,14 @@ function Tooltip({ point }: { point: PlotPoint | null }) {
       <span>{point.side}</span>
       <span>rank {point.rank}/{point.nRanked}</span>
       <span>rank evidence {fmt(point.evidence)}</span>
+      <SecondaryDetail support={p2s?.supportForTarget(point.id, point.armKey) ?? null} />
       {href && <a className="text-accent underline underline-offset-2" href={href} target="_blank" rel="noopener noreferrer">HPA ↗</a>}
     </div>
   );
 }
 
-export function EffectRankPlot({ facet }: { facet: CompactEffectRankFacet }) {
+export function EffectRankPlot({ facet, p2s }: { facet: CompactEffectRankFacet;
+  p2s?: P2sSecondarySupport }) {
   const points = effectRankPoints(facet);
   const [active, setActive] = useState<PlotPoint | null>(null);
   const xMax = Math.max(1e-9, ...points.map((p) => Math.abs(p.shift)));
@@ -114,7 +135,7 @@ export function EffectRankPlot({ facet }: { facet: CompactEffectRankFacet }) {
           })}
         </svg>
       </div>
-      <Tooltip point={active} />
+      <Tooltip point={active} p2s={p2s} />
     </section>
   );
 }

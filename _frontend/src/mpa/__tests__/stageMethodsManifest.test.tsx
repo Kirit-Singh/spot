@@ -433,11 +433,11 @@ describe('CLEAN unbound state — one route status, exactly zero "unavailable" (
     expect(d).toHaveTextContent(/Direct & temporal effects/); // static definition preserved
   });
 
-  it('the "no admitted P2S bundle bound" status appears EXACTLY once, only on Targets (neutral Reference label)', async () => {
+  it('the optional separately-admitted P2S status appears EXACTLY once, only on Targets', async () => {
     const t = await buildStageMethodsManifest('targets');
     render(<ProvenanceDrawer open title="Targets" provenance={null} methods={t} onClose={() => {}} />);
     const td = screen.getByRole('dialog').textContent ?? '';
-    expect((td.match(/no independently admitted P2S bundle is bound/gi) ?? []).length).toBe(1); // stated once (Upstream step)
+    expect((td.match(/Exact run identity is shown only when a separately verified projection is admitted/gi) ?? []).length).toBe(1)
     expect(td).toMatch(/Perturb2State/); // neutral Reference label retains commit/archive/license
     expect(td).not.toMatch(/Perturb2State \(secondary, unadmitted\)/); // no duplicated status in the label
     cleanup();
@@ -445,7 +445,7 @@ describe('CLEAN unbound state — one route status, exactly zero "unavailable" (
       const m = await buildStageMethodsManifest(page);
       render(<ProvenanceDrawer open title={page} provenance={null} methods={m} onClose={() => {}} />);
       const d = screen.getByRole('dialog').textContent ?? '';
-      expect(d).not.toMatch(/Perturb2State|independently admitted P2S bundle/i); // P2S only on Targets
+      expect(d).not.toMatch(/Perturb2State|separately verified projection/i); // P2S only on Targets
       cleanup();
     }
   });

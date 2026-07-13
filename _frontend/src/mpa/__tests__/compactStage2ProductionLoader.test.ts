@@ -86,6 +86,30 @@ describe('compact Stage-2 production loader — all dropdown arrangements', () =
 });
 
 describe('compact Stage-2 production loader — fail-closed attacks', () => {
+  it('returns admitted Direct without waiting for a hung optional P2S sidecar', async () => {
+    const rel = await release();
+    rel.current.routes.targets!.p2s_secondary = {
+      schema_version: 'spot.ui_p2s_secondary_release.v1',
+      projection_path: 'stage02/p2s.json', projection_raw_sha256: H,
+      projection_canonical_sha256: H, projection_rows_sha256: H,
+      verification_path: 'stage02/p2s.verify.json', verification_raw_sha256: H,
+      verification_canonical_sha256: H, verification_self_sha256: H,
+      receipt_sha256: H, p2s_run_sha256: H,
+      arm_key: directArmKey('prog_alpha', 'increase', 'Rest'),
+      sibling_arm_key: directArmKey('prog_alpha', 'decrease', 'Rest'),
+      source_bundle: 'direct/fixture',
+    };
+    const fetchText = (path: string): Promise<string> => path.includes('/p2s')
+      ? new Promise(() => undefined) : rel.fetchText(path);
+    const result = await Promise.race([
+      loadProductionProjection('targets', rel.current, fetchText,
+        selection('within_condition', ['Rest'])),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('P2S blocked Direct')), 100)),
+    ]);
+    expect(stage2View(result)?.geneArmA.lane).toBe('direct');
+    expect(result?.kind === 'stage2' ? result.p2sPending : undefined).toBeInstanceOf(Promise);
+  });
+
   it('rejects changed projection bytes and changed receipt bytes', async () => {
     const rel = await release();
     rel.files['results/stage02/display.json'] += ' ';

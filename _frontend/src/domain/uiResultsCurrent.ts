@@ -9,6 +9,7 @@
 // unbound. A route simply absent from `routes` is unbound (not an error). No fixture, no fake result.
 
 import type { CompactStage2ReleaseMetadata } from './compactStage2Projection';
+import type { P2sSecondaryReleaseMetadata } from '../p2s/types';
 
 export const UI_RESULTS_CURRENT_SCHEMA = 'spot.ui_results_current.v1' as const;
 
@@ -27,6 +28,8 @@ export interface RouteReleaseEntry {
   projection_content_hash: string | null;
   /** Required by the compact Stage-2 targets/pathways routes; absent for Stage 3/4. */
   compact_stage2: CompactStage2ReleaseMetadata | null;
+  /** Optional, independently admitted Perturb2State support; valid only on Targets and never gating. */
+  p2s_secondary: P2sSecondaryReleaseMetadata | null;
 }
 
 /** The Stage-1 release/selection identity the downstream results descend from (fail closed on drift). */
