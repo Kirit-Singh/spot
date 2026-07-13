@@ -43,7 +43,60 @@ FAIL = "fail"
 
 REQUIRED_FILES = ("pathway.json", "pathway_provenance.json")
 
-VERIFIER_ID = "spot.stage02.pathway.verifier.v1"
+VERIFIER_ID = "spot.stage02.pathway.verifier.v2"
+
+# --------------------------------------------------------------------------- #
+# A3 — THE COVERAGE POLICY, REIMPLEMENTED FROM THE WRITTEN SPEC.
+#
+# These constants are NOT imported from ``genesets``. They are the verifier's OWN copy of
+# the frozen rule, held here so this module can DISAGREE with the generator. A verifier
+# that read the generator's thresholds would ratify whatever the generator currently says —
+# including a threshold quietly loosened to make a result rankable, which is precisely the
+# attack the coverage governance exists to stop.
+#
+# The artifact DECLARES the policy it ran under. That declaration is CHECKED against these
+# constants: an artifact that ran under a different rule is refused, whatever it computed.
+#
+#     MIN_SOURCE_COVERAGE    = 0.50   a pathway must retain half the genes it is named for
+#     MIN_ARM_RANKED_MEMBERS = 3      ...and an ARM must actually rank three of them
+#                                     (INCLUSIVE: exactly three is enough)
+# --------------------------------------------------------------------------- #
+SPEC_MIN_SOURCE_COVERAGE = 0.50
+SPEC_MIN_ARM_RANKED_MEMBERS = 3
+SPEC_COVERAGE_POLICY_ID = "spot.stage02.pathway.coverage_governance.prospective.v2"
+
+RANKABLE = "rankable"
+LOW_COVERAGE = "descriptive_only_low_source_coverage"
+UNKNOWN_COVERAGE = "descriptive_only_source_coverage_unknown"
+THIN_ARM = "descriptive_only_thin_arm"
+UNDEFINED = "undefined"
+
+FLOAT_TOL = 1e-6
+
+
+def _global_disposition(target_source_coverage):
+    """The GLOBAL rule, re-derived. Necessary for a headline arm result, never sufficient."""
+    if target_source_coverage is None:
+        return UNKNOWN_COVERAGE, False
+    if target_source_coverage >= SPEC_MIN_SOURCE_COVERAGE:
+        return RANKABLE, True
+    return LOW_COVERAGE, False
+
+
+def _arm_disposition(global_passed, n_hits, enrichment_value):
+    """The PER-ARM rule, re-derived. Inclusive at the boundary."""
+    defined = enrichment_value is not None
+    thick = n_hits >= SPEC_MIN_ARM_RANKED_MEMBERS
+    passed = bool(global_passed) and thick and defined
+    if not defined:
+        return UNDEFINED, passed
+    if global_passed is None:
+        return UNKNOWN_COVERAGE, passed
+    if not global_passed:
+        return LOW_COVERAGE, passed
+    if not thick:
+        return THIN_ARM, passed
+    return RANKABLE, passed
 
 
 def _check(name: str, ok: bool, detail: str = "") -> dict[str, Any]:
@@ -196,6 +249,78 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
                            f"does not follow the sign of {e['enrichment_value']}")
     checks.append(_check("a_defined_enrichment_always_names_a_non_empty_edge", not bad,
                          "; ".join(bad[:5])))
+
+    # ---- 5b. A3: THE COVERAGE ARITHMETIC AND PER-ARM ELIGIBILITY, RE-DERIVED ----
+    # From the shipped bytes, against the verifier's OWN copy of the frozen policy. The
+    # generator's thresholds are not consulted — they are CHECKED.
+    method = doc["method"]
+    declared = (method.get("coverage_policy_id"), method.get("min_source_coverage"),
+                method.get("min_arm_ranked_members"))
+    frozen = (SPEC_COVERAGE_POLICY_ID, SPEC_MIN_SOURCE_COVERAGE,
+              SPEC_MIN_ARM_RANKED_MEMBERS)
+    checks.append(_check(
+        "the_artifact_ran_under_the_FROZEN_coverage_policy", declared == frozen,
+        f"artifact declares {declared}; the frozen policy is {frozen} — a threshold "
+        "loosened after the fact is the attack this governance exists to stop"))
+    checks.append(_check(
+        "arm_eligibility_is_independent_and_never_combined",
+        method.get("arm_eligibility_is_independent_per_arm") is True
+        and method.get("combined_arm_eligibility_permitted") is False))
+
+    bad = []
+    for r in records:
+        sid = r["set_id"]
+        n_src = r.get("n_source_symbols")
+        n_tgt = r["n_genes_in_target_universe"]
+
+        # (i) the GLOBAL coverage arithmetic
+        want_cov = (round(n_tgt / n_src, 6) if n_src else None)
+        got_cov = r.get("target_source_coverage")
+        if (want_cov is None) != (got_cov is None) or (
+                want_cov is not None and abs(got_cov - want_cov) > FLOAT_TOL):
+            bad.append(f"{sid}: target_source_coverage {got_cov} != {n_tgt}/{n_src}")
+
+        # (ii) the GLOBAL disposition
+        want_disp, want_passed = _global_disposition(got_cov)
+        if r["global_coverage_disposition"] != want_disp:
+            bad.append(f"{sid}: global disposition {r['global_coverage_disposition']} != "
+                       f"{want_disp} for coverage {got_cov}")
+        if bool(r["global_coverage_policy_passed"]) != want_passed:
+            bad.append(f"{sid}: global_coverage_policy_passed "
+                       f"{r['global_coverage_policy_passed']} != {want_passed}")
+
+        # (iii) the PER-ARM arithmetic and eligibility. The arms are INDEPENDENT.
+        for arm, e in r["enrichment"].items():
+            n_hits = e["n_hits_in_ranking"]
+            want_ac = (round(n_hits / n_src, 6) if n_src else None)
+            got_ac = e["arm_evaluable_source_coverage"]
+            if (want_ac is None) != (got_ac is None) or (
+                    want_ac is not None and abs(got_ac - want_ac) > FLOAT_TOL):
+                bad.append(f"{sid}/{arm}: arm_evaluable_source_coverage {got_ac} != "
+                           f"{n_hits}/{n_src}")
+
+            want_ad, want_rank = _arm_disposition(want_passed, n_hits,
+                                                  e["enrichment_value"])
+            if e["arm_coverage_disposition"] != want_ad:
+                bad.append(f"{sid}/{arm}: arm disposition "
+                           f"{e['arm_coverage_disposition']} != {want_ad}")
+            if bool(e["arm_headline_rankable"]) != want_rank:
+                bad.append(f"{sid}/{arm}: arm_headline_rankable "
+                           f"{e['arm_headline_rankable']} != {want_rank} "
+                           f"(global_passed={want_passed}, n_hits={n_hits}, "
+                           f"defined={e['enrichment_value'] is not None})")
+
+            # (iv) RECORD <-> ARM agreement. An arm may not be ranked on a global verdict
+            # the record itself does not carry.
+            if e["global_target_source_coverage"] != got_cov:
+                bad.append(f"{sid}/{arm}: the arm block's global coverage "
+                           f"{e['global_target_source_coverage']} disagrees with the "
+                           f"record's {got_cov}")
+            if e["arm_headline_rankable"] and not r["global_coverage_policy_passed"]:
+                bad.append(f"{sid}/{arm}: headline-rankable while the RECORD says the "
+                           "global coverage policy did not pass")
+    checks.append(_check("coverage_and_per_arm_eligibility_rederive_from_the_record",
+                         not bad, "; ".join(bad[:5])))
 
     # ---- 6. the two evidence lines are side by side, NEVER fused ----
     checks.append(_check(
