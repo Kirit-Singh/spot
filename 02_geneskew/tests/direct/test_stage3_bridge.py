@@ -50,13 +50,16 @@ def _native_temporal(root, value=0.5):
                    "base_records": [{"base_key": "PRG-1|ENSG00000111111",
                                      "target_id": "ENSG00000111111",
                                      "target_id_namespace": "ensembl_gene_id",
-                                     "target_symbol": "SYM", "target_ensembl":
-                                     "ENSG00000111111",
+                                     "target_symbol": "SYM",
+                                     "target_ensembl": "ENSG00000111111",
                                      "perturbation_modality": "CRISPRi_knockdown"}]}, fh)
     with open(os.path.join(d, "rankings", "PRG-1__increase.json"), "w") as fh:
-        json.dump({"records": [{"target_id": "ENSG00000111111",
+        # THE NATIVE TEMPORAL SHAPE: arm_key ONCE, at the top of the document. The ranked
+        # records do NOT repeat it.
+        json.dump({"arm_key": ARM,
+                   "records": [{"target_id": "ENSG00000111111",
                                 "base_key": "PRG-1|ENSG00000111111",
-                                "arm_key": ARM, "arm_value": value,
+                                "arm_value": value,
                                 "evaluable": True, "rank": 1}]}, fh)
     return d
 
@@ -212,8 +215,9 @@ class TestTheRECONSTRUCTION:
                                            contexts=[]))
         # somebody edits the ADMITTED ranking afterwards
         with open(os.path.join(d, "rankings", "PRG-1__increase.json"), "w") as fh:
-            json.dump({"records": [{"target_id": "ENSG00000111111",
-                                    "base_key": "PRG-1|ENSG00000111111", "arm_key": ARM,
+            json.dump({"arm_key": ARM,
+                       "records": [{"target_id": "ENSG00000111111",
+                                    "base_key": "PRG-1|ENSG00000111111",
                                     "arm_value": -0.5, "evaluable": True, "rank": 1}]}, fh)
 
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
@@ -225,20 +229,41 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
     """YOUR SECOND ATTACK. The contexts were ignored entirely, so this was admitted."""
 
     def _pathway(self, root):
+        # a Direct bundle MUST be present: target_identity.json is where a leading-edge gene's
+        # namespace comes from, and a pathway that cannot resolve its leading edge cannot hand
+        # Stage 3 a gene to look a drug up against.
+        _native_direct(root)
         d = os.path.join(root, "pathway", "Stim48hr__GO-BP")
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
             json.dump({"schema_version": "spot.stage02_pathway_arm_bundle.v1",
                        "pathway_run_id": "P-1", "condition": "Stim48hr", "source": "GO-BP",
-                       "records": [{"pathway_arm_key":
-                                    "pathway|PRG-1|increase|condition=Stim48hr",
-                                    "set_id": "GO:0006955", "enrichment_value": 2.4,
-                                    "leading_edge": ["ENSG00000111111"]}]}, fh)
+                       "bindings": {"gene_set_membership": {"sha256": "m" * 64}},
+                   # THE NATIVE PATHWAY RECORD (pathway_arms.enrichment_arms): the coverage is
+                   # `target_source_coverage`, NOT `coverage`.
+                   "records": [{"pathway_arm_key":
+                                "pathway|PRG-1|increase|condition=Stim48hr",
+                                "direct_arm_key": DARM, "program_id": "PRG-1",
+                                "desired_change": "increase", "condition": "Stim48hr",
+                                "source": "GO-BP", "set_id": "GO:0006955",
+                                "target_source_coverage": 0.75,
+                                "convergence_ref": "conv|Stim48hr|GO-BP",
+                                "enrichment_value": 2.4,
+                                "leading_edge": ["ENSG00000111111"]}]}, fh)
         return d
 
     def _bind(self, root, d):
         rel = os.path.relpath(d, root).replace(os.sep, "/")
-        b = {"native_bundles": {rel: {
+        dd = os.path.join(root, "direct", "Stim48hr")
+        drel = os.path.relpath(dd, root).replace(os.sep, "/")
+        from direct import target_identity as TI
+        b = {"native_bundles": {
+             drel: {"lane": "direct", "bundle_id": "D-1",
+                    "context": {"condition": "Stim48hr"},
+                    "identity_source": {"kind": "identity_artifact",
+                                        "file": TI.TARGET_IDENTITY_FILE},
+                    "files": {}},
+             rel: {
                 "lane": "pathway", "bundle_id": "P-1",
                 "context": {"condition": "Stim48hr", "gene_set_source": "GO-BP"},
                 "files": {"arm_bundle.json": _sha(os.path.join(d, "arm_bundle.json"))}}},
@@ -252,13 +277,14 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
     def _ctx(self, d):
         rec = json.load(open(os.path.join(d, "arm_bundle.json")))["records"][0]
         return S.pathway_context(arm_key=rec["pathway_arm_key"], program_id="PRG-1", record=rec,
-                                 context={"condition": "Stim48hr"}, namespace_of=UNIVERSE)
+                                 context={"condition": "Stim48hr"}, namespace_of=UNIVERSE,
+                                 source_artifact={"sha256": "m" * 64})
 
     def test_an_HONEST_pathway_context_is_ADMITTED(self, tmp_path):
         root = str(tmp_path)
         d = self._pathway(root)
-        _write_bridge(root, B.build_bridge(bindings=self._bind(root, d), rows=[],
-                                           contexts=[self._ctx(d)]))
+        _write_bridge(root, B.build_bridge(bindings=self._bind(root, d),
+                                           rows=_direct_rows(), contexts=[self._ctx(d)]))
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
         assert report["verdict"] == "admit", report["failures"]
 
@@ -272,8 +298,8 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
         ctx["may_be_matched_to_a_drug_as_a_target"] = True
         ctx["arm_value"] = 99
         ctx["desired_target_modulation"] = "decrease"
-        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d), rows=[],
-                                                   contexts=[ctx])))
+        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d),
+                                                   rows=_direct_rows(), contexts=[ctx])))
 
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
         assert report["verdict"] == "reject"
@@ -286,8 +312,8 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
         d = self._pathway(root)
         ctx = self._ctx(d)
         ctx["enrichment_value"] = 99.0
-        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d), rows=[],
-                                                   contexts=[ctx])))
+        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d),
+                                                   rows=_direct_rows(), contexts=[ctx])))
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
         assert report["verdict"] == "reject"
         assert any(V.G_CTX_RECONSTRUCTED in f for f in report["failures"])
@@ -297,8 +323,8 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
         d = self._pathway(root)
         ctx = self._ctx(d)
         ctx["gene_set_id"] = "GO:9999999"
-        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d), rows=[],
-                                                   contexts=[ctx])))
+        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d),
+                                                   rows=_direct_rows(), contexts=[ctx])))
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
         assert report["verdict"] == "reject"
         assert any("no such (arm, gene set)" in f for f in report["failures"])
@@ -309,8 +335,8 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
         ctx = self._ctx(d)
         ctx["leading_edge"][0]["joinable"] = False
         # non-joinable, yet still carrying a namespace: sniffed, not resolved
-        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d), rows=[],
-                                                   contexts=[ctx])))
+        _write_bridge(root, _reseal(B.build_bridge(bindings=self._bind(root, d),
+                                                   rows=_direct_rows(), contexts=[ctx])))
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
         assert report["verdict"] == "reject"
         assert any(V.G_CTX_RECONSTRUCTED in f for f in report["failures"])
@@ -528,8 +554,15 @@ def _admitted_release(tmp_path, direct_value=0.5):
     with open(os.path.join(p, "arm_bundle.json"), "w") as fh:
         json.dump({"schema_version": "spot.stage02_pathway_arm_bundle.v1",
                    "pathway_run_id": "P-1", "condition": "Stim48hr", "source": "GO-BP",
+                   "bindings": {"gene_set_membership": {"sha256": "m" * 64}},
+                   # the NATIVE record: `target_source_coverage`, not `coverage`
                    "records": [{"pathway_arm_key": "pathway|PRG-1|increase|condition=Stim48hr",
-                                "set_id": "GO:0006955", "enrichment_value": 2.4,
+                                "direct_arm_key": DARM, "program_id": "PRG-1",
+                                "desired_change": "increase", "condition": "Stim48hr",
+                                "source": "GO-BP", "set_id": "GO:0006955",
+                                "target_source_coverage": 0.75,
+                                "convergence_ref": "conv|Stim48hr|GO-BP",
+                                "enrichment_value": 2.4,
                                 "leading_edge": ["ENSG00000111111"]}]}, fh)
 
     # Direct's rows live in arms.parquet — there is no rankings/ dir on this lane
@@ -814,3 +847,262 @@ class TestTheRECEIPTIsAReferentLikeAnyOther:
         rec = json.load(open(os.path.join(bridge, BB.RECEIPT_REPORT_FILE)))
         assert rec["verdict"] == "admit"
         assert rec["generator_is_not_verifier"] is True
+
+
+class TestTheWHOLEROWIsTheContract:
+    """Selective comparison leaks by construction — it only catches the fields somebody listed.
+
+    Independent replay walked straight through the gaps: target_symbol, target_ensembl,
+    program_id and context.condition were ALL admitted after a reseal. Adding four names would
+    only move the hole. So the rebuilt row IS the contract: every key, every value, nothing
+    extra, nothing missing.
+    """
+
+    def _forge(self, tmp_path, mutate):
+        from direct import stage3_bridge as BB
+        root, d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+        path = os.path.join(bridge, BB.BRIDGE_FILE)
+        doc = json.load(open(path))
+        mutate(doc["target_rows"][0])
+        with open(path, "w") as fh:
+            json.dump(_reseal(doc), fh)
+        return V.verify(bridge, bundles_root=root)
+
+    @pytest.mark.parametrize("field,value", [
+        ("target_symbol", "WRONG_GENE"),
+        ("target_ensembl", "ENSG00000999999"),
+        ("target_id_namespace", "gene_symbol"),
+        ("program_id", "PRG-OTHER"),
+        ("observed_perturbation_modality", "CRISPRa_activation"),
+        ("perturbation_target_effect", "target_transcript_increased"),
+        ("phenocopy_claim", "equivalence"),
+        ("rank", 99),
+    ])
+    def test_a_RESEALED_row_with_an_ALTERED_field_is_REFUSED(self, tmp_path, field, value):
+        report = self._forge(tmp_path, lambda r: r.__setitem__(field, value))
+        assert report["verdict"] == "reject"
+        assert any(V.G_RECONSTRUCTED in f and field in f for f in report["failures"])
+
+    def test_a_RESEALED_row_with_an_ALTERED_CONTEXT_is_REFUSED(self, tmp_path):
+        report = self._forge(tmp_path,
+                             lambda r: r.__setitem__("context", {"condition": "Rest"}))
+        assert report["verdict"] == "reject"
+        assert any(V.G_RECONSTRUCTED in f and "context" in f for f in report["failures"])
+
+    def test_an_EXTRA_field_is_REFUSED(self, tmp_path):
+        """A row may not add facts of its own — including a p-value."""
+        report = self._forge(tmp_path, lambda r: r.__setitem__("p_value", 0.001))
+        assert report["verdict"] == "reject"
+        assert any("may not add facts of its own" in f for f in report["failures"])
+
+    def test_a_MISSING_field_is_REFUSED(self, tmp_path):
+        report = self._forge(tmp_path, lambda r: r.pop("target_ensembl"))
+        assert report["verdict"] == "reject"
+        assert any(V.G_RECONSTRUCTED in f and "missing" in f for f in report["failures"])
+
+
+class TestThePATHWAYProvenanceREBUILDS:
+    def test_a_native_0_75_coverage_stays_0_75(self, tmp_path):
+        """The native field is `target_source_coverage`. A `.get("coverage")` against these
+        bytes returns None on every record, forever, and nothing would ever say so."""
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        ctx = json.load(open(os.path.join(bridge, BB.BRIDGE_FILE)))["pathway_contexts"][0]
+        assert ctx["target_source_coverage"] == 0.75
+        assert ctx["convergence_ref"] == "conv|Stim48hr|GO-BP"
+        assert ctx["source"] == "GO-BP"
+        assert "coverage" not in ctx          # the name I invented is gone
+
+    @pytest.mark.parametrize("field,value", [
+        ("target_source_coverage", 0.99),
+        ("convergence_ref", "conv|Rest|Reactome"),
+        ("source", "Reactome"),
+        ("enrichment_value", 99.0),
+    ])
+    def test_MISMATCHED_context_provenance_is_REFUSED(self, tmp_path, field, value):
+        """A resealed context with a fabricated coverage, convergence_ref or source was
+        admitted: only enrichment_value was ever compared."""
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        path = os.path.join(bridge, BB.BRIDGE_FILE)
+        doc = json.load(open(path))
+        doc["pathway_contexts"][0][field] = value
+        with open(path, "w") as fh:
+            json.dump(_reseal(doc), fh)
+
+        report = V.verify(bridge, bundles_root=root)
+        assert report["verdict"] == "reject"
+        assert any(V.G_CTX_RECONSTRUCTED in f and field in f for f in report["failures"])
+
+    def test_a_LEADING_EDGE_namespace_SWAPPED_from_ENSG_to_symbol_is_REFUSED(self, tmp_path):
+        """It is a valid enum value. It is not THIS target's namespace — and a leading-edge
+        gene whose namespace disagrees with its target record is a DIFFERENT GENE."""
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        path = os.path.join(bridge, BB.BRIDGE_FILE)
+        doc = json.load(open(path))
+        le = doc["pathway_contexts"][0]["leading_edge"][0]
+        assert le["target_id_namespace"] == "ensembl_gene_id"
+        le["target_id_namespace"] = "gene_symbol"          # a valid enum; the wrong gene
+        with open(path, "w") as fh:
+            json.dump(_reseal(doc), fh)
+
+        report = V.verify(bridge, bundles_root=root)
+        assert report["verdict"] == "reject"
+        assert any("target_identity.json says" in f for f in report["failures"])
+
+
+class TestNaNNeverReachesTheBridge:
+    """A non-evaluable Direct row carries a NULL value and a NULL rank — the row that says
+    'this arm could not score this target'. Through parquet those come back as float('nan'),
+    and then json writes the literal `NaN` (not JSON) and NaN != NaN makes the row unequal to
+    its own rebuild. The row is REAL and it must bridge cleanly."""
+
+    def test_a_NON_EVALUABLE_row_round_trips_through_parquet_with_NO_NaN_BYTES(self, tmp_path):
+        import pandas as pd
+        from direct import stage3_bridge as BB
+        root, d, _p = _admitted_release(tmp_path)
+
+        # the producer-style unrankable row: evaluable=False, value and rank NULL
+        pd.DataFrame([
+            {"arm_key": DARM, "program_id": "PRG-1", "desired_change": "increase",
+             "condition": "Stim48hr", "target_id": "ENSG00000111111",
+             "value": 0.5, "rank": 1, "evaluable": True},
+            {"arm_key": DARM, "program_id": "PRG-1", "desired_change": "increase",
+             "condition": "Stim48hr", "target_id": "OCLM",
+             "value": None, "rank": None, "evaluable": False},
+        ]).to_parquet(os.path.join(d, "arms.parquet"))
+
+        # ...and OCLM must be in target_identity.json, or it would drop out of the join
+        from direct import target_identity as TI
+        ip = os.path.join(d, TI.TARGET_IDENTITY_FILE)
+        idoc = json.load(open(ip))
+        idoc["records"].append({
+            "target_id": "OCLM", "target_id_namespace": "gene_symbol",
+            "target_symbol": "OCLM", "target_ensembl": None,
+            "observed_perturbation_modality": TI.OBSERVED_PERTURBATION_MODALITY})
+        idoc["n_targets"] = 2
+        idoc["n_gene_symbol"] = 1
+        with open(ip, "w") as fh:
+            json.dump(idoc, fh)
+
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        raw = open(os.path.join(bridge, BB.BRIDGE_FILE)).read()
+        assert "NaN" not in raw and "Infinity" not in raw     # not JSON, and not a number
+
+        rows = {r["target_id"]: r for r in json.loads(raw)["target_rows"]}
+        unrankable = rows["OCLM"]
+        assert unrankable["arm_value"] is None      # NULL — never a NaN, and never a zero
+        assert unrankable["rank"] is None
+        assert unrankable["evaluable"] is False
+        assert unrankable["desired_target_modulation"] == "not_evaluated"
+        assert unrankable["phenocopy_class"] == "not_evaluable"
+        # ...and the row is RETAINED: a dropped row and a row that never existed look the same
+        assert len(rows) == 2
+
+        report = json.load(open(os.path.join(bridge, BB.BRIDGE_REPORT_FILE)))
+        assert report["verdict"] == "admit", report["failures"]
+
+
+class TestTheSTALEREPORTAttack:
+    """An ADMIT report proves nothing unless it says WHICH BYTES it judged.
+
+    The attack: change the bridge, reseal it, update the receipt's bridge hashes to match the
+    new bytes, and leave the earlier ADMIT report untouched. Every hash in the chain agrees
+    with itself. The receipt admits — and a fresh bridge verification REJECTS. The report was
+    a verdict on bytes that no longer exist.
+    """
+
+    def test_the_report_says_WHICH_bridge_bytes_it_judged(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        report = json.load(open(os.path.join(bridge, BB.BRIDGE_REPORT_FILE)))
+        assert report["judged_bridge"]["raw_sha256"] == _sha(
+            os.path.join(bridge, BB.BRIDGE_FILE))
+
+    def test_a_STALE_ADMIT_report_over_NEW_bridge_bytes_is_REFUSED(self, tmp_path):
+        import hashlib
+
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        # (1) forge the bridge and reseal it
+        bpath = os.path.join(bridge, BB.BRIDGE_FILE)
+        doc = json.load(open(bpath))
+        doc["target_rows"][0]["arm_value"] = -0.5
+        doc["target_rows"][0]["desired_target_modulation"] = "increase"
+        doc["target_rows"][0]["phenocopy_class"] = "inhibitor_opposed"
+        with open(bpath, "w") as fh:
+            json.dump(_reseal(doc), fh)
+
+        # (2) point the receipt at the NEW bridge bytes, honestly, and reseal it.
+        #     The earlier ADMIT report is left EXACTLY as it was.
+        recp = os.path.join(bridge, BB.RECEIPT_FILE)
+        rec = json.load(open(recp))
+        rec["bridge"]["raw_sha256"] = _sha(bpath)
+        rec["bridge"]["canonical_sha256"] = hashlib.sha256(json.dumps(
+            json.load(open(bpath)), sort_keys=True, separators=(",", ":"),
+            ensure_ascii=True).encode()).hexdigest()
+        rec.pop("receipt_sha256")
+        rec["receipt_sha256"] = hashlib.sha256(json.dumps(
+            rec, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=True).encode()).hexdigest()
+        with open(recp, "w") as fh:
+            json.dump(rec, fh)
+
+        # every hash agrees with itself — and the receipt must still refuse
+        out = V.verify_receipt(bridge, bundles_root=root)
+        assert out["verdict"] == "reject"
+        assert any(V.G_RECEIPT_STALE in f for f in out["failures"])
+        # BOTH proofs fire: the report names other bytes, AND a fresh verification rejects
+        assert any("verdict on different bytes" in f for f in out["failures"])
+        assert any("no longer verifies" in f for f in out["failures"])
+
+    def test_a_report_that_names_NO_bridge_bytes_is_REFUSED(self, tmp_path):
+        import hashlib
+
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        rpath = os.path.join(bridge, BB.BRIDGE_REPORT_FILE)
+        report = json.load(open(rpath))
+        del report["judged_bridge"]                     # an admission that names no artifact
+        with open(rpath, "w") as fh:
+            json.dump(report, fh, indent=2, sort_keys=True)
+
+        recp = os.path.join(bridge, BB.RECEIPT_FILE)
+        rec = json.load(open(recp))
+        rec["bridge_report"]["raw_sha256"] = _sha(rpath)
+        rec["bridge_report"]["canonical_sha256"] = hashlib.sha256(json.dumps(
+            json.load(open(rpath)), sort_keys=True, separators=(",", ":"),
+            ensure_ascii=True).encode()).hexdigest()
+        rec.pop("receipt_sha256")
+        rec["receipt_sha256"] = hashlib.sha256(json.dumps(
+            rec, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=True).encode()).hexdigest()
+        with open(recp, "w") as fh:
+            json.dump(rec, fh)
+
+        out = V.verify_receipt(bridge, bundles_root=root)
+        assert out["verdict"] == "reject"
+        assert any("can be moved onto any" in f for f in out["failures"])

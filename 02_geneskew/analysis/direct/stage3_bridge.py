@@ -107,6 +107,38 @@ class BridgeError(ValueError):
     """The bridge cannot be built. Refuse; never repair."""
 
 
+def jsonable(value):
+    """pandas NaN/NA -> JSON null. A NaN is not a number, and it is not equal to itself.
+
+    A non-evaluable Direct row carries a NULL value and a NULL rank — the row that says "this
+    arm could not score this target", which a consumer must never mistake for a zero. Round-
+    tripped through parquet those nulls come back as float('nan'), and then `json.dump` writes
+    the literal `NaN` (which is not JSON) and `NaN != NaN` makes the row unequal to its own
+    rebuild. So they are normalized here, once, at the seam where parquet becomes JSON.
+    """
+    import math
+    if value is None:
+        return None
+    if hasattr(value, "item"):                  # numpy scalar -> python scalar
+        try:
+            value = value.item()
+        except (AttributeError, ValueError):
+            return value
+    if isinstance(value, float):
+        if math.isnan(value):
+            return None
+        if math.isinf(value):
+            raise BridgeError(f"an infinite value ({value!r}) is not a measurement")
+    return value
+
+
+def _dump(doc, path):
+    """JSON with NO NaN. `allow_nan=False` REFUSES rather than writing invalid JSON."""
+    import json
+    with open(path, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True, allow_nan=False)
+
+
 def _raw(path):
     import hashlib
     with open(path, "rb") as fh:
@@ -204,6 +236,7 @@ def _direct_rows(bundle_dir: str, context: dict) -> list:
 
     out = []
     for rec in pd.read_parquet(path).to_dict("records"):
+        rec = {k: jsonable(v) for k, v in rec.items()}     # NaN -> null, at the parquet seam
         ident = identity.get(str(rec.get("target_id")))
         if ident is None:
             raise BridgeError(
@@ -235,13 +268,19 @@ def _temporal_rows(bundle_dir: str, context: dict) -> list:
             continue
         with open(os.path.join(rdir, fname)) as fh:
             doc = json.load(fh)
+        # THE ARM KEY IS STORED ONCE, AT THE TOP OF THE RANKING DOCUMENT. The ranked records
+        # do NOT repeat it — reading `rec["arm_key"]` KeyErrors on every real temporal bundle.
+        arm_key = str(doc.get("arm_key") or "")
+        if not arm_key:
+            raise BridgeError(
+                f"{bundle_dir}/{fname}: the ranking document carries no arm_key. Temporal "
+                "stores it ONCE at the top level; its records do not repeat it")
         for rec in (doc.get("records") or doc.get("ranked") or []):
             base = bases.get(str(rec.get("base_key")))
             if base is None:
                 raise BridgeError(
                     f"{bundle_dir}: arm record for {rec.get('target_id')!r} joins base_key "
                     f"{rec.get('base_key')!r}, which no base_record carries")
-            arm_key = str(rec["arm_key"])
             out.append(R.build_row(
                 lane="temporal", record=rec, identity=base, arm_key=arm_key,
                 program_id=arm_key.split("|")[1],
@@ -262,14 +301,12 @@ def _pathway_contexts(bundle_dir: str, context: dict, namespace_of: dict) -> lis
         out.append(R.pathway_context(
             arm_key=arm_key, program_id=arm_key.split("|")[1] if "|" in arm_key else "",
             record=rec, context=context, namespace_of=namespace_of,
-            source=context.get("gene_set_source"), coverage=rec.get("coverage"),
-            convergence_ref=rec.get("convergence_ref")))
+            source_artifact=(bundle.get("bindings") or {}).get("gene_set_membership")))
     return out
 
 
 def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
     """Build the bridge from the ADMITTED release. Writes ONLY into ``bridge_root``."""
-    import json
     import os
 
     from . import bundle_shapes as BS
@@ -322,8 +359,7 @@ def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
         rows=rows, contexts=contexts)
 
     os.makedirs(bridge_root, exist_ok=True)
-    with open(os.path.join(bridge_root, BRIDGE_FILE), "w") as fh:
-        json.dump(doc, fh, indent=2, sort_keys=True)
+    _dump(doc, os.path.join(bridge_root, BRIDGE_FILE))     # allow_nan=False: no NaN bytes
     return doc
 
 
@@ -396,8 +432,7 @@ def main(argv=None) -> int:
     report_binding, _ = _bind_file(report_path)
     rec = receipt(aggregate=doc["bindings"]["aggregate"], bridge_binding=bridge_binding,
                   report_binding=report_binding)
-    with open(os.path.join(args.bridge_root, RECEIPT_FILE), "w") as fh:
-        json.dump(rec, fh, indent=2, sort_keys=True)
+    _dump(rec, os.path.join(args.bridge_root, RECEIPT_FILE))
 
     # ...and the SEPARATE verifier re-derives the receipt it did not write. Stage 3 gates on
     # this file, so it is a referent like any other: a receipt nobody checked is a claim.

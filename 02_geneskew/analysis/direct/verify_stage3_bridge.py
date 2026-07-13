@@ -91,6 +91,7 @@ G_RECEIPT_SELF_HASH = "the_receipt_hashes_to_what_it_says_it_does"
 G_RECEIPT_BINDS = "every_artifact_the_receipt_names_is_on_disk_with_exactly_the_bound_bytes"
 G_RECEIPT_ADMITTED = "the_bridge_report_the_receipt_names_actually_ADMITS_the_bridge"
 G_RECEIPT_RESEALED = "the_receipt_names_the_aggregate_that_was_actually_admitted"
+G_RECEIPT_STALE = "the_bridge_report_judged_exactly_the_bridge_bytes_being_handed_to_stage3"
 
 G_SELF_HASH = "the_bridge_hashes_to_what_it_says_it_does"
 G_BINDINGS = "the_bridge_binds_the_admitted_native_bytes_it_was_built_from"
@@ -109,9 +110,10 @@ G_ROW_FIREWALL = "a_typed_row_carries_only_contract_fields"
 # EXACTLY what a pathway context may carry, and exactly what it may never carry.
 CTX_ALLOWED = frozenset({
     "schema_version", "lane", "arm_key", "program_id", "context", "gene_set_id",
-    "native_set_id_field", "source", "enrichment_value", "coverage", "convergence_ref",
-    "leading_edge", "n_leading_edge", "n_leading_edge_joinable",
-    "is_a_crispri_target_row", "may_be_matched_to_a_drug_as_a_target", "links_to_targets_via",
+    "native_set_id_field", "source", "source_artifact", "enrichment_value",
+    "target_source_coverage", "convergence_ref", "leading_edge", "n_leading_edge",
+    "n_leading_edge_joinable", "is_a_crispri_target_row",
+    "may_be_matched_to_a_drug_as_a_target", "links_to_targets_via",
 })
 CTX_FORBIDDEN = frozenset({
     "arm_value", "desired_target_modulation", "phenocopy_class", "evaluable", "rank",
@@ -134,6 +136,44 @@ def _sha256(path: str) -> str:
 def _canon(obj: Any) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":"),
                                      ensure_ascii=True).encode()).hexdigest()
+
+
+G_NON_FINITE = "a_value_that_is_not_a_finite_number_and_not_null"
+
+
+def _jsonable(value: Any) -> Any:
+    """pandas NaN/NA -> JSON null. A NaN is not a number and it is not equal to itself.
+
+    A non-evaluable Direct row carries a null value and a null rank. Round-tripped through
+    parquet those come back as float('nan'), and then: `json.dump` writes the literal `NaN`
+    (which is not JSON), and `NaN != NaN`, so the row can never equal its own rebuild. The
+    row is REAL and it must bridge cleanly — it is the row that says "this arm could not
+    score this target", which is exactly the row a consumer must not mistake for a zero.
+    """
+    if value is None:
+        return None
+    if isinstance(value, float):
+        return None if value != value else value          # NaN is the only x with x != x
+    try:
+        import math
+        if hasattr(value, "item"):                        # numpy scalar
+            value = value.item()
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            return None if math.isnan(value) else value
+    except (TypeError, ValueError):
+        return value
+    return value
+
+
+def _finite_violations(where: str, row: dict) -> list:
+    """A non-finite number is never evidence. inf is refused; NaN must have been nulled."""
+    import math
+    bad = []
+    for field, value in row.items():
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            bad.append(f"{G_NON_FINITE}: {where}: {field}={value!r}. A NaN or an infinity is "
+                       "not a measurement; an unrankable target carries NULL, not a NaN")
+    return bad
 
 
 def _row_key(row: dict) -> tuple:
@@ -200,13 +240,15 @@ def verify(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
                 f"{G_ORPHAN_ROW}: {key}: the admitted native bytes produce no such row. It "
                 "agrees with itself, and with nothing that was measured")
             continue
-        for field in ("arm_value", "evaluable", "rank", "target_id_namespace",
-                      "observed_perturbation_modality", "desired_target_modulation",
-                      "phenocopy_class", "program_effect_direction"):
-            if row.get(field) != want.get(field):
-                failures.append(
-                    f"{G_RECONSTRUCTED}: {key}: {field}={row.get(field)!r}; rebuilt from the "
-                    f"admitted native bytes it is {want.get(field)!r}")
+        # THE WHOLE ROW, EXACTLY. Not a hand-picked list of fields.
+        #
+        # A SELECTIVE comparison leaks by construction: it can only ever catch the fields
+        # somebody remembered to list. Independent replay walked straight through the gaps —
+        # target_symbol, target_ensembl, program_id and context.condition were all admitted
+        # after a reseal, because none of them was on the list. Adding four more names would
+        # just move the hole. So the rebuilt row IS the contract: every key, every value,
+        # nothing extra, nothing missing.
+        failures += _diff_row(key, shipped=row, rebuilt=want)
     for key in rebuilt:
         if key not in shipped:
             failures.append(f"{G_RECONSTRUCTED}: {key}: the native bytes produce this row and "
@@ -220,7 +262,16 @@ def verify(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
 
     # (5) THE PATHWAY CONTEXTS — which the previous verifier did not read AT ALL.
     contexts = doc.get("pathway_contexts") or []
-    failures += _verify_contexts(contexts, sources, bundles_root)
+    # the CANONICAL namespaces, from every Direct bundle's target_identity.json — the same
+    # declared identity the typed target evidence uses.
+    canonical_ns = {}
+    for rel, bound in sources.items():
+        if str(bound.get("lane")) != "direct":
+            continue
+        idx = _identity_index(os.path.join(bundles_root, rel), bound) or {}
+        canonical_ns.update({str(v.get("target_id") or k): v.get("target_id_namespace")
+                             for k, v in idx.items()})
+    failures += _verify_contexts(contexts, sources, bundles_root, canonical_ns)
 
     # (6) DUPLICATES. Two rows under one key means one of them was never checked.
     seen_rows = [_row_key(r) for r in (doc.get("target_rows") or [])]
@@ -255,11 +306,19 @@ def verify(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
     # a wrong one.
     failures += _verify_completeness(doc, sources, rebuilt, contexts)
 
+    # WHICH BRIDGE BYTES THIS REPORT JUDGED. Without it, an ADMIT report can be pointed at
+    # bridge bytes it never saw: change the bridge, reseal it, update the receipt's bridge
+    # hashes, leave the old ADMIT report alone — every hash agrees, and the release is forged.
+    with open(path, "rb") as fh:
+        bridge_raw = hashlib.sha256(fh.read()).hexdigest()
     return {
         "verifier_id": "spot.stage02.stage3_bridge.independent_verifier.v1",
         "generator_is_not_verifier": True,
         "reconstructs_from_admitted_native_bytes": True,
         "self_hash_alone_is_sufficient": False,
+        "judged_bridge": {"raw_sha256": bridge_raw,
+                          "canonical_sha256": _canon(doc),
+                          "bridge_sha256": doc.get("bridge_sha256")},
         "n_rows": len(shipped),
         "n_rebuilt": len(rebuilt),
         "n_contexts": len(doc.get("pathway_contexts") or []),
@@ -381,19 +440,73 @@ def _rebuild_rows(bundle_dir: str, bound: dict) -> dict[tuple, dict]:
             join_value = str(rec.get(join_on) if rec.get(join_on) is not None
                              else rec.get("target_id"))
             ident = identity.get(join_value) or {}
-            value, evaluable = rec.get(value_field), bool(rec.get("evaluable"))
+            value = _jsonable(rec.get(value_field))
+            evaluable = bool(rec.get("evaluable"))
             modulation = VR._rederive(value, evaluable)
-            out[(lane, arm_key, str(rec.get("target_id")))] = {
-                "arm_value": value,
-                "evaluable": evaluable,
-                "rank": rec.get("rank"),
-                "target_id_namespace": ident.get("target_id_namespace"),
-                "observed_perturbation_modality": ident.get("modality"),
-                "desired_target_modulation": modulation,
-                "phenocopy_class": VR.CLASS_OF.get(modulation),
-                "program_effect_direction": change,
-            }
+            out[(lane, arm_key, str(rec.get("target_id")))] = _typed_row(
+                lane=lane, arm_key=arm_key, change=change, rec=rec, ident=ident,
+                value=_jsonable(value), evaluable=evaluable, modulation=modulation,
+                context=bound.get("context") or {})
     return out
+
+
+# --------------------------------------------------------------------------- #
+# THE COMPLETE TYPED ROW, rebuilt independently. This is the contract, and the whole of it.
+# --------------------------------------------------------------------------- #
+ROW_SCHEMA = "spot.stage02_stage3_row.v1"
+ROW_RULE_ID = "spot.stage02.stage3_row.direction_and_namespace.v1"
+PERTURBATION_TARGET_EFFECT = "target_transcript_reduced"
+PHENOCOPY_CLAIM = "putative_crispri_phenocopy"
+JOIN_ON = {"direct": "target_id", "temporal": "base_key"}
+IDENTITY_SOURCE_OF = {"direct": IDENTITY_FILE, "temporal": "base_records"}
+
+
+def _typed_row(*, lane, arm_key, change, rec, ident, value, evaluable, modulation, context):
+    """Every field the Stage-3 row carries — rebuilt from the native bytes and the identity."""
+    return {
+        "schema_version": ROW_SCHEMA,
+        "rule_id": ROW_RULE_ID,
+        "lane": lane,
+        "arm_key": arm_key,
+        # the PROGRAM the arm key names — not the one the row claims
+        "program_id": arm_key.split("|")[1] if arm_key.count("|") >= 1 else None,
+        "context": dict(context),
+        "target_id": str(rec.get("target_id")),
+        # THE COMPLETE IDENTITY TUPLE, from target_identity.json / base_records
+        "target_id_namespace": ident.get("target_id_namespace"),
+        "target_symbol": ident.get("target_symbol"),
+        "target_ensembl": ident.get("target_ensembl"),
+        "identity_joined_on": JOIN_ON.get(lane),
+        "identity_source": IDENTITY_SOURCE_OF.get(lane),
+        "observed_perturbation_modality": ident.get("modality"),
+        "perturbation_target_effect": PERTURBATION_TARGET_EFFECT,
+        "program_effect_direction": change,
+        "desired_target_modulation": modulation,
+        "phenocopy_class": VR.CLASS_OF.get(modulation),
+        "phenocopy_claim": PHENOCOPY_CLAIM,
+        "claim_is_equivalence": False,
+        "arm_value": _jsonable(value),
+        "evaluable": evaluable,
+        "rank": _jsonable(rec.get("rank")),
+    }
+
+
+def _diff_row(key, *, shipped: dict, rebuilt: dict) -> list:
+    """EXACT equality over the whole row. Extra, missing and changed all refuse."""
+    bad = []
+    extra = sorted(set(shipped) - set(rebuilt))
+    if extra:
+        bad.append(f"{G_RECONSTRUCTED}: {key}: carries field(s) {extra} that the admitted "
+                   "native bytes do not produce. A row may not add facts of its own")
+    missing = sorted(set(rebuilt) - set(shipped))
+    if missing:
+        bad.append(f"{G_RECONSTRUCTED}: {key}: is missing {missing}")
+    for field in sorted(set(shipped) & set(rebuilt)):
+        if shipped[field] != rebuilt[field]:
+            bad.append(
+                f"{G_RECONSTRUCTED}: {key}: {field}={shipped[field]!r}; rebuilt from the "
+                f"admitted native bytes it is {rebuilt[field]!r}")
+    return bad
 
 
 def _native_records(bundle_dir: str, spec: dict) -> list:
@@ -414,8 +527,12 @@ def _native_records(bundle_dir: str, spec: dict) -> list:
             continue
         with open(os.path.join(rdir, fname)) as fh:
             doc = json.load(fh)
-        # `records`, with `ranked` as the native alias (arm_topology.ARM_RANKING_ROWS)
-        out += doc.get("records") if doc.get("records") is not None else (doc.get("ranked") or [])
+        # THE ARM KEY IS STORED ONCE, AT THE TOP OF THE DOCUMENT — the ranked records do NOT
+        # repeat it. Reading it off a record KeyErrors on every real temporal bundle, so it is
+        # carried down here, verbatim, from the one place the producer writes it.
+        arm_key = doc.get("arm_key")
+        recs = doc.get("records") if doc.get("records") is not None else (doc.get("ranked") or [])
+        out += [dict(r, arm_key=r.get("arm_key", arm_key)) for r in recs]
     return out
 
 
@@ -434,6 +551,8 @@ def _identity_index(bundle_dir: str, bound: dict) -> Any:
         return {str(b.get("base_key")): {
             "target_id": b.get("target_id"),
             "target_id_namespace": b.get("target_id_namespace"),
+            "target_symbol": b.get("target_symbol"),
+            "target_ensembl": b.get("target_ensembl"),
             "modality": b.get("perturbation_modality"),
         } for b in (doc.get("base_records") or [])}
     if kind == "identity_artifact":
@@ -456,15 +575,21 @@ def _identity_index(bundle_dir: str, bound: dict) -> Any:
         ids = [str(r.get("target_id")) for r in rows]
         if len(ids) != len(set(ids)):
             return None
+        # THE COMPLETE IDENTITY TUPLE. A rebuild that carried only the namespace could not
+        # notice a resealed row with an altered target_symbol or target_ensembl — and both
+        # were admitted before this line existed.
         return {str(r.get("target_id")): {
             "target_id": r.get("target_id"),
             "target_id_namespace": r.get("target_id_namespace"),
+            "target_symbol": r.get("target_symbol"),
+            "target_ensembl": r.get("target_ensembl"),
             "modality": r.get(IDENTITY_MODALITY_FIELD),
         } for r in rows}
     return None
 
 
-def _verify_contexts(contexts: list, sources: dict, bundles_root: str) -> list[str]:
+def _verify_contexts(contexts: list, sources: dict, bundles_root: str,
+                     universe: dict) -> list[str]:
     """A pathway context is a GENE SET's record. It may never wear a target's clothes."""
     bad: list[str] = []
     native: dict[tuple, dict] = {}
@@ -496,26 +621,46 @@ def _verify_contexts(contexts: list, sources: dict, bundles_root: str) -> list[s
                        f"{ctx.get('may_be_matched_to_a_drug_as_a_target')!r} — a gene set is "
                        "not a drug target")
 
-        # ...and it must actually be one of the native records.
+        # ...and EVERY provenance field must REBUILD from the native record. A context that
+        # only had its enrichment_value checked could carry a fabricated coverage, a
+        # fabricated convergence_ref and a fabricated source, reseal, and be admitted.
         want = native.get((str(ctx.get("arm_key")), str(ctx.get("gene_set_id"))))
         if want is None:
             bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: the native pathway records contain no "
                        "such (arm, gene set)")
             continue
-        if ctx.get("enrichment_value") != want.get("enrichment_value"):
-            bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: enrichment_value "
-                       f"{ctx.get('enrichment_value')!r} != native {want['enrichment_value']!r}")
+        for field in ("enrichment_value", "target_source_coverage", "convergence_ref",
+                      "source"):
+            if ctx.get(field) != want.get(field):
+                bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: {field}={ctx.get(field)!r}; "
+                           f"the native pathway record says {want.get(field)!r}")
+
         shipped_le = [e.get("target_id") for e in (ctx.get("leading_edge") or [])]
         if shipped_le != [str(t) for t in (want.get("leading_edge") or [])]:
             bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: the leading edge is not the native one")
+
+        # THE LEADING EDGE JOINS BACK TO target_identity.json. Its namespace must be the
+        # CANONICAL one for that target — not merely a valid enum value. A leading-edge gene
+        # whose namespace disagrees with its target record is a DIFFERENT GENE, and it would
+        # be handed to a drug search as if it were this one.
         for entry in (ctx.get("leading_edge") or []):
+            tid = str(entry.get("target_id"))
             ns, joinable = entry.get("target_id_namespace"), entry.get("joinable")
-            if joinable is True and ns not in VR.NAMESPACES:
-                bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: leading-edge "
-                           f"{entry.get('target_id')!r} claims joinable with namespace {ns!r}")
-            if joinable is False and ns is not None:
-                bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: leading-edge "
-                           f"{entry.get('target_id')!r} is non-joinable yet carries {ns!r}")
+            canonical = universe.get(tid)
+            if canonical is None:
+                if joinable is not False or ns is not None:
+                    bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: leading-edge {tid!r} is not in "
+                               "target_identity.json, so it is NON-JOINABLE — it may not carry "
+                               "a namespace, and it may not be dropped")
+                continue
+            if ns != canonical:
+                bad.append(
+                    f"{G_CTX_RECONSTRUCTED}: {where}: leading-edge {tid!r} declares namespace "
+                    f"{ns!r}; target_identity.json says {canonical!r}. A leading-edge gene "
+                    "whose namespace disagrees with its target record is a different gene")
+            if joinable is not True:
+                bad.append(f"{G_CTX_RECONSTRUCTED}: {where}: leading-edge {tid!r} resolves in "
+                           "target_identity.json yet is marked non-joinable")
     return bad
 
 
@@ -532,6 +677,11 @@ def _native_pathway_records(bundle_dir: str, bound: dict) -> dict[tuple, dict]:
         arm_key = str(rec.get("pathway_arm_key") or rec.get("arm_key"))
         out[(arm_key, str(rec.get("set_id")))] = {
             "enrichment_value": rec.get("enrichment_value"),
+            # THE NATIVE FIELD NAME is `target_source_coverage`. A `.get("coverage")` against
+            # these bytes returns None on every record, forever, and nothing would say so.
+            "target_source_coverage": rec.get("target_source_coverage"),
+            "convergence_ref": rec.get("convergence_ref"),
+            "source": rec.get("source"),
             "leading_edge": rec.get("leading_edge") or [],
         }
     return out
@@ -647,6 +797,35 @@ def verify_receipt(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
             failures.append(
                 f"{G_RECEIPT_ADMITTED}: {name} says verdict={body.get('verdict')!r}, not "
                 f"{want!r}. The receipt is a receipt FOR AN ADMISSION")
+
+    # THE STALE-REPORT ATTACK, closed two ways.
+    #
+    # An ADMIT report proves nothing unless it says WHICH BYTES it judged. Change the bridge,
+    # reseal it, update the receipt's bridge hashes, and leave the earlier ADMIT report
+    # untouched: every hash in the chain agrees with itself, the receipt admits — and a fresh
+    # bridge verification would REJECT. The report was a verdict on bytes that no longer exist.
+    report_body, bridge_bound = loaded.get("bridge_report"), referents["bridge"]
+    if report_body is not None and bridge_bound:
+        judged = report_body.get("judged_bridge") or {}
+        if not judged:
+            failures.append(
+                f"{G_RECEIPT_STALE}: the bridge report does not say WHICH bridge bytes it "
+                "judged. An admission that names no artifact can be moved onto any")
+        elif judged.get("raw_sha256") != bridge_bound.get("raw_sha256"):
+            failures.append(
+                f"{G_RECEIPT_STALE}: the bridge report judged bridge "
+                f"{str(judged.get('raw_sha256'))[:16]}; the receipt binds "
+                f"{str(bridge_bound.get('raw_sha256'))[:16]}. That report is a verdict on "
+                "different bytes than the ones being handed to Stage 3")
+
+    # ...and BELT AND BRACES: re-run the bridge verification NOW, over the bytes that are
+    # actually there. A receipt may not out-live the thing it is a receipt for.
+    fresh = verify(bridge_root, bundles_root=bundles_root)
+    if fresh["verdict"] != "admit":
+        failures.append(
+            f"{G_RECEIPT_STALE}: a FRESH bridge verification of the bytes on disk REJECTS "
+            f"({fresh['n_failed']} failed gate(s), e.g. {(fresh['failures'] or ['-'])[0]}). "
+            "The receipt is stale: it certifies a bridge that no longer verifies")
 
     return {
         "verifier_id": "spot.stage02.stage3_receipt.independent_verifier.v1",

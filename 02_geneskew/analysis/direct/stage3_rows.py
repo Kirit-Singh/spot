@@ -248,9 +248,16 @@ IDENTITY_FIELDS = ("target_id_namespace", "target_symbol", "target_ensembl")
 # THE PATHWAY LANE'S OWN FIELD NAME. Its records key gene sets by `set_id`; this contract
 # calls them `gene_set_id`. One rename, stated once and adapted explicitly — not two words
 # quietly meaning one thing, and not a `.get("gene_set_id")` that returns None forever.
+# THE PATHWAY RECORD'S OWN FIELD NAMES. Read off `pathway_arms.enrichment_arms`, not guessed:
+# the coverage is `target_source_coverage`, and a `.get("coverage")` against these bytes
+# returns None on every record, forever, and nothing would ever say so.
 PATHWAY_SET_ID_FIELD = "set_id"
 PATHWAY_ENRICHMENT_FIELD = "enrichment_value"
 PATHWAY_LEADING_EDGE_FIELD = "leading_edge"
+PATHWAY_COVERAGE_FIELD = "target_source_coverage"
+PATHWAY_CONVERGENCE_FIELD = "convergence_ref"
+PATHWAY_SOURCE_FIELD = "source"
+PATHWAY_ARM_KEY_FIELD = "pathway_arm_key"
 
 # Documented expectation for the pin test — never the source a row's namespace is read from.
 KNOWN_SYMBOL_TARGETS = ("MTRNR2L1", "MTRNR2L4", "MTRNR2L8", "OCLM")
@@ -447,9 +454,10 @@ LEADING_EDGE_NON_JOINABLE = "non_joinable_unresolved_target_identity"
 # NOTHING that looks like target evidence or a drug direction may appear on one.
 PATHWAY_CONTEXT_FIELDS = (
     "schema_version", "lane", "arm_key", "program_id", "context", "gene_set_id",
-    "native_set_id_field", "source", "enrichment_value", "coverage", "convergence_ref",
-    "leading_edge", "n_leading_edge", "n_leading_edge_joinable",
-    "is_a_crispri_target_row", "may_be_matched_to_a_drug_as_a_target", "links_to_targets_via",
+    "native_set_id_field", "source", "source_artifact", "enrichment_value",
+    "target_source_coverage", "convergence_ref", "leading_edge", "n_leading_edge",
+    "n_leading_edge_joinable", "is_a_crispri_target_row",
+    "may_be_matched_to_a_drug_as_a_target", "links_to_targets_via",
 )
 # A context carrying ANY of these is a target row wearing a pathway's clothes.
 PATHWAY_CONTEXT_FORBIDDEN = (
@@ -460,8 +468,7 @@ PATHWAY_CONTEXT_FORBIDDEN = (
 
 def pathway_context(*, arm_key: str, program_id: str, record: dict[str, Any],
                     context: dict[str, Any], namespace_of: dict[str, str],
-                    source: Any = None, coverage: Any = None,
-                    convergence_ref: Any = None) -> dict[str, Any]:
+                    source_artifact: Any = None) -> dict[str, Any]:
     """The pathway lane's contribution: CONTEXT, and explicitly not a target row.
 
     ``record`` is the producer's NATIVE pathway record, which names its gene set ``set_id``.
@@ -480,6 +487,9 @@ def pathway_context(*, arm_key: str, program_id: str, record: dict[str, Any],
     # then to a drug. An unresolved one is marked NON-JOINABLE, explicitly, on the record: it
     # is never string-sniffed, and it is never quietly dropped so the pathway looks cleaner
     # than its evidence.
+    # ...and the namespace is the CANONICAL one from target_identity.json — not merely "a
+    # valid enum value". A leading-edge gene whose namespace disagrees with the target record
+    # is a different gene, and it would be handed to a drug search as if it were this one.
     leading_edge = []
     for target_id in (record.get(PATHWAY_LEADING_EDGE_FIELD) or []):
         namespace = namespace_of.get(str(target_id))
@@ -499,10 +509,13 @@ def pathway_context(*, arm_key: str, program_id: str, record: dict[str, Any],
         "context": dict(context),
         "gene_set_id": gene_set_id,
         "native_set_id_field": PATHWAY_SET_ID_FIELD,
-        "source": source,
+        # EVERY provenance field comes off the NATIVE record. None is passed in by a caller:
+        # a caller-supplied coverage is a coverage nobody measured.
+        "source": record.get(PATHWAY_SOURCE_FIELD),
+        "source_artifact": source_artifact,
         "enrichment_value": record.get(PATHWAY_ENRICHMENT_FIELD),
-        "coverage": coverage,
-        "convergence_ref": convergence_ref,
+        "target_source_coverage": record.get(PATHWAY_COVERAGE_FIELD),
+        "convergence_ref": record.get(PATHWAY_CONVERGENCE_FIELD),
         "leading_edge": leading_edge,
         "n_leading_edge": len(leading_edge),
         "n_leading_edge_joinable": sum(1 for e in leading_edge if e["joinable"]),
