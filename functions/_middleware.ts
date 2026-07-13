@@ -1,5 +1,6 @@
 import {
   CANONICAL_HOST,
+  PLACEHOLDER_HOST,
   canonicalRedirectTarget,
   expiredSessionCookie,
   localHostAllowed,
@@ -34,9 +35,18 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     return withSecurityHeaders(await context.next());
   }
 
-  if (env.SITE_MODE !== 'production' && !(env.SITE_MODE === 'local' && localHostAllowed(url.hostname))) {
+  // The interim placeholder is the production deployment served only at the
+  // project's pages.dev alias; any other host is refused, never redirected.
+  if (env.SITE_MODE === 'placeholder' && url.hostname !== PLACEHOLDER_HOST) {
     return operationalFailure();
   }
+
+  // Only production (canonical host), placeholder (pages.dev alias, host already
+  // checked), and local-on-localhost reach the shared reviewer-cookie gate.
+  const gated = env.SITE_MODE === 'production'
+    || env.SITE_MODE === 'placeholder'
+    || (env.SITE_MODE === 'local' && localHostAllowed(url.hostname));
+  if (!gated) return operationalFailure();
 
   if (url.pathname === '/index.html' && (request.method === 'GET' || request.method === 'HEAD')) {
     return redirect('/', 308);

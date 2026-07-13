@@ -1,12 +1,16 @@
 export const CANONICAL_HOST = 'spotpathways.com';
 export const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`;
+// Interim production deployment host, served ONLY at the project's pages.dev alias
+// before the canonical domain is attached. It runs the same reviewer-code gate.
+export const PLACEHOLDER_HOST = 'spotpathways.pages.dev';
+export const PLACEHOLDER_ORIGIN = `https://${PLACEHOLDER_HOST}`;
 export const REVIEW_COOKIE = '__Host-spot-review';
 export const SESSION_TTL_SECONDS = 4 * 60 * 60;
 
 export interface Env {
   ACCESS_CODE?: string;
   SESSION_SIGNING_KEY?: string;
-  SITE_MODE?: 'production' | 'preview' | 'local';
+  SITE_MODE?: 'production' | 'placeholder' | 'preview' | 'local';
 }
 
 export interface PagesContext {

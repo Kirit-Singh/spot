@@ -1,6 +1,8 @@
 import {
   CANONICAL_HOST,
   CANONICAL_ORIGIN,
+  PLACEHOLDER_HOST,
+  PLACEHOLDER_ORIGIN,
   canonicalRedirectTarget,
   constantTimeSecretEqual,
   issueSession,
@@ -18,10 +20,12 @@ function invalidAccess(): Response {
   return redirect('/?access=invalid', 303);
 }
 
-function sameOrigin(request: Request, local: boolean): boolean {
+// A null expectedOrigin means "match the request's own host" (local dev); otherwise
+// the Origin header must equal the exact expected origin for the active mode.
+function sameOrigin(request: Request, expectedOrigin: string | null): boolean {
   const origin = request.headers.get('Origin');
   if (!origin) return false;
-  if (!local) return origin === CANONICAL_ORIGIN;
+  if (expectedOrigin !== null) return origin === expectedOrigin;
   try {
     return new URL(origin).hostname === new URL(request.url).hostname;
   } catch {
@@ -88,12 +92,18 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   // remains usable for authorized preview reviewers but sets no application cookie.
   if (env.SITE_MODE === 'preview') return redirect('/01_page.html', 303);
 
+  // The interim placeholder auth is served only at the project's pages.dev alias.
+  if (env.SITE_MODE === 'placeholder' && url.hostname !== PLACEHOLDER_HOST) {
+    return operationalFailure();
+  }
+
   const local = env.SITE_MODE === 'local' && localHostAllowed(url.hostname);
-  if (env.SITE_MODE !== 'production' && !local) return operationalFailure();
+  if (env.SITE_MODE !== 'production' && env.SITE_MODE !== 'placeholder' && !local) return operationalFailure();
   if (!env.ACCESS_CODE || !env.SESSION_SIGNING_KEY || env.SESSION_SIGNING_KEY.length < 32) {
     return operationalFailure();
   }
-  if (!sameOrigin(request, local)) return invalidAccess();
+  const expectedOrigin = local ? null : env.SITE_MODE === 'placeholder' ? PLACEHOLDER_ORIGIN : CANONICAL_ORIGIN;
+  if (!sameOrigin(request, expectedOrigin)) return invalidAccess();
 
   let candidate: string | null = null;
   try {

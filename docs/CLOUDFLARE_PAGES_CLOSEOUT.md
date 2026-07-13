@@ -2,6 +2,8 @@
 
 This is a closeout lane. Do not attach domains or enable production deployment until the Stage 1–4 release and `public_release/results/` tree are admitted. The scaffold does not contain credentials and does not deploy anything.
 
+The interim `spotpathways.pages.dev` placeholder (served before this full release is admitted) is a separate build and mode, documented in `docs/CLOUDFLARE_PLACEHOLDER.md`.
+
 ## Deployment boundary
 
 Neither existing build directory is a valid Pages source:
