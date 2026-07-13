@@ -17,15 +17,22 @@
     --serif:'Newsreader','Iowan Old Style','Palatino Linotype',Georgia,serif;
     --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
     --wordmark:clamp(58px,13vw,84px);
-    /* Measured ink of "spot" in this serif: ascender .572em, descender .252em.
-       The mark spans the ascender band only — top of the "t" down to the baseline —
-       so the dot's centre passes through the optical centre of the word, ignoring the
-       "p" tail. The hit target stays >=48px even when the visible box is smaller, so
-       both offsets back out that slack. Everything tracks the wordmark clamp. */
+    /* Measured ink of this serif at the wordmark size: "spot" ascender .572em; the "o"
+       spans .4932em above the baseline with a .0132em overshoot below it, putting the
+       centre of the "o" at .24em above the baseline.
+
+       The mark is .572em square (the ascender band) and the dot is centred in it, so the
+       dot's centre sits .286em above the mark's bottom edge. --mark-drop is solved from
+       the rendered geometry (not assumed from line-height) so that the dot's centre lands
+       on the "o" centre at .24em: solved to .012em by sweeping the value in-page and
+       least-squares fitting (slope -84px/em == -1x font-size). Verified at both clamp ends.
+
+       The hit target stays >=48px even when the visible box is smaller, so both offsets
+       back out that slack. Everything tracks the wordmark clamp. */
     --mark:calc(var(--wordmark) * .572);
     --hit:max(48px,var(--mark));
     --slack:calc((var(--hit) - var(--mark)) / 2);
-    --mark-drop:calc(var(--wordmark) * .06 - var(--slack));
+    --mark-drop:calc(var(--wordmark) * .012 - var(--slack));
     --gap:calc(var(--wordmark) * .1 - var(--slack));
   }
   *{box-sizing:border-box}
