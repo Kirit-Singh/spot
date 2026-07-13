@@ -1,0 +1,361 @@
+"""NINE ATTACKS on the aggregate run manifest. Each dies at a NAMED gate.
+
+The manifest is the last thing between a partial, mismatched or forged set of lane outputs
+and a release. So it is attacked here the way it would actually be attacked: not with
+nonsense, but with runs that LOOK complete — the right number of directories, the right
+filenames, the right hashes — and are not the same science.
+
+Every bundle is a FIXTURE. What is real is the gate that stops it.
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+
+import fixtures_run_manifest as F
+import pytest
+from direct import run_manifest
+from direct import verify_run_manifest as V
+from direct.hashing import content_hash
+
+
+def _manifest(tmp_path, run, name="manifest.json", allow_partial=False):
+    scorer = run_manifest.load_scorer_view(run["scorer_view"])
+    bundles = [run_manifest.bind_bundle(d)
+               for d in run["direct"] + run["temporal"] + run["pathway"]]
+    return run_manifest.build(
+        bundles=bundles, out_path=os.path.join(str(tmp_path), name),
+        scorer_view=scorer, conditions=run["conditions"], sources=run["sources"],
+        allow_partial=allow_partial,
+        code_identity={"commit": "f" * 40, "clean_tree": True,
+                       "manifest_sha256": "0" * 64, "canonical_digest": "0" * 16})
+
+
+def _forge_complete(path):
+    """What a forger with repo access does: declare it complete and RE-SEAL the hash."""
+    doc = json.load(open(path))
+    doc["complete"] = True
+    doc["release_admissible"] = True
+    doc["manifest_sha256"] = content_hash(
+        {k: v for k, v in doc.items() if k not in ("created_at", "manifest_sha256")})
+    with open(path, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+    return path
+
+
+def _verify(run, manifest_path):
+    return V.verify(manifest_path=manifest_path, bundles_root=run["root"],
+                    scorer_view_path=run["scorer_view"],
+                    batch_policy_path=run["batch_policy"],
+                    expect_gene_sets_path=run["pinned_gene_sets"])
+
+
+def _clone(src, dst_name):
+    dst = os.path.join(os.path.dirname(src), dst_name)
+    shutil.copytree(src, dst)
+    return dst
+
+
+def _patch(bundle_dir, filename, mutate):
+    path = os.path.join(bundle_dir, filename)
+    doc = json.load(open(path))
+    mutate(doc)
+    with open(path, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+
+
+def test_a_clean_complete_run_is_ADMITTED(tmp_path):
+    """The control. Without it, every REJECT below proves nothing."""
+    run = F.complete_run(tmp_path)
+    doc = _verify(run, _manifest(tmp_path, run)["path"])
+    assert doc["verdict"] == V.R.ADMIT, doc["failed_gates"]
+    assert doc["n_arm_slots"] == doc["n_expected_arm_slots"] == 300
+    assert doc["n_bundles"] == 15
+    assert doc["selection_capacity"]["total_valid_ordered_selections"] == 3540
+
+
+# --------------------------------------------------------------------------- #
+# 1-3. ONE RESULT, REPEATED. The old manifest counted 3/6/6 and called it complete.
+# --------------------------------------------------------------------------- #
+def test_1_one_DIRECT_result_repeated_three_times(tmp_path):
+    run = F.complete_run(tmp_path)
+    first = run["direct"][0]
+    run["direct"] = [first, _clone(first, "COPY-direct-2"),
+                     _clone(first, "COPY-direct-3")]
+    doc = _verify(run, _forge_complete(_manifest(tmp_path, run, allow_partial=True)["path"]))
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_DIRECT_SLOTS in doc["failed_gates"]
+    # three copies of one condition: 20 slots filled three times over, 40 never
+    assert doc["n_arm_slots"] == 20 + 120 + 120
+
+
+def test_2_one_TEMPORAL_result_repeated_six_times(tmp_path):
+    run = F.complete_run(tmp_path)
+    first = run["temporal"][0]
+    run["temporal"] = [first] + [_clone(first, f"COPY-temporal-{i}")
+                                 for i in range(2, 7)]
+    doc = _verify(run, _forge_complete(_manifest(tmp_path, run, allow_partial=True)["path"]))
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_TEMPORAL_SLOTS in doc["failed_gates"]
+
+
+def test_3_one_PATHWAY_result_repeated_six_times(tmp_path):
+    run = F.complete_run(tmp_path)
+    first = run["pathway"][0]
+    run["pathway"] = [first] + [_clone(first, f"COPY-pathway-{i}") for i in range(2, 7)]
+    doc = _verify(run, _forge_complete(_manifest(tmp_path, run, allow_partial=True)["path"]))
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_PATHWAY_SLOTS in doc["failed_gates"]
+
+
+# --------------------------------------------------------------------------- #
+# 4-5. THE SAME SHAPE, DIFFERENT SCIENCE.
+# --------------------------------------------------------------------------- #
+def test_4_one_lane_produced_from_ANOTHER_COMMIT(tmp_path):
+    run = F.complete_run(tmp_path)
+    _patch(run["temporal"][2], "temporal_provenance.json",
+           lambda d: d["run_binding"]["code_identity"].update(
+               {"commit": "a" * 40, "canonical_digest": "deadbeefdeadbeef"}))
+    doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_CODE in doc["failed_gates"]
+
+
+def test_5_one_lane_bound_to_ANOTHER_SELECTION(tmp_path):
+    run = F.complete_run(tmp_path)
+    _patch(run["pathway"][4], "pathway_provenance.json",
+           lambda d: d["run_binding"]["selection_release"].update(
+               {"release_id": "FIXTURE-a-different-stage1-release",
+                "scorer_view_raw_sha256": "b" * 64}))
+    doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_SELECTION in doc["failed_gates"]
+
+
+# --------------------------------------------------------------------------- #
+# 6. AN UNADMITTED ARM.
+# --------------------------------------------------------------------------- #
+def test_6_a_verification_report_changed_to_REJECT(tmp_path):
+    run = F.complete_run(tmp_path)
+    _patch(run["direct"][1], "verification.json",
+           lambda d: d.update({"verdict": "reject", "n_failed": 1}))
+    doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_VERDICT in doc["failed_gates"]
+
+
+# --------------------------------------------------------------------------- #
+# 7. THE RIGHT FILENAMES, THE WRONG BYTES.
+# --------------------------------------------------------------------------- #
+def test_7_arbitrary_bytes_stored_under_expected_filenames(tmp_path):
+    run = F.complete_run(tmp_path)
+    path = _manifest(tmp_path, run)["path"]
+
+    # the bundle was bound; NOW its ranking is replaced with junk under the same name
+    ranking = os.path.join(run["direct"][0], "rankings", "treg_like__decrease.json")
+    with open(ranking, "w") as fh:
+        fh.write("not json, just bytes that happen to sit at an expected path")
+
+    doc = _verify(run, path)
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_BYTES in doc["failed_gates"]
+
+
+def test_7b_the_producer_refuses_to_BIND_arbitrary_bytes(tmp_path):
+    run = F.complete_run(tmp_path)
+    with open(os.path.join(run["direct"][0], "arm_bundle.json"), "w") as fh:
+        fh.write("{{ not json")
+    with pytest.raises(run_manifest.RunManifestError, match="not readable JSON"):
+        run_manifest.bind_bundle(run["direct"][0])
+
+
+# --------------------------------------------------------------------------- #
+# 8. A SELF-HASH THE MANIFEST DOES NOT HAVE.
+# --------------------------------------------------------------------------- #
+def test_8_a_FORGED_aggregate_manifest_sha256(tmp_path):
+    run = F.complete_run(tmp_path)
+    path = _manifest(tmp_path, run)["path"]
+    doc = json.load(open(path))
+    doc["manifest_sha256"] = "0" * 64          # a value the caller simply supplied
+    with open(path, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+
+    report = _verify(run, path)
+    assert report["verdict"] == V.R.REJECT
+    assert V.G_SELF_HASH in report["failed_gates"]
+    assert report["manifest_sha256_recomputed"] != "0" * 64
+
+
+def test_8b_a_field_edited_after_sealing_is_caught(tmp_path):
+    run = F.complete_run(tmp_path)
+    path = _manifest(tmp_path, run)["path"]
+    doc = json.load(open(path))
+    doc["n_expected_arm_slots"] = 20           # keep the old hash; move the content
+    with open(path, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+
+    report = _verify(run, path)
+    assert report["verdict"] == V.R.REJECT
+    assert V.G_SELF_HASH in report["failed_gates"]
+
+
+# --------------------------------------------------------------------------- #
+# 9. THE SNEAKY ONE: a missing slot back-filled by a duplicate, RELABELLED so the
+#    topology looks perfect. Only the content address gives it away.
+# --------------------------------------------------------------------------- #
+def test_9_a_missing_slot_replaced_by_a_DUPLICATE(tmp_path):
+    run = F.complete_run(tmp_path)
+    conds = run["conditions"]
+    # the first condition's bundle never ran; the second's is copied into its place
+    missing, stand_in = conds[0], run["direct"][1]
+
+    dupe = _clone(stand_in, f"COPY-direct-{missing}")
+    # relabel it to the slot it is filling — but keep the bundle_id it was born with,
+    # which is what a copied artifact actually does
+    def relabel(d):
+        d["context"] = {"condition": missing}
+        for arm in d["arms"]:
+            parts = arm["arm_key"].split("|")
+            arm["arm_key"] = "|".join(parts[:3] + [missing])
+    _patch(dupe, "arm_bundle.json", relabel)
+
+    run["direct"] = [run["direct"][1], run["direct"][2], dupe]
+
+    # the PRODUCER refuses outright: a duplicate bundle id is not a complete run
+    with pytest.raises(run_manifest.RunManifestError, match="duplicate bundle ids"):
+        _manifest(tmp_path, run)
+
+    # so the forger goes around it — --allow-partial, then declare it complete and
+    # re-seal the self-hash. The verifier is not fooled.
+    doc = _verify(run, _forge_complete(
+        _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+    # every slot LOOKS filled...
+    assert doc["n_arm_slots"] == 300
+    # ...and it is still refused, because one invocation repeated is not two
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_UNIQUE in doc["failed_gates"]
+
+
+# --------------------------------------------------------------------------- #
+# The topology-specific attacks the reusable-arm release introduces.
+# --------------------------------------------------------------------------- #
+def test_a_PAIR_SPECIFIC_bundle_cannot_satisfy_completeness(tmp_path):
+    run = F.complete_run(tmp_path)
+    shutil.rmtree(run["direct"][0])
+    run["direct"][0] = F.build_bundle(
+        run["root"], "direct", {"condition": run["conditions"][0]}, run["scorer_view"],
+        arms_for=[("treg_like", "decrease"), ("th1_like", "increase")])
+    doc = _verify(run, _forge_complete(
+        _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_ALL_ARM in doc["failed_gates"]
+
+
+def test_a_MISLABELLED_desired_change_is_caught_by_the_frozen_table(tmp_path):
+    run = F.complete_run(tmp_path)
+    # away_from_A(high) DECREASES the program; claim it as an increase
+    def mislabel(d):
+        for arm in d["arms"]:
+            if arm["desired_change"] == "decrease":
+                arm["desired_change"] = "increase"
+                break
+    _patch(run["direct"][0], "arm_bundle.json", mislabel)
+    doc = _verify(run, _manifest(tmp_path, run, allow_partial=True)["path"])
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_MAPPING in doc["failed_gates"]
+
+
+def test_a_DECLARED_hit_count_that_the_bytes_do_not_support_is_caught(tmp_path):
+    run = F.complete_run(tmp_path)
+    _patch(run["pathway"][0], "arm_bundle.json",
+           lambda d: d["arms"][0]["n_hits_by_set"].update({"FIXTURE-SET-1": 99}))
+    doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_RECONSTRUCT in doc["failed_gates"]
+
+
+def test_a_PARTIAL_run_is_never_release_admissible(tmp_path):
+    run = F.complete_run(tmp_path)
+    run["pathway"] = run["pathway"][:-1]
+    doc = _verify(run, _manifest(tmp_path, run, allow_partial=True)["path"])
+
+    assert doc["verdict"] == V.R.REJECT
+    assert V.G_PATHWAY_SLOTS in doc["failed_gates"]
+    assert doc["n_arm_slots"] == 280
+
+
+class TestTheVerifierIsIndependentOfTheProducer:
+    """generator != verifier. Enforced, not intended."""
+
+    @staticmethod
+    def _imports(module):
+        import ast
+        src = open(module.__file__).read()
+        names = set()
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.Import):
+                names |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                # a relative import (level > 0) is an import from the generator package
+                names.add(("." * node.level) + (node.module or ""))
+        return names
+
+    @pytest.mark.parametrize("module", [V, V.R])
+    def test_it_imports_nothing_from_the_generator(self, module):
+        producer = {"run_manifest", "arm_topology", "config", "hashing", "code_digest",
+                    "emit", "pathway", "genesets", "projection", "arms", "direct"}
+        imported = self._imports(module)
+        assert not any(name.startswith(".") for name in imported), imported
+        assert not (imported & producer), (
+            f"{module.__name__} imports {imported & producer} from the generator; a "
+            "verifier that reused the producer's functions would agree with it by "
+            "construction")
+
+    def test_the_two_desired_change_tables_were_derived_INDEPENDENTLY_and_AGREE(self):
+        from direct import arm_topology as T
+        for (role, pole), expected in V.R.SPEC_DESIRED_CHANGE.items():
+            # the producer DERIVES it from ARM_FORMULA x POLE_SIGN; the verifier holds its
+            # own frozen copy. They must agree — and either can catch the other drifting.
+            assert T.desired_change_for(role, pole) == expected
+
+    def test_the_two_slot_algebras_AGREE(self):
+        from direct import arm_topology as T
+        mine = T.expected_slots(["p1", "p2"], ["C1", "C2"], ["s1"])
+        theirs = V.R.expected_slots(["p1", "p2"], ["C1", "C2"], ["s1"])
+        assert {lane: sorted(mine[lane]) for lane in mine} == {
+            lane: sorted(theirs[lane]) for lane in theirs}
+
+
+def test_the_verifier_does_not_take_the_TOPOLOGY_from_the_manifest_it_audits(tmp_path):
+    """A forger shrinks the expected run so a partial one satisfies it."""
+    run = F.complete_run(tmp_path)
+    run["pathway"] = run["pathway"][:-1]
+    path = _manifest(tmp_path, run, allow_partial=True)["path"]
+    doc = json.load(open(path))
+    doc["conditions"] = run["conditions"][:1]        # "the run was only ever one condition"
+    doc["gene_set_sources"] = ["reactome"]
+    doc["complete"] = True
+    doc["release_admissible"] = True
+    doc["manifest_sha256"] = content_hash(
+        {k: v for k, v in doc.items() if k not in ("created_at", "manifest_sha256")})
+    with open(path, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+
+    report = _verify(run, path)
+    # the expectation came from the pinned batch policy and the pinned sources, not from
+    # the document under test — so shrinking the document changes nothing
+    assert report["verdict"] == V.R.REJECT
+    assert report["conditions"] == run["conditions"]
+    assert report["n_expected_arm_slots"] == 300
+    assert V.G_PATHWAY_SLOTS in report["failed_gates"]
