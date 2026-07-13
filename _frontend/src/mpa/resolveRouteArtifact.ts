@@ -221,7 +221,14 @@ export async function loadProductionProjection(
     if ((await sha256Hex(receiptText)) !== meta.independent_verifier.receipt_raw_sha256) return null;
     const receiptRaw = JSON.parse(receiptText) as unknown;
     if ((await sha256Hex(canonicalJson(receiptRaw))) !== meta.independent_verifier.receipt_canonical_sha256) return null;
-    parseCompactDisplayReceipt(receiptRaw, proj.n_arms);
+    // Admit the receipt against the EXACT projection identity (not n_arms alone): the receipt subject
+    // must bind these projection bytes. A real receipt lacking the W3 subject fails closed here.
+    parseCompactDisplayReceipt(receiptRaw, {
+      n_arms: proj.n_arms,
+      projection_raw_sha256: meta.projection_raw_sha256,
+      projection_canonical_sha256: meta.projection_canonical_sha256,
+      projection_self_sha256: meta.projection_self_sha256,
+    });
 
     return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection) };
   } catch {

@@ -7,7 +7,7 @@ import { loadProductionProjection, resolveRouteArtifact } from '../resolveRouteA
 import type { RouteLoaderDeps } from '../resolveRouteArtifact';
 import { STAGE1_SELECTION_SCHEMA_RAW_SHA256, STAGE1_V3_RELEASE_SELF_SHA256 } from '../../stage1/contractBinding';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
-import { compactProjectionRaw, compactReceipt, CONDITIONS, SOURCES } from '../../test/compactStage2';
+import { compactProjectionRaw, compactReceiptAdmitted, CONDITIONS, SOURCES } from '../../test/compactStage2';
 
 interface Packager {
   pack: (spec: unknown) => { tree: Record<string, string>; current: unknown };
@@ -52,14 +52,18 @@ const withinSelection: SelectionV3 = {
   selection_full_sha256: 'f'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
 };
 
-async function makeSpec() {
-  const projection = await compactProjectionRaw();
-  const display_verifier_receipt = await compactReceipt(projection.n_arms);
+async function makeSpec(opts?: { projection?: Awaited<ReturnType<typeof compactProjectionRaw>>; projectionText?: string }) {
+  const projection = opts?.projection ?? await compactProjectionRaw();
+  // W3 hands the packager EXACT projection bytes; the subject raw hash is over those bytes. The default
+  // here simulates a differently-formatted-but-identical-content serialization (pretty-printed) to prove
+  // the packager preserves the bytes verbatim rather than re-serializing them.
+  const text = opts?.projectionText ?? JSON.stringify(projection, null, 2);
+  const display_verifier_receipt = await compactReceiptAdmitted(projection, text);
   const compact_release = {
     run_id: 'stage2-run-1', release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES],
     active_pathway_source: 'reactome',
   };
-  const stage2 = { projection, display_verifier_receipt, compact_release };
+  const stage2 = { projection_text: text, display_verifier_receipt, compact_release };
   return {
     stage1_binding: {
       release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64),
@@ -98,6 +102,28 @@ describe('packager → browser loader round-trip', () => {
     expect(pathways?.route).toBe('pathways');
     expect(targets?.manifest?.methods.reproduce_command).toBe('spot repro targets');
     expect(pathways?.manifest?.provenance.verifier_status).toBe('admitted');
+  });
+
+  it('serves W3 projection bytes VERBATIM (formatting differs, content identical) and refuses a stale receipt over another serialization', async () => {
+    const { pack } = await importPack();
+    const projection = await compactProjectionRaw();
+    const pretty = JSON.stringify(projection, null, 2); // W3's exact bytes (sorted-python-like formatting)
+    const compactText = JSON.stringify(projection);     // identical CONTENT, different bytes
+
+    // (a) the served projection file is the EXACT input bytes — never re-serialized
+    const { tree } = pack(await makeSpec({ projection, projectionText: pretty }));
+    expect(tree['stage02/stage2_display_projection.json']).toBe(pretty);
+    expect(tree['stage02/stage2_display_projection.json']).not.toBe(compactText);
+    // and it still round-trips through the browser loader (raw hash is over the served bytes)
+    const resolved = await resolveRouteArtifact('targets', deps(withinSelection, tree));
+    expect(resolved?.route).toBe('targets');
+
+    // (b) a receipt whose subject hashed a DIFFERENT serialization than the served bytes is refused
+    const stale = await compactReceiptAdmitted(projection, compactText); // subject over compact bytes
+    const spec = await makeSpec({ projection, projectionText: pretty });  // but serve the pretty bytes
+    spec.routes.targets.display_verifier_receipt = stale;
+    spec.routes.pathways.display_verifier_receipt = stale;
+    expect(() => pack(spec)).toThrow(/different projection/);
   });
 
   it('round-trips Stage-3 and Stage-4 while preserving typed missing values', async () => {
@@ -154,9 +180,10 @@ describe('packager refuses invented or inconsistent Stage-2 releases', () => {
   it('refuses hidden p/q/combined fields before writing the served tree', async () => {
     const { pack } = await importPack();
     for (const key of ['empirical_p_value', 'qval', 'fdr', 'combined_score', 'balanced_skew']) {
-      const base = await makeSpec();
-      const first = Object.values(base.routes.targets.projection.arms)[0] as { rows: Record<string, unknown>[] };
+      const projection = await compactProjectionRaw();
+      const first = Object.values(projection.arms)[0] as { rows: Record<string, unknown>[] };
       first.rows[0][key] = 0.01;
+      const base = await makeSpec({ projection, projectionText: JSON.stringify(projection) });
       expect(() => pack(base)).toThrow(/forbidden/);
     }
   });

@@ -75,11 +75,39 @@ export async function compactProjectionRaw() {
   return { ...body, projection_sha256: await sha256Hex(canonicalJson(body)) };
 }
 
+/** The pre-W3, n_arms-only receipt (NO exact-subject binding) — used by fail-closed tests: the strict
+ *  adapter/loader must REFUSE it. Do not use on the binding path. */
 export async function compactReceipt(n_arms: number) {
   return {
     verifier_id: 'spot.stage02.display_projection.independent_verifier.v1',
     generator_is_not_verifier: true, rebuilt_from_admitted_native_bytes: true,
     n_arms, n_failed: 0, failures: [], verdict: 'admit',
+  };
+}
+
+/** The real W3 admitted receipt (verify_display_projection.py shape): the exact projection-subject
+ *  binding (raw hash over the SERVED bytes `rawText`, canonical hash, declared+recomputed self-hash that
+ *  agree) + non-empty per-lane admitted_inputs. `rawText` MUST be the exact bytes served for the subject
+ *  raw hash to match — pass the same text used as projection_text. Use on the binding path. */
+export async function compactReceiptAdmitted(
+  projection: { n_arms: number; projection_sha256: string },
+  rawText?: string,
+) {
+  const raw = rawText ?? JSON.stringify(projection);
+  return {
+    ...(await compactReceipt(projection.n_arms)),
+    subject: {
+      projection_file: 'stage2_display_projection.json',
+      projection_raw_sha256: await sha256Hex(raw),
+      projection_canonical_sha256: await sha256Hex(canonicalJson(projection)),
+      projection_self_sha256_declared: projection.projection_sha256,
+      projection_self_sha256_recomputed: projection.projection_sha256,
+      self_hash_agrees: true,
+    },
+    admitted_inputs: {
+      'direct:Rest': { admission_file: 'w10_admission_Rest.json', report_sha256: 'a'.repeat(64),
+        n_gates: 5, n_arms_verified: 1, recompute_mode: 'full' },
+    },
   };
 }
 

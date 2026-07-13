@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { parseCompactDisplayReceipt, parseCompactStage2Projection } from '../compactStage2ProjectionAdapter';
 import { canonicalJson, sha256Hex } from '../../stage1/canonical';
-import { compactProjectionRaw, compactReceipt } from '../../test/compactStage2';
+import { compactProjectionRaw, compactReceipt, compactReceiptAdmitted } from '../../test/compactStage2';
 
 async function reseal(doc: Record<string, unknown>) {
   const body = { ...doc };
   delete body.projection_sha256;
   doc.projection_sha256 = await sha256Hex(canonicalJson(body));
+}
+
+/** The exact projection identity the receipt must admit (mirrors the loader's expectation). */
+async function expectationFor(proj: { n_arms: number; projection_sha256: string }) {
+  return {
+    n_arms: proj.n_arms,
+    projection_raw_sha256: await sha256Hex(JSON.stringify(proj)),
+    projection_canonical_sha256: await sha256Hex(canonicalJson(proj)),
+    projection_self_sha256: proj.projection_sha256,
+  };
 }
 
 describe('CompactStage2Projection — exact W3 producer contract', () => {
@@ -15,7 +25,8 @@ describe('CompactStage2Projection — exact W3 producer contract', () => {
     const parsed = await parseCompactStage2Projection(raw, raw.projection_sha256);
     expect(parsed.schema_version).toBe('spot.stage02_display_projection.v1');
     expect(parsed.n_arms).toBe(Object.keys(parsed.arms).length);
-    expect(parseCompactDisplayReceipt(await compactReceipt(parsed.n_arms), parsed.n_arms).verdict).toBe('admit');
+    const admitted = await compactReceiptAdmitted(raw);
+    expect(parseCompactDisplayReceipt(admitted, await expectationFor(raw)).verdict).toBe('admit');
   });
 
   it('rejects a mismatched projection self hash, even when the surrounding shape is valid', async () => {
@@ -58,9 +69,28 @@ describe('CompactStage2Projection — exact W3 producer contract', () => {
   });
 
   it('rejects a receipt with a wrong arm count, verifier, verdict, or nonempty failures', async () => {
-    const receipt = await compactReceipt(60);
-    expect(() => parseCompactDisplayReceipt({ ...receipt, n_arms: 59 }, 60)).toThrow(/did not admit/);
-    expect(() => parseCompactDisplayReceipt({ ...receipt, verifier_id: 'other' }, 60)).toThrow(/did not admit/);
-    expect(() => parseCompactDisplayReceipt({ ...receipt, verdict: 'reject', n_failed: 1, failures: ['x'] }, 60)).toThrow(/did not admit/);
+    const raw = await compactProjectionRaw();
+    const exp = await expectationFor(raw);
+    const receipt = await compactReceiptAdmitted(raw);
+    expect(() => parseCompactDisplayReceipt({ ...receipt, n_arms: exp.n_arms - 1 }, exp)).toThrow(/did not admit/);
+    expect(() => parseCompactDisplayReceipt({ ...receipt, verifier_id: 'other' }, exp)).toThrow(/did not admit/);
+    expect(() => parseCompactDisplayReceipt({ ...receipt, verdict: 'reject', n_failed: 1, failures: ['x'] }, exp)).toThrow(/did not admit/);
+  });
+
+  it('FAILS CLOSED on a receipt that admits by arm count alone (no exact-subject binding)', async () => {
+    const raw = await compactProjectionRaw();
+    const exp = await expectationFor(raw);
+    const nArmsOnly = await compactReceipt(raw.n_arms); // the pre-W3, n_arms-only receipt — no `subject`
+    expect(() => parseCompactDisplayReceipt(nArmsOnly, exp)).toThrow();
+  });
+
+  it('FAILS CLOSED on a subject that binds a different projection than the served bytes', async () => {
+    const raw = await compactProjectionRaw();
+    const exp = await expectationFor(raw);
+    const admitted = await compactReceiptAdmitted(raw);
+    const wrongRaw = { ...admitted, subject: { ...admitted.subject, projection_raw_sha256: '0'.repeat(64) } };
+    expect(() => parseCompactDisplayReceipt(wrongRaw, exp)).toThrow(/different projection/);
+    const wrongSelf = { ...admitted, subject: { ...admitted.subject, projection_self_sha256_declared: '0'.repeat(64) } };
+    expect(() => parseCompactDisplayReceipt(wrongSelf, exp)).toThrow(/different projection/);
   });
 });

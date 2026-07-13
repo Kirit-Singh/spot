@@ -97,10 +97,30 @@ export interface CompactStage2ReleaseMetadata {
   };
 }
 
+/**
+ * W3 exact admission subject (verify_display_projection.py). Binds the independent receipt to the EXACT
+ * projection bytes it verified — the raw-file hash, the canonical hash, and the projection's own self-hash
+ * (both the document's declared value and the verifier's recompute, plus their agreement) — closing the
+ * n_arms-alone weakness where a receipt was transferable to any different projection with the same arm
+ * count. The verifier recomputes these from the file on disk; the UI checks them against the served bytes.
+ */
+export interface CompactReceiptAdmissionSubject {
+  projection_file: string;
+  projection_raw_sha256: string;
+  projection_canonical_sha256: string;
+  projection_self_sha256_declared: string;
+  projection_self_sha256_recomputed: string;
+  self_hash_agrees: boolean;
+}
+
 export interface CompactDisplayVerificationReceipt {
   verifier_id: typeof COMPACT_STAGE2_VERIFIER;
   generator_is_not_verifier: true;
   rebuilt_from_admitted_native_bytes: true;
+  /** Exact projection-subject binding (W3). Required — a receipt admitting by n_arms alone is refused. */
+  subject: CompactReceiptAdmissionSubject;
+  /** Per-lane external admission evidence the view was rebuilt from (dynamic keys). Must be non-empty. */
+  admitted_inputs: Record<string, unknown>;
   n_arms: number;
   n_failed: 0;
   failures: [];

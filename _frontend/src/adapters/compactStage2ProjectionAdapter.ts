@@ -257,16 +257,52 @@ export async function parseCompactStage2Projection(raw: unknown, expectedSelfHas
     projection_sha256: declared, n_arms, arms, bindings };
 }
 
-/** Strictly admit the independent display-projection receipt after its bytes were hash-checked. */
-export function parseCompactDisplayReceipt(raw: unknown, expectedArms: number): CompactDisplayVerificationReceipt {
+/** The exact projection identity a receipt must admit — n_arms alone is deliberately insufficient. */
+export interface CompactReceiptExpectation {
+  n_arms: number;
+  projection_raw_sha256: string;
+  projection_canonical_sha256: string;
+  projection_self_sha256: string;
+}
+
+/**
+ * Strictly admit the independent display-projection receipt after its bytes were hash-checked. Beyond the
+ * verdict + exact-arm count, this enforces the W3 exact-SUBJECT binding: the receipt must name the EXACT
+ * projection it verified (raw/canonical/self sha) plus the admitted per-lane native receipts + inventory.
+ * A receipt that admits by arm count alone (no `subject`, or a `subject` binding different projection
+ * bytes) is REFUSED — so the real-data loader fails closed until W3 emits receipts carrying this subject.
+ */
+export function parseCompactDisplayReceipt(raw: unknown, expected: CompactReceiptExpectation): CompactDisplayVerificationReceipt {
   if (!isObject(raw)) fail('malformed', 'display-projection verification receipt must be an object');
-  exactKeys(raw, ['failures', 'generator_is_not_verifier', 'n_arms', 'n_failed',
-    'rebuilt_from_admitted_native_bytes', 'verdict', 'verifier_id'], 'display_receipt');
+  exactKeys(raw, ['admitted_inputs', 'failures', 'generator_is_not_verifier', 'n_arms', 'n_failed',
+    'rebuilt_from_admitted_native_bytes', 'subject', 'verdict', 'verifier_id'], 'display_receipt');
   if (str(raw.verifier_id, 'display_receipt.verifier_id') !== COMPACT_STAGE2_VERIFIER ||
       raw.generator_is_not_verifier !== true || raw.rebuilt_from_admitted_native_bytes !== true ||
       raw.verdict !== 'admit' || uint(raw.n_failed, 'display_receipt.n_failed') !== 0 ||
-      uint(raw.n_arms, 'display_receipt.n_arms') !== expectedArms || arr(raw.failures, 'display_receipt.failures').length !== 0) {
+      uint(raw.n_arms, 'display_receipt.n_arms') !== expected.n_arms || arr(raw.failures, 'display_receipt.failures').length !== 0) {
     fail('verifier_not_admitted', 'independent display-projection receipt did not admit these exact arms');
+  }
+  // W3 exact-subject binding: the receipt must name the EXACT projection it verified, not just a count.
+  // A matching n_arms on different projection bytes is refused here (closes the same-n_arms weakness).
+  const subject = raw.subject;
+  if (!isObject(subject)) fail('verifier_not_admitted', 'display receipt has no exact projection-subject binding (n_arms alone is not accepted)');
+  exactKeys(subject, ['projection_canonical_sha256', 'projection_file', 'projection_raw_sha256',
+    'projection_self_sha256_declared', 'projection_self_sha256_recomputed', 'self_hash_agrees'], 'display_receipt.subject');
+  str(subject.projection_file, 'display_receipt.subject.projection_file');
+  const declaredSelf = hex64(subject.projection_self_sha256_declared, 'display_receipt.subject.projection_self_sha256_declared');
+  const recomputedSelf = hex64(subject.projection_self_sha256_recomputed, 'display_receipt.subject.projection_self_sha256_recomputed');
+  if (hex64(subject.projection_raw_sha256, 'display_receipt.subject.projection_raw_sha256') !== expected.projection_raw_sha256 ||
+      hex64(subject.projection_canonical_sha256, 'display_receipt.subject.projection_canonical_sha256') !== expected.projection_canonical_sha256 ||
+      declaredSelf !== expected.projection_self_sha256) {
+    fail('verifier_not_admitted', 'display receipt subject binds a different projection than the served bytes');
+  }
+  // the verifier must have independently CONFIRMED the projection's own self-hash (declared == recomputed)
+  if (subject.self_hash_agrees !== true || declaredSelf !== recomputedSelf) {
+    fail('verifier_not_admitted', 'display receipt subject self-hash does not agree with the verifier recompute');
+  }
+  // the per-lane external admission evidence the view was rebuilt from must be present + non-empty
+  if (!isObject(raw.admitted_inputs) || Object.keys(raw.admitted_inputs).length === 0) {
+    fail('verifier_not_admitted', 'display receipt carries no admitted native-input evidence');
   }
   return raw as unknown as CompactDisplayVerificationReceipt;
 }

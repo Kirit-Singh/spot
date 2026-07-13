@@ -85,8 +85,12 @@ const PATHWAY_SOURCES = ['reactome', 'go_bp'];
 const STAGE2_TOP_KEYS = ['analysis_mode', 'arms', 'authoritative_artifacts_are_the_native_ones',
   'bindings', 'cap_policy', 'combined_objective', 'cross_arm_score_or_order', 'method_version',
   'n_arms', 'projection_sha256', 'schema_version', 'selection_id', 'selection_independent'];
-const STAGE2_RECEIPT_KEYS = ['failures', 'generator_is_not_verifier', 'n_arms', 'n_failed',
-  'rebuilt_from_admitted_native_bytes', 'verdict', 'verifier_id'];
+const STAGE2_RECEIPT_KEYS = ['admitted_inputs', 'failures', 'generator_is_not_verifier', 'n_arms', 'n_failed',
+  'rebuilt_from_admitted_native_bytes', 'subject', 'verdict', 'verifier_id'];
+// W3 exact admission subject (verify_display_projection.py): binds the EXACT projection the receipt
+// verified — raw/canonical hashes + the projection's declared vs recomputed self-hash + their agreement.
+const STAGE2_SUBJECT_KEYS = ['projection_canonical_sha256', 'projection_file', 'projection_raw_sha256',
+  'projection_self_sha256_declared', 'projection_self_sha256_recomputed', 'self_hash_agrees'];
 
 function fail(msg) {
   throw new Error('pack: ' + msg);
@@ -286,10 +290,28 @@ function exactList(v, expected, path) {
 
 function compactStage2Input(routeInput) {
   nObj(routeInput, 'stage2 route');
-  const projection = nObj(routeInput.projection, 'stage2 route.projection');
+  // W3 writes SORTED PYTHON JSON bytes; the subject raw hash is over that EXACT file. We accept those
+  // verbatim bytes, parse ONLY for validation, and serve the original text unchanged (re-serializing
+  // would change float formatting / key order / newlines and break the raw-hash + subject binding).
+  const projectionText = nStr(routeInput.projection_text, 'stage2 route.projection_text');
+  let projection;
+  try { projection = JSON.parse(projectionText); } catch { fail('stage2 route.projection_text is not valid JSON'); }
+  if (!projection || typeof projection !== 'object' || Array.isArray(projection)) {
+    fail('stage2 route.projection_text must decode to an object');
+  }
   const displayReceipt = nObj(routeInput.display_verifier_receipt,
     'stage2 route.display_verifier_receipt');
   exactKeys(displayReceipt, STAGE2_RECEIPT_KEYS, 'stage2 route.display_verifier_receipt');
+  const subject = nObj(displayReceipt.subject, 'stage2 route.display_verifier_receipt.subject');
+  exactKeys(subject, STAGE2_SUBJECT_KEYS, 'stage2 route.display_verifier_receipt.subject');
+  for (const h of ['projection_raw_sha256', 'projection_canonical_sha256', 'projection_self_sha256_declared', 'projection_self_sha256_recomputed']) {
+    if (!HEX64.test(subject[h])) fail(`stage2 display receipt subject.${h} must be a 64-hex sha256`);
+  }
+  if (subject.self_hash_agrees !== true || subject.projection_self_sha256_declared !== subject.projection_self_sha256_recomputed) {
+    fail('stage2 display receipt subject self-hash does not agree with the verifier recompute');
+  }
+  const admittedInputs = nObj(displayReceipt.admitted_inputs, 'stage2 route.display_verifier_receipt.admitted_inputs');
+  if (Object.keys(admittedInputs).length === 0) fail('stage2 display receipt admitted_inputs must be non-empty');
   const release = nObj(routeInput.compact_release, 'stage2 route.compact_release');
   const runId = nStr(release.run_id, 'stage2 route.compact_release.run_id');
   const releaseConditions = exactList(release.release_conditions, RELEASE_CONDITIONS,
@@ -307,7 +329,7 @@ function compactStage2Input(routeInput) {
       displayReceipt.n_arms !== projection.n_arms) {
     fail('stage2 independent display-verifier receipt is not admitted for this projection');
   }
-  return { projection, displayReceipt, runId, releaseConditions, pathwaySources, activeSource };
+  return { projection, projectionText, displayReceipt, runId, releaseConditions, pathwaySources, activeSource };
 }
 
 /** Accumulate the admitted cross-stage chain ids from each route's derived projection. */
@@ -377,7 +399,9 @@ export function pack(spec) {
     validateProjectionEnvelope(route, def, projection);
     collectChain(route, projection, chainIds, compact?.runId ?? null);
 
-    const projectionText = JSON.stringify(projection, null, 2);
+    // Compact Stage-2 serves W3's EXACT projection bytes VERBATIM (never re-serialized); derived
+    // Stage-3/4 projections have no external raw text and are serialized here.
+    const projectionText = compact ? compact.projectionText : JSON.stringify(projection, null, 2);
     if (def.projection_path in tree && tree[def.projection_path] !== projectionText) {
       fail(`${route} projection disagrees with the already-packaged shared Stage-2 projection`);
     }
@@ -396,6 +420,14 @@ export function pack(spec) {
         fail(`${route} verifier receipt disagrees with the already-packaged Stage-2 receipt`);
       }
       tree[STAGE2_RECEIPT_PATH] = displayReceiptText;
+      // W3 exact-subject binding: refuse to package a receipt whose subject admits DIFFERENT projection
+      // bytes than the ones being served (closes the same-n_arms weakness at package time, not just load).
+      const subj = compact.displayReceipt.subject;
+      if (subj.projection_raw_sha256 !== sha256Hex(projectionText) ||
+          subj.projection_canonical_sha256 !== projection_content_hash ||
+          subj.projection_self_sha256_declared !== projection.projection_sha256) {
+        fail(`${route} display receipt subject binds a different projection than the packaged bytes`);
+      }
       compact_stage2 = {
         schema_version: 'spot.ui_compact_stage2_release.v1',
         run_id: compact.runId,
