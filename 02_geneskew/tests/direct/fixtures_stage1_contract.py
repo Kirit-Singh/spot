@@ -90,6 +90,16 @@ def schema_path() -> str:
     return _staged(SCHEMA_REL)
 
 
+def release_selector() -> dict:
+    """The REAL enum space the release admits: programs x directions x conditions x modes.
+
+    Read from the authoritative release rather than retyped, so a test that claims to cover
+    "every valid tuple" covers the tuples Stage-1 can actually emit — not a list that drifts.
+    """
+    with open(_staged(RELEASE_REL)) as fh:
+        return json.load(fh)["selector"]
+
+
 def producer_fixture(name: str) -> dict:
     """One contract STAGE-1 ITSELF emitted — ids included, computed by its code."""
     with open(_staged(PRODUCER_FIXTURES[name])) as fh:
