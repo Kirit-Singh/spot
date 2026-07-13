@@ -153,25 +153,17 @@ def test_a_nested_finding_is_not_double_counted_in_the_release(tmp_path):
 
 # ---------- SEAM B: BLOCKER for W8 — one moiety cannot carry two labels (evidence_id collides)
 
-def test_two_labels_for_one_moiety_currently_COLLIDE_on_evidence_id():
-    """A BLOCKING cross-lane finding, pinned in code so it cannot be forgotten.
+def test_two_labels_for_one_moiety_still_collide_under_the_PRESERVED_v1_identity():
+    """RESOLVED by evidence identity v2 (Option A) — this now pins the preserved v1 behaviour.
 
-    `analysis/safety.py:117` derives
-        evidence_id = f"{candidate_id}.{label_source}.{finding_type}.{i:03d}"
-    with `i` restarting at 0 on every call. The label's own identity (setid, version) is NOT in
-    the id. So two DailyMed SPLs for the SAME moiety produce the same ids and the run is
-    REFUSED by the duplicate-id firewall.
+    v1 derives `{candidate_id}.{label_source}.{finding_type}.{NNN}` with NNN restarting at 0 and
+    the label's own identity absent, so two SPLs for one moiety collide and the run is REFUSED
+    (`duplicate_id`). That is kept EXACTLY as it was — v1 is frozen byte-for-byte — so this test
+    asserts the collision still happens under v1. If it stops, v2 has leaked into the default
+    and v1 reproducibility is broken.
 
-    It fails CLOSED, which is the right instinct — but it means Stage 4 cannot ingest more than
-    one label per moiety at all, and the audit's own sequence requires exactly that:
-    "parse every selected label version; do not select an arbitrary first hit" (§5.4). Real
-    drugs carry many SPLs (temozolomide: 20 on DailyMed).
-
-    W8 (acquisition/selection) will hit this on its first multi-label fetch. The fix — putting
-    the setid/version into the evidence_id — CHANGES v1 evidence ids and therefore every
-    scorecard_set_id, so it is a deliberate contract decision for the orchestrator, not
-    something a lane may do quietly. This test asserts TODAY's behaviour; when the id scheme
-    changes it must be updated on purpose, with the reproducibility cost stated.
+    The multi-label path is `EVIDENCE_IDENTITY_V2`, which puts the setid + version into the id.
+    W8's acquisition must select it. See `tests/test_evidence_identity_v2.py`.
     """
     from analysis.firewall import Rejection
     from analysis.integrity import check_referential_integrity

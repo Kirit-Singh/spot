@@ -10,8 +10,10 @@ Two things this module refuses to do, both enforced by tests:
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable
 
+from .contracts import ID_PATTERN, SourceRecord
 from .evidence_records import (
     EvidenceState,
     FindingType,
@@ -59,6 +61,81 @@ class LabelIdentityError(ValueError):
     """The label is not a label for this candidate's active moiety."""
 
 
+# ------------------------------------------------------------------- evidence identity
+
+# v1: `{candidate_id}.{label_source}.{finding_type}.{NNN}` — the index restarts at 0 on every
+# call and the label's own identity is absent, so two SPLs for one moiety produce the same ids
+# and the run is refused (`duplicate_id`). It fails closed, but Stage 4 cannot then ingest more
+# than one label per moiety — and the source audit requires exactly that ("parse every selected
+# label version; do not select an arbitrary first hit"). Temozolomide carries 20 SPLs.
+#
+# v2 puts the label DOCUMENT (setid + version) into the id, so a finding is identified by the
+# document it was read from and ids are unique — and ORDER-INDEPENDENT — across labels.
+#
+# v2 is OPT-IN. v1 stays the default and is preserved byte-for-byte: every existing
+# scorecard_set_id is unchanged. An acquisition path that selects many labels passes v2.
+EVIDENCE_IDENTITY_V1 = "v1"
+EVIDENCE_IDENTITY_V2 = "v2"
+EVIDENCE_IDENTITY_SCHEMES = (EVIDENCE_IDENTITY_V1, EVIDENCE_IDENTITY_V2)
+
+
+def _evidence_id(scheme: str, candidate_id: str, parsed: ParsedLabel,
+                 finding_type: str, i: int) -> str:
+    if scheme == EVIDENCE_IDENTITY_V1:
+        return f"{candidate_id}.{parsed.label_source}.{finding_type}.{i:03d}"
+
+    # The document is part of the identity. `setid` is the label's stable identifier and
+    # `label_version` distinguishes two revisions of the SAME setid — both are needed: a
+    # re-issued label keeps its setid and bumps its version.
+    doc = parsed.setid or parsed.application_number
+    if not doc:
+        raise LabelIdentityError(
+            "evidence identity v2 needs the label's own identity (setid or application number) "
+            "to tell one label's findings from another's, and this label declares neither")
+    version = parsed.label_version or "unversioned"
+    ident = f"{candidate_id}.{parsed.label_source}.{doc}.v{version}.{finding_type}.{i:03d}"
+    if not re.match(ID_PATTERN, ident):
+        raise LabelIdentityError(
+            f"the v2 evidence id {ident!r} ({len(ident)} chars) is not a legal identifier "
+            f"({ID_PATTERN}). Refusing rather than emitting a row that cannot be referenced.")
+    return ident
+
+
+def source_record_for_label(
+    parsed: ParsedLabel,
+    *,
+    source_record_id: str,
+    acquisition_status: str,
+    access_date: str,
+    url: str | None = None,
+    license: str | None = None,
+    raw_media_type: str | None = None,
+) -> SourceRecord:
+    """One SourceRecord per label DOCUMENT — bytes taken from the parsed document, not passed in.
+
+    A second label is a second source. The bytes, the stable record id (setid) and the release
+    (spl version + effective date) are derived from the document itself, so a caller cannot
+    mint a source record that claims one document while carrying another's hash. The
+    referential firewall then refuses any finding that cites a source whose bytes are not the
+    bytes it was read from (`source_hash_mismatch`).
+    """
+    return SourceRecord(
+        source_record_id=source_record_id,
+        source_type="fixture" if acquisition_status == "synthetic_fixture" else "regulatory_label",
+        source_name=f"{parsed.label_source} label document {parsed.setid or parsed.product_identity}",
+        acquisition_status=acquisition_status,  # type: ignore[arg-type]
+        url=url,
+        record_id=parsed.setid,
+        access_date=access_date,
+        release_version=(f"{parsed.label_source} version={parsed.label_version}; "
+                         f"effective_date={parsed.effective_date}"),
+        license=license,
+        raw_sha256=parsed.raw_sha256,
+        raw_bytes=parsed.raw_bytes,
+        raw_media_type=raw_media_type,
+    )
+
+
 def safety_rows_from_label(
     parsed: ParsedLabel,
     candidate_id: str,
@@ -69,6 +146,7 @@ def safety_rows_from_label(
     *,
     expected_unii: str | None = None,
     expected_moiety_name: str | None = None,
+    evidence_identity: str = EVIDENCE_IDENTITY_V1,
 ) -> list[SafetyEvidenceRecord]:
     """One row per boxed warning / contraindication / warning / interaction / adverse reaction.
 
@@ -114,7 +192,8 @@ def safety_rows_from_label(
     for i, f in enumerate(parsed.findings):
         rows.append(
             SafetyEvidenceRecord(
-                evidence_id=f"{candidate_id}.{parsed.label_source}.{f.finding_type}.{i:03d}",
+                evidence_id=_evidence_id(evidence_identity, candidate_id, parsed,
+                                         f.finding_type, i),
                 candidate_id=candidate_id,
                 active_moiety_id=active_moiety_id,
                 evidence_state=EvidenceState.LABEL_SUPPORTED,
