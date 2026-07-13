@@ -389,6 +389,8 @@ def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDI
                      solver_lock_sha256: Optional[str] = None,
                      independent: bool = True,
                      bundle_run_id: Optional[str] = None,
+                     verifier_code_sha256: Optional[str] = None,
+                     omit_code_sha: bool = False,
                      tamper_hash: bool = False) -> str:
     """A W10 ADMIT report, content-addressed exactly as W10 writes one."""
     doc = json.load(open(os.path.join(bundle_dir, "arm_bundle.json")))
@@ -400,7 +402,7 @@ def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDI
         "schema_version": _cfg.W10_REPORT_SCHEMA,
         "verifier_id": verifier_id or _cfg.W10_VERIFIER_ID,
         "spec_sha256": spec_sha256 or _cfg.W10_SPEC_SHA256,
-        "verifier_code_sha256": "a" * 64,
+        "verifier_code_sha256": verifier_code_sha256 or _cfg.W10_VERIFIER_CODE_SHA256,
         "independent_of_generator": independent,
         "generator_modules_not_imported": ["direct.arm_bundle", "direct.run_arms"],
         "gate_inventory": ["g1", "g2"],
@@ -425,6 +427,12 @@ def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDI
             "n_arm_rows": doc.get("n_arm_rows"),
         },
     }
+    if omit_code_sha:
+        body.pop("verifier_code_sha256")
+
+    # RE-SEALED HONESTLY: the body is hashed AFTER the edit, so report_sha256 agrees with it.
+    # Every integrity gate is satisfied and the report is internally consistent. Only the PIN
+    # refuses it.
     report = dict(body, report_sha256=_csha(body))
     if tamper_hash:                          # a flipped verdict that kept the old hash
         report["verdict"] = _cfg.W10_VERDICT_ADMIT

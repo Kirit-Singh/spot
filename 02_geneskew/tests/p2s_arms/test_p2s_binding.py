@@ -319,3 +319,102 @@ def test_a_refusal_record_carries_no_support():
     assert rec["support_emitted"] is False
     assert rec["reason"] == D.REFUSE_NO_PANEL
     assert rec["arm_key"] == KEY
+
+
+# --------------------------------------------------------------------------- #
+# WHICH CODE RAN — the honestly-resealed report.
+#
+# The gap an independent audit found: a REAL ADMIT whose `verifier_code_sha256` is blanked
+# and whose body is then RE-HASHED so `report_sha256` agrees with it again. Every other gate
+# is satisfied. The report is perfectly self-consistent and names no checker at all.
+#
+# Self-consistency is not authenticity. Only the PIN refuses this.
+# --------------------------------------------------------------------------- #
+def test_MUTATION_an_HONESTLY_RESEALED_report_with_a_ZEROED_code_sha_is_refused(
+        tmp_path, bundle_dir, view):
+    """THE AUDIT FINDING. It used to ADMIT."""
+    forged = fx.write_w10_report(str(tmp_path / "w10.json"), bundle_dir, view,
+                                 verifier_code_sha256="0" * 64)
+
+    # the forgery is HONEST: it agrees with itself, so every integrity gate passes
+    doc = json.load(open(forged))
+    body = {k: v for k, v in doc.items() if k != "report_sha256"}
+    from p2s_arms.w10 import content_sha256
+    assert doc["report_sha256"] == content_sha256(body), \
+        "the fixture must reseal honestly, or this tests the wrong thing"
+    assert doc["verdict"] == "ADMIT"
+    assert doc["verifier_id"] == config.W10_VERIFIER_ID
+    assert doc["spec_sha256"] == config.W10_SPEC_SHA256
+
+    # ...and it is refused anyway, on the code pin alone
+    with pytest.raises(D.RefusalError) as e:
+        _bind(bundle_dir, forged, view)
+    assert e.value.reason == D.REFUSE_W10_WRONG_CODE
+    assert "resealed" in str(e.value)
+
+
+def test_MUTATION_a_report_that_names_NO_code_is_refused(tmp_path, bundle_dir, view):
+    """A checker that will not name its own code is unfalsifiable."""
+    forged = fx.write_w10_report(str(tmp_path / "w10.json"), bundle_dir, view,
+                                 omit_code_sha=True)
+    with pytest.raises(D.RefusalError) as e:
+        _bind(bundle_dir, forged, view)
+    assert e.value.reason == D.REFUSE_W10_WRONG_CODE
+    assert "unfalsifiable" in str(e.value)
+
+
+@pytest.mark.parametrize("code", [
+    "0" * 64,                                    # blanked
+    "f" * 64,                                    # invented
+    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a833",   # off by one char
+    "3bc55ba5",                                  # truncated to the display prefix
+])
+def test_MUTATION_a_WRONG_verifier_code_sha_is_refused(code, tmp_path, bundle_dir, view):
+    """Including the display prefix: a truncated pin is not the pin."""
+    forged = fx.write_w10_report(str(tmp_path / "w10.json"), bundle_dir, view,
+                                 verifier_code_sha256=code)
+    with pytest.raises(D.RefusalError) as e:
+        _bind(bundle_dir, forged, view)
+    assert e.value.reason == D.REFUSE_W10_WRONG_CODE
+
+
+def test_the_W10_code_pin_is_RE_DERIVABLE_from_W10s_own_recipe():
+    """Re-derive it here, from the blobs at W10's commit — not copied from a report.
+
+    W10's recipe: {module: sha256(file)} over its eight verifier modules -> canonical json ->
+    sha256. Reimplemented, never imported: a pin the checker borrowed from the thing it checks
+    is a pin nobody checked.
+    """
+    import hashlib
+    import subprocess
+
+    modules = ("verify_arm_bundle.py", "verify_arm_gates.py", "verify_arm_report.py",
+               "verify_arm_rules.py", "verify_arm_science.py", "verify_arm_view.py",
+               "verify_arm_recompute.py", "verify_direct_release.py")
+    assert len(modules) == config.W10_VERIFIER_N_MODULES
+
+    try:
+        per_file = {}
+        for m in sorted(modules):
+            blob = subprocess.run(
+                ["git", "show",
+                 f"{config.W10_VERIFIER_COMMIT_HINT}:02_geneskew/analysis/direct/{m}"],
+                capture_output=True, check=True).stdout
+            per_file[m] = hashlib.sha256(blob).hexdigest()
+    except (subprocess.CalledProcessError, OSError):
+        pytest.skip("W10's verifier commit is not in this checkout")
+
+    canonical = json.dumps(per_file, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True, allow_nan=False)
+    derived = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    assert derived == config.W10_VERIFIER_CODE_SHA256
+
+
+def test_the_pinned_code_sha_is_bound_INTO_the_artifact(tmp_path, view, bundle_dir,
+                                                        w10_report, inputs):
+    out = fx.run_producer(tmp_path, view=view, bundle_dir=bundle_dir,
+                          w10_report=w10_report, inputs=inputs)
+    doc = json.load(open(os.path.join(out["out_dir"], "p2s_support.json")))
+    m = doc["method"]
+    assert m["w10_verifier_code_sha256"] == config.W10_VERIFIER_CODE_SHA256
+    assert m["w10_verifier_code_pinned"] is True

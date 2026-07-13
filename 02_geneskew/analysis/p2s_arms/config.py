@@ -206,6 +206,23 @@ TEMPORAL_ARTIFACT_EMITTED = False
 # is a bundle admitting itself and is REFUSED.
 # --------------------------------------------------------------------------- #
 W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
+
+# WHICH CHECKER RAN. The sha256 over W10's eight verifier modules, exactly as
+# `verify_arm_report.verifier_code_sha256()` combines them: {module: sha256(file)} ->
+# canonical json -> sha256.
+#
+# RE-DERIVED INDEPENDENTLY from the git blobs at W10 commit 3119900 — not copied from a
+# report, and not imported from W10's code. It matched.
+#
+# WHY IT IS PINNED AND NOT MERELY RECORDED. Without this, an HONESTLY RESEALED report
+# passes: take a real ADMIT, set `verifier_code_sha256` to 00...00, re-hash the body so
+# `report_sha256` agrees with it, and every other gate is satisfied. The report is then
+# internally consistent and says nothing about which code produced the verdict. A checker
+# that will not name its own code is unfalsifiable, and a name nobody checks is not a name.
+W10_VERIFIER_CODE_SHA256 = \
+    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
+W10_VERIFIER_COMMIT_HINT = "3119900"
+W10_VERIFIER_N_MODULES = 8
 W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
 W10_SPEC_SHA256 = "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f"
 W10_VERDICT_ADMIT = "ADMIT"                       # uppercase, as W10 writes it
