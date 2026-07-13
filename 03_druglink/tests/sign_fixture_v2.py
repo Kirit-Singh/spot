@@ -125,22 +125,6 @@ def arm(lane: str, records: list[dict[str, Any]], *, key: str = "A",
         records=tuple(records))
 
 
-def bridge_binding(arms: list[sa.LoadedArm]) -> dict[str, Any]:
-    """The BRIDGE these fixture rows were typed by — through the producer's OWN binding shape.
-
-    Every measured row carries a namespace and a modality, and the only place those can come from
-    is the bridge. So a fixture aggregate names a bridge too: an emitted bundle that named none
-    could be rebuilt from a DIFFERENT admitted bridge and come out byte-identical.
-    """
-    n = sum(len(a.records) for a in arms if a.lane in sa.MEASURED_LANES)
-    return sa.AdmittedBridge(
-        bridge_raw_sha256="2" * 64, bridge_canonical_sha256="3" * 64,
-        bridge_self_hash="4" * 64, report_raw_sha256="5" * 64, receipt_raw_sha256="6" * 64,
-        verifier_id="spot.stage02.stage3_bridge.independent_verifier.v1", verdict="admit",
-        n_rows=n, n_pathway_contexts=0, rows_by_arm={},
-        rule_id="spot.stage02.stage3_row.direction_and_namespace.v1").binding()
-
-
 def aggregate(arms: list[sa.LoadedArm]) -> sa.AdmittedAggregate:
     return sa.AdmittedAggregate(
         artifact_class="fixture", manifest_raw_sha256="e" * 64,
@@ -149,7 +133,7 @@ def aggregate(arms: list[sa.LoadedArm]) -> sa.AdmittedAggregate:
         stage1_release_sha256="1" * 64,
         # AdmittedBundle holds a dict, so it is not hashable: dedupe by KEY, not by set.
         bundles=tuple({a.bundle.bundle_key: a.bundle for a in arms}.values()),
-        arms=tuple(arms), program_ids=("P0",), bridge_binding=bridge_binding(arms))
+        arms=tuple(arms), program_ids=("P0",))
 
 
 def edges_for(store: ur.AdmittedStore, arms: list[sa.LoadedArm]) -> list[dict[str, Any]]:

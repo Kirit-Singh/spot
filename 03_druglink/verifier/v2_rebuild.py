@@ -343,17 +343,8 @@ def reconstruct(rep: Report, *, aggregate: dict[str, Any], store: dict[str, Any]
                 detail=f"identity={candidate['identity_status']}")
             dispositions[row["disposition_id"]] = row
 
-    # THE ARMS AS THE EMITTER SEES THEM: a measured arm's records are the NATIVE rows TYPED by the
-    # bridge. Reconstructing from the untyped rows read a namespace of None on every measured row,
-    # so every target fell out of the admitted universe and each arm rebuilt with zero coverage —
-    # a reconstruction that would refuse an honest bundle and, worse, would ADMIT one that had
-    # genuinely lost its identities.
-    typed_arms = [dict(arm, records=typed.get(arm["arm_key"], []))
-                  if C.ORIGIN_FOR_LANE[arm["lane"]] in v2.MEASURED_ORIGINS else arm
-                  for arm in aggregate["arms"]]
-
     return {
-        "arm_slots": R.arm_slots(typed_arms, store, edges, records),
+        "arm_slots": R.arm_slots(aggregate["arms"], store, edges, records),
         "target_drug_edges": sorted(edges, key=lambda e: str(e["edge_id"])),
         # THE UNADMITTED LANE CONTRIBUTES ZERO. Reconstructed as empty and COMPARED, so a single
         # context row the producer emitted from it is a refusal rather than a silence.

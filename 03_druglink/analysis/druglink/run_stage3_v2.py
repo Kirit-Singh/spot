@@ -54,24 +54,22 @@ V2_REQUIRED = ("--stage2-manifest", "--stage2-report", "--bundles-root", "--stag
                "--universe-store", "--stage2-bridge", "--stage2-bridge-report",
                "--stage2-bridge-receipt")
 
-# The bridge CONSUMER. It exists now (:mod:`druglink.stage2_bridge`): it re-hashes the bridge, it
-# requires the RECEIPT (the report alone names no bytes), it cross-binds the bridge to the
-# aggregate STAGE 3 ADMITTED, it re-checks every row's arm_value/rank/evaluable against the
-# ADMITTED NATIVE ranking records, and it re-derives the sign rather than trusting the serialized
-# modulation.
+# The bridge CONSUMER is not implemented yet. The flags exist (the contract is published to W3
+# and they are generating against it), but nothing in this module reads them.
 #
-# The gate below stays, because an accepted-and-ignored flag is worse than a missing one: if the
-# consumer is ever removed, a caller passing --stage2-bridge would get a run that silently never
-# honoured it — an artifact that looks like it was built on admitted identity and modality when it
-# was not.
+# An accepted-and-ignored flag is worse than a missing one: a caller who passes --stage2-bridge
+# would get a run that silently never honoured it, and an artifact that looks like it was built
+# on admitted identity and modality when it was not. So the v2 path REFUSES BY NAME until the
+# consumer lands. It is not "wired" — it is declared, and it says so.
 GATE_BRIDGE_CONSUMER_NOT_IMPLEMENTED = "the_stage3_bridge_consumer_is_not_implemented_yet"
 
 
 def bridge_consumer_ready() -> bool:
     """Can Stage-3 actually ADMIT and CONSUME the bridge (not merely accept its path)?
 
-    TRUE. ``stage2_aggregate.admit_bridge`` is the admitter, and ``typed_aggregate`` is what
-    carries its typed rows into the emitter.
+    False. `stage2_contract` has no bridge admitter: nothing re-hashes `bridge_sha256`, nothing
+    binds the separate bridge report to those exact bytes, nothing cross-binds the bridge to the
+    aggregate, and nothing re-checks the bridge's arm_value against the native ranking file.
 
     This reports a fact about THIS module — whether the consumer exists — and it is checked by a
     test that greps for the admitter. It is NOT an artifact-admission gate. (An artifact gate
@@ -120,26 +118,16 @@ def _v2_main(args) -> int:
             manifest_path=args.stage2_manifest, report_path=args.stage2_report,
             bundles_root=args.bundles_root, stage1_release_path=args.stage1_release,
             artifact_class=args.artifact_class)
-        # THE BRIDGE, ADMITTED FROM DISK against that exact aggregate. Its typed rows then REPLACE
-        # the native ranking records on the measured arms — the emitter needs a namespace and a
-        # modality on every measured row, and the native records have neither. Nothing else about
-        # the aggregate changes: arm_value, rank and evaluable are the native bytes' to state, and
-        # `admit_bridge` has already refused any row that moved one.
-        bridge = sa.admit_bridge(
-            bridge_path=args.stage2_bridge, report_path=args.stage2_bridge_report,
-            receipt_path=args.stage2_bridge_receipt, aggregate=aggregate,
-            aggregate_report_path=args.stage2_report)
-        typed = sa.typed_aggregate(aggregate, bridge)
         store = universe_rows.load_store(args.universe_store)
         loaded = load_v2_inputs(
             universe_store=args.universe_store,
             # the REAL typed universe, derived from the store's own rows — never []
             universe_targets=store.typed_universe,
             require_production=True,
-            admitted_aggregate=typed)
+            admitted_aggregate=aggregate)
         emitted = artifacts_v2.emit(
             output_root=args.output_root, artifact_class=args.artifact_class,
-            aggregate=typed, store=store, report_path=args.stage2_report)
+            aggregate=aggregate, store=store, report_path=args.stage2_report)
     except (admitted_universe.AdmittedUniverseError, v2.V2InputLoaderError,
             sa.Stage2AggregateError, universe_rows.UniverseRowsError,
             aq.ArmQueryError) as exc:
@@ -158,10 +146,6 @@ def _v2_main(args) -> int:
     print(f"stage2_aggregate {aggregate.manifest_self_hash[:16]}… "
           f"admitted_by={aggregate.verifier_id} verdict={aggregate.verdict}")
     print(f"                 {len(aggregate.bundles)} bundles / {len(aggregate.arms)} arm slots")
-    print(f"stage2_bridge    {bridge.bridge_raw_sha256[:16]}… "
-          f"admitted_by={bridge.verifier_id} verdict={bridge.verdict}")
-    print(f"                 {bridge.n_rows} typed rows / {bridge.n_pathway_contexts} pathway "
-          "contexts (CONTEXT only; a pathway never sources a drug edge)")
     print(f"universe_store   {binding['store_id'][:16]}… "
           f"({len(store.typed_universe)} typed targets)")
     print(f"bundle           {emitted['bundle_id']}")

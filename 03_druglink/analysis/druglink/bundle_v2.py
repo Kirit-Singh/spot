@@ -1,20 +1,20 @@
 """The Stage-3 **v2** document: what the bundle id commits to, and what it may never carry.
 
-Audit blocker **B8**. v1 is FROZEN — Stage 4 binds ``spot.stage03_drug_annotation.v1`` by SHA — so
-v2 does not widen it: this is a NEW schema id with new table contracts, emitted beside v1.
-:mod:`druglink.artifacts_v2` owns the TABLES and the atomic write; this module owns the document,
-its bindings, and the two structural refusals.
+Audit blocker **B8**. v1 is FROZEN — Stage 4 binds ``spot.stage03_drug_annotation.v1`` by
+SHA — so v2 does not widen it. This is a NEW schema id with new table contracts, emitted
+beside v1 and handed to the Stage-4 owner deliberately.
+
+:mod:`druglink.artifacts_v2` owns the TABLES and the atomic write; this module owns the
+document, its bindings, and the two structural refusals.
 
 WHAT THE BUNDLE ID COMMITS TO
 -----------------------------
 Everything that could change the science, and nothing that could not:
 
   * the Stage-2 aggregate manifest — RAW and CANONICAL identity, and its own self-hash;
-  * the SEPARATE independent aggregate report — raw + canonical, verifier and verdict,
-    re-checked here to bind THIS manifest (a report that admits other bytes admits nothing);
-  * the W3 STAGE-3 BRIDGE, its SEPARATE report and its RECEIPT — the ONLY source of every
-    measured row's target namespace and perturbation modality. A bundle that did not name it
-    could be rebuilt from a DIFFERENT admitted bridge and come out byte-identical;
+  * the SEPARATE independent aggregate report — raw + canonical identity, verifier and
+    verdict, re-checked here to bind THIS manifest (a report that admits other bytes admits
+    nothing about the artifact in hand);
   * every consumed lane artifact — all 15, by raw AND canonical hash;
   * the Stage-1 release the aggregate was computed against;
   * the admitted universe store — its id, the typed universe it was extracted FOR, and the
@@ -23,9 +23,9 @@ Everything that could change the science, and nothing that could not:
   * the code tree, the schema set and the environment lock;
   * every scientific table's content hash, and the candidates themselves.
 
-**Paths and timestamps stay OUT** — the document carries no clock (``created_at`` lives in the
-manifest, outside its identity). A bundle re-run from the same inputs on another host, in another
-directory, at another hour is the same bundle.
+**Paths and timestamps stay OUT** — the document carries no clock at all (``created_at`` lives
+in the manifest, outside its identity). A bundle re-run from the same inputs on another host,
+in another directory, at another hour is the same bundle.
 """
 from __future__ import annotations
 
@@ -50,11 +50,13 @@ V2_SCHEMA = "spot.stage03_drug_annotation.v2"
 V2_MANIFEST_SCHEMA = "spot.stage03_manifest.v2"
 V2_METHOD_VERSION = "stage3-druglink-v2-reusable-arms-typed-origins"
 
-# THE DOCUMENT FILENAME IS PART OF THE CONTRACT, not a convention. Stage 4 opens this file BY
-# NAME, and a producer/consumer that disagree about the spelling do not fail loudly — the reader
+# THE DOCUMENT FILENAME IS PART OF THE CONTRACT, not a convention.
+#
+# Stage 4 opens this file BY NAME. A producer and a consumer that disagree about the spelling
+# (``drug_annotation.v2.json`` vs ``drug_annotation_v2.json``) do not fail loudly — the reader
 # simply finds nothing, and "no candidates" is indistinguishable from "no file". So the name is
-# published in the schema, carried INSIDE the document, echoed in the manifest, and the verifier
-# refuses a bundle whose document is not named what the contract says.
+# published in the schema, carried INSIDE the document, echoed in the manifest, and the
+# verifier refuses a bundle whose document is not named what the contract says.
 V2_DOC = {ac.ANALYSIS: "drug_annotation.v2.json",
           ac.FIXTURE: "fixture_drug_annotation.v2.json"}
 
@@ -83,8 +85,10 @@ PROVENANCE_COLUMNS: tuple[str, ...] = (
 PROVENANCE_KEY: tuple[str, ...] = ("provenance_id",)
 
 # --------------------------------------------------------------------------- #
-# The two vocabularies this bundle may not contain, at ANY depth. Structural, not a single
-# boolean: a revived combined objective arrives as ONE new field, nested, in a later writer.
+# The two vocabularies this bundle may not contain, at ANY depth.
+#
+# Structural, not a single boolean: the whole point of reviving a combined objective is that
+# it arrives as ONE new field, in a nested block, in a later writer.
 # --------------------------------------------------------------------------- #
 OBJECTIVE_TOKENS = ("combined", "balanced", "weighted", "overall", "headline", "composite",
                     "best_of", "winner", "score")
@@ -129,7 +133,8 @@ def check_no_combined_objective(obj: Any) -> None:
     """No combined / balanced / weighted / overall / headline / composite score, at any depth.
 
     This bundle holds reusable arms and three typed origins that answer DIFFERENT questions. A
-    number that pools them has no unit, no estimand, and no way back to its evidence.
+    number that pools them has no unit, no estimand, and no way back to the evidence it came
+    from.
     """
     for key, path in _keys(obj):
         low = key.lower()
@@ -147,9 +152,9 @@ def check_no_combined_objective(obj: Any) -> None:
 def check_no_pq_fdr(obj: Any) -> None:
     """No p, q, FDR or adjusted-p, at any depth. ``inference_status`` is ``not_calibrated``.
 
-    Nothing in Stage 3 is calibrated: no null distribution behind a target->drug edge, no
-    multiple-testing frame over reusable arms. A p-value here would have the FORM of a calibrated
-    statistic and none of the meaning — and a reader would be right to trust it.
+    Nothing in Stage 3 is calibrated: there is no null distribution behind a target->drug edge
+    and no multiple-testing frame over reusable arms. A p-value here would have the FORM of a
+    calibrated statistic and none of the meaning — and a reader would be right to trust it.
     """
     for key, path in _keys(obj):
         low = key.lower()
@@ -237,8 +242,6 @@ def aggregate_binding(aggregate: sa.AdmittedAggregate,
         "manifest_self_hash": aggregate.manifest_self_hash,
         "independent_report": dict(report),
         "stage1_release_sha256": aggregate.stage1_release_sha256,
-        # WHICH BRIDGE TYPED THESE ARMS. See the header: it is in the bundle id.
-        "stage3_bridge": dict(aggregate.bridge_binding),
         # Every consumed lane artifact, by BOTH hashes. A bundle nobody can address is a bundle
         # nobody admitted.
         "lane_artifacts": sorted(
@@ -340,10 +343,6 @@ def provenance_rows(*, aggregate: sa.AdmittedAggregate, store: ur.AdmittedStore,
          "raw_sha256": aggregate.stage1_release_sha256, "canonical_sha256": None,
          "verifier_id": None, "verdict": None,
          "detail": "the release the aggregate was computed against"},
-        # THE BRIDGE, ENUMERABLE — the bridge, the SEPARATE report that admitted it, and the
-        # RECEIPT that joins it to the aggregate. It is the only source of target identity and
-        # perturbation modality here, so a reader must be able to reopen the exact bytes.
-        *sa.bridge_provenance_rows(aggregate.bridge_binding),
         {"kind": "universe_store", "subject": store.store_id, "raw_sha256": None,
          "canonical_sha256": store.typed_universe_sha256,
          "verifier_id": str((store.store_binding or {}).get("admitted_by") or ""),

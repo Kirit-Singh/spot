@@ -56,8 +56,6 @@ PROGRAMS = tuple(f"FIXTURE_PROG_{i:02d}" for i in range(sa.N_PROGRAMS))
 CONDITIONS = sa.CONDITIONS
 SOURCES = sa.PATHWAY_SOURCES
 
-N_PROGRAMS_X_ARMS = 1                    # this fixture asserts no row count
-
 MANIFEST_NAME = "stage2_run_manifest.json"
 REPORT_NAME = "stage2_aggregate_verification.json"
 RECEIPT_NAME = "stage2_stage3_receipt.json"
@@ -296,35 +294,8 @@ def build(root: str, *, mutate_manifest=None, mutate_report=None, mutate_receipt
             "manifest_doc": manifest}
 
 
-def bridge_binding(paths: dict[str, str]) -> dict[str, Any]:
-    """The BRIDGE these typed rows came from — through the PRODUCER'S own binding shape.
-
-    This fixture's ranking rows already carry the namespace and the modality W3's bridge supplies
-    (it stands in for the post-bridge bytes), so the aggregate must NAME the bridge they came
-    from: an emitted bundle that named none could be rebuilt from a DIFFERENT admitted bridge and
-    come out byte-identical. The hashes are the ones the fixture's own RECEIPT binds, so the two
-    artifacts cannot drift apart.
-    """
-    with open(paths["receipt"], encoding="utf-8") as fh:
-        receipt = json.load(fh)
-    # A receipt a test deliberately broke still yields a binding — the RECEIPT gate is what
-    # refuses it, by name, and it must not be pre-empted by a KeyError here.
-    bound = receipt.get("bridge") or {"raw_sha256": "0" * 64, "canonical_sha256": "0" * 64}
-    return sa.AdmittedBridge(
-        bridge_raw_sha256=bound["raw_sha256"],
-        bridge_canonical_sha256=bound["canonical_sha256"],
-        bridge_self_hash=bound["canonical_sha256"],
-        report_raw_sha256=file_sha256(paths["report"]),
-        receipt_raw_sha256=file_sha256(paths["receipt"]),
-        verifier_id="spot.stage02.stage3_bridge.independent_verifier.v1", verdict="admit",
-        n_rows=N_PROGRAMS_X_ARMS, n_pathway_contexts=0, rows_by_arm={},
-        rule_id="spot.stage02.stage3_row.direction_and_namespace.v1").binding()
-
-
 def admit(paths: dict[str, str]) -> sa.AdmittedAggregate:
     """The sealed release, through the REAL native admission gate. No shortcut, no fallback."""
-    from dataclasses import replace
-    aggregate = sa.admit_aggregate(manifest_path=paths["manifest"], report_path=paths["report"],
-                                   bundles_root=paths["bundles_root"],
-                                   stage1_release_path=paths["stage1_release"])
-    return replace(aggregate, bridge_binding=bridge_binding(paths))
+    return sa.admit_aggregate(manifest_path=paths["manifest"], report_path=paths["report"],
+                              bundles_root=paths["bundles_root"],
+                              stage1_release_path=paths["stage1_release"])

@@ -7,7 +7,7 @@
     "aggregate_verifier_id": "spot.stage02.run_manifest.verifier.v1",
     "bridge_canonical_sha256": "2b0d92d8b06b1fb700f1d7cdc99fcc87b0032ae4e1e622068071d16cebcbaa92",
     "bridge_raw_sha256": "9e38be95b3a56c562ade1e72a6c3d8abba38ff588dae7323dd7c5fcc9d2704d2",
-    "projection_sha256": "457e12e7b0e905b1af8b05fbdd8686e325152e35e9745416fe6f9a3a97d43b1b",
+    "projection_sha256": "77b63a1b77fece8870089ceb8782ff8e69a6db6abd5e4019ddf05f07b5fbfeea",
     "receipt_schema": "spot.stage02_stage3_receipt.v1"
   },
   "arm_evidence": [
@@ -181,7 +181,7 @@
     ],
     "projection_schema_set_sha256": "578d82a29a065541c440229df1c55945349749688053c518fac3e7680fc5446c",
     "projection_seal_schema": "spot.stage03_selection_view.projection_seal.v1",
-    "projection_sha256": "457e12e7b0e905b1af8b05fbdd8686e325152e35e9745416fe6f9a3a97d43b1b",
+    "projection_sha256": "77b63a1b77fece8870089ceb8782ff8e69a6db6abd5e4019ddf05f07b5fbfeea",
     "projection_verifier_id": "spot.stage03.selection_view.projection_identity.v1",
     "row_order_carries_meaning": {
       "arm_evidence": true,
@@ -189,7 +189,7 @@
       "tables": false,
       "tables_reason": "every projected table is ordered by CONTENT ID, which is not a ranking; a row set is a SET and its content hash is row-order-invariant. A DUPLICATE row identity is still refused: a set cannot hold the same row twice, and a duplicate double-counts the evidence it carries"
     },
-    "schemas_sha256": "fc7ed2674dd62472ecf619b922c135d66070828941520455e5a3cb287392c551",
+    "schemas_sha256": "b19f26cb1992b1c4bf1cca74ab720e6b1cc219e8d540de1a0c422210c00810bf",
     "tables": {
       "arm_slots": {
         "content_sha256": "fddc79840b0c9633501874c71ba3e6218038a126a932024184f704e2653c2686",
@@ -198,8 +198,8 @@
         "schema_id": "spot.stage03_selection_view.table.arm_slots.v1"
       },
       "arm_summaries": {
-        "content_sha256": "33e4ce55e06c2d3314e53c578ba37d155589d292945f2bed18625b33abbaf4bc",
-        "raw_sha256": "11385fc9fa068cc3d932e966f9d9a8cc6b5545b07a33298e5067715de2eab5bd",
+        "content_sha256": "a23d900f8b860b8d80eb32d7f85e74f40b810089f5b6ff31331cd6e896ba4d11",
+        "raw_sha256": "cd6393d8bdcb072d6210f78867a6e16d43c0a6db3318ee2492960861a0aef560",
         "row_count": 10,
         "schema_id": "spot.stage03_selection_view.table.arm_summaries.v1"
       },
@@ -323,16 +323,16 @@
     "stage1_release_binding_sha256": "a22e8e2ce94d97606813d0ee462a337231d2a7eca0443e5b508a3d284f2b2958"
   },
   "store": {
-    "bundle_id": "fx_fafc18917960ac3f",
+    "bundle_id": "fx_20fb33fb5d9b13e5",
     "bundle_schema": "spot.stage03_drug_annotation.v2",
-    "canonical_content_sha256": "fafc18917960ac3feca3a0f40781dc88a5bdcccae8fa62b31e8aa7aa3ff83a69",
-    "code_tree_sha256": "07dbd543b9ae933f330e5dd8ab63f23d538cf9352c493d7ae554c8b9961abd43",
+    "canonical_content_sha256": "20fb33fb5d9b13e5650635596752e8acb67a88d2c6a175cddb17678cab15a19d",
+    "code_tree_sha256": "5fd4b4b981f40c6e6a6bdd142aa48fa083832bd508cf0823e6a84969c91cd783",
     "direction_vocabulary_digest": "a5dbabcf99c5558ccae5ade4646721122df2551c8769a868f73beffd4ead4ea8",
-    "document_sha256": "cfa0ded6bdf153b654bc5815f60e42a97f8952cb69fb32313692668064d29e46",
-    "method_sha256": "6a6e2466da2ac7b87738678fd8182dbc3b25893dfc36d58f3896adf1aec2fb44",
+    "document_sha256": "ba7a64204c68c4e9982ad15b8c8a487705983bd89b011c9020cc28a5d1bed11f",
+    "method_sha256": "e877720f12d9a6cc3f0c6a8409e09cc060ee6e568202db6e772be9d11e0a826a",
     "n_tables_verified": 8,
-    "projection_sha256": "457e12e7b0e905b1af8b05fbdd8686e325152e35e9745416fe6f9a3a97d43b1b",
-    "schemas_sha256": "fc7ed2674dd62472ecf619b922c135d66070828941520455e5a3cb287392c551",
+    "projection_sha256": "77b63a1b77fece8870089ceb8782ff8e69a6db6abd5e4019ddf05f07b5fbfeea",
+    "schemas_sha256": "b19f26cb1992b1c4bf1cca74ab720e6b1cc219e8d540de1a0c422210c00810bf",
     "selection_view_vocabulary_digest": "9e4992beba89cee2a3089714552520f05cc093f7fb1cdd0a4c332605bbd469a0",
     "stage1_release_sha256": "8d2d55f4e8b20ba5730e4d5148517eef3287d6f2386d513b1273403b3f4e155d",
     "stage2_manifest_canonical_sha256": "a35ab793d2c8bb2b8d8ca1a0c3b20f6c04afbf11128c67d59670cfcf170f38ee",
@@ -349,14 +349,14 @@
       "the_view_was_asked_to_project_a_store_whose_bytes_nobody_verified"
     ],
     "store_identity_verifier_id": "spot.stage03.selection_view.store_identity.v1",
-    "store_manifest_sha256": "1ed52b6d86ab8a665e090b88a74a619b0eeae0dbd9bdc211da0ee0537ed8815d",
+    "store_manifest_sha256": "3255d149aae9d4691aa6502f62dcff953b358e2dacd01223a888e61998342874",
     "table_hashes": {
       "arm_slots": "99db22fd1fbf175bbb70b406015f9d9e0b4ca097f06a8da40605b847ee5355fa",
-      "arm_summaries": "69194f747ad53307aa81f98c0b7db2d62b3dfd84200eca2c45ca12f520e7d098",
+      "arm_summaries": "5d0a54fb08f6c6f39e2b086531ebeed5eeb4364af35d9acd2085c9bcb84c2ccf",
       "candidates": "199bb49cadaaf7159b8141a1a6362aaeb6fe62943ac95de3628969a0b6091a5b",
       "dispositions": "b3c4a6ec6bc2ef4c7add26f2159428be0e6b07ee93a10979fb388c1ca97ba8fa",
       "pathway_context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "provenance": "6b2ae34809663ca5c226fe2d33ca36f71b11c3a85e843d79c7d3e2048517d7be",
+      "provenance": "9b0908a46395ad09781ba265aa173e02efddcffcfb3e5cc932e6adc5fabfdcb5",
       "source_records": "52613f6edb9fbb3144beab6b1b1ccd465ccaecac0800cdf01e54bf35ed86d7d5",
       "target_drug_edges": "bf4ec3a4ca17ee7de457a63ab2ed975e03c1a273728eec71f0b48adbdb7d6019"
     },
@@ -635,181 +635,29 @@
     ],
     "arm_summaries": [
       {
-        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M6",
-        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
-        "arm_evidence_state": "unresolved",
-        "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
-        "arm_ranks": [
-          1
-        ],
-        "arm_summary_id": "0de08b32658b45ad",
-        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M6",
-        "condition": null,
-        "desired_change": "increase",
-        "desired_target_modulations": [
-          "decrease"
-        ],
-        "edge_ids": [
-          "7e796df61e03430f"
-        ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "mechanism_effect_not_enumerated_no_phenocopy_claim"
-        ],
-        "from_condition": "Rest",
-        "lane": "temporal",
-        "mechanism_match_statuses": [
-          "mechanism_effect_unknown"
-        ],
-        "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 1,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
-        "n_inverse_direction_hypothesis": 0,
-        "n_observed_perturbation": 0,
-        "n_opposed": 0,
-        "n_pathway_hypothesis": 0,
-        "n_unresolved": 1,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
-        "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_supports_the_desired_change"
-        ],
-        "origin_type": "temporal_cross_time_measured",
-        "pathway_source": null,
-        "program_id": "FIXTURE_PROG_01",
-        "selection_roles": [
-          "toward_B"
-        ],
-        "stage3_evidence_classes": [
-          "no_supporting_evidence"
-        ],
-        "target_ids": [
-          "FIXTURE_TGT_00"
-        ],
-        "to_condition": "Stim48hr"
-      },
-      {
-        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M3",
-        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
-        "arm_evidence_state": "opposed",
-        "arm_key": "temporal|FIXTURE_PROG_00|decrease|Rest|Stim48hr",
-        "arm_ranks": [],
-        "arm_summary_id": "2cbac20b44fd0c4d",
-        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M3",
-        "condition": null,
-        "desired_change": "decrease",
-        "desired_target_modulations": [
-          "decrease"
-        ],
-        "edge_ids": [
-          "0b19678f7e9e1f84"
-        ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "untested_inverse_of_the_tested_perturbation"
-        ],
-        "from_condition": "Rest",
-        "lane": "temporal",
-        "mechanism_match_statuses": [
-          "runs_against_the_perturbation_that_helped"
-        ],
-        "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 1,
-          "untested_inverse_direction_never_supported": 0
-        },
-        "n_inverse_direction_hypothesis": 0,
-        "n_observed_perturbation": 0,
-        "n_opposed": 1,
-        "n_pathway_hypothesis": 0,
-        "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
-        "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_supports_the_desired_change"
-        ],
-        "origin_type": "temporal_cross_time_measured",
-        "pathway_source": null,
-        "program_id": "FIXTURE_PROG_00",
-        "selection_roles": [
-          "away_from_A"
-        ],
-        "stage3_evidence_classes": [
-          "no_supporting_evidence"
-        ],
-        "target_ids": [
-          "FIXTURE_TGT_01"
-        ],
-        "to_condition": "Stim48hr"
-      },
-      {
-        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M1",
+        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M2",
         "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
         "arm_evidence_state": "observed_perturbation",
         "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
         "arm_ranks": [
           1
         ],
-        "arm_summary_id": "773af74247e851cf",
-        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M1",
+        "arm_summary_id": "056e88d6729beb90",
+        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M2",
         "condition": null,
         "desired_change": "increase",
-        "desired_target_modulations": [
-          "decrease"
-        ],
         "edge_ids": [
-          "fcba309ba8f15873"
-        ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "putative_crispri_phenocopy"
+          "2103218bae2b40e9"
         ],
         "from_condition": "Rest",
         "lane": "temporal",
-        "mechanism_match_statuses": [
-          "phenocopies_the_perturbation_that_helped"
-        ],
         "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 1,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
         "n_inverse_direction_hypothesis": 0,
         "n_observed_perturbation": 1,
         "n_opposed": 0,
         "n_pathway_hypothesis": 0,
         "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
         "observed_perturbation_support": true,
-        "observed_sign_states": [
-          "perturbation_supports_the_desired_change"
-        ],
         "origin_type": "temporal_cross_time_measured",
         "pathway_source": null,
         "program_id": "FIXTURE_PROG_01",
@@ -825,6 +673,80 @@
         "to_condition": "Stim48hr"
       },
       {
+        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
+        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
+        "arm_evidence_state": "opposed",
+        "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
+        "arm_ranks": [],
+        "arm_summary_id": "4108e9fbd246880f",
+        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
+        "condition": null,
+        "desired_change": "increase",
+        "edge_ids": [
+          "8ec1ebc23bf6e7f3"
+        ],
+        "from_condition": "Rest",
+        "lane": "temporal",
+        "n_edges": 1,
+        "n_inverse_direction_hypothesis": 0,
+        "n_observed_perturbation": 0,
+        "n_opposed": 1,
+        "n_pathway_hypothesis": 0,
+        "n_unresolved": 0,
+        "observed_perturbation_support": false,
+        "origin_type": "temporal_cross_time_measured",
+        "pathway_source": null,
+        "program_id": "FIXTURE_PROG_01",
+        "selection_roles": [
+          "toward_B"
+        ],
+        "stage3_evidence_classes": [
+          "no_supporting_evidence"
+        ],
+        "target_ids": [
+          "FIXTURE_TGT_01"
+        ],
+        "to_condition": "Stim48hr"
+      },
+      {
+        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M6",
+        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
+        "arm_evidence_state": "unresolved",
+        "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
+        "arm_ranks": [
+          1
+        ],
+        "arm_summary_id": "5e1baf3a6abf8bba",
+        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M6",
+        "condition": null,
+        "desired_change": "increase",
+        "edge_ids": [
+          "7e796df61e03430f"
+        ],
+        "from_condition": "Rest",
+        "lane": "temporal",
+        "n_edges": 1,
+        "n_inverse_direction_hypothesis": 0,
+        "n_observed_perturbation": 0,
+        "n_opposed": 0,
+        "n_pathway_hypothesis": 0,
+        "n_unresolved": 1,
+        "observed_perturbation_support": false,
+        "origin_type": "temporal_cross_time_measured",
+        "pathway_source": null,
+        "program_id": "FIXTURE_PROG_01",
+        "selection_roles": [
+          "toward_B"
+        ],
+        "stage3_evidence_classes": [
+          "no_supporting_evidence"
+        ],
+        "target_ids": [
+          "FIXTURE_TGT_00"
+        ],
+        "to_condition": "Stim48hr"
+      },
+      {
         "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M1",
         "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
         "arm_evidence_state": "opposed",
@@ -832,48 +754,22 @@
         "arm_ranks": [
           1
         ],
-        "arm_summary_id": "96c87e7a8b42a45c",
+        "arm_summary_id": "69a65f847c58c81a",
         "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M1",
         "condition": null,
         "desired_change": "decrease",
-        "desired_target_modulations": [
-          "increase"
-        ],
         "edge_ids": [
           "0a91024170631336"
         ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "putative_crispri_phenocopy"
-        ],
         "from_condition": "Rest",
         "lane": "temporal",
-        "mechanism_match_statuses": [
-          "phenocopies_the_perturbation_that_harmed"
-        ],
         "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 1,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
         "n_inverse_direction_hypothesis": 0,
         "n_observed_perturbation": 0,
         "n_opposed": 1,
         "n_pathway_hypothesis": 0,
         "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
         "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_opposes_the_desired_change"
-        ],
         "origin_type": "temporal_cross_time_measured",
         "pathway_source": null,
         "program_id": "FIXTURE_PROG_00",
@@ -889,6 +785,42 @@
         "to_condition": "Stim48hr"
       },
       {
+        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M3",
+        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
+        "arm_evidence_state": "opposed",
+        "arm_key": "temporal|FIXTURE_PROG_00|decrease|Rest|Stim48hr",
+        "arm_ranks": [],
+        "arm_summary_id": "9e7b1014748c95e9",
+        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M3",
+        "condition": null,
+        "desired_change": "decrease",
+        "edge_ids": [
+          "0b19678f7e9e1f84"
+        ],
+        "from_condition": "Rest",
+        "lane": "temporal",
+        "n_edges": 1,
+        "n_inverse_direction_hypothesis": 0,
+        "n_observed_perturbation": 0,
+        "n_opposed": 1,
+        "n_pathway_hypothesis": 0,
+        "n_unresolved": 0,
+        "observed_perturbation_support": false,
+        "origin_type": "temporal_cross_time_measured",
+        "pathway_source": null,
+        "program_id": "FIXTURE_PROG_00",
+        "selection_roles": [
+          "away_from_A"
+        ],
+        "stage3_evidence_classes": [
+          "no_supporting_evidence"
+        ],
+        "target_ids": [
+          "FIXTURE_TGT_01"
+        ],
+        "to_condition": "Stim48hr"
+      },
+      {
         "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M2",
         "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
         "arm_evidence_state": "opposed",
@@ -896,48 +828,22 @@
         "arm_ranks": [
           1
         ],
-        "arm_summary_id": "9b8e912983fcfb00",
+        "arm_summary_id": "aea834866b6b3c3b",
         "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M2",
         "condition": null,
         "desired_change": "decrease",
-        "desired_target_modulations": [
-          "increase"
-        ],
         "edge_ids": [
           "d81f9e5f65ea9498"
         ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "putative_crispri_phenocopy"
-        ],
         "from_condition": "Rest",
         "lane": "temporal",
-        "mechanism_match_statuses": [
-          "phenocopies_the_perturbation_that_harmed"
-        ],
         "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 1,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
         "n_inverse_direction_hypothesis": 0,
         "n_observed_perturbation": 0,
         "n_opposed": 1,
         "n_pathway_hypothesis": 0,
         "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
         "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_opposes_the_desired_change"
-        ],
         "origin_type": "temporal_cross_time_measured",
         "pathway_source": null,
         "program_id": "FIXTURE_PROG_00",
@@ -958,48 +864,22 @@
         "arm_evidence_state": "inverse_direction_hypothesis",
         "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
         "arm_ranks": [],
-        "arm_summary_id": "b35c644e88b75210",
+        "arm_summary_id": "bd5081bc452c14c2",
         "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M3",
         "condition": null,
         "desired_change": "increase",
-        "desired_target_modulations": [
-          "increase"
-        ],
         "edge_ids": [
           "c268565f5579bf47"
         ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "untested_inverse_of_the_tested_perturbation"
-        ],
         "from_condition": "Rest",
         "lane": "temporal",
-        "mechanism_match_statuses": [
-          "untested_inverse_direction_never_supported"
-        ],
         "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 1
-        },
         "n_inverse_direction_hypothesis": 1,
         "n_observed_perturbation": 0,
         "n_opposed": 0,
         "n_pathway_hypothesis": 0,
         "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
         "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_opposes_the_desired_change"
-        ],
         "origin_type": "temporal_cross_time_measured",
         "pathway_source": null,
         "program_id": "FIXTURE_PROG_01",
@@ -1015,132 +895,6 @@
         "to_condition": "Stim48hr"
       },
       {
-        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
-        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
-        "arm_evidence_state": "observed_perturbation",
-        "arm_key": "temporal|FIXTURE_PROG_00|decrease|Rest|Stim48hr",
-        "arm_ranks": [],
-        "arm_summary_id": "cb23071840fb4c57",
-        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
-        "condition": null,
-        "desired_change": "decrease",
-        "desired_target_modulations": [
-          "decrease"
-        ],
-        "edge_ids": [
-          "105c3504538d68fd"
-        ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "putative_crispri_phenocopy"
-        ],
-        "from_condition": "Rest",
-        "lane": "temporal",
-        "mechanism_match_statuses": [
-          "phenocopies_the_perturbation_that_helped"
-        ],
-        "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 1,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
-        "n_inverse_direction_hypothesis": 0,
-        "n_observed_perturbation": 1,
-        "n_opposed": 0,
-        "n_pathway_hypothesis": 0,
-        "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
-        "observed_perturbation_support": true,
-        "observed_sign_states": [
-          "perturbation_supports_the_desired_change"
-        ],
-        "origin_type": "temporal_cross_time_measured",
-        "pathway_source": null,
-        "program_id": "FIXTURE_PROG_00",
-        "selection_roles": [
-          "away_from_A"
-        ],
-        "stage3_evidence_classes": [
-          "measured_perturbation"
-        ],
-        "target_ids": [
-          "FIXTURE_TGT_01"
-        ],
-        "to_condition": "Stim48hr"
-      },
-      {
-        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M2",
-        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
-        "arm_evidence_state": "observed_perturbation",
-        "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
-        "arm_ranks": [
-          1
-        ],
-        "arm_summary_id": "d66ddd880830a401",
-        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M2",
-        "condition": null,
-        "desired_change": "increase",
-        "desired_target_modulations": [
-          "decrease"
-        ],
-        "edge_ids": [
-          "2103218bae2b40e9"
-        ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "putative_crispri_phenocopy"
-        ],
-        "from_condition": "Rest",
-        "lane": "temporal",
-        "mechanism_match_statuses": [
-          "phenocopies_the_perturbation_that_helped"
-        ],
-        "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 1,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
-        "n_inverse_direction_hypothesis": 0,
-        "n_observed_perturbation": 1,
-        "n_opposed": 0,
-        "n_pathway_hypothesis": 0,
-        "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
-        "observed_perturbation_support": true,
-        "observed_sign_states": [
-          "perturbation_supports_the_desired_change"
-        ],
-        "origin_type": "temporal_cross_time_measured",
-        "pathway_source": null,
-        "program_id": "FIXTURE_PROG_01",
-        "selection_roles": [
-          "toward_B"
-        ],
-        "stage3_evidence_classes": [
-          "measured_perturbation"
-        ],
-        "target_ids": [
-          "FIXTURE_TGT_00"
-        ],
-        "to_condition": "Stim48hr"
-      },
-      {
         "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M6",
         "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
         "arm_evidence_state": "unresolved",
@@ -1148,48 +902,22 @@
         "arm_ranks": [
           1
         ],
-        "arm_summary_id": "dfcb7c4f80204507",
+        "arm_summary_id": "d797212705862115",
         "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M6",
         "condition": null,
         "desired_change": "decrease",
-        "desired_target_modulations": [
-          "increase"
-        ],
         "edge_ids": [
           "77af84fc99729916"
         ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "mechanism_effect_not_enumerated_no_phenocopy_claim"
-        ],
         "from_condition": "Rest",
         "lane": "temporal",
-        "mechanism_match_statuses": [
-          "mechanism_effect_unknown"
-        ],
         "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 1,
-          "phenocopies_the_perturbation_that_harmed": 0,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
         "n_inverse_direction_hypothesis": 0,
         "n_observed_perturbation": 0,
         "n_opposed": 0,
         "n_pathway_hypothesis": 0,
         "n_unresolved": 1,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
         "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_opposes_the_desired_change"
-        ],
         "origin_type": "temporal_cross_time_measured",
         "pathway_source": null,
         "program_id": "FIXTURE_PROG_00",
@@ -1205,53 +933,29 @@
         "to_condition": "Stim48hr"
       },
       {
-        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
+        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M1",
         "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
-        "arm_evidence_state": "opposed",
+        "arm_evidence_state": "observed_perturbation",
         "arm_key": "temporal|FIXTURE_PROG_01|increase|Rest|Stim48hr",
-        "arm_ranks": [],
-        "arm_summary_id": "f2ae7a8f7a00c2a8",
-        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
+        "arm_ranks": [
+          1
+        ],
+        "arm_summary_id": "ec5ab63e9012fc9e",
+        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M1",
         "condition": null,
         "desired_change": "increase",
-        "desired_target_modulations": [
-          "increase"
-        ],
         "edge_ids": [
-          "8ec1ebc23bf6e7f3"
-        ],
-        "evidence_is_equivalence": false,
-        "evidence_relation_caveat": "PUTATIVE PHENOCOPY, NOT EQUIVALENCE. A drug acting on the PROTEIN is not the genetic perturbation of the TRANSCRIPT that was measured: they differ in modality (protein vs mRNA), in degree (partial, reversible occupancy vs sustained knockdown), in timing, and in off-target profile. This edge may SUGGEST a hypothesis; it can never CONFIRM one.",
-        "evidence_relations": [
-          "putative_crispri_phenocopy"
+          "fcba309ba8f15873"
         ],
         "from_condition": "Rest",
         "lane": "temporal",
-        "mechanism_match_statuses": [
-          "phenocopies_the_perturbation_that_harmed"
-        ],
         "n_edges": 1,
-        "n_edges_by_mechanism_match": {
-          "arm_not_evaluable": 0,
-          "arm_shows_no_directional_response": 0,
-          "mechanism_effect_unknown": 0,
-          "phenocopies_the_perturbation_that_harmed": 1,
-          "phenocopies_the_perturbation_that_helped": 0,
-          "runs_against_the_perturbation_that_helped": 0,
-          "untested_inverse_direction_never_supported": 0
-        },
         "n_inverse_direction_hypothesis": 0,
-        "n_observed_perturbation": 0,
-        "n_opposed": 1,
+        "n_observed_perturbation": 1,
+        "n_opposed": 0,
         "n_pathway_hypothesis": 0,
         "n_unresolved": 0,
-        "observed_perturbation_modalities": [
-          "CRISPRi_knockdown"
-        ],
-        "observed_perturbation_support": false,
-        "observed_sign_states": [
-          "perturbation_opposes_the_desired_change"
-        ],
+        "observed_perturbation_support": true,
         "origin_type": "temporal_cross_time_measured",
         "pathway_source": null,
         "program_id": "FIXTURE_PROG_01",
@@ -1259,7 +963,43 @@
           "toward_B"
         ],
         "stage3_evidence_classes": [
-          "no_supporting_evidence"
+          "measured_perturbation"
+        ],
+        "target_ids": [
+          "FIXTURE_TGT_00"
+        ],
+        "to_condition": "Stim48hr"
+      },
+      {
+        "active_moiety_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
+        "arm_context_sha256": "fd945b0e89a2d488195521af73abf7857a139efaeb3513d078944e3f896decdd",
+        "arm_evidence_state": "observed_perturbation",
+        "arm_key": "temporal|FIXTURE_PROG_00|decrease|Rest|Stim48hr",
+        "arm_ranks": [],
+        "arm_summary_id": "f8ac370c01867fc7",
+        "candidate_id": "AM:CHEMBL:FIXTURE_CHEMBL_M7",
+        "condition": null,
+        "desired_change": "decrease",
+        "edge_ids": [
+          "105c3504538d68fd"
+        ],
+        "from_condition": "Rest",
+        "lane": "temporal",
+        "n_edges": 1,
+        "n_inverse_direction_hypothesis": 0,
+        "n_observed_perturbation": 1,
+        "n_opposed": 0,
+        "n_pathway_hypothesis": 0,
+        "n_unresolved": 0,
+        "observed_perturbation_support": true,
+        "origin_type": "temporal_cross_time_measured",
+        "pathway_source": null,
+        "program_id": "FIXTURE_PROG_00",
+        "selection_roles": [
+          "away_from_A"
+        ],
+        "stage3_evidence_classes": [
+          "measured_perturbation"
         ],
         "target_ids": [
           "FIXTURE_TGT_01"
@@ -5127,7 +4867,7 @@
       }
     ]
   },
-  "view_content_sha256": "e09bbac1e9407078f0dadf7a117d30b2e6fb39968ddb6bcb836971f6b27a557e",
-  "view_id": "e09bbac1e9407078",
+  "view_content_sha256": "cdc4d60cc411e6d392f58e4504019d9c70c7e8f4daf6f218e81ac2befb6a5b9e",
+  "view_id": "cdc4d60cc411e6d3",
   "view_method_id": "spot.stage03.selection_view.projection.v1"
 }

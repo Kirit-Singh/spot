@@ -12,11 +12,10 @@ plus the universe store an INDEPENDENT verifier admitted (``625c921f…``), boun
 
 THE GATE IS THE POINT OF THIS COMMIT
 ------------------------------------
-A production consumption with NO ADMITTED AGGREGATE REFUSES, and Stage 3 writes nothing — and it
-is refused by an ARTIFACT that did not admit, never by a Boolean in Stage-3's own source (that was
-``DETACHED_CLONE_MATRIX_GREEN``, and it is deleted). There is no fabricated candidate bundle here
-and there must not be one: a synthetic number that reaches a bundle is a synthetic number that
-reaches Stage 4.
+``arm_query.DETACHED_CLONE_MATRIX_GREEN`` is False. So a production consumption REFUSES, and
+Stage 3 writes nothing. There is no fabricated candidate bundle here and there must not be one:
+a synthetic number that reaches a bundle is a synthetic number that reaches Stage 4. The wiring
+is real, the refusal is real, and the candidates wait for a real admitted Stage-2 bundle.
 """
 from __future__ import annotations
 
@@ -63,9 +62,8 @@ class TestTheProducerKnowsTheThreeTypedOrigins:
 
 
 class TestProductionIsGatedAndNothingIsFabricated:
-    def test_a_production_consumption_REFUSES_without_an_ADMITTED_aggregate(self):
-        # ...and it is refused by an ARTIFACT that did not admit, never by a source-code Boolean.
-        assert not hasattr(aq, "DETACHED_CLONE_MATRIX_GREEN")
+    def test_a_production_consumption_REFUSES_while_the_matrix_is_red(self):
+        assert aq.DETACHED_CLONE_MATRIX_GREEN is False
         with pytest.raises(v2.ProductionConsumptionGated):
             v2.load_admitted_stage2_inputs(direct_arm_bundle=_D,
                                            direct_admission=_adm(_D),
