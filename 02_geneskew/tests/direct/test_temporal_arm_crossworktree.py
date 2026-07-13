@@ -727,7 +727,7 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert ev["verifier_code_sha256"] == W.FROZEN_VERIFIER_CODE_SHA256
         # ...and the gate profile it must have run
         assert ev["gate_inventory_sha256"] == W.FROZEN_GATE_INVENTORY_SHA256
-        assert ev["n_gates"] == W.FROZEN_N_GATES == 80        # the PRODUCTION bundle profile
+        assert ev["n_gates"] == W.FROZEN_N_GATES == 93        # the PRODUCTION bundle profile
         assert ev["gate_profile"] == W.PROFILE_BUNDLE_PRODUCTION
         assert ev["w10_pinned_verifier_commit"] == W.W10_PINNED_VERIFIER_COMMIT
         # the always-on gates survive a pin override

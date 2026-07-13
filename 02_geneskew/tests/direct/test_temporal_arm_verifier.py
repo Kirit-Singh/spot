@@ -571,16 +571,64 @@ class TestTheDirectEndpointSource:
 
         assert w10.FROZEN_SPEC_SHA256 == (
             "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
-        # RE-PINNED to W10's repaired verifier: new code sha, and the PRODUCTION BUNDLE
-        # profile (--stage1-v3-release --expect-h5ad-sha256 --recompute all) — 80 gates, not 90
+        # W10 FINAL (f6da804). Nine modules now — verify_target_identity.py came back.
+        assert len(w10.W10_VERIFIER_MODULES) == 9
         assert w10.FROZEN_VERIFIER_CODE_SHA256 == (
-            "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834")
+            "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174")
         assert w10.FROZEN_GATE_INVENTORY_SHA256 == (
-            "d98200175b528dec569655e558944d065c1280c19874c4e555ff0bbdb66c1cc4")
-        assert w10.FROZEN_N_GATES == 80
+            "91f15db7ceec71c51fd21fda77c24956dcc6a4de998ef32ca7395e13a13fac6e")
+        assert w10.FROZEN_N_GATES == 93
         assert w10.PROFILE_BUNDLE_PRODUCTION == "spot.stage02.direct.bundle.production.v1"
+        assert w10.FROZEN_RELEASE_GATE_INVENTORY_SHA256 == (
+            "e66d7f9be7b4f8e38c45b2e7c4815459f7215441ee553ba6278469d9cd3a2437")
+        assert w10.FROZEN_RELEASE_N_GATES == 28
         assert len(w10.EXPECTED_FILES) == 11
         assert w10.Pins().is_production is True
+
+    def test_the_PRODUCER_ROOT_gates_are_required_of_every_admission(self):
+        """W10's repair added them: the producer's code root must be SUPPLIED to the verifier,
+        the producer tree's git HEAD must BE the commit the run bound, and the code manifest
+        must RE-DERIVE from the tree the run claims. A report that skipped them admitted a
+        bundle without ever checking which tree built it."""
+        from verify_temporal_arms import w10
+
+        listed = "\n".join(w10.REQUIRED_GATE_SUBSTRINGS)
+        for g in ("the PRODUCER's code root is SUPPLIED to the verifier",
+                  "the producer tree's git HEAD IS the commit the run bound",
+                  "the code manifest hash RE-DERIVES from the tree this run claims",
+                  "every observed_perturbation_modality is EXACTLY CRISPRi_knockdown"):
+            assert g in listed
+
+    def test_a_report_wearing_the_RELEASE_profile_is_not_a_BUNDLE_admission(self, tmp_path):
+        """The release invocation runs 28 gates; the bundle invocation runs 93. A report that
+        wears the wrong profile checked a different thing, and its own numbers say so."""
+        from verify_temporal_arms import w10
+
+        _staged(tmp_path)
+        fired = self._load(
+            tmp_path, FX.CONDITIONS[0],
+            mutate=lambda b: b.update({
+                "gate_inventory_sha256": w10.FROZEN_RELEASE_GATE_INVENTORY_SHA256,
+                "n_gates": w10.FROZEN_RELEASE_N_GATES}))
+        assert "the_w10_report_ran_the_pinned_gate_profile" in fired
+
+    def test_a_producer_root_gate_deleted_and_resealed_is_refused(self, tmp_path):
+        """The producer-root checks are the newest, and the easiest to quietly drop."""
+        from direct.hashing import content_hash
+
+        _staged(tmp_path)
+        dropped = "the producer tree's git HEAD IS the commit the run bound"
+
+        def delete_it(b):
+            kept = [g for g in b["gate_inventory"] if g != dropped]
+            b["gate_inventory"] = kept
+            b["gates"] = [g for g in b["gates"] if g["gate"] != dropped]
+            b["gate_inventory_sha256"] = content_hash(kept)
+            b["n_gates"] = len(kept)
+            b["n_passed"] = len(kept)
+
+        fired = self._load(tmp_path, FX.CONDITIONS[0], mutate=delete_it)
+        assert "the_w10_inventory_contains_every_security_critical_gate" in fired
 
     def test_an_artifact_map_SUPERSET_or_DUPLICATE_is_refused(self, tmp_path):
         _staged(tmp_path)

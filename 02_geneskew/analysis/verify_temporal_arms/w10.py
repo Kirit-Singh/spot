@@ -61,22 +61,34 @@ PENDING_VERDICT = "pending_independent_verification"
 # v3 release, pins the H5AD object, and recomputes EVERY target
 # (``--stage1-v3-release --expect-h5ad-sha256 --recompute all``). 80 gates, exactly, in order.
 # --------------------------------------------------------------------------- #
-W10_PINNED_VERIFIER_COMMIT = "9965d64e50cd4a38fb6067a35c00bd7a5a7babef"
+W10_PINNED_VERIFIER_COMMIT = "f6da8047a61411aa5374d6281fe6672979573af5"
+# NINE modules at the final head — ``verify_target_identity.py`` came back. The module SET is
+# part of the recipe: re-deriving over eight of them yields a different number that is wrong
+# in a way nothing else would catch, so the set is pinned here beside the hash it produces.
 W10_VERIFIER_MODULES = (
     "verify_arm_bundle.py", "verify_arm_gates.py", "verify_arm_report.py",
     "verify_arm_rules.py", "verify_arm_science.py", "verify_arm_view.py",
-    "verify_arm_recompute.py", "verify_direct_release.py",
+    "verify_arm_recompute.py", "verify_direct_release.py", "verify_target_identity.py",
 )
 
 FROZEN_SPEC_SHA256 = (
     "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
 FROZEN_VERIFIER_CODE_SHA256 = (
-    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834")
+    "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174")
 
+# The PRODUCTION BUNDLE profile — the invocation that actually admits a Direct bundle:
+# ``--stage1-v3-release --expect-h5ad-sha256 --recompute all``, with the producer's code root
+# supplied. This lane consumes BUNDLE reports; the release profile is pinned beside it so the
+# contract can state both and a report wearing the wrong one is caught by its own numbers.
 PROFILE_BUNDLE_PRODUCTION = "spot.stage02.direct.bundle.production.v1"
 FROZEN_GATE_INVENTORY_SHA256 = (
-    "d98200175b528dec569655e558944d065c1280c19874c4e555ff0bbdb66c1cc4")
-FROZEN_N_GATES = 80
+    "91f15db7ceec71c51fd21fda77c24956dcc6a4de998ef32ca7395e13a13fac6e")
+FROZEN_N_GATES = 93
+
+PROFILE_RELEASE_PRODUCTION = "spot.stage02.direct.release.production.v1"
+FROZEN_RELEASE_GATE_INVENTORY_SHA256 = (
+    "e66d7f9be7b4f8e38c45b2e7c4815459f7215441ee553ba6278469d9cd3a2437")
+FROZEN_RELEASE_N_GATES = 28
 
 # THE GATES THAT MUST HAVE RUN — whatever profile is pinned.
 #
@@ -90,8 +102,7 @@ FROZEN_N_GATES = 80
 # requirement.
 REQUIRED_GATE_SUBSTRINGS = (
     "matches the BYTES ON DISK",
-    "the MASK's identity is bound into the run and RE-DERIVES from the shipped "
-    "masks.parquet",
+    "the MASK's identity is bound into the run and RE-DERIVES from the shipped masks.parquet",
     "every SHIPPED mask is the one the verifier independently derives",
     "the supplied solver lock's BYTES hash to the hard-pinned Stage-2 lock",
     "the lock the bundle bound IS the hard-pinned Stage-2 lock",
@@ -101,6 +112,12 @@ REQUIRED_GATE_SUBSTRINGS = (
     "every rank RE-DERIVES per arm",
     "every emitted base delta RE-DERIVES from the bound DE data",
     "the run id RE-DERIVES from its own binding",
+    "the target_identity rows are EXACTLY this bundle's arm target set",
+    "every observed_perturbation_modality is EXACTLY CRISPRi_knockdown",
+    "the target_identity canonical hash is bound into the run identity",
+    "the PRODUCER's code root is SUPPLIED to the verifier",
+    "the producer tree's git HEAD IS the commit the run bound",
+    "the code manifest hash RE-DERIVES from the tree this run claims",
 )
 
 # THE EXACT, COMPLETE artifact set a Direct all-arm bundle is made of. Eleven files, and an
