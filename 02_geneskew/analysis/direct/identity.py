@@ -33,9 +33,12 @@ the symbol were an accession.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Optional
+
+from .hashing import content_hash, file_sha256
 
 # The controlled namespace vocabulary. BINARY, and decided ONLY by the literal
 # value of obs.target_contrast against the contract's exact Ensembl rule.
@@ -188,6 +191,29 @@ def load_identity_map(path: Optional[str]) -> dict[str, str]:
                 f"target-identity map: {k!r} -> {v!r} is not an Ensembl gene id")
         out[str(k)] = str(v)
     return out
+
+
+def binding_block(path: Optional[str]) -> dict[str, Any]:
+    """What a run binds about the target-identity map — INCLUDING its absence.
+
+    This map is the only way a non-Ensembl ``target_id`` may acquire an Ensembl id, and that
+    id decides which gene gets masked out of the target's own effect vector. So a run that
+    consulted a map is standing on different evidence from one that did not, and a run that
+    consulted a DIFFERENT map is standing on different evidence again. Both the bytes and the
+    absence are bound; neither is inferred from silence.
+    """
+    if not path or not os.path.exists(path):
+        return {"status": "not_supplied", "raw_sha256": None,
+                "canonical_sha256": None, "n_mapped": 0}
+    with open(path) as fh:
+        doc = json.load(fh)
+    return {
+        "status": "bound",
+        "schema_version": str(doc.get("schema_version", "")),
+        "raw_sha256": file_sha256(path),
+        "canonical_sha256": content_hash(doc),
+        "n_mapped": len(doc.get("map") or {}),
+    }
 
 
 def resolve(released_estimate_id: Any, target_contrast: Any,

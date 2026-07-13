@@ -20,6 +20,7 @@ import os
 
 import pytest
 from direct import arm_bundle, arm_keys, run_arms, scorer_view
+from direct import projection as proj
 
 
 @pytest.fixture
@@ -28,9 +29,11 @@ def bundle(synthetic_run, tmp_path):
     args.condition = "StimX"
     args.out_root = str(tmp_path / "arms")
     res = run_arms.build_bundle(args)
-    with open(os.path.join(res["out_dir"], "arm_bundle.json")) as fh:
+    # the STANDARDIZED native names (run_arms.PROVENANCE_FILE etc.) — the interface W3 reads
+    # and W10 verifies, not this module's private convention
+    with open(os.path.join(res["out_dir"], run_arms.BUNDLE_FILE)) as fh:
         doc = json.load(fh)
-    with open(os.path.join(res["out_dir"], "provenance.json")) as fh:
+    with open(os.path.join(res["out_dir"], run_arms.PROVENANCE_FILE)) as fh:
         prov = json.load(fh)
     return res, doc, prov
 
@@ -192,14 +195,39 @@ class TestM4b_APairDerivedStatusCanNEVERGateAReusableArm:
 
     def test_a_COHERENTLY_SIGN_FLIPPED_configuration_still_builds_every_arm(
             self, synthetic_run, tmp_path):
-        # flip the sign of every base delta: a perfectly valid configuration, and exactly
-        # the one the pair-derived joint_status gate rejected
-        args = synthetic_run()
-        args.condition = "StimX"
-        args.out_root = str(tmp_path / "flipped")
-        res = run_arms.build_bundle(args)
-        assert res["n_arm_slots"] == res["n_expected_arm_slots"]
-        assert res["n_arm_rows"] > 0
+        # The audit caught this test not doing what it said: it named a sign flip and then
+        # called the ORDINARY fixture, unchanged. So it asserted nothing about flipped signs
+        # and would have passed against a producer that refused them outright.
+        #
+        # It now actually flips. Arbitrary coherent signs — positive, negative and zero — are
+        # a perfectly valid configuration, and exactly the one the pair-derived `joint_status`
+        # gate rejected. A quantity that exists only when two arms are put side by side cannot
+        # decide whether one of them is admissible.
+        base = {"p": [
+            {"target_id": "T1", "delta": 7.5, "status": proj.OK, "base_state": "pass",
+             "base_passed": True, "n_panel_surviving": 3, "n_control_surviving": 9},
+            {"target_id": "T2", "delta": -3.25, "status": proj.OK, "base_state": "pass",
+             "base_passed": True, "n_panel_surviving": 3, "n_control_surviving": 9},
+            {"target_id": "T3", "delta": 0.0, "status": proj.OK, "base_state": "pass",
+             "base_passed": True, "n_panel_surviving": 3, "n_control_surviving": 9},
+        ]}
+        rows = arm_bundle.build_rows(condition="StimX", admitted=["p"],
+                                     base_by_program=base)
+
+        assert len(rows) == 6                     # one program x two arms x three targets
+        up = {r["target_id"]: r for r in rows
+              if r["desired_change"] == arm_keys.INCREASE}
+        down = {r["target_id"]: r for r in rows
+                if r["desired_change"] == arm_keys.DECREASE}
+
+        # every sign survives, and decrease is the EXACT negation — never a re-estimate
+        assert up["T1"]["value"] == 7.5 and down["T1"]["value"] == -7.5
+        assert up["T2"]["value"] == -3.25 and down["T2"]["value"] == 3.25
+        assert up["T3"]["value"] == 0.0 and down["T3"]["value"] == 0.0
+
+        # ...and the RANKS genuinely reverse, because negating the values reverses the order
+        assert up["T1"]["rank"] == 1 and down["T2"]["rank"] == 1
+        assert arm_bundle.expected_slots(["p"]) == 2
 
     def test_NO_joint_status_exists_anywhere_in_the_bundle(self, bundle):
         res, doc, prov = bundle
@@ -267,10 +295,21 @@ class TestThePhysicalContract:
     """The exact names W10's verifier and W3's manifest read. Emitted natively, no shim."""
 
     def test_the_bundle_ships_exactly_the_contract_files(self, bundle):
+        # INTEGRATION. W18's line pinned an exact FIVE-file contract; the audit's BLOCKER 4
+        # requires the contributor evidence to SHIP, not merely be hashed — a reader who
+        # cannot obtain the contributing guides cannot reconstruct which guides made the mask
+        # that made the deltas. So the exact contract is the SUPERSET, and it is still exact:
+        # W18's intent (a closed, no-shim file set that W10 and W3 read by name) is preserved,
+        # and the five files it named are all still here.
         res, _, _ = bundle
         assert sorted(os.listdir(res["out_dir"])) == [
-            "arm_bundle.json", "arms.parquet", "masks.parquet", "provenance.json",
+            "arm_bundle.json", "arms.parquet", "contributing_guides.parquet",
+            "donor_support.parquet", "gene_universe.json", "guide_support.parquet",
+            "input_manifest.json", "masks.parquet", "provenance.json",
             "verification.json"]
+        for w18_file in ("arm_bundle.json", "arms.parquet", "masks.parquet",
+                         "provenance.json", "verification.json"):
+            assert w18_file in os.listdir(res["out_dir"])
 
     def test_the_producer_does_NOT_admit_its_own_output(self, bundle):
         res, _, _ = bundle
@@ -353,7 +392,12 @@ class TestW10_TheCONTRIBUTORManifestAndTheMASKAreBoundAsBYTES:
     def test_a_RESEALED_mask_mutation_changes_the_bound_hash(self, bundle):
         # the honest-producer attack: alter the masked genes and re-hash. The mask hash is
         # over the mask ROWS, so it moves — and the run id, which covers it, moves with it.
-        from direct import emit as _emit
+        #
+        # INTEGRATION: this now exercises `masks.mask_content_sha256` — the CANONICAL hash the
+        # integrated producer actually binds — not `emit.mask_content_sha256`, which W18's line
+        # bound and which W14 proved unreproducible from the shipped file. A mutation test
+        # aimed at a function the producer no longer calls guards nothing.
+        from direct import masks as _emit
         res, _, prov = bundle
         import pandas as pd
         df = pd.read_parquet(os.path.join(res["out_dir"], "masks.parquet"))
