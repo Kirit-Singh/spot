@@ -14,33 +14,60 @@ from .report import Report
 # --------------------------------------------------------------------------- #
 # THE ADMITTED UNIVERSE STORE. Bound by exact identity — this is the only one.
 #
-# The store lives on TCEFOLD at:
-#     /home/tcelab/.cache/spot-stage3-universe/store/
 # Git carries only compact reports, so the CHECKED-IN reports are NOT the binding. Stage-3
-# target admission consumes the store and manifest by EXACT IDENTITY, from tcefold.
+# target admission consumes the store and manifest by EXACT IDENTITY.
 #
 # Independently re-derived from those bytes (not accepted from the producer): the bound
 # content hashes recompute, all 11,055 eligibility verdicts REPLAY with zero mismatches,
 # and the PRODUCER's own gate refuses a mutated and a deleted provenance by name.
 # Sealed report: STAGE3_UNIVERSE_CACHE_FINAL_ADMISSION.4aba8b58.md
+#
+# RE-PINNED at the NAMESPACE-VOCABULARY standardisation. The store was re-emitted so it
+# serializes the tokens Stage 2 (W3) serializes — `ensembl_gene_id` / `gene_symbol` — because
+# exact-token equality against the old `ensembl_gene` / `symbol` refused every real Ensembl row
+# and produced ZERO edges. The identity necessarily MOVED (the typed universe hashes the
+# identity PAIR); the SCIENCE did not, and that is proved rather than asserted: the store's
+# scientific content hash — every row with `target_id_namespace` projected out — is IDENTICAL
+# on both sides at 95f81cb1…. Same 11,526 rows, same 2,262 assertions, same 505 targets, same
+# 1,923 molecules, same licences and provenance bytes. See `druglink.universe_repin`.
 # --------------------------------------------------------------------------- #
-ADMITTED_STORE_PATH = "tcefold:/home/tcelab/.cache/spot-stage3-universe/store/"
+# WHERE THE BYTES ARE, said accurately rather than conveniently. The EXTRACTION ran on tcefold
+# (it needed the 30 GB ChEMBL SQLite); the vocabulary RE-PIN is a pure re-serialisation of those
+# same bytes and ran on tcedirector, which is where the admitted store now sits. Either way it
+# is an out-of-repo cache: Git carries only compact reports, so a checked-in report is NOT the
+# binding — binding to one is how a stale store gets consumed while everything still looks green.
+ADMITTED_STORE_PATH = "/home/tcelab/.cache/spot-stage3-universe-w3tokens/store/"
+ADMITTED_STORE_IS_OUT_OF_REPO = True
+EXTRACTION_HOST = "tcefold"
+SOURCE_EXTRACTION_STORE_PATH = "tcefold:/home/tcelab/.cache/spot-stage3-universe/store/"
 ADMITTED_PRODUCER_COMMIT = "d268a74f339d346609951e73810ab26e2e654d86"
 ADMITTED_STORE_ID = \
-    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
+    "625c921fce2daf60b69fb0ae33570a9f074a0a0042b1717ee2111f81c1160bff"
 ADMITTED_MANIFEST_CONTENT_SHA256 = \
-    "7cd1cfc8d31faefc419195d36ccfa33c1c8a4274b9a39702ed55492c1df4cae8"
+    "c07d24038ac10f1051607d3a9c1532d8384e7bf4a95d1a2f1f4a104c7222736f"
+ADMITTED_TYPED_UNIVERSE_SHA256 = \
+    "1c19db2b5d666a8f33c715cb634cf111953c7cdd6c23d082e9b375643a3e7cc8"
+# Carried through the re-pin byte-for-byte, and pinned to prove it.
 ADMITTED_ELIGIBILITY_EVIDENCE_SHA256 = \
     "cf5d70884240d2e8ba9c2c5c60a986cf1ec665e73d2ae821d47495dff174167c"
 ADMITTED_PROVENANCE_SHA256 = \
     "72ef88dcb0538f39b2ea04982495ce6e6eb0be04ed80bd5b0b72bbd81f6ca81c"
 ADMISSION_REPORT_SHA256 = \
     "4aba8b5882e5ea32707875fc5026ca6b0b5d811ad01412bfa4b121c29b283bfb"
+# The invariant the re-pin had to preserve, and did. A vocabulary moved; no science did.
+ADMITTED_SCIENTIFIC_CONTENT_SHA256 = \
+    "95f81cb11abf1b39d9345edb182344f0b90b60e08dd7605145b40c08eda391eb"
 
 # Every store Stage 3 has seen and REFUSED. Kept so a stale binding cannot be reintroduced
 # by accident — and because `bdf41b69` under the WRONG PRODUCER is still a refusal: the
 # bytes were fine, the gate that shipped with them was not.
 REFUSED_STORES = {
+    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160":
+        "RETIRED NAMESPACE VOCABULARY: types its rows `ensembl_gene`/`symbol` while Stage 2 "
+        "serializes `ensembl_gene_id`/`gene_symbol`, so the exact-typed join refuses all "
+        "11,522 of its Ensembl rows and yields ZERO edges. Its science is CARRIED FORWARD "
+        "byte-for-byte in 625c921f… — same rows, same assertions, same scientific content hash "
+        "(95f81cb1…). Re-admitting it would re-open the divergence the re-pin closed.",
     "446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d":
         "pre-repair (e298770): nested ambiguous assertions rankable; no provenance binding",
     "b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e":
@@ -83,9 +110,11 @@ def check_admitted_store_is_bound(rep: Report, binding: dict[str, Any]) -> None:
             False, refused)
         return
 
-    rep.check("the bundle binds the ADMITTED store_id (bdf41b69…), not a checked-in report",
+    rep.check(f"the bundle binds the ADMITTED store_id ({ADMITTED_STORE_ID[:8]}…), not a "
+              "checked-in report",
               store_id == ADMITTED_STORE_ID, f"got {str(store_id)[:16]}…")
-    rep.check("the bundle binds the admitted manifest content hash (7cd1cfc8…)",
+    rep.check(f"the bundle binds the admitted manifest content hash "
+              f"({ADMITTED_MANIFEST_CONTENT_SHA256[:8]}…)",
               binding.get("manifest_content_sha256") == ADMITTED_MANIFEST_CONTENT_SHA256,
               f"got {str(binding.get('manifest_content_sha256'))[:16]}…")
 
@@ -99,7 +128,7 @@ def check_admitted_store_is_bound(rep: Report, binding: dict[str, Any]) -> None:
 
 # The evidence artifact — shipped on tcefold, copied, and independently replayed.
 W2_EVIDENCE_SHIPPED = True
-W2_STORE_PATH = "tcefold:/home/tcelab/.cache/spot-stage3-universe/store/"
+W2_STORE_PATH = ADMITTED_STORE_PATH
 
 # Independently reproduced by Stage 3 against the real bytes (not accepted from W2):
 W2_REPLAY = {

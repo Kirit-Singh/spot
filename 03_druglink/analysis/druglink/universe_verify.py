@@ -13,7 +13,29 @@ from typing import Any
 
 from .hashing import content_hash
 
-VERIFY_POLICY_VERSION = "stage3-universe-verify-v1"
+VERIFY_POLICY_VERSION = "stage3-universe-verify-v2-w3-tokens"
+
+# --------------------------------------------------------------------------- #
+# THE NAMESPACE VOCABULARY. ONE vocabulary, spelled the way Stage 2 (W3) serializes it.
+#
+# The store used to type its rows ``ensembl_gene`` / ``symbol`` while Stage-2's W3 release
+# serializes ``ensembl_gene_id`` / ``gene_symbol``. Exact-token equality — which is the only
+# honest way to join two typed identities — then refused every real Ensembl row and the join
+# yielded ZERO edges. The store was RE-EMITTED under Stage-2's tokens (see
+# :mod:`druglink.universe_repin`): a vocabulary re-pin, not a re-extraction.
+#
+# There is NO alias map here, deliberately. Translating ``ensembl_gene`` -> ``ensembl_gene_id``
+# would absorb exactly this divergence in silence, and is how two admitted artifacts drift
+# apart while every test stays green. An unrecognised token is a NAMED violation and is never
+# coerced, defaulted or aliased.
+# --------------------------------------------------------------------------- #
+NS_ENSEMBL_GENE = "ensembl_gene_id"
+NS_SYMBOL = "gene_symbol"
+STORE_NAMESPACES = (NS_ENSEMBL_GENE, NS_SYMBOL)
+
+# The tokens the store USED to speak, kept so a stale-vocabulary store is refused BY NAME
+# rather than by a confusing pile of per-row coverage mismatches.
+RETIRED_NAMESPACES = ("ensembl_gene", "symbol")
 
 # A cache drug row may carry only source-faithful fields. These are forbidden: they would
 # mean the cache precomputed direction, coarsened the phase, invented a cross-ref, or
@@ -44,11 +66,31 @@ def _typed_universe_hash(universe_targets: list[dict[str, str]]) -> str:
     return content_hash(typed)
 
 
+def store_identity(manifest: dict[str, Any]) -> str:
+    """The ``store_id`` a manifest's OWN pins imply: source releases + universe + method.
+
+    ONE implementation, so :func:`verify` and :mod:`druglink.universe_repin` cannot disagree
+    about what a store's identity is. A second implementation is a second chance to disagree.
+    """
+    ub = manifest.get("universe_binding", {})
+    ext = manifest.get("extraction", {})
+    rel = manifest.get("releases", {})
+    return content_hash({
+        "extraction_query_sha256": ext.get("extraction_query_sha256"),
+        "chembl_source_sha256": rel.get("chembl", {}).get("source_sha256"),
+        "uniprot_source_sha256": rel.get("uniprot", {}).get("source_sha256"),
+        "universe_targets_sha256": ub.get("universe_targets_sha256"),
+        "store_rows_sha256": ext.get("store_rows_sha256"),
+        "eligibility_evidence_sha256": ext.get("eligibility_evidence_sha256"),
+        "public_source_provenance_sha256": ext.get("public_source_provenance_sha256"),
+    })
+
+
 def _recompute_coverage(store_rows: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "n_targets_total": len(store_rows),
         "n_ensg": sum(1 for r in store_rows
-                      if r["target_id_namespace"] == "ensembl_gene"),
+                      if r["target_id_namespace"] == NS_ENSEMBL_GENE),
         "n_symbol_only_unsupported_namespace": sum(
             1 for r in store_rows if r["disposition"] == "unsupported_namespace"),
         "n_drug_evidence": sum(1 for r in store_rows
@@ -115,19 +157,9 @@ def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
         v.append("universe_targets_hash_mismatch")
 
     # 4. store_id binds source releases + typed universe + method
-    ub = manifest.get("universe_binding", {})
     ext = manifest.get("extraction", {})
     rel = manifest.get("releases", {})
-    recomputed_store_id = content_hash({
-        "extraction_query_sha256": ext.get("extraction_query_sha256"),
-        "chembl_source_sha256": rel.get("chembl", {}).get("source_sha256"),
-        "uniprot_source_sha256": rel.get("uniprot", {}).get("source_sha256"),
-        "universe_targets_sha256": ub.get("universe_targets_sha256"),
-        "store_rows_sha256": ext.get("store_rows_sha256"),
-        "eligibility_evidence_sha256": ext.get("eligibility_evidence_sha256"),
-        "public_source_provenance_sha256": ext.get("public_source_provenance_sha256"),
-    })
-    if recomputed_store_id != manifest.get("store_id"):
+    if store_identity(manifest) != manifest.get("store_id"):
         v.append("store_id_tamper")
 
     # 4b. the ACTUAL on-disk eligibility artifact (hash + verdict replay + counts)
@@ -170,7 +202,14 @@ def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
     for r in store_rows:
         ns = r["target_id_namespace"]
         disp = r["disposition"]
-        if ns != "ensembl_gene":
+        # An UNKNOWN namespace token is a NAMED refusal. Never coerced, never defaulted to the
+        # majority namespace, never aliased onto a known one: a token nobody agreed to is a
+        # different identity space, and joining it to this store would answer questions about
+        # targets the store never covered.
+        if ns not in STORE_NAMESPACES:
+            v.append(f"unknown_namespace_token:{r['target_id']}:{ns}")
+            continue
+        if ns != NS_ENSEMBL_GENE:
             if disp != "unsupported_namespace" or r["drugs"]:
                 v.append(f"symbol_row_not_unsupported:{r['target_id']}")
             continue

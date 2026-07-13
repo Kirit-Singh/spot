@@ -41,11 +41,35 @@ BINDING_SCHEMA = "spot.stage03_admitted_universe_binding.v1"
 MANIFEST_NAME = "universe_manifest.json"
 
 # The exact identities an INDEPENDENT verifier admitted. Literals, not derivations.
+#
+# RE-PINNED at the namespace-vocabulary standardisation. The store was re-emitted under
+# Stage-2's tokens (`ensembl_gene_id` / `gene_symbol`), so its identity necessarily moved —
+# the typed universe hashes {target_id, target_id_namespace}. The SCIENCE did not move: the
+# store's scientific content hash, taken with the namespace token projected out, is identical
+# on both sides (95f81cb1…). See :mod:`druglink.universe_repin` for the proof.
 ADMITTED_STORE_ID = \
-    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
+    "625c921fce2daf60b69fb0ae33570a9f074a0a0042b1717ee2111f81c1160bff"
 ADMITTED_PRODUCER_COMMIT = "d268a74f339d346609951e73810ab26e2e654d86"
 ADMISSION_REPORT_SHA256 = \
     "4aba8b5882e5ea32707875fc5026ca6b0b5d811ad01412bfa4b121c29b283bfb"
+
+# Every store this lane has REFUSED, kept by id so a stale binding cannot be reintroduced by
+# accident. A bare compare against ADMITTED_STORE_ID would already refuse them — but silently,
+# as "some other store", which tells the next reader nothing about WHY.
+REFUSED_STORES = {
+    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160":
+        "RETIRED NAMESPACE VOCABULARY: this store types its rows `ensembl_gene` / `symbol`, "
+        "and Stage-2's W3 release serializes `ensembl_gene_id` / `gene_symbol`. Exact-token "
+        "equality — the only honest typed join — refuses every one of its 11,522 Ensembl rows, "
+        "so it yields ZERO edges. Its science is intact and is CARRIED FORWARD byte-for-byte "
+        "in 625c921f…, which is the same store re-emitted under Stage-2's tokens. Admitting "
+        "this one again would re-open the divergence the re-pin closed.",
+    "446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d":
+        "pre-repair (e298770): nested ambiguous assertions rankable; no provenance binding",
+    "b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e":
+        "RETRACTED ADMISSION (0e349b1): passed Stage-3's own verifier while the PRODUCER's "
+        "gate was fail-open on a deleted provenance file",
+}
 
 # Stated as a fact about this module, and asserted by its tests: there is no path here that
 # admits anything.
@@ -54,6 +78,7 @@ PRODUCER_ADMITS_STORE = False
 REFUSE_STORE_NOT_FOUND = "the_universe_store_is_not_on_disk"
 REFUSE_STORE_DID_NOT_VERIFY = "the_universe_store_did_not_verify_from_its_own_bytes"
 REFUSE_NOT_THE_ADMITTED_STORE = "this_is_not_the_store_an_independent_verifier_admitted"
+REFUSE_REFUSED_STORE = "this_store_is_on_the_refused_list_and_names_its_reason"
 
 
 class AdmittedUniverseError(ValueError):
@@ -99,6 +124,18 @@ def bind(*, store_dir: str,
             "become a Stage-3 run with a synthetic one")
     with open(manifest_path) as fh:
         manifest = json.load(fh)
+
+    # THE REFUSED LIST, FIRST — so a store this lane has already rejected refuses BY NAME, with
+    # its reason, rather than as an anonymous "some other store". Reading the manifest's own
+    # declared id here is safe in the REFUSING direction only: it can add a refusal, never grant
+    # an admission, and a store that lied about its id to dodge this list still has to survive
+    # the exact-identity compare below.
+    declared = str(manifest.get("store_id", ""))
+    refused = REFUSED_STORES.get(declared)
+    if refused:
+        raise AdmittedUniverseError(
+            REFUSE_REFUSED_STORE,
+            f"{declared[:16]}… is on the REFUSED list: {refused}")
 
     # THE PRODUCER'S GATE, over the ACTUAL bytes on disk — not the in-memory objects that
     # produced them. A missing artifact is a named refusal; an altered one fails at its hash

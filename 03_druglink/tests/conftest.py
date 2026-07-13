@@ -162,13 +162,31 @@ def analysis_build(loaded_direct, analysis_cache):
                             acquired=acquired)
 
 
-# --- the sealed NON-PRODUCTION Stage-2 aggregate release (plumbing, never science) --- #
-@pytest.fixture(scope="module")
+# --- the REAL Stage-2 aggregate release, built by STAGE-2's OWN producer + verifier --- #
+# Not a hand-written document: ``build_release`` drives direct.run_manifest.build and
+# direct.verify_run_manifest.verify (see stage2_release_fixture). Stage-2's bundle SCORES are
+# synthetic — no science is asserted — but the schema, the self-hash and the ADMISSION are
+# real, so the shape cannot drift from the producer without these tests failing.
+@pytest.fixture(scope="session")
 def honest(tmp_path_factory):
     return build_release(tmp_path_factory.mktemp("s2_aggregate"))
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def admitted(honest):
+    """The real release, admitted through Stage-2's own admission chain.
+
+    ``artifact_class`` is STAGE-3's declaration about this run (Stage 2 declares none, and
+    never did). It stays a fixture here, so the analysis path still refuses it.
+    """
     from druglink import stage2_aggregate as sa
     return sa.admit_aggregate(**honest)
+
+
+# --- the sealed NON-PRODUCTION Stage-3 v2 world (aggregate + store + emitted bundle) --- #
+@pytest.fixture(scope="session")
+def v2_world(tmp_path_factory):
+    """Built ONCE: 15 bundles, 300 arm slots, a universe store, and a v2 bundle emitted
+    from both. Every v2 attack breaks exactly one thing in a copy of these honest bytes."""
+    from v2_world import build_world
+    return build_world(str(tmp_path_factory.mktemp("v2_world")))

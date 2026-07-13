@@ -2,7 +2,7 @@
 
 Audit blocker B6: the admitted store verifies, every hash in it checks out — and the v2 CLI
 hands it an **EMPTY** typed universe. The empty list hashes to ``4f53cda1…``; the universe the
-store was built for hashes to ``5fdbaf58…``. An empty universe is not "no universe supplied",
+store was built for hashes to ``1c19db2b…``. An empty universe is not "no universe supplied",
 it is a **different** universe — one covering nothing. So these tests prove the real
 11,526-row universe is DERIVED from the store's own rows (never copied from the manifest),
 that the store re-hashes every artifact it loads, and that the join is by exact typed identity
@@ -52,7 +52,7 @@ from universe_store_fixture import (
 # --------------------------------------------------------------------------- #
 @needs_store
 def test_the_typed_universe_derives_the_admitted_hash_from_the_stores_own_rows(store):
-    """THE B6 GATE. 11,526 rows in, 5fdbaf58… out — derived, never copied."""
+    """THE B6 GATE. 11,526 rows in, 1c19db2b… out — derived, never copied."""
     assert len(store.typed_universe) == N_TARGETS
     assert store.typed_universe_sha256 == ADMITTED_UNIVERSE_SHA
     assert store.typed_universe_sha256 != EMPTY_UNIVERSE_SHA

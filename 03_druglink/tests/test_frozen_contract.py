@@ -38,8 +38,32 @@ SCHEMA_DIR = os.path.abspath(os.path.join(_HERE, "..", "schemas"))
 FROZEN_CONTRACT = "spot.stage03_drug_annotation.v1"
 FROZEN_CONTRACT_SHA256 = \
     "361d0833d5cb099155ac6ad87557c728fcd64feba1e2ccbf7938bd2c6f4c9eed"
+
+# THE SCHEMA SET MOVED, DELIBERATELY, AND v1 DID NOT.
+#
+# A NEW schema was ADDED: `spot.stage03_drug_annotation.v2` (the reusable-arm / three-typed-
+# origin contract, audit B8 + step 6). The set digest covers names AND per-file hashes, so an
+# ADDED file moves it — which is the test doing its job, not a nuisance.
+#
+# This is the sanctioned unfreeze path and not a re-pin to make a failure go away: v1's own
+# bytes are UNCHANGED (FROZEN_CONTRACT_SHA256 above still holds, and
+# `test_the_generic_stage4_contract_is_byte_frozen` proves it), because v2 is a new $id rather
+# than a widening of v1. Widening the v1 origin enum remains forbidden and is still caught by
+# tests/test_stage3_to_stage4_freeze_mutation.py.
+#
+# The v2 contract moved AGAIN as its schema was completed (the seven-table layout, the
+# published `document_file`, per-row namespace, explicit missingness, and the sign-derived
+# direction fields). Each move is a deliberate re-pin of a NEW $id — never an edit to v1.
+#
+# WHAT THE STAGE-4 OWNER MUST BE TOLD, before any v2 bundle is admitted downstream:
+#     schema set   3068e0c1… -> db4b3557…      (a file was ADDED / the new v2 completed)
+#     v1 contract  361d0833…  UNCHANGED        (what Stage 4 binds today — verify this first)
+#     v2 contract  28a331b3…  NEW              (not yet consumed by Stage 4)
 FROZEN_SCHEMA_SET_SHA256 = \
-    "5b42a64c8aca0fd279ba1440cb956ce034246f542362a6a8b470d27ca2f11b82"
+    "db4b35574437b7009af399ad0157b4a31925eacc97223c16fc2a077fc3b0bb57"
+FROZEN_V2_CONTRACT = "spot.stage03_drug_annotation.v2"
+FROZEN_V2_CONTRACT_SHA256 = \
+    "28a331b3b840a756c360c3916634dd80dc24dbf59710800a67bebf60f02f9ac3"
 
 # The verifier's gate inventory on a clean bundle (sorted check names, newline-joined).
 # NEW at r8, closing the class of defect B6 belonged to: the freeze pinned the contract
@@ -145,6 +169,30 @@ def test_the_frozen_contract_still_declares_its_own_id():
     assert doc["$id"] == FROZEN_CONTRACT
     assert doc["properties"]["schema_version"]["const"] == FROZEN_CONTRACT
     assert doc["properties"]["artifact_class"]["const"] == "analysis"
+
+
+def test_v2_is_a_NEW_id_and_v1_is_not_widened_to_reach_it():
+    """The v2 lane ships its own contract. It must not have been bought by editing v1.
+
+    The temptation the mutation suite already caught once was to widen v1's `origin_type` enum
+    so the three typed v2 origins would validate. That silently moves bytes Stage 4 is bound
+    to. So: v2 declares its own $id and its own origins, and v1 still declares only its pair.
+    """
+    with open(os.path.join(SCHEMA_DIR, f"{FROZEN_V2_CONTRACT}.json")) as fh:
+        v2 = json.load(fh)
+    with open(os.path.join(SCHEMA_DIR, f"{FROZEN_CONTRACT}.json")) as fh:
+        v1 = json.load(fh)
+
+    got = _sha256(os.path.join(SCHEMA_DIR, f"{FROZEN_V2_CONTRACT}.json"))
+    assert got == FROZEN_V2_CONTRACT_SHA256, (
+        f"the v2 contract moved: {got} != pinned {FROZEN_V2_CONTRACT_SHA256}" + _UNFREEZE)
+
+    assert v2["$id"] == FROZEN_V2_CONTRACT
+    assert set(v2["$defs"]["origin_type"]["enum"]) == {
+        "direct_target", "temporal_cross_time_measured", "endpoint_pathway_context"}
+    # v1 keeps its own pair, and never learns the v2 origins.
+    assert set(v1["$defs"]["origin_type"]["enum"]) == {"direct_target", "pathway_node"}
+    assert "temporal_cross_time_measured" not in json.dumps(v1)
 
 
 @pytest.mark.parametrize("term", RETIRED)

@@ -10,6 +10,8 @@ and the acquisition is checked against them.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from verifier import admitted_store as ast
@@ -202,11 +204,38 @@ def test_w2s_chembl_source_sha_equals_the_publishers():
 
 
 def test_the_ADMITTED_store_is_the_binding():
-    """bdf41b69 @ d268a74, from tcefold — NOT the older checked-in reports."""
-    assert ast.ADMITTED_STORE_ID.startswith("bdf41b69")
-    assert ast.ADMITTED_MANIFEST_CONTENT_SHA256.startswith("7cd1cfc8")
+    """625c921f @ d268a74 — the RE-PINNED store, NOT an older checked-in report.
+
+    The extraction ran once, on tcefold, at d268a74. The store was then RE-EMITTED under
+    Stage-2's namespace vocabulary: same rows, same assertions, same licences, new tokens and
+    therefore a new identity. The producer commit does not move, because no science was
+    re-produced — only re-serialised.
+    """
+    assert ast.ADMITTED_STORE_ID.startswith("625c921f")
+    assert ast.ADMITTED_MANIFEST_CONTENT_SHA256.startswith("c07d2403")
+    assert ast.ADMITTED_TYPED_UNIVERSE_SHA256.startswith("1c19db2b")
     assert ast.ADMITTED_PRODUCER_COMMIT.startswith("d268a74")
-    assert ast.ADMITTED_STORE_PATH.startswith("tcefold:")
+    # The binding is an OUT-OF-REPO artifact. Git carries compact reports; a report is not a
+    # store, and binding to one is how a stale store gets consumed while everything looks green.
+    assert ast.ADMITTED_STORE_IS_OUT_OF_REPO is True
+    assert os.path.isabs(ast.ADMITTED_STORE_PATH)
+    assert "03_druglink" not in ast.ADMITTED_STORE_PATH
+
+
+def test_the_SCIENCE_survived_the_vocabulary_repin_unchanged():
+    """The new identity is a NEW SERIALISATION, not new evidence. Counts pinned, unmoved."""
+    assert ast.ADMITTED_SCIENTIFIC_CONTENT_SHA256.startswith("95f81cb1")
+    c = ast.ADMITTED_COUNTS
+    assert c["universe_total"] == 11_526
+    assert c["universe_ensg"] == 11_522
+    assert c["universe_symbol_only"] == 4
+    assert c["assertion_occurrences"] == 2_262
+    assert c["general_drug_assertions"] == 2_227
+    assert c["variant_specific_assertions"] == 29
+    assert c["drug_evidence_targets"] == 505
+    # licences and provenance were CARRIED, not re-derived
+    assert ast.ADMITTED_ELIGIBILITY_EVIDENCE_SHA256.startswith("cf5d7088")
+    assert ast.ADMITTED_PROVENANCE_SHA256.startswith("72ef88dc")
 
 
 def test_every_superseded_store_is_explicitly_REFUSED():
@@ -214,6 +243,15 @@ def test_every_superseded_store_is_explicitly_REFUSED():
     assert any(k.startswith("446c3b78") for k in ast.REFUSED_STORES)
     assert any(k.startswith("b20ec29b") for k in ast.REFUSED_STORES)
     assert any(k.startswith("d6066b7") for k in ast.REFUSED_PRODUCERS)
+
+
+def test_the_RETIRED_VOCABULARY_store_is_explicitly_REFUSED():
+    """bdf41b69's science is intact — and it types its rows in a vocabulary Stage 2 does not
+    speak, so the exact-typed join refuses every Ensembl row in it and the lane goes to zero.
+    It is refused BY NAME, with its reason, rather than as an anonymous 'some other store'."""
+    reason = next(v for k, v in ast.REFUSED_STORES.items() if k.startswith("bdf41b69"))
+    assert "RETIRED NAMESPACE VOCABULARY" in reason
+    assert "ensembl_gene_id" in reason and "gene_symbol" in reason
 
 
 def _binding(**over):
@@ -261,14 +299,17 @@ def test_a_stale_manifest_hash_is_refused():
 
 
 def test_the_eligibility_evidence_was_SHIPPED_and_REPLAYED():
-    """The store lives on tcefold; Git carries only the compact reports. Copied and audited.
+    """The store is an OUT-OF-REPO artifact; Git carries only the compact reports.
 
-    I first concluded the store was absent because I checked only tcedirector — it was on
-    tcefold all along. Checking one host and calling an artifact missing is the same error
-    as trusting a claim without checking: both substitute a convenient answer for a look.
+    I first concluded the store was absent because I checked only tcedirector — the EXTRACTION
+    was on tcefold all along. Checking one host and calling an artifact missing is the same
+    error as trusting a claim without checking: both substitute a convenient answer for a look.
+    The extraction host is still recorded, because that is where the ChEMBL bytes were read.
     """
     assert ast.EVIDENCE_SHIPPED is True
-    assert ast.ADMITTED_STORE_PATH.startswith("tcefold:")
+    assert ast.ADMITTED_STORE_IS_OUT_OF_REPO is True
+    assert ast.EXTRACTION_HOST == "tcefold"
+    assert ast.SOURCE_EXTRACTION_STORE_PATH.startswith("tcefold:")
 
 
 def test_all_11055_eligibility_verdicts_replay_with_zero_mismatches():

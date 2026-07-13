@@ -20,21 +20,22 @@ import pytest
 
 from druglink import stage2_aggregate as sa
 from druglink import v2_input_loader as v2
-from test_stage2_aggregate import build_release
+from stage2_release_fixture import build_release
 
 
 @pytest.fixture(scope="module")
 def analysis_aggregate(tmp_path_factory):
-    """A sealed plumbing release that declares the analysis class, so the production path
-    can be walked end to end. It carries arm slots and no candidates — by construction."""
-    paths = build_release(tmp_path_factory.mktemp("s2_prod"), artifact_class="analysis")
-    return sa.admit_aggregate(**paths)
+    """The REAL admitted Stage-2 release, which STAGE 3 declares an analysis, so the
+    production path can be walked end to end. It carries arm slots and no candidates."""
+    paths = build_release(tmp_path_factory.mktemp("s2_prod"))
+    return sa.admit_aggregate(**paths, artifact_class="analysis")
 
 
 @pytest.fixture(scope="module")
 def fixture_aggregate(tmp_path_factory):
-    paths = build_release(tmp_path_factory.mktemp("s2_fix"), artifact_class="fixture")
-    return sa.admit_aggregate(**paths)
+    """The same REAL release, declared by Stage 3 as a fixture run."""
+    paths = build_release(tmp_path_factory.mktemp("s2_fix"))
+    return sa.admit_aggregate(**paths, artifact_class="fixture")
 
 
 # --------------------------------------------------------------------------- #
@@ -85,15 +86,22 @@ def test_the_binding_names_every_field(analysis_aggregate):
     binding = out["stage2_aggregate_binding"]
     assert binding is not None, "non-vacuous guard: the admitted branch must have run"
 
+    # STAGE-3's own class. Stage 2 declares no artifact_class, and never did.
     assert binding["artifact_class"] == "analysis"
-    assert binding["verdict"] == sa.ADMIT
-    assert "independent" in binding["verifier_id"]
+    assert binding["verdict"] == sa.ADMIT == "admit"
+    # THE PINNED AGGREGATE VERIFIER — bound by IDENTITY, not by a substring. This assertion
+    # used to read `"independent" in verifier_id`, which the real verifier's id does not
+    # contain: it would have refused every genuine Stage-2 report and admitted any forgery
+    # that merely named itself "…independent…". Independence is the STRUCTURED FIELD
+    # generator_is_not_verifier, which admit_aggregate binds.
+    assert binding["aggregate_verifier_id"] == sa.AGGREGATE_VERIFIER_ID
+    assert "independent" not in binding["aggregate_verifier_id"]
     for key in ("manifest_raw_sha256", "manifest_canonical_sha256", "manifest_self_hash",
                 "stage1_release_sha256"):
         assert len(binding[key]) == 64, f"{key} is not a sha256"
     # the topology the aggregate reconstructed, carried into the projection
     assert binding["n_bundles"] == sa.N_BUNDLES == 15
-    assert binding["n_arms"] > 0
+    assert binding["n_arms"] == sa.N_ARM_SLOTS == 300
 
 
 def test_an_unadmitted_run_carries_no_aggregate_binding():

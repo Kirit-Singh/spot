@@ -29,28 +29,36 @@ def _failed(rep):
 
 
 def _row(origin=v2.ORIGIN_DIRECT, **over):
-    r = {"edge_id": "e1", "target_id": "ENSG1", "arm_key": "k1", "drug_id": "CHEMBL1",
-         "evidence_origin": origin, "arm_rank": 1,
-         "axis_order_preserved": True,
+    """A row in the SHIPPED shape. The origin lives in `origin_type` — a consumer must be able to
+    tell a measured lever from an inferred neighbour by reading the field NAMED for origin."""
+    r = {"edge_id": "e1", "target_id": "ENSG1", "arm_key": "k1",
+         "active_moiety_id": "AM:CHEMBL:CHEMBL1",
+         "origin_type": origin, "arm_rank": 1,
+         "observed_perturbation_support": origin != v2.ORIGIN_PATHWAY,
          "action_type_source": "INHIBITOR",
          "intervention_effect": "functional_inhibition",
          "direction_vocabulary_digest": DIGEST}
     if origin == v2.ORIGIN_TEMPORAL:
+        # Orderedness is DERIVED from the bundle the row came from, never from a flag it declares
+        # about itself: a row that can declare its own pair ordered can declare the wrong one.
         r.update({"from_condition": "Rest", "to_condition": "Stim48hr",
-                  "condition_pair_is_ordered": True})
+                  "bundle_key": "temporal|Rest|Stim48hr"})
     if origin == v2.ORIGIN_PATHWAY:
         r["arm_rank"] = None
+        r["observed_perturbation_support"] = False
     r.update(over)
     return r
 
 
 def _bundle(**over):
     b = {"artifact_class": "analysis",
-         "universe_store_binding": {
+         "universe_store": {
              "store_id": v2.ADMITTED_STORE_ID,
-             "producer_commit": v2.ADMITTED_PRODUCER_COMMIT,
-             "admitted_by": "stage3_external_verifier",
-             "admission_report_sha256": v2.ADMISSION_REPORT_SHA256}}
+             "admission": {
+                 "admitted_producer_commit": v2.ADMITTED_PRODUCER_COMMIT,
+                 "admitted_by": "stage3_external_verifier",
+                 "producer_admits_store": False,
+                 "admission_report_sha256": v2.ADMISSION_REPORT_SHA256}}}
     b.update(over)
     return b
 
@@ -87,7 +95,7 @@ def test_the_contract_is_ALIGNED_to_the_producers_shipped_origin_labels():
 
 
 def test_the_contract_is_frozen_to_the_ADMITTED_store_and_producer():
-    assert v2.ADMITTED_STORE_ID.startswith("bdf41b69")
+    assert v2.ADMITTED_STORE_ID.startswith("625c921f")
     assert v2.ADMITTED_PRODUCER_COMMIT.startswith("d268a74")
     assert v2.ADMISSION_REPORT_SHA256.startswith("4aba8b58")
 
@@ -145,8 +153,10 @@ def test_a_bundle_with_no_combined_score_passes():
 # 3. Ordered axes and conditions.
 # --------------------------------------------------------------------------- #
 def test_a_temporal_row_that_lost_its_ORDER_is_refused():
-    """Rest→Stim48 is not Stim48→Rest. A sorted pair is a different question."""
-    rep = _verify(rows=[_row(v2.ORIGIN_TEMPORAL, condition_pair_is_ordered=False)])
+    """Rest→Stim48 is not Stim48→Rest. A sorted pair is a different question — and the pair the
+    row carries must be the pair the bundle it came from actually states."""
+    rep = _verify(rows=[_row(v2.ORIGIN_TEMPORAL, from_condition="Stim48hr",
+                             to_condition="Rest")])
     assert any("ORDERED condition pair" in n for n in _failed(rep))
 
 
@@ -155,10 +165,11 @@ def test_a_temporal_row_missing_an_endpoint_is_refused():
     assert any("ORDERED condition pair" in n for n in _failed(rep))
 
 
-def test_a_row_that_lost_the_SELECTIONS_axis_order_is_refused():
-    """The axis belongs to the selection. Re-sorting it swaps which program is A."""
-    rep = _verify(rows=[_row(axis_order_preserved=False)])
-    assert any("axis order" in n for n in _failed(rep))
+def test_a_reusable_arm_that_BAKED_IN_a_selections_role_is_refused():
+    """A ROLE (away_from_A / toward_B) is what a SELECTION gives an arm at join time. An arm that
+    bakes one in has fused two different questions under one key."""
+    rep = _verify(rows=[_row(arm_key="k1|away_from_A")])
+    assert any("A/B role" in n for n in _failed(rep))
 
 
 # --------------------------------------------------------------------------- #
@@ -207,7 +218,7 @@ def test_a_bundle_not_declaring_artifact_class_analysis_is_refused():
 # --------------------------------------------------------------------------- #
 def test_the_WRONG_store_id_is_refused():
     b = _bundle()
-    b["universe_store_binding"]["store_id"] = "b20ec29b" + "0" * 56
+    b["universe_store"]["store_id"] = "b20ec29b" + "0" * 56
     rep = _verify(bundle=b)
     assert any("EXACT admitted universe store_id" in n for n in _failed(rep))
 
@@ -215,7 +226,8 @@ def test_the_WRONG_store_id_is_refused():
 def test_the_SAME_BYTES_under_a_DIFFERENT_PRODUCER_are_refused():
     """bdf41b69 built by d6066b7 shipped a fail-open provenance gate. Same store, no admission."""
     b = _bundle()
-    b["universe_store_binding"]["producer_commit"] = "d6066b7759a8bc57190365732f316b111eab85a1"
+    b["universe_store"]["admission"]["admitted_producer_commit"] = (
+        "d6066b7759a8bc57190365732f316b111eab85a1")
     rep = _verify(bundle=b)
     assert any("admitted producer commit" in n for n in _failed(rep))
 
@@ -223,20 +235,20 @@ def test_the_SAME_BYTES_under_a_DIFFERENT_PRODUCER_are_refused():
 def test_a_PRODUCER_SELF_ADMISSION_is_refused():
     """The producer's verify_report is the producer agreeing with itself."""
     b = _bundle()
-    b["universe_store_binding"]["admitted_by"] = "stage3-universe-verify-v1"
+    b["universe_store"]["admission"]["admitted_by"] = "stage3-universe-verify-v1"
     rep = _verify(bundle=b)
     assert any("INDEPENDENT verifier" in n for n in _failed(rep))
 
 
 def test_an_admission_naming_NO_REPORT_is_refused():
     b = _bundle()
-    b["universe_store_binding"]["admission_report_sha256"] = None
+    b["universe_store"]["admission"]["admission_report_sha256"] = None
     rep = _verify(bundle=b)
     assert any("bound by SHA-256" in n for n in _failed(rep))
 
 
 def test_a_bundle_with_NO_store_binding_at_all_is_refused():
-    rep = _verify(bundle=_bundle(universe_store_binding={}))
+    rep = _verify(bundle=_bundle(universe_store={}))
     assert len(_failed(rep)) >= 3, "store_id, producer, admitter and report all missing"
 
 
@@ -268,14 +280,13 @@ def test_this_contract_does_not_import_the_producer():
 def test_temporal_levers_labelled_as_DIRECT_are_refused():
     """The exact 9814898 defect. Same-time and cross-time are different measurements."""
     fused = [_row(v2.ORIGIN_DIRECT, edge_id="t1", time_scope="cross_time",
-                  from_condition="Rest", to_condition="Stim48hr",
-                  condition_pair_is_ordered=True)]
+                  from_condition="Rest", to_condition="Stim48hr")]
     rep = Report()
     v2.check_origins_are_typed_and_separate(rep, fused)
     # origin says Direct; the row is cross-time. The contract requires the ORIGIN to say so.
-    assert fused[0]["evidence_origin"] == v2.ORIGIN_DIRECT
+    assert fused[0]["origin_type"] == v2.ORIGIN_DIRECT
     assert fused[0]["time_scope"] == "cross_time"
-    assert v2.ORIGIN_TEMPORAL not in {r["evidence_origin"] for r in fused}, (
+    assert v2.ORIGIN_TEMPORAL not in {r["origin_type"] for r in fused}, (
         "a cross-time lever whose ORIGIN says direct_same_time_measured is mislabelled; "
         "a consumer reading origin_type cannot tell them apart, and having to read "
         "time_scope instead is the inference clause 1 forbids")

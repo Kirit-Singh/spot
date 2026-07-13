@@ -7,11 +7,17 @@ producer must stand on its own bytes, or the "independent" check is the same pro
 
 So the producer pins the ONE store an independent verifier admitted:
 
-    store_id  bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160
+    store_id  625c921fce2daf60b69fb0ae33570a9f074a0a0042b1717ee2111f81c1160bff
     producer  d268a74f339d346609951e73810ab26e2e654d86
 
 and REFUSES anything else — including a store whose internal hashes are all perfectly
 self-consistent. Self-consistency is what a forger has; admission is what a forger lacks.
+
+It also refuses, BY NAME and with its reason, the store this one replaces
+(``bdf41b69…``): same science, RETIRED namespace vocabulary. That store types its rows
+``ensembl_gene`` / ``symbol`` while Stage 2 serializes ``ensembl_gene_id`` / ``gene_symbol``,
+so the exact-typed join refuses every Ensembl row in it and the lane yields zero edges. A
+stale binding must not be reintroducible by accident.
 
 Two refusals matter especially, because an earlier producer (d6066b7) shipped the provenance
 gate's REPORT rather than the gate, and `verify_from_disk` still returned ok=True on a DELETED
@@ -38,14 +44,21 @@ from druglink.hashing import content_hash      # noqa: E402
 # The exact identities an INDEPENDENT verifier admitted. Asserted as literals: a pin that is
 # computed from the thing it pins is not a pin.
 ADMITTED_STORE_ID = \
-    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
+    "625c921fce2daf60b69fb0ae33570a9f074a0a0042b1717ee2111f81c1160bff"
 ADMITTED_PRODUCER_COMMIT = "d268a74f339d346609951e73810ab26e2e654d86"
+STALE_VOCAB_STORE_ID = \
+    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
 
-TARGETS = [{"target_id": "ENSG1", "target_id_namespace": "ensembl"},
-           {"target_id": "ENSG2", "target_id_namespace": "ensembl"}]
+# The canonical vocabulary, spelled out rather than imported: this file must be able to say
+# what the tokens ARE without asking the module it is testing.
+NS_ENSEMBL_GENE = "ensembl_gene_id"
+
+TARGETS = [{"target_id": "ENSG1", "target_id_namespace": NS_ENSEMBL_GENE},
+           {"target_id": "ENSG2", "target_id_namespace": NS_ENSEMBL_GENE}]
 
 
-def _store(tmp_path, *, mutate_provenance=False, delete_provenance=False):
+def _store(tmp_path, *, mutate_provenance=False, delete_provenance=False,
+           namespace=NS_ENSEMBL_GENE, store_id=None):
     """A SYNTHETIC store whose internal hashes are all self-consistent — and which is still
     not the admitted store, because it is not the one anybody admitted."""
     d = str(tmp_path / "store")
@@ -54,10 +67,10 @@ def _store(tmp_path, *, mutate_provenance=False, delete_provenance=False):
     # The REAL row shape the store verifier recomputes coverage over. No drug rows: the drug
     # payload is not what these tests are about, and a fixture that fights the real gate on
     # unrelated fields would be testing the fixture.
-    rows = [{"target_id": "ENSG1", "target_id_namespace": "ensembl_gene",
+    rows = [{"target_id": "ENSG1", "target_id_namespace": namespace,
              "disposition": "no_drug_evidence", "drugs": [],
              "variant_specific_assertions": []},
-            {"target_id": "ENSG2", "target_id_namespace": "ensembl_gene",
+            {"target_id": "ENSG2", "target_id_namespace": namespace,
              "disposition": "no_drug_evidence", "drugs": [],
              "variant_specific_assertions": []}]
     elig = {"records": [], "counts": {"n_total": 0, "n_eligible": 0}}
@@ -69,22 +82,18 @@ def _store(tmp_path, *, mutate_provenance=False, delete_provenance=False):
         "eligibility_evidence_sha256": content_hash(elig),
         "public_source_provenance_sha256": content_hash(prov),
     }
-    ub = {"universe_targets_sha256": uv._typed_universe_hash(TARGETS)}
+    # The universe the store BINDS is derived from its own rows, so the fixture stays
+    # self-consistent whatever namespace it is built in.
+    targets = [{"target_id": r["target_id"],
+                "target_id_namespace": r["target_id_namespace"]} for r in rows]
+    ub = {"universe_targets_sha256": uv._typed_universe_hash(targets)}
     rel = {"chembl": {"source_sha256": content_hash({"c": 1}),
                       "license": "CC BY-SA 3.0"},
            "uniprot": {"source_sha256": content_hash({"u": 1}),
                        "license": "CC BY 4.0"}}
     manifest = {"extraction": ext, "universe_binding": ub, "releases": rel,
                 "coverage": uv._recompute_coverage(rows)}
-    manifest["store_id"] = content_hash({
-        "extraction_query_sha256": ext["extraction_query_sha256"],
-        "chembl_source_sha256": rel["chembl"]["source_sha256"],
-        "uniprot_source_sha256": rel["uniprot"]["source_sha256"],
-        "universe_targets_sha256": ub["universe_targets_sha256"],
-        "store_rows_sha256": ext["store_rows_sha256"],
-        "eligibility_evidence_sha256": ext["eligibility_evidence_sha256"],
-        "public_source_provenance_sha256": ext["public_source_provenance_sha256"],
-    })
+    manifest["store_id"] = store_id or uv.store_identity(manifest)
     manifest["content_sha256"] = uv._manifest_identity(manifest)
 
     if mutate_provenance:
@@ -113,6 +122,53 @@ class TestThePinIsTheMechanism:
         with pytest.raises(au.AdmittedUniverseError) as exc:
             au.bind(store_dir=store, universe_targets=TARGETS)
         assert exc.value.reason == au.REFUSE_NOT_THE_ADMITTED_STORE
+
+
+class TestTheRetiredVocabularyStoreIsRefused:
+    """The store this one replaces holds the SAME science and the WRONG tokens.
+
+    It types its rows ``ensembl_gene`` / ``symbol``; Stage 2 serializes ``ensembl_gene_id`` /
+    ``gene_symbol``. Exact-token equality — the only honest typed join — then refuses every
+    Ensembl row in it, and the lane produces zero edges while every hash inside it verifies.
+    Its science was carried forward byte-for-byte into the admitted store, so there is no
+    reason to reach for it again — and the refusal says so rather than leaving a bare mismatch.
+    """
+
+    def test_the_STALE_store_id_is_on_the_REFUSED_list_with_its_reason(self):
+        assert STALE_VOCAB_STORE_ID in au.REFUSED_STORES
+        reason = au.REFUSED_STORES[STALE_VOCAB_STORE_ID]
+        assert "ensembl_gene_id" in reason and "gene_symbol" in reason
+        assert STALE_VOCAB_STORE_ID != au.ADMITTED_STORE_ID
+
+    def test_a_store_carrying_the_STALE_store_id_REFUSES_BY_NAME(self, tmp_path):
+        store = _store(tmp_path, store_id=STALE_VOCAB_STORE_ID)
+        with pytest.raises(au.AdmittedUniverseError) as exc:
+            au.bind(store_dir=store, universe_targets=TARGETS)
+        assert exc.value.reason == au.REFUSE_REFUSED_STORE
+        assert "RETIRED NAMESPACE VOCABULARY" in str(exc.value)
+
+    def test_a_store_still_speaking_the_RETIRED_TOKENS_does_not_verify(self, tmp_path):
+        """Not silently accepted, and not coerced: the token is refused at the store verifier.
+
+        This is the alias layer's absence, made testable. A translation map would have let this
+        store through and every test would still be green.
+        """
+        store = _store(tmp_path, namespace="ensembl_gene")
+        targets = [{"target_id": t["target_id"], "target_id_namespace": "ensembl_gene"}
+                   for t in TARGETS]
+        with pytest.raises(au.AdmittedUniverseError) as exc:
+            au.bind(store_dir=store, universe_targets=targets)
+        assert exc.value.reason == au.REFUSE_STORE_DID_NOT_VERIFY
+        assert "unknown_namespace_token:ENSG1:ensembl_gene" in str(exc.value)
+
+    def test_an_UNKNOWN_token_is_a_NAMED_refusal_never_a_coercion(self, tmp_path):
+        store = _store(tmp_path, namespace="entrez_gene_id")
+        targets = [{"target_id": t["target_id"], "target_id_namespace": "entrez_gene_id"}
+                   for t in TARGETS]
+        with pytest.raises(au.AdmittedUniverseError) as exc:
+            au.bind(store_dir=store, universe_targets=targets)
+        assert exc.value.reason == au.REFUSE_STORE_DID_NOT_VERIFY
+        assert "unknown_namespace_token:ENSG1:entrez_gene_id" in str(exc.value)
 
     def test_the_producer_does_NOT_admit_the_store_it_binds(self, tmp_path):
         store = _store(tmp_path)

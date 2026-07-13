@@ -6,13 +6,13 @@ generation**, because the v2 CLI hands ``admitted_universe.bind`` an **EMPTY** t
 universe::
 
     []                    -> 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
-    the store's universe  -> 5fdbaf585a246489a5f2dfcb9450553370d435b1757b2247d972f79be75193af
+    the store's universe  -> 1c19db2b5d666a8f33c715cb634cf111953c7cdd6c23d082e9b375643a3e7cc8
 
 An empty list is not "no universe supplied". It is a **different universe** — one that covers
 nothing — and the only reason it does not already produce silent zero-coverage answers is that
-the store's binding gate refuses it. The fix is therefore not to relax that gate: it is to
-DERIVE the real 11,526-row typed universe from the store's own rows and prove it hashes to
-what the store bound. Copying the claimed hash across would prove exactly nothing.
+the store's binding gate refuses it. The fix is not to relax that gate: it is to DERIVE the
+real 11,526-row typed universe from the store's own rows and prove it hashes to what the store
+bound. Copying the claimed hash across would prove exactly nothing.
 
 THE JOIN IS TYPED, OR IT IS MIS-ATTRIBUTION
 -------------------------------------------
@@ -22,13 +22,24 @@ is written and silently re-attributes every edge the first time a gene is rename
 is reused across namespaces. A query that cannot be answered by an exact typed match REFUSES;
 it never degrades to a name match, and it never crosses a namespace to find something.
 
+ONE VOCABULARY, AND NO ALIAS LAYER
+----------------------------------
+Exact-token equality only works if both sides spell the token the same way. Stage 2 serializes
+``ensembl_gene_id`` / ``gene_symbol``; the store serialized ``ensembl_gene`` / ``symbol``, so
+the join refused every real Ensembl row and returned ZERO edges. The store was RE-EMITTED under
+Stage-2's tokens (:mod:`druglink.universe_repin`) — a vocabulary re-pin, its scientific content
+hash proved identical across it. There is no translation map here and there must never be one:
+an unknown token is a NAMED refusal (:data:`GATE_UNKNOWN_NAMESPACE_TOKEN`), because an alias
+layer absorbs this divergence in silence and drifts two admitted artifacts apart while green.
+
 WHAT A SYMBOL-ONLY TARGET MEANS
 -------------------------------
 Four released targets (MTRNR2L1/L4/L8, OCLM) carry a gene symbol and no Ensembl id. Stage-3's
 acquisition route resolves targets by UniProt Ensembl cross-reference, so the ROUTE cannot
-reach them. They are **RETAINED** with an ``unsupported_namespace`` disposition, answer with
-zero edges, and that is never an absence of drug evidence — an absence nobody recorded is
-indistinguishable from a target nobody measured.
+reach them. They are **RETAINED** with an ``unsupported_namespace`` disposition and answer with
+zero edges — never dropped, and never handed an invented edge to make a join look non-empty.
+That is not an absence of drug evidence: an absence nobody recorded is indistinguishable from
+a target nobody measured.
 
 The assertion-level semantics (ambiguous identity, variant containment, the ``-1`` UNDEFINED
 MUTATION sentinel, max_phase-is-context) live one layer down in
@@ -72,17 +83,17 @@ UNIVERSE_ROWS_POLICY_VERSION = "stage3-universe-rows-v1"
 # The one front door: the edge-layer names are re-exported so a consumer binds ONE module.
 __all__ = [
     "UNIVERSE_ROWS_POLICY_VERSION", "ADMITTED_TYPED_UNIVERSE_SHA256",
-    "EMPTY_TYPED_UNIVERSE_SHA256", "MANIFEST_NAME", "ROWS_NAME", "ELIGIBILITY_NAME",
-    "PROVENANCE_NAME", "LICENSE_NAME", "ATTRIBUTION_NAME", "JSON_ARTIFACTS",
-    "LICENSE_ARTIFACTS", "ARTIFACT_PINS", "NS_ENSEMBL_GENE", "NS_SYMBOL", "STORE_NAMESPACES",
+    "ADMITTED_SCIENTIFIC_CONTENT_SHA256", "EMPTY_TYPED_UNIVERSE_SHA256", "MANIFEST_NAME",
+    "ROWS_NAME", "ELIGIBILITY_NAME", "PROVENANCE_NAME", "LICENSE_NAME", "ATTRIBUTION_NAME",
+    "JSON_ARTIFACTS", "LICENSE_ARTIFACTS", "ARTIFACT_PINS", "NS_ENSEMBL_GENE", "NS_SYMBOL",
+    "STORE_NAMESPACES", "RETIRED_NAMESPACES", "GATE_UNKNOWN_NAMESPACE_TOKEN",
     "DISP_DRUG_EVIDENCE", "DISP_NO_DRUG_EVIDENCE", "DISP_AMBIGUOUS_IDENTITY",
     "DISP_UNSUPPORTED_NAMESPACE", "DISPOSITIONS", "LANE_GENERAL", "LANE_VARIANT",
     "LANE_AMBIGUOUS", "LANE_CONTAINERS", "RANKABLE_LANES", "MAX_PHASE_KEYS",
-    "VARIANT_UNDEFINED_MUTATION",
-    "GATE_EMPTY_TYPED_UNIVERSE", "GATE_MALFORMED_STORE_ROW", "GATE_DUPLICATE_TYPED_IDENTITY",
-    "GATE_TYPED_UNIVERSE_HASH_MISMATCH", "GATE_NOT_THE_ADMITTED_UNIVERSE",
-    "GATE_STORE_NOT_FOUND", "GATE_MISSING_ARTIFACT", "GATE_ARTIFACT_HASH_DRIFT",
-    "GATE_LICENSE_BINDING_MISSING", "GATE_STORE_DID_NOT_VERIFY",
+    "VARIANT_UNDEFINED_MUTATION", "GATE_EMPTY_TYPED_UNIVERSE", "GATE_MALFORMED_STORE_ROW",
+    "GATE_DUPLICATE_TYPED_IDENTITY", "GATE_TYPED_UNIVERSE_HASH_MISMATCH",
+    "GATE_NOT_THE_ADMITTED_UNIVERSE", "GATE_STORE_NOT_FOUND", "GATE_MISSING_ARTIFACT",
+    "GATE_ARTIFACT_HASH_DRIFT", "GATE_LICENSE_BINDING_MISSING", "GATE_STORE_DID_NOT_VERIFY",
     "GATE_UNTYPED_TARGET_QUERY", "GATE_NAMESPACE_CROSS_JOIN",
     "GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE", "GATE_AMBIGUOUS_ROW_HAS_RANKABLE_EVIDENCE",
     "GATE_VARIANT_IN_GENERAL_LANE", "GATE_CACHE_CARRIES_A_DIRECTION_VERDICT",
@@ -105,24 +116,34 @@ JSON_ARTIFACTS = (ROWS_NAME, ELIGIBILITY_NAME, PROVENANCE_NAME)
 LICENSE_ARTIFACTS = (LICENSE_NAME, ATTRIBUTION_NAME)
 
 # Each JSON artifact, and the manifest key that pins its bytes.
-ARTIFACT_PINS = {
-    ROWS_NAME: "store_rows_sha256",
-    ELIGIBILITY_NAME: "eligibility_evidence_sha256",
-    PROVENANCE_NAME: "public_source_provenance_sha256",
-}
+ARTIFACT_PINS = {ROWS_NAME: "store_rows_sha256",
+                 ELIGIBILITY_NAME: "eligibility_evidence_sha256",
+                 PROVENANCE_NAME: "public_source_provenance_sha256"}
 
 # --------------------------------------------------------------------------- #
 # The audited universe, pinned. A pin computed from the thing it pins is not a pin.
+#
+# RE-PINNED at the vocabulary standardisation. The typed universe hashes {target_id,
+# target_id_namespace}, so Stage-2's tokens necessarily moved it:
+#     5fdbaf58…  ensembl_gene / symbol          REFUSED, retired vocabulary
+#     1c19db2b…  ensembl_gene_id / gene_symbol  ADMITTED
+# The SCIENCE did not move: every row with the namespace projected out hashes to 95f81cb1… on
+# both sides, and that equality is the proof the re-pin moved a vocabulary and nothing else.
+#
+# The tokens are RESTATED from the store's own verifier, not re-typed here, so the loader and
+# the verifier cannot spell them differently. The retired pair is a REFUSAL vocabulary only.
 # --------------------------------------------------------------------------- #
 ADMITTED_TYPED_UNIVERSE_SHA256 = \
-    "5fdbaf585a246489a5f2dfcb9450553370d435b1757b2247d972f79be75193af"
+    "1c19db2b5d666a8f33c715cb634cf111953c7cdd6c23d082e9b375643a3e7cc8"
 # The hash of []. Named so the B6 defect can be refused BY NAME, not merely fail a compare.
 EMPTY_TYPED_UNIVERSE_SHA256 = \
     "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-
-NS_ENSEMBL_GENE = "ensembl_gene"
-NS_SYMBOL = "symbol"
-STORE_NAMESPACES = (NS_ENSEMBL_GENE, NS_SYMBOL)
+ADMITTED_SCIENTIFIC_CONTENT_SHA256 = \
+    "95f81cb11abf1b39d9345edb182344f0b90b60e08dd7605145b40c08eda391eb"
+NS_ENSEMBL_GENE = uv.NS_ENSEMBL_GENE                             # "ensembl_gene_id"
+NS_SYMBOL = uv.NS_SYMBOL                                         # "gene_symbol"
+STORE_NAMESPACES = uv.STORE_NAMESPACES
+RETIRED_NAMESPACES = uv.RETIRED_NAMESPACES
 
 DISP_DRUG_EVIDENCE = "drug_evidence"
 DISP_NO_DRUG_EVIDENCE = "no_drug_evidence"
@@ -144,6 +165,7 @@ GATE_STORE_DID_NOT_VERIFY = "the_universe_store_did_not_verify_from_its_own_byte
 GATE_UNTYPED_TARGET_QUERY = "a_drug_edge_query_must_carry_an_exact_typed_target_identity"
 GATE_NAMESPACE_CROSS_JOIN = "a_target_id_may_not_be_joined_across_namespaces"
 GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE = "the_target_is_not_in_the_admitted_typed_universe"
+GATE_UNKNOWN_NAMESPACE_TOKEN = "a_store_row_carries_a_namespace_token_nobody_agreed_to"
 
 
 class TypedUniverseError(UniverseRowsError):
@@ -185,6 +207,19 @@ def derive_typed_universe(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, s
             raise TypedUniverseError(
                 GATE_MALFORMED_STORE_ROW,
                 f"row {tid!r} carries an unknown disposition {disp!r}; known: {DISPOSITIONS}")
+        # AN UNKNOWN NAMESPACE TOKEN IS A NAMED REFUSAL — never coerced, never defaulted to the
+        # majority namespace, never aliased. The retired `ensembl_gene` / `symbol` land here
+        # deliberately: a translation layer that quietly accepted them is how two lanes drift
+        # apart while every test stays green.
+        if str(ns) not in STORE_NAMESPACES:
+            retired = (" — the RETIRED store vocabulary, re-emitted under Stage-2's tokens by "
+                       "druglink.universe_repin" if str(ns) in RETIRED_NAMESPACES else "")
+            raise TypedUniverseError(
+                GATE_UNKNOWN_NAMESPACE_TOKEN,
+                f"row {tid!r} carries target_id_namespace={ns!r}{retired}. The admitted "
+                f"vocabulary is exactly {list(STORE_NAMESPACES)}. An unrecognised token names a "
+                "different identity space, and coercing it into a known one would join this "
+                "store to targets it never covered")
         key = (str(ns), str(tid))
         if key in seen:
             raise TypedUniverseError(

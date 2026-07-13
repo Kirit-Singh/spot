@@ -8,7 +8,7 @@ actually admits:
     temporal_cross_time_measured   cross-time DiD measured — a DISTINCT estimand
     endpoint_pathway_context       inferred; nobody perturbed it
 
-plus the universe store an INDEPENDENT verifier admitted (``bdf41b69…``), bound by exact id.
+plus the universe store an INDEPENDENT verifier admitted (``625c921f…``), bound by exact id.
 
 THE GATE IS THE POINT OF THIS COMMIT
 ------------------------------------

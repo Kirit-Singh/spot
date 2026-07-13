@@ -1,303 +1,294 @@
-"""The Stage-2 aggregate admission chain: every way an aggregate is REFUSED.
+"""ATTACKS on the Stage-2 aggregate admission chain. Each dies at the gate that NAMES it.
 
-The aggregate is admitted from bytes on disk, never from a Boolean in Stage-3's own source.
-Each test asserts the SPECIFIC gate name, so a refusal for the wrong reason still fails.
+The honest release is the REAL one — Stage-2's generated manifest and its generated admission
+report, byte for byte (``stage2_release_fixture``). Every attack below breaks exactly ONE
+thing in a copy of those real bytes, so what is under test is the gate, not the fixture.
+
+THE ADMISSION. Stage 2 declares no ``artifact_class``, so there is no such field for a
+fixture firewall to key on. What admits a release is Stage-2's OWN admission, and each clause
+is a separate gate:
+
+    verdict == "admit"  AND  admission.status == "admitted"
+    AND generator_is_not_verifier is True   AND  n_failed == 0
+    AND topology_complete is True           AND  release_admissible is True
+    AND the report's manifest_sha256 == the semantic self-hash WE recompute from the bytes
 
 Topology and the fixture firewall: ``test_stage2_aggregate.py``.
 """
 from __future__ import annotations
 
-import ast
-import copy
 import json
 import os
+import shutil
 
 import pytest
-
 from druglink import stage2_aggregate as sa
 
-from stage2_release_fixture import (
-    TARGETS,
-    PROGRAMS,
-    _gate,
-    build_release,
-)
+from stage2_release_fixture import build_invented_release, build_release
+
+
+def _refused(paths, gate, exc=sa.Stage2AggregateError):
+    with pytest.raises(exc) as err:
+        sa.admit_aggregate(**{k: v for k, v in paths.items()
+                              if k != "other_manifest_path"})
+    assert gate in str(err.value), f"expected gate {gate!r}, got: {err.value}"
+    return str(err.value)
+
 
 # --------------------------------------------------------------------------- #
-# THE POINT OF THE MODULE: admission is on the bytes, not on a source constant.
+# 0. THE CONTROL. Without it, every refusal below proves nothing.
 # --------------------------------------------------------------------------- #
-def test_admission_is_not_a_source_code_boolean():
-    """The gate this module replaces was a constant. A constant admits nothing.
+def test_the_REAL_release_is_ADMITTED(honest):
+    agg = sa.admit_aggregate(**honest)
+    assert agg.verdict == sa.ADMIT
+    assert len(agg.bundles) == 15 and len(agg.arms) == 300     # non-vacuous
 
-    Checked over the AST, not the text: the prose names the flag deliberately (that is
-    the whole point of the module), so a substring search would pass on a module that
-    still *read* it. Only an actual load of the name counts.
+
+# --------------------------------------------------------------------------- #
+# 1. THE RETIRED INVENTED SHAPE. It must be REFUSED, not silently accepted.
+# --------------------------------------------------------------------------- #
+def test_the_OLD_INVENTED_SHAPE_is_refused(tmp_path):
+    """The regression that closes this defect.
+
+    ``inventory[]`` instead of ``bundles[]``, an ``admits{}`` block instead of the report's
+    own ``manifest_sha256``, a top-level ``artifact_class`` Stage 2 has never declared, and a
+    verifier id containing the word "independent". The old loader REQUIRED all of it. It is a
+    schema Stage 2 never emitted, and it now dies at the first gate that reads the bytes.
     """
-    with open(sa.__file__, encoding="utf-8") as fh:
-        tree = ast.parse(fh.read())
-
-    names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-    names |= {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
-    assert "DETACHED_CLONE_MATRIX_GREEN" not in names, (
-        "admission still reads the stale source-code flag")
-
-    imported = {a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
-                for a in n.names}
-    assert "arm_query" not in imported
-
-    module_bools = [k for k, v in vars(sa).items() if isinstance(v, bool)]
-    assert module_bools == [], (
-        f"module-level Booleans {module_bools} — a constant in a source file names no "
-        "manifest, no report, no verifier and no bytes; it cannot admit anything")
+    paths = build_invented_release(tmp_path)
+    _refused(paths, sa.GATE_MANIFEST_NOT_NATIVE)
 
 
-def test_the_manifest_must_prove_its_own_identity(tmp_path):
-    def tamper(manifest):
-        manifest["inventory"][0]["raw_sha256"] = "f" * 64      # resealed? no: post-seal
-    paths = build_release(tmp_path, mutate_after_seal=tamper)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_MANIFEST_SELF_HASH in _gate(exc)
+def test_the_invented_verifier_id_substring_no_longer_admits_anything(tmp_path):
+    """'…independent…' in a name proves nothing: the id must BE the pinned verifier.
 
-
-def test_the_self_hash_ignores_non_semantic_timestamps():
-    a = {"artifact_class": "fixture", "inventory": [], "generated_at": "2026-01-01"}
-    b = dict(a, generated_at="2099-12-31")
-    assert sa.manifest_self_hash(a) == sa.manifest_self_hash(b)
-    c = dict(a, inventory=[{"bundle_key": "direct|Rest"}])
-    assert sa.manifest_self_hash(c) != sa.manifest_self_hash(a)
+    The retired gate required that substring — so it would have REFUSED the genuine report
+    (whose id does not contain it) and ADMITTED this forgery (whose id does).
+    """
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"verifier_id": "spot.stage02.aggregate.independent_verifier.v1"}))
+    _refused(paths, sa.GATE_VERIFIER_NOT_PINNED)
 
 
 # --------------------------------------------------------------------------- #
-# The independent report. It must ADMIT, and it must admit THESE bytes.
+# 2. THE ADMISSION. One clause broken at a time.
 # --------------------------------------------------------------------------- #
-def test_a_report_binding_a_DIFFERENT_manifest_is_refused(tmp_path):
-    paths = build_release(
-        tmp_path,
-        mutate_report=lambda r: r["admits"].update({"manifest_raw_sha256": "f" * 64}))
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_REPORT_BINDS_ANOTHER_MANIFEST in _gate(exc)
-
-
-def test_a_report_binding_a_different_CANONICAL_hash_is_refused(tmp_path):
-    paths = build_release(
-        tmp_path,
-        mutate_report=lambda r: r["admits"].update(
-            {"manifest_canonical_sha256": "e" * 64}))
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_REPORT_BINDS_ANOTHER_MANIFEST in _gate(exc)
-
-
-def test_a_report_that_names_no_hash_at_all_is_an_opinion_not_an_admission(tmp_path):
-    paths = build_release(tmp_path, mutate_report=lambda r: r.update({"admits": {}}))
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_REPORT_BINDS_NOTHING in _gate(exc)
-
-
 def test_a_verdict_that_is_not_admit_is_refused(tmp_path):
     paths = build_release(tmp_path, mutate_report=lambda r: r.update({"verdict": "reject"}))
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_VERDICT_NOT_ADMIT in _gate(exc)
+    _refused(paths, sa.GATE_VERDICT_NOT_ADMIT)
 
 
-def test_a_non_independent_verifier_cannot_admit(tmp_path):
+def test_a_report_with_FAILED_GATES_is_refused(tmp_path):
+    """verdict='admit' but n_failed>0: a release with a failed gate is not admitted,
+    whatever its verdict string says."""
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"n_failed": 1, "failed_gates": ["the_manifest_binds_the_release"]}))
+    _refused(paths, sa.GATE_GATES_FAILED)
+
+
+def test_a_report_that_does_not_assert_generator_is_not_verifier_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"generator_is_not_verifier": False}))
+    _refused(paths, sa.GATE_GENERATOR_IS_VERIFIER)
+
+
+def test_a_report_MISSING_generator_is_not_verifier_is_refused(tmp_path):
+    """A missing field is a refusal, never a default."""
+    paths = build_release(tmp_path,
+                          mutate_report=lambda r: r.pop("generator_is_not_verifier"))
+    _refused(paths, sa.GATE_GENERATOR_IS_VERIFIER)
+
+
+def test_an_INCOMPLETE_TOPOLOGY_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"topology_complete": False}))
+    _refused(paths, sa.GATE_TOPOLOGY_NOT_COMPLETE)
+
+
+def test_a_release_the_verifier_did_not_find_ADMISSIBLE_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"release_admissible": False}))
+    _refused(paths, sa.GATE_NOT_RELEASE_ADMISSIBLE)
+
+
+def test_an_admission_status_that_is_not_ADMITTED_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_report=lambda r: r["admission"].update(
+        {"status": "refused_by_independent_aggregate_admission"}))
+    _refused(paths, sa.GATE_ADMISSION_NOT_GRANTED)
+
+
+def test_a_report_from_an_UNPINNED_verifier_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"verifier_id": "spot.stage02.some.other.verifier.v9"}))
+    _refused(paths, sa.GATE_VERIFIER_NOT_PINNED)
+
+
+def test_a_report_that_is_not_the_native_schema_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"schema_version": "spot.stage02_aggregate_verification.v1"}))
+    _refused(paths, sa.GATE_REPORT_NOT_NATIVE)
+
+
+# --------------------------------------------------------------------------- #
+# 3. IDENTITY. The manifest proves who it is; the report admits THOSE bytes.
+# --------------------------------------------------------------------------- #
+def test_a_manifest_that_cannot_recompute_its_own_identity_is_refused(tmp_path):
+    """Edited after sealing, self-hash left stale."""
+    paths = build_release(tmp_path, reseal_manifest=False,
+                          mutate_manifest=lambda m: m.update({"n_bundles": 14}))
+    _refused(paths, sa.GATE_MANIFEST_SELF_HASH)
+
+
+def test_a_manifest_MUTATED_AFTER_ADMISSION_and_RESEALED_is_refused(tmp_path):
+    """The forger with repo access: edit the manifest AND re-seal its self-hash.
+
+    The self-hash now recomputes cleanly, so the ONLY thing that catches this is that the
+    report admitted a DIFFERENT number. This is precisely why the report must bind the bytes
+    and why the self-hash alone is not enough.
+    """
+    paths = build_release(tmp_path, reseal_manifest=True,
+                          mutate_manifest=lambda m: m.update({"n_bundles": 14}))
+    _refused(paths, sa.GATE_REPORT_BINDS_ANOTHER_MANIFEST)
+
+
+def test_a_report_that_admits_a_DIFFERENT_manifest_is_refused(tmp_path):
+    """The report is genuine and says ADMIT — about other bytes."""
+    paths = build_release(tmp_path, second_manifest=True)
+    paths["manifest_path"] = paths.pop("other_manifest_path")
+    _refused(paths, sa.GATE_REPORT_BINDS_ANOTHER_MANIFEST)
+
+
+def test_a_report_whose_RECOMPUTATION_disagrees_with_its_claim_is_refused(tmp_path):
+    """manifest_sha256 matches ours, manifest_sha256_recomputed does not: a verifier
+    contradicting itself is not an admission."""
+    paths = build_release(tmp_path, mutate_report=lambda r: r.update(
+        {"manifest_sha256_recomputed": "0" * 64}))
+    _refused(paths, sa.GATE_REPORT_BINDS_ANOTHER_MANIFEST)
+
+
+def test_the_manifest_and_the_report_may_not_be_the_SAME_FILE(tmp_path):
+    paths = build_release(tmp_path)
+    paths["report_path"] = paths["manifest_path"]
+    _refused(paths, sa.GATE_SELF_ADMISSION)
+
+
+def test_a_manifest_that_is_not_the_native_schema_is_refused(tmp_path):
+    paths = build_release(tmp_path, mutate_manifest=lambda m: m.update(
+        {"schema_version": "spot.stage02_aggregate_run_manifest.v1"}))
+    _refused(paths, sa.GATE_MANIFEST_NOT_NATIVE)
+
+
+def test_a_manifest_that_is_not_readable_json_is_refused(tmp_path):
+    def corrupt(paths):
+        with open(paths["manifest_path"], "w") as fh:
+            fh.write("{not json")
+    paths = build_release(tmp_path, mutate_disk=corrupt)
+    _refused(paths, sa.GATE_MANIFEST_UNREADABLE)
+
+
+def test_a_MISSING_artifact_is_refused_and_never_defaulted(tmp_path):
+    paths = build_release(tmp_path, mutate_disk=lambda p: os.remove(p["report_path"]))
+    _refused(paths, sa.GATE_ARTIFACT_NOT_ON_DISK)
+
+
+# --------------------------------------------------------------------------- #
+# 4. THE STAGE-1 RELEASE the aggregate stands on.
+# --------------------------------------------------------------------------- #
+def test_a_DIFFERENT_stage1_release_on_disk_is_refused(tmp_path):
+    def swap(paths):
+        with open(paths["stage1_release_path"], "w") as fh:
+            json.dump({"schema": "spot.stage01_v3_release.v1", "forged": True}, fh)
+    paths = build_release(tmp_path, mutate_disk=swap)
+    _refused(paths, sa.GATE_STAGE1_RELEASE_UNBOUND)
+
+
+def test_a_manifest_binding_ANOTHER_RELEASE_is_refused(tmp_path):
+    """A release of another shape is a different aggregate, and its arms are not these."""
+    paths = build_release(tmp_path, reforge_admission=True,
+                          mutate_manifest=lambda m: m["stage1_v3_release"].update(
+                              {"conditions": ["Rest", "Stim8hr"]}))
+    _refused(paths, sa.GATE_RELEASE_IS_NOT_THE_PINNED_ONE)
+
+
+# --------------------------------------------------------------------------- #
+# 5. THE BUNDLES. Bytes, paths, counts.
+# --------------------------------------------------------------------------- #
+def test_a_bundle_whose_BYTES_MOVED_is_refused(tmp_path):
+    """One ranking file edited after the verifier read it. Every bound byte is re-hashed."""
+    def tamper(bundles_root):
+        for base, _dirs, files in os.walk(bundles_root):
+            if os.path.basename(base) == "rankings":
+                for fn in sorted(files):
+                    path = os.path.join(base, fn)
+                    doc = json.load(open(path))
+                    doc["records"][0]["arm_value"] = 999.0
+                    with open(path, "w") as fh:
+                        json.dump(doc, fh)
+                    return
+    paths = build_release(tmp_path, mutate_bundles=tamper)
+    _refused(paths, sa.GATE_BUNDLE_BYTES_MOVED)
+
+
+def test_a_bundle_whose_ARM_INVENTORY_was_edited_is_refused(tmp_path):
+    def tamper(bundles_root):
+        for base, _dirs, files in os.walk(bundles_root):
+            if "arm_bundle.json" in files:
+                path = os.path.join(base, "arm_bundle.json")
+                doc = json.load(open(path))
+                doc["arms"] = doc["arms"][:-1]            # quietly drop an arm
+                with open(path, "w") as fh:
+                    json.dump(doc, fh)
+                return
+    paths = build_release(tmp_path, mutate_bundles=tamper)
+    _refused(paths, sa.GATE_BUNDLE_BYTES_MOVED)
+
+
+def test_a_MISSING_bundle_directory_is_refused(tmp_path):
     paths = build_release(
         tmp_path,
-        mutate_report=lambda r: r.update({"verifier_id": "spot.stage02.self_verifier.v1"}))
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_VERIFIER_NOT_INDEPENDENT in _gate(exc)
+        mutate_bundles=lambda root: shutil.rmtree(os.path.join(root, "direct")))
+    _refused(paths, sa.GATE_ARTIFACT_NOT_ON_DISK)
 
 
-def test_the_report_may_not_BE_the_manifest(honest):
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(manifest_path=honest["manifest_path"],
-                           report_path=honest["manifest_path"],
-                           bundles_root=honest["bundles_root"],
-                           stage1_release_path=honest["stage1_release_path"])
-    assert sa.GATE_SELF_ADMISSION in _gate(exc)
+def test_a_bundle_DROPPED_from_the_manifest_is_refused(tmp_path):
+    """The forger owns BOTH files, so the hash chain closes — and the topology, re-derived
+    from the release, still says a bundle is missing."""
+    paths = build_release(tmp_path, reforge_admission=True,
+                          mutate_manifest=lambda m: m["bundles"].pop(0))
+    _refused(paths, sa.GATE_MISSING_BUNDLE, exc=sa.AggregateTopologyRefused)
 
 
-def test_a_missing_manifest_refuses_and_never_falls_back_to_a_fixture(tmp_path):
-    paths = build_release(tmp_path)
-    os.remove(paths["manifest_path"])
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_ARTIFACT_NOT_ON_DISK in _gate(exc)
+def test_a_DUPLICATE_bundle_is_refused(tmp_path):
+    """A repeated invocation is not two: a duplicate silently fills a missing slot."""
+    def dup(m):
+        m["bundles"][1] = json.loads(json.dumps(m["bundles"][0]))
+    paths = build_release(tmp_path, reforge_admission=True, mutate_manifest=dup)
+    _refused(paths, sa.GATE_DUPLICATE_BUNDLE)
 
 
-# --------------------------------------------------------------------------- #
-# Path traversal. Every bundle resolves INSIDE the root, or it is not read.
-# --------------------------------------------------------------------------- #
-def test_a_traversing_bundle_path_is_refused(tmp_path):
-    def escape(inv):
-        inv[0]["path"] = "../../etc/arm_bundle.json"
-    paths = build_release(tmp_path, mutate_inventory=escape)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_PATH_TRAVERSAL in _gate(exc)
+def test_a_bundle_path_that_ESCAPES_the_bundles_root_is_refused(tmp_path):
+    """An out_dir is a bare NAME. A traversing path reads bytes nobody bound."""
+    paths = build_release(tmp_path, reforge_admission=True,
+                          mutate_manifest=lambda m: m["bundles"][0].update(
+                              {"out_dir": "../../../etc"}))
+    _refused(paths, sa.GATE_PATH_TRAVERSAL)
 
 
-def test_an_absolute_bundle_path_is_refused(tmp_path):
-    def escape(inv):
-        inv[4]["path"] = "/etc/passwd"
-    paths = build_release(tmp_path, mutate_inventory=escape)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_PATH_TRAVERSAL in _gate(exc)
+def test_an_ABSOLUTE_bundle_path_is_refused(tmp_path):
+    paths = build_release(tmp_path, reforge_admission=True,
+                          mutate_manifest=lambda m: m["bundles"][0].update(
+                              {"out_dir": "/etc"}))
+    _refused(paths, sa.GATE_PATH_TRAVERSAL)
 
 
-def test_a_symlink_out_of_the_root_is_refused(tmp_path):
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (outside / "arm_bundle.json").write_text("{}", encoding="utf-8")
-
-    def link(paths):
-        target = os.path.join(paths["bundles_root"], "direct", "escape.json")
-        os.symlink(str(outside / "arm_bundle.json"), target)
-
-    paths = build_release(tmp_path / "rel",
-                          mutate_inventory=lambda inv: inv[0].update(
-                              {"path": "direct/escape.json"}),
-                          mutate_disk=link)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_PATH_TRAVERSAL in _gate(exc)
+def test_a_manifest_with_NO_BUNDLES_is_refused(tmp_path):
+    paths = build_release(tmp_path, reforge_admission=True,
+                          mutate_manifest=lambda m: m.update({"bundles": []}))
+    _refused(paths, sa.GATE_INCOMPLETE_TOPOLOGY, exc=sa.AggregateTopologyRefused)
 
 
-# --------------------------------------------------------------------------- #
-# The inventory: missing, duplicate, unknown, partial — each refused BY NAME.
-# --------------------------------------------------------------------------- #
-def test_a_missing_bundle_is_refused(tmp_path):
-    paths = build_release(tmp_path, mutate_inventory=lambda inv: inv.pop(7))
-    with pytest.raises(sa.AggregateTopologyRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_MISSING_BUNDLE in _gate(exc)
-
-
-def test_a_missing_LANE_is_refused_and_named(tmp_path):
-    def drop_temporal(inv):
-        inv[:] = [e for e in inv if e["lane"] != sa.LANE_TEMPORAL]
-    paths = build_release(tmp_path, mutate_inventory=drop_temporal)
-    with pytest.raises(sa.AggregateTopologyRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_MISSING_BUNDLE in _gate(exc)
-    assert "temporal|Rest|Stim8hr" in _gate(exc)
-
-
-def test_a_duplicate_bundle_key_cannot_fill_a_missing_slot(tmp_path):
-    def dup(inv):
-        inv[14] = copy.deepcopy(inv[0])          # count still says 15
-    paths = build_release(tmp_path, mutate_inventory=dup)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_DUPLICATE_BUNDLE in _gate(exc)
-
-
-def test_an_unknown_lane_is_refused(tmp_path):
-    paths = build_release(
-        tmp_path, mutate_inventory=lambda inv: inv[0].update({"lane": "chronological"}))
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_UNKNOWN_LANE in _gate(exc)
-
-
-def test_an_unknown_CONTEXT_is_refused(tmp_path):
-    def alien(inv):
-        inv[0].update({"bundle_key": "direct|Stim72hr", "condition": "Stim72hr"})
-    paths = build_release(tmp_path, mutate_inventory=alien)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_UNKNOWN_LANE in _gate(exc)
-
-
-def test_a_bundle_key_that_disagrees_with_its_own_context_is_refused(tmp_path):
-    def mislabel(inv):
-        inv[0]["bundle_key"] = "direct|Stim48hr"          # entry's condition is Rest
-    paths = build_release(tmp_path, mutate_inventory=mislabel)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_UNKNOWN_LANE in _gate(exc)
-
-
-def test_a_partial_inventory_is_never_admissible(tmp_path):
-    paths = build_release(tmp_path, mutate_inventory=lambda inv: inv.clear())
-    with pytest.raises(sa.AggregateTopologyRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_INCOMPLETE_TOPOLOGY in _gate(exc)
-
-
-def test_a_partial_BUNDLE_short_of_its_arm_slots_is_refused(tmp_path):
-    def drop_arms(docs):
-        docs["temporal|Rest|Stim48hr"]["arms"] = \
-            docs["temporal|Rest|Stim48hr"]["arms"][:18]
-    paths = build_release(tmp_path, mutate_bundles=drop_arms)
-    with pytest.raises(sa.AggregateTopologyRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_INCOMPLETE_TOPOLOGY in _gate(exc)
-    assert "298" in _gate(exc)
-
-
-def test_a_missing_program_across_the_release_is_refused(tmp_path):
-    def drop_program(docs):
-        for doc in docs.values():
-            doc["arms"] = [a for a in doc["arms"] if a["program_id"] != PROGRAMS[3]]
-    paths = build_release(tmp_path, mutate_bundles=drop_program)
-    with pytest.raises(sa.AggregateTopologyRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_INCOMPLETE_TOPOLOGY in _gate(exc)
-    assert "9 programs" in _gate(exc)
-
-
-# --------------------------------------------------------------------------- #
-# The bytes on disk are the bytes that were admitted.
-# --------------------------------------------------------------------------- #
-def test_a_bundle_mutated_after_admission_is_refused(tmp_path):
-    def mutate(paths):
-        victim = os.path.join(paths["bundles_root"], "direct", "direct__Rest.json")
-        with open(victim, encoding="utf-8") as fh:
-            doc = json.load(fh)
-        doc["arms"][0]["records"][2]["rank"] = 1        # promote the UNRANKED target
-        with open(victim, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(doc, sort_keys=True, separators=(",", ":")))
-
-    paths = build_release(tmp_path, mutate_disk=mutate)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_BUNDLE_BYTES_MOVED in _gate(exc)
-
-
-def test_a_stage1_release_that_is_not_the_pinned_one_is_refused(tmp_path):
-    def swap(paths):
-        with open(paths["stage1_release_path"], "w", encoding="utf-8") as fh:
-            fh.write(json.dumps({"release_id": "some_other_release"}))
-
-    paths = build_release(tmp_path, mutate_disk=swap)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_STAGE1_RELEASE_UNBOUND in _gate(exc)
-
-
-def test_a_dangling_base_key_resolves_to_no_identity_and_is_refused(tmp_path):
-    def dangle(docs):
-        docs["direct|Rest"]["arms"][0]["records"][0]["base_key"] = "NOPE|NOPE"
-    paths = build_release(tmp_path, mutate_bundles=dangle)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_ARM_IDENTITY_UNRESOLVED in _gate(exc)
-
-
-def test_a_base_key_resolving_to_a_DIFFERENT_target_is_refused(tmp_path):
-    def swap(docs):
-        rec = docs["direct|Rest"]["arms"][0]["records"][0]
-        rec["base_key"] = f"{PROGRAMS[0]}|{TARGETS[1]}"     # says TGT_00, resolves TGT_01
-    paths = build_release(tmp_path, mutate_bundles=swap)
-    with pytest.raises(sa.AggregateAdmissionRefused) as exc:
-        sa.admit_aggregate(**paths)
-    assert sa.GATE_ARM_IDENTITY_UNRESOLVED in _gate(exc)
-
-
+def test_an_INVENTORY_array_is_not_a_BUNDLES_array(tmp_path):
+    """The old shape's field name, on an otherwise-real manifest. It binds nothing."""
+    paths = build_release(tmp_path, reforge_admission=True,
+                          mutate_manifest=lambda m: m.update({"inventory": m.pop("bundles")}))
+    _refused(paths, sa.GATE_INCOMPLETE_TOPOLOGY, exc=sa.AggregateTopologyRefused)

@@ -115,7 +115,7 @@ def direct_double(ensgs: list[str], *, run_id: str = "fx00direct00double",
     ranks = ranks or list(range(1, len(ensgs) + 1))
     rows = [{
         "released_estimate_id": f"est_{i:03d}", "target_id": ensg,
-        "target_id_namespace": "ensembl_gene", "target_ensembl": ensg,
+        "target_id_namespace": "ensembl_gene_id", "target_ensembl": ensg,
         "target_symbol": f"FXSYM{i}", "condition": "stim48",
         "away_from_A": 0.5 + i, "toward_B": 0.4 + i, "A_delta": 0.1, "B_delta": 0.2,
         "rank_away_from_A": rank, "rank_toward_B": rank,

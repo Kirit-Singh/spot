@@ -152,16 +152,26 @@ GATE_NO_ADMITTED_AGGREGATE: str = "a_production_run_has_no_admitted_stage2_aggre
 
 
 def _aggregate_binding(admitted: Optional[sa.AdmittedAggregate]) -> Optional[dict[str, Any]]:
-    """Name the exact aggregate that opened the production gate, by its own bytes."""
+    """Name the exact aggregate that opened the production gate, by its own bytes.
+
+    ``aggregate_verifier_id`` is Stage-2's PINNED aggregate verifier
+    (``spot.stage02.run_manifest.verifier.v1``). Its name does not contain the word
+    "independent" and never did — independence is asserted by the structured field
+    ``generator_is_not_verifier``, which ``admit_aggregate`` binds. A substring in an id is
+    not a binding.
+    """
     if admitted is None:
         return None
     return {
         "manifest_raw_sha256": admitted.manifest_raw_sha256,
         "manifest_canonical_sha256": admitted.manifest_canonical_sha256,
+        # the producer's SEMANTIC self-hash, re-derived by Stage 3 from the manifest bytes
         "manifest_self_hash": admitted.manifest_self_hash,
         "stage1_release_sha256": admitted.stage1_release_sha256,
-        "verifier_id": admitted.verifier_id,
+        "aggregate_verifier_id": admitted.verifier_id,
+        "verifier_id": admitted.verifier_id,      # retained: the same pinned identity
         "verdict": admitted.verdict,
+        # STAGE-3's own class. Stage 2 declares no artifact_class, and never did.
         "artifact_class": admitted.artifact_class,
         "n_bundles": len(admitted.bundles),
         "n_arms": len(admitted.arms),
@@ -175,16 +185,22 @@ def _require_admitted_aggregate(admitted: Optional[sa.AdmittedAggregate]) -> Non
     Boolean literal in Stage-3's own source. Nothing an upstream lane could produce, and no
     artifact on disk, could ever flip it — only a Stage-3 edit could, so the "gate" recorded
     a Stage-3 intention rather than an upstream fact, and it would have gone on reporting
-    green with no admitted bundle behind it. The gate is now the artifact: `admit_aggregate`
-    re-hashes the manifest, requires an INDEPENDENT report that binds those exact manifest
-    bytes, and reconstructs the full 15-bundle / 300-slot topology from the bundles root.
+    green with no admitted bundle behind it.
+
+    The gate is now the ARTIFACT, and specifically STAGE-2's OWN ADMISSION:
+    ``admit_aggregate`` re-derives the manifest's semantic self-hash, requires the pinned
+    aggregate verifier's report to ADMIT exactly those bytes (verdict=admit, n_failed=0,
+    topology_complete, release_admissible, admission.status=admitted, and
+    generator_is_not_verifier=true), and reconstructs the full 15-bundle / 300-slot topology
+    from the bundles root. A fixture cannot produce that report out of Stage-2's real
+    verifier, which is what makes it a gate rather than a label.
     """
     if admitted is None:
         raise ProductionConsumptionGated(
             f"[{GATE_NO_ADMITTED_AGGREGATE}] a production run requires a Stage-2 aggregate "
             "admitted from disk (druglink.stage2_aggregate.admit_aggregate); Stage 3 will "
             "not serve a production run or generate real candidates without one")
-    sa.require_analysis(admitted)      # a fixture aggregate cannot enter the analysis path
+    sa.require_analysis(admitted)      # Stage-3's OWN class: a fixture run is not an analysis
 
 
 def load_admitted_stage2_inputs(

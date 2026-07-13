@@ -67,11 +67,21 @@ MEASURED_ORIGINS = frozenset({ORIGIN_DIRECT, ORIGIN_TEMPORAL})
 INFERRED_ORIGINS = frozenset({ORIGIN_PATHWAY})
 
 # The universe store Stage 3 admitted. Bound by exact identity, not by name.
+#
+# RE-PINNED at the namespace-vocabulary standardisation: the store was re-emitted under
+# Stage-2's `ensembl_gene_id` / `gene_symbol` tokens, which necessarily moves its id (the typed
+# universe hashes the identity PAIR). The science is byte-identical across the re-pin — proved
+# by the store's scientific content hash, taken with the namespace token projected out.
 ADMITTED_STORE_ID = \
-    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
+    "625c921fce2daf60b69fb0ae33570a9f074a0a0042b1717ee2111f81c1160bff"
 ADMITTED_PRODUCER_COMMIT = "d268a74f339d346609951e73810ab26e2e654d86"
 ADMISSION_REPORT_SHA256 = \
     "4aba8b5882e5ea32707875fc5026ca6b0b5d811ad01412bfa4b121c29b283bfb"
+
+# The store this one REPLACES. Same science, retired vocabulary — and therefore ZERO edges
+# against a W3 release. Named here so a bundle that binds it is refused with its reason.
+STALE_VOCABULARY_STORE_ID = \
+    "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
 
 # Vocabulary that would fuse the origins or invent a combined objective. Refused by name,
 # at any depth, so a friendly synonym does not launder the claim.
@@ -107,27 +117,37 @@ def check_origins_are_typed_and_separate(rep: Report,
                                          rows: list[dict[str, Any]]) -> None:
     """Every evidence row names exactly ONE origin, from the closed set."""
     untyped = [r.get("edge_id") or r.get("target_id") for r in rows
-               if r.get("evidence_origin") not in ORIGINS]
+               if r.get("origin_type") not in ORIGINS]
     rep.check(
         f"every evidence row declares exactly one origin from {list(ORIGINS)} — a consumer "
         "must be able to tell a measured lever from an inferred neighbour without "
-        "inference of its own",
+        "inference of its own, and the three origins are carried all the way to Stage 4 "
+        "rather than collapsed into one column",
         not untyped, f"{len(untyped)} untyped: {untyped[:3]}")
 
     # A pathway-origin row may never carry a measured rank: nobody perturbed it.
     ranked_inferred = [r.get("target_id") for r in rows
-                       if r.get("evidence_origin") in INFERRED_ORIGINS
+                       if r.get("origin_type") in INFERRED_ORIGINS
                        and r.get("arm_rank") is not None]
     rep.check(
         "no pathway-origin row carries a measured arm rank (nobody perturbed it, so it has "
         "no rank to carry — a rank on an inferred row is a measurement that never happened)",
         not ranked_inferred, f"{len(ranked_inferred)}: {ranked_inferred[:3]}")
 
+    # An inferred origin can never carry observed support, whatever the drug does.
+    supported_inferred = [r.get("edge_id") for r in rows
+                          if r.get("origin_type") in INFERRED_ORIGINS
+                          and r.get("observed_perturbation_support") is not False]
+    rep.check(
+        "no inferred row claims observed-perturbation support (nobody perturbed it, so no "
+        "action of any drug can make it a measurement)",
+        not supported_inferred, f"{len(supported_inferred)}: {supported_inferred[:3]}")
+
     # Measured origins must never be relabelled as inferred, or vice versa, per target+arm.
     seen: dict[tuple, set] = {}
     for r in rows:
-        key = (r.get("target_id"), r.get("arm_key"), r.get("drug_id"))
-        seen.setdefault(key, set()).add(r.get("evidence_origin"))
+        key = (r.get("target_id"), r.get("arm_key"), r.get("active_moiety_id"))
+        seen.setdefault(key, set()).add(r.get("origin_type"))
     fused = [k for k, origins in seen.items()
              if len(origins & MEASURED_ORIGINS) and len(origins & INFERRED_ORIGINS)
              and len(origins) == 1]
@@ -156,28 +176,41 @@ def check_no_combined_score(rep: Report, document: Any) -> None:
 # --------------------------------------------------------------------------- #
 def check_ordered_axes_and_conditions(rep: Report,
                                       rows: list[dict[str, Any]]) -> None:
-    """Rest→Stim48 is not Stim48→Rest. An ordered pair that got sorted is a different question."""
+    """Rest→Stim48 is not Stim48→Rest. An ordered pair that got sorted is a different question.
+
+    Orderedness is DERIVED from the row's own bundle key, never read from a declared flag: a
+    row that can declare its own pair ordered can declare the wrong pair ordered, and the
+    bundle key is the one place Stage 2 states which direction the DiD was taken in.
+    """
     unordered = []
     for r in rows:
-        if r.get("evidence_origin") != ORIGIN_TEMPORAL:
+        if r.get("origin_type") != ORIGIN_TEMPORAL:
             continue
         frm, to = r.get("from_condition"), r.get("to_condition")
-        if not (frm and to):
-            unordered.append(f"{r.get('arm_key')}: missing endpoint")
-        elif r.get("condition_pair_is_ordered") is not True:
-            unordered.append(f"{r.get('arm_key')}: pair not declared ordered")
+        if not (frm and to) or frm == to:
+            unordered.append(f"{r.get('arm_key')}: endpoints {frm!r}->{to!r}")
+        elif r.get("bundle_key") != f"temporal|{frm}|{to}":
+            # The key IMPLIED by the row's own endpoints must be the key of the bundle it
+            # came from. A swapped pair changes the SIGN of the difference-in-differences.
+            unordered.append(f"{r.get('arm_key')}: {frm}->{to} came from "
+                             f"{r.get('bundle_key')!r}")
     rep.check(
-        "every temporal row preserves its ORDERED condition pair (from → to). Rest→Stim48 "
-        "is not Stim48→Rest, and a pair silently sorted into alphabetical order is a "
-        "different question wearing the same key",
+        "every temporal row preserves its ORDERED condition pair (from → to), and the pair it "
+        "carries is the pair its own bundle key states. Rest→Stim48 is not Stim48→Rest — the "
+        "difference-in-differences changes sign — and a pair silently sorted into alphabetical "
+        "order is a different question wearing the same key",
         not unordered, "; ".join(unordered[:3]))
 
-    axis_lost = [r.get("arm_key") for r in rows
-                 if r.get("axis_order_preserved") is not True]
+    # A ROLE (away_from_A / toward_B) is what a SELECTION gives an arm at join time. A
+    # reusable arm carries none, and there is no column for one: baking a role in fuses two
+    # different questions under one key.
+    roles = [r.get("arm_key") for r in rows
+             if any(role in str(r.get(k)) for role in ("away_from_A", "toward_B")
+                    for k in ("arm_key", "lane", "program_id", "desired_change"))]
     rep.check(
-        "every row preserves the SELECTION's A/B axis order (the axis belongs to the "
-        "selection; re-sorting it for convenience swaps which program is A)",
-        not axis_lost, f"{len(axis_lost)}")
+        "no reusable arm carries a SELECTION's A/B role (the axis belongs to the selection, "
+        "and an arm that bakes one in has fused two questions under one key)",
+        not roles, f"{len(roles)}")
 
 
 # --------------------------------------------------------------------------- #
@@ -233,33 +266,44 @@ def check_no_fixture_fallback(rep: Report, bundle: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------- #
 def check_universe_store_binding(rep: Report, bundle: dict[str, Any]) -> None:
     """The cache is admitted by an INDEPENDENT verifier and bound by exact identity."""
-    binding = bundle.get("universe_store_binding") or {}
+    store = bundle.get("universe_store") or {}
+    admission = store.get("admission") or {}
 
+    bound_id = str(store.get("store_id"))
+    stale = bound_id == STALE_VOCABULARY_STORE_ID
     rep.check(
         f"the bundle binds the EXACT admitted universe store_id ({ADMITTED_STORE_ID[:16]}…)",
-        binding.get("store_id") == ADMITTED_STORE_ID,
-        f"got {str(binding.get('store_id'))[:16]}…")
+        bound_id == ADMITTED_STORE_ID,
+        ("the RETIRED-VOCABULARY store (bdf41b69…): it types its rows `ensembl_gene` / "
+         "`symbol` while Stage 2 serializes `ensembl_gene_id` / `gene_symbol`, so the "
+         "exact-typed join refuses every Ensembl row and the bundle carries ZERO edges. Its "
+         "science is carried forward byte-for-byte in the re-pinned store"
+         if stale else f"got {bound_id[:16]}…"))
 
     rep.check(
         f"the bundle binds the admitted producer commit ({ADMITTED_PRODUCER_COMMIT[:7]}) — "
         "the same bytes under a different producer are NOT admitted (bdf41b69 built by "
         "d6066b7 shipped a fail-open provenance gate)",
-        binding.get("producer_commit") == ADMITTED_PRODUCER_COMMIT,
-        f"got {binding.get('producer_commit')!r}")
+        admission.get("admitted_producer_commit") == ADMITTED_PRODUCER_COMMIT,
+        f"got {admission.get('admitted_producer_commit')!r}")
 
-    verifier = str(binding.get("admitted_by") or "")
+    verifier = str(admission.get("admitted_by") or "")
     rep.check(
         "the store's admission comes from an INDEPENDENT verifier, never the producer's own "
         "verdict (a producer's verify_report is the producer agreeing with itself — this "
         "lane has now met that defect five times, once as its own author)",
         "independent" in verifier.lower() or verifier == "stage3_external_verifier",
         f"admitted_by={verifier!r}")
+    rep.check(
+        "the bundle STATES that the producer did not admit its own store",
+        admission.get("producer_admits_store") is False,
+        f"producer_admits_store={admission.get('producer_admits_store')!r}")
 
     rep.check(
         "the admission report is bound by SHA-256 (an admission that names no report is an "
         "opinion)",
-        binding.get("admission_report_sha256") == ADMISSION_REPORT_SHA256,
-        f"got {str(binding.get('admission_report_sha256'))[:16]}…")
+        admission.get("admission_report_sha256") == ADMISSION_REPORT_SHA256,
+        f"got {str(admission.get('admission_report_sha256'))[:16]}…")
 
 
 def verify(rep: Report, *, bundle: dict[str, Any], rows: list[dict[str, Any]],

@@ -1,0 +1,1879 @@
+{
+  "$defs": {
+    "arm_identity": {
+      "description": "The REUSABLE arm. No role, no pole, no score.",
+      "properties": {
+        "arm_context_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "arm_key": {
+          "type": "string"
+        },
+        "condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "desired_change": {
+          "$ref": "#/$defs/desired_change"
+        },
+        "from_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lane": {
+          "$ref": "#/$defs/lane"
+        },
+        "pathway_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "program_id": {
+          "type": "string"
+        },
+        "to_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "arm_key",
+        "lane",
+        "program_id",
+        "desired_change",
+        "arm_context_sha256"
+      ],
+      "type": "object"
+    },
+    "arm_summary": {
+      "additionalProperties": false,
+      "description": "One row per (candidate, REUSABLE ARM, ORIGIN) with at least one edge. Three origins answer three different questions, so they get three rows and are never pooled into one state.",
+      "properties": {
+        "active_moiety_id": {
+          "type": "string"
+        },
+        "arm_context_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "arm_evidence_state": {
+          "description": "A contradiction between sources is PRESERVED (conflicting), never resolved by preferring the favourable one.",
+          "enum": [
+            "observed_perturbation",
+            "inverse_direction_hypothesis",
+            "pathway_hypothesis",
+            "opposed",
+            "conflicting",
+            "unresolved",
+            "not_annotated"
+          ]
+        },
+        "arm_key": {
+          "type": "string"
+        },
+        "arm_ranks": {
+          "description": "Stage-2's OWN ranks, verbatim. Stage 3 never alters or invents one, and an inferred origin contributes none.",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "arm_summary_id": {
+          "type": "string"
+        },
+        "candidate_id": {
+          "type": "string"
+        },
+        "condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "desired_change": {
+          "$ref": "#/$defs/desired_change"
+        },
+        "edge_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lane": {
+          "$ref": "#/$defs/lane"
+        },
+        "n_edges": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_inverse_direction_hypothesis": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_observed_perturbation": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_opposed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_pathway_hypothesis": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_unresolved": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "observed_perturbation_support": {
+          "type": "boolean"
+        },
+        "origin_type": {
+          "$ref": "#/$defs/origin_type"
+        },
+        "pathway_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "program_id": {
+          "type": "string"
+        },
+        "stage3_evidence_classes": {
+          "items": {
+            "$ref": "#/$defs/stage3_evidence_class"
+          },
+          "type": "array"
+        },
+        "target_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "to_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "arm_summary_id",
+        "candidate_id",
+        "active_moiety_id",
+        "arm_key",
+        "lane",
+        "program_id",
+        "desired_change",
+        "arm_context_sha256",
+        "origin_type",
+        "arm_evidence_state",
+        "n_edges",
+        "observed_perturbation_support",
+        "edge_ids"
+      ],
+      "type": "object"
+    },
+    "assertion_lane": {
+      "description": "Exactly one lane may rank a gene. A V617F inhibitor is evidence about V617F; a shared accession would make one mechanism look like independent evidence for every gene it maps to.",
+      "enum": [
+        "general_gene_rankable",
+        "variant_specific_non_rankable",
+        "ambiguous_identity_non_rankable"
+      ]
+    },
+    "candidate": {
+      "additionalProperties": false,
+      "description": "A stable ACTIVE-MOIETY identity with per-arm/per-origin summaries. There is NO candidate-level winner, NO combined objective and NO cross-origin numeric total: counts are per-origin MAPS, and a map is not a sum. Ordering is by candidate_id (content-derived), which is not a rank.",
+      "properties": {
+        "active_moiety_id": {
+          "type": "string"
+        },
+        "arm_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "candidate_id": {
+          "type": "string"
+        },
+        "desired_target_modulations": {
+          "items": {
+            "$ref": "#/$defs/desired_target_modulation"
+          },
+          "type": "array"
+        },
+        "evidence_is_equivalence": {
+          "const": false,
+          "description": "A drug acting on the PROTEIN is never equivalent to silencing the TRANSCRIPT that was measured. This lane may SUGGEST; never CONFIRM."
+        },
+        "evidence_relation_caveat": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_relations": {
+          "description": "PHENOCOPY, NOT EQUIVALENCE \u2014 and only where a phenocopy exists. An agonist on a CRISPRi arm carries the untested-inverse relation, never a phenocopy label.",
+          "items": {
+            "$ref": "#/$defs/evidence_relation"
+          },
+          "type": "array"
+        },
+        "identity_status": {
+          "$ref": "#/$defs/identity_status"
+        },
+        "inchikey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inverse_direction_hypothesis_arm_keys": {
+          "description": "The knockdown moved the arm the UNDESIRED way AND a real sourced activation mechanism exists. A labelled hypothesis \u2014 never observed support.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "lanes": {
+          "items": {
+            "$ref": "#/$defs/lane"
+          },
+          "type": "array"
+        },
+        "max_phase_is_context_only": {
+          "const": true
+        },
+        "max_phase_sources": {
+          "description": "CONTEXT, preserved exactly. It may never gate or rank: an approved drug for another disease is not stronger evidence about this target than a phase-1 drug.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_phase_status": {
+          "$ref": "#/$defs/missingness_status",
+          "description": "Absence is STATED. A candidate whose sources state no max_phase carries not_stated_by_source \u2014 never a null a consumer can coerce to 0."
+        },
+        "mechanism_match_statuses": {
+          "items": {
+            "$ref": "#/$defs/mechanism_match"
+          },
+          "type": "array"
+        },
+        "molecule_chembl_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "molecule_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "n_arm_summaries_by_origin": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "n_edges_by_mechanism_match": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "n_edges_by_origin": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "PER-ORIGIN. A scalar total across origins would sum a measured effect, a cross-time DiD and an inference into a number with no estimand.",
+          "type": "object"
+        },
+        "observed_perturbation_arm_keys": {
+          "description": "Arms with MEASURED evidence. Only a perturbed target can appear here.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "observed_perturbation_modalities": {
+          "items": {
+            "$ref": "#/$defs/perturbation_modality"
+          },
+          "type": "array"
+        },
+        "observed_perturbation_support": {
+          "type": "boolean"
+        },
+        "observed_sign_states": {
+          "items": {
+            "$ref": "#/$defs/observed_sign_state"
+          },
+          "type": "array"
+        },
+        "opposed_arm_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "origin_types": {
+          "items": {
+            "$ref": "#/$defs/origin_type"
+          },
+          "type": "array"
+        },
+        "pathway_hypothesis_arm_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "preferred_name": {
+          "description": "DISPLAY only: excluded from the content hash, and never an identity.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "program_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_licenses": {
+          "description": "The licence each source is bound by, carried per source and not once.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_locators": {
+          "description": "Every ChEMBL row this candidate stands on, as an addressable locator (chembl:<release>:drug_mechanism/<mec_id>). A source record that cannot be reopened at its origin is an assertion with no address.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_record_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_releases": {
+          "description": "The exact release(s) the assertions were drawn from, read from the admitted store's own manifest and never hardcoded.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage3_evidence_classes": {
+          "items": {
+            "$ref": "#/$defs/stage3_evidence_class"
+          },
+          "type": "array"
+        },
+        "stage4_assessment_reason": {
+          "type": "string"
+        },
+        "stage4_assessment_status": {
+          "$ref": "#/$defs/stage4_assessment_status"
+        },
+        "target_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unresolved_arm_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "active_moiety_id",
+        "identity_status",
+        "n_edges_by_origin",
+        "n_arm_summaries_by_origin",
+        "arm_keys",
+        "origin_types",
+        "lanes",
+        "program_ids",
+        "target_ids",
+        "observed_perturbation_arm_keys",
+        "inverse_direction_hypothesis_arm_keys",
+        "pathway_hypothesis_arm_keys",
+        "opposed_arm_keys",
+        "unresolved_arm_keys",
+        "observed_perturbation_support",
+        "stage3_evidence_classes",
+        "max_phase_is_context_only",
+        "stage4_assessment_status",
+        "stage4_assessment_reason",
+        "source_record_ids",
+        "max_phase_status",
+        "source_locators",
+        "source_releases",
+        "source_licenses",
+        "evidence_relations",
+        "evidence_is_equivalence",
+        "mechanism_match_statuses",
+        "observed_perturbation_modalities",
+        "observed_sign_states",
+        "desired_target_modulations"
+      ],
+      "type": "object"
+    },
+    "desired_change": {
+      "description": "The direction the PROGRAM is wanted to move. Not a pair role.",
+      "enum": [
+        "increase",
+        "decrease"
+      ]
+    },
+    "desired_target_modulation": {
+      "description": "DERIVED from (modality, sign) \u2014 NEVER from the modality alone. On a CRISPRi arm 'increase' names the UNTESTED INVERSE of a deleterious result: it is never a licence to match an agonist as supported evidence.",
+      "enum": [
+        "decrease",
+        "increase",
+        "no_direction_evidence",
+        "not_evaluated"
+      ]
+    },
+    "directional_evidence_status": {
+      "description": "observed_perturbation is the only status backed by a measurement, and only a MEASURED origin can reach it. inverse_direction_hypothesis = the knockdown moved the arm the UNDESIRED way AND a real sourced activation mechanism exists on the exact target; a labelled hypothesis, never observed gain of function. pathway_hypothesis = an inference about a gene nobody perturbed. unresolved = fail-closed.",
+      "enum": [
+        "observed_perturbation",
+        "inverse_direction_hypothesis",
+        "pathway_hypothesis",
+        "opposed",
+        "unresolved"
+      ]
+    },
+    "disposition": {
+      "additionalProperties": false,
+      "description": "Every absence, NAMED. An assertion silently dropped is indistinguishable from a drug nobody found.",
+      "properties": {
+        "arm_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disposition_id": {
+          "type": "string"
+        },
+        "origin_type": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/origin_type"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "source_record_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/disposition_state"
+        },
+        "subject_id": {
+          "type": "string"
+        },
+        "subject_kind": {
+          "enum": [
+            "target",
+            "source_assertion",
+            "candidate"
+          ]
+        },
+        "target_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_id_namespace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "disposition_id",
+        "subject_kind",
+        "subject_id",
+        "state",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "disposition_state": {
+      "description": "Every absence is NAMED. A target this acquisition route cannot reach is not a target with no drug evidence, and neither is a target nobody looked up; a variant or shared-accession assertion is preserved and never rankable.",
+      "enum": [
+        "target_not_in_admitted_typed_universe",
+        "target_carries_no_source_drug_assertion",
+        "target_namespace_unreachable_by_this_acquisition_route",
+        "source_assertion_is_not_general_gene_rankable",
+        "not_queued"
+      ]
+    },
+    "edge": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin_type": {
+                "const": "endpoint_pathway_context"
+              }
+            },
+            "required": [
+              "origin_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "arm_rank": {
+                "description": "Nobody perturbed this node, so it has no rank to carry. A rank on it is a measurement that never happened.",
+                "type": "null"
+              },
+              "directional_evidence_status": {
+                "enum": [
+                  "pathway_hypothesis",
+                  "opposed",
+                  "unresolved"
+                ]
+              },
+              "observed_perturbation_support": {
+                "const": false
+              },
+              "origin_is_measured": {
+                "const": false
+              },
+              "perturbation_modality": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "origin_type": {
+                "enum": [
+                  "direct_target",
+                  "temporal_cross_time_measured"
+                ]
+              }
+            },
+            "required": [
+              "origin_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "directional_evidence_status": {
+                "enum": [
+                  "observed_perturbation",
+                  "inverse_direction_hypothesis",
+                  "opposed",
+                  "unresolved"
+                ]
+              },
+              "origin_is_measured": {
+                "const": true
+              },
+              "perturbation_modality": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "description": "ONE (reusable arm, typed origin, exact typed target, ONE source drug assertion). It binds the arm's key and context, the origin, the target identity, the assertion's own ChEMBL mechanism id, the digest of the direction vocabulary it was classified under, the intervention effect, the directional status, the observed-support flag, the evidence class, the NULLABLE source arm rank, and every upstream admission hash it stands on. There is no score field, and no role field.",
+      "properties": {
+        "action_type_normalized": {
+          "type": "string"
+        },
+        "action_type_source": {
+          "description": "Verbatim, as the source wrote it.",
+          "type": "string"
+        },
+        "active_moiety_id": {
+          "type": "string"
+        },
+        "arm_context_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "arm_desired_target_modulation": {
+          "description": "Stage-2's own term, verbatim.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "arm_evaluable": {
+          "type": "boolean"
+        },
+        "arm_key": {
+          "type": "string"
+        },
+        "arm_rank": {
+          "description": "Stage-2's own rank, verbatim and NULLABLE. Unranked is a STATE: never 0, never last, never invented. It must be NULL on an inferred origin.",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "arm_value_canonical_decimal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "arm_value_source_string": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "assertion_lane": {
+          "$ref": "#/$defs/assertion_lane"
+        },
+        "bundle_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bundle_key": {
+          "type": "string"
+        },
+        "bundle_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "desired_change": {
+          "$ref": "#/$defs/desired_change"
+        },
+        "desired_target_modulation": {
+          "$ref": "#/$defs/desired_target_modulation"
+        },
+        "direction_vocabulary_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "directional_evidence_reason": {
+          "type": "string"
+        },
+        "directional_evidence_status": {
+          "$ref": "#/$defs/directional_evidence_status"
+        },
+        "edge_id": {
+          "type": "string"
+        },
+        "from_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "general_gene_rankable": {
+          "const": true,
+          "description": "Only the general-gene lane may rank a gene, so only it may produce an edge. Variant and shared-accession assertions are preserved as source records and dispositions."
+        },
+        "intervention_effect": {
+          "$ref": "#/$defs/intervention_effect"
+        },
+        "intervention_effect_reason": {
+          "type": "string"
+        },
+        "lane": {
+          "$ref": "#/$defs/lane"
+        },
+        "mec_id": {
+          "description": "The ChEMBL mechanism row this edge stands on. An edge that cannot name its source row cannot be checked against the source.",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "molecule_chembl_id": {
+          "type": "string"
+        },
+        "observed_perturbation_support": {
+          "description": "TRUE only for a MEASURED origin in a MEASURED status. An inferred node can never carry it, whatever the drug does.",
+          "type": "boolean"
+        },
+        "origin_is_measured": {
+          "type": "boolean"
+        },
+        "origin_type": {
+          "$ref": "#/$defs/origin_type"
+        },
+        "pathway_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "perturbation_modality": {
+          "description": "What the SCREEN did. NULL on an inferred origin: nobody perturbed it, so there is no modality to name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "program_id": {
+          "type": "string"
+        },
+        "ranking_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "ranking_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "released_estimate_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "set_id": {
+          "description": "The gene set an INFERRED node came from. It is never read as a direction.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_record_id": {
+          "type": "string"
+        },
+        "stage1_release_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage2_independent_verdict": {
+          "const": "admit"
+        },
+        "stage2_independent_verifier_id": {
+          "pattern": "independent",
+          "type": "string"
+        },
+        "stage2_manifest_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage2_manifest_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage2_manifest_self_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage3_evidence_class": {
+          "$ref": "#/$defs/stage3_evidence_class"
+        },
+        "target_chembl_id": {
+          "type": "string"
+        },
+        "target_ensembl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "target_id_namespace": {
+          "type": "string"
+        },
+        "target_symbol": {
+          "description": "A LABEL. The join is by exact typed identity and never by symbol.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "typed_universe_sha256": {
+          "type": "string"
+        },
+        "universe_store_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "edge_id",
+        "arm_key",
+        "lane",
+        "program_id",
+        "desired_change",
+        "arm_context_sha256",
+        "origin_type",
+        "origin_is_measured",
+        "target_id",
+        "target_id_namespace",
+        "arm_rank",
+        "arm_evaluable",
+        "desired_target_modulation",
+        "source_record_id",
+        "mec_id",
+        "molecule_chembl_id",
+        "target_chembl_id",
+        "active_moiety_id",
+        "assertion_lane",
+        "general_gene_rankable",
+        "action_type_source",
+        "action_type_normalized",
+        "direction_vocabulary_digest",
+        "intervention_effect",
+        "intervention_effect_reason",
+        "directional_evidence_status",
+        "directional_evidence_reason",
+        "observed_perturbation_support",
+        "stage3_evidence_class",
+        "stage2_manifest_raw_sha256",
+        "stage2_manifest_canonical_sha256",
+        "stage2_manifest_self_hash",
+        "stage2_independent_verifier_id",
+        "stage2_independent_verdict",
+        "stage1_release_sha256",
+        "bundle_key",
+        "bundle_raw_sha256",
+        "bundle_canonical_sha256",
+        "ranking_raw_sha256",
+        "ranking_canonical_sha256",
+        "universe_store_id",
+        "typed_universe_sha256"
+      ],
+      "type": "object"
+    },
+    "evidence_relation": {
+      "description": "An inhibitor ALWAYS phenocopies CRISPRi (on a negative row it phenocopies the UNDESIRED effect). An agonist NEVER does.",
+      "enum": [
+        "putative_crispri_phenocopy",
+        "putative_crispra_phenocopy",
+        "untested_inverse_of_the_tested_perturbation",
+        "mechanism_effect_not_enumerated_no_phenocopy_claim"
+      ]
+    },
+    "identity_status": {
+      "description": "resolved = a structural identity (InChIKey). chembl_molecule_id_only = a registry id and no structure; that is a weaker identity, and it says so rather than passing as resolved.",
+      "enum": [
+        "resolved",
+        "chembl_molecule_id_only",
+        "ambiguous",
+        "unresolved"
+      ]
+    },
+    "intervention_effect": {
+      "description": "What the DRUG does. A functional inhibitor asserts NOTHING about target abundance; a degrader does. unknown is fail-closed: activation is never inferred from inhibition.",
+      "enum": [
+        "abundance_reduction",
+        "functional_inhibition",
+        "functional_activation",
+        "unknown"
+      ]
+    },
+    "lane": {
+      "enum": [
+        "direct",
+        "temporal",
+        "pathway"
+      ]
+    },
+    "mechanism_match": {
+      "enum": [
+        "phenocopies_the_perturbation_that_helped",
+        "phenocopies_the_perturbation_that_harmed",
+        "untested_inverse_direction_never_supported",
+        "runs_against_the_perturbation_that_helped",
+        "mechanism_effect_unknown",
+        "arm_shows_no_directional_response",
+        "arm_not_evaluable"
+      ]
+    },
+    "missingness_status": {
+      "description": "Absence is a VALUE, never a missing key. A null that a consumer coerces becomes a 0, and a 0 sorts \u2014 which is exactly how an unranked target reaches first place.",
+      "enum": [
+        "stated",
+        "not_stated_by_source",
+        "not_applicable_inferred_origin",
+        "ranked",
+        "unranked_by_source",
+        "no_general_drug_evidence"
+      ],
+      "type": "string"
+    },
+    "nullable_sha256": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observed_sign_state": {
+      "description": "Whether the perturbation HELPED. Re-derived from the SIGNED arm_value under Stage-2's own rule (eps=1e-9), and cross-checked against Stage-2's token.",
+      "enum": [
+        "not_evaluable",
+        "no_directional_response",
+        "perturbation_supports_the_desired_change",
+        "perturbation_opposes_the_desired_change"
+      ]
+    },
+    "origin_type": {
+      "description": "direct_target = the gene was PERTURBED in one condition. temporal_cross_time_measured = the gene was PERTURBED and the estimand is a cross-time difference-in-differences; it is measured, but it is NOT the same quantity as the same-condition effect and is never fused with it. endpoint_pathway_context = INFERRED from a gene set; nobody perturbed it.",
+      "enum": [
+        "direct_target",
+        "temporal_cross_time_measured",
+        "endpoint_pathway_context"
+      ]
+    },
+    "perturbation_modality": {
+      "description": "What the screen DID. Declared by Stage 2, carried verbatim, never defaulted from a config constant \u2014 a setting is not an assay.",
+      "enum": [
+        "CRISPRi_knockdown",
+        "CRISPRa_activation"
+      ]
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "description": "One row per artifact this bundle stands on. A binding a reader cannot enumerate is a binding a reader cannot check.",
+      "properties": {
+        "canonical_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "stage2_aggregate_manifest",
+            "stage2_independent_report",
+            "stage2_lane_artifact",
+            "stage1_release",
+            "universe_store",
+            "universe_store_artifact",
+            "vocabulary",
+            "code_identity"
+          ]
+        },
+        "provenance_id": {
+          "type": "string"
+        },
+        "raw_sha256": {
+          "$ref": "#/$defs/nullable_sha256"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "provenance_id",
+        "kind",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_record": {
+      "additionalProperties": false,
+      "description": "One source drug assertion, preserved verbatim with its ChEMBL identity, its rankability disposition and its licence binding. The cache carries NO direction verdict: direction is recomputed at build time from the frozen Stage-3 vocabulary.",
+      "properties": {
+        "action_type_source": {
+          "type": "string"
+        },
+        "active_moiety_id": {
+          "type": "string"
+        },
+        "ambiguity_disposition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "assertion_lane": {
+          "$ref": "#/$defs/assertion_lane"
+        },
+        "chembl_license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chembl_release": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chembl_required_attribution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chembl_source_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "direct_interaction": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "direction_decided_in_cache": {
+          "const": false
+        },
+        "disease_efficacy": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "edge_policy_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "general_gene_rankable": {
+          "type": "boolean"
+        },
+        "inchikey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_phase_canonical": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_phase_is_context_only": {
+          "const": true
+        },
+        "max_phase_source": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "mec_id": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "mechanism_of_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mechanism_refs": {
+          "type": "array"
+        },
+        "molecular_mechanism": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "molecule_chembl_id": {
+          "type": "string"
+        },
+        "molecule_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pref_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selectivity_comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_record_id": {
+          "type": "string"
+        },
+        "target_chembl_id": {
+          "type": "string"
+        },
+        "target_disposition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "target_id_namespace": {
+          "type": "string"
+        },
+        "typed_universe_sha256": {
+          "type": "string"
+        },
+        "uniprot_license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uniprot_release": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uniprot_source_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "universe_store_id": {
+          "type": "string"
+        },
+        "variant_disposition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variant_id": {
+          "description": "-1 is the source's UNDEFINED MUTATION sentinel. It is NOT null and NOT wild-type, and it is preserved exactly.",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "variant_specific": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source_record_id",
+        "mec_id",
+        "molecule_chembl_id",
+        "target_chembl_id",
+        "target_id",
+        "target_id_namespace",
+        "assertion_lane",
+        "general_gene_rankable",
+        "action_type_source",
+        "direction_decided_in_cache",
+        "max_phase_is_context_only",
+        "universe_store_id"
+      ],
+      "type": "object"
+    },
+    "stage2_aggregate_binding": {
+      "additionalProperties": false,
+      "description": "The Stage-2 admission chain, as the bundle id commits to it: report(ADMIT, independent) -> manifest (raw AND canonical) -> every lane artifact's bytes -> the Stage-1 release it stands on.",
+      "properties": {
+        "independent_report": {
+          "additionalProperties": false,
+          "description": "A SEPARATE artifact from a SEPARATE verifier. Its raw and canonical identity are bound here, and it must admit THIS manifest by both hashes: an ADMIT that names other bytes is an opinion about some other artifact.",
+          "properties": {
+            "canonical_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "raw_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "verdict": {
+              "const": "admit"
+            },
+            "verifier_id": {
+              "pattern": "independent",
+              "type": "string"
+            }
+          },
+          "required": [
+            "raw_sha256",
+            "canonical_sha256",
+            "verifier_id",
+            "verdict"
+          ],
+          "type": "object"
+        },
+        "lane_artifacts": {
+          "description": "EVERY consumed lane artifact, by both hashes. A bundle nobody can address is a bundle nobody admitted.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "bundle_key": {
+                "type": "string"
+              },
+              "canonical_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "lane": {
+                "$ref": "#/$defs/lane"
+              },
+              "raw_sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            },
+            "required": [
+              "bundle_key",
+              "lane",
+              "raw_sha256",
+              "canonical_sha256"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "manifest_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "manifest_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "manifest_self_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "n_arm_slots": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "n_bundles": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "pair_roles_assigned": {
+          "const": false
+        },
+        "program_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage1_release_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "topology_is_derived_not_declared": {
+          "const": true
+        }
+      },
+      "required": [
+        "manifest_raw_sha256",
+        "manifest_canonical_sha256",
+        "manifest_self_hash",
+        "independent_report",
+        "stage1_release_sha256",
+        "lane_artifacts",
+        "n_bundles",
+        "n_arm_slots",
+        "program_ids",
+        "topology_is_derived_not_declared",
+        "pair_roles_assigned"
+      ],
+      "type": "object"
+    },
+    "stage3_evidence_class": {
+      "description": "A LABEL, not a tier. Deliberately UNORDERED, and never comparable to (or allowed to alter) a Stage-2 rank or Pareto tier.",
+      "enum": [
+        "measured_perturbation",
+        "inverse_direction_hypothesis",
+        "pathway_hypothesis",
+        "no_supporting_evidence"
+      ]
+    },
+    "stage4_assessment_status": {
+      "description": "Whether Stage 4 is asked to ASSESS this candidate. An assessment is NOT biological promotion and NOT a recommendation.",
+      "enum": [
+        "queued",
+        "not_queued"
+      ]
+    },
+    "universe_store_binding": {
+      "additionalProperties": false,
+      "description": "The admitted public universe store: its identity, the typed universe it was extracted FOR, and the exact hashes of the source artifacts it stands on. The store carries action_type verbatim and NO Stage-3 direction verdict.",
+      "properties": {
+        "admission": {
+          "type": "object"
+        },
+        "chembl_license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chembl_release": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chembl_required_attribution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chembl_source_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "direction_decided_in_cache": {
+          "const": false
+        },
+        "n_typed_targets": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "source_artifacts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact": {
+                "type": "string"
+              },
+              "content_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "artifact",
+              "content_sha256"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "store_id": {
+          "type": "string"
+        },
+        "typed_universe_sha256": {
+          "type": "string"
+        },
+        "uniprot_license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uniprot_release": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uniprot_source_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "store_id",
+        "typed_universe_sha256",
+        "n_typed_targets",
+        "admission",
+        "source_artifacts",
+        "direction_decided_in_cache"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "spot.stage03_drug_annotation.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "artifact_class": {
+            "const": "analysis"
+          }
+        },
+        "required": [
+          "artifact_class"
+        ]
+      },
+      "then": {
+        "properties": {
+          "bundle_id": {
+            "pattern": "^s3_[0-9a-f]{16}$"
+          },
+          "data_status": {
+            "const": "admitted_stage2_aggregate_and_universe_store"
+          },
+          "stage4_admission_permitted": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "artifact_class": {
+            "const": "fixture"
+          }
+        },
+        "required": [
+          "artifact_class"
+        ]
+      },
+      "then": {
+        "properties": {
+          "bundle_id": {
+            "pattern": "^fx_[0-9a-f]{16}$"
+          },
+          "data_status": {
+            "const": "synthetic_fixture_only"
+          },
+          "stage4_admission_permitted": {
+            "const": false
+          }
+        }
+      }
+    }
+  ],
+  "description": "A drug annotation derived from an ADMITTED Stage-2 aggregate (15 lane artifacts, 300 reusable arm slots) and an ADMITTED public universe store. A NEW schema id: v1 is frozen and Stage 4 binds it by SHA, so this does not widen it. Arms are REUSABLE and selection-independent: they are keyed by lane|program_id|desired_change|context, and this schema provides NO field for a pair ROLE (a role is what a selection assigns at join time), NO combined/balanced/weighted/headline/composite objective, NO candidate rank or score, and NO p-value, q-value or FDR (inference_status is not_calibrated). Evidence carries one of three TYPED origins: direct_target (same-condition, measured), temporal_cross_time_measured (cross-time difference-in-differences, measured, a DISTINCT estimand that is never fused with the same-condition effect) and endpoint_pathway_context (INFERRED: nobody perturbed it, so it can never carry a measured rank and can never carry observed-perturbation support). The document carries NO timestamp and NO path: additionalProperties is false, so a created_at added here would be REFUSED rather than quietly making two runs of identical science differ byte for byte. When the run happened is recorded in the bundle manifest, outside the content address. Stage 3 reports scientific workflow states; it decides no promotion, eligibility or recommendation.",
+  "properties": {
+    "a_pathway_enrichment_record_never_sources_a_drug_edge": {
+      "const": true
+    },
+    "an_agonist_is_never_promoted_to_supported_evidence_by_sign_inversion": {
+      "const": true
+    },
+    "arms_are_independent": {
+      "const": true
+    },
+    "artifact_class": {
+      "description": "THE FIREWALL. A fixture is synthetic data: it lands in its own output subtree, wears an fx_ bundle id, and may never be admitted by Stage 4. An analysis is a real computation over admitted inputs. The two constraints below bind the class to the id prefix and to stage4_admission_permitted, so a fixture cannot be relabelled by editing one field.",
+      "enum": [
+        "analysis",
+        "fixture"
+      ]
+    },
+    "bundle_id": {
+      "pattern": "^(s3|fx)_[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "candidate_rank_permitted": {
+      "const": false
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/candidate"
+      },
+      "type": "array"
+    },
+    "canonical_content_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "canonical_form": {
+      "const": "exact_decimal_string"
+    },
+    "combined_objective_permitted": {
+      "const": false
+    },
+    "counts": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "data_status": {
+      "enum": [
+        "admitted_stage2_aggregate_and_universe_store",
+        "synthetic_fixture_only"
+      ]
+    },
+    "deferred_lanes": {
+      "additionalProperties": {
+        "const": "not_evaluated"
+      },
+      "description": "A lane this release does not evaluate is recorded as not_evaluated. An absent lane is never a favourable one, and never a zero.",
+      "type": "object"
+    },
+    "desired_changes": {
+      "items": {
+        "$ref": "#/$defs/desired_change"
+      },
+      "type": "array"
+    },
+    "direct_and_temporal_are_distinct_estimands_never_fused": {
+      "const": true
+    },
+    "directional_evidence_statuses": {
+      "items": {
+        "$ref": "#/$defs/directional_evidence_status"
+      },
+      "type": "array"
+    },
+    "document_file": {
+      "description": "THE PUBLISHED FILENAME of this document inside the bundle directory. Stage 4 opens it BY NAME, so the name is part of the contract and part of the content address. A producer and a consumer that disagree about the spelling do not fail loudly: the reader finds nothing, and 'no candidates' is then indistinguishable from 'no file'. An analysis bundle is drug_annotation.v2.json; a fixture is fixture_drug_annotation.v2.json, and the two can never be confused for one another.",
+      "enum": [
+        "drug_annotation.v2.json",
+        "fixture_drug_annotation.v2.json"
+      ],
+      "type": "string"
+    },
+    "document_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "evidence_classes_are_unordered": {
+      "const": true
+    },
+    "gene_and_pathway_evidence_are_never_merged": {
+      "const": true
+    },
+    "headline_arm_permitted": {
+      "const": false
+    },
+    "inference_status": {
+      "const": "not_calibrated",
+      "description": "There is no null distribution behind a target-drug edge and no multiple-testing frame over reusable arms. A p/q/FDR field would have the form of a calibrated statistic and none of its meaning."
+    },
+    "inferred_origin_can_never_carry_observed_support": {
+      "const": true
+    },
+    "inferred_origins": {
+      "description": "Nobody perturbed these. They can never carry a measured rank or observed support.",
+      "items": {
+        "enum": [
+          "endpoint_pathway_context"
+        ]
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "lanes": {
+      "items": {
+        "$ref": "#/$defs/lane"
+      },
+      "type": "array"
+    },
+    "measured_origins": {
+      "description": "Both were PERTURBED, and they are not the same quantity.",
+      "items": {
+        "enum": [
+          "direct_target",
+          "temporal_cross_time_measured"
+        ]
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "method": {
+      "description": "Code tree, schema set, environment lock and every vocabulary digest this build was computed under. direction_vocabulary_digest names the exact closed vocabulary each edge was classified against: move an action type between sets and the digest moves, instead of a drug quietly starting to rank.",
+      "properties": {
+        "candidate_rank_permitted": {
+          "const": false
+        },
+        "candidates_v2_vocabulary_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "code_tree_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "combined_objective_permitted": {
+          "const": false
+        },
+        "direction_vocabulary_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "env_lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "headline_arm_permitted": {
+          "const": false
+        },
+        "schemas_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "workflow_vocabulary_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "stage3_method_version",
+        "direction_vocabulary_digest",
+        "workflow_vocabulary_digest",
+        "candidates_v2_vocabulary_digest",
+        "code_tree_sha256",
+        "schemas_sha256",
+        "env_lock_sha256",
+        "combined_objective_permitted",
+        "headline_arm_permitted",
+        "candidate_rank_permitted"
+      ],
+      "type": "object"
+    },
+    "origin_types": {
+      "items": {
+        "$ref": "#/$defs/origin_type"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "p_q_fdr_permitted": {
+      "const": false
+    },
+    "pathway_direction_is_never_inherited_from_set_membership": {
+      "const": true
+    },
+    "pathway_lane_admitted": {
+      "type": "boolean"
+    },
+    "reusable_arm_identity": {
+      "description": "The fields that IDENTIFY a reusable arm. No pair role appears among them, and no role field exists anywhere in this contract.",
+      "items": {
+        "enum": [
+          "arm_key",
+          "lane",
+          "program_id",
+          "desired_change",
+          "condition",
+          "from_condition",
+          "to_condition",
+          "pathway_source",
+          "arm_context_sha256"
+        ]
+      },
+      "type": "array"
+    },
+    "rounding_rule": {
+      "type": "string"
+    },
+    "rounding_rule_id": {
+      "const": "spot.stage03.canonical_number.v1",
+      "description": "ONE frozen canonical numeric representation. Every number that enters a hash goes through it."
+    },
+    "schema_version": {
+      "const": "spot.stage03_drug_annotation.v2"
+    },
+    "selection_roles_assigned": {
+      "const": false,
+      "description": "away_from_A / toward_B are ROLES a SELECTION gives an arm at join time. Baking one into a reusable arm fuses two different questions under one key, and no consumer can un-fuse them afterwards."
+    },
+    "sign_rule": {
+      "description": "The rule, bound into the bundle id: the modality says what was TESTED, the sign says whether it HELPED, and neither is ever derived from the other.",
+      "type": "object"
+    },
+    "stage2_aggregate": {
+      "$ref": "#/$defs/stage2_aggregate_binding"
+    },
+    "stage3_evidence_classes": {
+      "items": {
+        "$ref": "#/$defs/stage3_evidence_class"
+      },
+      "type": "array"
+    },
+    "stage3_never_alters_stage2_ranks_or_tiers": {
+      "const": true
+    },
+    "stage4_admission_permitted": {
+      "description": "Bound to artifact_class below. A fixture is never admissible downstream.",
+      "type": "boolean"
+    },
+    "stage4_assessment_note": {
+      "type": "string"
+    },
+    "stage4_assessment_statuses": {
+      "items": {
+        "$ref": "#/$defs/stage4_assessment_status"
+      },
+      "type": "array"
+    },
+    "table_hashes": {
+      "additionalProperties": false,
+      "description": "The content hash of every one of the SEVEN v2 tables. `arm_slots` carries EVERY arm slot the release resolved, including the ones no drug evidence reached: without it, 'this arm had no drug evidence' and 'this arm never ran' are the same silence. `source_records` carries every VERBATIM source assertion, including the variant-specific and ambiguous-identity lanes that may never rank a gene: a dropped assertion is indistinguishable from a drug nobody found.",
+      "properties": {
+        "arm_slots": {
+          "$ref": "#/$defs/sha256"
+        },
+        "arm_summaries": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidates": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dispositions": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provenance": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_records": {
+          "$ref": "#/$defs/sha256"
+        },
+        "target_drug_edges": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "arm_slots",
+        "target_drug_edges",
+        "arm_summaries",
+        "candidates",
+        "source_records",
+        "dispositions",
+        "provenance"
+      ],
+      "type": "object"
+    },
+    "the_target_modulation_is_never_derived_from_the_modality_alone": {
+      "const": true
+    },
+    "universe_store": {
+      "$ref": "#/$defs/universe_store_binding"
+    }
+  },
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "document_file",
+    "bundle_id",
+    "canonical_content_sha256",
+    "document_sha256",
+    "stage2_aggregate",
+    "universe_store",
+    "method",
+    "origin_types",
+    "measured_origins",
+    "inferred_origins",
+    "lanes",
+    "desired_changes",
+    "reusable_arm_identity",
+    "selection_roles_assigned",
+    "arms_are_independent",
+    "direct_and_temporal_are_distinct_estimands_never_fused",
+    "gene_and_pathway_evidence_are_never_merged",
+    "inferred_origin_can_never_carry_observed_support",
+    "pathway_direction_is_never_inherited_from_set_membership",
+    "combined_objective_permitted",
+    "headline_arm_permitted",
+    "candidate_rank_permitted",
+    "p_q_fdr_permitted",
+    "inference_status",
+    "stage3_never_alters_stage2_ranks_or_tiers",
+    "directional_evidence_statuses",
+    "stage3_evidence_classes",
+    "evidence_classes_are_unordered",
+    "stage4_assessment_statuses",
+    "stage4_assessment_note",
+    "stage4_admission_permitted",
+    "data_status",
+    "deferred_lanes",
+    "table_hashes",
+    "counts",
+    "candidates",
+    "rounding_rule_id",
+    "rounding_rule",
+    "canonical_form",
+    "the_target_modulation_is_never_derived_from_the_modality_alone",
+    "an_agonist_is_never_promoted_to_supported_evidence_by_sign_inversion",
+    "a_pathway_enrichment_record_never_sources_a_drug_edge"
+  ],
+  "title": "spot Stage-3 drug annotation v2 (reusable arms, three typed origins)",
+  "type": "object"
+}

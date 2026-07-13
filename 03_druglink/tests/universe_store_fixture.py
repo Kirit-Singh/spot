@@ -20,7 +20,6 @@ that is supposed to produce it.
 from __future__ import annotations
 
 import copy
-import glob
 import json
 import os
 import shutil
@@ -29,25 +28,52 @@ import pytest
 
 from druglink import universe_rows as ur
 
-# The audited store identity. Literals: a pin computed from the thing it pins is not a pin.
-ADMITTED_STORE_ID = "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
-ADMITTED_UNIVERSE_SHA = "5fdbaf585a246489a5f2dfcb9450553370d435b1757b2247d972f79be75193af"
+# The audited store identity, RE-PINNED onto Stage-2's namespace vocabulary. Literals: a pin
+# computed from the thing it pins is not a pin.
+#
+# The store was re-emitted so it serializes the tokens Stage 2 (W3) serializes —
+# `ensembl_gene_id` / `gene_symbol` — because exact-token equality against the retired
+# `ensembl_gene` / `symbol` refused every real Ensembl row and yielded ZERO edges. The identity
+# MOVED (the typed universe hashes the identity PAIR); the SCIENCE did not, and every count
+# below is unchanged because of it.
+#
+#     store_id            bdf41b69… -> 625c921f…
+#     typed universe      5fdbaf58… -> 1c19db2b…
+#     scientific content  95f81cb1… == 95f81cb1…   (the namespace projected out)
+ADMITTED_STORE_ID = "625c921fce2daf60b69fb0ae33570a9f074a0a0042b1717ee2111f81c1160bff"
+ADMITTED_UNIVERSE_SHA = "1c19db2b5d666a8f33c715cb634cf111953c7cdd6c23d082e9b375643a3e7cc8"
 EMPTY_UNIVERSE_SHA = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+SCIENTIFIC_CONTENT_SHA = "95f81cb11abf1b39d9345edb182344f0b90b60e08dd7605145b40c08eda391eb"
+
+# The store this one REPLACES. Same science, retired vocabulary. It must REFUSE.
+STALE_VOCAB_STORE_ID = "bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160"
+STALE_VOCAB_STORE_DIR = "/home/tcelab/.cache/spot-stage3-universe-real/store"
 
 N_TARGETS, N_ENSG, N_SYMBOL_ONLY = 11_526, 11_522, 4
 N_GENERAL, N_VARIANT, N_AMBIGUOUS = 2_227, 29, 6
 N_OCCURRENCES, N_UNIQUE_MEC = 2_262, 2_258
 N_UNDEFINED_MUTATION = 10                       # variant_id == -1
+N_DRUG_EVIDENCE_TARGETS = 505
+N_MOLECULES_GENERAL = 1_923
 SYMBOL_ONLY = ("MTRNR2L1", "MTRNR2L4", "MTRNR2L8", "OCLM")
 CALMODULIN = ("ENSG00000143933", "ENSG00000160014", "ENSG00000198668")
 AMBIGUOUS_MEC_IDS = (6210, 6862)
 
+# A real ENSG target that carries a NON-EMPTY general drug-evidence edge set. Named so the
+# typed join is exercised against real ChEMBL assertions and cannot pass vacuously.
+ENSG_WITH_EDGES = "ENSG00000003436"
+
 
 def _find_store() -> str | None:
-    """The admitted store lives on tcefold; a working copy may be local. Never synthesised."""
+    """The ADMITTED (re-pinned) store. Never synthesised, and never the retired-vocabulary one.
+
+    Discovery names exactly the store that is admitted. It deliberately does NOT fall back to
+    the old `spot-stage3-universe-real` copy: that store's `store_id` is on the REFUSED list, so
+    finding it would only turn a clean skip into a confusing refusal — and the one thing that
+    must never happen is a run quietly standing on the store whose vocabulary was retired.
+    """
     candidates = [os.environ.get("SPOT_STAGE3_UNIVERSE_STORE"),
-                  "/home/tcelab/.cache/spot-stage3-universe/store"]
-    candidates += sorted(glob.glob("/tmp/claude-*/*/*/scratchpad/w2_admit"))
+                  "/home/tcelab/.cache/spot-stage3-universe-w3tokens/store"]
     for path in candidates:
         if path and os.path.exists(os.path.join(path, ur.MANIFEST_NAME)):
             return path
@@ -57,7 +83,14 @@ def _find_store() -> str | None:
 STORE_DIR = _find_store()
 needs_store = pytest.mark.skipif(
     STORE_DIR is None,
-    reason="the admitted universe store is not on this host (it lives on tcefold)")
+    reason="the admitted universe store is not on this host")
+
+STALE_STORE_DIR = (STALE_VOCAB_STORE_DIR
+                   if os.path.exists(os.path.join(STALE_VOCAB_STORE_DIR, ur.MANIFEST_NAME))
+                   else None)
+needs_stale_store = pytest.mark.skipif(
+    STALE_STORE_DIR is None,
+    reason="the retired-vocabulary store is not on this host")
 
 
 def _copy_store(tmp_path) -> str:
