@@ -19,9 +19,11 @@ function renderRes(res: RealRouteResolution) {
 
 function stage3(): Stage3UiArtifact {
   return {
-    schema_version: 'spot.stage03_drug_annotation.v1',
+    schema_version: 'spot.ui.stage03_candidates.v2',
+    native_schema_version: 'spot.stage03_drug_annotation.v2',
+    artifact_class: 'analysis',
     bundle_id: 's3_bundle01',
-    manifest_sha256: 'a'.repeat(64),
+    canonical_content_sha256: 'a'.repeat(64),
     upstream_stage2_run: 'stage02_run_777',
     candidates: [
       {
@@ -29,20 +31,19 @@ function stage3(): Stage3UiArtifact {
         active_moiety_id: 'MOI1',
         preferred_name: 'Examplib',
         identity_status: 'resolved',
-        form_ids: ['F1', 'F2'],
+        molecule_chembl_ids: ['CHEMBL1', 'CHEMBL2'],
         target_ensembls: ['ENSG1', 'ENSG2'],
         n_edges: 3,
         n_direct_gene_edges: 1,
-        development_state_aggregate: 'approved',
-        n_potency_rows: 0,
-        potency_state: null, // → typed em-dash
+        max_phase_status: 'stated',
+        max_phase_sources: ['4'],
         observed_perturbation_arms: ['arm1'],
-        inverse_direction_support: 'supported',
+        observed_perturbation_support: true,
+        mechanism_match_statuses: ['phenocopies_the_perturbation_that_helped'],
         pathway_hypothesis_arms: [],
         stage3_evidence_classes: ['observed_perturbation_target'],
-        disease_context_review_status: 'reviewed',
-        disease_context_review_result: 'eligible',
         stage4_assessment_status: 'queued',
+        stage4_assessment_reason: null,
         source_record_ids: ['s1'],
       },
     ],
@@ -113,21 +114,20 @@ function pathwayView(): JoinedView {
 }
 
 describe('renderRouteReal — distinct native path per route', () => {
-  it('Drugs renders Stage-3 cards (not Stage-2 tables); a null field is a typed em-dash; no deprecated fields', () => {
+  it('Drugs renders Stage-3 v2 candidate cards (not Stage-2 tables or a candidate ranking)', () => {
     renderRes({ route: 'drugs', artifact: stage3(), admission: 'admitted' });
     const canvas = screen.getByTestId('canvas');
     expect(canvas.querySelector('[data-route="drugs"]')).toBeTruthy();
     expect(within(canvas).getByText('cand-1')).toBeInTheDocument();
     expect(within(canvas).getByText('Examplib')).toBeInTheDocument();
-    expect(within(canvas).getByText('approved')).toBeInTheDocument();
+    expect(within(canvas).getByText('stated')).toBeInTheDocument();
     expect(within(canvas).getByText('stage02_run_777')).toBeInTheDocument();
     // NOT the Stage-2 gene / pathway table headers
     expect(within(canvas).queryByText('disposition')).toBeNull();
     expect(within(canvas).queryByText('enrichment')).toBeNull();
     // never manufacture deprecated Stage-3 fields
     expect(canvas.textContent).not.toMatch(/gbm_context|directness|mechanism_direction/i);
-    // the null potency_state renders as a compact em-dash
-    expect(canvas.textContent).toContain('—');
+    expect(canvas.textContent).not.toMatch(/candidate rank|overall rank|headline/i);
   });
 
   it('PK & Safety renders Stage-4 lanes; a not-evaluated lane is typed-missing, never safe/brain-penetrant/0', () => {

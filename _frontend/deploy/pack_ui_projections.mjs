@@ -61,7 +61,7 @@ const ROUTES = {
   },
   drugs: {
     stage_label: 'Drugs',
-    method_id: 'stage3-druglink-v4-workflow-states · schema spot.stage03_drug_annotation.v1',
+    method_id: 'stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2',
     projection_path: 'stage03/drugs.ui.json',
     projection_schema: 'spot.ui_projection.drugs.v1',
   },
@@ -201,46 +201,65 @@ function requireBinding(b) {
 // them. Stage-3/4 adapters remain strict on required ids + types and preserve typed absence.
 function nObj(v, path) { if (!v || typeof v !== 'object' || Array.isArray(v)) fail(`${path} must be an object`); return v; }
 function nStr(v, path) { if (typeof v !== 'string' || v.trim() === '') fail(`${path} must be a non-empty string`); return v; }
+function nBool(v, path) { if (typeof v !== 'boolean') fail(`${path} must be boolean`); return v; }
+function nHex(v, path) { const s = nStr(v, path); if (!HEX64.test(s)) fail(`${path} must be 64-hex`); return s; }
 function nOptStr(v, path) { if (v === undefined || v === null) return null; if (typeof v !== 'string') fail(`${path} must be a string or null`); return v; }
-function nOptNum(v, path) { if (v === undefined || v === null) return null; if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${path} must be a finite number or null`); return v; }
 function nStrList(v, path) { if (v === undefined || v === null) return []; if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) fail(`${path} must be a string[]`); return v; }
 function nArr(v, path) { if (!Array.isArray(v)) fail(`${path} must be an array`); return v; }
+function nCountMap(v, path) {
+  nObj(v, path); const out = {};
+  for (const [key, value] of Object.entries(v)) {
+    if (!Number.isSafeInteger(value) || value < 0) fail(`${path}.${key} must be a non-negative integer`);
+    out[key] = value;
+  }
+  return out;
+}
 
 // Stage-3 v2 native drug_annotation → compact Drugs projection (fields per §7 "Required Stage-3 UI model").
 function nativeToDrugsProjection(nat) {
   nObj(nat, 'drugs native');
+  if (nat.schema_version !== 'spot.stage03_drug_annotation.v2') fail('drugs native.schema_version must be spot.stage03_drug_annotation.v2');
+  if (nat.artifact_class !== 'analysis') fail('drugs native.artifact_class must be analysis (fixture/research artifacts are refused)');
+  if (nat.p_q_fdr_permitted !== false || nat.candidate_rank_permitted !== false ||
+      nat.combined_objective_permitted !== false || nat.headline_arm_permitted !== false) {
+    fail('drugs native permits an inferential/ranked/combined claim the browser contract forbids');
+  }
+  const aggregate = nObj(nat.stage2_aggregate, 'drugs native.stage2_aggregate');
+  const upstreamStage2 = nHex(aggregate.manifest_self_hash, 'drugs native.stage2_aggregate.manifest_self_hash');
   const candidates = nArr(nat.candidates, 'drugs native.candidates').map((c, i) => {
     const p = `drugs native.candidates[${i}]`;
     nObj(c, p);
+    const byOrigin = nCountMap(c.n_edges_by_origin, `${p}.n_edges_by_origin`);
     return {
       candidate_id: nStr(c.candidate_id, `${p}.candidate_id`),
       active_moiety_id: nOptStr(c.active_moiety_id, `${p}.active_moiety_id`),
       preferred_name: nOptStr(c.preferred_name, `${p}.preferred_name`),
       identity_status: nOptStr(c.identity_status, `${p}.identity_status`),
-      form_ids: nStrList(c.form_ids, `${p}.form_ids`),
-      target_ensembls: nStrList(c.target_ensembls, `${p}.target_ensembls`),
-      n_edges: nOptNum(c.n_edges, `${p}.n_edges`),
-      n_direct_gene_edges: nOptNum(c.n_direct_gene_edges, `${p}.n_direct_gene_edges`),
-      development_state_aggregate: nOptStr(c.development_state_aggregate, `${p}.development_state_aggregate`),
-      n_potency_rows: nOptNum(c.n_potency_rows, `${p}.n_potency_rows`),
-      potency_state: nOptStr(c.potency_state, `${p}.potency_state`),
-      observed_perturbation_arms: nStrList(c.observed_perturbation_arms, `${p}.observed_perturbation_arms`),
-      inverse_direction_support: nOptStr(c.inverse_direction_support, `${p}.inverse_direction_support`),
-      pathway_hypothesis_arms: nStrList(c.pathway_hypothesis_arms, `${p}.pathway_hypothesis_arms`),
+      molecule_chembl_ids: nStrList(c.molecule_chembl_ids, `${p}.molecule_chembl_ids`),
+      target_ensembls: nStrList(c.target_ids, `${p}.target_ids`),
+      n_edges: Object.values(byOrigin).reduce((sum, value) => sum + value, 0),
+      n_direct_gene_edges: byOrigin.direct_target ?? 0,
+      max_phase_status: nOptStr(c.max_phase_status, `${p}.max_phase_status`),
+      max_phase_sources: nStrList(c.max_phase_sources, `${p}.max_phase_sources`),
+      observed_perturbation_arms: nStrList(c.observed_perturbation_arm_keys, `${p}.observed_perturbation_arm_keys`),
+      observed_perturbation_support: nBool(c.observed_perturbation_support, `${p}.observed_perturbation_support`),
+      mechanism_match_statuses: nStrList(c.mechanism_match_statuses, `${p}.mechanism_match_statuses`),
+      pathway_hypothesis_arms: nStrList(c.pathway_hypothesis_arm_keys, `${p}.pathway_hypothesis_arm_keys`),
       stage3_evidence_classes: nStrList(c.stage3_evidence_classes, `${p}.stage3_evidence_classes`),
-      disease_context_review_status: nOptStr(c.disease_context_review_status, `${p}.disease_context_review_status`),
-      disease_context_review_result: nOptStr(c.disease_context_review_result, `${p}.disease_context_review_result`),
       stage4_assessment_status: nOptStr(c.stage4_assessment_status, `${p}.stage4_assessment_status`),
+      stage4_assessment_reason: nOptStr(c.stage4_assessment_reason, `${p}.stage4_assessment_reason`),
       source_record_ids: nStrList(c.source_record_ids, `${p}.source_record_ids`),
     };
   });
   return {
     schema_version: 'spot.ui_projection.drugs.v1', route: 'drugs',
     artifact: {
-      schema_version: 'spot.stage03_drug_annotation.v1',
+      schema_version: 'spot.ui.stage03_candidates.v2',
+      native_schema_version: 'spot.stage03_drug_annotation.v2',
+      artifact_class: 'analysis',
       bundle_id: nStr(nat.bundle_id, 'drugs native.bundle_id'),
-      manifest_sha256: nStr(nat.manifest_sha256, 'drugs native.manifest_sha256'),
-      upstream_stage2_run: nStr(nat.upstream_stage2_run, 'drugs native.upstream_stage2_run'),
+      canonical_content_sha256: nHex(nat.canonical_content_sha256, 'drugs native.canonical_content_sha256'),
+      upstream_stage2_run: upstreamStage2,
       candidates,
     },
   };

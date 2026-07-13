@@ -356,7 +356,7 @@ function drugsRaw(): RawManifest {
         'Only UniProt identity + ChEMBL mechanism are wired; ChEMBL activity, Open Targets, DGIdb, DrugBank and DepMap-PRISM are not.',
         'ChEMBL is CC BY-SA 3.0 (ShareAlike): redistributed ChEMBL-derived fields inherit attribution and ShareAlike obligations.',
       ],
-      method_id: 'stage3-druglink-v4-workflow-states · schema spot.stage03_drug_annotation.v1',
+      method_id: 'stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2',
       // UNAVAILABLE: a reproduce command may be shown ONLY when it reproduces the ADMITTED bound
       // artifact. No admitted Stage-3 candidate bundle is bound to this page, so a generic
       // druglink.run_stage3 invocation (valid --help notwithstanding) does not reproduce a bound
@@ -391,7 +391,7 @@ function pksafetyRaw(): RawManifest {
         'CNS-MPO (Wager 2010) six-parameter physicochemical desirability (ClogP, ClogD7.4, MW, TPSA, HBD, most-basic pKa), an equal-weight 0–6 sum — a design heuristic, not measured brain permeability. NEBPI (Grossman 2026) criterion-level brain-penetrance classification keyed to (moiety × route × formulation × dose × schedule × tumour × potency): a class belongs to a context, never to a drug. Exposure / potency margins only from sourced measurements; label safety in five evidence states where no_evidence_found never renders as safe.',
       masks_qc:
         'Label adapters are pure parsers over cached bytes (no network); each row binds set-ID / application number, active moiety, label version, effective date, the LOINC-coded section, and the raw response hash. A label is never summarised from memory. Organ-system safety groups: with no admitted source supplying the organ-system field, the current adapters emit unspecified / not_evaluated — source-backed only, never inferred from target, mechanism, class, or drug name.',
-      upstream_model: 'Required upstream: an admitted Stage-3 drug-candidate bundle (spot.stage03_drug_annotation.v1).',
+      upstream_model: 'Required upstream: an admitted Stage-3 drug-candidate bundle (spot.stage03_drug_annotation.v2; artifact_class analysis).',
       limitations: [
         'NEBPI (Grossman 2026) is an expert-consensus review, not FDA guidance; its transcription and interpretation calls need clinical / pharmacology review before any real use.',
         'The current public acquisition lacks logD7.4 and most-basic pKa, so a full CNS-MPO score is incomplete unless those exact sourced values are acquired; drug labels do not establish measured brain exposure.',
@@ -454,8 +454,8 @@ export function stageMethodsRaw(page: PageKey): RawManifest {
 export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string> = {
   targets: '90c11e80a8338443e2550581f89330e2de44a38eafa071d5158d354d7c8adabb',
   pathways: '3d0294fe0b6d0beb618a477b65a0cd82a736fdd60ef875baf2f6eb9a3864f657',
-  drugs: '59017bfb16f7a8a88e44f5f79eac321f04492a1e3c035d76d1298040ffcd1fa9',
-  pksafety: '86a186781ee64406f2246771c1815d72fb37049214db1e4a262e858bc40ab50b',
+  drugs: '9b4fea60d229dd04418ac67e0cf9ad48338fecb6d32814761e2934cf51f0c320',
+  pksafety: '1b8e6ab3631f949f57c7998d9366d7c060d47d3dbcd6605257a2d6ac85ef3c5a',
 };
 
 function keyFor(page: PageKey): keyof typeof STAGE_METHODS_HASHES {

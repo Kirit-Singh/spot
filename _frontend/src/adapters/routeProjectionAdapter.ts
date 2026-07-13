@@ -11,14 +11,14 @@
 import type { ResolvedBundles } from '../repository/joinResolver';
 import type { SelectionV3 } from './selectionV3Adapter';
 import type { Stage3Candidate, Stage3UiArtifact } from '../domain/stage3UiArtifact';
-import { STAGE3_UI_ARTIFACT_SCHEMA } from '../domain/stage3UiArtifact';
+import { STAGE3_NATIVE_ARTIFACT_SCHEMA, STAGE3_UI_ARTIFACT_SCHEMA } from '../domain/stage3UiArtifact';
 import type { JsonObject, JsonValue, Stage4Candidate, Stage4Lanes, Stage4ProductionEligibility, Stage4UiArtifact } from '../domain/stage4UiArtifact';
 import { STAGE4_LANE_KEYS, STAGE4_UI_ARTIFACT_SCHEMA } from '../domain/stage4UiArtifact';
 import { parseNativeTemporalArmBundle } from './nativeTemporalArmAdapter';
 import { parseDirectArmBundle, parsePathwayArmBundle } from './reusableArmAdapter';
 import type { PathwayArmBundle } from '../domain/reusableArm';
 import { fail } from './errors';
-import { arr, isObject, optBool, optNum, optStr, str } from './guards';
+import { arr, bool, isObject, optBool, optNum, optStr, str } from './guards';
 
 export const UI_PROJECTION_SCHEMA = {
   stage2: 'spot.ui_projection.stage2.v1',
@@ -149,20 +149,19 @@ function parseStage3Candidate(v: unknown, path: string): Stage3Candidate {
     active_moiety_id: optStr(v.active_moiety_id, `${path}.active_moiety_id`),
     preferred_name: optStr(v.preferred_name, `${path}.preferred_name`),
     identity_status: optStr(v.identity_status, `${path}.identity_status`),
-    form_ids: strList(v.form_ids, `${path}.form_ids`),
+    molecule_chembl_ids: strList(v.molecule_chembl_ids, `${path}.molecule_chembl_ids`),
     target_ensembls: strList(v.target_ensembls, `${path}.target_ensembls`),
     n_edges: optNum(v.n_edges, `${path}.n_edges`),
     n_direct_gene_edges: optNum(v.n_direct_gene_edges, `${path}.n_direct_gene_edges`),
-    development_state_aggregate: optStr(v.development_state_aggregate, `${path}.development_state_aggregate`),
-    n_potency_rows: optNum(v.n_potency_rows, `${path}.n_potency_rows`),
-    potency_state: optStr(v.potency_state, `${path}.potency_state`),
+    max_phase_status: optStr(v.max_phase_status, `${path}.max_phase_status`),
+    max_phase_sources: strList(v.max_phase_sources, `${path}.max_phase_sources`),
     observed_perturbation_arms: strList(v.observed_perturbation_arms, `${path}.observed_perturbation_arms`),
-    inverse_direction_support: optStr(v.inverse_direction_support, `${path}.inverse_direction_support`),
+    observed_perturbation_support: bool(v.observed_perturbation_support, `${path}.observed_perturbation_support`),
+    mechanism_match_statuses: strList(v.mechanism_match_statuses, `${path}.mechanism_match_statuses`),
     pathway_hypothesis_arms: strList(v.pathway_hypothesis_arms, `${path}.pathway_hypothesis_arms`),
     stage3_evidence_classes: strList(v.stage3_evidence_classes, `${path}.stage3_evidence_classes`),
-    disease_context_review_status: optStr(v.disease_context_review_status, `${path}.disease_context_review_status`),
-    disease_context_review_result: optStr(v.disease_context_review_result, `${path}.disease_context_review_result`),
     stage4_assessment_status: optStr(v.stage4_assessment_status, `${path}.stage4_assessment_status`),
+    stage4_assessment_reason: optStr(v.stage4_assessment_reason, `${path}.stage4_assessment_reason`),
     source_record_ids: strList(v.source_record_ids, `${path}.source_record_ids`),
   };
 }
@@ -182,8 +181,14 @@ export function parseDrugsProjection(raw: unknown): Stage3UiArtifact {
   }
   return {
     schema_version: STAGE3_UI_ARTIFACT_SCHEMA,
+    native_schema_version: str(a.native_schema_version, 'artifact.native_schema_version') === STAGE3_NATIVE_ARTIFACT_SCHEMA
+      ? STAGE3_NATIVE_ARTIFACT_SCHEMA
+      : fail('unknown_schema_version', `artifact.native_schema_version must be ${STAGE3_NATIVE_ARTIFACT_SCHEMA}`),
+    artifact_class: str(a.artifact_class, 'artifact.artifact_class') === 'analysis'
+      ? 'analysis'
+      : fail('namespace_mismatch', 'artifact.artifact_class must be analysis'),
     bundle_id: prodId(a.bundle_id, 'artifact.bundle_id'),
-    manifest_sha256: str(a.manifest_sha256, 'artifact.manifest_sha256'),
+    canonical_content_sha256: str(a.canonical_content_sha256, 'artifact.canonical_content_sha256'),
     upstream_stage2_run: prodId(a.upstream_stage2_run, 'artifact.upstream_stage2_run'),
     candidates: arr(a.candidates, 'artifact.candidates').map((c, i) => parseStage3Candidate(c, `artifact.candidates[${i}]`)),
   };

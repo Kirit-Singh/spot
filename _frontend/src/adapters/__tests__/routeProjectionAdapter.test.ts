@@ -14,18 +14,21 @@ function drugsRaw() {
     schema_version: 'spot.ui_projection.drugs.v1',
     route: 'drugs',
     artifact: {
-      schema_version: 'spot.stage03_drug_annotation.v1',
+      schema_version: 'spot.ui.stage03_candidates.v2',
+      native_schema_version: 'spot.stage03_drug_annotation.v2',
+      artifact_class: 'analysis',
       bundle_id: 's3_b1',
-      manifest_sha256: H,
+      canonical_content_sha256: H,
       upstream_stage2_run: 'run_1',
       candidates: [
         {
           candidate_id: 'cand-1', active_moiety_id: 'MOI1', preferred_name: 'Examplib', identity_status: 'resolved',
-          form_ids: ['F1'], target_ensembls: ['ENSG1'], n_edges: 2, n_direct_gene_edges: 1,
-          development_state_aggregate: 'approved', n_potency_rows: 0, potency_state: null,
-          observed_perturbation_arms: ['a1'], inverse_direction_support: 'supported', pathway_hypothesis_arms: [],
-          stage3_evidence_classes: ['observed_perturbation_target'], disease_context_review_status: 'reviewed',
-          disease_context_review_result: 'eligible', stage4_assessment_status: 'queued', source_record_ids: ['s1'],
+          molecule_chembl_ids: ['CHEMBL1'], target_ensembls: ['ENSG1'], n_edges: 2, n_direct_gene_edges: 1,
+          max_phase_status: 'stated', max_phase_sources: ['4'],
+          observed_perturbation_arms: ['a1'], observed_perturbation_support: true,
+          mechanism_match_statuses: ['phenocopies_the_perturbation_that_helped'], pathway_hypothesis_arms: [],
+          stage3_evidence_classes: ['measured_perturbation'], stage4_assessment_status: 'queued',
+          stage4_assessment_reason: null, source_record_ids: ['s1'],
         },
       ],
     },
@@ -82,7 +85,7 @@ describe('parseDrugsProjection — strict', () => {
     const a = parseDrugsProjection(drugsRaw());
     expect(a.bundle_id).toBe('s3_b1');
     expect(a.candidates[0].candidate_id).toBe('cand-1');
-    expect(a.candidates[0].potency_state).toBeNull();
+    expect(a.candidates[0].observed_perturbation_support).toBe(true);
   });
   it('rejects an unknown projection schema', () => {
     expect(() => parseDrugsProjection({ ...drugsRaw(), schema_version: 'spot.ui_projection.drugs.v2' })).toThrow(AdapterError);
@@ -98,9 +101,17 @@ describe('parseDrugsProjection — strict', () => {
   it('rejects a fixture-namespaced bundle id', () => {
     expect(() => parseDrugsProjection({ ...drugsRaw(), artifact: { ...drugsRaw().artifact, bundle_id: 'demo:b1' } })).toThrow(AdapterError);
   });
+  it('rejects a retired native schema or non-analysis artifact class', () => {
+    const v1 = drugsRaw();
+    v1.artifact.native_schema_version = 'spot.stage03_drug_annotation.v1';
+    expect(() => parseDrugsProjection(v1)).toThrow(/native_schema_version/);
+    const fixture = drugsRaw();
+    fixture.artifact.artifact_class = 'fixture';
+    expect(() => parseDrugsProjection(fixture)).toThrow(/artifact_class|analysis/);
+  });
   it('rejects a mis-typed candidate field', () => {
     const raw = drugsRaw();
-    (raw.artifact.candidates[0] as unknown as Record<string, unknown>).form_ids = 'F1'; // must be string[]
+    (raw.artifact.candidates[0] as unknown as Record<string, unknown>).molecule_chembl_ids = 'F1'; // must be string[]
     expect(() => parseDrugsProjection(raw)).toThrow(AdapterError);
   });
   it('rejects a namespace-smuggling envelope', () => {

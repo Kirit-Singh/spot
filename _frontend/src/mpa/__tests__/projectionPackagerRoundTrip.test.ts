@@ -37,8 +37,17 @@ function receipt(route: string) {
 }
 
 const drugsNative = {
-  bundle_id: 's3_b1', manifest_sha256: 'a'.repeat(64), upstream_stage2_run: 'stage2-run-1',
-  candidates: [{ candidate_id: 'cand-1', preferred_name: 'Examplib', identity_status: 'resolved', development_state_aggregate: 'approved', potency_state: null }],
+  schema_version: 'spot.stage03_drug_annotation.v2', artifact_class: 'analysis',
+  bundle_id: 's3_b1', canonical_content_sha256: 'a'.repeat(64),
+  p_q_fdr_permitted: false, candidate_rank_permitted: false, combined_objective_permitted: false,
+  headline_arm_permitted: false, stage2_aggregate: { manifest_self_hash: 'b'.repeat(64) },
+  candidates: [{ candidate_id: 'cand-1', active_moiety_id: 'AM1', preferred_name: 'Examplib',
+    identity_status: 'resolved', molecule_chembl_ids: ['CHEMBL1'], target_ids: ['ENSG1'],
+    n_edges_by_origin: { direct_target: 1, temporal_cross_time_measured: 1, endpoint_pathway_context: 0 },
+    max_phase_status: 'stated', max_phase_sources: ['4'], observed_perturbation_arm_keys: ['a1'],
+    observed_perturbation_support: true, mechanism_match_statuses: ['phenocopies_the_perturbation_that_helped'],
+    pathway_hypothesis_arm_keys: [], stage3_evidence_classes: ['measured_perturbation'],
+    stage4_assessment_status: 'queued', stage4_assessment_reason: null, source_record_ids: ['s1'] }],
 };
 const pksafetyNative = {
   schema_id: 'spot.stage04_browser_projection.v1', scorecard_set_id: 's4_1',
@@ -73,7 +82,7 @@ async function makeSpec(opts?: { projection?: Awaited<ReturnType<typeof compactP
   };
   const stage2 = { projection_text: text, display_verifier_receipt, compact_release };
   return {
-    stage2_run_id: 'stage2-run-1',
+    stage2_run_id: 'b'.repeat(64),
     stage1_binding: {
       release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64),
       selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256,
@@ -122,7 +131,7 @@ describe('packager → browser loader round-trip', () => {
     expect(tree['stage02/display_projection.verification.json']).toBeTruthy();
     const cur = current as { chain: { stage2_display_release_id: string; stage2_run_id: string | null }; routes: Record<string, { compact_stage2: { release_conditions: string[]; pathway_sources: string[]; projection_self_sha256: string } }> };
     expect(cur.chain.stage2_display_release_id).toBe('stage2-display-1');
-    expect(cur.chain.stage2_run_id).toBe('stage2-run-1');
+    expect(cur.chain.stage2_run_id).toBe('b'.repeat(64));
     expect(cur.routes.targets.compact_stage2.release_conditions).toEqual(CONDITIONS);
     expect(cur.routes.targets.compact_stage2.pathway_sources).toEqual(SOURCES);
     expect(cur.routes.targets.compact_stage2).toEqual(cur.routes.pathways.compact_stage2);
@@ -162,12 +171,20 @@ describe('packager → browser loader round-trip', () => {
     const { tree } = pack(await makeSpec());
     const drugs = await resolveRouteArtifact('drugs', deps(withinSelection, tree));
     expect(drugs?.route).toBe('drugs');
-    expect(drugs && drugs.route === 'drugs' ? drugs.artifact.candidates[0].potency_state : 'x').toBeNull();
+    expect(drugs && drugs.route === 'drugs' ? drugs.artifact.candidates[0].observed_perturbation_support : false).toBe(true);
     const pk = await resolveRouteArtifact('pksafety', deps(withinSelection, tree));
     const art = pk && pk.route === 'pksafety' ? pk.artifact : null;
     expect(art?.candidates[0].lanes.delivery).toEqual([]);
     expect(art?.candidates[0].lanes.transporters).toEqual({});
     expect(art?.candidates[0].lanes.potency).toEqual({ state: 'not_evaluated' });
+  });
+
+  it('refuses retired or fixture Stage-3 native documents before projecting candidates', async () => {
+    const { deriveCompactProjection } = await importPack();
+    expect(() => deriveCompactProjection('drugs', { ...drugsNative,
+      schema_version: 'spot.stage03_drug_annotation.v1' })).toThrow(/schema_version/);
+    expect(() => deriveCompactProjection('drugs', { ...drugsNative,
+      artifact_class: 'fixture' })).toThrow(/artifact_class|fixture/);
   });
 
   it('fails closed when projection or independent-receipt bytes change', async () => {
@@ -225,7 +242,7 @@ describe('packager refuses invented or inconsistent Stage-2 releases', () => {
     const base = await makeSpec();
     const badReceipt = { ...base, routes: { drugs: { native: drugsNative, receipt: { ...receipt('drugs'), reproduce_command: undefined } } } };
     expect(() => pack(badReceipt)).toThrow(/reproduce_command/);
-    const wrong = { ...drugsNative, upstream_stage2_run: 'wrong' };
+    const wrong = { ...drugsNative, stage2_aggregate: { manifest_self_hash: '9'.repeat(64) } };
     expect(() => pack({ ...base, routes: { ...base.routes, drugs: { native: wrong, receipt: receipt('drugs') } } })).toThrow(/upstream_stage2_run/);
   });
 });

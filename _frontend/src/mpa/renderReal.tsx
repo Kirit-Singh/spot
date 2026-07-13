@@ -247,10 +247,10 @@ function DrugCandidate({ c }: { c: Stage3Candidate }) {
         <Field label="targets" value={count(c.target_ensembls)} />
         <Field label="edges" value={num(c.n_edges)} />
         <Field label="direct gene edges" value={num(c.n_direct_gene_edges)} />
-        <Field label="development" value={txt(c.development_state_aggregate)} />
-        <Field label="potency" value={txt(c.potency_state)} />
-        <Field label="inverse-dir support" value={txt(c.inverse_direction_support)} />
-        <Field label="disease context" value={txt(c.disease_context_review_result)} />
+        <Field label="max phase status" value={txt(c.max_phase_status)} />
+        <Field label="measured perturbation support" value={c.observed_perturbation_support ? 'yes' : 'no'} />
+        <Field label="mechanism match states" value={count(c.mechanism_match_statuses)} />
+        <Field label="pathway contexts" value={count(c.pathway_hypothesis_arms)} />
         <Field label="stage-4 status" value={txt(c.stage4_assessment_status)} />
       </div>
     </section>

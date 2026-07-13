@@ -67,9 +67,9 @@ const bundles = {} as unknown as ResolvedBundles;
 
 function stage3(): Stage3UiArtifact {
   return {
-    schema_version: 'spot.stage03_drug_annotation.v1',
+    schema_version: 'spot.ui.stage03_candidates.v2', native_schema_version: 'spot.stage03_drug_annotation.v2', artifact_class: 'analysis',
     bundle_id: 's3_bundle01',
-    manifest_sha256: 'a'.repeat(64),
+    canonical_content_sha256: 'a'.repeat(64),
     upstream_stage2_run: 'stage02_run_777',
     candidates: [],
   };

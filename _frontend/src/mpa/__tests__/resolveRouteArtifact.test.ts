@@ -30,9 +30,9 @@ const stage2Projection: RouteProjection = {
 
 function stage3Artifact(): Stage3UiArtifact {
   return {
-    schema_version: 'spot.stage03_drug_annotation.v1',
+    schema_version: 'spot.ui.stage03_candidates.v2', native_schema_version: 'spot.stage03_drug_annotation.v2', artifact_class: 'analysis',
     bundle_id: 's3_bundle01',
-    manifest_sha256: 'f'.repeat(64),
+    canonical_content_sha256: 'f'.repeat(64),
     upstream_stage2_run: 'stage02_run_777',
     candidates: [],
   };

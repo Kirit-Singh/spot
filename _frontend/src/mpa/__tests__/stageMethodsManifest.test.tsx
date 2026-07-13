@@ -69,7 +69,7 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(p.provenance.source_chain.some((s) => /GO Biological/.test(s.label) && s.license === 'CC-BY-4.0' && s.url)).toBe(true);
 
     const d = await buildStageMethodsManifest('drugs');
-    expect(d.methods.method_id).toBe('stage3-druglink-v4-workflow-states · schema spot.stage03_drug_annotation.v1');
+    expect(d.methods.method_id).toBe('stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2');
     expect(d.provenance.source_chain.some((s) => s.label === 'ChEMBL 37' && s.license === 'CC BY-SA 3.0' && s.url)).toBe(true);
     expect(d.provenance.source_chain.some((s) => /UniProt/.test(s.label) && s.license === 'CC BY 4.0' && s.url)).toBe(true);
 
@@ -393,9 +393,9 @@ describe('CLEAN unbound state — one route status, exactly zero "unavailable" (
       cleanup();
     }
     // current authoritative identities
-    expect((await buildStageMethodsManifest('drugs')).methods.method_id).toContain('spot.stage03_drug_annotation.v1');
+    expect((await buildStageMethodsManifest('drugs')).methods.method_id).toContain('spot.stage03_drug_annotation.v2');
     expect((await buildStageMethodsManifest('pksafety')).methods.method_id).toContain('stage4-evidence-v2');
-    expect((await buildStageMethodsManifest('pksafety')).methods.upstream_model).toContain('spot.stage03_drug_annotation.v1');
+    expect((await buildStageMethodsManifest('pksafety')).methods.upstream_model).toContain('spot.stage03_drug_annotation.v2');
     expect((await buildStageMethodsManifest('targets')).methods.method_id).toContain('masked_program_projection');
   });
 

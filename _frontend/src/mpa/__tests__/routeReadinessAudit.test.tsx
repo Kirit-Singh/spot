@@ -82,7 +82,7 @@ function boundManifestWith(page: PageKey, run: { last_run_utc: string; method_co
 
 const geneView = { mode: 'within_condition', geneArmA: null, geneArmB: null, pathwayArmA: null, pathwayArmB: null, pathway_context: 'reactome' } as unknown as JoinedView;
 const bundles = {} as unknown as ResolvedBundles;
-const stage3: Stage3UiArtifact = { schema_version: 'spot.stage03_drug_annotation.v1', bundle_id: 's3_b1', manifest_sha256: 'a'.repeat(64), upstream_stage2_run: 'run_1', candidates: [] };
+const stage3: Stage3UiArtifact = { schema_version: 'spot.ui.stage03_candidates.v2', native_schema_version: 'spot.stage03_drug_annotation.v2', artifact_class: 'analysis', bundle_id: 's3_b1', canonical_content_sha256: 'a'.repeat(64), upstream_stage2_run: 'run_1', candidates: [] };
 const stage4: Stage4UiArtifact = { schema_version: 'spot.stage04_browser_projection.v1', scorecard_set_id: 's4_1', upstream_stage3_bundle: 's3_b1', upstream: { candidate_set_id: 's3_b1', namespace: 'production', is_fixture: false }, store_is_selection_independent: true, is_ranking: false, ordering: { by: 'candidate_id' }, guards: [], active_selection_view: null, active_view_candidate_ids: [], candidates: [] };
 
 async function boundResolution(page: PageKey): Promise<RealRouteResolution> {
