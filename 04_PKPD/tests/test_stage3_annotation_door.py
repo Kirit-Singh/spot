@@ -12,13 +12,14 @@ The contract now:
     artifact_class           analysis
     stage4_assessment_status queued | not_queued
 
-The bundle these tests run against is Stage-3's own pinned r5 emission, taken from the run
-root and re-hashed here. Stage 4 never hand-authors a Stage-3 shape.
+The bundle these tests run against is a REAL emission of the CURRENT frozen Stage-3 engine
+(03_druglink @ e5aa666), built by driving Direct's real screen + the pinned public-bytes
+cache through the engine, then re-hashed here. Stage 4 never hand-authors a Stage-3 shape.
 
-    bundle_id                s3_be0f05c07b3f6330
-    canonical_content_sha256 be0f05c07b3f6330693a6e64fdd2b8ceab4a2a9d074803f161f0c2dca2ed36a9
-    document_sha256          db5d89731f75f57c4eed77d7bb3edd7ebacff78d9dc95d34ff6b63a8b540fbc3
-    manifest_sha256          be6deafd837e0f6c2f1d429951c701715a92b17c17cb119d0dca35114e7f8f2e
+    bundle_id                s3_0b119088734643bf
+    canonical_content_sha256 0b119088734643bfa6a236ebae0713e4a88a5b043227c1d45c1b3b18a3334853
+    document_sha256          ec727aef9682fb61d263367e53adcf52c193a206abb80b79d20a00327ab94ea4
+    manifest_sha256          59dcbb99d1552a19ce081d4e2a591a4fd72cb709176614a3377d60b3c55869ac
 """
 
 from __future__ import annotations
@@ -46,18 +47,18 @@ from verifier.checks import verify_release
 import annotation_evidence as AE
 
 BUNDLE = os.path.join(STAGE4_DIR, "tests", "fixtures", "stage3_annotation",
-                      "s3_be0f05c07b3f6330")
+                      "s3_0b119088734643bf")
 METHOD_DIR = os.path.join(STAGE4_DIR, "method")
 
 # The exact bytes Stage 4 builds against, recorded so a silent re-pin is impossible.
 PINNED = {
-    "bundle_id": "s3_be0f05c07b3f6330",
+    "bundle_id": "s3_0b119088734643bf",
     "canonical_content_sha256":
-        "be0f05c07b3f6330693a6e64fdd2b8ceab4a2a9d074803f161f0c2dca2ed36a9",
+        "0b119088734643bfa6a236ebae0713e4a88a5b043227c1d45c1b3b18a3334853",
     "document_sha256":
-        "db5d89731f75f57c4eed77d7bb3edd7ebacff78d9dc95d34ff6b63a8b540fbc3",
+        "ec727aef9682fb61d263367e53adcf52c193a206abb80b79d20a00327ab94ea4",
     "manifest_sha256":
-        "be6deafd837e0f6c2f1d429951c701715a92b17c17cb119d0dca35114e7f8f2e",
+        "59dcbb99d1552a19ce081d4e2a591a4fd72cb709176614a3377d60b3c55869ac",
 }
 
 # The legacy fixture bundle, from the contract before this one.
@@ -178,11 +179,21 @@ def test_an_inverse_hypothesis_is_never_observed_gain_of_function():
         assert "inverse_direction_hypothesis" not in q.stage3_evidence_classes
 
 
-def test_claude_science_review_status_is_carried_not_assumed():
+def test_disease_context_review_is_carried_not_assumed():
+    """A COMPLETABLE review, carried verbatim. `pending` is not reviewed; `insufficient` is
+    not a soft yes. Stage 4 reports Stage 3's recorded result and invents none of it."""
     a = adapt_annotation_bundle(BUNDLE)
     for q in a.queued:
-        assert q.claude_science_review_status in (
-            "not_required", "pending_claude_science_inverse_direction_plausibility")
+        r = q.disease_context_review
+        assert r.status in ("pending", "completed", "not_required")
+        # a result is only ever set on a COMPLETED review; otherwise it is None
+        if r.status == "completed":
+            assert r.result in ("supportive", "contradictory", "mixed", "insufficient")
+        else:
+            assert r.result is None
+        # every carried evidence ref is a typed triple, never a blob
+        for ref in r.evidence_refs:
+            assert set(ref) == {"science_evidence_id", "science_evidence_sha256", "record_type"}
 
 
 def test_science_evidence_refs_are_carried_as_typed_references():

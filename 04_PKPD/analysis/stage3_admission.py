@@ -74,6 +74,7 @@ ENV_CACHE_ROOT = "SPOT_STAGE3_CACHE_ROOT"            # the pinned acquisition ca
 ENV_DIRECT_RUN = "SPOT_STAGE3_DIRECT_RUN"            # the verified Stage-2 Direct run
 ENV_DIRECT_INPUTS = "SPOT_STAGE3_DIRECT_INPUTS_ROOT"  # raw Direct inputs
 ENV_SCIENCE_REGISTRY = "SPOT_STAGE3_SCIENCE_REGISTRY"  # optional evidence registry
+ENV_DIRECT_ANALYSIS = "SPOT_STAGE3_DIRECT_ANALYSIS"  # optional Stage-2 Direct analysis root
 
 PASSED = "passed"
 NOT_RUN = "not_run"
@@ -149,6 +150,11 @@ def run_external_verifier(bundle_dir: str, ctx: dict[str, str],
     registry = os.environ.get(ENV_SCIENCE_REGISTRY)
     if registry:
         argv += ["--science-registry", registry]
+    # The verifier re-runs Direct's OWN standalone verifier, which lives in the Stage-2 Direct
+    # analysis tree. It resolves a default, but a real integration can pin it explicitly.
+    direct_analysis = os.environ.get(ENV_DIRECT_ANALYSIS)
+    if direct_analysis:
+        argv += ["--direct-analysis", direct_analysis]
 
     # Prepend, never clobber: the verifier's root must win imports, but the real integration
     # may need the inherited PYTHONPATH too (a shared env, a src root). Replacing it outright

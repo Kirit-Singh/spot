@@ -145,7 +145,7 @@ def test_admission_records_that_the_external_verifier_did_not_run(tmp_path):
     assert got.gates == ("stage4_restatement",)
     assert got.data_bound_integration_ready is False
     assert got.stage3_handoff_sha256 == STAGE3_HANDOFF_SHA256
-    assert got.bundle_id == "s3_be0f05c07b3f6330"
+    assert got.bundle_id == "s3_0b119088734643bf"
 
 
 def test_require_external_verifier_refuses_a_bundle_the_verifier_never_saw(tmp_path):

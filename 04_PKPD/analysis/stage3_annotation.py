@@ -17,7 +17,9 @@ WHAT IS CARRIED THROUGH UNCHANGED, and must never be collapsed:
     combined rank, NO headline arm, NO cross-arm objective. There is no field to hold one.
   * `inverse_direction_hypothesis_arms` + `inverse_direction_support` — a LABELLED HYPOTHESIS.
     Never reported as observed gain of function.
-  * `claude_science_review_status` — pending is not reviewed.
+  * the disease-context review — a COMPLETABLE result (supportive/contradictory/mixed/
+    insufficient), not a one-way flag. `pending` is not reviewed; `insufficient` is not a
+    soft yes. Carried verbatim, interpreted never.
   * `origin_type` — a `pathway_node` result may NEVER be reported as a measured one.
   * science-evidence refs `{science_evidence_id, science_evidence_sha256, record_type}` —
     carried verbatim as typed REFERENCES, never dereferenced, embedded or summarised.
@@ -57,8 +59,8 @@ from .stage3_contract_v2 import (
 
 __all__ = [
     "ADAPTER_ID", "ADAPTER_VERSION", "ANNOTATION_SCHEMA", "RETIRED_KEYS",
-    "STAGE3_CONTRACT_VERSION", "AnnotationAdmission", "ArmEvidence", "QueuedCandidate",
-    "adapt_annotation_bundle", "verify_annotation_bundle",
+    "STAGE3_CONTRACT_VERSION", "AnnotationAdmission", "ArmEvidence", "DiseaseContextReview",
+    "QueuedCandidate", "adapt_annotation_bundle", "verify_annotation_bundle",
 ]
 
 @dataclass
@@ -69,6 +71,24 @@ class ArmEvidence:
     origin_type: str
     arm_evidence_state: str
     raw: dict[str, Any]
+
+
+@dataclass
+class DiseaseContextReview:
+    """A COMPLETABLE disease-context review, carried verbatim from Stage 3.
+
+    Not a one-way flag. `status` is pending / completed / not_required; `result` is
+    supportive / contradictory / mixed / insufficient (only when completed, else None). A
+    substantive result is one Stage 3 already paid for with resolvable evidence bindings —
+    Stage 4 reports it and interprets none of it. `pending` is not reviewed; `insufficient` is
+    not a soft yes.
+    """
+
+    status: str
+    result: Optional[str]
+    reason: str
+    evidence_refs: list[dict[str, Any]]
+    reviewed_by: Optional[str]
 
 
 @dataclass
@@ -85,7 +105,7 @@ class QueuedCandidate:
     pathway_hypothesis_arms: list[str]
     opposed_arms: list[str]
     stage3_evidence_classes: list[str]
-    claude_science_review_status: str
+    disease_context_review: DiseaseContextReview
     potency_state: str
     science_evidence_refs: list[dict[str, Any]] = field(default_factory=list)
 
@@ -226,7 +246,14 @@ def adapt_annotation_bundle(bundle_dir: str, *,
             pathway_hypothesis_arms=list(c.get("pathway_hypothesis_arms") or []),
             opposed_arms=list(c.get("opposed_arms") or []),
             stage3_evidence_classes=list(c.get("stage3_evidence_classes") or []),
-            claude_science_review_status=c.get("claude_science_review_status") or "not_required",
+            disease_context_review=DiseaseContextReview(
+                status=c.get("disease_context_review_status") or "not_required",
+                result=c.get("disease_context_review_result"),
+                reason=c.get("disease_context_review_reason") or "",
+                evidence_refs=[dict(r) for r in
+                               (c.get("disease_context_review_evidence_refs") or [])],
+                reviewed_by=c.get("disease_context_reviewed_by"),
+            ),
             potency_state=c.get("potency_state") or "not_evaluated",
             science_evidence_refs=science,
         ))

@@ -6,9 +6,13 @@ Stage 3 retired its promotion lattice outright. `namespace`, `production_candida
 `eligibility.py` module are GONE — not deprecated, deleted. `spot.stage03_research_annotation.v1`
 is not emitted any more and `load()` no longer takes `namespace=`.
 
-Stage 4's previous research adapter was written against that retired contract. It has been
-deleted, not adapted: an adapter that still believed in `namespace=research_only` and
-`research_pk_annotation_eligible` would be reading fields no producer writes.
+This restatement (and the admission door in `stage3_admission`) is the ONLY path a frozen
+Stage-3 `spot.stage03_drug_annotation.v1` bundle takes into Stage 4. A separate, pre-freeze
+namespace subsystem (`stage3_adapter.py` / `stage3_verify.py`) still exists and still consumes
+the retired `spot.stage03_research_annotation.v1`, but its `SUPPORTED_DOCUMENTS` does not
+include the current contract, so the frozen bundle never routes through it and this module
+imports nothing from it. An adapter that believed in `namespace=research_only` /
+`research_pk_annotation_eligible` would be reading fields no current producer writes.
 
 What Stage 3 emits now:
 
@@ -51,8 +55,10 @@ WHAT IS CARRIED THROUGH UNCHANGED, and must never be collapsed:
   * `inverse_direction_hypothesis_arms` + `inverse_direction_support` — a LABELLED HYPOTHESIS.
     Never reported as observed gain of function. `stage3_evidence_classes` is an UNORDERED
     label set, not a tier.
-  * `claude_science_review_status` — an inverse hypothesis is PENDING a Claude Science
-    plausibility review. Stage 4 must not treat it as reviewed.
+  * the disease-context review (`disease_context_review_status/_result/_reason/`
+    `_evidence_refs/_reviewed_by`) — a COMPLETABLE review, carried verbatim. `pending` is not
+    reviewed and `insufficient` is not a soft yes; Stage 4 reports the result Stage 3 recorded
+    and invents none. A substantive result Stage 3 already paid for with resolvable evidence.
   * `origin_type` — a `pathway_node` result may NEVER be reported as a measured one.
   * science-evidence refs `{science_evidence_id, science_evidence_sha256, record_type}` —
     carried verbatim as typed REFERENCES. Stage 4 never dereferences, embeds or summarises
@@ -75,7 +81,7 @@ ADAPTER_VERSION = "1.0.0"
 
 # The exact Stage-3 contract this restatement was written against. Bump ONLY after re-reading
 # the Stage-3 handoff and re-verifying the pinned bundle.
-STAGE3_CONTRACT_VERSION = "spot.stage03_drug_annotation.v1/2026-07-12-r5"
+STAGE3_CONTRACT_VERSION = "spot.stage03_drug_annotation.v1/2026-07-12-r8"
 
 ANNOTATION_SCHEMA = "spot.stage03_drug_annotation.v1"
 ANNOTATION_DOC = "drug_annotation.json"
@@ -100,22 +106,33 @@ RETIRED_KEYS = frozenset({
 
 POINTER_FILES = ("production_pointer.json", "current.json", "PRODUCTION_POINTER.json")
 
-# Restated from Stage-3's `bundle.CANDIDATE_CONTENT_KEYS`, in order.
+# Restated from Stage-3's `bundle.CANDIDATE_CONTENT_KEYS`, in order (03_druglink @ e5aa666).
+# The r5 one-way flag `claude_science_review_status` is GONE. In its place, Stage 3 carries a
+# COMPLETABLE disease-context review as five fields per candidate: a review is an ingestible
+# RESULT (supportive / contradictory / mixed / insufficient), never a pending flag that could
+# only ever say "not yet". A substantive result must pay for itself with resolvable evidence
+# bindings; Stage 4 carries all five verbatim and interprets none of them.
 CANDIDATE_CONTENT_KEYS = (
     "candidate_id", "active_moiety_id", "identity_status", "identity_conflicts",
     "arm_evidence_states", "observed_perturbation_arms",
     "inverse_direction_hypothesis_arms", "inverse_direction_support",
     "pathway_hypothesis_arms", "opposed_arms", "stage3_evidence_classes",
-    "claude_science_review_status", "form_ids", "target_ensembls", "n_edges",
+    "disease_context_review_status", "disease_context_review_result",
+    "disease_context_review_reason", "disease_context_review_evidence_refs",
+    "disease_context_reviewed_by", "form_ids", "target_ensembls", "n_edges",
     "n_direct_gene_edges", "development_state_aggregate", "n_potency_rows",
     "potency_state", "stage4_assessment_status", "stage4_assessment_reason",
     "source_record_ids",
 )
 
-# Restated from Stage-3's `bundle.canonical_content`, key for key, in order.
+# Restated from Stage-3's `bundle.canonical_content`, key for key, in order (@ e5aa666).
+# `science_evidence_registry` and `disease_context_review` are new document-level members of
+# the canonical content: the referenced Claude Science records and the completed-review block
+# are now BOUND into the bundle id, so a dangling or altered record moves the hash.
 CANONICAL_CONTENT_KEYS = (
     "schema_version", "artifact_class", "upstream", "acquisition", "pathway_hypotheses",
-    "stage2_joint_context", "method", "deferred_lanes", "table_hashes", "candidates",
+    "stage2_joint_context", "science_evidence_registry", "disease_context_review",
+    "method", "deferred_lanes", "table_hashes", "candidates",
 )
 
 # Excluded from CONTENT hashes (still covered by the file hash).
@@ -314,6 +331,8 @@ def verify_annotation_bundle(bundle_dir: str) -> tuple[dict[str, Any], dict[str,
             "acquisition": doc["acquisition"],
             "pathway_hypotheses": doc["pathway_hypotheses"],
             "stage2_joint_context": doc["stage2_joint_context"],
+            "science_evidence_registry": doc["science_evidence_registry"],
+            "disease_context_review": doc["disease_context_review"],
             "method": doc["method"],
             "deferred_lanes": dict(sorted(doc["deferred_lanes"].items())),
             "table_hashes": dict(sorted(doc["table_hashes"].items())),

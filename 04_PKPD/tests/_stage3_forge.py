@@ -23,7 +23,7 @@ from analysis.stage3_contract_v2 import (
 )
 
 PINNED_BUNDLE = os.path.join(STAGE4_DIR, "tests", "fixtures", "stage3_annotation",
-                             "s3_be0f05c07b3f6330")
+                             "s3_0b119088734643bf")
 
 
 def copy_bundle(tmp_path) -> str:
@@ -104,6 +104,8 @@ def reseal_fully(bundle: str) -> None:
         "acquisition": doc["acquisition"],
         "pathway_hypotheses": doc["pathway_hypotheses"],
         "stage2_joint_context": doc["stage2_joint_context"],
+        "science_evidence_registry": doc["science_evidence_registry"],
+        "disease_context_review": doc["disease_context_review"],
         "method": doc["method"],
         "deferred_lanes": dict(sorted(doc["deferred_lanes"].items())),
         "table_hashes": dict(sorted(doc["table_hashes"].items())),

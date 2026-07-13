@@ -46,7 +46,7 @@ COMMITTED_BUNDLES = {
 
 
 PINNED_ANNOTATION_BUNDLE = os.path.normpath(
-    os.path.join(STAGE3_FIXTURE_DIR, "..", "stage3_annotation", "s3_be0f05c07b3f6330"))
+    os.path.join(STAGE3_FIXTURE_DIR, "..", "stage3_annotation", "s3_0b119088734643bf"))
 
 
 def stage3_source_root() -> str | None:

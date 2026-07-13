@@ -41,7 +41,7 @@ from analysis.stage3_frozen import banned_keys_in
 def test_the_clean_pinned_bundle_is_admitted(tmp_path):
     """The floor. If the firewall refuses a clean bundle it is not a firewall, it is a wall."""
     doc, tables = verify_annotation_bundle(copy_bundle(str(tmp_path)))
-    assert doc["bundle_id"] == "s3_be0f05c07b3f6330"
+    assert doc["bundle_id"] == "s3_0b119088734643bf"
     assert doc["artifact_class"] == "analysis"
     assert tables and all(t in tables for t in ("candidates", "target_drug_edges"))
 
@@ -63,7 +63,7 @@ def test_a_resealed_combined_objective_is_refused(tmp_path):
     assert doc["overall_rank"] == 1
     assert doc["document_sha256"] == content_hash(
         {k: v for k, v in doc.items() if k != "document_sha256"})
-    assert doc["bundle_id"] == "s3_be0f05c07b3f6330", "the bundle id must be UNMOVED"
+    assert doc["bundle_id"] == "s3_0b119088734643bf", "the bundle id must be UNMOVED"
 
     with pytest.raises(Rejection) as exc:
         verify_annotation_bundle(bundle)

@@ -30,7 +30,7 @@ from analysis.method_config import STAGE4_DIR
 from analysis.stage3_annotation import adapt_annotation_bundle
 
 FIXTURES = os.path.join(STAGE4_DIR, "tests", "fixtures", "stage3_annotation")
-BUNDLE = os.path.join(FIXTURES, "s3_be0f05c07b3f6330")
+BUNDLE = os.path.join(FIXTURES, "s3_0b119088734643bf")
 CACHE = os.path.join(FIXTURES, "cache")
 
 # How many queued candidates to reconstruct from raw bytes. The task asks for >= 2; every

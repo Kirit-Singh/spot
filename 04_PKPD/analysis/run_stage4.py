@@ -318,8 +318,17 @@ def annotation_receipt(admission: AnnotationAdmission, ran: bool, reason_code: s
             q.candidate_id: q.inverse_direction_hypothesis_arms
             for q in admission.queued if q.inverse_direction_hypothesis_arms
         },
-        "claude_science_review_status": {
-            q.candidate_id: q.claude_science_review_status for q in admission.queued
+        # A COMPLETABLE disease-context review, reported verbatim. `pending` is not reviewed;
+        # `insufficient` is not a soft yes. Stage 4 interprets none of it.
+        "disease_context_review": {
+            q.candidate_id: {
+                "status": q.disease_context_review.status,
+                "result": q.disease_context_review.result,
+                "reason": q.disease_context_review.reason,
+                "reviewed_by": q.disease_context_review.reviewed_by,
+                "evidence_refs": q.disease_context_review.evidence_refs,
+            }
+            for q in admission.queued
         },
         # Typed REFERENCES. Never dereferenced, embedded or summarised by Stage 4.
         "science_evidence_refs": (admission.queued[0].science_evidence_refs
