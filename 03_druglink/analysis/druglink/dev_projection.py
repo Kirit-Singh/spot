@@ -60,6 +60,14 @@ from .stage2_contract import AdmittedBundle, LoadedArm
 SCHEMA = "spot.stage03_dev_projection.v0"
 STATUS_UNADMITTED = "development_unadmitted"
 
+# THE ADMISSION THESE EDGES STAND ON: none, said out loud in the field Stage 4 reads.
+# The frozen edge engine refuses a NULL verifier/verdict — rightly, because a null is an edge
+# whose admission nobody can read, and it would reach Stage 4 looking exactly like an admitted
+# one. So the true thing is written instead. Neither token is ever "admit", and no consumer can
+# mistake "admission_pending" for an admission.
+AGGREGATE_NOT_ADMITTED_VERIFIER = "spot.development.unadmitted_adapter.v0"
+VERDICT_ADMISSION_PENDING = "admission_pending"
+
 LANE_DIRECT = "direct"
 ARM_BUNDLE = "arm_bundle.json"
 ARM_ROWS = "arms.parquet"
@@ -134,6 +142,22 @@ def load_direct_arms(bundle_dir: str) -> tuple[list[LoadedArm], dict[str, Any]]:
         "arm_bundle_run_id": run_id,
         "condition": condition,
         "schema_version": str(bundle.get("schema_version") or ""),
+
+        # EVERY EDGE MUST NAME THE ADMISSION IT STANDS ON — and these edges stand on NONE.
+        #
+        # The frozen engine refuses a null here, and it is right to: "a null is an edge whose
+        # admission nobody can read, and it would ride out to Stage 4 looking exactly like an
+        # admitted one." The fix is NOT to weaken that gate, and NOT to write "admit" — it is to
+        # say the true thing in the field Stage 4 actually reads. These tokens are not a verdict
+        # of admission; they are a verdict of NO admission, and no consumer can mistake one for
+        # the other. A null could be overlooked; this cannot.
+        "aggregate_verifier_id": AGGREGATE_NOT_ADMITTED_VERIFIER,
+        "aggregate_verdict": VERDICT_ADMISSION_PENDING,
+        # There is no aggregate manifest to hash, because there is no aggregate.
+        "manifest_raw_sha256": None,
+        "manifest_canonical_sha256": None,
+        "manifest_self_hash": None,
+
         # SAID IN THE ARTIFACT, not only in a docstring.
         "status": STATUS_UNADMITTED,
         "admission_pending": True,
@@ -289,6 +313,7 @@ def _candidates(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "mechanism_match_status": edge.get("mechanism_match_status"),
             "observed_perturbation_support": edge.get("observed_perturbation_support"),
             "stage3_evidence_class": edge.get("stage3_evidence_class"),
+            "source_record_id": edge.get("source_record_id"),
         })
     for cand in out.values():
         cand["arms"] = [cand["arms"][k] for k in sorted(cand["arms"])]
@@ -391,82 +416,3 @@ def build_document(*, condition: str, selection: dict[str, Any], projection: dic
         "stage2_direct_inputs": provenance,
         "direction_vocabulary_digest": dr.vocabulary_digest(),
     }
-
-
-def main(argv: Optional[list[str]] = None) -> int:
-    """Project ONE same-condition question over the REAL Direct bytes. Writes ONE JSON."""
-    import argparse
-
-    ap = argparse.ArgumentParser(
-        description="DEVELOPMENT projection over real, UNADMITTED Stage-2 Direct bytes. "
-                    "This is not a production result and writes no Stage-3 bundle.")
-    ap.add_argument("--direct-bundle", required=True,
-                    help="the real Direct bundle dir (arm_bundle.json + arms.parquet + "
-                         "target_identity.json)")
-    ap.add_argument("--universe-store", required=True, help="the ADMITTED universe store")
-    ap.add_argument("--a-program", required=True, help="the A pole's program_id")
-    ap.add_argument("--a-change", required=True, choices=("increase", "decrease"))
-    ap.add_argument("--b-program", required=True, help="the B pole's program_id")
-    ap.add_argument("--b-change", required=True, choices=("increase", "decrease"))
-    ap.add_argument("--selection", default=None,
-                    help="the real Stage-1 v3 selection contract, bound for identity")
-    ap.add_argument("--pathway-context", default=None,
-                    help="a COMPACT GO-BP endpoint context. Absent => a NAMED unavailable entry.")
-    ap.add_argument("--out", required=True)
-    args = ap.parse_args(argv)
-
-    try:
-        arms, provenance = load_direct_arms(args.direct_bundle)
-        store = ur.load_store(args.universe_store)
-        condition = str(provenance["condition"])
-        a_key = f"{LANE_DIRECT}|{args.a_program}|{args.a_change}|{condition}"
-        b_key = f"{LANE_DIRECT}|{args.b_program}|{args.b_change}|{condition}"
-        projection = project(arms=arms, store=store, a_arm_key=a_key, b_arm_key=b_key)
-    except (DevProjectionError, ur.UniverseRowsError, eb.CandidatesV2Error) as exc:
-        print(f"REFUSED: {exc}")
-        print("nothing was written. This runner has no fixture fallback.")
-        return 3
-
-    selection: dict[str, Any] = {
-        "a": {"program_id": args.a_program, "desired_change": args.a_change,
-              "arm_key": a_key, "condition": condition},
-        "b": {"program_id": args.b_program, "desired_change": args.b_change,
-              "arm_key": b_key, "condition": condition},
-        "analysis_mode": "within_condition",
-        "roles_are_assigned_at_join_time_never_stored_on_an_arm": True,
-    }
-    if args.selection and os.path.isfile(args.selection):
-        doc = _load_json(args.selection, "Stage-1 v3 selection contract")
-        selection["stage1_selection"] = {
-            "path": os.path.basename(args.selection),
-            "raw_sha256": file_sha256(args.selection),
-            "selection_id": doc.get("selection_id"),
-            "question_id": doc.get("question_id"),
-        }
-
-    document = build_document(condition=condition, selection=selection, projection=projection,
-                              provenance=provenance, store=store,
-                              store_dir=args.universe_store)
-    attach_pathway_context(document, args.pathway_context)
-
-    os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as fh:
-        json.dump(document, fh, sort_keys=True, indent=1)
-        fh.write("\n")
-
-    a, b = document["arms"][a_key], document["arms"][b_key]
-    print(f"[{STATUS_UNADMITTED}] {condition}: {args.a_program}|{args.a_change} -> "
-          f"{args.b_program}|{args.b_change}")
-    for block in (a, b):
-        print(f"  {block['arm_key']:<44} {block['n_ranked']:>6} ranked  "
-              f"{block['n_edges']:>5} edges  {block['n_candidates']:>4} candidates")
-    print(f"  candidates (both arms)                       {document['n_candidates']}")
-    print(f"  pathway_context                              {document['pathway_context']['status']}")
-    print(f"  store                                        {store.store_id[:16]}… (admitted)")
-    print(f"  -> {args.out}  sha256={file_sha256(args.out)}")
-    print("NOT a production result: the Stage-2 aggregate and bridge are not admitted.")
-    return 0
-
-
-if __name__ == "__main__":                                   # pragma: no cover
-    raise SystemExit(main())
