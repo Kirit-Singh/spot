@@ -23,6 +23,10 @@ interface Pole {
 export interface Stage1Selection {
   program_a?: Pole;
   program_b?: Pole;
+  /** Endpoint-specific conditions. A temporal selection must never be collapsed to one label. */
+  condition_a?: string;
+  condition_b?: string;
+  /** Backwards-compatible shared condition for a within-condition selection. */
   analysis_condition?: string;
 }
 
@@ -65,10 +69,14 @@ export function readStage1Selection(): Stage1Selection | null {
   if (typeof cc !== 'object' || cc === null) return null;
   const ccr = cc as Record<string, unknown>;
   const conditions = Array.isArray(ccr.conditions) ? ccr.conditions : [];
+  const conditionA = typeof conditions[0] === 'string' ? (conditions[0] as string) : undefined;
+  const conditionB = typeof conditions[1] === 'string' ? (conditions[1] as string) : conditionA;
   return {
     program_a: pole1(ccr.A),
     program_b: pole1(ccr.B),
-    analysis_condition: typeof conditions[0] === 'string' ? (conditions[0] as string) : undefined,
+    condition_a: conditionA,
+    condition_b: conditionB,
+    analysis_condition: conditions.length === 1 ? conditionA : undefined,
   };
 }
 
@@ -109,10 +117,12 @@ function pole(p: Pole | undefined, cond: string): string {
 /** Format a selection as the contrast title, or null if it lacks two poles. */
 export function contrastTitle(sel: Stage1Selection | null): string | null {
   if (!sel || !sel.program_a || !sel.program_b) return null;
-  const cond = sel.analysis_condition
-    ? (COND[sel.analysis_condition] ?? sel.analysis_condition.toLowerCase())
-    : '';
-  return `${pole(sel.program_a, cond)} → ${pole(sel.program_b, cond)}`;
+  const shared = sel.analysis_condition;
+  const rawA = sel.condition_a ?? shared;
+  const rawB = sel.condition_b ?? shared;
+  const condA = rawA ? (COND[rawA] ?? rawA.toLowerCase()) : '';
+  const condB = rawB ? (COND[rawB] ?? rawB.toLowerCase()) : '';
+  return `${pole(sel.program_a, condA)} → ${pole(sel.program_b, condB)}`;
 }
 
 export const NO_SELECTION_TITLE = 'Select populations in Programs →';

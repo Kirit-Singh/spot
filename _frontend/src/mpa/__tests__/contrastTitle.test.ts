@@ -97,6 +97,17 @@ describe('contrastTitle — formatting', () => {
     );
   });
 
+  it('renders each endpoint condition for a temporal cross-condition selection', () => {
+    expect(
+      contrastTitle({
+        program_a: { display_label: 'Activated', direction: 'high' },
+        program_b: { display_label: 'Activated', direction: 'high' },
+        condition_a: 'Stim8hr',
+        condition_b: 'Stim48hr',
+      }),
+    ).toBe('Activated hi (at 8 hr) → Activated hi (at 48 hr)');
+  });
+
   it('omits the "(at …)" clause without a condition and passes an unknown direction through', () => {
     expect(
       contrastTitle({

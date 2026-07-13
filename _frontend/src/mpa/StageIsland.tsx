@@ -72,10 +72,14 @@ function PendingArtifact({ resolving }: { resolving: boolean }) {
 /** Header contrast from a fully-verified v3 selection, with Tier-2 display labels resolved from the
  *  Stage-1 display registry (never a raw program_id when the registry names it; v3 carries no label). */
 export function contrastFromV3(sel: SelectionV3, labels: Map<string, string>): Stage1Selection {
+  const conditionA = sel.conditions[0];
+  const conditionB = sel.conditions[1] ?? conditionA;
   return {
     program_a: { display_label: programLabel(labels, sel.A.program_id), direction: sel.A.direction },
     program_b: { display_label: programLabel(labels, sel.B.program_id), direction: sel.B.direction },
-    analysis_condition: sel.conditions[0],
+    condition_a: conditionA,
+    condition_b: conditionB,
+    analysis_condition: sel.conditions.length === 1 ? conditionA : undefined,
   };
 }
 

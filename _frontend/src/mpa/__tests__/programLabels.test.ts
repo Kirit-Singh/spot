@@ -50,4 +50,17 @@ describe('Tier-2 program label resolution', () => {
     expect(contrast.program_b?.display_label).toBe('Th17-like');
     expect(contrast.program_a?.display_label).not.toBe('treg_like'); // no raw id
   });
+
+  it('contrastFromV3 preserves ordered temporal endpoint conditions', async () => {
+    const labels = await loadProgramLabels(fetchRegistry);
+    const sel = {
+      A: { program_id: 'diff_activated', direction: 'high' },
+      B: { program_id: 'diff_activated', direction: 'high' },
+      conditions: ['Stim8hr', 'Stim48hr'],
+    } as unknown as SelectionV3;
+    const contrast = contrastFromV3(sel, labels);
+    expect(contrast.condition_a).toBe('Stim8hr');
+    expect(contrast.condition_b).toBe('Stim48hr');
+    expect(contrast.analysis_condition).toBeUndefined();
+  });
 });
