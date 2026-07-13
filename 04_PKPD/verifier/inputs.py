@@ -53,6 +53,11 @@ INPUT_COLUMNS: dict[str, tuple[str, ...]] = {
     "potency_evidence": (
         "potency_id", "candidate_id", "active_moiety_id", "metric", "value_source_string",
         "units", "binding_state", "assay", "biological_context", "evidence_type",
+        "relation", "assay_activity_id", "assay_assay_id", "assay_target_id",
+        "assay_document_id", "assay_type", "assay_description",
+        "assay_experimental_system", "assay_target_organism",
+        "assay_target_uniprot_accession", "assay_confidence_score",
+        "assay_validity_comment",
         "source_record_id", "source_url", "access_date", "release_version",
         "raw_response_sha256", "extraction_transform",
     ),

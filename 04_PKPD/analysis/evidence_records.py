@@ -12,6 +12,7 @@ from typing import Literal, Optional
 
 from pydantic import Field, model_validator
 
+from .assay_records import POINT_ESTIMATE_RELATIONS, AssayBinding, Relation
 from .contracts import ID_PATTERN, SHA256_PATTERN, Strict
 from .quantity import CNS_MPO_DIMENSIONS, Quantity, validate_domain
 
@@ -87,18 +88,34 @@ class PropertyRecord(Strict):
 
 
 class PotencyRecord(Strict):
-    """MEC / potency, with the biological context that makes it comparable."""
+    """MEC / potency, with the biological context that makes it comparable.
+
+    `metric` keeps MEC, IC50, IC90, EC50 and Ki DISTINCT, and no transform between them is
+    supplied: deriving an MEC from an IC50 needs an unbound fraction and a declared PD model,
+    and Stage 4 supplies neither silently. A richer assay binding makes an IC50 better
+    documented; it does not make it a minimum effective concentration.
+
+    `relation` is the v2 addition that changes conclusions. A source that says `IC50 > 10000
+    nM` is saying the assay ran OUT OF RANGE, not that the effect occurs at 10 uM. Only `=` is
+    a point estimate, and only a point estimate may be the denominator of an exposure margin.
+    It defaults to `=` because that is exactly how a v1 row's bare magnitude was already read —
+    so v1 rows keep their meaning rather than silently acquiring a new one.
+    """
 
     potency_id: str = Field(pattern=ID_PATTERN)
     candidate_id: str = Field(pattern=ID_PATTERN)
     active_moiety_id: str = Field(pattern=ID_PATTERN)
     metric: Literal["MEC", "IC50", "IC90", "EC50", "Ki", "target_concentration"]
+    relation: Relation = Relation.EQ
     value_source_string: str
     units: str
     binding_state: Literal["free", "total", "unspecified"]
     assay: str
     biological_context: str  # the tumour/model the potency was actually measured against
     evidence_type: EvidenceType
+    # v2: the structured activity/assay/target/document identity. Optional on the model so a
+    # v1 bundle stays valid; REQUIRED by the v2 acquisition profile (`contract_profile.py`).
+    assay_binding: Optional[AssayBinding] = None
     provenance: Provenance
 
     @model_validator(mode="after")
@@ -111,6 +128,16 @@ class PotencyRecord(Strict):
     @property
     def quantity(self) -> Quantity:
         return Quantity.parse(self.value_source_string, self.units)
+
+    @property
+    def is_point_estimate(self) -> bool:
+        """`>`/`<`/`~` are bounds and approximations, not magnitudes to divide by."""
+        return self.relation in POINT_ESTIMATE_RELATIONS
+
+    @property
+    def is_target_concentration(self) -> bool:
+        """Whether this is an admissible denominator for an exposure margin at all."""
+        return self.metric in ("MEC", "target_concentration")
 
 
 # --------------------------------------------------------------------- transporters

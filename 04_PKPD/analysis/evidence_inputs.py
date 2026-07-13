@@ -48,6 +48,11 @@ INPUT_COLUMNS: dict[str, tuple[str, ...]] = {
     "potency_evidence": (
         "potency_id", "candidate_id", "active_moiety_id", "metric", "value_source_string",
         "units", "binding_state", "assay", "biological_context", "evidence_type",
+        "relation", "assay_activity_id", "assay_assay_id", "assay_target_id",
+        "assay_document_id", "assay_type", "assay_description",
+        "assay_experimental_system", "assay_target_organism",
+        "assay_target_uniprot_accession", "assay_confidence_score",
+        "assay_validity_comment",
         "source_record_id", "source_url", "access_date", "release_version",
         "raw_response_sha256", "extraction_transform",
     ),
@@ -184,6 +189,27 @@ def _empty_prov() -> dict[str, Any]:
                               "extraction_transform")}
 
 
+# The v2 assay binding, flattened. A v1 row has no binding and every cell is None — which is
+# the honest representation of "this row never carried an activity id", not a default.
+_ASSAY_FIELDS = (
+    ("assay_activity_id", "activity_id"),
+    ("assay_assay_id", "assay_id"),
+    ("assay_target_id", "target_id"),
+    ("assay_document_id", "document_id"),
+    ("assay_type", "assay_type"),
+    ("assay_description", "assay_description"),
+    ("assay_experimental_system", "experimental_system"),
+    ("assay_target_organism", "target_organism"),
+    ("assay_target_uniprot_accession", "target_uniprot_accession"),
+    ("assay_confidence_score", "confidence_score"),
+    ("assay_validity_comment", "validity_comment"),
+)
+
+
+def _assay(b: Any) -> dict[str, Any]:
+    return {col: (getattr(b, attr) if b is not None else None) for col, attr in _ASSAY_FIELDS}
+
+
 def evidence_input_rows(inputs: Any) -> dict[str, list[dict[str, Any]]]:
     """Every consumed evidence-input row, as the exact dict the parquet must carry."""
     from .delivery_reduce import assignment_content
@@ -212,7 +238,9 @@ def evidence_input_rows(inputs: Any) -> dict[str, list[dict[str, Any]]]:
              "value_source_string": p.value_source_string, "units": p.units,
              "binding_state": p.binding_state, "assay": p.assay,
              "biological_context": p.biological_context,
-             "evidence_type": p.evidence_type.value, **_prov(p.provenance)}
+             "evidence_type": p.evidence_type.value,
+             "relation": p.relation.value, **_assay(p.assay_binding),
+             **_prov(p.provenance)}
             for p in inputs.potencies
         ],
         "potency_context_links": [

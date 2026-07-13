@@ -24,6 +24,11 @@ from .delivery import rebuild_delivery
 CNS_MPO_PROPERTIES = ("clogp", "clogd_74", "mw", "tpsa", "hbd", "pka_most_basic")
 NEB_MATRICES = ("brain_tissue_non_enhancing", "microdialysate_brain_isf")
 MARGIN_METRICS = ("MEC", "target_concentration")
+
+# Only an equality is a magnitude to divide by. `>` / `<` / `~` are the source saying the assay
+# ran out of range or could not resolve the value. Restated here, not imported: a verifier that
+# imported the generator's rule would be checking the generator against itself.
+POINT_ESTIMATE_RELATIONS = ("=",)
 CONTEXT_FIELDS = ("route", "formulation", "dose", "schedule")
 CENSORED_STATUSES = ("not_detected", "below_lloq")
 
@@ -144,6 +149,10 @@ def _shared_gates(m: dict, potency: Optional[dict], ctx: Optional[dict],
         return "candidate_mismatch"
     if potency["metric"] not in MARGIN_METRICS:
         return "potency_metric_not_a_target_concentration"
+    # A censored/approximate potency is a bound, not a magnitude. `relation` defaults to "="
+    # for a v1 row, which is exactly how a v1 bare magnitude was already read.
+    if (potency.get("relation") or "=") not in POINT_ESTIMATE_RELATIONS:
+        return "potency_relation_not_a_point_estimate"
     if "unspecified" in (m["binding_state"], potency["binding_state"]):
         return "binding_state_unspecified"
     if m["binding_state"] != potency["binding_state"]:

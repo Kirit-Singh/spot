@@ -76,13 +76,34 @@ def stage3_schema() -> dict[str, Any]:
 
 
 def evidence_inputs_schema() -> dict[str, Any]:
+    """v2 — the acquisition-complete contract.
+
+    v1 is NOT regenerated. It is frozen on disk (see FROZEN below) and remains a true
+    description of an admissible v1 document: every v2 field is additive and optional, so a
+    v1 bundle still validates, and `contract_profile.py` refuses a v1 bundle that smuggles a
+    v2 cell. What v2 adds is what an ACQUISITION must show — and a v1 bundle can never claim
+    to be acquisition-complete.
+    """
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "spot.stage04_evidence_inputs.v1",
+        "$id": "spot.stage04_evidence_inputs.v2",
         "description": (
             "One row per actual observation, each bound to a public source response "
             "(source_record_id + access_date + raw_response_sha256 + exact extraction "
-            "transform). Nothing here is derived, imputed or summarized."
+            "transform). Nothing here is derived, imputed or summarized. v2 adds the "
+            "acquisition contract: a SourceAcquisitionRecord per source (canonical query, "
+            "accessed_at_utc, HTTP status/media type/headers, release, terms URL, raw bytes "
+            "+ hash, stable content hash, transform, adapter code hash, review status and an "
+            "explicit observation state), structured assay/PK bindings, and reported-vs-"
+            "derived ratios. v1 documents remain readable and remain NOT acquisition-complete."
+        ),
+        "supersedes": "spot.stage04_evidence_inputs.v1",
+        "migration": (
+            "v1 -> v2 is additive: every new field is optional on the model, so a v1 document "
+            "validates unchanged. It does NOT become acquisition-complete by validating. To "
+            "reach v2 a document must declare schema_id spot.stage04_evidence_bundle.v2 and "
+            "satisfy analysis/contract_profile.py, which requires the acquisition manifest and "
+            "the per-lane bindings above."
         ),
         "stage4_method_version": STAGE4_METHOD_VERSION,
         "records": {name: model.model_json_schema() for name, model in EVIDENCE_MODELS.items()},
@@ -92,7 +113,7 @@ def evidence_inputs_schema() -> dict[str, Any]:
 def tables_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "spot.stage04_evidence_tables.v1",
+        "$id": "spot.stage04_evidence_tables.v2",
         "description": (
             "The four parquet evidence tables. Column order, dtypes and row order are part "
             "of the contract: content_sha256 is taken over the canonical rows in this exact "
@@ -116,8 +137,19 @@ def tables_schema() -> dict[str, Any]:
 
 GENERATED = {
     "spot.stage03_drug_candidate_set.v1.schema.json": stage3_schema,
-    "spot.stage04_evidence_inputs.v1.schema.json": evidence_inputs_schema,
-    "spot.stage04_evidence_tables.v1.schema.json": tables_schema,
+    "spot.stage04_evidence_inputs.v2.schema.json": evidence_inputs_schema,
+    "spot.stage04_evidence_tables.v2.schema.json": tables_schema,
+}
+
+# FROZEN. These files are the v1 contract as it was published. They are NOT regenerated, and
+# their bytes are pinned by a test: "backwards compatible" is a claim about the OLD contract,
+# and a claim you can edit is not a guarantee. A v1 document still validates against the v2
+# models (every v2 field is additive and optional) and still means exactly what it meant.
+FROZEN = {
+    "spot.stage04_evidence_inputs.v1.schema.json":
+        "5667ef89d86ff5b8c37df8caea912648977f8fa85acd663434e0cc51f1cd8528",
+    "spot.stage04_evidence_tables.v1.schema.json":
+        "8c38e6952f1624644cb0762257ba64ba4d790b810c25c028fb112ccfe5ed3bff",
 }
 
 

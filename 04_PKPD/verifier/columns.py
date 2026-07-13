@@ -18,7 +18,7 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
                           "value_source_string", "units", "calculator_id", "accepted",
                           "source_record_id", "raw_response_sha256"),
     "potency_evidence": ("potency_id", "candidate_id", "active_moiety_id", "metric",
-                         "value_source_string", "units", "binding_state",
+                         "relation", "value_source_string", "units", "binding_state",
                          "biological_context", "source_record_id", "raw_response_sha256"),
     # Every field the source binding is checked on. A link is the only way a potency from
     # one tumour context may be used in another, so it rests on acquired bytes like any

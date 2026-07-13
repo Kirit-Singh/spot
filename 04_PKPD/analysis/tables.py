@@ -228,6 +228,14 @@ POTENCY_SCHEMA = pa.schema([
     ("metric", _STR), ("value_source_string", _STR), ("value_canonical_decimal", _STR),
     ("units", _STR), ("binding_state", _STR), ("assay", _STR),
     ("biological_context", _STR), ("evidence_type", _STR),
+    # v2: what the source SAID about the magnitude, and the assay record it said it in.
+    # `relation` is load-bearing -- "MEC > 500 nM" is not the sentence "MEC = 500 nM".
+    ("relation", _STR),
+    ("assay_activity_id", _STR), ("assay_assay_id", _STR), ("assay_target_id", _STR),
+    ("assay_document_id", _STR), ("assay_type", _STR), ("assay_description", _STR),
+    ("assay_experimental_system", _STR), ("assay_target_organism", _STR),
+    ("assay_target_uniprot_accession", _STR), ("assay_confidence_score", pa.int64()),
+    ("assay_validity_comment", _STR),
     ("source_record_id", _STR), ("source_url", _STR), ("access_date", _STR),
     ("release_version", _STR), ("raw_response_sha256", _STR),
     ("extraction_transform", _STR),

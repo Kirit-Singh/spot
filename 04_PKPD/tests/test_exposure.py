@@ -14,6 +14,7 @@ from analysis.evidence_records import (
     PotencyRecord,
     Provenance,
 )
+from analysis.assay_records import Relation
 from analysis.exposure import compute_exposure_margin
 
 PROV = Provenance(source_record_id="src.test", access_date="2026-07-11",
@@ -211,3 +212,34 @@ def test_no_potency_record_means_no_margin():
 def test_concentration_without_units_is_impossible_at_the_record_level():
     with pytest.raises(ValidationError, match="concentration without units"):
         measurement(concentration_units=None)
+
+
+# ------------------------------------------------- v2: a censored MEC is not a magnitude
+
+def test_a_greater_than_mec_cannot_underwrite_a_margin():
+    """`MEC > 500 nM` says the assay never reached the effect. Dividing an exposure by 500
+    would report a margin against a concentration that was never shown to do anything —
+    and it would report it as a POINT estimate. The relation is not decoration."""
+    r = compute_exposure_margin(measurement(), potency(relation=Relation.GT,
+                                                       value_source_string="500"), CTX)
+    assert r.status == "not_computable"
+    assert r.reason_code == "potency_relation_not_a_point_estimate"
+
+
+def test_a_less_than_mec_cannot_underwrite_a_margin_either():
+    r = compute_exposure_margin(measurement(), potency(relation=Relation.LT,
+                                                       value_source_string="500"), CTX)
+    assert r.status == "not_computable"
+    assert r.reason_code == "potency_relation_not_a_point_estimate"
+
+
+def test_an_approximate_mec_cannot_underwrite_a_margin():
+    r = compute_exposure_margin(measurement(), potency(relation=Relation.APPROX), CTX)
+    assert r.status == "not_computable"
+    assert r.reason_code == "potency_relation_not_a_point_estimate"
+
+
+def test_an_equality_mec_still_computes_a_margin_the_v1_reading_is_unchanged():
+    r = compute_exposure_margin(measurement(), potency(relation=Relation.EQ), CTX)
+    assert r.status == "computed"
+    assert r.reason_code is None
