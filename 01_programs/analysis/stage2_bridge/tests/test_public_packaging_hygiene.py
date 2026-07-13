@@ -46,12 +46,16 @@ SCANNED_FILES = [
     "01_programs/hf_release/stage1_release_hf_manifest.template.json",
     "docs/history/README.md",
     "docs/PUBLIC_PACKAGING_CHECKLIST.md",
+    "docs/FINAL_ADMISSION_CHECKLIST.md",
+    "docs/HANDOFF_W23_pathway_source_topology.md",
     "01_programs/analysis/test_selection_v3_browser.mjs",
     "deploy/RELEASE_ASSEMBLY.md",
     "deploy/release_spec.template.json",
     "deploy/release_spec.closeout.json",
     "deploy/MANIFEST.template.json",
     "deploy/handoff_release.sh",
+    "deploy/serve_static.py",
+    "deploy/build_dist.sh",
 ]
 
 # deploy/assemble_release.py and deploy/tests/ are deliberately NOT scanned: like this file,

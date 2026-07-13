@@ -133,6 +133,14 @@ GO_BP_GENESET_SHA256 = "4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e
 # own subject, so Stage-3/4 shapes are DISCOVERED from their final receipts, never guessed.
 SUBJECT_FILE_KEYS = {"projection_file", "artifact_file", "subject_file", "filename", "file"}
 
+# An UNADMITTED producer output is EXCLUDED from a public release, not merely labelled pending.
+# The producer runs name themselves (…-unadmitted); an admitted artifact never comes from one.
+UNADMITTED_PATH = re.compile(r"(^|[/_-])unadmitted([/_.-]|$)", re.I)
+# A fixture/demo may never be labelled production, nor enter a public release.
+FIXTURE_PATH = re.compile(r"(^|/)(fixtures?|demo)(/|$)|(^|[/_-])fixture([/_.-]|$)", re.I)
+FIXTURE_FLAG_KEYS = {"is_fixture", "is_demo"}
+PRODUCTION = "production"
+
 # A receipt that NAMES the bytes it judged (e.g. the Stage-2 display projection's
 # subject.projection_raw_sha256, recomputed by the verifier from the file on disk).
 SUBJECT_HASH_KEYS = {"projection_raw_sha256", "raw_sha256", "artifact_raw_sha256", "artifact_sha256"}
@@ -311,6 +319,56 @@ def check_pathway_artifact(src: str, declared: str) -> list[str]:
     return out
 
 
+def check_source_topology(src: str, lane_declares_go_bp_pathway: bool) -> list[str]:
+    """The released source list must be DERIVED from the admitted topology, never asserted.
+
+    The UI packager hard-codes PATHWAY_SOURCES = ['reactome','go_bp'] and requires an exact match,
+    so the envelope it emits names Reactome as a released AND active pathway source. The formal
+    release is GO-BP-only, so any envelope that:
+      * lists a PARKED source in pathway_sources, or
+      * names a parked/unknown source as active_pathway_source, or
+      * claims an active source while no admitted GO-BP pathway artifact is staged
+    is refused. While the pathway lane is unadmitted the active source must be null (or an explicit
+    awaiting-admission marker) — never Reactome.
+    """
+    try:
+        doc = json.load(open(src, encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return []      # not a JSON envelope; other gates cover it
+    out: list[str] = []
+    name = os.path.basename(src)
+
+    for key, value in _iter_items(doc):
+        k = str(key).strip().lower()
+        if k in ("pathway_sources", "sources") and isinstance(value, list):
+            listed = {str(v).strip().lower() for v in value if isinstance(v, str)}
+            parked = listed & PATHWAY_COLLECTIONS_PARKED
+            if parked:
+                out.append(f"{name}: {k} lists PARKED source(s) {sorted(parked)} — the formal release "
+                           f"is GO-BP-only; Reactome is parked history/license only")
+            unknown = listed - PATHWAY_COLLECTIONS_ALLOWED - PATHWAY_COLLECTIONS_PARKED
+            if k == "pathway_sources" and unknown:
+                out.append(f"{name}: pathway_sources names unknown source(s) {sorted(unknown)}")
+        elif k == "active_pathway_source":
+            if value is None:
+                continue                                   # unadmitted -> null is correct
+            active = str(value).strip().lower()
+            if active in PATHWAY_COLLECTIONS_PARKED:
+                out.append(f"{name}: active_pathway_source is {active!r} — a PARKED source may never "
+                           f"be active. While the pathway lane is unadmitted this must be null "
+                           f"(or an explicit go_bp awaiting-admission marker).")
+            elif active.startswith("go_bp") and active != "go_bp":
+                continue                                   # e.g. "go_bp:awaiting_admission"
+            elif active not in PATHWAY_COLLECTIONS_ALLOWED:
+                out.append(f"{name}: active_pathway_source {active!r} is not an admitted source "
+                           f"(allowed: {sorted(PATHWAY_COLLECTIONS_ALLOWED)}, or null while unadmitted)")
+            elif not lane_declares_go_bp_pathway:
+                out.append(f"{name}: active_pathway_source is 'go_bp' but no admitted GO-BP pathway "
+                           f"artifact is staged for this lane — the active source must be DERIVED "
+                           f"from the admitted topology, not asserted. Use null while unadmitted.")
+    return out
+
+
 def receipt_subject_files(parsed: dict) -> set[str]:
     """The artifact filename(s) a receipt says it judged — how Stage-3/4 shapes are discovered."""
     out = set()
@@ -319,6 +377,32 @@ def receipt_subject_files(parsed: dict) -> set[str]:
             name = os.path.basename(value.strip())
             if name and name not in (".", "..") and "/" not in name and "\\" not in name:
                 out.add(name)
+    return out
+
+
+def check_admitted_provenance(src: str, dst: str) -> list[str]:
+    """Refuse an UNADMITTED producer output, and refuse a fixture/demo labelled production."""
+    out: list[str] = []
+    name = os.path.basename(dst)
+    path = src.replace(os.sep, "/")
+    if UNADMITTED_PATH.search(path):
+        out.append(f"{name}: comes from an UNADMITTED producer run — an unadmitted output is "
+                   f"EXCLUDED from a public release, not merely labelled pending")
+    if FIXTURE_PATH.search(path):
+        out.append(f"{name}: is a fixture/demo path — a fixture may never enter a public release")
+    try:
+        doc = json.load(open(src, encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return out
+    for key, value in _iter_items(doc):
+        k = str(key).strip().lower()
+        if k in FIXTURE_FLAG_KEYS and value is True:
+            out.append(f"{name}: declares {k}=true — a fixture/demo may never be released as production")
+        elif k == "namespace" and isinstance(value, str) and value.strip().lower() != PRODUCTION:
+            out.append(f"{name}: declares namespace={value!r}, not {PRODUCTION!r} — a non-production "
+                       f"artifact may not be labelled production")
+        elif k in GENESET_SOURCE_KEYS and isinstance(value, str) and value.strip().lower() == "fixture":
+            out.append(f"{name}: gene-set source is 'fixture' — a fixture collection is not releasable")
     return out
 
 
@@ -342,6 +426,8 @@ def _plan_file(src, dst, lane, role, expected, problems) -> dict | None:
         return None
     problems.extend(f"[{lane}/{role}] {p}" for p in check_deny(src))
     problems.extend(f"[{lane}/{role}] {p}" for p in check_excluded(src, dst))
+    if lane != "repo":                       # the repo's own public docs are not producer outputs
+        problems.extend(f"[{lane}/{role}] {p}" for p in check_admitted_provenance(src, dst))
     problems.extend(f"[{lane}/{role}] {p}" for p in scan_text(src))
     actual = sha256_file(src)
     if expected is not None and expected != actual:
@@ -436,6 +522,9 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
         artifacts = entry.get("artifacts") or []
         if not artifacts:
             problems.append(f"[{lane}] no artifacts declared")
+        # the released source list is DERIVED from the admitted topology, never asserted
+        declares_go_bp = any(str(a.get("pathway_collection", "")).strip().lower() == "go_bp"
+                             for a in artifacts)
         staged_hashes = set()
         for a in artifacts:
             dst = a.get("dst")
@@ -460,6 +549,7 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
             if not rec:
                 continue
             staged_hashes.add(rec["sha256"])
+            problems.extend(f"[{lane}] {p}" for p in check_source_topology(a["src"], declares_go_bp))
             if a.get("pathway_collection"):
                 problems.extend(f"[{lane}] {p}" for p in
                                 check_pathway_artifact(a["src"], a["pathway_collection"]))
@@ -528,6 +618,10 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
                             if parked in text:
                                 problems.append(f"[dist] {rel} advertises the PARKED source "
                                                 f"{parked!r}; the deployable UI bundle is GO-BP-only")
+                        # deployable current/release metadata may never NAME Reactome, and may not
+                        # assert an active source the admitted topology does not support.
+                        for issue in check_source_topology(p, False):
+                            problems.append(f"[dist] {issue}")
                         found.append(rec)
             if not found:
                 problems.append(f"[dist] directory is empty: {root}")

@@ -500,6 +500,86 @@ def test_stage3_consuming_bytes_no_one_admitted_is_refused(tmp_path):
     assert "not among that lane's admitted staged artifacts" in _refuses(tmp_path, spec)
 
 
+# ---------------- release-envelope source topology: GO-BP-only, Reactome never named as a source
+def _envelope(tmp, doc, name="current.json"):
+    p = tmp / name
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def test_envelope_naming_reactome_as_a_released_source_is_refused(tmp_path):
+    """The exact defect served at :8347 — pack_ui_projections.mjs hard-codes ['reactome','go_bp']."""
+    env = _envelope(tmp_path, {"pathway_sources": ["reactome", "go_bp"],
+                               "active_pathway_source": "reactome"})
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": env, "dst": "current.json"}]})
+    msg = _refuses(tmp_path, spec)
+    assert "lists PARKED source(s) ['reactome']" in msg
+    assert "a PARKED source may never be active" in msg
+
+
+def test_envelope_active_source_null_while_unadmitted_is_accepted(tmp_path):
+    env = _envelope(tmp_path, {"pathway_sources": ["go_bp"], "active_pathway_source": None})
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": env, "dst": "current.json"}]})
+    ar.assemble(spec, _staging(tmp_path), run_utc="2026-07-13T00:00:00Z")   # must NOT refuse
+
+
+def test_envelope_claiming_active_go_bp_without_an_admitted_pathway_is_refused(tmp_path):
+    """The active source must be DERIVED from the admitted topology, not asserted."""
+    env = _envelope(tmp_path, {"pathway_sources": ["go_bp"], "active_pathway_source": "go_bp"})
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": env, "dst": "current.json"}]})
+    msg = _refuses(tmp_path, spec)
+    assert "no admitted GO-BP pathway artifact is staged" in msg
+
+
+def test_envelope_awaiting_admission_marker_is_accepted(tmp_path):
+    env = _envelope(tmp_path, {"pathway_sources": ["go_bp"],
+                               "active_pathway_source": "go_bp:awaiting_admission"})
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": env, "dst": "current.json"}]})
+    ar.assemble(spec, _staging(tmp_path), run_utc="2026-07-13T00:00:00Z")
+
+
+def test_dist_current_json_naming_reactome_is_refused(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "current.json").write_text(
+        json.dumps({"pathway_sources": ["reactome", "go_bp"], "active_pathway_source": "reactome"}),
+        encoding="utf-8")
+    sp = _spec(tmp_path)
+    d = json.loads(open(sp, encoding="utf-8").read())
+    d["dist"] = {"src": str(dist)}
+    open(sp, "w", encoding="utf-8").write(json.dumps(d))
+    assert "PARKED" in _refuses(tmp_path, sp)
+
+
+# ------------- unadmitted producer outputs are EXCLUDED; fixtures may never be labelled production
+def test_unadmitted_producer_output_is_excluded_not_merely_pending(tmp_path):
+    src = tmp_path / "output" / "pathway-117ccc4-stream1w8-unadmitted" / "47a0d01fd23f705e" / "pathway_arm_release.json"
+    src.parent.mkdir(parents=True)
+    src.write_text(json.dumps(GO_BP_OK), encoding="utf-8")
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": str(src), "dst": "pathway_arm_release.json"}]})
+    msg = _refuses(tmp_path, spec)
+    assert "UNADMITTED producer run" in msg and "not merely labelled pending" in msg
+
+
+def test_fixture_path_may_not_enter_the_release(tmp_path):
+    src = tmp_path / "tests" / "fixtures" / "canonical_two_arm_run.json"
+    src.parent.mkdir(parents=True)
+    src.write_text('{"a":1}', encoding="utf-8")
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": str(src), "dst": "arm.json"}]})
+    assert "fixture/demo path" in _refuses(tmp_path, spec)
+
+
+@pytest.mark.parametrize("doc,expect", [
+    ({"is_fixture": True}, "may never be released as production"),
+    ({"namespace": "fixture"}, "may not be labelled production"),
+    ({"source": "fixture", "schema_version": "x"}, "gene-set source is 'fixture'"),
+])
+def test_fixture_or_demo_may_not_be_labelled_production(tmp_path, doc, expect):
+    src = _artifact(tmp_path, "stage2", body=json.dumps(doc), name="claims_production.json")
+    spec = _spec(tmp_path, stage2={"artifacts": [{"src": src, "dst": "a.json"}]})
+    assert expect in _refuses(tmp_path, spec)
+
+
 # ------------------------------------------------- excluded / internal-path scan
 @pytest.mark.parametrize("relpath", [
     "cache/blob.json",

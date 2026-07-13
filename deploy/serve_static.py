@@ -12,7 +12,11 @@ unauthenticated POST /rerun mutation endpoint.
 import os, re, sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-DIST = os.environ.get("SPOT_DIST", "/home/tcelab/spot-dist")
+# Repo-relative default (matches build_dist.sh's "$REPO/dist"); override with SPOT_DIST.
+# A machine-local absolute path must never be baked into a tracked public file — a host that
+# previously relied on the old default must now set SPOT_DIST explicitly.
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIST = os.environ.get("SPOT_DIST", os.path.join(_REPO, "dist"))
 PORT = int(os.environ.get("SPOT_PORT", "8347"))
 # Only these content extensions may be served; everything else 404s.
 ALLOW_EXT = {".html", ".css", ".js", ".json", ".svg", ".png", ".ico", ".woff2", ".webp", ".map", ".txt"}
