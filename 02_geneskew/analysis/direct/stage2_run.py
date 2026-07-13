@@ -42,6 +42,12 @@ GENESKEW = os.path.dirname(ANALYSIS)                        # .../02_geneskew
 REPO = os.path.dirname(GENESKEW)
 
 SCHEDULER_VERSION = "spot.stage02.scheduler.v1"
+# P2S production scores input — the staged, independently-verified 396k-row Stage-1 scores.
+# NEVER the 40k overlay. Both hashes are pinned and bound into the run identity + preflight.
+P2S_SCORES_DEFAULT = ("/home/tcelab/.spot-runs/20260712T021343Z/stage1-inputs/"
+                      "stage01_scores_full.parquet")
+P2S_SCORES_RAW_SHA256 = "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f"
+P2S_SCORES_CANONICAL_SHA256 = "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316"
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 PAIRS = ("Rest__Stim8hr", "Stim8hr__Rest", "Rest__Stim48hr",
          "Stim48hr__Rest", "Stim8hr__Stim48hr", "Stim48hr__Stim8hr")
@@ -110,6 +116,7 @@ class Cfg:
         self.direct_verifier = os.environ.get(
             "DIRECT_VERIFIER_DIR",
             "/home/tcelab/worktrees/spot-stage2-direct-verifier/02_geneskew/analysis/direct")
+        self.p2s_scores = os.environ.get("P2S_SCORES", P2S_SCORES_DEFAULT)
 
 
 # ---- run-identity manifest (Phase A) ----------------------------------------------------
@@ -149,8 +156,15 @@ def build_run_identity(cfg: Cfg) -> dict:
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
                 "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",
+            "direct_verifier_head": "cee73c8",   # repaired neutral adapter checkout
             "temporal_verifier": "07a064c1b8c4f5a1c1693c306fd264c4ada6f49d",
             "pathway_verifier": "53ac540",
+        },
+        "p2s": {
+            "scores_full": h(cfg.p2s_scores),
+            "scores_raw_sha256": P2S_SCORES_RAW_SHA256,
+            "scores_canonical_sha256": P2S_SCORES_CANONICAL_SHA256,
+            "forbid_40k_overlay": True,
         },
     }
     manifest["run_identity_sha256"] = content_sha256(manifest)
@@ -179,6 +193,12 @@ def phaseA_preflight(cfg: Cfg):
         raise SchedulerError(f"preflight: staged release root missing: {cfg.stage1_release_root}")
     if os.path.exists(cfg.out) and not os.path.isdir(cfg.state_dir) and os.listdir(cfg.out):
         raise SchedulerError(f"preflight: OUT {cfg.out} non-empty and not a resumable run root")
+    if os.path.isfile(cfg.p2s_scores):
+        raw = file_sha256(cfg.p2s_scores)
+        if raw != P2S_SCORES_RAW_SHA256:
+            raise SchedulerError(
+                f"preflight: P2S scores raw sha {raw[:16]} != pinned {P2S_SCORES_RAW_SHA256[:16]} "
+                "(bind the staged 396k-row stage01_scores_full.parquet; NEVER the 40k overlay)")
     os.makedirs(cfg.state_dir, exist_ok=True)
     with open(identity_path(cfg), "w") as fh:
         json.dump(manifest, fh, sort_keys=True, indent=2)
@@ -407,7 +427,7 @@ def lane_p2s(cfg):
             _py("p2s_arms.run_p2s_arms", "--direct-bundle", direct_bundle_for(cfg, cond),
                 "--w10-report", w10_binding_path(cfg, cond), "--env-lock", cfg.env_lock,
                 "--stage1-release", cfg.stage1_release, "--arm-key", f"p2s.{cond}",
-                "--cells", os.path.join(cfg.sel_dir, f"cells_{cond}.npz"),
+                "--cells", cfg.p2s_scores,   # staged 396k-row Stage-1 scores; never the 40k overlay
                 "--effects", os.path.join(cfg.sel_dir, f"effects_{cond}.parquet"),
                 "--out-root", os.path.join(cfg.out, "p2s")),
             consumes=[f"w10_admission:{cond}"], produces=[f"p2s:{cond}"])
