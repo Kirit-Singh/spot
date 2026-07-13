@@ -7,10 +7,22 @@ real ChEMBL/UniProt universe. **No fixtures. No invented values.**
 
 ```
 /home/tcelab/.spot-runs/stage3-ui-dev-20260713/
-  stage03_drugs_rest.json    content_sha256 ba0d522be4b9a7e25e4d015cfaf7d8c4b21a0564872ecb412fbae74f9f7dc32f
-  stage03_drugs_stim8.json   content_sha256 f69e6e23a3b32b1c21a4f3e3c3b8a7174419659e47db440d8af0c27f9205971d
+  stage03_drugs_rest.json    content_sha256 40546baccb1f1a2b46971fa962dc3ad7527a9df94721daec6d1d9117834a7701
+  stage03_drugs_stim8.json   content_sha256 baf21007b332b04ebca37e65a6a595a483cda44fc1f0961a8c1a5b2154a33e74
   *.sidecar.json             internal only — exact filesystem paths live HERE, never in the served doc
 ```
+
+**HASHES MOVED.** An AGONIST row was correctly `opposed` and still carried
+`evidence_relation: putative_crispri_phenocopy`. An agonist phenocopies **nothing that was tested** —
+CRISPRi never tested activation. `evidence_relation` is now decided by the frozen
+`modality_rule.classify`, and the invariant holds on every row: **relation is a phenocopy IFF
+`mechanism_phenocopies_modality` is true** (0 violations, 0 equivalence claims).
+
+TNFRSF18 / TRX-518 [AGONIST] @ Rest now reads:
+`status=opposed`, `relation=untested_inverse_of_the_tested_perturbation`,
+`mechanism_phenocopies_modality=false`.
+
+Raw arm ranks and values are **unchanged**.
 
 Schema: `spot.stage03_ui_drugs.v1`
 

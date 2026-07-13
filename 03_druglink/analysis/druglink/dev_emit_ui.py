@@ -30,23 +30,18 @@ from typing import Any
 
 import pandas as pd
 
-from . import direction as dr
+from . import modality_rule as mr
 from . import universe_rows as ur
 
 SCHEMA = "spot.stage03_ui_drugs.v1"
 SIGN_EPS = 1e-9                      # Stage-2 Direct config.py:186 — bound, not invented
 
-SUPPORTED = "inhibition_observed_compatible"
-OPPOSED = "inhibitor_opposed_activation_is_an_untested_inverse_hypothesis"
-NO_DIRECTION = "no_directional_response"
-NOT_EVALUABLE = "not_evaluated"
-
-# NO LOCAL ACTION VOCABULARY. `direction.py` is the frozen engine and it is the only one.
-#
-# My duplicate put PARTIAL AGONIST in ACTIVATING. The frozen engine deliberately calls it
-# `unknown` — a partial agonist's net effect is not enumerable from the action string alone, and
-# guessing it would have manufactured a direction the source never asserted. A second vocabulary is
-# not a convenience; it is a second answer to the same question, and the two drift apart in silence.
+# THE SIGN TOKENS AND THE MODALITY RULE ARE THE FROZEN ENGINE'S. No local copies.
+SUPPORTED = mr.SIGN_SUPPORTS_DESIRED_CHANGE
+OPPOSED = mr.SIGN_OPPOSES_DESIRED_CHANGE
+NO_DIRECTION = mr.SIGN_NO_DIRECTIONAL_RESPONSE
+NOT_EVALUABLE = mr.SIGN_NOT_EVALUABLE
+MODALITY = mr.MODALITY_CRISPRI            # "CRISPRi_knockdown"
 
 
 def _sha(path: str) -> str:
@@ -58,6 +53,7 @@ def _sha(path: str) -> str:
 
 
 def sign_state(value: Any, evaluable: Any) -> str:
+    """The observed sign, oriented to the arm's own desired_change. SIGN_EPS is Stage-2's."""
     if not bool(evaluable) or value is None or pd.isna(value):
         return NOT_EVALUABLE
     if float(value) > SIGN_EPS:
@@ -67,34 +63,20 @@ def sign_state(value: Any, evaluable: Any) -> str:
     return NO_DIRECTION
 
 
-def desired_modulation(value: Any, evaluable: Any) -> str:
-    """Stage-2's own rule: the SIGN decides, oriented to the arm's desired_change."""
-    if not bool(evaluable) or value is None or pd.isna(value):
-        return dr.MOD_NOT_EVALUATED
-    if float(value) > SIGN_EPS:
-        return dr.MOD_DECREASE            # knockdown moved the arm the desired way -> inhibit
-    if float(value) < -SIGN_EPS:
-        return dr.MOD_INCREASE            # it moved the WRONG way -> an inhibitor is opposed
-    return dr.MOD_NO_DIRECTION
+def compatibility(value: Any, evaluable: Any, action: str | None) -> dict[str, Any]:
+    """THE FROZEN MODALITY RULE decides. Nothing here is hardcoded.
 
+    I had stamped `evidence_relation: "putative_crispri_phenocopy"` on EVERY drug row. An AGONIST
+    cannot be a CRISPRi phenocopy — it phenocopies nothing that was tested. The row was correctly
+    `opposed` and simultaneously claimed to phenocopy the knockdown, which is a contradiction a
+    reader would have to catch by hand.
 
-def compatibility(value: Any, evaluable: Any, action: str | None,
-                  single_protein: bool = True) -> dict[str, Any]:
-    """THE FROZEN ENGINE decides. No local vocabulary, no second answer."""
-    effect, effect_reason = dr.intervention_effect(action)
-    verdict = dr.translate(
-        desired_modulation=desired_modulation(value, evaluable),
-        effect=effect, arm_evaluable=bool(evaluable),
-        target_entity_is_single_protein=single_protein)
-    out = {
-        "action_type_normalized": dr.normalize_action_type(action),
-        "intervention_effect": effect,
-        "intervention_effect_reason": effect_reason,
-        "claim_is_equivalence": False,
-        "evidence_relation": "putative_crispri_phenocopy",
-    }
-    out.update(verdict)
-    return out
+    `modality_rule.classify` decides both, together, and the invariant it guarantees is the one
+    that matters: `evidence_relation` is a phenocopy IFF `mechanism_phenocopies_modality` is true.
+    """
+    return mr.classify(action_type=action, modality=MODALITY,
+                       sign_state=sign_state(value, evaluable),
+                       origin_is_measured=True)
 
 
 def _arm(df: pd.DataFrame, program: str, change: str, condition: str) -> pd.DataFrame:
