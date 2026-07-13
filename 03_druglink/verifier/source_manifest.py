@@ -354,3 +354,102 @@ def check_release_metadata_is_bound(rep: Report, provenance: Any) -> None:
         any("mutable" in str(k).lower() or "mutable" in str(v).lower()
             for k, v in uni.items()),
         "no mutability note")
+
+
+# --------------------------------------------------------------------------- #
+# ADMISSION MUST TEST THE **PRODUCER'S** GATE, NOT ONLY ITS OWN.
+#
+# I admitted store b20ec29b because MY verifier opened and hashed the provenance file and
+# found it correct. That was the wrong test, and the mistake is exactly the one this lane
+# has been calling out in everyone else all round.
+#
+# An external verifier catching a mutation does not repair a producer gate that returns
+# True on one. Downstream consumers run the PRODUCER's verify path — it is what ships with
+# the store — so a fail-open producer gate is a hole in the product regardless of what my
+# lane happens to catch in its own process.
+#
+# Proven against 0e349b1: `universe_verify.verify_from_disk` opens universe_store.rows.json
+# and target_eligibility_evidence.json and NEVER OPENS source_provenance.public.json. So:
+#
+#     clean store                    -> ok=True   violations=[]
+#     provenance MUTATED             -> ok=True   violations=[]      <-- fail-open
+#     provenance DELETED entirely    -> ok=True   violations=[]      <-- fail-open
+#
+# A gate cannot catch a mutation to a file it never reads.
+#
+# So admission now ACTIVELY PROBES the producer's gate: copy the store to scratch, mutate
+# the provenance, and require the producer's own verifier to REJECT it. A producer gate
+# that passes a mutated artifact is not admissible, however correct the artifact happens to
+# be today.
+# --------------------------------------------------------------------------- #
+GATE_PRODUCER_FAIL_OPEN = "producer_gate_is_fail_open_on_provenance"
+
+
+def check_producer_gate_rejects_provenance_mutation(
+        rep: Report, *, store_dir: str, producer_verify: Any,
+        verify_kwargs: dict[str, Any]) -> None:
+    """Mutate the provenance in a scratch copy; the PRODUCER's gate must reject it.
+
+    ``producer_verify`` is the producer's own entry point. Stage 3 does not reimplement it
+    — it RUNS it, on a store it has deliberately broken, and requires a refusal.
+    """
+    import json as _json
+    import os
+    import shutil
+    import tempfile
+
+    scratch = tempfile.mkdtemp(prefix="producer_gate_probe_")
+    try:
+        probe = os.path.join(scratch, "store")
+        shutil.copytree(store_dir, probe)
+        prov_path = os.path.join(probe, PROVENANCE_FILENAME)
+
+        if not os.path.isfile(prov_path):
+            rep.check(f"{PROVENANCE_FILENAME} is present to probe", False, "absent")
+            return
+
+        # 1. the clean copy must PASS — otherwise the probe proves nothing
+        clean = producer_verify(store_dir=probe, **verify_kwargs)
+        if not (clean.get("ok") if isinstance(clean, dict) else clean):
+            rep.check("the producer's gate passes an UNMODIFIED store (control)",
+                      False, "the control failed; the probe below would be meaningless")
+            return
+
+        # 2. mutate the provenance, leaving manifest and every other file untouched
+        with open(prov_path, "r", encoding="utf-8") as fh:
+            prov = _json.load(fh)
+        for rec in (prov if isinstance(prov, list) else [prov]):
+            if isinstance(rec, dict) and "uniprot" in str(rec.get("name", "")).lower():
+                rec["release"] = "2026_03"
+                rec["acquired_sha256"] = "deadbeef" + "0" * 56
+        with open(prov_path, "w", encoding="utf-8") as fh:
+            _json.dump(prov, fh)
+
+        mutated = producer_verify(store_dir=probe, **verify_kwargs)
+        mutated_ok = mutated.get("ok") if isinstance(mutated, dict) else mutated
+
+        # 3. delete it outright
+        os.remove(prov_path)
+        try:
+            deleted = producer_verify(store_dir=probe, **verify_kwargs)
+            deleted_ok = deleted.get("ok") if isinstance(deleted, dict) else deleted
+        except Exception:
+            deleted_ok = False      # raising IS a refusal
+
+        rep.check(
+            f"[{GATE_PRODUCER_FAIL_OPEN}] the PRODUCER's own verifier REJECTS a mutated "
+            "source_provenance.public.json (my verifier catching it does not repair a "
+            "producer gate that returns True on it — downstream consumers run the "
+            "producer's verify path, so a fail-open producer gate is a hole in the product "
+            "regardless of what my lane catches)",
+            mutated_ok is False,
+            f"producer gate returned ok={mutated_ok!r} on a MUTATED provenance")
+
+        rep.check(
+            f"[{GATE_PRODUCER_FAIL_OPEN}] the PRODUCER's own verifier REJECTS a DELETED "
+            "source_provenance.public.json (a gate cannot catch a mutation to a file it "
+            "never reads)",
+            deleted_ok is False,
+            f"producer gate returned ok={deleted_ok!r} on a DELETED provenance")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
