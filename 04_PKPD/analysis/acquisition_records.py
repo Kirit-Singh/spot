@@ -303,6 +303,56 @@ class SourceAcquisitionRecord(Strict):
             if not self.not_applicable_reason:
                 raise ValueError("not_applicable requires not_applicable_reason")
 
+    def _check_silence_is_allowed(self) -> None:
+        """A row that states NO disposition must earn that silence. (W9 closeout, A2.)
+
+        This rule used to live only in `materialize`, and `_check_selection` simply RETURNED when
+        the disposition was null. But materialize is not the only producer: the v2 bundle door
+        validates SourceAcquisitionRecord directly, so a HAND-AUTHORED observed fetched row with no
+        proof at all walked through the model, through the door, and into a release — past a gate
+        that existed and was correct, by not going through it.
+
+        A guard on the writer is not a guarantee about the artifact. This is the record CONTRACT, so
+        it holds for every producer that can ever construct one: the pipeline, the bundle door, a
+        test, a future adapter, or a document somebody typed by hand.
+
+        Silence is admissible in exactly two cases, and neither is "we fetched it and said nothing":
+
+          * NOT OBSERVED. A `not_evaluated` / `not_found_after_search` row selected nothing at all.
+            Demanding a selection proof from a lane nobody looked at is demanding evidence of an
+            absence.
+          * REUSED FROM STAGE 3. Stage 3 issued the query; Stage 4 holds the bytes but never made
+            the request and cannot attest to a selection it never performed. The proof is DELEGATED
+            — and delegation is only honest if the record NAMES what it delegates to. Without
+            `stage3_source_record_id` the row is not delegating, it is just quiet.
+
+        A fetched, observed row is the one case where Stage 4 DID the selecting. It has no one to
+        delegate to and nothing to be silent about.
+        """
+        if self.observation_state != EvidenceObservationState.OBSERVED:
+            return
+
+        if self.origin == "reused_from_stage3":
+            if not self.stage3_source_record_id:
+                raise ValueError(
+                    f"acquisition {self.acquisition_id!r} is an OBSERVED row reused from Stage 3 "
+                    "with no selection_disposition and no stage3_source_record_id. Stage 4 did not "
+                    "issue this query, so it may DELEGATE the selection proof upstream — but it "
+                    "must name the upstream record it is delegating to. A row that delegates to "
+                    "nobody has not delegated; it has simply declined to say how its record was "
+                    "chosen, which is the thing this field exists to prevent."
+                )
+            return
+
+        raise ValueError(
+            f"acquisition {self.acquisition_id!r} is an OBSERVED, Stage-4-fetched row that states "
+            "NO selection_disposition. Stage 4 issued this request and chose this record, so there "
+            "is no upstream to delegate to. Silence is not a disposition: a record picked by "
+            "POSITION (`results[0]`) is indistinguishable from one pinned by IDENTITY until the row "
+            "says which it was, and every selection rule in this contract is bypassed by a row that "
+            "asserts nothing. State `identity_get`, `exactly_one`, or `sorted_unique`."
+        )
+
     def _check_selection(self) -> None:
         """The record must be able to show that its selection was not a pick.
 
@@ -310,6 +360,7 @@ class SourceAcquisitionRecord(Strict):
         selection which never had them cannot be written down as though it did.
         """
         if self.selection_disposition is None:
+            self._check_silence_is_allowed()
             return
 
         # An IDENTITY GET has no result set. The request named one record by its stable id, and the

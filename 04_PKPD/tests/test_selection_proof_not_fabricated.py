@@ -332,3 +332,107 @@ def test_those_REAL_records_MATERIALIZE_with_the_NULL_PRESERVED(tmp_path):
 
         if rec.selection_disposition == "identity_get":
             assert row.result_set_complete is None, "the null did not survive materialization"
+
+
+# ============================================================ W9 closeout A2: the door, not the writer
+#
+# The rule above lived ONLY in `materialize`, and `SourceAcquisitionRecord._check_selection` simply
+# RETURNED when the disposition was null. But materialize is not the only producer: the v2 bundle
+# door maps the `source_acquisition` lane straight onto the model (`evidence_bundle.LANE_MODELS_V2`),
+# so a HAND-AUTHORED observed fetched row with no proof at all reached a release by never passing
+# through the gate that would have refused it.
+#
+# A guard on the WRITER is not a guarantee about the ARTIFACT. The rule now lives in the record
+# contract, so it binds every producer that can construct one — the pipeline, the door, a test, or a
+# document somebody typed.
+
+def _row(**over):
+    """A SourceAcquisitionRecord built DIRECTLY — the way the bundle door builds one.
+
+    Built from the REAL fixture record so the shape is the shipped one; only the selection proof is
+    varied. A hand-rolled shape would test a record the door never sees.
+    """
+    from analysis.acquisition_records import SourceAcquisitionRecord
+
+    import fixtures as fx
+
+    base = fx.acquisitions()[0].model_dump()
+    base.pop("selection_disposition", None)
+    base.pop("selection_pin", None)
+    base.pop("match_total_reported", None)
+    base.pop("records_returned", None)
+    base.pop("result_set_complete", None)
+    base.update(over)
+    return SourceAcquisitionRecord(**base)
+
+
+def test_the_MODEL_refuses_an_observed_fetched_row_that_states_no_disposition():
+    """A2. Stage 4 issued the request and chose the record. There is no upstream to delegate to."""
+    with pytest.raises(ValueError, match="no upstream to delegate|NO selection_disposition"):
+        _row()  # observed + fetched_public + silence
+
+
+def test_the_MODEL_refuses_a_reused_row_that_delegates_to_NOBODY():
+    """Reuse delegates the proof to Stage 3 — and delegation is honest only if it NAMES its
+    upstream. A row that delegates to nobody has not delegated; it is just quiet."""
+    with pytest.raises(ValueError, match="delegates to nobody|stage3_source_record_id"):
+        _row(origin="reused_from_stage3", http_status=None, accessed_at_utc=None,
+             access_time_not_stated_reason="stage3_response_carried_no_access_time")
+
+
+def test_the_MODEL_ACCEPTS_a_reused_row_that_NAMES_its_upstream():
+    """The legitimate silence. Stage 4 never issued this query and may not attest to a selection it
+    did not perform — but it says exactly whose selection it is standing on."""
+    row = _row(origin="reused_from_stage3", http_status=None, accessed_at_utc=None,
+               access_time_not_stated_reason="stage3_response_carried_no_access_time",
+               stage3_source_record_id="stage3.src.chembl.CHEMBL64545")
+    assert row.selection_disposition is None
+    assert row.stage3_source_record_id == "stage3.src.chembl.CHEMBL64545"
+
+
+def test_the_MODEL_ACCEPTS_silence_from_a_row_that_OBSERVED_NOTHING():
+    """A `not_evaluated` lane selected nothing. Demanding a selection proof from a lane nobody
+    looked at is demanding evidence of an absence."""
+    row = _row(observation_state="not_evaluated", raw_sha256=None, content_sha256=None,
+               raw_bytes=None, http_status=None, accessed_at_utc=None,
+               access_time_not_stated_reason="stage4_performed_no_access")
+    assert row.selection_disposition is None
+
+
+def test_the_BUNDLE_DOOR_refuses_a_hand_authored_observed_row_with_no_proof(tmp_path):
+    """THE REACHABLE GAP. Not the pipeline — a v2 bundle document, authored by hand, loaded through
+    the real door. This is the path W9 found: it never touches `materialize`."""
+    import json
+    import os
+
+    from analysis.evidence_bundle import EVIDENCE_BUNDLE_SCHEMA_V2, load_evidence_bundle
+
+    import fixtures as fx
+
+    # A REAL, admissible row — then the one mutation: delete its selection proof. Everything else
+    # about it stays valid, so nothing incidental can refuse it.
+    forged = fx.acquisitions()[0].model_dump(mode="json")
+    forged.update(origin="fetched_public", selection_disposition=None, selection_pin=None,
+                  match_total_reported=None, records_returned=None, result_set_complete=None,
+                  stage3_source_record_id=None)
+
+    path = os.path.join(tmp_path, "bundle.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"schema_id": EVIDENCE_BUNDLE_SCHEMA_V2, "contexts": [], "sources": {},
+                   "fraction_unbound": [], "source_acquisition": [forged]}, fh)
+
+    from analysis.firewall import Rejection
+
+    with pytest.raises(Rejection) as exc:
+        load_evidence_bundle(path)
+
+    assert exc.value.code == "evidence_bundle_row_invalid", (
+        "the door ACCEPTED an observed, Stage-4-fetched acquisition row carrying NO selection "
+        "proof. materialize's gate is correct and was simply never reached — a guard on the writer "
+        "is not a guarantee about the artifact.")
+    assert exc.value.context["lane"] == "source_acquisition"
+    # And it must say WHY. "does not satisfy the contract" is not a finding; the refusal has to name
+    # the missing proof, or the next person cannot tell this apart from a typo in a URL.
+    why = str(exc.value.context["errors"])
+    assert "selection_disposition" in why or "delegate" in why, (
+        f"the door refused the row but could not say why: {why[:200]}")
