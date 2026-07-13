@@ -24,107 +24,52 @@ Exit 0 = ADMIT. Exit 1 = REJECT. Fail-closed: any failed check rejects the artif
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import math
 import os
-import re
+import sys
 from typing import Any
 
 import pandas as pd
 
-VERIFIER_ID = "spot.stage02.p2s_arms.independent_verifier.v1"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-ADMIT, REJECT = "admit", "reject"
+from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementation)
+    ADMIT,
+    ALLOWLISTS,
+    COEF_FILE,
+    DECREASE,
+    DESIRED_CHANGE_BY_ROLE_AND_POLE,
+    DOC_FILE,
+    FORBIDDEN_FILES,
+    INCREASE,
+    NEGATIVE_DECLARATIONS,
+    OPPOSED,
+    PINNED_SOLVER_LOCK_SHA256,
+    PROVENANCE_FILE,
+    RECON_FILE,
+    REJECT,
+    REQUIRED_FILES,
+    SPEC_L1_MAX,
+    SPEC_L1_MIN,
+    SPEC_LANE_ROLE,
+    SPEC_RANDOM_STATE,
+    SPEC_SIGN_TRANSFORM_TOL,
+    SPEC_STATUS_VALUES,
+    SUPPORT_FILE,
+    VERIFIER_ID,
+    W10_SPEC_SHA256,
+    W10_VERDICT_ADMIT,
+    W10_VERIFIER_ID,
+    canonical_coefficients,
+    canonical_support,
+    content_sha256,
+    forbidden_keys,
+    machine_paths,
+    parse_arm_key,
+    support_status,
+)
+
 PASS, FAIL = "pass", "fail"
-
-SUPPORT_FILE = "p2s_arm_support.parquet"
-COEF_FILE = "p2s_coefficients.parquet"
-RECON_FILE = "p2s_reconstruction.parquet"
-DOC_FILE = "p2s_support.json"
-PROVENANCE_FILE = "p2s_provenance.json"
-REQUIRED_FILES = (SUPPORT_FILE, COEF_FILE, RECON_FILE, DOC_FILE, PROVENANCE_FILE)
-
-# A temporal artifact must NOT exist. The endpoints of a temporal question are two DIRECT
-# arm keys; a file keyed on an ordered condition pair is where a DiD claim would live.
-FORBIDDEN_FILES = ("p2s_temporal.parquet", "p2s_temporal_endpoints.json",
-                   "p2s_endpoints.parquet")
-
-# --------------------------------------------------------------------------- #
-# THE SPEC, REIMPLEMENTED. Not imported from the generator's config.
-# --------------------------------------------------------------------------- #
-SPEC_LANE_ROLE = "secondary_non_gating"
-SPEC_RANDOM_STATE = 42
-SPEC_L1_MIN, SPEC_L1_MAX = 0.0, 1.0
-SPEC_MIN_SELECTION = 0.5
-SPEC_SIGN_DOMINANCE = 0.75
-SPEC_NONZERO_TOL = 1e-6
-SPEC_SIGN_TRANSFORM_TOL = 1e-12
-
-SUPPORTED, OPPOSED, MIXED, WEAK, NOT_SELECTED = (
-    "p2s_supported", "p2s_opposed", "p2s_mixed", "p2s_weak", "p2s_not_selected")
-SPEC_STATUS_VALUES = frozenset({SUPPORTED, OPPOSED, MIXED, WEAK, NOT_SELECTED})
-
-INCREASE, DECREASE = "increase", "decrease"
-DESIRED_CHANGES = frozenset({INCREASE, DECREASE})
-ROLES = frozenset({"away_from_A", "toward_B"})
-POLES = frozenset({"high", "low"})
-
-# The FROZEN mapping, RE-DERIVED here rather than read from the artifact.
-DESIRED_CHANGE_BY_ROLE_AND_POLE = {
-    ("away_from_A", "high"): DECREASE,
-    ("away_from_A", "low"): INCREASE,
-    ("toward_B", "high"): INCREASE,
-    ("toward_B", "low"): DECREASE,
-}
-
-# The key-name firewall, written from the failures it exists to catch.
-FORBIDDEN_KEY_RE = re.compile(
-    r"p_value|q_value|q_val|qval|fdr|pval|padj|adj_|significance"
-    r"|combined|balanced|weighted|score", re.IGNORECASE)
-# ...and a STANDALONE p/q token. A substring rule for "p" would refuse every key containing
-# the letter, and a firewall that refuses everything is one somebody turns off.
-FORBIDDEN_TOKEN_RE = re.compile(r"(^|_)[pq](_|$)", re.IGNORECASE)
-
-# Exempt by EXACT spelling. ``scorer_view_*`` contains "score" only because Direct's own
-# field for the admitted-program view is spelled that way; it is a HASH and an ID, not a
-# statistic, and renaming it would break the join it exists to make.
-KEY_FIREWALL_EXCEPTIONS = frozenset({"scorer_view_sha256", "scorer_view_id"})
-
-# Exempt ONLY while they still say ``false``. An artifact must be able to write down its own
-# prohibition; it does not get to keep the exemption after flipping the prohibition off.
-NEGATIVE_DECLARATIONS = {
-    "combined_objective_permitted": False,
-    "p2s_may_rank_or_gate": False,
-    "coefficients_are_causal_effects": False,
-    "coefficients_are_significance_tests": False,
-    "temporal_did_claimed": False,
-    "validates_direct_by_agreement": False,
-}
-
-# EXACT column allowlists. A rank, a gate or a promotion column is rejected by ABSENCE from
-# this list — not by a name rule that would have to anticipate what it was called.
-SUPPORT_COLUMNS = frozenset({
-    "arm_key", "program_id", "desired_change", "condition", "target_id",
-    "n_runs", "n_selected_runs", "selection_frequency", "positive_frequency",
-    "negative_frequency", "median_coefficient", "coefficient_min", "coefficient_max",
-    "lodo_sign_agreement", "n_lodo_runs", "effect_layer_agreement", "n_effect_layers",
-    "support_status", "opposed"})
-COEF_COLUMNS = frozenset({
-    "arm_key", "program_id", "desired_change", "condition", "target_id",
-    "coefficient", "coef_fit_variation", "nonzero", "sign",
-    "effect_layer", "model_config", "donor_scope", "quantity"})
-RECON_COLUMNS = frozenset({
-    "arm_key", "program_id", "desired_change", "condition",
-    "effect_layer", "model_config", "donor_scope",
-    "reconstruction_gene_cv_test_r2_mean", "reconstruction_gene_cv_test_r2_median",
-    "reconstruction_gene_cv_test_spearman_mean", "reconstruction_gene_cv_train_r2_mean",
-    "n_folds", "cv_label", "cv_semantics", "seconds", "metrics_are_sign_invariant"})
-ALLOWLISTS = {SUPPORT_FILE: SUPPORT_COLUMNS, COEF_FILE: COEF_COLUMNS,
-              RECON_FILE: RECON_COLUMNS}
-
-MACHINE_PATH_RE = re.compile(r"(^|[\s\"'=(])(/home/|/Users/|/mnt/|/tmp/|[A-Za-z]:\\\\)")
-
 
 class Report:
     """Fail-closed. Any failed check REJECTS the artifact."""
@@ -157,131 +102,15 @@ class Report:
         return doc
 
 
-# --------------------------------------------------------------------------- #
-# The verifier's OWN canonical hash. Not the generator's helper.
-# --------------------------------------------------------------------------- #
-def canonical_json(obj: Any) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-                      allow_nan=False)
 
 
-def content_sha256(obj: Any) -> str:
-    return hashlib.sha256(canonical_json(obj).encode("utf-8")).hexdigest()
 
 
-def num(v: Any) -> Any:
-    if v is None:
-        return None
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return None
-    if math.isnan(f) or math.isinf(f):
-        return None
-    return round(f, 6)
 
 
-def forbidden_keys(obj: Any, path: str = "") -> list[str]:
-    """Every key matching the firewall, at ANY depth, as a dotted path.
-
-    Walks dicts AND lists: a disguised inference field buried in a list of diagnostics is
-    exactly the shape one would take.
-    """
-    out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            here = f"{path}.{k}" if path else str(k)
-            if _forbidden(str(k)) and not _exempt(str(k), v):
-                out.append(here)
-            out += forbidden_keys(v, here)
-    elif isinstance(obj, list):
-        for i, v in enumerate(obj):
-            out += forbidden_keys(v, f"{path}[{i}]")
-    return out
 
 
-def _forbidden(key: str) -> bool:
-    return bool(FORBIDDEN_KEY_RE.search(key) or FORBIDDEN_TOKEN_RE.search(key))
 
-
-def _exempt(key: str, value: Any) -> bool:
-    if key in KEY_FIREWALL_EXCEPTIONS:
-        return True
-    # a negative declaration keeps its exemption only while it still says "forbidden"
-    if key in NEGATIVE_DECLARATIONS:
-        return value is False
-    return False
-
-
-def machine_paths(obj: Any, path: str = "") -> list[str]:
-    out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            out += machine_paths(v, f"{path}.{k}" if path else str(k))
-    elif isinstance(obj, list):
-        for i, v in enumerate(obj):
-            out += machine_paths(v, f"{path}[{i}]")
-    elif isinstance(obj, str) and MACHINE_PATH_RE.search(obj):
-        out.append(path)
-    return out
-
-
-# --------------------------------------------------------------------------- #
-# The rules, re-derived.
-# --------------------------------------------------------------------------- #
-def parse_arm_key(arm_key: str) -> dict[str, str]:
-    """``direct|program|desired_change|condition``. Anything else is not this lane's."""
-    parts = str(arm_key).split("|")
-    if len(parts) != 4 or parts[0] != "direct":
-        raise ValueError(f"{arm_key!r} is not a 4-part direct arm key")
-    _, program_id, change, condition = parts
-    if change not in DESIRED_CHANGES:
-        what = ("a POLE" if change in POLES else
-                "a ROLE" if change in ROLES else "not a desired change")
-        raise ValueError(f"{arm_key!r} carries {what} in the desired_change slot")
-    if not program_id or not condition:
-        raise ValueError(f"{arm_key!r} has an empty program_id or condition")
-    return {"program_id": program_id, "desired_change": change, "condition": condition}
-
-
-def support_status(sel: float, pos: float, neg: float) -> str:
-    """The frozen categorical rule, re-derived from the emitted frequencies."""
-    if sel <= 0:
-        return NOT_SELECTED
-    if sel < SPEC_MIN_SELECTION:
-        return WEAK
-    if pos >= SPEC_SIGN_DOMINANCE:
-        return SUPPORTED
-    if neg >= SPEC_SIGN_DOMINANCE:
-        return OPPOSED
-    return MIXED
-
-
-def canonical_support(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = [{
-        "arm_key": str(r["arm_key"]), "target_id": str(r["target_id"]),
-        "n_runs": int(r["n_runs"]),
-        "selection_frequency": num(r["selection_frequency"]),
-        "positive_frequency": num(r["positive_frequency"]),
-        "negative_frequency": num(r["negative_frequency"]),
-        "median_coefficient": num(r["median_coefficient"]),
-        "support_status": str(r["support_status"]),
-        "opposed": bool(r["opposed"]),
-    } for r in rows]
-    out.sort(key=lambda r: (r["arm_key"], r["target_id"]))
-    return out
-
-
-def canonical_coefficients(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = [{
-        "arm_key": str(r["arm_key"]), "target_id": str(r["target_id"]),
-        "effect_layer": str(r["effect_layer"]), "model_config": str(r["model_config"]),
-        "donor_scope": str(r["donor_scope"]), "coefficient": num(r["coefficient"]),
-        "nonzero": bool(r["nonzero"]), "sign": int(r["sign"]),
-    } for r in rows]
-    out.sort(key=lambda r: (r["arm_key"], r["donor_scope"], r["effect_layer"],
-                            r["model_config"], r["target_id"]))
-    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -350,8 +179,34 @@ def verify(out_dir: str) -> dict[str, Any]:
               bool(method.get("scorer_view_sha256")))
     rep.check("the artifact binds the Direct arm rows it supports",
               bool(method.get("arm_rows_sha256")))
-    rep.check("the Direct bundle it supports was ADMITTED by its own verifier",
-              method.get("direct_verifier_verdict") == ADMIT)
+    # -- THE W10 ADMISSION CHAIN, re-derived ----------------------------------- #
+    rep.check("the Direct bundle was ADMITTED by W10, the INDEPENDENT verifier",
+              method.get("w10_verdict") == W10_VERDICT_ADMIT,
+              f"got {method.get('w10_verdict')!r}; W10 writes {W10_VERDICT_ADMIT!r} and a "
+              "transliterated verdict is a verdict nobody checked")
+    rep.check("the admitting verifier is the pinned W10 arm-bundle verifier",
+              method.get("w10_verifier_id") == W10_VERIFIER_ID,
+              f"got {method.get('w10_verifier_id')!r}")
+    rep.check("W10's report was written against the pinned spec",
+              method.get("w10_spec_sha256") == W10_SPEC_SHA256)
+    rep.check("W10's report hash was RE-DERIVED, not quoted",
+              method.get("w10_report_sha256_rederived") is True
+              and bool(method.get("w10_report_sha256")))
+    rep.check("the run binds the arms it supports to a REAL, admitted bundle",
+              method.get("bundle_is_real_and_admitted") is True
+              and bool(method.get("arm_bundle_run_id")))
+    rep.check("every file of the Direct bundle was re-hashed and bound",
+              bool(method.get("direct_bundle_artifact_sha256")))
+
+    # -- THE SOLVER LOCK, against THIS verifier's own literal -------------------- #
+    rep.check("the run bound the PINNED Stage-2 solver lock",
+              method.get("solver_lock_sha256") == PINNED_SOLVER_LOCK_SHA256,
+              f"got {str(method.get('solver_lock_sha256'))[:16]}...; a run whose environment "
+              "is unbound can be re-attributed to one it was not computed in")
+    rep.check("the arms and the support were computed under the SAME lock",
+              method.get("solver_lock_pinned_sha256") == PINNED_SOLVER_LOCK_SHA256)
+    rep.check("the run declares a release lane, not a fixture",
+              method.get("lane") in ("production", "research_only", "synthetic"))
     rep.check("the artifact does NOT carry a production_eligible gate",
               "production_eligible" not in json.dumps(doc),
               "the historical 0/33 LOMO result is descriptive evidence about single-marker "

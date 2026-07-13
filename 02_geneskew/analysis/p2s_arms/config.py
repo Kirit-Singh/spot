@@ -189,3 +189,45 @@ NEGATIVE_DECLARATIONS: dict[str, bool] = {
 # endpoints, and no file exists in which to write one. The endpoints of a temporal question
 # are two DIRECT arm keys, which already exist; the consumer joins them.
 TEMPORAL_ARTIFACT_EMITTED = False
+
+
+# --------------------------------------------------------------------------- #
+# THE W10 ADMISSION CONTRACT.
+#
+# P2S may run ONLY from a real Direct arm bundle that W10 -- the INDEPENDENT on-disk
+# verifier, which is not the producer -- has ADMITTED. Everything below is pinned so that a
+# report cannot be swapped for a friendlier one, and so that a bundle cannot arrive
+# ADMITTING ITSELF.
+#
+# A generator that signs its own homework is the same process asserting twice. The Direct
+# producer therefore writes `verdict: pending_independent_verification` and
+# `verifier_id: null` into its own verification.json -- that is a SLOT, not a verdict -- and
+# W10 fills it from outside. A "report" carrying the pending verdict, or a null verifier id,
+# is a bundle admitting itself and is REFUSED.
+# --------------------------------------------------------------------------- #
+W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
+W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
+W10_SPEC_SHA256 = "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f"
+W10_VERDICT_ADMIT = "ADMIT"                       # uppercase, as W10 writes it
+W10_VERDICT_REFUSE = "REFUSE"
+W10_VERDICT_PENDING = "pending_independent_verification"   # the producer's SLOT, not a verdict
+
+# The Stage-2 solver lock (W7), pinned. The Direct arms P2S supports must have been computed
+# under the SAME lock this run executes under -- otherwise support computed in one
+# environment is being attached to arms computed in another, and nothing says so.
+PINNED_SOLVER_LOCK_SHA256 = \
+    "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe"
+SOLVER_LOCK_FILENAME = "stage02_solver_lock.txt"
+
+# The files an ADMITTED Direct bundle ships. All ten are re-hashed and matched against the
+# report's `artifact_sha256` map: a bundle with a swapped parquet keeps its name.
+DIRECT_BUNDLE_FILES = (
+    "arm_bundle.json", "provenance.json", "arms.parquet", "masks.parquet",
+    "contributing_guides.parquet", "guide_support.parquet", "donor_support.parquet",
+    "input_manifest.json", "gene_universe.json", "verification.json",
+)
+
+# A RELEASE lane. `synthetic` is not one: synthetic arms may never carry production support.
+RELEASE_LANES = ("production", "research_only")
+LANE_SYNTHETIC = "synthetic"
+LANES = RELEASE_LANES + (LANE_SYNTHETIC,)

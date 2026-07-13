@@ -84,13 +84,6 @@ values and ranks do not move. We test this row-by-row and rank-by-rank, not just
 → **Freeze once, with P2S already in the tree.** Otherwise the run ids shift under you when
 it lands.
 
-### One defect found in your neighbourhood (not fixed here — it is your lane)
-
-There is **no independent verifier for the all-arm bundle yet**. `arm_bundle.json` is touched
-only by `arm_bundle.py` and `run_arms.py`. P2S *requires* a verifier report with
-`verdict == "admit"` and will refuse without one. Whatever emits it, please give it a
-`verifier_id` and a `report_sha256`.
-
 ---
 
 ## 3. → W12 (verification)
@@ -177,7 +170,7 @@ to reorder anything.
 
 ---
 
-## 5. The real run — tcefold ONLY
+## 5. The real run — tcefold ONLY, and ONLY from a W10 ADMIT
 
 Real compute runs on **tcefold**, never tcedirector: tcedirector reads
 `GWCD4i.DE_stats.h5ad` **non-deterministically** (stable mtime/size, differing sha256 on
@@ -188,31 +181,39 @@ inputs hash differently on two reads cannot be content-addressed at all.
 
 ```bash
 ssh tcefold
+conda activate spot-run                       # the env the solver lock pins
 cd ~/spot/02_geneskew/analysis
-source /home/tcelab/spot_stage2/venv/bin/activate     # the pinned env
 
 # 0. prepare the cell matrix ONCE per condition (h5ad -> npz; scores READ BY BARCODE)
 #    required arrays: barcodes, donors, gene_ids, expr, score__<program_id> ...
 
-# 1. one arm (its sibling comes free — one fit, two arms)
+# 1. DISCOVER the bundle — never guess a path (refuses on none and on more than one)
+BUNDLE=$(python -m direct.bundle_index --root <out-root> --condition Stim48hr --kind direct)
+
+# 2. one arm (its sibling comes free — one fit, two arms)
 python -m p2s_arms.run_p2s_arms \
+  --direct-bundle  "$BUNDLE" \
+  --w10-report     <run-root>/DIRECT_BUNDLE_ADMISSION_Stim48hr.json \
+  --env-lock       analysis/stage02_solver_lock.txt \
+  --stage1-release <the bound v3 release manifest> \
+  --release-kind   production \
   --arm-key 'direct|treg_like|increase|Stim48hr' \
-  --bundle-dir   <W1's ADMITTED all-arm bundle dir for Stim48hr> \
-  --verifier-report <that bundle's independent verifier report .json> \
-  --stage1-release  <the bound v3 release manifest> \
-  --release-kind production \
   --cells    <prepared cells.npz> \
   --effects  <effects.parquet> \
   --masks    <the Direct lane's masks.parquet> \
   --eligible <eligible.parquet> \
   --upstream-tree-sha256 <pin, once recorded from the verified checkout> \
-  --env-lock <the Linux env lock> \
   --lane production \
   --out-root /home/tcelab/.spot-runs/<ts>/p2s-arms      # OUTSIDE every tracked tree
+#  exit 0 = support emitted;  exit 2 = a NAMED refusal + p2s_deferred_disposition.json
 
-# 2. generator != verifier
+# 3. generator != verifier
 python -m p2s_arms.verify_p2s_arms --out-dir <run dir> --report <run dir>/p2s_verification.json
 ```
+
+**It will refuse until W10 has actually admitted a REAL bundle.** Every ADMIT on disk today is
+code + fixtures (12 logical arms, 2 fixture programs); the real release is 10 programs x 2 x 3
+= **60** logical arms and needs real compute on tcefold first. That refusal is the lane working.
 
 The upstream pin (`emdann/pert2state_model` @ `2c2e3095…`, MIT, `0.0.1`) is **resolved at
 runtime** — module path, git commit, package version, source-tree content hash, dirty-tree

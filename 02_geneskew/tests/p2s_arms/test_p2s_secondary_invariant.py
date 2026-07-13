@@ -35,6 +35,7 @@ import fixtures_p2s as fx
 import pandas as pd
 import pytest
 from direct import arm_bundle
+from p2s_arms import config as P2S_CONFIG
 
 
 def _sha(path: str) -> str:
@@ -49,27 +50,29 @@ def _snapshot(d: str) -> dict[str, str]:
 # MUTATION 10 — same commit, P2S EXECUTED vs OMITTED.
 # --------------------------------------------------------------------------- #
 def test_MUTATION_direct_artifacts_are_byte_identical_with_p2s_executed_vs_omitted(
-        tmp_path, view, admit_report, inputs):
+        tmp_path, view, w10_report, inputs):
     """The whole safety case for a secondary lane, in one test."""
-    direct_dir = fx.write_arm_bundle(str(tmp_path / "direct"), view)
+    direct_dir = fx.write_full_bundle(str(tmp_path / "direct"), view)
     before = _snapshot(direct_dir)
-    assert set(before) == {"arm_bundle.json", "arms.parquet"}
+    assert set(before) == set(P2S_CONFIG.DIRECT_BUNDLE_FILES), \
+        "the fixture must ship a REAL ten-file Direct bundle, or this proves nothing"
 
+    report = fx.write_w10_report(str(tmp_path / "w10.json"), direct_dir, view)
     out = fx.run_producer(tmp_path, view=view, bundle_dir=direct_dir,
-                          admit_report=admit_report, inputs=inputs)
+                          w10_report=report, inputs=inputs)
 
     after = _snapshot(direct_dir)
     assert after == before, "the P2S lane changed a Direct artifact"
 
     # ...and it wrote nothing into Direct's tree at all
     assert not os.path.commonpath([out["out_dir"], direct_dir]) == direct_dir
-    assert os.listdir(direct_dir) == sorted(before)
+    assert sorted(os.listdir(direct_dir)) == sorted(before)
 
 
 def test_the_p2s_run_writes_ONLY_into_its_own_content_addressed_directory(
-        tmp_path, view, bundle_dir, admit_report, inputs):
+        tmp_path, view, bundle_dir, w10_report, inputs):
     out = fx.run_producer(tmp_path, view=view, bundle_dir=bundle_dir,
-                          admit_report=admit_report, inputs=inputs)
+                          w10_report=w10_report, inputs=inputs)
     written = sorted(os.listdir(out["out_dir"]))
     assert written == sorted([
         "p2s_arm_support.parquet", "p2s_coefficients.parquet",
@@ -82,7 +85,7 @@ def test_the_p2s_run_writes_ONLY_into_its_own_content_addressed_directory(
 # --------------------------------------------------------------------------- #
 # MUTATION 9 — numerical non-regression over the canonical Direct arm rows and RANKS.
 # --------------------------------------------------------------------------- #
-def test_MUTATION_direct_canonical_rows_and_ranks_do_not_move(tmp_path, view, admit_report,
+def test_MUTATION_direct_canonical_rows_and_ranks_do_not_move(tmp_path, view, w10_report,
                                                               inputs):
     """Value-by-value and rank-by-rank, not merely file-hash-by-file-hash.
 
@@ -90,7 +93,7 @@ def test_MUTATION_direct_canonical_rows_and_ranks_do_not_move(tmp_path, view, ad
     the claim a reader of the science actually cares about, and it would survive a change of
     parquet writer that a byte hash would not.
     """
-    direct_dir = fx.write_arm_bundle(str(tmp_path / "direct"), view)
+    direct_dir = fx.write_full_bundle(str(tmp_path / "direct"), view)
     rows_path = os.path.join(direct_dir, "arms.parquet")
 
     before_rows = pd.read_parquet(rows_path).to_dict("records")
@@ -98,7 +101,7 @@ def test_MUTATION_direct_canonical_rows_and_ranks_do_not_move(tmp_path, view, ad
     before_sha = arm_bundle.rows_sha256(before_rows)
 
     fx.run_producer(tmp_path, view=view, bundle_dir=direct_dir,
-                    admit_report=admit_report, inputs=inputs)
+                    w10_report=w10_report, inputs=inputs)
 
     after_rows = pd.read_parquet(rows_path).to_dict("records")
     after_canon = arm_bundle.canonical_rows(after_rows)
@@ -129,7 +132,7 @@ def test_arm_rows_sha256_EXCLUDES_the_run_id_so_the_science_survives_a_digest_ch
     ``arm_bundle_run_id``. Two bundles built from the same science under different code
     digests carry different run ids and the SAME ``arm_rows_sha256``.
     """
-    direct_dir = fx.write_arm_bundle(str(tmp_path / "direct"), view)
+    direct_dir = fx.write_full_bundle(str(tmp_path / "direct"), view)
     rows = pd.read_parquet(os.path.join(direct_dir, "arms.parquet")).to_dict("records")
 
     assert "arm_bundle_run_id" in rows[0], "the run id really is stamped on every row"
@@ -216,18 +219,22 @@ def test_v2_emits_no_pair_named_away_or_toward_output():
             assert banned not in low, f"{column!r} carries pair/ranking vocabulary"
 
 
-def test_a_STAND_IN_MODEL_may_never_run_outside_the_synthetic_lane(
-        tmp_path, view, bundle_dir, admit_report, inputs):
+def test_a_STAND_IN_MODEL_may_never_run_outside_the_synthetic_lane(tmp_path):
     """A stand-in is a DIFFERENT MODEL wearing the pinned model's provenance.
 
     The injectable fit is what lets this lane be developed on a host without the upstream
     package. That same seam, left ungated, is how a stand-in reaches a production artifact —
-    so the production lane refuses it outright rather than trusting nobody will pass one.
+    so any release lane refuses it outright rather than trusting nobody will pass one.
+
+    Driven straight at ``execute``: through ``run_producer`` the FIXTURE-RELEASE refusal now
+    fires first (a fixture release may not back a production run), which is correct but would
+    make this test pass for the wrong reason.
     """
-    from p2s_arms import model
+    from p2s_arms import model, run_p2s_arms
 
     for lane in ("production", "research_only"):
         with pytest.raises(model.ModelError) as e:
-            fx.run_producer(tmp_path, view=view, bundle_dir=bundle_dir,
-                            admit_report=admit_report, inputs=inputs, lane=lane)
+            run_p2s_arms.execute(
+                bound={}, release=None, view={}, paths={}, up={},
+                out_root=str(tmp_path), lane=lane, fit=fx.linear_fit)
         assert e.value.reason == "stand_in_model_outside_the_synthetic_lane"

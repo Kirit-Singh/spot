@@ -16,10 +16,10 @@ from p2s_arms import verify_p2s_arms as V
 
 
 @pytest.fixture
-def run_dir(tmp_path, view, bundle_dir, admit_report, inputs):
+def run_dir(tmp_path, view, bundle_dir, w10_report, inputs):
     """A complete P2S run over the synthetic fixture, through the real producer."""
     out = fx.run_producer(tmp_path, view=view, bundle_dir=bundle_dir,
-                          admit_report=admit_report, inputs=inputs)
+                          w10_report=w10_report, inputs=inputs)
     return out["out_dir"]
 
 
@@ -199,3 +199,18 @@ def test_the_verifier_exit_code_follows_the_verdict(run_dir, tmp_path, capsys):
     assert V.main(["--out-dir", run_dir]) == 0
     os.remove(os.path.join(run_dir, "p2s_support.json"))
     assert V.main(["--out-dir", run_dir]) == 1
+
+
+def test_the_verifier_RULES_module_is_also_independent():
+    """The spec the verifier checks against must not come from the code it is checking."""
+    from p2s_arms import verify_p2s_rules as R
+
+    src = open(R.__file__).read()
+    for forbidden in ("from p2s_arms", "import p2s_arms", "from direct", "import direct",
+                      "from . import", "from .."):
+        assert forbidden not in src, f"the verifier's spec imports {forbidden!r}"
+
+    # the pins are LITERALS here, not borrowed
+    assert R.PINNED_SOLVER_LOCK_SHA256.startswith("2983d140")
+    assert R.W10_VERIFIER_ID == "spot.stage02.direct.arm_bundle.verifier.v1"
+    assert R.W10_VERDICT_ADMIT == "ADMIT"        # never transliterated

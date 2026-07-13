@@ -27,6 +27,7 @@ producing numbers under this lane's name.
 """
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, Optional
 
@@ -283,9 +284,11 @@ UPSTREAM_OBSERVED = {
 }
 
 
-def run_producer(tmp_path, *, view, bundle_dir, admit_report, inputs,
+def run_producer(tmp_path, *, view, bundle_dir, w10_report, inputs,
                  arm_key: Optional[str] = None, seed: int = 42,
-                 lane: str = "synthetic") -> dict:
+                 lane: str = "synthetic", env_lock: Optional[str] = None,
+                 release=None) -> dict:
+    """Drive the REAL producer, through the REAL admission chain, on synthetic data."""
     from p2s_arms import binding, run_p2s_arms, upstream
     from p2s_arms import config as p2s_config
 
@@ -294,11 +297,139 @@ def run_producer(tmp_path, *, view, bundle_dir, admit_report, inputs,
                     version=p2s_config.UPSTREAM_VERSION)
     up = upstream.identity(observed)
 
+    rel = release if release is not None else make_release()
     bound = binding.bind(
         arm_key=arm_key or f"direct|{PROGRAM}|increase|{CONDITION}",
-        bundle_dir=bundle_dir, view=view, verifier_report=admit_report)
+        bundle_dir=bundle_dir, w10_report=w10_report,
+        env_lock=env_lock or REAL_SOLVER_LOCK, view=view, release=rel, lane=lane)
 
     return run_p2s_arms.execute(
-        bound=bound, release=make_release(), view=view, up=up, paths=inputs,
+        bound=bound, release=rel, view=view, up=up, paths=inputs,
         out_root=str(tmp_path / "p2s"), lane=lane, seed=seed,
         argv=["--arm-key", bound["arm"].arm_key], fit=linear_fit)
+
+
+# --------------------------------------------------------------------------- #
+# A REAL Direct bundle (all ten shipped files) and a REAL W10 ADMIT report.
+#
+# The report is built the way W10 builds one — content-addressed over its own body, with
+# `verifier_code_sha256`, `spec_sha256` and a `bound_artifact` that names the exact bytes on
+# disk. So the P2S admission gate is exercised against a report it must actually re-derive,
+# not a stub that says {"verdict": "ADMIT"} and nothing else.
+#
+# The DATA is synthetic. The ADMISSION CHAIN is real.
+# --------------------------------------------------------------------------- #
+# THE REAL LOCK. Tests bind the actual committed stage02_solver_lock.txt, because the pin is
+# the mechanism: a test that bound a synthetic lock and a synthetic pin would prove that two
+# made-up numbers match each other, which is not the property under test.
+from direct import envlock as _envlock  # noqa: E402
+
+from p2s_arms import config as _cfg  # noqa: E402
+from p2s_arms.w10 import content_sha256 as _csha  # noqa: E402
+from p2s_arms.w10 import file_sha256 as _fsha  # noqa: E402
+
+REAL_SOLVER_LOCK = _envlock.DEFAULT_PATH
+
+
+def write_solver_lock(path: str, *, pinned: bool = True, stage1: bool = False) -> str:
+    """The REAL pinned lock, or a lock that is not it (and must be refused)."""
+    if pinned:
+        return REAL_SOLVER_LOCK
+    target = path
+    if stage1:                                # the STAGE-1 lock: refused BY NAME
+        target = os.path.join(os.path.dirname(path), _envlock.STAGE1_LOCK_FILENAME)
+    with open(target, "wb") as fh:
+        fh.write(b"# a valid lock for a DIFFERENT environment (scvi_gpu, py3.11)\n")
+    return target
+
+
+def write_full_bundle(out_root: str, view, *, condition: str = CONDITION,
+                      lane: str = "synthetic", tamper_rank: bool = False,
+                      self_admitted: bool = False) -> str:
+    """All TEN files an admitted Direct bundle ships."""
+    d = write_arm_bundle(out_root, view, condition=condition, tamper_rank=tamper_rank)
+
+    # the seven files beyond arm_bundle.json / arms.parquet
+    for name in ("masks.parquet", "contributing_guides.parquet", "guide_support.parquet",
+                 "donor_support.parquet"):
+        pd.DataFrame([{"target_id": t, "gene_id": gene_ids()[0]}
+                      for t in target_ids()[:2]]).to_parquet(os.path.join(d, name),
+                                                             index=False)
+
+    direct_emit.write_json(os.path.join(d, "input_manifest.json"), {"inputs": []})
+    direct_emit.write_json(os.path.join(d, "gene_universe.json"),
+                           {"gene_ids": gene_ids()[:5]})
+    direct_emit.write_json(os.path.join(d, "provenance.json"), {
+        "arm_bundle_run_id": os.path.basename(d),
+        "run_binding": {"lane": lane, "environment_lock": {
+            "lock_id": "spot.stage02.solver_lock.v1",
+            "sha256": _cfg.PINNED_SOLVER_LOCK_SHA256, "verified": True, "status": "locked"}},
+    })
+
+    # the PRODUCER'S EMPTY SLOT — un-admitted, for an outsider to fill.
+    verification = {
+        "verifier_id": None,
+        "verdict": _cfg.W10_VERDICT_PENDING,
+        "admitted": False,
+        "self_admitted": False,
+        "produced_by": "spot.stage02.direct.all_arm_runner.v1",
+    }
+    if self_admitted:                       # the mutation: the bundle admits itself
+        verification.update(verifier_id="spot.stage02.direct.all_arm_runner.v1",
+                            verdict=_cfg.W10_VERDICT_ADMIT, admitted=True,
+                            self_admitted=True)
+    direct_emit.write_json(os.path.join(d, "verification.json"), verification)
+    return d
+
+
+def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDITION,
+                     lane: str = "synthetic", verdict: Optional[str] = None,
+                     verifier_id: Optional[str] = None,
+                     spec_sha256: Optional[str] = None,
+                     solver_lock_sha256: Optional[str] = None,
+                     independent: bool = True,
+                     bundle_run_id: Optional[str] = None,
+                     tamper_hash: bool = False) -> str:
+    """A W10 ADMIT report, content-addressed exactly as W10 writes one."""
+    doc = json.load(open(os.path.join(bundle_dir, "arm_bundle.json")))
+    files = {n: _fsha(os.path.join(bundle_dir, n))
+             for n in _cfg.DIRECT_BUNDLE_FILES
+             if os.path.exists(os.path.join(bundle_dir, n))}
+
+    body = {
+        "schema_version": _cfg.W10_REPORT_SCHEMA,
+        "verifier_id": verifier_id or _cfg.W10_VERIFIER_ID,
+        "spec_sha256": spec_sha256 or _cfg.W10_SPEC_SHA256,
+        "verifier_code_sha256": "a" * 64,
+        "independent_of_generator": independent,
+        "generator_modules_not_imported": ["direct.arm_bundle", "direct.run_arms"],
+        "gate_inventory": ["g1", "g2"],
+        "gate_inventory_sha256": _csha(["g1", "g2"]),
+        "gates": [{"gate": "g1", "passed": True, "detail": ""},
+                  {"gate": "g2", "passed": True, "detail": ""}],
+        "n_gates": 2, "n_passed": 2, "n_failed": 0, "failed_gates": [],
+        "verdict": verdict or _cfg.W10_VERDICT_ADMIT,
+        "bound_artifact": {
+            "arm_bundle_run_id": bundle_run_id or os.path.basename(bundle_dir),
+            "arm_bundle_run_sha256": "b" * 64,
+            "condition": condition,
+            "lane": lane,
+            "arm_rows_sha256": doc.get("arm_rows_sha256"),
+            "scorer_view_sha256": view["scorer_view_sha256"],
+            "stage1_scorer_view_canonical_sha256": "c" * 64,
+            "solver_lock_sha256": solver_lock_sha256 or _cfg.PINNED_SOLVER_LOCK_SHA256,
+            "solver_lock_pinned_sha256": _cfg.PINNED_SOLVER_LOCK_SHA256,
+            "artifact_sha256": files,
+            "n_admitted_programs": view["n_admitted_programs"],
+            "n_arm_slots": len(doc.get("arms", [])),
+            "n_arm_rows": doc.get("n_arm_rows"),
+        },
+    }
+    report = dict(body, report_sha256=_csha(body))
+    if tamper_hash:                          # a flipped verdict that kept the old hash
+        report["verdict"] = _cfg.W10_VERDICT_ADMIT
+        report["bound_artifact"]["condition"] = condition
+        report["report_sha256"] = "0" * 64
+    with open(path, "w") as fh:
+        json.dump(report, fh, indent=2, sort_keys=True)
+    return path

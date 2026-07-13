@@ -42,7 +42,7 @@ def build(out_root: str, *, arm_key: str = ARM_KEY) -> dict:
     view = scorer_view.view(release)
 
     work = tempfile.mkdtemp(prefix="p2s_ui_fixture_")
-    direct_dir = synthetic.write_arm_bundle(os.path.join(work, "direct"), view)
+    direct_dir = synthetic.write_full_bundle(os.path.join(work, "direct"), view)
 
     paths = {
         "cells": synthetic.make_cells(os.path.join(work, "cells.npz")),
@@ -51,11 +51,15 @@ def build(out_root: str, *, arm_key: str = ARM_KEY) -> dict:
         "eligible": synthetic.make_eligible(os.path.join(work, "eligible.parquet")),
     }
 
-    report = {"verdict": "admit",
-              "verifier_id": "spot.stage02.direct.arm.verifier.v1",
-              "report_sha256": "0" * 64}
-    bound = binding.bind(arm_key=arm_key, bundle_dir=direct_dir, view=view,
-                         verifier_report=report)
+    # a REAL W10 ADMIT report, content-addressed over its own body — the fixture goes through
+    # the whole admission chain, not around it.
+    report_path = os.path.join(work, "W10_ADMIT.json")
+    synthetic.write_w10_report(report_path, direct_dir, view)
+
+    bound = binding.bind(
+        arm_key=arm_key, bundle_dir=direct_dir, w10_report=report_path,
+        env_lock=synthetic.REAL_SOLVER_LOCK, view=view, release=release,
+        lane=runner.LANE_SYNTHETIC)
 
     up = upstream.identity(dict(synthetic.UPSTREAM_OBSERVED,
                                 commit=config.UPSTREAM_COMMIT,
