@@ -235,48 +235,6 @@ def check_cache_is_not_coarser_than_the_contract(rep: Report,
         not coarse, "; ".join(coarse[:3]))
 
 
-def check_one_assertion_per_mec_id(rep: Report,
-                                   assertions: list[dict[str, Any]]) -> None:
-    """BLOCKER 2. ``mec_id`` is the assertion's primary key; it is never collapsed.
-
-    Two rows sharing molregno+tid+action_type are NOT necessarily duplicates: they may
-    differ by mec_id, variant_id, or mechanism evidence. Collapsing on
-    molecule-target-action erases a variant-specific assertion, and no downstream hash can
-    then reveal which one was lost.
-    """
-    seen: dict[str, int] = {}
-    for a in assertions:
-        mec = a.get("source_row_id")
-        if mec is not None:
-            seen[str(mec)] = seen.get(str(mec), 0) + 1
-
-    dupes = sorted(m for m, n in seen.items() if n > 1)
-    rep.check("exactly ONE cache assertion per ChEMBL mec_id (source_row_id)",
-              not dupes, f"{len(dupes)} duplicated: {dupes[:3]}")
-
-    lossy = []
-    for a in assertions:
-        missing = [f for f in REQUIRED_ASSERTION_FIELDS if f not in a]
-        if missing:
-            lossy.append(f"{a.get('source_row_id')}: {missing}")
-    rep.check(
-        "every assertion retains its identity/context fields (source_row_id=mec_id, "
-        "mechanism_of_action, molecular_mechanism, direct_interaction, disease_efficacy, "
-        "variant_id, selectivity_comment) — a coarser record allows silent deduplication",
-        not lossy, "; ".join(lossy[:3]))
-
-    # Variant-specific records are separately typed, or fail closed for general ranking.
-    leaking = [a.get("source_row_id") for a in assertions
-               if a.get("variant_id") not in (None, "")
-               and not a.get("variant_specific")
-               and a.get("general_gene_rankable", True)]
-    rep.check(
-        "a VARIANT-specific assertion is separately typed, or fails closed for "
-        "general-gene ranking (a variant assertion is not evidence about the wild-type "
-        "gene)",
-        not leaking, f"{len(leaking)} variant assertion(s) ranking as general")
-
-
 def check_typed_universe(rep: Report, universe: dict[str, Any]) -> None:
     """BLOCKER 3. The universe is a TYPED artifact; the four symbols are HASHED ROWS."""
     rep.check(

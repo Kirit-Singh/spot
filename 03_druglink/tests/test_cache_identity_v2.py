@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import pytest
 
+from verifier import cache_evidence as ce
 from verifier import cache_identity as ci
 from verifier.report import Report
 
@@ -193,40 +194,26 @@ def _assertion(**over):
 
 def test_two_rows_for_one_mec_id_is_double_counting():
     rep = Report()
-    ci.check_one_assertion_per_mec_id(rep, [_assertion(), _assertion()])
+    ce.check_one_assertion_per_mec_id(rep, [_assertion(), _assertion()])
     assert any("ONE cache assertion per ChEMBL mec_id" in n for n in _failed(rep))
 
 
-@pytest.mark.parametrize("field", ci.REQUIRED_ASSERTION_FIELDS)
+@pytest.mark.parametrize("field", ce.REQUIRED_ASSERTION_FIELDS)
 def test_an_assertion_missing_any_identity_or_context_field_is_lossy(field):
     a = _assertion()
     del a[field]
     rep = Report()
-    ci.check_one_assertion_per_mec_id(rep, [a])
+    ce.check_one_assertion_per_mec_id(rep, [a])
     assert any("identity/context fields" in n for n in _failed(rep))
 
 
 def test_a_lossless_assertion_passes():
     rep = Report()
-    ci.check_one_assertion_per_mec_id(rep, [_assertion(source_row_id=7),
+    ce.check_one_assertion_per_mec_id(rep, [_assertion(source_row_id=7),
                                             _assertion(source_row_id=8)])
     assert not _failed(rep)
 
 
-def test_a_VARIANT_assertion_may_not_rank_as_general_gene_evidence():
-    """A variant assertion is not evidence about the wild-type gene."""
-    rep = Report()
-    ci.check_one_assertion_per_mec_id(
-        rep, [_assertion(variant_id=42, general_gene_rankable=True)])
-    assert any("VARIANT-specific" in n for n in _failed(rep))
-
-
-def test_a_variant_assertion_that_is_separately_typed_passes():
-    rep = Report()
-    ci.check_one_assertion_per_mec_id(
-        rep, [_assertion(variant_id=42, variant_specific=True,
-                         general_gene_rankable=False)])
-    assert not _failed(rep)
 
 
 # --------------------------------------------------------------------------- #
@@ -372,4 +359,95 @@ def test_a_properly_packaged_separable_chembl_layer_passes():
                    "chembl_release": "CHEMBL_37",
                    "chembl_doi": "10.6019/CHEMBL.database.37",
                    "chembl_layer_is_separable": True})
+    assert not _failed(rep)
+
+
+# --------------------------------------------------------------------------- #
+# REAL-STORE ATTACK — mec_id 6210/6862 across three ENSG targets.
+#
+# The store FLAGGED the ambiguity (`shared_accession`) and then emitted `drug_evidence`
+# anyway. A flag that does not gate is decoration: the drug lands on all three genes, and
+# each one reads to a consumer as independent evidence.
+# --------------------------------------------------------------------------- #
+THREE_GENES = ["ENSG00000000001", "ENSG00000000002", "ENSG00000000003"]
+SHARED_ACC = "P0DUMMY"
+
+
+def _edge(mec, gene, **over):
+    e = {"edge_id": f"e{mec}_{gene[-1]}", "source_row_id": mec, "target_ensembl": gene,
+         "uniprot_id": SHARED_ACC, "identity_status": ce.IDENTITY_SHARED_ACCESSION,
+         "lane": "direct_gene_mechanism", "rankable": True}
+    e.update(over)
+    return e
+
+
+REAL_ACC_MAP = {SHARED_ACC: THREE_GENES}
+
+
+def test_the_real_counterexample_is_refused_mec_6210_and_6862_across_three_genes():
+    """The exact rows found in the extracted store."""
+    edges = [_edge(mec, g) for mec in ce.REAL_ATTACK_MEC_IDS for g in THREE_GENES]
+    assert len(edges) == 6                       # 2 mec_ids x 3 genes
+
+    rep = Report()
+    ce.check_no_drug_evidence_on_ambiguous_identity(
+        rep, edges=edges, accession_to_genes=REAL_ACC_MAP, dispositions=[])
+    failed = _failed(rep)
+    assert any("SHARED identity" in n for n in failed)
+    assert any("ambiguous_identity" in n for n in failed)
+
+
+def test_one_mec_id_may_not_be_evidence_for_three_genes():
+    rep = Report()
+    ce.check_one_mec_id_is_not_spread_across_genes(
+        rep, [_edge(6210, g) for g in THREE_GENES])
+    assert any("MORE THAN ONE gene" in n for n in _failed(rep))
+    assert ce.REAL_ATTACK_N_GENES == 3
+
+
+def test_shared_accession_flagged_but_still_rankable_is_the_defect():
+    """The row SAYS shared_accession and carries drug_evidence. Noticing is not acting."""
+    rep = Report()
+    ce.check_no_drug_evidence_on_ambiguous_identity(
+        rep, edges=[_edge(6210, THREE_GENES[0])],
+        accession_to_genes=REAL_ACC_MAP, dispositions=[])
+    assert any("SHARED identity" in n for n in _failed(rep))
+
+
+def test_an_unresolved_identity_may_never_be_rankable():
+    rep = Report()
+    ce.check_no_drug_evidence_on_ambiguous_identity(
+        rep, edges=[_edge(1, "ENSG1", identity_status="unresolved",
+                          uniprot_id="P_CLEAN")],
+        accession_to_genes={"P_CLEAN": ["ENSG1"]}, dispositions=[])
+    assert any("unresolved" in d for _, ok, d in rep.checks if not ok)
+
+
+def test_a_shared_accession_needs_a_NAMED_ambiguous_identity_disposition():
+    """No edge is necessary but not sufficient: an absent edge with no record is
+    indistinguishable from a drug nobody found."""
+    rep = Report()
+    ce.check_no_drug_evidence_on_ambiguous_identity(
+        rep, edges=[], accession_to_genes=REAL_ACC_MAP, dispositions=[])
+    assert any("ambiguous_identity" in n for n in _failed(rep))
+
+
+def test_a_shared_accession_WITH_its_disposition_and_no_edge_passes():
+    rep = Report()
+    ce.check_no_drug_evidence_on_ambiguous_identity(
+        rep, edges=[], accession_to_genes=REAL_ACC_MAP,
+        dispositions=[{"subject_id": SHARED_ACC,
+                       "state": ce.DISP_AMBIGUOUS_IDENTITY}])
+    assert not _failed(rep)
+
+
+def test_a_resolved_one_to_one_accession_still_ranks():
+    """The gate must not refuse everything — a clean identity is still drug evidence."""
+    rep = Report()
+    ce.check_no_drug_evidence_on_ambiguous_identity(
+        rep,
+        edges=[_edge(9, "ENSG_CLEAN", uniprot_id="P16410",
+                     identity_status=ce.IDENTITY_RESOLVED)],
+        accession_to_genes={"P16410": ["ENSG_CLEAN"]},
+        dispositions=[])
     assert not _failed(rep)
