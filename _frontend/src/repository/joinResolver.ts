@@ -12,29 +12,25 @@ import { conditionUniverse, joinPlan } from './joinSemantics';
 import type { JoinPlan, JoinSelectionInput } from './joinSemantics';
 import { desiredChange } from './armKey';
 import type { SelectionV3 } from '../adapters/selectionV3Adapter';
-import type {
-  DirectArm,
-  DirectArmBundle,
-  PathwayArm,
-  PathwayArmBundle,
-  TemporalArm,
-  TemporalArmBundle,
-} from '../domain/reusableArm';
-import { getDirectArm, getTemporalArm, getPathwayArm } from '../adapters/reusableArmAdapter';
+import type { DirectArm, DirectArmBundle, PathwayArm, PathwayArmBundle } from '../domain/reusableArm';
+import type { NativeTemporalArm, NativeTemporalArmBundle } from '../domain/nativeTemporalArm';
+import { getDirectArm, getPathwayArm } from '../adapters/reusableArmAdapter';
+import { getNativeTemporalArm } from '../adapters/nativeTemporalArmAdapter';
 
-/** The bundles a selection needs. pathwayByContext is keyed `condition|source`. */
+/** The bundles a selection needs. pathwayByContext is keyed `condition|source`. The temporal
+ *  bundle is W5's NATIVE spot.stage02_temporal_arm_bundle.v1 shape. */
 export interface ResolvedBundles {
   direct?: DirectArmBundle | null;
-  temporal?: TemporalArmBundle | null;
+  temporal?: NativeTemporalArmBundle | null;
   pathwayByContext?: Record<string, PathwayArmBundle | null>;
 }
 
 export interface JoinedView {
   mode: SelectionV3['analysis_mode'];
   plan: JoinPlan;
-  /** Perturbation-gene ranking arms (Direct for within, Temporal DiD for cross-time). */
-  geneArmA: DirectArm | TemporalArm | null;
-  geneArmB: DirectArm | TemporalArm | null;
+  /** Perturbation-gene ranking arms (Direct for within, native Temporal DiD for cross-time). */
+  geneArmA: DirectArm | NativeTemporalArm | null;
+  geneArmB: DirectArm | NativeTemporalArm | null;
   /** Pathway panel arms. */
   pathwayArmA: PathwayArm | null;
   pathwayArmB: PathwayArm | null;
@@ -89,8 +85,8 @@ export function resolveJoinedView(
   return {
     mode: sel.analysis_mode,
     plan,
-    geneArmA: bundles.temporal ? getTemporalArm(bundles.temporal, sel.A.program_id, dcA) : null,
-    geneArmB: bundles.temporal ? getTemporalArm(bundles.temporal, sel.B.program_id, dcB) : null,
+    geneArmA: bundles.temporal ? getNativeTemporalArm(bundles.temporal, sel.A.program_id, dcA) : null,
+    geneArmB: bundles.temporal ? getNativeTemporalArm(bundles.temporal, sel.B.program_id, dcB) : null,
     pathwayArmA: pwFrom ? getPathwayArm(pwFrom, sel.A.program_id, dcA) : null,
     pathwayArmB: pwTo ? getPathwayArm(pwTo, sel.B.program_id, dcB) : null,
     pathway_context: plan.pathway_context,

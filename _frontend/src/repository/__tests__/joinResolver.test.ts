@@ -10,7 +10,8 @@ import { joinRowIdentity, desiredDirectionDisposition } from '../armIdentity';
 import { directArmKey, temporalArmKey, pathwayArmKey, convergenceKey } from '../armKey';
 import { ConditionUniverseError } from '../joinSemantics';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
-import type { DirectArmBundle, TemporalArmBundle, PathwayArmBundle } from '../../domain/reusableArm';
+import type { DirectArmBundle, PathwayArmBundle } from '../../domain/reusableArm';
+import type { NativeTemporalArmBundle } from '../../domain/nativeTemporalArm';
 
 const prov = { provenance: {} } as unknown as { provenance: unknown };
 
@@ -40,16 +41,20 @@ function directBundle(condition: string): DirectArmBundle {
     },
   } as unknown as DirectArmBundle;
 }
-function temporalBundle(from: string, to: string): TemporalArmBundle {
+function temporalBundle(from: string, to: string): NativeTemporalArmBundle {
   const kA = temporalArmKey('th17_like', 'decrease', from, to);
   const kB = temporalArmKey('th1_like', 'increase', from, to);
+  const emptyArm = (arm_key: string, program_id: string, desired_change: 'increase' | 'decrease') => ({
+    arm_key, program_id, desired_change, from_condition: from, to_condition: to,
+    n_targets: 0, n_evaluable: 0, n_ranked: 0, records: [],
+    ranking: { path: '', raw_sha256: '', canonical_sha256: '' },
+  });
   return {
-    ...prov, lane: 'temporal', from, to, bundle_sha256: 'f'.repeat(64),
-    arms: {
-      [kA]: { arm_key: kA, program_id: 'th17_like', desired_change: 'decrease', from, to, rows: [] },
-      [kB]: { arm_key: kB, program_id: 'th1_like', desired_change: 'increase', from, to, rows: [] },
-    },
-  } as unknown as TemporalArmBundle;
+    schema_version: 'spot.stage02_temporal_arm_bundle.v1', lane: 'temporal', analysis_mode: 'temporal_cross_condition',
+    from_condition: from, to_condition: to, bundle_id: 'x', base_records: {},
+    verification_ref: 'spot.stage02.temporal.arm.independent_verifier.v1', ...prov,
+    arms: { [kA]: emptyArm(kA, 'th17_like', 'decrease'), [kB]: emptyArm(kB, 'th1_like', 'increase') },
+  } as unknown as NativeTemporalArmBundle;
 }
 function pathwayBundle(condition: string, source: string): PathwayArmBundle {
   const kA = pathwayArmKey('th17_like', 'decrease', condition, source);
