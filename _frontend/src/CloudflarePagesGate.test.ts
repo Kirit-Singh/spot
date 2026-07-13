@@ -35,7 +35,7 @@ function postAuth(code: string, url = `https://${CANONICAL_HOST}/auth`): Request
 }
 
 describe('Cloudflare Pages canonical and reviewer gate', () => {
-  it('redirects the singular host before auth and never sets a cookie there', async () => {
+  it('redirects the singular host before auth and refuses deployment subdomains', async () => {
     const next = vi.fn(async () => new Response('must not run'));
     const request = new Request('https://spotpathway.com/auth?view=targets&code=must-not-forward', {
       method: 'POST',
@@ -48,9 +48,10 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     expect(response.headers.has('Set-Cookie')).toBe(false);
     expect(next).not.toHaveBeenCalled();
 
+    // A per-branch/per-deployment subdomain is refused outright, never redirected:
+    // it must not serve the app or hand back a reviewer cookie. See CloudflareHostPolicy.
     const pagesDev = await middleware(context(new Request('https://release.spotpathways.pages.dev/results/current.json'), production, next));
-    expect(pagesDev.status).toBe(308);
-    expect(pagesDev.headers.get('Location')).toBe('https://spotpathways.com/results/current.json');
+    expect(pagesDev.status).toBe(503);
     expect(pagesDev.headers.has('Set-Cookie')).toBe(false);
     expect(next).not.toHaveBeenCalled();
   });

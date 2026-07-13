@@ -1,10 +1,10 @@
 import {
-  CANONICAL_HOST,
   PLACEHOLDER_HOST,
   canonicalRedirectTarget,
   expiredSessionCookie,
   localHostAllowed,
   operationalFailure,
+  productionHostDecision,
   readCookie,
   redirect,
   verifySession,
@@ -22,10 +22,12 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
 
-  // Canonicalization is deliberately first. No alias, pages.dev production URL,
-  // or unexpected production host can reach auth or receive the reviewer cookie.
-  if (env.SITE_MODE === 'production' && url.hostname !== CANONICAL_HOST) {
-    return redirect(canonicalRedirectTarget(request.url), 308);
+  // Host policy is deliberately first. No redirect host, stale alias, deployment
+  // subdomain, or unexpected host can reach auth or receive the reviewer cookie.
+  if (env.SITE_MODE === 'production') {
+    const decision = productionHostDecision(url.hostname, env);
+    if (decision === 'redirect') return redirect(canonicalRedirectTarget(request.url), 308);
+    if (decision === 'refuse') return operationalFailure();
   }
 
   // Preview deployments are protected by a Cloudflare Access policy upstream.

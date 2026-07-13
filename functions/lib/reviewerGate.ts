@@ -1,9 +1,16 @@
 export const CANONICAL_HOST = 'spotpathways.com';
 export const CANONICAL_ORIGIN = `https://${CANONICAL_HOST}`;
-// Interim production deployment host, served ONLY at the project's pages.dev alias
-// before the canonical domain is attached. It runs the same reviewer-code gate.
+// The project's STABLE production alias. It is the only pages.dev host that may ever
+// serve: unique per-deployment and per-branch subdomains are always refused. It serves
+// only while the canonical certificate provisions, then redirects to the canonical host.
 export const PLACEHOLDER_HOST = 'spotpathways.pages.dev';
 export const PLACEHOLDER_ORIGIN = `https://${PLACEHOLDER_HOST}`;
+// Hosts that permanently redirect to the canonical host, before auth or cookie parsing.
+export const REDIRECT_HOSTS: ReadonlySet<string> = new Set([
+  'spotpathway.com',
+  'www.spotpathway.com',
+  'www.spotpathways.com',
+]);
 export const REVIEW_COOKIE = '__Host-spot-review';
 export const SESSION_TTL_SECONDS = 4 * 60 * 60;
 
@@ -11,6 +18,23 @@ export interface Env {
   ACCESS_CODE?: string;
   SESSION_SIGNING_KEY?: string;
   SITE_MODE?: 'production' | 'placeholder' | 'preview' | 'local';
+  // '1' ONLY while the canonical certificate provisions: the stable pages.dev alias
+  // serves the gated app. Any other value (the default) redirects it to canonical.
+  ALLOW_PAGES_DEV_ALIAS?: string;
+}
+
+export type HostDecision = 'serve' | 'redirect' | 'refuse';
+
+// The exact production host policy. Default is 'refuse': an unknown host never serves
+// and is never redirected, so deployment subdomains cannot expose the app or leak a
+// reviewer cookie.
+export function productionHostDecision(hostname: string, env: Env): HostDecision {
+  if (hostname === CANONICAL_HOST) return 'serve';
+  if (REDIRECT_HOSTS.has(hostname)) return 'redirect';
+  if (hostname === PLACEHOLDER_HOST) {
+    return env.ALLOW_PAGES_DEV_ALIAS === '1' ? 'serve' : 'redirect';
+  }
+  return 'refuse';
 }
 
 export interface PagesContext {

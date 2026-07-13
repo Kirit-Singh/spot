@@ -59,14 +59,34 @@ no application cookie).
 The reviewer code and `SESSION_SIGNING_KEY` are deployment secrets: never committed,
 printed, embedded in HTML/JS/URLs, or logged. Set Pages **Runtime → Fail closed**.
 
+## Exact host policy (`SITE_MODE='production'`)
+
+`productionHostDecision(hostname, env)` in `functions/lib/reviewerGate.ts` is the single
+source of truth. It **defaults to refuse**, so an unknown host never serves and is never
+redirected:
+
+| Host | Decision |
+|------|----------|
+| `spotpathways.com` | **serve** — the canonical allowed application host; full reviewer gate |
+| `spotpathway.com`, `www.spotpathway.com`, `www.spotpathways.com` | **redirect** — 308 to canonical *before auth*, path + query preserved, credential-like query keys stripped, never `Set-Cookie` |
+| `spotpathways.pages.dev` (the project's stable alias) | **serve** while `ALLOW_PAGES_DEV_ALIAS=1` (certificate provisioning); otherwise **redirect** 308 to canonical |
+| unique per-deployment / per-branch subdomains (`<id>.spotpathways.pages.dev`, `release.spotpathways.pages.dev`) | **refuse** — 503, never serve, never redirect, never issue a cookie |
+| every other host | **refuse** — 503 |
+
+`POST /auth` requires the submission to be same-origin with the host that rendered the
+form (canonical, or the stable alias while provisioning). The access-code comparison,
+constant-time check, and host-only `__Host-spot-review` cookie are unchanged.
+
 ## Placeholder -> production switch
 
-When the canonical domain is authorized:
-
-1. Attach `spotpathways.com` to the project (DNS — only when instructed) and, later,
-   `spotpathway.com` as redirect-only.
-2. Set the production environment variable `SITE_MODE=production`.
-3. Point the build at the full-site assembler (`build_pages.sh` / `dist/cloudflare-pages`)
+1. Set the production environment variables **first**: `SITE_MODE=production` and, during
+   certificate provisioning, `ALLOW_PAGES_DEV_ALIAS=1`.
+   Attaching the custom domain while `SITE_MODE=placeholder` would 503 the canonical host.
+2. Attach `spotpathways.com`, then `spotpathway.com`, in the Pages project's Custom domains
+   screen. Wait for Active DNS + certificate.
+3. Once the canonical certificate is active, **remove `ALLOW_PAGES_DEV_ALIAS`** so the
+   stable alias 308s to the canonical host.
+4. Point the build at the full-site assembler (`build_pages.sh` / `dist/cloudflare-pages`)
    once the Stage-1..4 release is admitted.
 
 The cookie mechanism is identical across modes (same signing key, same signed message),

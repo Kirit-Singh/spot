@@ -196,7 +196,12 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
 
   it('fails closed on a tampered or expired cookie', async () => {
     const good = await issueSession(SIGNING_KEY);
-    const tamperedToken = `${good.slice(0, -1)}${good.endsWith('a') ? 'b' : 'a'}`;
+    // Flip the FIRST base64url character of the signature: it always contributes 6
+    // significant bits to byte 0. Flipping the last character is not a valid tamper,
+    // because a 32-byte signature encodes to 43 chars whose final 2 bits are discarded.
+    const parts = good.split('.');
+    parts[3] = `${parts[3][0] === 'A' ? 'B' : 'A'}${parts[3].slice(1)}`;
+    const tamperedToken = parts.join('.');
     const tampered = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page.html`, {
       headers: { Accept: 'text/html', Cookie: `${REVIEW_COOKIE}=${tamperedToken}` },
     }), placeholderEnv));

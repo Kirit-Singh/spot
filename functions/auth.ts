@@ -1,13 +1,11 @@
 import {
-  CANONICAL_HOST,
-  CANONICAL_ORIGIN,
   PLACEHOLDER_HOST,
-  PLACEHOLDER_ORIGIN,
   canonicalRedirectTarget,
   constantTimeSecretEqual,
   issueSession,
   localHostAllowed,
   operationalFailure,
+  productionHostDecision,
   redirect,
   sessionCookie,
   withSecurityHeaders,
@@ -79,10 +77,13 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
 
-  // Defense in depth: middleware performs this redirect first, but the route can
-  // never handle credentials or set a cookie for a noncanonical production host.
-  if (env.SITE_MODE === 'production' && url.hostname !== CANONICAL_HOST) {
-    return redirect(canonicalRedirectTarget(request.url), 308);
+  // Defense in depth: middleware applies this policy first, but the route can never
+  // handle credentials or set a cookie for a redirect host, a stale alias, a
+  // deployment subdomain, or any other unexpected production host.
+  if (env.SITE_MODE === 'production') {
+    const decision = productionHostDecision(url.hostname, env);
+    if (decision === 'redirect') return redirect(canonicalRedirectTarget(request.url), 308);
+    if (decision === 'refuse') return operationalFailure();
   }
   if (request.method !== 'POST') {
     return withSecurityHeaders(new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } }));
@@ -102,7 +103,10 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   if (!env.ACCESS_CODE || !env.SESSION_SIGNING_KEY || env.SESSION_SIGNING_KEY.length < 32) {
     return operationalFailure();
   }
-  const expectedOrigin = local ? null : env.SITE_MODE === 'placeholder' ? PLACEHOLDER_ORIGIN : CANONICAL_ORIGIN;
+  // The host is already validated as one that may serve (canonical, or the stable
+  // alias while provisioning), so the expected origin is derived from it: the form
+  // must be same-origin with the page that rendered it.
+  const expectedOrigin = local ? null : `https://${url.hostname}`;
   if (!sameOrigin(request, expectedOrigin)) return invalidAccess();
 
   let candidate: string | null = null;
