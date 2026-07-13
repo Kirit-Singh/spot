@@ -36,6 +36,7 @@ SCANNED_FILES = [
     "DATA_LICENSES.md",
     "schemas/README.md",
     "schemas/paper_concordance_run_receipt.schema.json",
+    "schemas/source_license_inventory.json",
     "01_programs/README.md",
     "02_geneskew/README.md",
     "03_druglink/README.md",
@@ -71,8 +72,11 @@ def test_no_machine_local_paths():
             continue
         with open(p, encoding="utf-8") as fh:
             for i, line in enumerate(fh, 1):
+                # strip URLs first: an official URL may legitimately contain "/home/" etc.
+                # (e.g. ncbi.nlm.nih.gov/home/about/policies/); a machine path is never a URL.
+                scan = re.sub(r"https?://\S+", "", line)
                 for pat in MACHINE_PATTERNS:
-                    if pat.search(line):
+                    if pat.search(scan):
                         offenders.append(f"{rel}:{i}: machine path {pat.pattern!r}")
     assert not offenders, "machine-local path(s) in public surface:\n" + "\n".join(offenders)
 

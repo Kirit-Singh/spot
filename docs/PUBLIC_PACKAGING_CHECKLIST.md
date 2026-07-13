@@ -44,6 +44,27 @@ tracked here rather than edited now:
       "authors' release, not bundled"), then re-freeze `PROTECTED_HASHES.json` and update the
       release manifest hash. Until then it is intentionally left byte-for-byte unchanged.
 
+## Fill-and-publish (orchestrator supplies final values; DO NOT UPLOAD yet)
+Templates in this repo carry `null` / pending fields on purpose. When the real runs finish, the
+orchestrator drops the exact final artifact path + content hash into each row below, a verifier
+re-derives the hash, and only then does publication proceed. **No upload happens from this branch.**
+
+| Artifact | Final repo path | Final sha256 | Verifier + result | Filled by | Filled UTC | Status |
+|---|---|---|---|---|---|---|
+| Stage-1 v3 HF bundle | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | pending |
+| `stage1_release_hf_revision` (returned) | n/a (HF) | _pending_ | _pending_ | _pending_ | _pending_ | pending |
+| Paper-concordance receipt | _pending_ | _pending_ | primary PDF sha `7539856ecfea…` re-checked | _pending_ | _pending_ | pending |
+| Stage-2 arms/pathway artifact(s) | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | pending |
+| Stage-3 / Stage-4 artifact(s) | _pending_ (not yet implemented) | _pending_ | _pending_ | _pending_ | _pending_ | pending |
+
+Publish gate — all must be true before any upload:
+- [ ] every row above filled with a real path + hash (no `_pending_`)
+- [ ] each hash re-derived by an independent verifier (generator ≠ verifier), exit 0
+- [ ] `source_license_inventory.json` and the HF card carry only verified licenses; no token, no
+      machine path, no raw proprietary/unlicensed data, no unfinished result presented as final
+- [ ] orchestrator sign-off recorded
+
 ## Secret / path hygiene (each reseal)
 - [ ] Re-run the machine-path regression scan (`test_public_packaging_hygiene.py`)
 - [ ] Re-run the secret scan; confirm no credentials or tokens are tracked
+- [ ] Confirm `schemas/source_license_inventory.json` licenses still resolve to their official URLs

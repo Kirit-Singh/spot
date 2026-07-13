@@ -9,6 +9,10 @@ repo (or the source's own official page); unrecorded fields are `—`, never gue
 accessed` is `—` for a source this repo does not pin. **Intended use:** academic /
 non-commercial. Verify current terms before any commercial or redistribution use.
 
+The **machine-readable, officially-verified** subset (with per-source official URL, verbatim
+license quote, and verification date) is `schemas/source_license_inventory.json`; that file is
+authoritative for the sources it lists and this table is the broader human-readable view.
+
 ## 1. Bundled (redistributed in this repo or on our Hugging Face)
 The only third-party data spot redistributes is a **derived** subset; no upstream source
 matrix is bundled.
@@ -37,9 +41,13 @@ a license here is not a claim that spot queries the source today.
 | Open Targets Platform | CC0 1.0 | — | Open Targets. Planned Stage-3 disease context. |
 | ChEMBL | CC BY-SA 3.0 | — | EMBL-EBI ChEMBL. Share-alike applies only if we redistribute *derived* ChEMBL data. Planned Stage-3 target→drug. |
 | UniProt | CC BY 4.0 | — | UniProt Consortium. Planned Stage-3 target crosswalk. |
+| PubChem | NCBI: no restrictions on NCBI content (US public domain); depositor content may carry copyright | — | NCBI / NLM. Verify submitter terms before redistributing depositor content. Planned Stage-3 chemistry. |
+| Gene Ontology (GO) | CC BY 4.0 | — | GO Consortium. Planned pathway/annotation context. |
+| Reactome | CC0 1.0 (annotation + interaction data; software/diagrams CC BY 4.0) | — | Reactome. Planned pathway context. |
 | LINCS L1000 / Connectivity Map | CC BY 4.0 | — | Broad Institute LINCS / CMap. Not in the current design; retained as a planned option only. |
 | DGIdb | open (see DGIdb terms) | — | Drug–Gene Interaction Database. Not in the current design; retained as a planned option only. |
-| FAERS / OpenFDA | U.S. public domain | — | U.S. FDA. Planned Stage-4 safety signal. |
+| openFDA / FAERS | CC0 1.0 (openFDA dedication; no FDA endorsement implied) | — | U.S. FDA. Planned Stage-4 safety signal. |
+| DailyMed | NLM-produced content US-government public domain; manufacturer-submitted label (SPL) content may carry restrictions | — | NLM. Attribute "Courtesy of the National Library of Medicine". Planned Stage-4 label context. |
 | ClinicalTrials.gov | **NLM Terms and Conditions — not blanket public domain** (records may contain material copyrighted by sponsors; attribute NLM, no endorsement implied) | — | U.S. NIH / NLM. Planned Stage-5 (placeholder). |
 | Grossman et al., *Neuro-Oncology* 2026 — NEBPI framework | CC BY 4.0 | doi:10.1093/neuonc/noag051 | reference framework; planned Stage-4 brain-penetrance scoring. |
 | RDKit (CNS-MPO descriptors) | BSD-3-Clause | — | RDKit (software library, not a dataset); planned Stage-4 descriptor calculation. |

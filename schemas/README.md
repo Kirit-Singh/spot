@@ -50,7 +50,7 @@ frozen selector admits 3,540 valid ordered selections over 10 base-portable prog
 
 ### `stage01_stage2_registry_view.json` (scorer VIEW)
 The minimal executable projection `selection_id` binds (canonical `5d1d8c36…`, rebuilt independently by
-`01_programs/analysis/build_registry_view.py`): programs, panel/control symbols + Ensembl, coefficients,
+`01_programs/analysis/stage2_bridge/build_registry_view.py`): programs, panel/control symbols + Ensembl, coefficients,
 `base_portable`. Excludes display labels, citations and provenance, so those never move `selection_id`.
 
 ## Downstream (Stage 2/3/4)
