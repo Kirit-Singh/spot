@@ -3,9 +3,10 @@
 An envelope over the (condition x source) bundles, anchored OUTWARD: the universe AND the
 scorer/method pins to the Stage-1 v3 release, each cell's local validity to its INDEPENDENT
 per-bundle report (one to one, exact gate inventory, attested bytes), the two gene-set source
-artifacts pinned, the solver lock to a constant, the producer inventory native-shaped, its
-release_id mandatory and byte-bound. The fixtures build the REAL producer shapes so the tests
-attack production bytes.
+artifacts pinned, the solver lock to a constant, and the PRODUCER inventory in its REAL native
+shape (release_inventory.py: un-admitted verdict/admitted/self_admitted/verifier_id, solver_lock
++ stage1_binding, context/relative_dir entries — NOT env_lock/topology), release_id mandatory
+and byte-bound. A test invokes the REAL release_inventory.build so the shape is not assumed.
 """
 from __future__ import annotations
 
@@ -19,15 +20,15 @@ from direct import verify_rules as R
 from direct import verify_signature_matrix as SM
 
 CONDITIONS = ["Rest", "Stim8hr", "Stim48hr"]
-SOURCES = ["reactome", "go_bp"]                     # lowercase ids, as the bundles carry them
+SOURCES = ["reactome", "go_bp"]
 RELEASE_SOURCES = ["GO-BP", "Reactome"]             # display-case, as selector.pathway_sources
 LOCK = VR.STAGE2_SOLVER_LOCK_SHA256
-SCORER_CANON = "v" * 64                             # release pin == bundle release-scorer-view
+SCORER_CANON = "v" * 64
 METHOD = "stage1-continuous-v3.0.1"
 SCORER_VIEW = "5" * 64
 CODE_IDENTITY = {"lane": "production", "code_tree_sha256": "c" * 64}
+W3C = "/home/tcelab/worktrees/spot-stage2-w3c/02_geneskew"
 
-# the EXACT per-bundle gate inventory, taken from the producer-verifier's own constants
 BUNDLE_GATES = [SM.V1, SM.V1_REFMAN, SM.V2_VALUES, SM.V2_BITS, SM.V2_CANON, SM.V2_ANCHOR,
                 SM.V2_FINITE, SM.V3, SM.V4, SM.V5, SM.V6, SM.V7, SM.V8, SM.V9, SM.V10,
                 SM.V_IDENTITY, SM.V_EXTERNAL_MASK, SM.V_SOLVER_LOCK, SM.V_QC, SM.V_STALE_SOURCE,
@@ -68,14 +69,19 @@ def _bundle(root, cond, src, *, scorer=SCORER_VIEW, code=None, release_scorer=SC
         "records_sha256": records or hashlib.sha256(f"{cond}:{src}".encode()).hexdigest(),
     }
     full = R.content_sha256(binding)
-    d = os.path.join(root, full[:VR.RUN_ID_LEN])
+    rid = full[:VR.RUN_ID_LEN]
+    d = os.path.join(root, rid)
     _write(os.path.join(d, VR.PROVENANCE_FILE),
-           {"pathway_run_id": full[:VR.RUN_ID_LEN], "pathway_run_sha256": full,
-            "run_binding": binding})
+           {"pathway_run_id": rid, "pathway_run_sha256": full, "run_binding": binding})
+    # the REAL native pathway arm_bundle shape (bundle_normalize contract)
     _write(os.path.join(d, VR.BUNDLE_FILE),
-           {"condition": cond, "source": doc_source or src, "bundle_id": full[:VR.RUN_ID_LEN],
-            "arms": [], "schema_version": "spot.stage02_pathway_arm.v1"})
+           {"schema_version": "spot.stage02_pathway_arm_bundle.v1", "pathway_run_id": rid,
+            "condition": cond, "source": doc_source or src,
+            "arms": [{"pathway_arm_key": f"PROG|increase|{cond}|{src}",
+                      "records_sha256": binding["records_sha256"]}]})
     _write(os.path.join(d, VR.GENE_SETS_FILE), _gene_doc(gene_tag or src))
+    _write(os.path.join(d, "signature_ref.json"), {"condition": cond, "source": src, "ref": rid})
+    _write(os.path.join(d, "convergence.json"), {"condition": cond, "source": src, "conv": rid})
     return d
 
 
@@ -93,13 +99,11 @@ def _release_file(path, conds=CONDITIONS, srcs=RELEASE_SOURCES, scorer=SCORER_CA
     return path
 
 
-def _report(path, d, *, verdict="admit", n_failed=0, gates=None, run_ids=None, tamper=False,
-            attest_gene=True):
+def _report(path, d, *, verdict="admit", n_failed=0, gates=None, run_ids=None, tamper=False):
     rid = _run_id(d)
     gate_list = BUNDLE_GATES if gates is None else gates
-    att = {rid: {VR.PROVENANCE_FILE: _raw(os.path.join(d, VR.PROVENANCE_FILE))}}
-    if attest_gene:
-        att[rid][VR.GENE_SETS_FILE] = _raw(os.path.join(d, VR.GENE_SETS_FILE))
+    att = {rid: {VR.PROVENANCE_FILE: _raw(os.path.join(d, VR.PROVENANCE_FILE)),
+                 VR.GENE_SETS_FILE: _raw(os.path.join(d, VR.GENE_SETS_FILE))}}
     body = {"schema_version": VR.BUNDLE_REPORT_SCHEMA, "verifier_id": VR.BUNDLE_VERIFIER_ID,
             "generator_is_not_verifier": True, "fail_closed": True, "n_bundles": 1,
             "n_conditions": 1, "run_ids": [rid] if run_ids is None else run_ids,
@@ -117,55 +121,67 @@ def _reports(rep_dir, dirs):
     return [_report(os.path.join(rep_dir, f"r{i}.json"), d) for i, d in enumerate(dirs)]
 
 
-def _inventory(path, dirs, root, *, status="pending", required_verifier_id=VR.VERIFIER_ID,
-               schema=VR.RELEASE_SCHEMA, generic=False, conds=CONDITIONS, srcs=SOURCES,
-               drop=None, extra=False, release_id=True, env_lock_sha=LOCK):
-    entries = []
+def _files_of(d):
+    """Every file in a bundle dir, keyed by relpath, {raw_sha256, canonical for json} — exactly
+    as release_inventory._files_of names them."""
+    out = {}
+    for base, _dirs, names in os.walk(d):
+        for name in names:
+            p = os.path.join(base, name)
+            rel = os.path.relpath(p, d).replace(os.sep, "/")
+            entry = {"raw_sha256": _raw(p)}
+            if rel.endswith(".json"):
+                entry["canonical_sha256"] = R.content_sha256(json.load(open(p)))
+            out[rel] = entry
+    return out
+
+
+def _native_inventory(path, dirs, root, *, status="pending", verdict=VR.VERDICT_PENDING,
+                      admitted=False, self_admitted=False, verifier_id=None, solver_lock=LOCK,
+                      s1_scorer=SCORER_CANON, s1_conds=CONDITIONS, schema=VR.RELEASE_SCHEMA,
+                      lane="pathway", drop=None, extra=False, release_id=True):
+    """The REAL release_inventory.build native shape, hand-built for attack isolation."""
+    entries, arm_keys = [], []
     for d in dirs:
-        b = json.load(open(os.path.join(d, VR.PROVENANCE_FILE)))["run_binding"]
-        entry = {"bundle_key": f"{b['condition']}|{b['source']}", "bundle_id": _run_id(d),
-                 "relative_dir": os.path.relpath(d, root).replace(os.sep, "/"),
-                 "n_arms": 0, "arm_keys": [],
-                 "files": {VR.BUNDLE_FILE: _hashes(os.path.join(d, VR.BUNDLE_FILE)),
-                           VR.PROVENANCE_FILE: _hashes(os.path.join(d, VR.PROVENANCE_FILE))},
-                 "rankings": {}}
-        if generic:
-            entry["context"] = {"condition": b["condition"], "gene_set_source": b["source"]}
-        else:
-            entry["condition"], entry["source"] = b["condition"], b["source"]
-        entries.append(entry)
-    inv = {"schema_version": schema,
-           "release_id_rule": "sha256(canonical JSON excluding release_id)",
-           "lane": "pathway", "stage1_binding": {"method_version": METHOD},
-           "env_lock": {"sha256": env_lock_sha, "status": "locked"},
-           "env_lock_sha256": env_lock_sha,
-           "topology": {"topology_rule_id": "spot.stage02.pathway.arm.topology.v1",
-                        "n_conditions": len(conds), "n_sources": len(srcs),
-                        "conditions": list(conds), "sources": list(srcs),
-                        "expected_n_bundles": len(conds) * len(srcs),
-                        "grid": [f"{c}|{s}" for c in conds for s in srcs]},
-           "n_bundles": len(entries), "n_logical_arms": 0, "arm_keys": [],
-           "bundles": sorted(entries, key=lambda e: e["bundle_key"]),
-           "external_admission": {"status": status, "required_verifier_id": required_verifier_id,
-                                  "required_report_schema_version":
-                                      "spot.stage02_temporal_arm_external_admission.v1"}}
+        doc = json.load(open(os.path.join(d, VR.BUNDLE_FILE)))
+        keys = [a["pathway_arm_key"] for a in doc["arms"]]
+        arm_keys += keys
+        ctx = {"condition": doc["condition"], "gene_set_source": doc["source"]}
+        entries.append({"bundle_id": doc["pathway_run_id"], "context": ctx,
+                        "relative_dir": os.path.relpath(d, root).replace(os.sep, "/"),
+                        "n_arms": len(doc["arms"]), "files": _files_of(d), "rankings": {}})
+    body = {"schema_version": schema, "lane": lane,
+            "release_id_rule": "sha256(canonical JSON excluding the id and admission fields)",
+            "n_bundles": len(entries), "n_logical_arms": len(arm_keys),
+            "arm_keys": sorted(arm_keys),
+            "bundles": sorted(entries, key=lambda e: e["bundle_id"]),
+            "stage1_binding": {"release_canonical_sha256": "rc" * 32,
+                               "registry_scorer_view_canonical_sha256": s1_scorer,
+                               "admitted_programs": ["PROG"], "conditions": list(s1_conds)},
+            "solver_lock_sha256": solver_lock, "producer_commit": "cafe" * 10,
+            "independent_verifier_commit": None,
+            "external_admission": {"status": status}}
+    doc = dict(body, verdict=verdict, admitted=admitted, self_admitted=self_admitted,
+               verifier_id=verifier_id)
     if drop:
-        inv.pop(drop, None)
+        doc.pop(drop, None)
     if extra:
-        inv["surprise_field"] = "not native"
+        doc["surprise_field"] = "not native"
     if release_id:
-        inv["release_id"] = R.content_sha256(inv)
-    _write(path, inv)
+        doc["release_id"] = R.content_sha256(doc)
+    _write(path, doc)
     return path
 
 
-def _build(tmp, *, conds=CONDITIONS, srcs=SOURCES, generic_inv=False, **bundle_kw):
+def _build(tmp, **bundle_kw):
+    conds = bundle_kw.pop("conds", CONDITIONS)
+    srcs = bundle_kw.pop("srcs", SOURCES)
     root = str(tmp / "pathway")
     dirs = [_bundle(root, c, s, **bundle_kw) for c in conds for s in srcs]
     return {
         "root": root, "dirs": dirs, "tmp": tmp,
         "release": _release_file(str(tmp / "stage01_v3_release.json")),
-        "inventory": _inventory(str(tmp / VR.RELEASE_FILE), dirs, root, generic=generic_inv),
+        "inventory": _native_inventory(str(tmp / VR.RELEASE_FILE), dirs, root),
         "reports": _reports(str(tmp / "verification"), dirs),
     }
 
@@ -212,10 +228,6 @@ class TestTheHonestReleaseAdmits:
         rest = {k: v for k, v in body.items() if k != VR.REPORT_ID_FIELD}
         assert body[VR.REPORT_ID_FIELD] == R.content_sha256(rest) and len(body["report_id"]) == 64
 
-    def test_the_generic_context_relative_dir_inventory_is_accepted(self, tmp_path):
-        rel = _build(tmp_path, generic_inv=True)
-        assert _verify(rel)["verdict"] == VR.ADMIT, sorted(_failed(_verify(rel)))
-
 
 # =========================================================================== #
 # universe + external scorer/method pins
@@ -230,7 +242,6 @@ class TestTheAuthoritativeUniverseAndPins:
         assert VR.G_RELEASE_ANCHOR in _failed(_verify(release, release=None))
 
     def test_six_bundles_sharing_a_WRONG_scorer_view_are_REFUSED(self, tmp_path):
-        # shared but not the release's pin — agreement with each other is not enough
         rel = _build(tmp_path, release_scorer="9" * 64)
         assert VR.G_ONE_RELEASE in _failed(_verify(rel))
 
@@ -259,12 +270,11 @@ class TestTheAuthoritativeUniverseAndPins:
 # =========================================================================== #
 class TestTheGeneSetSources:
     def test_two_sources_sharing_one_artifact_is_REFUSED(self, tmp_path):
-        rel = _build(tmp_path, gene_tag="shared")            # every bundle the same gene-set file
+        rel = _build(tmp_path, gene_tag="shared")
         assert VR.G_GENE_SETS in _failed(_verify(rel))
 
     def test_a_source_whose_bundles_disagree_on_the_artifact_is_REFUSED(self, release):
-        d = release["dirs"][0]
-        _write(os.path.join(d, VR.GENE_SETS_FILE), _gene_doc("reactome-TAMPERED"))
+        _write(os.path.join(release["dirs"][0], VR.GENE_SETS_FILE), _gene_doc("reactome-TAMPER"))
         assert VR.G_GENE_SETS in _failed(_verify(release))
 
     def test_a_MISSING_gene_set_file_is_REFUSED(self, release):
@@ -272,9 +282,7 @@ class TestTheGeneSetSources:
         assert VR.G_GENE_SETS in _failed(_verify(release))
 
     def test_a_gene_set_the_report_never_attested_is_REFUSED(self, release):
-        # swap the gene-set bytes AFTER the report was emitted: the report attests the old hash
-        d = release["dirs"][0]
-        gs = os.path.join(d, VR.GENE_SETS_FILE)
+        gs = os.path.join(release["dirs"][0], VR.GENE_SETS_FILE)
         doc = json.load(open(gs))
         doc["n_sets"] = 999
         _write(gs, doc)
@@ -311,8 +319,6 @@ class TestEveryCellIsIndependentlyAdmitted:
         assert VR.G_BUNDLE_ADMITTED in _failed(_verify(release))
 
     def test_a_single_FAILED_gate_is_REFUSED(self, release):
-        g = [{"check": x, "status": "pass"} for x in BUNDLE_GATES]
-        # build a report whose gates all named but one FAILED — reuse _report with custom gates
         d = release["dirs"][0]
         rid = _run_id(d)
         body = {"schema_version": VR.BUNDLE_REPORT_SCHEMA, "verifier_id": VR.BUNDLE_VERIFIER_ID,
@@ -320,9 +326,9 @@ class TestEveryCellIsIndependentlyAdmitted:
                 "n_conditions": 1, "run_ids": [rid],
                 "bound_artifacts": {rid: {VR.PROVENANCE_FILE: _raw(os.path.join(
                     d, VR.PROVENANCE_FILE)), VR.GENE_SETS_FILE: _raw(os.path.join(
-                        d, VR.GENE_SETS_FILE))}},
-                "verdict": "admit", "n_failed": 0,
-                "gates": g[:-1] + [{"check": BUNDLE_GATES[-1], "status": "fail"}]}
+                        d, VR.GENE_SETS_FILE))}}, "verdict": "admit", "n_failed": 0,
+                "gates": [{"check": g, "status": "pass"} for g in BUNDLE_GATES[:-1]]
+                + [{"check": BUNDLE_GATES[-1], "status": "fail"}]}
         sha = hashlib.sha256(
             json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         _write(release["reports"][0], dict(body, report_sha256=sha))
@@ -338,8 +344,8 @@ class TestEveryCellIsIndependentlyAdmitted:
                         "verdict": "admit", "n_failed": 0,
                         "run_ids": [_run_id(release["dirs"][0])], "report_sha256": "0" * 64,
                         "gates": [{"check": g, "status": "pass"} for g in BUNDLE_GATES]})
-        reports = [forged] + release["reports"][1:]
-        assert VR.G_BUNDLE_ADMITTED in _failed(_verify(release, reports=reports))
+        assert VR.G_BUNDLE_ADMITTED in _failed(
+            _verify(release, reports=[forged] + release["reports"][1:]))
 
     def test_mutating_a_bundle_AFTER_its_report_unbinds_it(self, release):
         d = release["dirs"][0]
@@ -353,9 +359,9 @@ class TestEveryCellIsIndependentlyAdmitted:
 
 
 # =========================================================================== #
-# the native producer inventory
+# the REAL native producer inventory (release_inventory.py)
 # =========================================================================== #
-class TestTheProducerInventory:
+class TestTheNativeProducerInventory:
     def test_a_MISSING_bundle_partial_release_is_REFUSED(self, release):
         assert VR.G_TOPOLOGY in _failed(_verify(release, dirs=release["dirs"][:5]))
 
@@ -366,20 +372,21 @@ class TestTheProducerInventory:
         doc = json.load(open(bp))
         doc["source"] = "go_bp"
         _write(bp, doc)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"])
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"])
         assert VR.G_SOURCE in _failed(_verify(rel))
 
     def test_a_FORGED_inventory_that_does_not_match_disk_is_REFUSED(self, release):
         inv = json.load(open(release["inventory"]))
-        inv["bundles"][0]["files"][VR.BUNDLE_FILE]["canonical_sha256"] = "0" * 64
+        first = inv["bundles"][0]
+        first["files"]["arm_bundle.json"]["canonical_sha256"] = "0" * 64
         inv["release_id"] = R.content_sha256({k: v for k, v in inv.items() if k != "release_id"})
         _write(release["inventory"], inv)
         assert VR.G_INVENTORY_BYTES in _failed(_verify(release))
 
     def test_a_MISSING_release_id_is_REFUSED(self, tmp_path):
         rel = _build(tmp_path)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
-                                      release_id=False)
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             release_id=False)
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
 
     def test_an_inventory_release_id_that_does_not_rederive_is_REFUSED(self, release):
@@ -390,57 +397,69 @@ class TestTheProducerInventory:
 
     def test_an_inventory_OMITTING_a_native_field_is_REFUSED(self, tmp_path):
         rel = _build(tmp_path)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
-                                      drop="topology")
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             drop="stage1_binding")
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
 
     def test_an_inventory_with_an_EXTRA_non_native_field_is_REFUSED(self, tmp_path):
         rel = _build(tmp_path)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
-                                      extra=True)
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             extra=True)
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
 
-    def test_an_inventory_topology_that_disagrees_with_the_release_is_REFUSED(self, tmp_path):
+    def test_a_SELF_ADMITTED_inventory_is_REFUSED(self, tmp_path):
         rel = _build(tmp_path)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
-                                      conds=["Rest", "Stim8hr", "OTHER"])
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             admitted=True, verdict="admitted",
+                                             verifier_id="spot.stage02.pathway.arm.independent_verifier.v1")
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
 
-    def test_a_wrong_env_lock_sha_in_the_inventory_is_REFUSED(self, tmp_path):
+    def test_a_wrong_solver_lock_sha_is_REFUSED(self, tmp_path):
         rel = _build(tmp_path)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
-                                      env_lock_sha="d" * 64)
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             solver_lock="d" * 64)
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
 
-    def test_an_inventory_that_is_NOT_pending_is_REFUSED(self, tmp_path):
+    def test_a_stage1_binding_scorer_that_is_not_the_release_pin_is_REFUSED(self, tmp_path):
         rel = _build(tmp_path)
-        rel["inventory"] = _inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
-                                      status="admit")
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             s1_scorer="7" * 64)
+        assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
+
+    def test_a_stage1_binding_conditions_mismatch_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path)
+        rel["inventory"] = _native_inventory(str(tmp_path / "i.json"), rel["dirs"], rel["root"],
+                                             s1_conds=["Rest", "Stim8hr", "OTHER"])
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(rel))
 
     def test_a_MISSING_inventory_is_fail_closed(self, release):
         assert VR.G_INVENTORY_PRESENT in _failed(_verify(release, inv=None))
 
     @pytest.mark.skipif(
-        not os.path.exists("/home/tcelab/worktrees/spot-stage2-w3/02_geneskew/"
-                           "analysis/direct/pathway_release.py"),
-        reason="the real pathway producer is not checked out")
-    def test_the_REAL_pathway_producer_inventory_is_accepted(self, tmp_path):
-        import importlib.util
+        not os.path.exists(os.path.join(W3C, "analysis/direct/release_inventory.py")),
+        reason="the real release_inventory producer is not checked out")
+    def test_the_REAL_release_inventory_build_is_accepted(self, tmp_path):
+        # invoke the REAL producer in a SUBPROCESS (PYTHONPATH=w3c) so its `direct` package never
+        # pollutes this process's module resolution — the shape is validated, not assumed.
+        import subprocess
         import sys
-        w3 = "/home/tcelab/worktrees/spot-stage2-w3/02_geneskew"
-        sys.path.insert(0, os.path.join(w3, "analysis"))
         rel = _build(tmp_path)
-        spec = importlib.util.spec_from_file_location(
-            "direct.pathway_release", os.path.join(w3, "analysis/direct/pathway_release.py"))
-        try:
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            mod.build_release(rel["dirs"], rel["root"], conditions=CONDITIONS, sources=SOURCES,
-                              write=True)
-        except Exception as exc:                            # noqa: BLE001
-            pytest.skip(f"real producer not importable in isolation: {exc}")
-        inv = os.path.join(rel["root"], mod.RELEASE_FILENAME)
+        inv = os.path.join(str(tmp_path), "real_pathway_arm_release.json")
+        script = (
+            "import json,sys\n"
+            "from direct import release_inventory as RI\n"
+            "dirs=sys.argv[3:]\n"
+            "stage1={'release_canonical_sha256':'rc'*32,"
+            f"'registry_scorer_view_canonical_sha256':{SCORER_CANON!r},"
+            "'admitted_programs':['PROG'],'conditions':" + repr(CONDITIONS) + "}\n"
+            "doc=RI.build(lane='pathway',bundle_dirs=dirs,root=sys.argv[1],expect_bundles=6,"
+            f"stage1=stage1,env_lock_sha256={LOCK!r},producer_commit='abc123',verifier_commit=None)\n"
+            "json.dump(doc,open(sys.argv[2],'w'),indent=2,sort_keys=True)\n")
+        p = subprocess.run([sys.executable, "-c", script, rel["root"], inv, *rel["dirs"]],
+                           env={**os.environ, "PYTHONPATH": os.path.join(W3C, "analysis")},
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            pytest.skip(f"real producer not runnable in isolation: {p.stderr[-400:]}")
         res = _verify(rel, inv=inv)
         assert res["verdict"] == VR.ADMIT, sorted(_failed(res))
 

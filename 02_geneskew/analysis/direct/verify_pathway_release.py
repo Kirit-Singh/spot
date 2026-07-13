@@ -49,14 +49,24 @@ VERIFIER_ID = "spot.stage02.pathway.arm.independent_verifier.v1"
 ADMISSION_FILE = "pathway_arm_external_admission.json"
 REPORT_ID_FIELD = "report_id"                     # the integration adapter's self-hash field
 
-# The PENDING producer inventory this admits a lane against (pathway_release.py).
+# The PENDING producer inventory this admits a lane against. The AUTHORITATIVE producer is
+# analysis/direct/release_inventory.py (invoked by run_release.py `python -m
+# direct.release_inventory --lane pathway`), NOT the stale pathway_release.py — the two emit the
+# same schema_version with divergent shapes (see the W1 handoff note). This binds the real one.
 RELEASE_SCHEMA = "spot.stage02_pathway_arm_release.v1"
 RELEASE_FILE = "pathway_arm_release.json"
-# The EXACT native top-level field set of pathway_arm_release.json — allowlist, enforced.
+VERDICT_PENDING = "pending_independent_verification"
+# The EXACT native top-level field set release_inventory.build emits for the pathway lane —
+# allowlist, enforced (there is NO env_lock/topology; the lane binding is solver_lock_sha256 +
+# stage1_binding, and the un-admitted producer ships verdict/admitted/self_admitted/verifier_id).
 NATIVE_INVENTORY_FIELDS = frozenset({
-    "schema_version", "release_id_rule", "lane", "stage1_binding", "env_lock", "env_lock_sha256",
-    "topology", "n_bundles", "n_logical_arms", "arm_keys", "bundles", "external_admission",
-    "release_id"})
+    "schema_version", "lane", "release_id_rule", "n_bundles", "n_logical_arms", "arm_keys",
+    "bundles", "stage1_binding", "solver_lock_sha256", "producer_commit",
+    "independent_verifier_commit", "external_admission", "verdict", "admitted", "self_admitted",
+    "verifier_id", "release_id"})
+# The bundle files the inventory names that this binds byte-for-byte (present ones).
+BOUND_BUNDLE_FILES = ("arm_bundle.json", "pathway_provenance.json", "gene_sets.source.json",
+                      "signature_ref.json", "convergence.json")
 
 # The AUTHORITATIVE Stage-1 v3 release: the ONLY source of the condition + source universe, and
 # the PUBLISHED scorer-view / method pins the six bundles are checked against.
@@ -192,7 +202,7 @@ def verify(*, bundle_dirs: list[str], inventory_path: Optional[str],
     checks.append(gene_check)
     checks.append(_verify_bundle_reports(bundle_report_paths, bundles))
     inv_present, inv_bytes, inv_release_id, inv_raw = _verify_inventory(
-        inventory_path, bundles, auth_cond_set, auth_src_set)
+        inventory_path, bundles, auth_cond_set, pins)
     checks.append(inv_present)
     checks.append(inv_bytes)
 
@@ -260,6 +270,8 @@ def _reopen_bundles(bundle_dirs):
             "records_sha256": binding.get("records_sha256"),
             "gene_sets_raw_sha256": _raw(gs) if os.path.exists(gs) else None,
             "arm_bundle_hashes": _hashes(bp), "provenance_hashes": _hashes(pp),
+            "file_hashes": {name: _hashes(os.path.join(d, name)) for name in BOUND_BUNDLE_FILES
+                            if os.path.exists(os.path.join(d, name))},
         })
     return bundles, bad
 
@@ -458,9 +470,14 @@ def _entry_cell(e):
     return (str(cond) if cond is not None else None, _norm_source(src))
 
 
-def _verify_inventory(inventory_path, bundles, auth_cond_set, auth_src_set):
-    """Require the PENDING producer inventory in its native shape, re-derive its MANDATORY
-    release_id, and bind the exact bytes it names."""
+def _verify_inventory(inventory_path, bundles, auth_cond_set, pins):
+    """Require the PENDING producer inventory in its REAL native shape (release_inventory.py),
+    re-derive its MANDATORY release_id, and bind the exact bytes it names.
+
+    The native pathway inventory ships UN-ADMITTED: verdict pending, admitted/self_admitted
+    false, verifier_id null. It binds the lane with solver_lock_sha256 + stage1_binding, NOT an
+    env_lock/topology block. Its release_id is content_hash(doc excluding release_id).
+    """
     none = (None, None)
     if not inventory_path or not os.path.exists(inventory_path):
         return (_check(G_INVENTORY_PRESENT, False, "no pathway_arm_release.json was supplied"),
@@ -484,23 +501,26 @@ def _verify_inventory(inventory_path, bundles, auth_cond_set, auth_src_set):
         present.append(f"the inventory carries non-native fields {extra_fields[:3]}")
     if inv.get("schema_version") != RELEASE_SCHEMA:
         present.append(f"inventory schema is {inv.get('schema_version')!r}, not {RELEASE_SCHEMA!r}")
-    ea = inv.get("external_admission") or {}
-    if ea.get("status") != "pending":
-        present.append("the producer inventory is not PENDING")
-    req = ea.get("required_verifier_id") or inv.get("required_verifier_id")
-    if req not in (None, VERIFIER_ID):
-        present.append("the inventory requires a different verifier")
-    if not ea.get("required_report_schema_version"):
-        present.append("the inventory names no required_report_schema_version")
-    if inv.get("env_lock_sha256") not in (None, STAGE2_SOLVER_LOCK_SHA256):
-        present.append("the inventory env_lock_sha256 is not the pinned solver lock")
-    # topology must agree with the authoritative universe, not merely exist.
-    topo = inv.get("topology") or {}
-    if auth_cond_set and set(str(c) for c in (topo.get("conditions") or [])) != auth_cond_set:
-        present.append("the inventory topology conditions are not the release's")
-    if auth_src_set and {_norm_source(s) for s in (topo.get("sources") or [])} != auth_src_set:
-        present.append("the inventory topology sources are not the release's")
-    # release_id is MANDATORY, non-null, and must re-derive from the inventory bytes.
+    if inv.get("lane") != "pathway":
+        present.append(f"inventory lane is {inv.get('lane')!r}, not 'pathway'")
+    # THE PRODUCER DOES NOT ADMIT ITS OWN RELEASE — it must ship un-admitted.
+    if (inv.get("external_admission") or {}).get("status") != "pending":
+        present.append("external_admission.status is not pending")
+    if inv.get("verdict") != VERDICT_PENDING:
+        present.append(f"verdict is {inv.get('verdict')!r}, not {VERDICT_PENDING!r}")
+    if inv.get("admitted") is not False or inv.get("self_admitted") is not False \
+            or inv.get("verifier_id") is not None:
+        present.append("the producer inventory is already admitted — it must ship un-admitted")
+    if inv.get("solver_lock_sha256") != STAGE2_SOLVER_LOCK_SHA256:
+        present.append("solver_lock_sha256 is not the pinned 2983d140… constant")
+    # stage1_binding is anchored OUTWARD to the release, not merely present.
+    s1 = inv.get("stage1_binding") or {}
+    if auth_cond_set and {str(c) for c in (s1.get("conditions") or [])} != auth_cond_set:
+        present.append("stage1_binding.conditions are not the authoritative release's")
+    pin_view = pins.get("scorer_view_canonical_sha256")
+    if pin_view and s1.get("registry_scorer_view_canonical_sha256") != pin_view:
+        present.append("stage1_binding scorer view is not the release's published pin")
+    # release_id is MANDATORY, non-null, and must re-derive (pathway excludes only release_id).
     release_id = inv.get("release_id")
     if release_id is None:
         present.append("the inventory carries no release_id — a release must name its identity")
@@ -508,8 +528,16 @@ def _verify_inventory(inventory_path, bundles, auth_cond_set, auth_src_set):
         present.append("the inventory release_id does not re-derive from its own bytes")
     present_ok = not present
 
+    byte_bad = _bind_inventory_bytes(inv.get("bundles") or [], bundles)
+    return (_check(G_INVENTORY_PRESENT, present_ok, "; ".join(present[:3])),
+            _check(G_INVENTORY_BYTES, present_ok and not byte_bad, "; ".join(byte_bad[:4])),
+            release_id, inv_raw_sha)
+
+
+def _bind_inventory_bytes(inv_entries, bundles):
+    """Every cell the inventory names binds the exact bytes on disk — arm_bundle, provenance,
+    gene-set source, and the signature/convergence refs — and the right bundle id."""
     byte_bad = []
-    inv_entries = inv.get("bundles") or []
     inv_by_cell = {_entry_cell(e): e for e in inv_entries}
     disk_by_cell = {(b["condition"], b["source"]): b for b in bundles}
     if set(inv_by_cell) != set(disk_by_cell):
@@ -522,18 +550,15 @@ def _verify_inventory(inventory_path, bundles, auth_cond_set, auth_src_set):
             if field not in e:
                 byte_bad.append(f"{cell}: the inventory entry omits {field}")
         files = e.get("files") or {}
-        for name, want in ((BUNDLE_FILE, b["arm_bundle_hashes"]),
-                           (PROVENANCE_FILE, b["provenance_hashes"])):
+        for name, want in b["file_hashes"].items():           # every bound file present on disk
             f = files.get(name) or {}
             if f.get("raw_sha256") != want["raw_sha256"] or \
-                    f.get("canonical_sha256") != want["canonical_sha256"]:
+                    f.get("canonical_sha256") != want.get("canonical_sha256"):
                 byte_bad.append(f"{cell}: inventory {name} bytes are not the ones on disk")
         bid = e.get("bundle_id")
         if bid is not None and b["run_id"] is not None and str(bid) != str(b["run_id"]):
             byte_bad.append(f"{cell}: inventory names a different bundle id")
-    return (_check(G_INVENTORY_PRESENT, present_ok, "; ".join(present[:3])),
-            _check(G_INVENTORY_BYTES, present_ok and not byte_bad, "; ".join(byte_bad[:4])),
-            release_id, inv_raw_sha)
+    return byte_bad
 
 
 def main(argv=None) -> int:
