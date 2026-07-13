@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 
 import fixtures_run_manifest as F
 import pytest
@@ -430,3 +431,57 @@ class TestGate7TheReleaseScope:
         assert pins["temporal"]["verifier_id"] == (
             "spot.stage02.temporal.arm.independent_verifier.v1")
         assert pins["temporal"]["commit"] == "99eaa81"
+
+
+class TestTheDiscoveryRefusesAtNamedGates:
+    """Discovery must resolve EXACTLY 3 Direct + 6 temporal + 6 pathway physical bundles.
+
+    A 2/6/6 or a duplicated bundle is refused BY DEFAULT at the gate that names the
+    violation; --allow-partial is the only (never-admissible) escape. The producer states
+    the TOPOLOGY and never the ADMISSION.
+    """
+
+    def test_the_gate_tokens_are_the_pinned_names(self):
+        assert run_manifest.GATE_BUNDLE_COUNT == (
+            "each_lane_ships_EXACTLY_its_expected_physical_bundle_count"
+            "_3_direct_6_temporal_6_pathway")
+        assert run_manifest.GATE_NO_DUPLICATE_BUNDLE == (
+            "no_bundle_id_appears_more_than_once_a_repeated_invocation_is_not_two")
+        assert run_manifest.GATE_TOPOLOGY_COMPLETE == (
+            "every_expected_arm_slot_is_filled_exactly_once_by_a_distinct_bundle")
+
+    def test_a_2_6_6_direct_shortfall_dies_at_the_BUNDLE_COUNT_gate(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        run["direct"] = run["direct"][:2]          # 2 Direct bundles, not 3
+        with pytest.raises(run_manifest.RunManifestError,
+                           match=run_manifest.GATE_BUNDLE_COUNT):
+            _build(tmp_path, run)
+
+    def test_a_5_6_6_pathway_shortfall_dies_at_the_BUNDLE_COUNT_gate(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        run["pathway"] = run["pathway"][:5]        # 5 pathway bundles, not 6
+        with pytest.raises(run_manifest.RunManifestError,
+                           match=run_manifest.GATE_BUNDLE_COUNT):
+            _build(tmp_path, run)
+
+    def test_a_DUPLICATE_bundle_dies_at_the_NO_DUPLICATE_gate(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        dupe = os.path.join(run["root"], "DUPE-direct-0")
+        shutil.copytree(run["direct"][0], dupe)     # same content -> same bundle_id
+        run["direct"] = [run["direct"][0], dupe, run["direct"][1]]
+        with pytest.raises(run_manifest.RunManifestError,
+                           match=run_manifest.GATE_NO_DUPLICATE_BUNDLE):
+            _build(tmp_path, run)
+
+    def test_EXACTLY_3_6_6_is_topology_complete_and_NEVER_self_admits(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        assert doc["n_bundles"] == doc["n_expected_bundles"] == 15
+        assert {lane: doc["per_lane"][lane]["n_bundles_present"] for lane in T.LANES} == {
+            "direct": 3, "temporal": 6, "pathway": 6}
+        assert doc["topology_complete"] is True
+        # the PRODUCER states topology only; admission is not its to grant
+        assert doc["topology_complete_is_an_admission"] is False
+        assert doc["release_admissible"] is None
+        assert doc["admission"]["status"] == run_manifest.ADMISSION_PENDING
+        assert doc["admission"]["granted_by"] is None
+        assert doc["admission"]["producer_may_declare_admission"] is False

@@ -241,7 +241,8 @@ def test_9_a_missing_slot_replaced_by_a_DUPLICATE(tmp_path):
     run["direct"] = [run["direct"][1], run["direct"][2], dupe]
 
     # the PRODUCER refuses outright: a duplicate bundle id is not a complete run
-    with pytest.raises(run_manifest.RunManifestError, match="duplicate bundle ids"):
+    with pytest.raises(run_manifest.RunManifestError,
+                       match=run_manifest.GATE_NO_DUPLICATE_BUNDLE):
         _manifest(tmp_path, run)
 
     # so the forger goes around it — --allow-partial, then declare it complete and

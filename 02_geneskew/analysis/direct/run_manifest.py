@@ -59,6 +59,18 @@ SCHEMA_VERSION = "spot.stage02_run_manifest.v3_topology_only"
 # The producer states the TOPOLOGY. It never states the ADMISSION.
 ADMISSION_PENDING = "pending_independent_aggregate_admission"
 ADMISSION_RULE_ID = "spot.stage02.run_manifest.admission.independent_only.v1"
+
+# ---- NAMED REFUSAL GATES. A partial or duplicated topology dies at the ONE that
+# names its violation. Discovery must resolve EXACTLY 3 Direct + 6 temporal + 6
+# pathway PHYSICAL bundles; a 2/6/6 or a repeated bundle is refused by DEFAULT, and
+# --allow-partial is the ONLY (explicit, never-admissible) escape.
+GATE_BUNDLE_COUNT = (
+    "each_lane_ships_EXACTLY_its_expected_physical_bundle_count"
+    "_3_direct_6_temporal_6_pathway")
+GATE_NO_DUPLICATE_BUNDLE = (
+    "no_bundle_id_appears_more_than_once_a_repeated_invocation_is_not_two")
+GATE_TOPOLOGY_COMPLETE = (
+    "every_expected_arm_slot_is_filled_exactly_once_by_a_distinct_bundle")
 MANIFEST_ID = "spot.stage02.run_manifest.v2"
 FROZEN_ADDENDUM_SHA256 = (
     "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
@@ -244,13 +256,37 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
     if dupe_ids:
         topology_complete = False
 
-    if not topology_complete and not allow_partial:
+    # PHYSICAL BUNDLE COUNT, per lane. Discovery must resolve EXACTLY 3 Direct + 6
+    # temporal + 6 pathway physical bundles; a 2/6/6 is a short run wearing a complete
+    # run's name.
+    bundle_count_mismatch = {
+        lane: (per_lane[lane]["n_bundles_present"],
+               per_lane[lane]["n_bundles_expected"])
+        for lane in LANES
+        if per_lane[lane]["n_bundles_present"]
+        != per_lane[lane]["n_bundles_expected"]}
+
+    # REFUSED BY DEFAULT at the gate that names the violation. --allow-partial is the
+    # only escape, and it emits an incomplete manifest that is NEVER release-admissible.
+    if not allow_partial and (dupe_ids or bundle_count_mismatch
+                              or not topology_complete):
+        failed = []
+        if bundle_count_mismatch:
+            failed.append(
+                f"[{GATE_BUNDLE_COUNT}] physical bundle counts (present, expected) "
+                f"{bundle_count_mismatch}")
+        if dupe_ids:
+            failed.append(
+                f"[{GATE_NO_DUPLICATE_BUNDLE}] bundle id(s) {dupe_ids} appear more than "
+                "once; a repeated result cannot stand in for a missing one")
+        if not topology_complete:
+            failed.append(
+                f"[{GATE_TOPOLOGY_COMPLETE}] lane slot completeness "
+                f"{ {lane: per_lane[lane]['lane_complete'] for lane in LANES} }")
         raise RunManifestError(
-            "this run's TOPOLOGY is incomplete: "
-            f"{ {lane: per_lane[lane]['lane_complete'] for lane in LANES} }, duplicate "
-            f"bundle ids {dupe_ids}. It MAY be manifested — pass --allow-partial — but it "
-            "is never silently called complete. (Note that a COMPLETE topology is still "
-            "not an admission: see 'admission'.)")
+            "this run's TOPOLOGY is incomplete: " + "; ".join(failed) + ". It MAY be "
+            "manifested — pass --allow-partial — but it is never silently called "
+            "complete. (A COMPLETE topology is still not an admission: see 'admission'.)")
 
     doc: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
