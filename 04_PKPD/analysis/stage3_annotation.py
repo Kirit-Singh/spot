@@ -43,6 +43,7 @@ from .contracts import (
 )
 from .firewall import Rejection, compute_candidate_rows_sha256
 from .stage3_admission import NOT_RUN, admit
+from .stage3_v2_seam import assert_v2_admissible
 from .stage3_contract_v2 import (
     ACQUISITION_STATUSES,
     ADAPTER_ID,
@@ -207,6 +208,14 @@ def adapt_annotation_bundle(bundle_dir: str, *,
     `require_external_verifier=True` for a data-bound run — it refuses a bundle that Stage-3's
     verifier has not actually passed.
     """
+    # THE V2 SEAM, before the v1 reader sees a single byte.
+    #
+    # A v2 bundle read by the v1 reader would have its new fields silently ignored and its evidence
+    # admitted against a contract nobody checked it against — and every downstream hash would be a
+    # self-consistent hash of a misreading. So a bundle DECLARING v2 is refused by name until W16
+    # publishes the final schema-set hash and Stage 4 re-pins deliberately.
+    assert_v2_admissible(bundle_dir)
+
     admission_gates = admit(bundle_dir, require_external_verifier=require_external_verifier)
     doc, tables = admission_gates.document, admission_gates.tables
 
