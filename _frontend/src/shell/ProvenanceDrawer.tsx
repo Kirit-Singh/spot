@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react';
 import type { Provenance } from '../domain/common';
 import type { Stage1Bindings, StageSelection } from '../domain/selection';
 import type { MethodsBlock, ProvenanceBlock, StageMethodsManifest } from '../domain/methodsManifest';
-import type { ProvNote } from './provenanceContext';
+import type { DrawerSection, ProvNote } from './provenanceContext';
 import { NamespaceChip, EligibilityChip } from './chips';
 
 function Mono({ children }: { children: React.ReactNode }) {
@@ -202,6 +202,8 @@ export interface ProvenanceDrawerProps {
   /** Stage Methods & Provenance manifest (the MPA per-tab content). When present it replaces
    *  the raw provenance block; the App SPA passes none and keeps its existing rendering. */
   methods?: StageMethodsManifest | null;
+  /** Which section the opening action targeted; the drawer scrolls it into view. */
+  focus?: DrawerSection;
 }
 
 export function ProvenanceDrawer({
@@ -212,18 +214,24 @@ export function ProvenanceDrawer({
   selection,
   notes,
   methods,
+  focus = 'methods',
 }: ProvenanceDrawerProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const methodsRef = useRef<HTMLDivElement>(null);
+  const provRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
+    // scroll the requested section into view (no-op in jsdom; safe via optional chaining)
+    const target = focus === 'provenance' ? provRef.current : methodsRef.current;
+    target?.scrollIntoView?.({ block: 'start' });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, focus, onClose]);
 
   return (
     <>
@@ -269,8 +277,12 @@ export function ProvenanceDrawer({
               <div className="mb-3 text-[13px] font-semibold text-ink" data-stage-label>
                 {methods.stage_label}
               </div>
-              <MethodsSection m={methods.methods} />
-              <ProvenanceManifestSection p={methods.provenance} />
+              <div ref={methodsRef} data-section="methods">
+                <MethodsSection m={methods.methods} />
+              </div>
+              <div ref={provRef} data-section="provenance">
+                <ProvenanceManifestSection p={methods.provenance} />
+              </div>
             </>
           )}
 

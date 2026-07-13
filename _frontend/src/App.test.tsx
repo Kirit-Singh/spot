@@ -44,7 +44,7 @@ describe('spot shell — navigation & modes', () => {
   it('opens the shared Methods & provenance drawer with hashes and relocated notes', () => {
     goto('/02_page.html?demo=1');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText(/Canonical/)).toBeInTheDocument();
     expect(within(dialog).getByText(/fixture:stage02:demo_lever_set/)).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe('compact selection context + drawer relocation', () => {
 
   it('surfaces the moved selection detail inside the provenance drawer', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Stage-1 selection')).toBeInTheDocument();
     expect(within(dialog).getByText(/Q_treg_to_th1_stim48/)).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe('compact selection context + drawer relocation', () => {
     expect(within(bar).queryByText(/stage1-continuous-v3\.0\.1/)).toBeNull();
     expect(within(bar).queryByText(/a{64}/)).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('stage1-continuous-v3.0.1')).toBeInTheDocument();
     expect(within(dialog).getByText('a'.repeat(64))).toBeInTheDocument();
@@ -178,7 +178,7 @@ describe('fixture source hygiene', () => {
   it('never renders the DrugBank brand on the Stage-4 canvas or in provenance', () => {
     render(<App />);
     expect(screen.queryByText(/DrugBank/i)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
     expect(within(screen.getByRole('dialog')).queryByText(/DrugBank/i)).toBeNull();
   });
 });

@@ -12,12 +12,15 @@ export interface ProvNote {
   body: string;
 }
 
+export type DrawerSection = 'methods' | 'provenance';
+
 export interface ProvenanceOpener {
   open: (
     title: string,
     provenance: Provenance | null,
     notes?: ProvNote[],
     methods?: StageMethodsManifest | null,
+    section?: DrawerSection,
   ) => void;
 }
 

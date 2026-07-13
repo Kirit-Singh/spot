@@ -24,8 +24,8 @@ function renderStage(page: PageKey, subtitle: string) {
   );
 }
 
-function openDrawer() {
-  fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+function openDrawer(action: 'Methods' | 'Provenance' = 'Methods') {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(action) }));
   return screen.getByRole('dialog');
 }
 
@@ -51,6 +51,21 @@ describe('contextual Methods & Provenance drawer', () => {
       expect(window.location.href).toBe(before); // NO navigation — one shell drawer
       unmount();
     }
+  });
+
+  it('BOTH the Methods and the Provenance header actions open the same one drawer', () => {
+    goto('/02_page.html');
+    renderStage('targets', 'Targets');
+    // Methods action
+    const d1 = openDrawer('Methods');
+    expect(within(d1).getByText('Methods')).toBeInTheDocument();
+    expect(within(d1).getByText('Provenance')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    // Provenance action opens the same drawer (both sections present)
+    const d2 = openDrawer('Provenance');
+    expect(within(d2).getByText('Provenance')).toBeInTheDocument();
+    expect(within(d2).getByText('Methods')).toBeInTheDocument();
+    expect(d2).toBe(d1); // the same single shell drawer node
   });
 
   it('production shows "unavailable" values and never a fixture (values never invented)', () => {

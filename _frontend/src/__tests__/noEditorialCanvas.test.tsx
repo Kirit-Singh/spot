@@ -106,7 +106,7 @@ describe('provenance drawer — one gate note and a compact role row', () => {
   function openDrawer(route: string) {
     window.history.pushState({}, '', `/02_page.html?demo=1#/${route}`);
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
     return screen.getByRole('dialog');
   }
 

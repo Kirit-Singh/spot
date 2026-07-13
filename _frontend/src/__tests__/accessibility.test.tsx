@@ -37,7 +37,7 @@ describe('accessibility', () => {
   it('opens a labelled modal dialog from the Methods & provenance control', () => {
     goto('/02_page.html?demo=1#/stage-2');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAccessibleName();

@@ -9,7 +9,7 @@ import type { StageMethodsManifest } from '../domain/methodsManifest';
 import { TopBar } from '../shell/TopBar';
 import { ProvenanceDrawer } from '../shell/ProvenanceDrawer';
 import { ProvenanceProvider } from '../shell/provenanceContext';
-import type { ProvNote } from '../shell/provenanceContext';
+import type { ProvNote, DrawerSection } from '../shell/provenanceContext';
 import { MpaNav } from './MpaNav';
 import type { PageKey } from './pages';
 
@@ -20,6 +20,7 @@ interface DrawerState {
   selection: StageSelection | null;
   notes: ProvNote[];
   methods: StageMethodsManifest | null;
+  focus: DrawerSection;
 }
 
 export function PageShell({
@@ -50,6 +51,7 @@ export function PageShell({
     selection: null,
     notes: [],
     methods: null,
+    focus: 'methods',
   });
   const opener = useMemo(
     () => ({
@@ -58,7 +60,8 @@ export function PageShell({
         provenance: Provenance | null,
         notes: ProvNote[] = [],
         methods: StageMethodsManifest | null = null,
-      ) => setDrawer({ open: true, title, provenance, selection, notes, methods }),
+        section: DrawerSection = 'methods',
+      ) => setDrawer({ open: true, title, provenance, selection, notes, methods, focus: section }),
     }),
     [selection],
   );
@@ -70,8 +73,8 @@ export function PageShell({
           subtitle={subtitle}
           subtitleNode={subtitleNode}
           onClearSelection={onClearSelection}
-          onOpenMethods={() =>
-            opener.open(`${subtitle} — methods`, methodsProvenance, methodsNotes, methodsManifest)
+          onOpenMethods={(section) =>
+            opener.open(`${subtitle} — methods`, methodsProvenance, methodsNotes, methodsManifest, section)
           }
         />
         <MpaNav active={page} />
@@ -84,6 +87,7 @@ export function PageShell({
         selection={drawer.selection}
         notes={drawer.notes}
         methods={drawer.methods}
+        focus={drawer.focus}
         onClose={() => setDrawer((d) => ({ ...d, open: false }))}
       />
     </ProvenanceProvider>
