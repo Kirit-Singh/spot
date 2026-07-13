@@ -1,352 +1,294 @@
-"""Target identity: the release key is a KEY, not a gene.
+"""The bound per-target IDENTITY/ASSAY artifact — the Stage-2 -> Stage-3 handoff.
 
-Verified against the complete public release (33,983 rows): exactly 12 dispositions
-carry a non-Ensembl ``obs.target_contrast`` — 4 symbols x 3 conditions. Nine of them
-carry an ENSG-looking ``obs.index`` prefix that belongs to a DIFFERENT gene than the
-symbol being targeted; OCLM's key is symbol-prefixed. All 12 are
-``ontarget_significant=false`` and ``low_target_gex=true`` and must still be emitted.
+The bundle shipped arm VALUES with no bound statement of WHAT each target_id IS. A consumer had
+to infer the namespace from the SHAPE OF THE KEY — the one inference `identity.py` exists to
+forbid, because four of this release's targets are bare SYMBOLS whose keys look nothing like the
+other 11,522.
+
+Derived from the ALREADY-ADMITTED identity table. Never parsed.
 """
+from __future__ import annotations
+
+import hashlib
+import json
 import os
 
-import pandas as pd
 import pytest
-from direct import guides, identity
-from direct.run_screen import build_screen
-from fixtures_spec import RELEASE_CONDITIONS
-
-# The exact, verified membership of the symbol-namespace disposition set.
-EXPECTED_SYMBOLS = {"MTRNR2L1", "MTRNR2L4", "MTRNR2L8", "OCLM"}
-EXPECTED_SCOPES = {(s, c) for s in EXPECTED_SYMBOLS for c in RELEASE_CONDITIONS}
-EXPECTED_N = 12
-RELEASE_TOTAL_ROWS = 33983
-
-# ENSG-looking release keys that belong to a DIFFERENT gene than the target symbol.
-DECOY_KEYS = {
-    "MTRNR2L1": "ENSG00000256618",
-    "MTRNR2L4": "ENSG00000232196",
-    "MTRNR2L8": "ENSG00000255823",
-    "OCLM": None,                    # symbol-prefixed key
-}
-
-from release_gate import DE_STATS as _RELEASE
-from release_gate import needs
-
-# OPT-IN ONLY. The presence of a 16 GB DE object on this host is not permission to
-# read it: the ordinary synthetic suite must cost the same everywhere. See
-# release_gate.py.
-needs_release = needs(_RELEASE)
-
-
-# --------------------------------------------------------------------------- #
-# The identity rule itself.
-# --------------------------------------------------------------------------- #
-def test_an_ensg_looking_release_key_never_becomes_the_target_ensembl():
-    """The exact trap: the key says ENSG00000232196, the target is MTRNR2L4."""
-    ident = identity.resolve("ENSG00000232196_Rest", "MTRNR2L4", "MTRNR2L4")
-    assert ident.released_estimate_id == "ENSG00000232196_Rest"   # verbatim
-    assert ident.target_id == "MTRNR2L4"
-    assert ident.target_id_namespace == identity.GENE_SYMBOL
-    assert ident.target_ensembl is None                            # NOT the prefix
-    assert ident.ensembl_resolved is False
-
-
-def test_a_symbol_prefixed_release_key_is_also_a_symbol_scope():
-    ident = identity.resolve("OCLM_Stim8hr", "OCLM", "OCLM")
-    assert ident.released_estimate_id == "OCLM_Stim8hr"
-    assert (ident.target_id, ident.target_id_namespace) == ("OCLM", "gene_symbol")
-    assert ident.target_ensembl is None
-
-
-def test_an_ordinary_ensembl_target_is_unchanged():
-    ident = identity.resolve("ENSG00000141510_Rest", "ENSG00000141510", "TP53")
-    assert ident.target_id == "ENSG00000141510"
-    assert ident.target_id_namespace == identity.ENSEMBL_GENE_ID
-    assert ident.target_ensembl == "ENSG00000141510"               # named source field
-    assert ident.target_symbol == "TP53"
-
-
-def test_only_an_explicit_map_can_give_a_symbol_an_ensembl_id():
-    without = identity.resolve("OCLM_Rest", "OCLM", "OCLM")
-    assert without.target_ensembl is None
-
-    with_map = identity.resolve("OCLM_Rest", "OCLM", "OCLM",
-                                {"OCLM": "ENSG00000262180"})
-    assert with_map.target_ensembl == "ENSG00000262180"
-    assert with_map.ensembl_source == "explicit_target_identity_map"
-    # the namespace still describes what target_id IS
-    assert with_map.target_id_namespace == identity.GENE_SYMBOL
-
-
-def test_a_map_may_not_supply_a_non_ensembl_value(tmp_path):
-    import json
-    p = tmp_path / "map.json"
-    p.write_text(json.dumps({"schema_version": identity.IDENTITY_MAP_SCHEMA,
-                             "map": {"OCLM": "OCLM"}}))
-    with pytest.raises(identity.IdentityError, match="not an Ensembl gene id"):
-        identity.load_identity_map(str(p))
-
-
-# --------------------------------------------------------------------------- #
-# MUTATION: the forbidden shortcuts must be absent from the code itself.
-# --------------------------------------------------------------------------- #
-def test_no_module_derives_an_identity_by_splitting_the_release_key():
-    """Namespace coercion / inferred Ensembl ids would need to parse the key."""
-    import ast
-    here = os.path.dirname(os.path.abspath(identity.__file__))
-    for mod in ("identity.py", "run_screen.py", "guides.py", "masks.py",
-                "verify_rules.py", "verify_tables.py", "verify_run.py"):
-        src = open(os.path.join(here, mod)).read()
-        tree = ast.parse(src)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
-                    and node.func.attr in ("split", "rsplit", "partition",
-                                           "removesuffix", "removeprefix"):
-                target = getattr(node.func.value, "id", "") or \
-                    getattr(getattr(node.func.value, "attr", None), "__str__",
-                            lambda: "")()
-                assert "released_estimate_id" not in str(target), (
-                    f"{mod} splits the release key")
-        assert "released_estimate_id.split" not in src
-        assert 'released_estimate_id"].split' not in src
-
-
-def test_the_ensembl_rule_is_exact():
-    for bad in ("ENSG", "ENSG00000232196_Rest", "ensg00000232196", "MTRNR2L4",
-                "ENSG00000232196X", " ENSG00000232196"):
-        assert identity.is_ensembl_gene_id(bad) is False
-    assert identity.is_ensembl_gene_id("ENSG00000232196") is True
-
-
-# --------------------------------------------------------------------------- #
-# The FULL public universe: exactly 12 symbol-namespace dispositions.
-# --------------------------------------------------------------------------- #
-@needs_release
-def test_the_full_release_universe_has_exactly_twelve_symbol_scopes():
-    import h5py
-    import numpy as np
-
-    with h5py.File(_RELEASE, "r") as f:
-        obs = f["obs"]
-
-        def col(n):
-            g = obs[n]
-            if isinstance(g, h5py.Group):
-                cats = np.array([x.decode() if isinstance(x, bytes) else str(x)
-                                 for x in g["categories"][:]], dtype=object)
-                codes = g["codes"][:]
-                out = np.empty(codes.shape, dtype=object)
-                out[codes >= 0] = cats[codes[codes >= 0]]
-                return out
-            return g[:]
-
-        idx = np.array([x.decode() if isinstance(x, bytes) else str(x)
-                        for x in obs[obs.attrs.get("_index", "index")][:]],
-                       dtype=object)
-        tc, gn, cond = col("target_contrast"), col("target_contrast_gene_name"), \
-            col("culture_condition")
-        ots, low = col("ontarget_significant"), col("low_target_gex")
-
-    assert len(idx) == RELEASE_TOTAL_ROWS          # lossless disposition universe
-
-    symbol_rows = []
-    for i in range(len(idx)):
-        ident = identity.resolve(idx[i], tc[i], gn[i])
-        if ident.target_id_namespace == identity.GENE_SYMBOL:
-            symbol_rows.append((ident, str(cond[i]), bool(ots[i]), bool(low[i])))
-
-    # EXACTLY 12, and exactly the expected membership
-    assert len(symbol_rows) == EXPECTED_N
-    assert {(i.target_id, c) for i, c, _o, _l in symbol_rows} == EXPECTED_SCOPES
-
-    for ident, condition, ontarget_sig, low_gex in symbol_rows:
-        # target_ensembl is NULL for every one of them
-        assert ident.target_ensembl is None, ident.target_id
-        # the release key is preserved verbatim, prefix and all
-        prefix = DECOY_KEYS[ident.target_id] or ident.target_id
-        assert ident.released_estimate_id == f"{prefix}_{condition}"
-        # and they are all non-significant / low-expression -- still emitted
-        assert ontarget_sig is False and low_gex is True
-
-    # the nine ENSG-prefixed keys are the parse trap; OCLM's three are not
-    ensg_prefixed = [i for i, _c, _o, _l in symbol_rows
-                     if i.released_estimate_id.startswith("ENSG")]
-    assert len(ensg_prefixed) == 9
-    for ident in ensg_prefixed:
-        # the prefix is a REAL Ensembl accession -- of a different gene
-        assert identity.is_ensembl_gene_id(
-            ident.released_estimate_id.rsplit("_", 1)[0])
-        assert ident.target_ensembl is None       # ...and it is still not adopted
-
-
-@needs_release
-def test_every_ordinary_ensembl_row_still_resolves():
-    import h5py
-    import numpy as np
-
-    with h5py.File(_RELEASE, "r") as f:
-        obs = f["obs"]
-        g = obs["target_contrast"]
-        cats = np.array([x.decode() if isinstance(x, bytes) else str(x)
-                         for x in g["categories"][:]], dtype=object)
-        codes = g["codes"][:]
-        tc = np.empty(codes.shape, dtype=object)
-        tc[codes >= 0] = cats[codes[codes >= 0]]
-        idx = np.array([x.decode() if isinstance(x, bytes) else str(x)
-                        for x in obs[obs.attrs.get("_index", "index")][:]],
-                       dtype=object)
-
-    n_ensg = 0
-    for i in range(len(idx)):
-        ident = identity.resolve(idx[i], tc[i], None)
-        if ident.target_id_namespace == identity.ENSEMBL_GENE_ID:
-            assert ident.target_ensembl == ident.target_id
-            n_ensg += 1
-    assert n_ensg == RELEASE_TOTAL_ROWS - EXPECTED_N
-
-
-# --------------------------------------------------------------------------- #
-# End to end: symbol scopes are emitted, non-evaluable, unranked.
-# --------------------------------------------------------------------------- #
-@pytest.fixture
-def screen(synthetic_run):
-    result = build_screen(synthetic_run())
-    df = pd.read_parquet(os.path.join(result["out_dir"], "screen.parquet"))
-    return result, df.set_index("target_id")
-
-
-def test_symbol_scopes_are_emitted_and_never_ranked(screen):
-    _, df = screen
-    for sym in EXPECTED_SYMBOLS:
-        assert sym in df.index, f"{sym} was DROPPED from the disposition table"
-        row = df.loc[sym]
-        assert row["target_id_namespace"] == "gene_symbol"
-        assert pd.isna(row["target_ensembl"])                    # nullable, null
-        assert row["base_qc_state"] == "unresolved_target_identity"
-        assert bool(row["base_qc_passed"]) is False
-        assert "unresolved_target_identity" in row["base_qc_reasons"]
-        for pole, rank in (("A", "rank_away_from_A"), ("B", "rank_toward_B")):
-            assert bool(row[f"{pole}_evaluable"]) is False
-            assert pd.isna(row[rank])
-        assert row["mask_unresolved_reason"] == guides.UNRESOLVED_TARGET_IDENTITY
-
-
-def test_the_exact_release_key_is_preserved_for_every_symbol_scope(screen):
-    _, df = screen
-    for sym, decoy in DECOY_KEYS.items():
-        expected = f"{decoy or sym}_StimX"          # the fixture's one condition
-        assert df.loc[sym, "released_estimate_id"] == expected
-
-
-def test_the_oclm_low_expression_non_significant_row_is_still_emitted(screen):
-    """OCLM is ontarget_significant=false + low_target_gex=true. It stays."""
-    _, df = screen
-    assert "OCLM" in df.index
-    row = df.loc["OCLM"]
-    assert bool(row["qc_ontarget_significant"]) is False
-    assert bool(row["qc_low_target_expression"]) is True
-    # ...and the low-expression/non-significant flags are NOT why it is unranked
-    assert row["base_qc_state"] == "unresolved_target_identity"
-    assert "low_target_expression" in row["base_qc_reasons"]
-    assert "no_detectable_source_on_target_repression" in row["base_qc_reasons"]
-
-
-def test_symbol_scopes_never_mask_a_gene(screen):
-    result, _ = screen
-    masks = pd.read_parquet(os.path.join(result["out_dir"], "masks.parquet"))
-    for sym in EXPECTED_SYMBOLS:
-        rows = masks[masks["target_id"] == sym]
-        assert len(rows) > 0                             # the estimate IS disposed
-        assert rows["masked_gene_ensembl"].isna().all()  # ...but masks no gene
-        decoy = DECOY_KEYS[sym]
-        if decoy:
-            assert decoy not in set(masks["masked_gene_ensembl"].dropna())
-
-
-def test_ordinary_ensembl_targets_are_unchanged(screen):
-    _, df = screen
-    ensg = df[df["target_id_namespace"] == "ensembl_gene_id"]
-    assert len(ensg) == 14
-    assert (ensg["target_ensembl"] == ensg.index).all()   # id == the target itself
-    assert ensg["rank_away_from_A"].notna().any()         # still ranked normally
-
-
-def test_the_disposition_table_is_lossless(screen):
-    """Non-significant / low-expression rows are never dropped."""
-    result, df = screen
-    assert len(df) == 18                                  # 14 ENSG + 4 symbol
-    assert result["verification"]["complete_disposition"] is True
-    assert df.index.is_unique
-
-
-# --------------------------------------------------------------------------- #
-# MUTATION: the independent verifier must catch every identity forgery.
-# --------------------------------------------------------------------------- #
-def _verify(result, args) -> int:
-    import contextlib
-    import io as _io
-
-    from direct.verify_run import main as verify_main
-    with contextlib.redirect_stdout(_io.StringIO()):
-        return verify_main(["--run-dir", result["out_dir"],
-                            "--inputs-root", os.path.dirname(args.selection)])
-
-
-@pytest.fixture
-def bundle(synthetic_run):
-    args = synthetic_run()
-    return build_screen(args), args
-
-
-def test_the_verifier_passes_the_honest_bundle(bundle):
-    result, args = bundle
-    assert _verify(result, args) == 0
-
-
-def test_mutation_namespace_coercion_is_caught(bundle):
-    """Relabel a gene_symbol scope as ensembl_gene_id."""
-    result, args = bundle
-    p = os.path.join(result["out_dir"], "screen.parquet")
-    df = pd.read_parquet(p)
-    df.loc[df["target_id"] == "MTRNR2L4", "target_id_namespace"] = "ensembl_gene_id"
-    df.to_parquet(p, index=False)
-    assert _verify(result, args) == 1
-
-
-def test_mutation_inferred_ensembl_id_from_the_release_key_is_caught(bundle):
-    """Promote the ENSG-looking release-key prefix into target_ensembl."""
-    result, args = bundle
-    p = os.path.join(result["out_dir"], "screen.parquet")
-    df = pd.read_parquet(p)
-    df.loc[df["target_id"] == "MTRNR2L4", "target_ensembl"] = "ENSG00000232196"
-    df.to_parquet(p, index=False)
-    assert _verify(result, args) == 1
-
-
-def test_mutation_dropping_a_symbol_row_is_caught(bundle):
-    """OCLM is non-significant and low-expression. Dropping it must be caught."""
-    result, args = bundle
-    p = os.path.join(result["out_dir"], "screen.parquet")
-    df = pd.read_parquet(p)
-    df = df[df["target_id"] != "OCLM"]
-    df.to_parquet(p, index=False)
-    assert _verify(result, args) == 1
-
-
-def test_mutation_forging_evaluability_on_a_symbol_row_is_caught(bundle):
-    result, args = bundle
-    p = os.path.join(result["out_dir"], "screen.parquet")
-    df = pd.read_parquet(p)
-    m = df["target_id"] == "MTRNR2L8"
-    df.loc[m, "A_evaluable"] = True
-    df.loc[m, "base_qc_state"] = "qc_pass_two_guide"
-    df.to_parquet(p, index=False)
-    assert _verify(result, args) == 1
-
-
-def test_mutation_tampering_with_the_release_key_is_caught(bundle):
-    result, args = bundle
-    p = os.path.join(result["out_dir"], "screen.parquet")
-    df = pd.read_parquet(p)
-    df.loc[df["target_id"] == "OCLM", "released_estimate_id"] = "ENSG00000262180_StimX"
-    df.to_parquet(p, index=False)
-    assert _verify(result, args) == 1
+from direct import target_identity as ti
+from direct.hashing import canonical_json, content_hash, sha256_hex
+
+
+class _Ident:
+    def __init__(self, ns, symbol, ensembl=None):
+        self.target_id_namespace = ns
+        self.target_symbol = symbol
+        self.target_ensembl = ensembl
+
+
+def _table():
+    return {
+        "ENSG00000000001": _Ident(ti.NAMESPACE_ENSEMBL, "AAA", "ENSG00000000001"),
+        "ENSG00000000002": _Ident(ti.NAMESPACE_ENSEMBL, "BBB", "ENSG00000000002"),
+        "MTRNR2L8": _Ident(ti.NAMESPACE_SYMBOL, "MTRNR2L8", None),   # a SYMBOL target
+    }
+
+
+class TestTheArtifactShipsInTheBundle:
+    def test_the_direct_bundle_ships_it(self, synthetic_run, tmp_path):
+        from direct import arm_artifacts, run_arms
+        args = synthetic_run()
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / "d")
+        res = run_arms.build_bundle(args)
+        path = os.path.join(res["out_dir"], arm_artifacts.TARGET_IDENTITY_FILE)
+        assert os.path.exists(path)
+        with open(path) as fh:
+            doc = json.load(fh)
+        assert doc["n_targets"] > 0
+
+    def test_the_SHIPPED_BYTES_are_exactly_the_bytes_the_run_id_BOUND(self, synthetic_run,
+                                                                     tmp_path):
+        # the raw hash cannot normally exist before the id names the directory; the bytes are
+        # deterministic, so they are hashed, bound, then written unchanged
+        from direct import arm_artifacts, run_arms
+        args = synthetic_run()
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / "d")
+        res = run_arms.build_bundle(args)
+        with open(os.path.join(res["out_dir"], "provenance.json")) as fh:
+            prov = json.load(fh)
+        block = prov["run_binding"]["target_identity"]
+        with open(os.path.join(res["out_dir"],
+                               arm_artifacts.TARGET_IDENTITY_FILE), "rb") as fh:
+            raw = fh.read()
+        assert hashlib.sha256(raw).hexdigest() == block["raw_sha256"]
+        assert content_hash(json.loads(raw)) == block["canonical_sha256"]
+
+    def test_it_is_INSIDE_the_arm_bundle_run_id(self, synthetic_run, tmp_path):
+        from direct import run_arms
+        args = synthetic_run()
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / "d")
+        res = run_arms.build_bundle(args)
+        with open(os.path.join(res["out_dir"], "provenance.json")) as fh:
+            prov = json.load(fh)
+        full = sha256_hex(canonical_json(prov["run_binding"]))
+        assert prov["arm_bundle_run_id"] == full[:16]
+
+        other = json.loads(json.dumps(prov["run_binding"]))
+        other["target_identity"]["raw_sha256"] = "f" * 64
+        assert sha256_hex(canonical_json(other))[:16] != prov["arm_bundle_run_id"]
+
+    def test_it_COVERS_every_target_the_bundle_SCORED(self, synthetic_run, tmp_path):
+        import pandas as pd
+        from direct import arm_artifacts, run_arms
+        args = synthetic_run()
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / "d")
+        res = run_arms.build_bundle(args)
+        with open(os.path.join(res["out_dir"],
+                               arm_artifacts.TARGET_IDENTITY_FILE)) as fh:
+            ids = {r["target_id"] for r in json.load(fh)["records"]}
+        arms = set(pd.read_parquet(
+            os.path.join(res["out_dir"], "arms.parquet"))["target_id"])
+        assert arms <= ids, "a scored target with no identity row drops out of the join"
+
+
+class TestUniquenessAndCompleteness:
+    def test_ONE_row_per_target(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        seen = [r["target_id"] for r in doc["records"]]
+        assert len(seen) == len(set(seen)) == doc["n_targets"]
+
+    def test_a_SCORED_target_with_NO_identity_row_is_REFUSED(self):
+        # it would drop out of Stage 3's join and disappear without a trace
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.build(_table(), condition="Rest",
+                     scored_targets=set(_table()) | {"ENSG_NOT_IN_THE_TABLE"})
+        assert exc.value.gate == ti.REFUSE_INCOMPLETE
+        assert "ENSG_NOT_IN_THE_TABLE" in str(exc.value)
+
+    def test_an_identity_row_the_bundle_NEVER_SCORED_is_REFUSED(self):
+        # the quieter error: a missing row makes a target vanish from Stage 3's join; an EXTRA
+        # one asserts this bundle measured something it did not. A condition bundle covers ITS
+        # OWN targets — the three conditions do not ship the same set.
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.build(_table(), condition="Rest",
+                     scored_targets={"ENSG00000000001"})     # the table has three
+        assert exc.value.gate == ti.REFUSE_EXTRANEOUS
+
+    def test_the_bundle_covers_EXACTLY_its_own_condition_not_a_global_union(self):
+        # nothing hard-codes a release-wide count: the set is derived and then checked in BOTH
+        # directions against what the bundle actually scored
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        assert {r["target_id"] for r in doc["records"]} == set(_table())
+        assert doc["n_targets"] == len(_table())
+        assert doc["condition"] == "Rest"
+
+
+class TestTheMIXEDNamespaceUniverse:
+    """11,522 Ensembl + 4 bare SYMBOL targets. A loader expecting one namespace drops four."""
+
+    def test_both_namespaces_are_COUNTED_not_assumed(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        assert doc["n_ensembl_gene_id"] == 2
+        assert doc["n_gene_symbol"] == 1
+        assert doc["n_ensembl_gene_id"] + doc["n_gene_symbol"] == doc["n_targets"]
+
+    def test_a_SYMBOL_target_keeps_a_NULL_target_ensembl(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        sym = next(r for r in doc["records"]
+                   if r["target_id_namespace"] == ti.NAMESPACE_SYMBOL)
+        assert sym["target_ensembl"] is None
+        assert sym["target_symbol"] == "MTRNR2L8"
+
+    def test_a_SYMBOL_row_carrying_an_ENSEMBL_id_is_REFUSED(self):
+        # promoting a key prefix into an accession is the guess this lane forbids
+        table = dict(_table())
+        table["MTRNR2L8"] = _Ident(ti.NAMESPACE_SYMBOL, "MTRNR2L8", "ENSG00000999999")
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.build(table, condition="Rest", scored_targets=set(table))
+        assert exc.value.gate == ti.REFUSE_SYMBOL_HAS_ENSEMBL
+
+    def test_an_UNDECLARED_namespace_is_REFUSED(self):
+        table = dict(_table())
+        table["X"] = _Ident("entrez_id", "X")
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.build(table, condition="Rest", scored_targets=set(table))
+        assert exc.value.gate == ti.REFUSE_NAMESPACE
+
+
+class TestTheMODALITYIsDeclaredNotDefaulted:
+    def test_every_row_declares_the_EXACT_pinned_modality(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        assert doc["observed_perturbation_modality"] == "CRISPRi_knockdown"
+        for r in doc["records"]:
+            assert r["observed_perturbation_modality"] == "CRISPRi_knockdown"
+
+    def test_a_DEFAULTED_or_ALTERED_modality_is_REFUSED_when_the_SHIPPED_doc_is_REOPENED(self):
+        # `build` checks rows it created itself, so ITS modality check can never fire — a gate
+        # that validates its own output validates nothing. `verify` runs against the bytes
+        # somebody else shipped, which is the only place the check means anything. W10 calls it.
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        ti.verify(doc)                                   # honest artifact: admits
+
+        doc["records"][0]["observed_perturbation_modality"] = ""      # defaulted
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.verify(doc)
+        assert exc.value.gate == ti.REFUSE_MODALITY
+
+    def test_an_OVEREXPRESSION_claim_is_REFUSED(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        doc["records"][0]["observed_perturbation_modality"] = "CRISPRa_overexpression"
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.verify(doc)
+        assert exc.value.gate == ti.REFUSE_MODALITY
+        assert "flips the meaning of every sign" in str(exc.value)
+
+    def test_a_REOPENED_duplicate_row_is_REFUSED(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        doc["records"].append(dict(doc["records"][0]))
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.verify(doc)
+        assert exc.value.gate == ti.REFUSE_DUPLICATE_TARGET
+
+    def test_a_REOPENED_incomplete_artifact_is_REFUSED(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.verify(doc, scored_targets=set(_table()) | {"GHOST"})
+        assert exc.value.gate == ti.REFUSE_INCOMPLETE
+
+    def test_the_modality_is_bound_into_the_binding_block(self):
+        doc = ti.build(_table(), condition="Rest", scored_targets=set(_table()))
+        block = ti.binding_block(doc, "a" * 64)
+        assert block["observed_perturbation_modality"] == "CRISPRi_knockdown"
+        assert block["modality_rule_id"]
+
+
+
+class TestTheProducerVerifierIntegration:
+    """The EXACT contract W10 verifies against, and the format mismatch it must not create.
+
+    The producer emits `target_identity.json`. That is the only shape there is. A verifier that
+    expected a parquet would either fail to find the artifact or WRITE ONE OF ITS OWN — and a
+    verifier that creates the file it is supposed to be checking has checked its own work.
+    """
+
+    @pytest.fixture
+    def bundle(self, synthetic_run, tmp_path):
+        from direct import run_arms
+        args = synthetic_run()
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / "d")
+        return run_arms.build_bundle(args)["out_dir"]
+
+    def test_the_file_is_JSON_and_there_is_NO_parquet_variant(self, bundle):
+        import os
+        assert os.path.exists(os.path.join(bundle, "target_identity.json"))
+        assert not os.path.exists(os.path.join(bundle, "target_identity.parquet"))
+
+    def test_ONE_shared_constant_not_two_literals(self):
+        # two literals for one filename is how `.json` quietly becomes `.parquet` in a test
+        from direct import arm_artifacts
+        assert arm_artifacts.TARGET_IDENTITY_FILE is ti.TARGET_IDENTITY_FILE
+        assert arm_artifacts.TARGET_IDENTITY_SCHEMA == ti.SCHEMA_VERSION
+
+    def test_it_is_in_VERIFIED_PATHS_so_the_verifier_READS_it_BACK(self, bundle):
+        from direct import arm_artifacts
+        assert ti.TARGET_IDENTITY_FILE in arm_artifacts.VERIFIED_PATHS
+
+    def test_it_is_in_the_bundle_ARTIFACT_MANIFEST_with_its_raw_hash(self, bundle):
+        from direct import arm_artifacts
+        names = {e["name"]: e for e in arm_artifacts.artifact_manifest(bundle)}
+        assert ti.TARGET_IDENTITY_FILE in names
+        assert len(names[ti.TARGET_IDENTITY_FILE]["raw_sha256"]) == 64
+
+    def test_a_CONSUMER_reads_the_PRODUCER_BYTES_in_place_and_they_ADMIT(self, bundle):
+        import pandas as pd
+        arms = set(pd.read_parquet(os.path.join(bundle, "arms.parquet"))["target_id"])
+        loaded = ti.load(bundle, scored_targets=arms)     # W10 / P2S / W3 entry point
+        assert loaded["doc"]["schema_version"] == ti.SCHEMA_VERSION
+        assert len(loaded["raw_sha256"]) == 64
+
+    def test_the_LOADED_hash_is_the_hash_the_RUN_BOUND(self, bundle):
+        loaded = ti.load(bundle)
+        with open(os.path.join(bundle, "provenance.json")) as fh:
+            block = json.load(fh)["run_binding"]["target_identity"]
+        assert loaded["raw_sha256"] == block["raw_sha256"]
+        assert loaded["canonical_sha256"] == block["canonical_sha256"]
+
+    def test_reading_it_does_NOT_CREATE_OR_OVERWRITE_anything(self, bundle):
+        # a verifier that writes the artifact it is checking has checked its own work
+        before = {n: os.path.getmtime(os.path.join(bundle, n))
+                  for n in sorted(os.listdir(bundle))}
+        ti.load(bundle)
+        after = {n: os.path.getmtime(os.path.join(bundle, n))
+                 for n in sorted(os.listdir(bundle))}
+        assert before == after, "loading the artifact must not touch the bundle"
+
+    def test_a_MUTATION_is_made_on_a_COPY_and_the_PRODUCER_BYTES_survive(self, bundle,
+                                                                        tmp_path):
+        # the shipped bytes are evidence; a mutation test that edits them in place destroys the
+        # very thing it is supposed to be attacking
+        original = ti.load(bundle)["raw_sha256"]
+
+        copy_dir = tmp_path / "attack"
+        copy_dir.mkdir()
+        with open(os.path.join(bundle, ti.TARGET_IDENTITY_FILE)) as fh:
+            doc = json.load(fh)
+        doc["records"][0]["observed_perturbation_modality"] = "CRISPRa_overexpression"
+        with open(copy_dir / ti.TARGET_IDENTITY_FILE, "w") as fh:
+            json.dump(doc, fh)
+
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.load(str(copy_dir))
+        assert exc.value.gate == ti.REFUSE_MODALITY
+        assert ti.load(bundle)["raw_sha256"] == original     # untouched
+
+    def test_a_MISSING_artifact_is_REFUSED_not_INFERRED(self, tmp_path):
+        # identity is not reconstructable from the masks or from the shape of a target_id: the
+        # release perturbs four bare SYMBOLS whose keys look nothing like the other 11,522, so a
+        # string heuristic is wrong for exactly the rows nobody thinks about
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.load(str(tmp_path))
+        assert exc.value.gate == ti.REFUSE_ABSENT

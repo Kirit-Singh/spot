@@ -52,6 +52,7 @@ from . import manifest as mf
 from . import projection as proj
 from . import selection as sel_mod
 from . import universe as uni
+from .hashing import file_sha256
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -88,6 +89,45 @@ def _b(v) -> Optional[bool]:
 # There is no separate "audit loader". A preflight that validated something other than
 # what the run consumes would be a preflight of a different program.
 # --------------------------------------------------------------------------- #
+def load_and_prepare(args, *, expect_mode: str) -> dict[str, Any]:
+    """THE selection-load + admission path. Preflight and the build BOTH call this.
+
+    B2. ``preflight.run`` used to call ``prepare(args)`` with no v3 argument, while the build
+    called ``stage1_v3.load_selection(...)`` first and then ``prepare(args, v3=...)``. So a
+    ``--preflight-only`` run carrying a v3 contract bound the LEGACY selection, certified
+    THAT, and returned GO — for a run production would then execute against entirely
+    different programs. A preflight of a different program certifies nothing about this one,
+    and a GO makes it worse than no preflight at all.
+
+    There is now no second loader to drift from: the preflight cannot check a weaker or a
+    different contract than the build, because it has no way to.
+    """
+    from . import stage1_v3
+    v3 = stage1_v3.load_selection(args, expect_mode=expect_mode)
+    return prepare(args, v3=v3)
+
+
+def legacy_selection_block(args, v3) -> dict[str, Any]:
+    """WHETHER the legacy contract was supplied, and whether it was CONSUMED.
+
+    When a v3 contract is present it IS the selection and the legacy file is ignored — that
+    is the point. But "ignored" must be VISIBLE: the invocation matrix passes both, and a
+    reader who sees a legacy contract on the command line is entitled to know it did nothing.
+    So it is hashed and declared unconsumed, rather than leaving a reader to infer from the
+    absence of evidence that it had no effect. Bound, not hidden.
+    """
+    path = getattr(args, "selection", None)
+    if not path:
+        return {"supplied": False, "consumed": False, "sha256": None,
+                "superseded_by": None}
+    return {
+        "supplied": True,
+        "consumed": v3 is None,
+        "sha256": file_sha256(path),
+        "superseded_by": ("stage1_v3_selection_contract" if v3 is not None else None),
+    }
+
+
 def prepare(args, v3=None) -> dict[str, Any]:
     """Bind every input up to (and NOT including) any dense effect-layer read.
 
@@ -140,6 +180,65 @@ def prepare(args, v3=None) -> dict[str, Any]:
                     cond=selection.analysis_condition)
 
 
+def prepare_bundle(args, *, cond: str) -> dict[str, Any]:
+    """Bind an ALL-ARM bundle run: a LANE and a CONTEXT, and NO pair.
+
+    The owner's topology decision, made real: a physical bundle's identity may not be a
+    function of an A/B pair. So this path never loads a pair selection and never builds an
+    axis — the admitted programs come from the bound release's scorer view, and the same
+    release, manifest, mask universe and evidence domain are bound as everywhere else.
+
+    ``ctx["selection"]`` and ``ctx["axis"]`` are None, and that is the POINT: a bundle that
+    could not be built without a pair would not be a reusable bundle, it would be a pair's
+    run with extra columns.
+    """
+    lane = getattr(args, "lane", None) or config.LANE_PRODUCTION
+    if lane not in config.LANES:
+        raise sel_mod.SelectionError(f"unknown lane {lane!r}")
+    if not getattr(args, "stage1_release", None) and lane != config.LANE_SYNTHETIC:
+        raise sel_mod.SelectionError(
+            "an arm-bundle run requires --stage1-release: the admitted program set is "
+            "DERIVED from the bound release's scorer view, and an unbound release cannot "
+            "say which programs it admits")
+    release = load_bundle_release(args, lane)
+    ctx = _context(args, lane, None, release, None, {}, cond=cond)
+    ctx["bundle_scoped"] = True
+    return ctx
+
+
+def load_bundle_release(args, lane: str):
+    """Bind the Stage-1 release an all-arm bundle stands on.
+
+    The AUTHORITATIVE Stage-1 release is `spot.stage01_v3_release.v1` (55899ac). It is loaded
+    natively — components resolved under an EXPLICITLY staged root, self hash and every
+    component's raw/canonical bytes proved, the admitted set DERIVED from the executable
+    scorer view's `base_portable` flags. Direct used to refuse this release outright, because
+    its legacy loader accepts only `spot.stage01_release_manifest.v1`.
+
+    The legacy loaders remain for the legacy shapes. Dispatch is on the release's OWN declared
+    schema, never on the lane: what a file IS decides how it is read.
+    """
+    from . import stage1_release_v3 as rel_v3
+
+    path = getattr(args, "stage1_release", None)
+    if path and rel_v3.is_v3_release(path):
+        root = getattr(args, "stage1_release_root", None)
+        if not root:
+            raise sel_mod.SelectionError(
+                "a spot.stage01_v3_release.v1 release requires --stage1-release-root: its "
+                "components are declared by repo-relative path and are resolved under an "
+                "EXPLICITLY staged root. A loader that guessed the root from the release's "
+                "own location could be walked into a different tree by a relative path")
+        return rel_v3.load(path, root=root, lane=lane)
+
+    if lane == config.LANE_PRODUCTION:
+        return trust.load_production_release(args.stage1_release)
+    if lane == config.LANE_RESEARCH:
+        return trust.load_research_release(args.stage1_release)
+    return trust.load_fixture_release(
+        args.registry, args.stage1_validation, args.stage1_gate_spec)
+
+
 def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
     """Bind a run whose selection IS the verified v3 contract (B3).
 
@@ -167,8 +266,14 @@ def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
 
     axis = stage1_v3.bind_axis(v3, release)
     id_check = {
-        "rule_id": stage1_v3.STAGE1_SELECTION_ID_NOT_REDERIVABLE,
+        # The LIVE rule (m2). This carried STAGE1_SELECTION_ID_NOT_REDERIVABLE — a RETIRED
+        # constant whose value literally begins "RETIRED:" — so every v3 run stamped its own
+        # identity with the claim that its selection_id was a citation nobody could
+        # recompute. The id IS re-derived, and the run now says which rule did it.
+        "rule_id": stage1_v3.SELECTION_ID_RULE_ID,
+        "rule": stage1_v3.SELECTION_ID_RULE,
         "selection_id": v3.selection_id,
+        "selection_id_rederived": stage1_v3.derive_selection_id(v3.raw),
         # RE-DERIVED, not carried: the run identity is about to bind this hash, and a hash
         # verified once then passed around as a string is a string.
         "full_contract_content_sha256": stage1_v3.reverify_full_contract_hash(v3.raw),
@@ -238,12 +343,21 @@ def _context(args, lane: str, selection, release, axis: dict[str, Any],
 
     splits = donors.complementary_splits(sorted(donor_mods))
     splits["n_pairs"] = len(donor_mods)
+    # getattr, like `lane` / `stage1_release` / `target_identity_map` above: this ONE context
+    # builder serves every entry point, and a caller that does not define an optional input
+    # has not supplied it. Reading it as a bare attribute made the all-arm CLI die with
+    # AttributeError while every test passed, because the test fixture's dataclass happened
+    # to declare a field the real parser did not.
     crosswalk = donors.donor_crosswalk(
-        splits["donor_tokens"], io_data.load_donor_crosswalk(args.donor_crosswalk))
+        splits["donor_tokens"],
+        io_data.load_donor_crosswalk(getattr(args, "donor_crosswalk", None)))
 
     return {
         "lane": lane, "selection": selection, "release": release,
-        "axis": _restrict_axis(axis, gene_universe["gene_ids"]),
+        # An ALL-ARM bundle ctx has no axis: its programs come from the scorer view, and
+        # each one's panel/control is restricted to this universe where it is projected.
+        "axis": (None if axis is None
+                 else _restrict_axis(axis, gene_universe["gene_ids"])),
         "id_check": id_check, "cond": cond,
         "identities": identities, "identities_by_condition": identities_by_condition,
         "global_scopes": global_scopes, "n_global_scopes": len(global_scopes),
@@ -418,6 +532,56 @@ def stage2_input_manifest(args) -> list[dict[str, Any]]:
     })
 
 
+def bundle_input_manifest(args) -> list[dict[str, Any]]:
+    """The pinned inputs of a REUSABLE bundle. The A/B SELECTION IS NOT ONE OF THEM.
+
+    W10 proved the defect: the all-arm runner bound ``stage2_input_manifest``, which hashes
+    ``stage01_selection_contract.json``. So two bundles with byte-identical arm content got
+    DIFFERENT ids purely because a pair the bundle does not contain, does not use and cannot
+    be affected by had changed. A reusable arm keyed on the question that happened to be
+    asked first is not reusable — it is a pair's run wearing a different name, and the cache
+    would miss every time.
+
+    A bundle's scientific identity is the DATA, the generic v3 release/scorer view and the
+    CONTEXT. Nothing else. The pair is not an input here; it is a JOIN performed later.
+
+    INTEGRATION (W18 name, W14 content): this delegates to ``arm_inputs``, which binds every
+    file the bundle actually reads — not only the four data objects and the registry, but the
+    guide manifest, the source registry, the target-identity map, the donor crosswalk, the
+    strict-replay source and the pseudobulk. An input the bundle consumed but did not bind is
+    an input that can be swapped underneath it. There is ONE implementation behind this name;
+    two would drift, and the drift would be invisible.
+    """
+    from . import arm_inputs
+    return arm_inputs.bundle_input_manifest(args)
+
+
+def contributor_manifest_identity(args, ctx: dict[str, Any]) -> dict[str, Any]:
+    """The contributor manifest, by RAW bytes and by CONTENT — not by its row count.
+
+    W10's second defect: the all-arm output recorded only COUNTS of the contributor evidence,
+    although EVERY delta in the bundle depends on those bytes — the manifest decides which
+    guides contributed, which decides the mask, which decides the projection. A bundle that
+    binds a count binds nothing: two different manifests with the same number of rows would
+    produce different science under the same id.
+
+    INTEGRATION (W18 name, both lines' content): the SEMANTIC block — `mf.binding_block`,
+    which is what run_id has always bound for the pair screen, so a reordered manifest is the
+    same manifest and does not move the id — PLUS the RAW bytes that actually arrived, and the
+    source-record/replay pins behind them. W18 bound raw+canonical; W14 bound the semantics.
+    Both are here, under one key, because two sibling keys for one fact can drift apart.
+    """
+    doc = ctx.get("manifest_doc")
+    path = getattr(args, "guide_manifest", None)
+    if doc is None:
+        return dict(mf.binding_block(None), raw_sha256=None, manifest_sha256=None)
+    return dict(
+        mf.binding_block(doc),
+        raw_sha256=(file_sha256(path) if path else None),
+        manifest_sha256=doc["manifest_sha256"],
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Main build.
 # --------------------------------------------------------------------------- #
@@ -428,13 +592,12 @@ def build_screen(args) -> dict:
     # selection — the axis is built from ITS poles and its full-contract hash is bound.
     # A temporal contract is refused by name: the two estimators answer different
     # questions and their numbers look alike.
+    #
+    # B2: this is THE loader, and the preflight calls the very same one. The production
+    # firewall, the Stage-1 binding, the pooled-main evidence domain, the manifest and the
+    # gene universe are all bound here, BEFORE any dense layer is read.
     from . import stage1_v3
-    v3 = stage1_v3.load_selection(args, expect_mode=stage1_v3.MODE_WITHIN)
-
-    # PRODUCTION FIREWALL, Stage-1 binding, the pooled-main evidence domain, the
-    # manifest and the gene universe — all bound BEFORE any dense layer is read, by the
-    # same ``prepare`` the preflight runs.
-    ctx = prepare(args, v3=v3)
+    ctx = load_and_prepare(args, expect_mode=stage1_v3.MODE_WITHIN)
 
     # ...and then the SAME gate the preflight applies, over the SAME ctx, BEFORE the
     # dense read and before a single artifact exists. A build that could skip this
@@ -474,6 +637,21 @@ def build_screen(args) -> dict:
     ordered = proj.emit_order(screen_rows)
 
     # ---- identifiers: masks and inputs are bound BEFORE the run is named ----
+    #
+    # SUPERSEDED, AND KNOWINGLY LEFT ALONE. `emit.mask_content_sha256` hashes the mask rows in
+    # the order they were BUILT, while `masks.parquet` below is written under a partial
+    # `sort_by`. So this pair screen's `mask_sha256` is taken over an order its own shipped
+    # file does not preserve: a reader of that file cannot reproduce this number, and the same
+    # rows in a different order would give a different run_id.
+    #
+    # The reusable-bundle lane fixes this properly — `masks.canonical_mask_rows` defines ONE
+    # total order over the full identity columns, serializes the parquet from that exact table
+    # and hashes that exact table (see `masks.MASK_ORDER_RULE_ID`, used by `run_arms`).
+    #
+    # It is NOT retrofitted here on purpose: changing this call changes every legacy run_id,
+    # and this pair screen is superseded rather than production. Silently re-identifying
+    # artifacts other work is pinned to would be a worse defect than the one it fixes. The
+    # legacy screen is NOT release-grade until it adopts the canonical mask order.
     mask_sha = emit.mask_content_sha256(mask_rows)
     guide_manifest_block = mf.provenance_block(manifest_doc)
     binding = runid.build_run_binding(
@@ -499,7 +677,11 @@ def build_screen(args) -> dict:
         # commit printed beside it.
         code_identity=code_identity_for(
             lane, getattr(args, "allow_dirty_tree", False)),
-        stage1_v3=stage1_v3.binding_block(ctx.get("v3")))
+        stage1_v3=stage1_v3.binding_block(ctx.get("v3")),
+        # B2: the legacy contract is BOUND even when it is ignored. The invocation matrix
+        # passes both, and a reader who sees one on the command line is entitled to know it
+        # did nothing — rather than inferring it from an absence of evidence.
+        legacy_selection=legacy_selection_block(args, ctx.get("v3")))
     run_id, run_sha = runid.run_id_of(binding)
 
     for rows in (screen_rows, mask_rows, guide_rows, donor_rows, contrib_rows):

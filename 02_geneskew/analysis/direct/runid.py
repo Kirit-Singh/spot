@@ -86,7 +86,8 @@ def build_run_binding(*, selection, lane: str, stage1_release,
                       evidence_domain: dict[str, Any],
                       release_gate: dict[str, Any],
                       code_identity: Optional[dict[str, Any]] = None,
-                      stage1_v3: Optional[dict[str, Any]] = None
+                      stage1_v3: Optional[dict[str, Any]] = None,
+                      legacy_selection: Optional[dict[str, Any]] = None
                       ) -> dict[str, Any]:
     """Assemble the canonical, timestamp-free content that run_id hashes.
 
@@ -156,6 +157,11 @@ def build_run_binding(*, selection, lane: str, stage1_release,
         # WHICH v3 contract drove this run, or None. Emitted either way, so a reader can
         # tell a v3-driven run from a legacy one without inferring it.
         "stage1_v3": stage1_v3,
+        # WHETHER a legacy contract was supplied, and whether it was CONSUMED. When a v3
+        # contract is present it supersedes the legacy one — and the run SAYS so, with the
+        # ignored file's hash, rather than leaving a reader to infer from silence that it
+        # had no effect. Bound, not hidden.
+        "legacy_selection": legacy_selection,
         "environment_lock": env_lock,
     }
 

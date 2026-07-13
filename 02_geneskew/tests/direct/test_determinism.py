@@ -19,6 +19,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 
 import pandas as pd
 import pytest
@@ -56,12 +57,62 @@ def test_the_same_inputs_rerun_to_the_same_run_id_and_the_same_artifacts(
     assert fingerprint(first["out_dir"]) == fingerprint(second["out_dir"])
 
 
+# A SHA-256 is hex, and hex digits include 0-9. So a digest can contain "2026" — and one now
+# does: adding a file to the package moved `code_tree_sha256` to 0202655bac16… , whose second
+# character onward reads "2026". The old check substring-searched the whole JSON blob, digests
+# included, so it called that a leaked wall clock. It was a false positive waiting for whoever
+# next added a module, and it fired on a run that carries no timestamp at all.
+#
+# The intent is worth keeping and the implementation was not: a wall clock is a KEY that names
+# a time, or a VALUE that parses as one. So look for those, and do not read a content hash as
+# if it were prose.
+_CLOCK_KEYS = ("created_at", "timestamp", "generated_at", "date", "time")
+_ISO_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+_HEX_DIGEST = re.compile(r"^[0-9a-f]{16,}$")
+
+
+def _wall_clock_leaks(node, path=""):
+    """Every place a wall clock could actually be hiding: a time-naming key, or a date value."""
+    leaks = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if any(c in str(key).lower() for c in _CLOCK_KEYS):
+                leaks.append(f"{path}.{key} (a key that names a time)")
+            leaks += _wall_clock_leaks(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for i, value in enumerate(node):
+            leaks += _wall_clock_leaks(value, f"{path}[{i}]")
+    elif isinstance(node, str) and not _HEX_DIGEST.match(node):
+        if _ISO_DATETIME.search(node):
+            leaks.append(f"{path} = {node!r} (a value that parses as a datetime)")
+    return leaks
+
+
 def test_the_run_binding_carries_no_wall_clock(synthetic_run):
     result = build_screen(synthetic_run())
     prov = json.load(open(os.path.join(result["out_dir"], "provenance.json")))
-    blob = json.dumps(prov["run_binding"])
-    for leak in ("created_at", "timestamp", "T0", "2026"):
-        assert leak not in blob, f"the binding leaks {leak!r}"
+    assert _wall_clock_leaks(prov["run_binding"]) == []
+
+
+def test_the_wall_clock_check_would_actually_CATCH_one(synthetic_run):
+    """The positive control. A check that cannot fail is not a check.
+
+    The old one was passing for the wrong reason and failing for the wrong reason; this pins
+    that the replacement still bites on a real leak, in both the shapes one can take.
+    """
+    result = build_screen(synthetic_run())
+    prov = json.load(open(os.path.join(result["out_dir"], "provenance.json")))
+
+    by_key = dict(prov["run_binding"], created_at="2026-07-13T01:02:03Z")
+    assert _wall_clock_leaks(by_key)
+
+    by_value = dict(prov["run_binding"], lane="built 2026-07-13T01:02:03Z")
+    assert _wall_clock_leaks(by_value)
+
+    # ...and a content hash that merely CONTAINS "2026" is not a wall clock
+    assert _wall_clock_leaks(
+        {"code_tree_sha256":
+         "0202655bac16c6c6b87d870f4971a60fb5a60d2b847d5d57841c9c2f101d85ba"}) == []
 
 
 # --------------------------------------------------------------------------- #
