@@ -115,11 +115,23 @@ NEGATIVE_VERDICTS = {"refuse", "refused", "reject", "rejected", "fail", "failed"
 PATHWAY_COLLECTIONS_ALLOWED = {"go_bp"}
 PATHWAY_COLLECTIONS_PARKED = {"reactome"}
 PARKED_IN_DIST = ("reactome",)
-# genesets.py: GO-BP must name a DATED release, and the GMT on disk must hash to its pin.
+# genesets.py: GO-BP must name a DATED release, and the gene-set bytes must hash to their pin.
 DATED_RELEASE = re.compile(r"\d{4}-\d{2}(-\d{2})?")
 GENESET_SOURCE_KEYS = {"source", "geneset_source", "collection", "pathway_collection"}
 GENESET_RELEASE_KEYS = {"release_id", "geneset_release_id"}
-GENESET_PIN_KEYS = {"geneset_sha256", "gmt_sha256", "source_sha256", "geneset_raw_sha256"}
+GENESET_PIN_KEYS = {"geneset_sha256", "gmt_sha256", "source_sha256", "geneset_raw_sha256",
+                    "geneset_bundle_sha256", "geneset_cache_sha256"}
+
+# THE authoritative pinned Ensembl-keyed GO-BP gene-set bundle. A pathway artifact must bind to
+# exactly these bytes. The bundle lives on the run host under the operator's runs root
+# ($SPOT_RUNS/direct-candidate-20260713T171655Z/inputs/geneset-cache-ensembl/); that absolute host
+# path is deliberately NOT tracked here — the bundle's identity is its SHA-256, not its location.
+GO_BP_GENESET_FILE = "go_bp_ensembl.genesets.json"
+GO_BP_GENESET_SHA256 = "4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e5914d2a6"
+
+# A lane whose artifact shape is not fixed here: the public filename is taken from the receipt's
+# own subject, so Stage-3/4 shapes are DISCOVERED from their final receipts, never guessed.
+SUBJECT_FILE_KEYS = {"projection_file", "artifact_file", "subject_file", "filename", "file"}
 
 # A receipt that NAMES the bytes it judged (e.g. the Stage-2 display projection's
 # subject.projection_raw_sha256, recomputed by the verifier from the file on disk).
@@ -285,11 +297,28 @@ def check_pathway_artifact(src: str, declared: str) -> list[str]:
         if not DATED_RELEASE.search(r):
             out.append(f"GO-BP release_id {r!r} is not dated (YYYY-MM or YYYY-MM-DD)")
 
-    pins = [v for k, v in _iter_items(doc)
-            if str(k).strip().lower() in GENESET_PIN_KEYS and isinstance(v, str)]
-    if not any(HEX64.match(p.strip().lower()) for p in pins):
+    pins = {p.strip().lower() for k, p in _iter_items(doc)
+            if str(k).strip().lower() in GENESET_PIN_KEYS and isinstance(p, str)}
+    hexpins = {p for p in pins if HEX64.match(p)}
+    if not hexpins:
         out.append("pathway artifact carries no 64-hex gene-set byte pin "
-                   f"(one of {sorted(GENESET_PIN_KEYS)}); the GMT on disk must hash to its pin")
+                   f"(one of {sorted(GENESET_PIN_KEYS)}); the gene-set bytes must hash to their pin")
+    elif GO_BP_GENESET_SHA256 not in hexpins:
+        # byte verification against THE authoritative pinned Ensembl-keyed GO-BP bundle
+        out.append(f"pathway artifact does not bind the authoritative GO-BP gene-set bundle "
+                   f"({GO_BP_GENESET_FILE} sha256 {GO_BP_GENESET_SHA256[:16]}…); it pins "
+                   f"{sorted(h[:16] + '…' for h in hexpins)}")
+    return out
+
+
+def receipt_subject_files(parsed: dict) -> set[str]:
+    """The artifact filename(s) a receipt says it judged — how Stage-3/4 shapes are discovered."""
+    out = set()
+    for key, value in _iter_items(parsed):
+        if str(key).strip().lower() in SUBJECT_FILE_KEYS and isinstance(value, str):
+            name = os.path.basename(value.strip())
+            if name and name not in (".", "..") and "/" not in name and "\\" not in name:
+                out.add(name)
     return out
 
 
@@ -375,6 +404,7 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
             continue
 
         subject_hashes: set[str] = set()
+        subject_files: set[str] = set()
         receipt = entry.get("receipt") or {}
         r_src = receipt.get("src")
         r_dst = receipt.get("dst") or f"lanes/{lane}/receipt.json"
@@ -395,6 +425,7 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
                 for c in receipt_self_contradictions(parsed):
                     problems.append(f"[{lane}] {c}")
                 subject_hashes = receipt_subject_hashes(parsed)
+                subject_files = receipt_subject_files(parsed)
             except Refusal as exc:
                 problems.append(f"[{lane}] {exc}")
             rec = _plan_file(r_src, r_dst, lane, "receipt", receipt.get("expected_sha256"), problems)
@@ -408,8 +439,21 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
         staged_hashes = set()
         for a in artifacts:
             dst = a.get("dst")
+            if a.get("dst_from_receipt"):
+                # shape DISCOVERED from the final receipt, never guessed here
+                if len(subject_files) != 1:
+                    problems.append(
+                        f"[{lane}] dst_from_receipt: the receipt must name exactly ONE subject file "
+                        f"to take the public shape from (found {sorted(subject_files) or 'none'})")
+                    continue
+                if not a.get("bound_by_receipt"):
+                    problems.append(f"[{lane}] dst_from_receipt requires bound_by_receipt: a shape "
+                                    f"taken from a receipt must also be bound to the bytes it judged")
+                    continue
+                dst = next(iter(subject_files))
             if not dst:
-                problems.append(f"[{lane}] artifact needs a 'dst'")
+                problems.append(f"[{lane}] artifact needs a 'dst' (or dst_from_receipt to take it "
+                                f"from the receipt's subject)")
                 continue
             dst = dst if dst.startswith("lanes/") else os.path.join("lanes", lane, dst)
             rec = _plan_file(a.get("src"), dst, lane, "artifact", a.get("expected_sha256"), problems)

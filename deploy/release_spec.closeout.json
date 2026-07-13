@@ -2,10 +2,10 @@
   "_comment": "CLOSEOUT release spec. Slots are exact where the shape is known; every 'src' and every hash is null until the orchestrator supplies the real admitted bytes. Nothing here is invented. As shipped this REFUSES (every lane is PENDING). Flip a lane to ADMIT only when its production receipt admits.",
   "_slot_provenance": {
     "stage2": "Symbol-bound display projection from W3 commit bc3b10b (origin/agent/stage2-runmanifest-round4). Artifact filename, schema and receipt shape are taken from that commit: display_projection.PROJECTION_FILE='stage2_display_projection.json', SCHEMA='spot.stage02_display_projection.v2', verifier_id='spot.stage02.display_projection.independent_verifier.v1', receipt verdict is 'admit'|'reject' and its subject.projection_raw_sha256 names the exact bytes judged. 'bound_by_receipt' makes the assembler refuse an artifact the receipt did not judge.",
-    "pathway_go_bp_rest": "GO-BP-ONLY CRITICAL PATH. NOT YET PRODUCED: no emitted pathway artifact or receipt is committed on any branch, so no path or hash is filled here. Producer (verified from origin/agent/stage2-runmanifest-round4): `python -m direct.release_inventory --lane pathway` is the ONE pathway inventory builder -> emits 'pathway_arm_release.json' (schema spot.stage02_pathway_arm_release.v1). Its external admission report must declare the PATHWAY lane's own schema 'spot.stage02_pathway_arm_external_admission.v1' (a temporal report may NOT admit the pathway lane). The Direct/condition admission receipt is 'w10_admission_{condition}.json' -> for Rest: 'w10_admission_Rest.json' (schema spot.stage02_direct_arm_bundle_verification.v1). genesets.py requires GO-BP to name a DATED release_id and pins the GMT's raw sha256 - the file on disk must hash to the pin; 'pathway_collection: go_bp' makes the assembler enforce all of that.",
+    "pathway_go_bp_rest": "GO-BP-ONLY CRITICAL PATH. The pinned Ensembl-keyed GO-BP gene-set bundle EXISTS: 'go_bp_ensembl.genesets.json', sha256 4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e5914d2a6, under the operator's runs root ($SPOT_RUNS/direct-candidate-20260713T171655Z/inputs/geneset-cache-ensembl/). Its absolute host path is deliberately NOT tracked in this repo - the bundle's identity is its SHA-256, not its location - and the assembler byte-verifies a pathway artifact against exactly that sha. The completed Rest producer bundle exists (run pathway-117ccc4-stream1w8-unadmitted, bundle 47a0d01fd23f705e) but is UNADMITTED: it awaits final W18/W4 independent admission, so its src/hash stay null here and the assembler still refuses. Stim8/Stim48 GO-only jobs are RUNNING serially (run pathway-117ccc4-prodonly-gobp-w8-unadmitted) - also unadmitted. Producer contract (origin/agent/stage2-runmanifest-round4): `python -m direct.release_inventory --lane pathway` -> 'pathway_arm_release.json' (spot.stage02_pathway_arm_release.v1); the external admission report must declare the PATHWAY lane's OWN schema 'spot.stage02_pathway_arm_external_admission.v1' (a temporal report may NOT admit it); the per-condition receipt is 'w10_admission_Rest.json' (spot.stage02_direct_arm_bundle_verification.v1).",
     "reactome": "PARKED. Not on the critical path, not required, and never advertised in the deployable UI bundle. The assembler refuses pathway_collection='reactome', refuses a pathway artifact that names reactome, and refuses a dist file that advertises it. Its license (CC0-1.0) stays recorded in the inventory as parked, for the record only.",
-    "stage3": "PENDING — 03_druglink is specified but not implemented; artifact shape unknown, so no dst is guessed. Its 'consumes' block is the gate: Stage-3 may only rest on an INDEPENDENTLY ADMITTED Stage-2 artifact, named by its exact sha256.",
-    "stage4": "PENDING — 04_PKPD is specified but not implemented; artifact shape unknown, so no dst is guessed. Same 'consumes' gate against Stage-3."
+    "stage3": "PENDING admission. The artifact SHAPE is discovered from the lane's FINAL RECEIPT, not guessed here: 'dst_from_receipt' takes the public filename from the receipt's own subject, and 'bound_by_receipt' binds it to the exact bytes that receipt judged. 'consumes' is the second gate: Stage-3 may only rest on an INDEPENDENTLY ADMITTED Stage-2 artifact, named by its exact sha256.",
+    "stage4": "PENDING admission. Same as Stage-3: shape discovered from its final receipt (dst_from_receipt + bound_by_receipt), and 'consumes' binds it to an independently admitted Stage-3 artifact."
   },
   "release_id": null,
   "lanes": {
@@ -26,7 +26,15 @@
         {"src": null, "dst": "stage2_display_projection.json", "expected_sha256": null, "bound_by_receipt": true},
         {"src": null, "dst": "pathway_arm_release.json", "expected_sha256": null, "pathway_collection": "go_bp",
          "_condition": "Rest",
-         "_requires": "a DATED GO-BP release_id + a 64-hex GMT byte pin; the GMT on disk must hash to the pin. Reactome is parked and refused."}
+         "_producer_bundle": "pathway-117ccc4-stream1w8-unadmitted / 47a0d01fd23f705e — COMPLETE but UNADMITTED (awaiting W18/W4). src stays null until it admits.",
+         "_also_running": "Stim8 / Stim48 GO-only, serially: pathway-117ccc4-prodonly-gobp-w8-unadmitted — unadmitted.",
+         "_geneset_bundle": {
+           "file": "go_bp_ensembl.genesets.json",
+           "sha256": "4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e5914d2a6",
+           "locator": "$SPOT_RUNS/direct-candidate-20260713T171655Z/inputs/geneset-cache-ensembl/",
+           "_note": "PINNED and present. The absolute host path is deliberately not tracked: identity is the SHA-256. The assembler byte-verifies the pathway artifact against exactly this sha."
+         },
+         "_requires": "a DATED GO-BP release_id + a gene-set pin equal to the sha above. Reactome is parked and refused."}
       ]
     },
     "stage3": {
@@ -38,7 +46,8 @@
          "_note": "the exact sha256 of the independently admitted Stage-2 artifact Stage-3 reads. Null refuses: a consumer may not rest on bytes nobody admitted."}
       ],
       "artifacts": [
-        {"src": null, "dst": null, "expected_sha256": null}
+        {"src": null, "dst": null, "dst_from_receipt": true, "bound_by_receipt": true, "expected_sha256": null,
+         "_note": "shape DISCOVERED from the final receipt: the public filename comes from the receipt's own subject, and the bytes must be the ones that receipt judged. Nothing is guessed here."}
       ]
     },
     "stage4": {
@@ -50,7 +59,8 @@
          "_note": "the exact sha256 of the independently admitted Stage-3 artifact Stage-4 reads."}
       ],
       "artifacts": [
-        {"src": null, "dst": null, "expected_sha256": null}
+        {"src": null, "dst": null, "dst_from_receipt": true, "bound_by_receipt": true, "expected_sha256": null,
+         "_note": "shape DISCOVERED from the final receipt, as Stage-3."}
       ]
     }
   },

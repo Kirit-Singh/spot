@@ -23,9 +23,9 @@ Descriptor calculation uses RDKit (BSD-3-Clause).
   own provenance. No lane is collapsed into an overall call.
 
 ## Reproduce
-Runs as a Claude Science specialist (neuro-oncology PK/PD). **Not yet implemented in this
-repo** — `analysis/` and `inputs/` are placeholders; the entry point and its verifier land
-with the stage.
+Runs as a Claude Science specialist (neuro-oncology PK/PD) in its own lane. This branch packages
+the stage's **admitted** artifact + receipt; the artifact shape and entry point are taken from that
+final receipt rather than restated here.
 
 ## Provenance & licenses
 Brain-penetrance scoring is a *screen*, not a clinical determination. Queried sources and

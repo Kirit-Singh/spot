@@ -348,7 +348,8 @@ GO_BP_OK = {
     "schema_version": "spot.stage02_pathway_arm_release.v1",
     "source": "go_bp",
     "release_id": "go_bp-2026-05-01",
-    "geneset_sha256": "b" * 64,
+    # THE authoritative pinned Ensembl-keyed GO-BP bundle
+    "geneset_sha256": ar.GO_BP_GENESET_SHA256,
     "sets": [{"set_id": "GO:0006955", "name": "immune response"}],
 }
 
@@ -394,6 +395,65 @@ def test_pathway_without_geneset_byte_pin_is_refused(tmp_path):
 def test_pathway_without_release_id_is_refused(tmp_path):
     doc = {k: v for k, v in GO_BP_OK.items() if k != "release_id"}
     assert "names no gene-set release_id" in _refuses(tmp_path, _pathway_spec(tmp_path, doc))
+
+
+def test_pathway_binding_the_WRONG_geneset_bundle_is_refused(tmp_path):
+    """A well-formed pin is not enough: it must be THE authoritative GO-BP bundle."""
+    doc = dict(GO_BP_OK, geneset_sha256="d" * 64)
+    msg = _refuses(tmp_path, _pathway_spec(tmp_path, doc))
+    assert "does not bind the authoritative GO-BP gene-set bundle" in msg
+    assert ar.GO_BP_GENESET_SHA256[:16] in msg
+
+
+def test_authoritative_geneset_sha_is_the_pinned_one(tmp_path):
+    assert ar.GO_BP_GENESET_FILE == "go_bp_ensembl.genesets.json"
+    assert ar.GO_BP_GENESET_SHA256 == \
+        "4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e5914d2a6"
+
+
+# --------------------------------- Stage-3/4 shape DISCOVERED from the final receipt, never guessed
+def _receipt_with_subject(tmp, artifact, name, subject_file=None):
+    doc = {
+        "verifier_id": "spot.stage03.independent_verifier.v1",
+        "subject": {"artifact_file": subject_file or os.path.basename(artifact),
+                    "raw_sha256": ar.sha256_file(artifact)},
+        "verdict": "admit",
+    }
+    p = tmp / name
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def test_stage3_shape_is_taken_from_its_receipt(tmp_path):
+    art = _artifact(tmp_path, "stage3", body='{"drug":"x"}', name="whatever_producer_named_it.json")
+    rc = _receipt_with_subject(tmp_path, art, "s3_receipt.json", subject_file="druglink_release.json")
+    spec = _spec(tmp_path, stage3={
+        "receipt": {"src": rc, "dst": "lanes/stage3/receipt.json"},
+        "artifacts": [{"src": art, "dst": None, "dst_from_receipt": True, "bound_by_receipt": True}]})
+    staging = _staging(tmp_path)
+    ar.assemble(spec, staging, run_utc="2026-07-13T00:00:00Z")
+    # the public name came from the RECEIPT's subject, not from the spec
+    assert os.path.isfile(os.path.join(staging, "lanes", "stage3", "druglink_release.json"))
+
+
+def test_dst_from_receipt_without_a_named_subject_is_refused(tmp_path):
+    art = _artifact(tmp_path, "stage3", body='{"a":1}', name="s3.json")
+    r = tmp_path / "no_subject_receipt.json"
+    r.write_text(json.dumps({"verdict": "admit", "subject": {"raw_sha256": ar.sha256_file(art)}}),
+                 encoding="utf-8")
+    spec = _spec(tmp_path, stage3={
+        "receipt": {"src": str(r), "dst": "lanes/stage3/receipt.json"},
+        "artifacts": [{"src": art, "dst": None, "dst_from_receipt": True, "bound_by_receipt": True}]})
+    assert "must name exactly ONE subject file" in _refuses(tmp_path, spec)
+
+
+def test_dst_from_receipt_requires_bound_by_receipt(tmp_path):
+    art = _artifact(tmp_path, "stage3", body='{"a":1}', name="s3.json")
+    rc = _receipt_with_subject(tmp_path, art, "s3_rc.json")
+    spec = _spec(tmp_path, stage3={
+        "receipt": {"src": rc, "dst": "lanes/stage3/receipt.json"},
+        "artifacts": [{"src": art, "dst": None, "dst_from_receipt": True}]})
+    assert "requires bound_by_receipt" in _refuses(tmp_path, spec)
 
 
 def test_dist_advertising_reactome_is_refused(tmp_path):
@@ -489,10 +549,17 @@ def test_artifact_provenance_ships_and_declares_no_invented_values(tmp_path):
                      "stage2_arm_temporal", "stage2_arm_pathway_go_bp_rest"):
         assert required in kinds
 
-    # the pathway lane is GO-BP only, with its gene-set pin still unfilled
+    # the pathway lane is GO-BP only; the gene-set bundle is PINNED and present...
     pw = next(a for a in prov["artifacts"] if a["id"] == "stage2_arm_pathway_go_bp_rest")
     assert pw["geneset_collection"] == "go_bp"
-    assert pw["geneset_release_id"] is None and pw["geneset_gmt_sha256"] is None
+    assert pw["geneset_bundle"]["sha256"] == ar.GO_BP_GENESET_SHA256
+    assert pw["geneset_bundle"]["status"] == "PINNED_AND_PRESENT"
+    # ...but the producer bundles are UNADMITTED, so the artifact still carries no hash/admission
+    assert pw["sha256"] is None and pw["admitted"] is False
+    states = {b["state"] for b in pw["producer_bundles"]}
+    assert states == {"COMPLETE_UNADMITTED", "RUNNING_UNADMITTED"}
+    # no machine-local host path leaked into the tracked provenance
+    assert "/home/" not in json.dumps(pw)
 
     # Reactome is parked, and recorded as parked rather than deleted
     parked = {p["id"]: p for p in prov["parked_sources"]}

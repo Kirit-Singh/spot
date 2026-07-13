@@ -49,8 +49,9 @@ Stage-1 scoring tier (deterministic, per-barcode reproducible):
 cd 01_programs/analysis && ./reproduce.sh   # pins the HF revision + SHA, then per-barcode verify
 ```
 Stage-2 runs from `02_geneskew/analysis/` (`direct/run_screen.py`, `perturb2state/run_p2s.py`)
-as a Claude Science specialist over the authors' released `GWCD4i.DE_stats`. Stages 3–4 are
-specified but not yet implemented in this repo. See each stage README for the exact entry point.
+as a Claude Science specialist over the authors' released `GWCD4i.DE_stats`. Stages 3–4 run in
+their own lanes and are packaged from their admitted artifacts + receipts. See each stage README
+for the exact entry point.
 
 ## Provenance
 Every number comes from a real tool or database with source + method + exact statistic —

@@ -1,7 +1,7 @@
 {
   "schema_id": "spot.source_license_inventory.v1",
   "status": "TEMPLATE_VERIFIED_LICENSES_ONLY",
-  "description": "Machine-readable source + license inventory for the sources spot uses or plans to use. Each entry's license was checked against the source's official page on the verification date; entries whose license could not be verified are omitted. Usage_status is honest about the current implementation state (Stages 3-4 not yet implemented in this repo).",
+  "description": "Machine-readable source + license inventory. Each entry's license was checked against the source's official page on the verification date; entries whose license could not be verified are omitted. usage_status reflects how spot touches the source today: critical_path (GO-BP is the only admitted pathway collection), used, planned, or parked (Reactome).",
   "verification_date_utc": "2026-07-13",
   "spdx_note": "license.id uses SPDX identifiers where one exists; scope_note records any per-component license split.",
   "sources": [

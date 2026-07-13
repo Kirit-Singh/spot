@@ -21,9 +21,9 @@ descriptive** axis, never a filter.
   (source database, release, exact record).
 
 ## Reproduce
-Runs as a Claude Science specialist (drug repurposing). **Not yet implemented in this repo** —
-`analysis/` and `inputs/` are placeholders; the entry point and its verifier land with the
-stage. Current cross-stage contract expectations are in `schemas/README.md`.
+Runs as a Claude Science specialist (drug repurposing) in its own lane. This branch packages the
+stage's **admitted** artifact + receipt; the artifact shape and entry point are taken from that
+final receipt rather than restated here. Cross-stage contract expectations: `schemas/README.md`.
 
 ## Provenance & licenses
 Every annotation cites its source database and release. Queried sources and their licenses

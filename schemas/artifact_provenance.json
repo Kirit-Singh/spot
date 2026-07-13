@@ -1,7 +1,7 @@
 {
   "schema_id": "spot.artifact_provenance.v1",
   "status": "TEMPLATE_NO_ARTIFACT_ADMITTED",
-  "description": "Per-artifact provenance for the public release: what each artifact is, the exact command that regenerates it, its independent verifier, and its license. Every sha256 and every rerun_utc is null until a real run fills it from the actual bytes/clock — never fabricated. 'admitted' flips to true only when that lane's production receipt admits. deploy/assemble_release.py refuses any lane that is not ADMIT.",
+  "description": "Per-artifact provenance for the public release: what each artifact is, the exact command that regenerates it, its independent verifier, and its license. Every sha256 and every rerun_utc is null until a real run fills it from the actual bytes/clock \u2014 never fabricated. 'admitted' flips to true only when that lane's production receipt admits. deploy/assemble_release.py refuses any lane that is not ADMIT.",
   "notes": {
     "rerun_utc": "ISO-8601 UTC of the run that produced the bytes. null = not yet run.",
     "sha256": "measured from the produced bytes. null = not yet produced. Never a placeholder.",
@@ -15,7 +15,10 @@
       "description": "Stage-1 v3 program registry: per-program panels, coefficients, marker provenance locators.",
       "repo_path": "01_programs/app/data/stage01_program_registry_v3.json",
       "public_path": "lanes/stage1/stage01_program_registry_v3.json",
-      "rerun": {"entry_point": "01_programs/analysis/reproduce.sh", "command": "cd 01_programs/analysis && ./reproduce.sh"},
+      "rerun": {
+        "entry_point": "01_programs/analysis/reproduce.sh",
+        "command": "cd 01_programs/analysis && ./reproduce.sh"
+      },
       "verifier": "01_programs/analysis/verify_stage1_provenance.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -29,7 +32,10 @@
       "description": "Executable scorer VIEW that selection_id binds (display labels/citations excluded).",
       "repo_path": "01_programs/app/data/stage01_stage2_registry_view.json",
       "public_path": "lanes/stage1/stage01_stage2_registry_view.json",
-      "rerun": {"entry_point": "01_programs/analysis/stage2_bridge/build_registry_view.py", "command": "python3 01_programs/analysis/stage2_bridge/build_registry_view.py"},
+      "rerun": {
+        "entry_point": "01_programs/analysis/stage2_bridge/build_registry_view.py",
+        "command": "python3 01_programs/analysis/stage2_bridge/build_registry_view.py"
+      },
       "verifier": "01_programs/analysis/stage2_bridge/protected_hashes.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -43,7 +49,10 @@
       "description": "Full 396k continuous per-cell program scores. NOT tracked in the repo (generated, gitignored under _t8_staging) - it ships via the HF bundle, not the git tree. The current in-repo pointer is a candidate: the built v3 overlay is proven overlay==full but is NOT deployed.",
       "repo_path": null,
       "public_path": "lanes/stage1/stage01_scores_full.parquet",
-      "rerun": {"entry_point": "01_programs/analysis/reproduce_t8.sh", "command": "cd 01_programs/analysis && ./reproduce_t8.sh"},
+      "rerun": {
+        "entry_point": "01_programs/analysis/reproduce_t8.sh",
+        "command": "cd 01_programs/analysis && ./reproduce_t8.sh"
+      },
       "verifier": "01_programs/analysis/verify_stage1_t8.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -57,7 +66,10 @@
       "description": "40,000-cell display overlay (SEED=12345), 12 continuous program scores per cell + frozen display domains.",
       "repo_path": "01_programs/app/data/stage01_umap_overlay_v3.json",
       "public_path": "lanes/stage1/stage01_umap_overlay_v3.json",
-      "rerun": {"entry_point": "01_programs/analysis/reproduce_scores_v3.sh", "command": "cd 01_programs/analysis && ./reproduce_scores_v3.sh"},
+      "rerun": {
+        "entry_point": "01_programs/analysis/reproduce_scores_v3.sh",
+        "command": "cd 01_programs/analysis && ./reproduce_scores_v3.sh"
+      },
       "verifier": "01_programs/analysis/verify_reproduce.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -71,7 +83,10 @@
       "description": "Per-cell display records the Stage-1 workbench renders.",
       "repo_path": "01_programs/app/data/stage01_cell_records.json",
       "public_path": "lanes/stage1/stage01_cell_records.json",
-      "rerun": {"entry_point": "01_programs/analysis/reproduce.sh", "command": "cd 01_programs/analysis && ./reproduce.sh"},
+      "rerun": {
+        "entry_point": "01_programs/analysis/reproduce.sh",
+        "command": "cd 01_programs/analysis && ./reproduce.sh"
+      },
       "verifier": "01_programs/analysis/verify_reproduce.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -85,7 +100,10 @@
       "description": "Symbol-bound Stage-2 display projection (schema spot.stage02_display_projection.v2). Covers the Direct and Temporal arm lanes; the Pathway lane is a separate arm lane in the same projection and is NOT yet admitted. Every target_symbol is looked up in the frozen Stage-1 symbol crosswalk, never guessed. Bound to its receipt by subject.projection_raw_sha256 (see deploy/assemble_release.py bound_by_receipt).",
       "repo_path": null,
       "public_path": "lanes/stage2/stage2_display_projection.json",
-      "rerun": {"entry_point": "02_geneskew/analysis/direct/display_projection.py", "command": "python3 02_geneskew/analysis/direct/display_projection.py --bundles-root <bundles> --out stage2_display_projection.json --symbol-crosswalk 01_programs/analysis/effect_universe_gwcd4i.json"},
+      "rerun": {
+        "entry_point": "02_geneskew/analysis/direct/display_projection.py",
+        "command": "python3 02_geneskew/analysis/direct/display_projection.py --bundles-root <bundles> --out stage2_display_projection.json --symbol-crosswalk 01_programs/analysis/effect_universe_gwcd4i.json"
+      },
       "verifier": "02_geneskew/analysis/direct/verify_display_projection.py (spot.stage02.display_projection.independent_verifier.v1)",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -100,7 +118,10 @@
       "description": "Direct arm bundle: measured perturbation effect on the selected program at one condition.",
       "repo_path": null,
       "public_path": "lanes/stage2/direct/arm_bundle.json",
-      "rerun": {"entry_point": "02_geneskew/analysis/direct/run_screen.py", "command": "cd 02_geneskew/analysis && python -m direct.run_screen"},
+      "rerun": {
+        "entry_point": "02_geneskew/analysis/direct/run_screen.py",
+        "command": "cd 02_geneskew/analysis && python -m direct.run_screen"
+      },
       "verifier": "02_geneskew/analysis/direct/verify_display_projection.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -114,7 +135,10 @@
       "description": "Temporal arm bundle: cross-condition (timepoint-to-timepoint) measured effect.",
       "repo_path": null,
       "public_path": "lanes/stage2/temporal/arm_bundle.json",
-      "rerun": {"entry_point": "02_geneskew/analysis/direct/run_screen.py", "command": "cd 02_geneskew/analysis && python -m direct.run_screen"},
+      "rerun": {
+        "entry_point": "02_geneskew/analysis/direct/run_screen.py",
+        "command": "cd 02_geneskew/analysis && python -m direct.run_screen"
+      },
       "verifier": "02_geneskew/analysis/direct/verify_display_projection.py",
       "license": "MIT (spot output over the MIT source)",
       "rerun_utc": null,
@@ -126,7 +150,7 @@
       "lane": "stage2",
       "kind": "arm",
       "critical_path": "GO-BP only (Rest). Reactome is PARKED - see parked_sources below.",
-      "description": "Pathway arm release for the GO-BP gene-set collection at condition Rest: INFERRED pathway-node levers, kept typed and separate from measured direct targets - never merged. NOT YET PRODUCED: no emitted pathway artifact or receipt exists on any branch, so no path or hash is recorded here.",
+      "description": "Pathway arm release for the GO-BP gene-set collection at condition Rest. INFERRED pathway-node levers, kept typed and separate from measured direct targets - never merged. The completed Rest producer bundle EXISTS but is UNADMITTED (awaiting W18/W4 independent admission), so no artifact sha256 is recorded: an unadmitted producer output is not a public artifact.",
       "repo_path": null,
       "public_path": "lanes/stage2/pathway_arm_release.json",
       "artifact_schema": "spot.stage02_pathway_arm_release.v1",
@@ -135,15 +159,40 @@
       "condition_admission_receipt": "w10_admission_Rest.json (schema spot.stage02_direct_arm_bundle_verification.v1)",
       "geneset_collection": "go_bp",
       "geneset_release_id": null,
-      "geneset_gmt_sha256": null,
       "byte_verification": "genesets.py pins BOTH the release id and the raw sha256 of the GMT; the file on disk must hash to the pin. GO-BP must name a DATED release (an enrichment that names no release cannot be reproduced or contested). deploy/assemble_release.py enforces this via pathway_collection: go_bp.",
-      "rerun": {"entry_point": "02_geneskew/analysis/direct/release_inventory.py", "command": "cd 02_geneskew/analysis && python -m direct.release_inventory --lane pathway --bundles-root <bundles> --release <release> --release-root <root> --env-lock <lock>"},
+      "rerun": {
+        "entry_point": "02_geneskew/analysis/direct/release_inventory.py",
+        "command": "cd 02_geneskew/analysis && python -m direct.release_inventory --lane pathway --bundles-root <bundles> --release <release> --release-root <root> --env-lock <lock>"
+      },
       "verifier": "02_geneskew/analysis/direct/verify_release_envelope.py (pathway lane declares its OWN admission schema; a temporal report may not admit it)",
       "license": "MIT (spot output); GO-BP gene sets CC BY 4.0 (Gene Ontology Consortium), dated release required",
       "rerun_utc": null,
       "sha256": null,
       "admitted": false,
-      "provenance_source": "origin/agent/stage2-runmanifest-round4 (release_inventory.py, verify_release_envelope.py, verify_admission_rules.py, genesets.py)"
+      "provenance_source": "origin/agent/stage2-runmanifest-round4 (release_inventory.py, verify_release_envelope.py, verify_admission_rules.py, genesets.py)",
+      "geneset_bundle": {
+        "file": "go_bp_ensembl.genesets.json",
+        "sha256": "4f8b124432e9c1f75f4780b233bd55a29b04150e36d71e04d183d85e5914d2a6",
+        "keying": "Ensembl-keyed (spot.stage02_geneset_cache_ensembl.v1)",
+        "locator": "$SPOT_RUNS/direct-candidate-20260713T171655Z/inputs/geneset-cache-ensembl/",
+        "status": "PINNED_AND_PRESENT",
+        "note": "The absolute host path is deliberately NOT tracked in this repo - the bundle's identity is its SHA-256, not its location. deploy/assemble_release.py byte-verifies the pathway artifact against exactly this sha."
+      },
+      "producer_bundles": [
+        {
+          "condition": "Rest",
+          "run": "pathway-117ccc4-stream1w8-unadmitted",
+          "bundle": "47a0d01fd23f705e",
+          "state": "COMPLETE_UNADMITTED",
+          "awaiting": "W18/W4 independent admission"
+        },
+        {
+          "condition": "Stim8 / Stim48 (GO-only, serial)",
+          "run": "pathway-117ccc4-prodonly-gobp-w8-unadmitted",
+          "state": "RUNNING_UNADMITTED",
+          "awaiting": "completion, then independent admission"
+        }
+      ]
     }
   ],
   "parked_sources": [
@@ -158,11 +207,60 @@
   "excluded_from_release": {
     "policy": "Never staged, whatever a spec says. Enforced by deploy/assemble_release.py (EXCLUDE_PATH_PATTERNS + DENY_EXTENSIONS) and covered by its tests.",
     "classes": [
-      {"class": "prefetch-only / cache", "why": "re-fetchable working state, not a result", "examples": ["cache/", ".cache/", "prefetch/", "*_cache/", "pipeline/datasets/"]},
-      {"class": "private logs / run scratch", "why": "may carry machine paths, hosts, or operator detail", "examples": ["logs/", "*.log", "_staging/", "_t8_staging/", "tmp/", ".scratch/"]},
-      {"class": "raw source matrices", "why": "upstream bytes are not ours to redistribute; fetched from the source", "examples": ["*.h5ad", "*.h5mu"]},
-      {"class": "credentials", "why": "never in a public artifact, and never printed", "examples": [".env", "*.pem", "*.key", ".netrc"]},
-      {"class": "build/interpreter junk", "why": "not content", "examples": ["__pycache__/", "*.pyc", ".ipynb_checkpoints/"]}
+      {
+        "class": "prefetch-only / cache",
+        "why": "re-fetchable working state, not a result",
+        "examples": [
+          "cache/",
+          ".cache/",
+          "prefetch/",
+          "*_cache/",
+          "pipeline/datasets/"
+        ]
+      },
+      {
+        "class": "private logs / run scratch",
+        "why": "may carry machine paths, hosts, or operator detail",
+        "examples": [
+          "logs/",
+          "*.log",
+          "_staging/",
+          "_t8_staging/",
+          "tmp/",
+          ".scratch/"
+        ]
+      },
+      {
+        "class": "raw source matrices",
+        "why": "upstream bytes are not ours to redistribute; fetched from the source",
+        "examples": [
+          "*.h5ad",
+          "*.h5mu"
+        ]
+      },
+      {
+        "class": "credentials",
+        "why": "never in a public artifact, and never printed",
+        "examples": [
+          ".env",
+          "*.pem",
+          "*.key",
+          ".netrc"
+        ]
+      },
+      {
+        "class": "build/interpreter junk",
+        "why": "not content",
+        "examples": [
+          "__pycache__/",
+          "*.pyc",
+          ".ipynb_checkpoints/"
+        ]
+      }
     ]
+  },
+  "stage3_stage4_shape_discovery": {
+    "policy": "Stage-3 and Stage-4 artifact shapes are DISCOVERED from their FINAL RECEIPTS, never guessed here. The spec marks them dst_from_receipt + bound_by_receipt: the public filename is taken from the receipt's own subject and the bytes must be the ones that receipt judged. Until each lane's receipt admits, its src/hash stay null and the assembler refuses.",
+    "enforced_by": "deploy/assemble_release.py (dst_from_receipt, bound_by_receipt, consumes)"
   }
 }
