@@ -27,6 +27,12 @@ import pytest
 RELEASE_COMMIT = "55899ac"
 RELEASE_PATH = "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json"
 VIEW_PATH = "01_programs/app/data/stage01_stage2_registry_view.json"
+
+# The AUTHORITATIVE Stage-2 solver lock, staged from git exactly as the release is. Its
+# bytes hash to 2983d140... — the verifier holds that constant itself, so a fixture cannot
+# bypass it by inventing a lock of its own.
+LOCK_COMMIT = "c1f8e80"
+LOCK_PATH = "02_geneskew/analysis/stage02_solver_lock.txt"
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
@@ -72,9 +78,9 @@ def stage_release(tmp_path) -> dict[str, Any]:
     with open(release_path, "wb") as fh:
         fh.write(raw)
 
-    lock_path = os.path.join(root, "stage2_env.lock")
-    with open(lock_path, "w") as fh:
-        fh.write("# FIXTURE solved environment\nnumpy==1.26.4\npandas==2.2.2\n")
+    lock_path = os.path.join(root, "stage02_solver_lock.txt")
+    with open(lock_path, "wb") as fh:
+        fh.write(_git_show(f"{LOCK_COMMIT}:{LOCK_PATH}"))
 
     release = json.loads(raw)
     view = json.loads(open(view_path).read())
@@ -177,14 +183,6 @@ def pinned_verifiers(tmp_path) -> str:
 def env_lock_sha256(run: dict) -> str:
     """The sha256 of the lock this fixture run was solved under."""
     return _raw(run["env_lock"])
-
-
-def env_lock(tmp_path) -> str:
-    """The COMMITTED Stage-2 environment lock. Its BYTES are what the verifier compares."""
-    path = os.path.join(str(tmp_path), "FIXTURE_stage2_env.lock")
-    with open(path, "w") as fh:
-        fh.write("# FIXTURE solved environment\nnumpy==1.26.4\npandas==2.2.2\n")
-    return path
 
 
 def expected_code_identity(tmp_path) -> str:

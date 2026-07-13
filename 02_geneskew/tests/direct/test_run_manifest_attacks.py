@@ -19,6 +19,7 @@ import pytest
 from direct import run_manifest
 from direct import verify_run_manifest as V
 from direct.hashing import content_hash
+from fixtures_run_manifest import REPO
 
 
 def _manifest(tmp_path, run, name="manifest.json", allow_partial=False):
@@ -1414,9 +1415,61 @@ class TestTheAUTHORITATIVELockIsTheSameAcrossEveryLane:
     different environment is a different run, whatever its code says.
     """
 
-    W5_WRONG = "b9284e63" + "0" * 56          # the lock W5 actually bound
+    # _requirements/base.lock — the REPO environment, which W5 4435366 bound by mistake
+    W5_WRONG = "b9284e63acb5703a" + "0" * 48
     AUTHORITATIVE = ("2983d140941f13d223dad93bae71434663882f23"
                      "f25f6717c3debe59d2711abe")
+
+    def test_a_WHOLLY_CONSISTENT_b928_run_is_STILL_REFUSED(self, tmp_path):
+        """The independent lock attack. Nothing here disagrees with anything else.
+
+        Every lane binds b9284e63. The lock file handed to the verifier IS that lock. The
+        caller pins b9284e63 as the expected digest. Every comparison agrees with every
+        other — and the run is still refused, because the verifier holds its OWN copy of
+        the authoritative fact and can therefore disagree with the operator. Without that,
+        everything would simply be compared to the wrong thing, consistently.
+        """
+        run = F.complete_run(tmp_path)
+
+        # a REAL lock file — just the wrong one (the repo env lock, not the solver lock)
+        wrong = os.path.join(str(tmp_path), "base.lock")
+        with open(wrong, "wb") as fh:
+            fh.write(open(os.path.join(REPO, "_requirements", "base.lock"), "rb").read())
+        wrong_sha = F._raw(wrong)
+        assert wrong_sha.startswith("b9284e63")          # the lock W5 actually bound
+
+        # EVERY lane binds it, and the inventory/envelope are resealed over the result
+        for lane in ("direct", "temporal", "pathway"):
+            for d in run[lane]:
+                name = ("provenance.json" if lane == "direct" else
+                        f"{lane}_provenance.json")
+                _patch(d, name, lambda doc: doc["run_binding"]["environment_lock"].update(
+                    {"name": "base.lock", "sha256": wrong_sha, "status": "locked"}))
+        F.seal_release(run)
+
+        doc = V.verify(
+            manifest_path=_manifest(tmp_path, run)["path"],
+            bundles_root=run["root"], release_path=run["release_path"],
+            release_root=run["release_root"],
+            expect_release_sha256=run["expect_release_sha256"],
+            expect_gene_sets_path=run["pinned_gene_sets"],
+            expect_verifiers_path=run["pinned_verifiers"],
+            expected_code_identity_path=run["expected_code_identity"],
+            env_lock_path=wrong,                 # the wrong lock, supplied...
+            expect_env_lock_sha256=wrong_sha)    # ...and pinned by the caller as expected
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_the_authoritative_lock_is_PINNED_IN_VERIFIER_CODE(self):
+        import verify_release_rules as WR
+
+        assert WR.AUTHORITATIVE_ENV_LOCK_SHA256 == self.AUTHORITATIVE
+        assert WR.AUTHORITATIVE_ENV_LOCK_PATH == (
+            "02_geneskew/analysis/stage02_solver_lock.txt")
+        # and the wrong lock is named, so a refusal says WHY
+        assert "b9284e63" in WR.KNOWN_WRONG_LOCKS
 
     def test_the_b928_lock_W5_BOUND_is_REFUSED(self, tmp_path):
         run = F.complete_run(tmp_path)
@@ -1428,25 +1481,6 @@ class TestTheAUTHORITATIVELockIsTheSameAcrossEveryLane:
 
         assert doc["verdict"] == V.R.REJECT
         assert doc["n_failed"] > 0
-        assert V.G_ENV_LOCK in doc["failed_gates"]
-
-    def test_a_lock_the_OPERATOR_supplied_is_not_an_AUTHORITY(self, tmp_path):
-        # the run is internally perfect: every lane binds the SAME lock, and the verifier
-        # was handed that same lock. It is simply not the authoritative one, and without an
-        # external pin everything would be compared to the wrong thing.
-        run = F.complete_run(tmp_path)
-        doc = V.verify(
-            manifest_path=_manifest(tmp_path, run)["path"],
-            bundles_root=run["root"], release_path=run["release_path"],
-            release_root=run["release_root"],
-            expect_release_sha256=run["expect_release_sha256"],
-            expect_gene_sets_path=run["pinned_gene_sets"],
-            expect_verifiers_path=run["pinned_verifiers"],
-            expected_code_identity_path=run["expected_code_identity"],
-            env_lock_path=run["env_lock"],
-            expect_env_lock_sha256=self.AUTHORITATIVE)     # the REAL one
-
-        assert doc["verdict"] == V.R.REJECT
         assert V.G_ENV_LOCK in doc["failed_gates"]
 
     def test_NO_authoritative_pin_is_REFUSED(self, tmp_path):

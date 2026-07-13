@@ -276,23 +276,63 @@ def check_env_lock(prov: Any, expected_sha256: Any, bundle_id: str) -> list[str]
     return bad
 
 
-def check_supplied_lock(supplied: Any, pinned: Any) -> list[str]:
-    """The lock handed to the verifier must BE the authoritative one.
+# --------------------------------------------------------------------------- #
+# THE AUTHORITATIVE STAGE-2 SOLVER LOCK — a PROTECTED VERIFIER IDENTITY.
+#
+# The caller's ``--expect-env-lock-sha256`` is NOT an authority: it is a digest the operator
+# chose. An independent probe built an aggregate in which EVERY lane bound b9284e63... AND
+# the caller pinned b9284e63..., so every comparison agreed with every other — and the run
+# was admitted. Everything was being compared to the wrong thing, consistently.
+#
+# So the verifier holds its OWN copy of the frozen fact, exactly as it holds its own copy of
+# the desired-change table and the coverage thresholds. It can therefore DISAGREE with the
+# operator, which is the only way the operator can ever be wrong.
+#
+#   authoritative : 02_geneskew/analysis/stage02_solver_lock.txt  (committed at c1f8e80)
+#                   sha256 2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe
+#   NOT the lock  : _requirements/base.lock (sha b9284e63...) is the REPO environment, not
+#                   the Stage-2 solver lock. W5 4435366 bound it. They are different files
+#                   describing different environments, and Stage-1 runs a third.
+# --------------------------------------------------------------------------- #
+AUTHORITATIVE_ENV_LOCK_SHA256 = (
+    "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe")
+AUTHORITATIVE_ENV_LOCK_PATH = "02_geneskew/analysis/stage02_solver_lock.txt"
 
-    A lock the OPERATOR chose is not an authority for the lock the run must have used:
-    without an external pin, a wrong-but-consistently-bound lock passes every comparison,
-    because everything is being compared to the wrong thing.
+# Locks that are REAL, and are not this one. Named so the refusal says WHY.
+KNOWN_WRONG_LOCKS = {
+    "b9284e63": "_requirements/base.lock — the REPO environment, not the Stage-2 solver "
+                "lock (bound by W5 4435366)",
+}
+
+
+def check_supplied_lock(supplied: Any, pinned: Any,
+                        authoritative: str = AUTHORITATIVE_ENV_LOCK_SHA256) -> list[str]:
+    """The lock must be THE authoritative one — not the one the operator nominated.
+
+    Both the bytes handed to the verifier AND the caller's expected digest are checked
+    against the verifier's own frozen constant. A run in which every lane, and the caller,
+    consistently name the WRONG lock is still the wrong lock.
     """
+    bad: list[str] = []
     if not supplied:
         return ["no environment lock was supplied to the verifier (--env-lock); the lock a "
                 "bundle NAMES cannot be checked against bytes nobody handed us"]
+
+    def _why(sha):
+        note = KNOWN_WRONG_LOCKS.get(str(sha)[:8])
+        return f" ({note})" if note else ""
+
+    if supplied != authoritative:
+        bad.append(
+            f"the lock supplied to the verifier hashes to {supplied[:16]}{_why(supplied)}; "
+            f"the AUTHORITATIVE Stage-2 solver lock is {authoritative[:16]} "
+            f"({AUTHORITATIVE_ENV_LOCK_PATH}). Which environment the run used is not the "
+            "operator's to choose")
     if not pinned:
-        return ["no authoritative lock hash was pinned (--expect-env-lock-sha256); a lock "
-                "the operator supplied is not an authority for the lock the run must have "
-                "used"]
-    if supplied != pinned:
-        return [f"the lock supplied to the verifier hashes to {supplied[:16]}; the pinned "
-                f"AUTHORITATIVE Stage-2 solver lock is {str(pinned)[:16]}. Every lane binds "
-                "the SAME lock, and which environment the run used is not the operator's "
-                "to choose"]
-    return []
+        bad.append("no expected lock digest was pinned (--expect-env-lock-sha256)")
+    elif pinned != authoritative:
+        bad.append(
+            f"the caller pinned {str(pinned)[:16]}{_why(pinned)} as the expected lock; the "
+            f"AUTHORITATIVE one is {authoritative[:16]}. A digest the operator nominated is "
+            "not an authority — that is the whole reason the verifier holds its own")
+    return bad
