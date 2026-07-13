@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from .acquisition import ACQUISITION_SCHEMA_ID, HARD_RULES, AcquisitionManifest
 from .contracts import (
     STAGE3_CONTRACT_STATUS,
     STAGE3_SCHEMA_ID,
@@ -114,8 +115,26 @@ def tables_schema() -> dict[str, Any]:
     }
 
 
+def acquisition_manifest_schema() -> dict[str, Any]:
+    schema = AcquisitionManifest.model_json_schema()
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["$id"] = ACQUISITION_SCHEMA_ID
+    schema["description"] = (
+        "One record per source response: canonical URL + query, UTC access time, HTTP status, "
+        "media type and selected response headers, source release/last_updated, licence/terms "
+        "URL, raw byte count + SHA-256 (plus a stable content hash where the transport envelope "
+        "is volatile), the adapter code hash, the exact extraction transform, and the review "
+        "status. Raw bytes are cached OUTSIDE Git under a caller-supplied run root and are "
+        "addressed by their own SHA-256; `cache_relpath` is relative to that root. Absent "
+        "evidence is stated in `missing`, never left as an empty field."
+    )
+    schema["x-spot-hard-rules"] = list(HARD_RULES)
+    return schema
+
+
 GENERATED = {
     "spot.stage03_drug_candidate_set.v1.schema.json": stage3_schema,
+    "spot.stage04_acquisition_manifest.v1.schema.json": acquisition_manifest_schema,
     "spot.stage04_evidence_inputs.v1.schema.json": evidence_inputs_schema,
     "spot.stage04_evidence_tables.v1.schema.json": tables_schema,
 }
