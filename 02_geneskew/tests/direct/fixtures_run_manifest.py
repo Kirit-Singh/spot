@@ -372,13 +372,43 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
     }
     if lane == "pathway":
         inv["bindings"] = bindings
-        inv["gene_sets"] = dict(gene_set_identity(ctx["gene_set_source"]),
-                                gene_set_source=ctx["gene_set_source"])
+        # The producer binds the gene-set identity UNDER the method block it hashes -- in
+        # the bundle at method.gene_sets and in the provenance at
+        # run_binding.method.gene_sets -- never top-level. (pathway_arms.method_block ->
+        # genesets.binding_block, nested under "method" in pathway_arms.build; and
+        # run_pathway_arms binding["method"] = doc["method"], prov["run_binding"] = binding.)
+        gene_set_ident = dict(gene_set_identity(ctx["gene_set_source"]),
+                              gene_set_source=ctx["gene_set_source"])
+        inv["method"] = {"gene_sets": gene_set_ident}
         inv["convergence"] = {
             "convergence_id": convergence_id,
             "sha256": _raw(os.path.join(out_dir, "convergence.json"))}
     inv["bundle_id"] = f"FIXTURE-{_canon(inv)[:16]}"
     arm_raw, _ = _write(os.path.join(out_dir, "arm_bundle.json"), inv)
+
+    run_binding = {
+        # WHICH BUILD produced these bytes (recorded, never self-admitted)...
+        "code_identity": _code_identity(),
+        # ...and WHICH SOLVED ENVIRONMENT it ran under. Two runs under different
+        # environments are two different runs, however identical the code.
+        # the producers' shared ``envlock`` block (fc9bdcd)
+        "environment_lock": {
+            "lock_id": "spot.stage02.solver_lock.v1",
+            "name": os.path.basename(staged["env_lock"]),
+            "sha256": _raw(staged["env_lock"]),
+            "expected_sha256": _raw(staged["env_lock"]),
+            "verified": True, "status": "locked"},
+        # ...and WHAT THE CODE DID, kept as a separate explicit role
+        "temporal_method_sha256": _canon("FIXTURE-method"),
+        "estimator_id": "FIXTURE.spot.stage02.arm.estimator.v1",
+        "selection_release": _selection_release(staged),
+        "stage2_inputs": _inputs(),
+    }
+    if lane == "pathway":
+        # The provenance carries the SAME method.gene_sets the bundle does; the scanner
+        # requires both present and in exact agreement. (run_pathway_arms
+        # binding["method"] = doc["method"], and prov["run_binding"] = binding.)
+        run_binding["method"] = {"gene_sets": gene_set_ident}
 
     prov_raw, _ = _write(os.path.join(out_dir, prov_name), {
         "fixture": True,
@@ -388,24 +418,7 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         "context": dict(ctx),
         # W5 native: HOW the program axis was derived, bound so it is checkable
         "program_admission": _program_admission(staged, progs),
-        "run_binding": {
-            # WHICH BUILD produced these bytes (recorded, never self-admitted)...
-            "code_identity": _code_identity(),
-            # ...and WHICH SOLVED ENVIRONMENT it ran under. Two runs under different
-            # environments are two different runs, however identical the code.
-            # the producers' shared ``envlock`` block (fc9bdcd)
-            "environment_lock": {
-                "lock_id": "spot.stage02.solver_lock.v1",
-                "name": os.path.basename(staged["env_lock"]),
-                "sha256": _raw(staged["env_lock"]),
-                "expected_sha256": _raw(staged["env_lock"]),
-                "verified": True, "status": "locked"},
-            # ...and WHAT THE CODE DID, kept as a separate explicit role
-            "temporal_method_sha256": _canon("FIXTURE-method"),
-            "estimator_id": "FIXTURE.spot.stage02.arm.estimator.v1",
-            "selection_release": _selection_release(staged),
-            "stage2_inputs": _inputs(),
-        },
+        "run_binding": run_binding,
     })
     # A TYPED admission from the pinned lane verifier, BINDING THE BUNDLE IT JUDGED.
     # A file that merely says {"verdict": "admit"} is not an independent admission.

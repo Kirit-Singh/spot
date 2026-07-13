@@ -174,11 +174,36 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
 
         if lane == R.LANE_PATHWAY:
             src = str(ctx.get("gene_set_source"))
-            geneset_by_source.setdefault(src, []).append(
-                (bid, R.content_sha256(inv.get("gene_sets"))))
-            # ...and the gene-set identity FIELD BY FIELD against the pinned source.
-            bad_gene_sets += B.check_gene_sets(
-                inv.get("gene_sets"), pinned.get(src), src, bid)
+            # The gene-set identity the producer bound lives UNDER the method block: in
+            # the bundle at arm_bundle.method.gene_sets AND in the provenance at
+            # run_binding.method.gene_sets -- NEVER top-level. (pathway_arms.method_block
+            # -> genesets.binding_block, nested under "method" in pathway_arms.build; the
+            # SAME method block is the provenance run_binding["method"].) A bundle whose
+            # identity is only at a top-level `gene_sets`, or nowhere, admits nothing.
+            inv_method = inv.get("method")
+            bundle_gs = (inv_method.get("gene_sets")
+                         if isinstance(inv_method, dict) else None)
+            prov_gs = (((prov.get("run_binding") or {}).get("method") or {})
+                       .get("gene_sets"))
+            if not isinstance(bundle_gs, dict):
+                bad_gene_sets.append(
+                    f"{bid}: no gene-set identity at arm_bundle.method.gene_sets "
+                    "(a top-level `gene_sets`, or none, admits nothing)")
+            elif not isinstance(prov_gs, dict):
+                bad_gene_sets.append(
+                    f"{bid}: no gene-set identity at provenance "
+                    "run_binding.method.gene_sets")
+            elif bundle_gs != prov_gs:
+                bad_gene_sets.append(
+                    f"{bid}: gene-set identity disagrees between "
+                    "arm_bundle.method.gene_sets and provenance "
+                    "run_binding.method.gene_sets")
+            else:
+                geneset_by_source.setdefault(src, []).append(
+                    (bid, R.content_sha256(bundle_gs)))
+                # ...and the gene-set identity FIELD BY FIELD against the pinned source.
+                bad_gene_sets += B.check_gene_sets(
+                    bundle_gs, pinned.get(src), src, bid)
             conv = inv.get("convergence") or {}
             cpath = os.path.join(path, "convergence.json")
             convergences.append((

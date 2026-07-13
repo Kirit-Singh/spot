@@ -17,6 +17,7 @@ import shutil
 import fixtures_run_manifest as F
 import pytest
 from direct import run_manifest
+from direct import verify_manifest_rules as R
 from direct import verify_run_manifest as V
 from direct.hashing import content_hash
 from fixtures_run_manifest import REPO
@@ -323,8 +324,13 @@ class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
             inv = json.load(open(os.path.join(d, "arm_bundle.json")))
             if inv["context"]["gene_set_source"] != source:
                 continue
+            # The identity lives under method.gene_sets in BOTH the bundle and the
+            # provenance; forge them TOGETHER so the two still AGREE and it is
+            # check_gene_sets (G_GENESET_ID) that judges it, not the agreement gate.
             _patch(d, "arm_bundle.json",
-                   lambda doc: doc["gene_sets"].update(fields))
+                   lambda doc: doc["method"]["gene_sets"].update(fields))
+            _patch(d, R.PROVENANCE_OF["pathway"],
+                   lambda doc: doc["run_binding"]["method"]["gene_sets"].update(fields))
 
     def test_a_FORGED_release_under_the_right_source_name_is_REJECTED(self, tmp_path):
         run = F.complete_run(tmp_path)
@@ -350,6 +356,53 @@ class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
         # wearing a null result, and the namespace is part of the identity for that reason.
         run = F.complete_run(tmp_path)
         self._forge(run, "GO-BP", **{field: value})
+        doc = _verify(run, _forge_complete(
+            _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_GENESET_ID in doc["failed_gates"]
+
+    @staticmethod
+    def _demote_to_top_level(doc):
+        # A bundle that carries its identity ONLY at a top-level `gene_sets` -- the shape
+        # the OLD scanner read -- and NOT at method.gene_sets, where the producer binds it.
+        doc["gene_sets"] = doc["method"].pop("gene_sets")
+
+    def test_a_pathway_identity_only_at_TOP_LEVEL_is_REJECTED(self, tmp_path):
+        # The old scanner read inv.get("gene_sets"); a REAL pathway bundle carries None
+        # there and the gate silently passed on nothing. A bundle with its identity only
+        # top-level, method.gene_sets absent, must now be REJECTED.
+        run = F.complete_run(tmp_path)
+        for d in run["pathway"]:
+            _patch(d, "arm_bundle.json", self._demote_to_top_level)
+        doc = _verify(run, _forge_complete(
+            _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_GENESET_ID in doc["failed_gates"]
+
+    def test_bundle_method_gene_sets_DISAGREEING_with_provenance_is_REJECTED(self, tmp_path):
+        # Forge ONLY the bundle method.gene_sets, leaving the provenance untouched: the two
+        # no longer agree, and the agreement gate must catch it (an attacker who moved the
+        # identity in one place but not the other).
+        run = F.complete_run(tmp_path)
+        for d in run["pathway"]:
+            _patch(d, "arm_bundle.json",
+                   lambda doc: doc["method"]["gene_sets"].update(
+                       {"release_id": "FIXTURE-mismatch-only-in-the-bundle"}))
+        doc = _verify(run, _forge_complete(
+            _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_GENESET_ID in doc["failed_gates"]
+
+    def test_provenance_that_OMITS_method_gene_sets_is_REJECTED(self, tmp_path):
+        # The bundle binds method.gene_sets but the provenance run_binding carries no
+        # method block at all: the identity is unwitnessed by the provenance and REJECTED.
+        run = F.complete_run(tmp_path)
+        for d in run["pathway"]:
+            _patch(d, R.PROVENANCE_OF["pathway"],
+                   lambda doc: doc["run_binding"].pop("method", None))
         doc = _verify(run, _forge_complete(
             _manifest(tmp_path, run, allow_partial=True)["path"]))
 
