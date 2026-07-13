@@ -79,6 +79,12 @@ def shipped(synthetic_run, tmp_path):
     args.out_root = str(tmp_path / "pw")
     args.signature_matrix_root = str(tmp_path / "signatures")
 
+    # THE STAGE-2 SOLVER LOCK (W7 @ c1f8e80). Binding it (not merely committing it) is what puts
+    # the deterministic environment into the run identity. The honest run passes the real lock.
+    args.env_lock = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "analysis", "stage02_solver_lock.txt")
+
     # THE CROSS-LANE ANCHOR (W18 5628f84). The Direct masks.parquet is the SAME mask_sets this
     # lane derives, so an honest matrix is anchored and admits; a forged one disagrees.
     main = io_data.load_main(args.de_main, "StimX")
@@ -262,7 +268,7 @@ class TestTheHonestProducerOutputAdmits:
         names = {c["check"] for c in verify(shipped)["checks"]}
         for g in (V.V1, V.V1_REFMAN, V.V2_VALUES, V.V2_BITS, V.V2_CANON, V.V2_ANCHOR,
                   V.V3, V.V4, V.V5, V.V6, V.V7, V.V8, V.V9, V.V10, V.V_IDENTITY,
-                  V.V_EXTERNAL_MASK):
+                  V.V_EXTERNAL_MASK, V.V_SOLVER_LOCK):
             assert g in names, f"gate never ran: {g}"
 
 
@@ -538,6 +544,58 @@ class TestTheCrossLaneAnchor:
         # The anchor is bound, but the auditor does not supply the Direct bundle to re-check it.
         shipped["args"].direct_bundle = None
         assert V.V_EXTERNAL_MASK in failed(verify(shipped))
+
+
+# =========================================================================== #
+# THE STAGE-2 SOLVER LOCK — bound into the run identity (W7 c1f8e80)
+# =========================================================================== #
+def _reseal_binding(shipped, binding):
+    prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+    prov = _json(prov_path)
+    prov["run_binding"] = binding
+    full = R.content_sha256(binding)
+    prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+    with open(prov_path, "w") as fh:
+        json.dump(prov, fh, sort_keys=True)
+
+
+class TestTheSolverLockBinding:
+    """A committed lock nobody's identity depends on can be dropped or swapped unnoticed."""
+
+    def test_the_honest_run_binds_the_pinned_solver_lock(self, shipped):
+        prov = _json(os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE))
+        lock = prov["run_binding"]["environment_lock"]
+        assert lock["status"] == "locked"
+        assert lock["sha256"] == V.STAGE2_SOLVER_LOCK_SHA256
+        assert V.V_SOLVER_LOCK not in failed(verify(shipped))
+
+    def test_a_MISSING_solver_lock_is_REJECTED(self, shipped):
+        # fully resealed: drop the lock, recompute the run id from the binding
+        prov = _json(os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE))
+        b = prov["run_binding"]
+        b["environment_lock"] = {"name": None, "sha256": None,
+                                 "status": "environment_lock_not_supplied"}
+        _reseal_binding(shipped, b)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_SOLVER_LOCK in failed(r)
+        assert V.V_IDENTITY not in failed(r)      # the run id re-derives; only the pin catches it
+
+    def test_a_SWAPPED_solver_lock_is_REJECTED(self, shipped):
+        prov = _json(os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE))
+        b = prov["run_binding"]
+        b["environment_lock"] = {"name": "stage01_solver_lock.txt", "sha256": "d" * 64,
+                                 "status": "locked"}     # a different (e.g. Stage-1) lock
+        _reseal_binding(shipped, b)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_SOLVER_LOCK in failed(r)
+        assert V.V_IDENTITY not in failed(r)
+
+    def test_the_verifier_pins_the_committed_lock_sha(self):
+        # the pinned sha IS the committed Stage-2 lock file's hash
+        import os as _os
+        lock = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__)))), "analysis", "stage02_solver_lock.txt")
+        assert R.sha256_file(lock) == V.STAGE2_SOLVER_LOCK_SHA256
 
 
 # =========================================================================== #

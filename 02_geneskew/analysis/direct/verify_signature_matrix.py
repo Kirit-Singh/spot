@@ -26,6 +26,8 @@ SHIPPED bytes off disk — the three shared artifacts and each bundle's `signatu
     V10       every reference resolves; every shared artifact is cited.
     V_IDENTITY the signature_ref on disk IS the one bound into a re-derivable pathway_run_id, so
               a forger who reseals the manifest/ref must also change the run id.
+    V_SOLVER_LOCK the Stage-2 deterministic solver lock is bound into run_binding (→ run id) AND
+              is the PINNED lock (sha 2983d140…). A missing or swapped lock refuses.
 
 GENERATOR ≠ VERIFIER. It imports NO producer module — only ``h5py``/``numpy``/``json`` and the
 verifier-side ``verify_rules`` / ``verify_run`` (primary h5ad reader) / ``verify_reconstruct``
@@ -83,6 +85,13 @@ V9 = "V9_no_forbidden_key_at_any_depth"
 V10 = "V10_every_reference_resolves_and_every_shared_artifact_is_referenced"
 V_IDENTITY = "the_signature_ref_is_bound_into_a_rederivable_pathway_run_id"
 V_EXTERNAL_MASK = "the_source_mask_matches_the_external_independent_direct_mask_verification"
+V_SOLVER_LOCK = "the_stage2_solver_lock_is_bound_into_the_run_identity"
+
+# The Stage-2 deterministic solver lock, committed VERBATIM on the producer (W7,
+# stage02_solver_lock.txt @ c1f8e80). Unlike a per-run value, this IS a frozen release pin:
+# the gate exists precisely to check that the run bound THIS lock and not a swapped one.
+STAGE2_SOLVER_LOCK_SHA256 = (
+    "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe")
 
 SIGNATURE_BYTE_FILES = ("pathway_signatures.parquet", "signatures.parquet")
 
@@ -407,6 +416,10 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
         # the shipped Direct masks.parquet, not merely trusted from the producer's anchor.
         checks.append(_check(V_EXTERNAL_MASK, *_verify_external_mask(r, rr, args)))
 
+        # V_SOLVER_LOCK: the Stage-2 deterministic solver lock is BOUND into the run identity,
+        # and it is the PINNED lock — not a loose file, not a swapped one, not absent.
+        checks.append(_check(V_SOLVER_LOCK, *_verify_solver_lock(bdir)))
+
     # ---- V10 ----
     all_matrix_raw = {m["_reread"]["raw_matrix"] for m in man_by_cond.values()
                       if "_reread" in m}
@@ -490,6 +503,29 @@ def _verify_identity(bdir, ref_on_disk):
     if full != prov.get("pathway_run_sha256") or full[:RUN_ID_LEN] != prov.get(
             "pathway_run_id"):
         return False, "the run binding does not hash to the declared pathway_run_id"
+    return True, ""
+
+
+def _verify_solver_lock(bdir):
+    """The Stage-2 deterministic solver lock is BOUND into the run identity — and is the PINNED
+    lock, not a loose file. A committed lock nobody's identity depends on can be swapped or
+    dropped and nothing notices; this reads it from the shipped run_binding and refuses a
+    MISSING or SWAPPED lock at a named gate.
+    """
+    prov_path = os.path.join(bdir, PROVENANCE_FILE)
+    if not os.path.exists(prov_path):
+        return False, f"{bdir}: no {PROVENANCE_FILE} to carry the solver-lock binding"
+    binding = _json(prov_path).get("run_binding") or {}
+    lock = binding.get("environment_lock") or {}
+    status = lock.get("status")
+    sha = lock.get("sha256")
+    if status != "locked" or not sha:
+        return False, (f"the Stage-2 solver lock is not bound (status={status!r}); an "
+                       "unbound environment is not a reproducible one")
+    if sha != STAGE2_SOLVER_LOCK_SHA256:
+        return False, (f"the bound environment lock {str(sha)[:16]}… is not the pinned "
+                       f"Stage-2 solver lock {STAGE2_SOLVER_LOCK_SHA256[:16]}… — a swapped "
+                       "lock, however self-consistent after the run id is resealed")
     return True, ""
 
 
