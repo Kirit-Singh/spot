@@ -143,7 +143,7 @@
     "scoring_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c"
   },
   "provenance_bindings": {
-    "primary_registry_v3_raw_sha256": "193ead24cf9b161c024614d54ab87b0152b21f7da67d9069205f9dd313e3b860"
+    "primary_registry_v3_raw_sha256": "c16076283bcc83717a62157bd7ad1710b4fbbb9e6527f37909f3e9bc688207fe"
   },
   "historical_validation_provenance": {
     "kind": "frozen_lomo_within_condition_validation_v3",

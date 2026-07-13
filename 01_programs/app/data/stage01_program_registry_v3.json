@@ -1381,6 +1381,7 @@
       "exact_locator": "Wang et al. 2007 (Eur J Immunol 37:129-138): activation induces transient FOXP3 in human conventional CD4 T cells without regulatory function",
       "species_lineage_scope": "human",
       "support_level": "corroborating_secondary_human",
+      "verification_status": "provisional",
       "claim_scope_limit": "Wang et al. 2007 (PMID 17154262): human \u2014 activated conventional CD4 T cells transiently induce FOXP3; not Treg-exclusive"
      }
     },
@@ -4290,6 +4291,6 @@
   "not_a_scorer_method_revision": "Literature/provenance metadata revision only. Panels, gene ids, controls, bins, seeds, coefficients, normalization and all scores are byte-identical; this is an additive panel_provenance sub-schema, not a scorer method_version bump.",
   "not_a_production_or_selectability_promotion": "Provenance-only. The frozen 0/33 production-selectability result, overlay/app deployment gates, and the candidate pointer are unchanged."
  },
- "citations_provenance_note": "Per-program `citations` remain program-level references; per-marker PRIMARY provenance is now carried in structured `marker_provenance` and summarized in `panel_provenance`. 53/53 measured marker-program pairs carry a bounded primary-source locator, independently completed by the lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a naming framework only and is never attached to any marker as evidence.",
- "registry_sha256": "e579d5fef0643094f33a1e0fe04dab000cf283c5955eee7e5600ca09a4aaa8c1"
+ "citations_provenance_note": "Per-program `citations` remain program-level references; per-marker PRIMARY provenance is now carried in structured `marker_provenance` and summarized in `panel_provenance`. 53/53 measured marker-program pairs carry a bounded primary-source locator, independently completed by the lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a naming framework only and is never attached to any marker as evidence. SOURCE-VALIDATION POLICY (Round-4 Rule 1): every marker-source citation here is PROVISIONAL \u2014 internally located/bounded, but NOT independently verified. A SEPARATE citation-verifier lane must resolve each DOI/PMID/URL + claim-match and emit an evidence record; only `verification_status=verified` references may render in the UI. The producer never upgrades a citation to accepted.",
+ "registry_sha256": "43cfc7bbd3272147377db0ae64462c797e0ac0bed3571a680c6f6896c7f79029"
 }

@@ -233,6 +233,9 @@ def build_records():
                 "exact_locator": _n(r.get("external_locator")),
                 "species_lineage_scope": "human",
                 "support_level": "corroborating_secondary_human",
+                # Round-4 Rule 1: every emitted citation is PROVISIONAL until an INDEPENDENT citation-verifier
+                # resolves DOI/PMID/URL + claim-match; producer never upgrades to accepted. UI renders only verified.
+                "verification_status": "provisional",
                 "claim_scope_limit": ext_note,
             }
         elif ext_note:
@@ -339,7 +342,11 @@ def integrate(reg, base, intended_only, actadj_inherited, predictor_inherited, c
         "marker-program pairs carry a bounded primary-source locator, independently completed by the "
         "lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). "
         "Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a "
-        "naming framework only and is never attached to any marker as evidence.")
+        "naming framework only and is never attached to any marker as evidence. "
+        "SOURCE-VALIDATION POLICY (Round-4 Rule 1): every marker-source citation here is PROVISIONAL — "
+        "internally located/bounded, but NOT independently verified. A SEPARATE citation-verifier lane must "
+        "resolve each DOI/PMID/URL + claim-match and emit an evidence record; only `verification_status=verified` "
+        "references may render in the UI. The producer never upgrades a citation to accepted.")
     # Tier-2 display-only fields (labels) never enter the Tier-1 scientific content hash (see DISPLAY_ONLY_FIELDS)
     _strip_display_only(reg)
     # move schema key next to schema_version, keep registry_sha256 last

@@ -95,7 +95,7 @@ def _self_check(base: dict) -> None:
     fix (TOX citation + FOXP3 human corroboration) moved self 84da49c9→070e798e, raw 20f91fdd→04ce0a25 while
     scorer-projection 008c1da1, Stage-2 view 5d1d8c36 and scores 43c4296d are byte-identical."""
     assert base["registry_self_declared_sha256"] == \
-        "e579d5fef0643094f33a1e0fe04dab000cf283c5955eee7e5600ca09a4aaa8c1", \
+        "43cfc7bbd3272147377db0ae64462c797e0ac0bed3571a680c6f6896c7f79029", \
         "registry self-declared sha drift"
     # Validates canonical_json + content_hash (sort_keys, compact seps, ensure_ascii)
     # against the registry's own frozen rule.
@@ -105,7 +105,7 @@ def _self_check(base: dict) -> None:
         "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85", \
         "scorer-projection invariant drift"
     assert base["raw_sha256"]["registry_v3"] == \
-        "193ead24cf9b161c024614d54ab87b0152b21f7da67d9069205f9dd313e3b860", \
+        "c16076283bcc83717a62157bd7ad1710b4fbbb9e6527f37909f3e9bc688207fe", \
         "served registry raw sha drift"
     # The Stage-2 scorer VIEW (what selection_id binds) must reproduce its known raw + canonical hashes.
     assert base["stage2_view_canonical_sha256"] == \
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     with open(BASELINE_PATH, "w") as fh:
         json.dump(base, fh, indent=2, sort_keys=True)
         fh.write("\n")
-    print("canonical.py self-check PASSED (e579d5fe + 008c1da1 reproduced; S1-M5 structured Wang locator)")
+    print("canonical.py self-check PASSED (43cfc7bb + 008c1da1 reproduced; Rule-1 provisional citation)")
     print("wrote", os.path.relpath(BASELINE_PATH, ANALYSIS))
     for k, v in base["raw_sha256"].items():
         print(f"  {k:26s} {v}")
