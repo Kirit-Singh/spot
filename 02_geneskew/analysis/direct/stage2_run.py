@@ -157,7 +157,7 @@ def build_run_identity(cfg: Cfg) -> dict:
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
                 "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",
-            "direct_verifier_head": "cee73c8",   # repaired neutral adapter checkout
+            "direct_verifier_head": "9965d64",   # W10 FINAL adapter head (56/56; production gate profiles)
             "temporal_verifier": "07a064c1b8c4f5a1c1693c306fd264c4ada6f49d",
             "pathway_verifier": "53ac540",
         },
@@ -292,18 +292,47 @@ def native_report_path(cfg, cond):
     return os.path.join(cfg.w10_report_dir, f"w10_admission_{cond}.json")
 
 
+BINDING_SCHEMA = "spot.stage02.direct_admission_binding.v1"
+W10_VERIFIER_CODE = "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
+W10_BUNDLE_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
+# every field the adapter's binding must carry, non-null, for a per-bundle admission
+_BINDING_REQUIRED = ("binding_schema", "subject_kind", "native_verdict", "disposition",
+                     "verifier_id", "verifier_code_sha256", "bundle_id", "condition",
+                     "arm_rows_sha256", "mask_sha256", "binding_sha256")
+
+
 def w10_admitted(cfg, cond):
-    """Read the adapter's normalized binding; ADMITTED only if it validates + disposition==admitted."""
+    """Fail-closed. The adapter's normalized `binding_schema` binding must: carry the EXACT schema
+    id, re-derive its own `binding_sha256` over the FULL body, present every required field
+    non-null, be independently ADMITTED, carry the pinned W10 verifier id + code sha, and BIND
+    this condition + the DISCOVERED bundle's `arm_bundle_run_id` on disk. A forged partial binding
+    (e.g. the 4-field {schema,disposition,verifier_code_sha256,binding_sha256}) is refused because
+    the full required set + the condition/bundle bind must hold. Field is `binding_schema` (the
+    adapter's name), never `schema`."""
     p = w10_binding_path(cfg, cond)
     if not os.path.isfile(p):
         return False
-    b = json.load(open(p))
-    body = {k: v for k, v in b.items() if k != "binding_sha256"}
-    return (content_sha256(body) == b.get("binding_sha256")
-            and b.get("disposition") == "admitted"
-            and b.get("schema") == "spot.stage02.direct_admission_binding.v1"
-            and b.get("verifier_code_sha256")
-            == "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834")
+    try:
+        b = json.load(open(p))
+    except Exception:
+        return False
+    if any(b.get(k) in (None, "") for k in _BINDING_REQUIRED):
+        return False
+    if b["binding_schema"] != BINDING_SCHEMA:
+        return False
+    if content_sha256({k: v for k, v in b.items() if k != "binding_sha256"}) != b["binding_sha256"]:
+        return False
+    if b["disposition"] != "admitted":
+        return False
+    if b["verifier_code_sha256"] != W10_VERIFIER_CODE or b["verifier_id"] != W10_BUNDLE_VERIFIER_ID:
+        return False
+    if b["condition"] != cond:
+        return False
+    try:                                              # bind the ACTUAL discovered bundle
+        doc = json.load(open(os.path.join(direct_bundle_for(cfg, cond), "arm_bundle.json")))
+    except Exception:
+        return False
+    return b["bundle_id"] == doc.get("arm_bundle_run_id")
 
 
 def require_admitted_direct(cfg):
