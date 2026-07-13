@@ -31,10 +31,10 @@
     "verifier_id": "spot.stage03.candidate_membership.verifier.v2",
     "vocabulary_digest_in_force": "07f460f6817188c15b7c2def0a08d1b1a2ade95707a35b5d90aeca6f68d17bda"
   },
-  "producer_commit": "e455363ba3c623754d7dbb9577f4d4b52e67c56b",
-  "producer_tree_is_clean": false,
+  "producer_commit": "3e5c1b38769d9eafba2da1b1f6c6af752a62ba24",
+  "producer_tree_is_clean": true,
   "receipt_schema": "spot.stage03_independent_receipt.v2",
-  "self_sha256": "bb2c43e64e7a4671f6a3aa38a309e16c950b45f6bc061fa4305ccc2deb82a560",
+  "self_sha256": "eda808cbff2000bcecc6316b2d1387df03415f84a94384e6c391073ba19c3bd7",
   "store_canonical_content_sha256": "90cd64ada42521c33721dc9efa8558966f8fdf2c566f1d934782466614cf3946",
   "table_hashes": {
     "arm_slots": "99db22fd1fbf175bbb70b406015f9d9e0b4ca097f06a8da40605b847ee5355fa",
