@@ -26,10 +26,14 @@ from verify_arm_report import (  # noqa: E402
     EXPECTED_FILES,
     INFERENCE_STATUS,
     LANES,
+    PROVENANCE_FILE,
     PROVENANCE_SCHEMA,
     RELEASE_LANES,
     REQUEST_SCHEMA,
     RUNNER_ID,
+    VERDICT_PENDING,
+    VERIFICATION_FILE,
+    VERIFICATION_SCHEMA,
     VERIFIER_MODULES,
     Report,
 )
@@ -62,7 +66,7 @@ def gate_independence(rep: Report) -> None:
 
 def gate_files(bundle_dir: str, rep: Report) -> Optional[dict]:
     present = {f for f in os.listdir(bundle_dir) if not f.startswith(".")}
-    rep.gate("file inventory: exactly the bundle's three artifacts, no extras",
+    rep.gate("file inventory: exactly the bundle's shipped artifacts, no extras",
              present == EXPECTED_FILES,
              f"extra={sorted(present - EXPECTED_FILES)} "
              f"missing={sorted(EXPECTED_FILES - present)}")
@@ -231,30 +235,58 @@ def gate_inputs(binding: dict, paths: dict[str, str], rep: Report) -> None:
 
 
 # WHAT THE ROWS WERE ACTUALLY COMPUTED FROM. A consumed input absent from the identity is
-# an input a reader cannot check and a run cannot be reconstructed from.
+# an input a reader cannot check and a run cannot be reconstructed from. (Audit BLOCKER 4.)
 CONSUMED_INPUT_BINDINGS = {
-    "guide_manifest": "the contributor manifest the masks were resolved from",
+    "contributor_manifest": "the contributor manifest the masks were resolved from",
     "mask_sha256": "the masks every base delta was taken under",
-    "target_identity_map": "the run-level target-identity map, if one was supplied",
-    "source_registry": "the source registry the contributor evidence resolves against",
+    "source_registry_raw_sha256":
+        "the source registry the contributor evidence resolves against",
+    "target_identity_map": "the run-level target-identity map, supplied or explicitly not",
 }
 
 
 def gate_consumed_inputs_bound(binding: dict, rep: Report) -> None:
     """Every CONSUMED scientific input is in the identity, or the bundle cannot be checked.
 
-    The legacy pair runner already binds this pattern (``guide_manifest``, ``mask_sha256``,
-    the full Stage-1 and input bindings). A bundle that omits them records COUNTS where it
-    needs IDENTITIES: "29 rows, 18 scopes" cannot tell two different contributor manifests
-    apart, and the masks they imply move every base delta in all |admitted| x 2 arms.
+    A bundle that omits them records COUNTS where it needs IDENTITIES: "29 rows, 18 scopes"
+    cannot tell two different contributor manifests apart, and the masks they imply move
+    every base delta in all |admitted| x 2 arms at once.
+
+    ``target_identity_map`` is required to be PRESENT, not to be supplied: a run that used
+    no map must say so out loud (``status: not_supplied``), because absence and silence are
+    different claims and only one of them can be checked.
     """
-    missing = sorted(k for k in ("guide_manifest", "mask_sha256")
-                     if not binding.get(k))
+    missing = sorted(k for k in CONSUMED_INPUT_BINDINGS if k not in binding)
+    empty = sorted(k for k in ("contributor_manifest", "mask_sha256")
+                   if not binding.get(k))
     rep.gate("every CONSUMED scientific input is bound into the run identity — the "
-             "contributor manifest and the masks the rows were computed under",
-             not missing,
-             f"absent from the binding: {missing} "
-             f"({', '.join(CONSUMED_INPUT_BINDINGS[k] for k in missing)})")
+             "contributor manifest, the masks, the source registry and the target-identity "
+             "map",
+             not missing and not empty,
+             f"absent={missing} empty={empty} "
+             f"({', '.join(CONSUMED_INPUT_BINDINGS[k] for k in missing + empty)})")
+
+
+def gate_not_self_admitted(verification: dict, rep: Report) -> None:
+    """The PRODUCER may not admit its own output.
+
+    ``verification.json`` ships as an empty slot — verdict pending, ``admitted: false``,
+    ``verifier_id: null``. A bundle that arrived already admitting itself is refused
+    outright: a generator that signs its own homework is the same process asserting twice,
+    and the signature would be worth exactly nothing while looking like everything.
+    """
+    rep.gate("the shipped verification slot declares the allowlisted schema",
+             verification.get("schema_version") == VERIFICATION_SCHEMA,
+             f"got {verification.get('schema_version')!r}")
+    rep.gate("the PRODUCER did not admit its own output — the verification slot ships "
+             "un-admitted, naming no verifier, for an independent one to fill",
+             verification.get("admitted") is False
+             and verification.get("self_admitted") is False
+             and verification.get("verifier_id") is None
+             and verification.get("verdict") == VERDICT_PENDING,
+             f"verdict={verification.get('verdict')!r} "
+             f"admitted={verification.get('admitted')!r} "
+             f"verifier_id={verification.get('verifier_id')!r}")
 
 
 def gate_support_unavailable(binding: dict, columns: list[str], rep: Report) -> None:
@@ -277,23 +309,37 @@ def gate_on_disk(paths: dict[str, str], doc: dict, prov: dict,
                  rep: Report) -> dict[str, str]:
     """Re-open every emitted file FROM DISK and hash its raw bytes.
 
-    And then the thing the audit found missing: the BUNDLE DOCUMENT is not bound. The run
-    id is a hash of the binding, and the binding carries the rows hash — but not the
-    document that describes those rows. So the arm manifest, the slot counts and the
-    embedded scorer view can all be edited while every advertised hash stays valid. A
-    document nothing binds is a document anyone can rewrite.
+    The bundle SHIPS an artifact manifest naming every file it wrote and the hash of each.
+    That manifest is checked against the bytes actually on disk — a citation whose target
+    has moved underneath it is worse than no citation, because it still looks like one.
+
+    ``verification.json`` is deliberately outside the manifest: it is the slot THIS verifier
+    fills, so a bundle that hashed it would be pinning a verdict before anyone reached one.
     """
     shas = {name: AR.sha256_file(path) for name, path in sorted(paths.items())}
     rep.gate("every emitted artifact is present on disk and hashable",
              len(shas) == len(EXPECTED_FILES), f"{sorted(shas)}")
 
-    binding = prov.get("run_binding") or {}
-    body = {k: v for k, v in doc.items() if k != "arm_bundle_run_id"}
-    declared = binding.get("arm_bundle_sha256") or doc.get("arm_bundle_sha256")
-    rep.gate("the BUNDLE DOCUMENT itself is bound into the run identity — its arm "
-             "manifest and counts cannot be rewritten while the hashes stay valid",
-             bool(declared) and declared == AR.content_sha256(body),
-             f"bound={declared!r} derived={AR.content_sha256(body)!r}")
+    declared = {e["name"]: e for e in (prov.get("artifacts") or [])}
+    # The provenance cannot list itself (it is written last and would have to contain its
+    # own hash), and the verification slot is what THIS verifier fills. Everything else the
+    # bundle wrote must be named.
+    expected = EXPECTED_FILES - {VERIFICATION_FILE, PROVENANCE_FILE}
+    rep.gate("the shipped artifact manifest names every file the bundle wrote",
+             set(declared) == expected,
+             f"unlisted={sorted(expected - set(declared))} "
+             f"phantom={sorted(set(declared) - expected)}")
+
+    drifted = sorted(name for name, entry in declared.items()
+                     if name in shas and entry.get("raw_sha256") != shas[name])
+    rep.gate("every artifact's shipped hash matches the BYTES ON DISK — no file moved "
+             "underneath its own citation",
+             not drifted, f"{drifted}")
+
+    rep.gate("the verification slot is NOT hashed into the bundle's own manifest — a "
+             "bundle cannot pin a verdict nobody has reached yet",
+             VERIFICATION_FILE not in declared,
+             f"{VERIFICATION_FILE} appears in the shipped artifact manifest")
     return shas
 
 

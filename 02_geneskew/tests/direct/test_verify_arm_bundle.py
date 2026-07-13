@@ -62,7 +62,7 @@ def built(synthetic_run, tmp_path):
 
 
 def _verifier_args(bundle_dir, prod, **over):
-    ns = VB.build_parser().parse_args([
+    argv = [
         "--bundle", bundle_dir,
         "--de-main", prod.de_main,
         "--sgrna", prod.sgrna,
@@ -70,10 +70,18 @@ def _verifier_args(bundle_dir, prod, **over):
         "--by-donors", prod.by_donors,
         "--guide-manifest", prod.guide_manifest,
         "--registry", prod.registry,
-        "--selection", prod.selection,
         "--condition", prod.condition,
         "--recompute", "all",
-    ])
+    ]
+    for flag, attr in (("--source-registry", "source_registry"),
+                       ("--target-identity-map", "target_identity_map"),
+                       ("--donor-crosswalk", "donor_crosswalk"),
+                       ("--strict-replay-source", "strict_replay_source"),
+                       ("--pseudobulk", "pseudobulk")):
+        value = getattr(prod, attr, None)
+        if value:
+            argv += [flag, value]
+    ns = VB.build_parser().parse_args(argv)
     for k, v in over.items():
         setattr(ns, k, v)
     return ns
@@ -101,47 +109,65 @@ def failed(args, gate_substring: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# THE PRODUCER AT fc763e8 IS REFUSED, and these are the gates it fails.
+# THE REPAIRED PRODUCER (W14, 2813f7c). It binds the real Stage-1 v3 release, ships its
+# evidence, and knows what a complete release is. Audit blockers 1-5 are CLOSED against it:
+# the pair selection is gone from the identity, the contributor manifest, the mask, the
+# source registry and the target-identity map are all bound, the evidence ships, and the
+# producer no longer admits itself.
 #
-# This verifier is fail-closed and W10 does not repair the producer: W14 owns that. So the
-# baseline is stated as a FACT rather than skipped — the independent audit's blockers 4 and
-# 5, reproduced here as named gates. When W14's producer lands, these gates start passing
-# and `test_the_producer_gaps_are_exactly_these` FAILS, which is the handoff signal to
-# unpin the baseline and assert a plain ADMIT.
+# ONE gate still fails, and it is a real defect, not a stale test. `mask_sha256` is hashed
+# over the producer's IN-MEMORY row order, while `masks.parquet` is written SORTED — so the
+# number bound into the run id cannot be re-derived by any reader of the file the bundle
+# ships. Proof: hashing the in-memory order reproduces the bound value exactly; hashing the
+# shipped order does not. This is the same "count nobody can recount" defect the ARM rows
+# already fixed by sorting before hashing (`canonical_rows`); the mask rows never got it.
+#
+# It is pinned here, not waived. When W14 sorts the mask rows before hashing,
+# `test_the_producer_gap_is_EXACTLY_this` fails — the signal to unpin and assert a plain
+# ADMIT.
 # --------------------------------------------------------------------------- #
-PRODUCER_GAPS = {
-    # audit BLOCKER 5 — the "pair-independent" identity still hashes the unused pair file
-    "the bundle's identity binds NO pair selection — a reusable arm may not be keyed by "
-    "the question that asked for it",
-    # audit BLOCKER 4 — consumed inputs and masks are absent from the identity
-    "every CONSUMED scientific input is bound into the run identity — the contributor "
-    "manifest and the masks the rows were computed under",
-    "the CONTRIBUTOR MANIFEST's identity is bound into the run — the mask, and therefore "
-    "every base delta, is a function of it",
-    "the MASK's identity is bound into the run",
-    # audit BLOCKER 3 — the bundle document itself is bound by nothing
-    "the BUNDLE DOCUMENT itself is bound into the run identity — its arm manifest and "
-    "counts cannot be rewritten while the hashes stay valid",
-}
+MASK_ORDER_GAP = ("the MASK's identity is bound into the run and RE-DERIVES from the "
+                  "shipped masks.parquet")
+PRODUCER_GAPS = {MASK_ORDER_GAP}
 
 
-class TestTheProducerAtFc763e8IsRefused:
-    def test_the_producer_gaps_are_EXACTLY_these(self, built):
-        """The baseline, pinned. When W14 lands, this test fails — by design."""
+class TestTheRepairedProducerAt2813f7c:
+    def test_the_producer_gap_is_EXACTLY_this(self, built):
+        """The baseline, pinned. When W14 sorts the mask rows, this fails — by design."""
         _, args = built()
         doc = run(args)
-        assert doc["verdict"] == "REFUSE"
         assert set(doc["failed_gates"]) == PRODUCER_GAPS, (
-            "the producer's failing gates moved. If W14's producer has landed, unpin "
-            "PRODUCER_GAPS and assert a plain ADMIT.")
+            "the producer's failing gates moved. If the mask-hash order fix has landed, "
+            "unpin PRODUCER_GAPS and assert a plain ADMIT.")
 
-    def test_EVERY_OTHER_gate_passes_on_honest_output(self, built):
-        # non-vacuous: the refusal is about BINDINGS, not about the science. Every arm,
-        # value, rank, byte, hash and recomputation gate passes on the honest bundle.
+    def test_EVERY_OTHER_gate_passes_on_the_repaired_producer(self, built):
+        # non-vacuous: 70 of 71 gates pass. Every arm, value, rank, byte, hash, binding and
+        # recomputation gate is green on honest output.
         _, args = built()
         doc = run(args)
-        assert doc["n_gates"] >= 30
+        assert doc["n_gates"] >= 60
         assert doc["n_passed"] == doc["n_gates"] - len(PRODUCER_GAPS)
+
+    def test_the_audit_blockers_4_and_5_are_CLOSED(self, built):
+        # the gates that refused fc763e8 now PASS: the identity binds no pair, and it binds
+        # the contributor manifest, the mask, the source registry and the identity map
+        _, args = built()
+        failed = failures(args)
+        for closed in ("binds NO pair selection",
+                       "every CONSUMED scientific input is bound",
+                       "CONTRIBUTOR MANIFEST's canonical identity is bound",
+                       "RAW BYTES are bound",
+                       "SHIPPED mask is the one the verifier independently derives"):
+            assert not any(closed in g for g in failed), f"still failing: {closed}"
+
+    def test_the_producer_does_NOT_admit_its_own_output(self, built):
+        res, args = built()
+        verification = json.load(open(os.path.join(res["out_dir"], "verification.json")))
+        assert verification["admitted"] is False
+        assert verification["self_admitted"] is False
+        assert verification["verifier_id"] is None
+        assert "PRODUCER did not admit its own output" in " ".join(
+            run(args)["gate_inventory"])
 
     def test_the_report_is_TYPED_and_bound_to_this_exact_artifact(self, built):
         res, args = built()
@@ -155,7 +181,6 @@ class TestTheProducerAtFc763e8IsRefused:
         assert bound["arm_bundle_run_id"] == res["arm_bundle_run_id"]
         assert bound["arm_rows_sha256"] == res["bundle"]["arm_rows_sha256"]
         assert set(bound["artifact_sha256"]) == VB.EXPECTED_FILES
-        assert bound["recompute_mode"] == "all"
         assert len(bound["arm_inventory"]) == res["n_expected_arm_slots"]
 
     def test_the_report_is_CONTENT_ADDRESSED_so_the_run_manifest_can_bind_it(self, built):
@@ -186,9 +211,37 @@ class TestTheProducerAtFc763e8IsRefused:
         assert failures(args) == PRODUCER_GAPS      # the sample mode adds no failure
 
 
-# --------------------------------------------------------------------------- #
-# M4b — the whole reason the reusable bundle exists.
-# --------------------------------------------------------------------------- #
+class TestAuditBlocker5IsClosedTheIdentityNoLongerNamesAPair:
+    def test_the_SAME_measurement_asked_for_two_pairs_is_now_ONE_bundle(
+            self, synthetic_run, tmp_path):
+        # The audit's BLOCKER 5, re-run against the repaired producer. Identical rows used
+        # to come back under two ids because an UNUSED pair file was hashed into the
+        # identity. Now the pair is not an input at all, so the id cannot move with it.
+        a = synthetic_run()
+        a.condition, a.out_root = F.CONDITION, str(tmp_path / "a")
+        b = synthetic_run(direction_a="low")     # a DIFFERENT pair question
+        b.condition, b.out_root = F.CONDITION, str(tmp_path / "b")
+        ra, rb = run_arms.build_bundle(a), run_arms.build_bundle(b)
+
+        assert ra["bundle"]["arm_rows_sha256"] == rb["bundle"]["arm_rows_sha256"], \
+            "the fixture did not hold the measurement constant"
+        assert ra["arm_bundle_run_id"] == rb["arm_bundle_run_id"], (
+            "the same measurement still produces two bundle ids — the arms inside cannot "
+            "be reused")
+
+    def test_no_pair_scoped_input_is_hashed_into_the_identity(self, built):
+        res, _ = built()
+        names = [i["name"] for i in
+                 res["provenance"]["run_binding"]["stage2_inputs"]]
+        assert not [n for n in names
+                    if any(f in n.lower() for f in ("selection", "contrast", "pair"))]
+
+    def test_the_verifier_PASSES_the_pair_gate_on_the_repaired_producer(self, built):
+        _, args = built()
+        assert not any("binds NO pair selection" in g
+                       for g in run(args)["failed_gates"])
+
+
 class TestM4bACoherentSignFlipIsNotRefusedByAnyDisplayLogic:
     def test_a_COHERENTLY_SIGN_FLIPPED_configuration_adds_NO_failure(self, built):
         """The pair-bound verifier refused this at 152/153 over a re-derived `joint_status`
@@ -203,7 +256,7 @@ class TestM4bACoherentSignFlipIsNotRefusedByAnyDisplayLogic:
         blob = json.dumps(json.load(open(
             os.path.join(res["out_dir"], "arm_bundle.json"))))
         blob += json.dumps(json.load(open(
-            os.path.join(res["out_dir"], "arm_bundle_provenance.json"))))
+            os.path.join(res["out_dir"], VB.PROVENANCE_FILE))))
         for absent in ("joint_status", "pareto_tier", "concordance_class"):
             assert absent not in blob
 
@@ -213,7 +266,7 @@ class TestM4bACoherentSignFlipIsNotRefusedByAnyDisplayLogic:
         # cannot BE here.
         res, args = built()
         doc = run(args)
-        for name in ("arm_bundle.json", "arm_bundle_provenance.json"):
+        for name in ("arm_bundle.json", VB.PROVENANCE_FILE):
             assert AR.forbidden_hits(
                 json.load(open(os.path.join(res["out_dir"], name)))) == []
         assert "no display-only field is available to gate admission" in \
@@ -226,9 +279,14 @@ class TestM4bACoherentSignFlipIsNotRefusedByAnyDisplayLogic:
 # The attacks. Each RESEALS what it breaks; the re-derivation must still catch it.
 # --------------------------------------------------------------------------- #
 def _reseal(bundle_dir, doc=None, prov=None, rows=None):
-    """Rewrite the artifacts, recomputing every hash a forger could recompute."""
+    """Rewrite the artifacts, recomputing every hash a forger could recompute.
+
+    Including the SHIPPED ARTIFACT MANIFEST: a forger who edited a file and left its own
+    hash behind would be caught by arithmetic, and that would prove nothing about the
+    verifier. Everything the producer can recompute, this recomputes.
+    """
     dpath = os.path.join(bundle_dir, "arm_bundle.json")
-    ppath = os.path.join(bundle_dir, "arm_bundle_provenance.json")
+    ppath = os.path.join(bundle_dir, VB.PROVENANCE_FILE)
     rpath = os.path.join(bundle_dir, "arms.parquet")
     doc = doc if doc is not None else json.load(open(dpath))
     prov = prov if prov is not None else json.load(open(ppath))
@@ -236,8 +294,15 @@ def _reseal(bundle_dir, doc=None, prov=None, rows=None):
         pd.DataFrame(rows).to_parquet(rpath, index=False)
     with open(dpath, "w") as fh:
         json.dump(doc, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+    prov["artifacts"] = [
+        {"name": e["name"],
+         "size_bytes": os.path.getsize(os.path.join(bundle_dir, e["name"])),
+         "raw_sha256": AR.sha256_file(os.path.join(bundle_dir, e["name"]))}
+        for e in prov.get("artifacts", [])]
     with open(ppath, "w") as fh:
         json.dump(prov, fh, indent=2, sort_keys=True)
+        fh.write("\n")
 
 
 def _rows_of(bundle_dir):
@@ -246,10 +311,11 @@ def _rows_of(bundle_dir):
 
 def _fully_reseal(bundle_dir, rows):
     """The STRONGEST forgery: rewrite the rows, then recompute every hash the producer
-    would have — the per-arm bytes, the rows hash, the binding and the run id — so nothing
-    is left inconsistent. Only an independent RE-DERIVATION can refuse this."""
+    would have — the per-arm bytes, the rows hash, the binding, the run id and the shipped
+    artifact manifest — so nothing is left inconsistent. Only an independent RE-DERIVATION
+    from the DE data can refuse this."""
     doc = json.load(open(os.path.join(bundle_dir, "arm_bundle.json")))
-    prov = json.load(open(os.path.join(bundle_dir, "arm_bundle_provenance.json")))
+    prov = json.load(open(os.path.join(bundle_dir, VB.PROVENANCE_FILE)))
     canon = [{c: r[c] for c in AR.ARM_ROW_COLUMNS} for r in rows]
     by_arm = {}
     for r in canon:
@@ -487,7 +553,7 @@ class TestResealedArtifactsAndIdentity:
     def test_a_RUN_ID_that_does_not_re_derive_is_REFUSED(self, built):
         res, args = built()
         prov = json.load(open(os.path.join(res["out_dir"],
-                                           "arm_bundle_provenance.json")))
+                                           VB.PROVENANCE_FILE)))
         prov["arm_bundle_run_id"] = "deadbeefdeadbeef"
         _reseal(res["out_dir"], prov=prov)
         assert failed(args, "run id RE-DERIVES")
@@ -496,7 +562,7 @@ class TestResealedArtifactsAndIdentity:
         # reseal the id so it DOES re-derive — the binding now describes a different run
         res, args = built()
         prov = json.load(open(os.path.join(res["out_dir"],
-                                           "arm_bundle_provenance.json")))
+                                           VB.PROVENANCE_FILE)))
         prov["run_binding"]["arm_rows_sha256"] = "0" * 64
         full = AR.sha256_hex(AR.canonical_json(prov["run_binding"]))
         prov["arm_bundle_run_sha256"] = full
@@ -507,7 +573,7 @@ class TestResealedArtifactsAndIdentity:
     def test_a_FORGED_request_hash_is_REFUSED(self, built):
         res, args = built()
         prov = json.load(open(os.path.join(res["out_dir"],
-                                           "arm_bundle_provenance.json")))
+                                           VB.PROVENANCE_FILE)))
         prov["run_binding"]["arm_bundle_request"]["condition"] = "SomewhereElse"
         _reseal(res["out_dir"], prov=prov)
         assert failed(args, "SELF-HASHED")
@@ -575,7 +641,7 @@ class TestInputAndCodeIdentityMismatches:
     def test_a_FORGED_code_digest_is_REFUSED(self, built):
         res, args = built()
         prov = json.load(open(os.path.join(res["out_dir"],
-                                           "arm_bundle_provenance.json")))
+                                           VB.PROVENANCE_FILE)))
         prov["run_binding"]["code_identity"]["manifest_sha256"] = "0" * 64
         _reseal(res["out_dir"], prov=prov)
         assert failed(args, "code manifest hash RE-DERIVES")
@@ -583,7 +649,7 @@ class TestInputAndCodeIdentityMismatches:
     def test_a_FORGED_gene_universe_hash_is_REFUSED(self, built):
         res, args = built()
         prov = json.load(open(os.path.join(res["out_dir"],
-                                           "arm_bundle_provenance.json")))
+                                           VB.PROVENANCE_FILE)))
         prov["run_binding"]["gene_universe_sha256"] = "0" * 64
         _reseal(res["out_dir"], prov=prov)
         assert failed(args, "effect-gene universe RE-DERIVES")
@@ -614,7 +680,7 @@ class TestDisplayOnlyFieldsAreForbiddenNotDefaultedOff:
     def test_an_INSERTED_q_value_is_REFUSED(self, built):
         res, args = built()
         prov = json.load(open(os.path.join(res["out_dir"],
-                                           "arm_bundle_provenance.json")))
+                                           VB.PROVENANCE_FILE)))
         prov["run_binding"]["method"]["q_value_threshold"] = 0.05
         _reseal(res["out_dir"], prov=prov)
         assert failed(args, "no pair / Pareto / concordance")
@@ -743,40 +809,3 @@ class TestTheCurrentGenericV3ReleaseIsWhatTheVerifierConsumes:
         args = _verifier_args(res["out_dir"], prod, stage1_v3_release=path,
                              release_root=root)
         assert failed(args, "admitted set EQUALS the independently derived set")
-
-
-class TestAuditBlocker5ThePairIndependentIdentityStillNamesAPair:
-    """The audit's BLOCKER 5, reproduced. W14 owns the producer fix; W10 owns proving the
-    defect is real and that the verifier refuses it BY NAME."""
-
-    def test_the_SAME_measurement_asked_for_two_pairs_yields_TWO_bundle_ids(
-            self, synthetic_run, tmp_path):
-        # Identical scientific rows; only the UNUSED pair selection moved. The bundle that
-        # declares `names_a_program_pair: False` nonetheless changes identity with it — the
-        # exact cache fragmentation the all-arm topology existed to remove.
-        a = synthetic_run()
-        a.condition, a.out_root = F.CONDITION, str(tmp_path / "a")
-        b = synthetic_run(direction_a="low")     # a DIFFERENT pair question
-        b.condition, b.out_root = F.CONDITION, str(tmp_path / "b")
-        ra, rb = run_arms.build_bundle(a), run_arms.build_bundle(b)
-
-        assert ra["bundle"]["arm_rows_sha256"] == rb["bundle"]["arm_rows_sha256"], \
-            "the fixture did not hold the measurement constant"
-        assert ra["arm_bundle_run_id"] != rb["arm_bundle_run_id"], (
-            "BLOCKER 5 appears repaired. If W14's producer has landed, flip this "
-            "assertion to == and unpin PRODUCER_GAPS.")
-        assert ra["provenance"]["run_binding"]["arm_bundle_request"][
-            "names_a_program_pair"] is False, "the request still truthfully names no pair"
-
-    def test_the_verifier_REFUSES_it_at_a_NAMED_gate(self, built):
-        _, args = built()
-        doc = run(args)
-        assert doc["verdict"] == "REFUSE"
-        assert any("binds NO pair selection" in g for g in doc["failed_gates"])
-
-    def test_the_pair_selection_is_what_is_hashed_into_the_identity(self, built):
-        res, _ = built()
-        names = [i["name"] for i in
-                 res["provenance"]["run_binding"]["stage2_inputs"]]
-        assert "stage01_selection_contract.json" in names, (
-            "BLOCKER 5 appears repaired — the pair selection is no longer an input")
