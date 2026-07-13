@@ -30,35 +30,99 @@ import datetime as _dt
 import json
 import os
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from . import (
     arm_bundle,
     arm_inputs,
+    arm_support,
     config,
     disposition,
     emit,
     gate,
     guides,
+    identity,
     io_data,
     masks,
     preflight,
     runid,
     scorer_view,
+    support_lanes,
 )
+from . import manifest as mf
 from . import projection as proj
 from . import run_screen as rs
 from . import universe as uni
-from .hashing import canonical_json, content_hash, sha256_hex
+from .hashing import canonical_json, content_hash, file_sha256, sha256_hex
 
 SCHEMA_REQUEST = "spot.stage02_arm_bundle_request.v1"
 SCHEMA_PROVENANCE = "spot.stage02_arm_bundle_provenance.v1"
 RUNNER_ID = "spot.stage02.direct.all_arm_runner.v1"
 BUNDLE_RUN_ID_LEN = 16
 
+SCHEMA_VERIFICATION = "spot.stage02_arm_bundle_verification.v1"
+
+# THE NATIVE FILE SET. These names are the interface W3 reads and W10 verifies; they are not
+# an implementation detail of this module. `verification.json` is written as a PLACEHOLDER —
+# the producer must never admit its own output.
 ROWS_FILE = "arms.parquet"
+MASKS_FILE = "masks.parquet"
+CONTRIB_FILE = "contributing_guides.parquet"
+GUIDE_SUPPORT_FILE = "guide_support.parquet"
+DONOR_SUPPORT_FILE = "donor_support.parquet"
+INPUTS_FILE = "input_manifest.json"
+UNIVERSE_FILE = "gene_universe.json"
 BUNDLE_FILE = "arm_bundle.json"
-PROVENANCE_FILE = "arm_bundle_provenance.json"
+PROVENANCE_FILE = "provenance.json"
+VERIFICATION_FILE = "verification.json"
+
+VERDICT_PENDING = "pending_independent_verification"
+
+
+def _raw_of(path: Optional[str]) -> Optional[str]:
+    """The raw byte hash of a pinned input, or None when it was not supplied."""
+    return file_sha256(path) if path and os.path.exists(path) else None
+
+
+def artifact_manifest(out_dir: str) -> list[dict[str, Any]]:
+    """Every file this bundle shipped, by RELATIVE name and raw hash.
+
+    Relative, always: a machine-local path in an artifact is a citation nobody else can
+    follow, and it would make the same science produced on two hosts cite two different
+    bundles.
+    """
+    return sorted(
+        [{"name": name, "size_bytes": os.path.getsize(os.path.join(out_dir, name)),
+          "raw_sha256": file_sha256(os.path.join(out_dir, name))}
+         for name in os.listdir(out_dir) if name != VERIFICATION_FILE],
+        key=lambda e: e["name"])
+
+
+def verification_placeholder(bundle_run_id: str, doc: dict[str, Any]) -> dict[str, Any]:
+    """NOT a verdict. The slot an INDEPENDENT verifier fills, and the producer never does.
+
+    A generator that admits its own output is not a gate — it is the same process asserting
+    twice. So this ships un-admitted, names no verifier, and states the files a verifier must
+    read back off disk. Whoever replaces it must be code that did not produce these bytes.
+    """
+    return {
+        "schema_version": SCHEMA_VERIFICATION,
+        "arm_bundle_run_id": bundle_run_id,
+        "verifier_id": None,
+        "verdict": VERDICT_PENDING,
+        "admitted": False,
+        "self_admitted": False,
+        "produced_by": RUNNER_ID,
+        "verified_paths": [BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE, MASKS_FILE,
+                           CONTRIB_FILE, GUIDE_SUPPORT_FILE, DONOR_SUPPORT_FILE,
+                           INPUTS_FILE, UNIVERSE_FILE],
+        # what a verifier is expected to re-derive, stated by the producer as a CLAIM —
+        # never as evidence that it holds
+        "arm_rows_sha256": doc["arm_rows_sha256"],
+        "n_expected_arm_slots": doc["n_expected_arm_slots"],
+        "n_arm_slots": doc["n_arm_slots"],
+        "n_arm_rows": doc["n_arm_rows"],
+    }
 
 
 def request_block(args, ctx: dict[str, Any], view: dict[str, Any]) -> dict[str, Any]:
@@ -82,17 +146,31 @@ def request_block(args, ctx: dict[str, Any], view: dict[str, Any]) -> dict[str, 
     return dict(body, request_sha256=content_hash(body))
 
 
-def base_deltas(*, ctx: dict[str, Any], args, cond: str,
-                admitted: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """ONE base delta per (program, target). The single dense read in the lane.
+def scan(*, ctx: dict[str, Any], args, cond: str,
+         admitted: list[str]) -> dict[str, Any]:
+    """ONE base delta per (program, target) — AND the evidence that produced it.
 
-    The mask is the SAME mask the within-condition screen takes its score under — built per
-    target, once, and reused for every program. A program projected under a different mask
-    from its neighbour would not be comparable to it, and the arms are meant to be joined.
+    The single dense read in the lane. The mask is the SAME mask the within-condition screen
+    takes its score under — built per target, once, and reused for every program. A program
+    projected under a different mask from its neighbour would not be comparable to it, and
+    the arms are meant to be joined.
+
+    The masks, the contributing guides and the released support slots are COLLECTED here
+    rather than discarded: every delta in the bundle is a function of those bytes, and a
+    bundle that binds only a COUNT of them binds nothing — two different contributor
+    manifests with the same number of rows would produce different science under one id.
     """
     release = ctx["release"]
     identities = ctx["identities_by_condition"][cond]
     library, manifest_index = ctx["library"], ctx["manifest_index"]
+    universe_ids = ctx["gene_universe"]["gene_ids"]
+    splits = ctx["splits"]
+    guide_ids, donor_ids = ctx["guide_ids"], ctx["donor_ids"]
+
+    mask_rows: list[dict[str, Any]] = []
+    contrib_rows: list[dict[str, Any]] = []
+    guide_rows: list[dict[str, Any]] = []
+    donor_rows: list[dict[str, Any]] = []
 
     main = io_data.load_main(args.de_main, cond)
     meta, gene_index = main["meta"], main["gene_index"]
@@ -127,6 +205,22 @@ def base_deltas(*, ctx: dict[str, Any], args, cond: str,
                                          library.get(ident.target_ensembl))
         mask_set = mask["gene_set"]
 
+        # THE EVIDENCE, KEPT. These are the bytes the deltas below are a function of.
+        contrib_rows += guides.contributor_rows(est, contrib)
+        mask_rows += masks.mask_rows_for_emit(est, mask, universe_ids, run_id=None)
+
+        # SUPPORT: enumerated for accounting, never projected, and carrying no pole — the
+        # legacy support rows are keyed on the PAIR's arms, and a bundle that shipped them
+        # would have smuggled the pair back in through its evidence files.
+        g_contrib, slots = support_lanes.guide_lane(ident, cond, guide_ids)
+        contrib_rows += g_contrib
+        guide_rows += arm_support.guide_support_rows(target, cond, slots)
+
+        d_contrib, pair_values = support_lanes.donor_lane(ident, cond, donor_ids)
+        contrib_rows += d_contrib
+        donor_rows += arm_support.donor_support_rows(target, cond, pair_values,
+                                                     splits["splits"])
+
         # BASE QC once per target: a function of no program's outcome, and of no arm's.
         base_state, base_passed, _reasons = disposition.base_qc(
             row_present=True, mask_resolved=mask["resolved"], n_cells=n_cells,
@@ -150,7 +244,9 @@ def base_deltas(*, ctx: dict[str, Any], args, cond: str,
                 "base_state": base_state,
                 "base_passed": base_passed,
             })
-    return out
+    return {"base": out, "mask_rows": mask_rows, "contrib_rows": contrib_rows,
+            "guide_rows": guide_rows, "donor_rows": donor_rows,
+            "n_source_targets": len(targets)}
 
 
 def build_bundle(args) -> dict[str, Any]:
@@ -175,16 +271,24 @@ def build_bundle(args) -> dict[str, Any]:
     cond = ctx["cond"]
     request = request_block(args, ctx, view)
 
-    base = base_deltas(ctx=ctx, args=args, cond=cond, admitted=admitted)
+    scanned = scan(ctx=ctx, args=args, cond=cond, admitted=admitted)
+    base = scanned["base"]
     rows = arm_bundle.build_rows(condition=cond, admitted=admitted,
                                  base_by_program=base)
+    arm_bundle.assert_exact_columns(rows)
     doc = arm_bundle.build(condition=cond, view=view, base_by_program=base, rows=rows)
+    # The inventory is COMPLETE, UNIQUE and cites ONE scorer view — re-derived from the bound
+    # release, before a byte is written. A bundle that shipped 19 arms while declaring 20 was
+    # internally hash-consistent and scientifically wrong.
+    arm_bundle.assert_complete_inventory(doc)
 
     # THE BUNDLE'S OWN input manifest — never the pair path's. `stage2_input_manifest` hashes
     # `args.selection`, which both crashed this CLI (no such flag) and made a supposedly
     # pair-independent identity move with a pair the bundle never loaded.
     manifest = arm_inputs.bundle_input_manifest(args)
     arm_inputs.assert_no_pair_input(manifest)
+
+    mask_sha = emit.mask_content_sha256(scanned["mask_rows"])
     binding = {
         "runner_id": RUNNER_ID,
         "lane": ctx["lane"],
@@ -197,6 +301,25 @@ def build_bundle(args) -> dict[str, Any]:
             [{"name": i["name"], "sha256": i["sha256"], "size_bytes": i["size_bytes"]}
              for i in manifest], key=lambda i: i["name"]),
         "gene_universe_sha256": ctx["gene_universe"]["sha256"],
+        # ---- THE EVIDENCE EVERY DELTA IS A FUNCTION OF (audit BLOCKER 4) ----
+        # The contributor manifest decides which guides contributed; the guides decide the
+        # mask; the mask decides the projection. Binding a COUNT of them binds nothing: two
+        # different manifests with the same number of rows would produce different science
+        # under one identity. So the SEMANTICS are bound (a reordered manifest is the same
+        # manifest and must not move the id) and so are the RAW bytes of the pinned upstream
+        # artifacts, which genuinely are the evidence.
+        # ONE key, both identities. The SEMANTIC block (a reordered manifest is the same
+        # manifest and must not move the id) and the RAW bytes that actually arrived. Two
+        # sibling keys for one fact can drift apart; one key cannot.
+        "contributor_manifest": dict(
+            mf.binding_block(ctx["manifest_doc"]),
+            raw_sha256=_raw_of(getattr(args, "guide_manifest", None))),
+        "source_registry_raw_sha256": _raw_of(getattr(args, "source_registry", None)),
+        "target_identity_map": identity.binding_block(
+            getattr(args, "target_identity_map", None)),
+        "mask_sha256": mask_sha,
+        "n_mask_rows": len(scanned["mask_rows"]),
+        "support_contract": ctx["support_contract"],
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
         "code_identity": rs.code_identity_for(
@@ -211,11 +334,32 @@ def build_bundle(args) -> dict[str, Any]:
     os.makedirs(out_dir, exist_ok=True)
     for r in rows:
         r["arm_bundle_run_id"] = bundle_run_id
+    for evidence in ("mask_rows", "contrib_rows", "guide_rows", "donor_rows"):
+        arm_support.stamp(scanned[evidence], bundle_run_id)
 
     emit.write_json(os.path.join(out_dir, BUNDLE_FILE),
                     dict(doc, arm_bundle_run_id=bundle_run_id))
     emit.write_parquet(rows, os.path.join(out_dir, ROWS_FILE),
                        sort_by=["arm_key", "target_id"])
+
+    # THE EVIDENCE SHIPS. Binding the hash of bytes nobody can hold is the same defect as
+    # citing a gene-set file that only exists on the producer's disk: a verifier could check
+    # the mask hashed to X and have no way to obtain X.
+    emit.write_parquet(scanned["mask_rows"], os.path.join(out_dir, MASKS_FILE),
+                       ["estimate_type", "estimate_id", "target_id",
+                        "masked_gene_ensembl", "mask_reason", "guide_id"])
+    emit.write_parquet(scanned["contrib_rows"], os.path.join(out_dir, CONTRIB_FILE),
+                       ["estimate_type", "estimate_id", "target_id", "guide_id"])
+    emit.write_parquet(scanned["guide_rows"], os.path.join(out_dir, GUIDE_SUPPORT_FILE),
+                       ["target_id", "estimate_id", "guide_id"])
+    emit.write_parquet(scanned["donor_rows"], os.path.join(out_dir, DONOR_SUPPORT_FILE),
+                       ["target_id", "split_id"])
+    emit.write_json(os.path.join(out_dir, INPUTS_FILE),
+                    {"schema_version": emit.SCHEMA_MANIFEST,
+                     "arm_bundle_run_id": bundle_run_id, "files": manifest})
+    emit.write_json(os.path.join(out_dir, UNIVERSE_FILE),
+                    {"schema_version": "spot.stage02_gene_universe.v1",
+                     "arm_bundle_run_id": bundle_run_id, **ctx["gene_universe"]})
 
     prov = {
         "schema_version": SCHEMA_PROVENANCE,
@@ -226,9 +370,21 @@ def build_bundle(args) -> dict[str, Any]:
         "n_arm_slots": doc["n_arm_slots"],
         "n_expected_arm_slots": doc["n_expected_arm_slots"],
         "n_arm_rows": doc["n_arm_rows"],
+        "n_source_targets": scanned["n_source_targets"],
+        "guide_manifest": mf.provenance_block(ctx["manifest_doc"]),
+        "mask_sha256": mask_sha,
         "inference_status": config.INFERENCE_STATUS,
+        # WHERE the bytes are, RELATIVE to this bundle — never a machine-local path. The
+        # same science produced on tcefold and on a laptop must cite the same artifacts.
+        "artifacts": artifact_manifest(out_dir),
     }
     emit.write_json(os.path.join(out_dir, PROVENANCE_FILE), prov)
+
+    # THE PRODUCER DOES NOT ADMIT ITSELF. A generator that signs its own homework is not a
+    # gate. This is a PLACEHOLDER: an independent verifier reads the files back off disk and
+    # replaces it with a real verdict. Until it does, the bundle is not admitted.
+    emit.write_json(os.path.join(out_dir, VERIFICATION_FILE),
+                    verification_placeholder(bundle_run_id, doc))
 
     return {
         "arm_bundle_run_id": bundle_run_id,
@@ -250,11 +406,22 @@ def build_parser() -> argparse.ArgumentParser:
         description="Emit ONE condition's all-arm Direct bundle: every admitted program's "
                     "increase and decrease arms, keyed on desired_change. Bundle-scoped: "
                     "it names a context, never an A/B pair.")
-    ap.add_argument("--condition", required=True,
+    ap.add_argument("--condition", default=None,
                     help="THE CONTEXT this bundle is for (e.g. Rest). A bundle names a "
                          "context, never an A/B pair.")
+    # A COMPLETE Direct release is every condition the BOUND release ships — derived from
+    # release.selector.conditions, never from a number written down here.
+    ap.add_argument("--all-conditions", action="store_true",
+                    help="build every condition the bound Stage-1 release ships and bind "
+                         "them into one Direct release; refuses a missing, duplicated or "
+                         "unknown condition")
     ap.add_argument("--registry", default=None)
     ap.add_argument("--stage1-release", default=None)
+    # The v3 release declares its components by REPO-RELATIVE path. They resolve under this
+    # explicitly staged root — never guessed from where the release JSON happens to sit.
+    ap.add_argument("--stage1-release-root", default=None,
+                    help="the staged root that a spot.stage01_v3_release.v1 release's "
+                         "component paths resolve under")
     ap.add_argument("--stage1-validation", default=None)
     ap.add_argument("--stage1-gate-spec", default=None)
     ap.add_argument("--de-main", required=True)
@@ -281,6 +448,31 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> dict[str, Any]:
     args = build_parser().parse_args(argv)
+
+    if args.all_conditions:
+        # imported here: arm_release drives THIS module's producer, so the dependency runs
+        # one way at module level and the other only when the aggregate is asked for
+        from . import arm_release
+        result = arm_release.build_release(args)
+        print(json.dumps({
+            "direct_release_run_id": result["direct_release_run_id"],
+            "out_dir": result["out_dir"],
+            "expected_conditions": result["expected_conditions"],
+            "n_physical_bundles": result["n_physical_bundles"],
+            "n_logical_arms": result["n_logical_arms"],
+            "bundles": [{"condition": b["condition"],
+                         "arm_bundle_run_id": b["arm_bundle_run_id"]}
+                        for b in result["bundles"]],
+            "admitted": False,
+            "verdict": VERDICT_PENDING,
+        }, indent=2))
+        return result
+
+    if not args.condition:
+        build_parser().error(
+            "one of --condition (one bundle) or --all-conditions (the complete Direct "
+            "release, derived from the bound Stage-1 release) is required")
+
     result = build_bundle(args)
     print(json.dumps({
         "arm_bundle_run_id": result["arm_bundle_run_id"],

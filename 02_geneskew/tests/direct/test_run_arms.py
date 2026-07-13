@@ -20,6 +20,7 @@ import os
 
 import pytest
 from direct import arm_bundle, arm_keys, run_arms, scorer_view
+from direct import projection as proj
 
 
 @pytest.fixture
@@ -28,9 +29,11 @@ def bundle(synthetic_run, tmp_path):
     args.condition = "StimX"
     args.out_root = str(tmp_path / "arms")
     res = run_arms.build_bundle(args)
-    with open(os.path.join(res["out_dir"], "arm_bundle.json")) as fh:
+    # the STANDARDIZED native names (run_arms.PROVENANCE_FILE etc.) — the interface W3 reads
+    # and W10 verifies, not this module's private convention
+    with open(os.path.join(res["out_dir"], run_arms.BUNDLE_FILE)) as fh:
         doc = json.load(fh)
-    with open(os.path.join(res["out_dir"], "arm_bundle_provenance.json")) as fh:
+    with open(os.path.join(res["out_dir"], run_arms.PROVENANCE_FILE)) as fh:
         prov = json.load(fh)
     return res, doc, prov
 
@@ -192,14 +195,39 @@ class TestM4b_APairDerivedStatusCanNEVERGateAReusableArm:
 
     def test_a_COHERENTLY_SIGN_FLIPPED_configuration_still_builds_every_arm(
             self, synthetic_run, tmp_path):
-        # flip the sign of every base delta: a perfectly valid configuration, and exactly
-        # the one the pair-derived joint_status gate rejected
-        args = synthetic_run()
-        args.condition = "StimX"
-        args.out_root = str(tmp_path / "flipped")
-        res = run_arms.build_bundle(args)
-        assert res["n_arm_slots"] == res["n_expected_arm_slots"]
-        assert res["n_arm_rows"] > 0
+        # The audit caught this test not doing what it said: it named a sign flip and then
+        # called the ORDINARY fixture, unchanged. So it asserted nothing about flipped signs
+        # and would have passed against a producer that refused them outright.
+        #
+        # It now actually flips. Arbitrary coherent signs — positive, negative and zero — are
+        # a perfectly valid configuration, and exactly the one the pair-derived `joint_status`
+        # gate rejected. A quantity that exists only when two arms are put side by side cannot
+        # decide whether one of them is admissible.
+        base = {"p": [
+            {"target_id": "T1", "delta": 7.5, "status": proj.OK, "base_state": "pass",
+             "base_passed": True, "n_panel_surviving": 3, "n_control_surviving": 9},
+            {"target_id": "T2", "delta": -3.25, "status": proj.OK, "base_state": "pass",
+             "base_passed": True, "n_panel_surviving": 3, "n_control_surviving": 9},
+            {"target_id": "T3", "delta": 0.0, "status": proj.OK, "base_state": "pass",
+             "base_passed": True, "n_panel_surviving": 3, "n_control_surviving": 9},
+        ]}
+        rows = arm_bundle.build_rows(condition="StimX", admitted=["p"],
+                                     base_by_program=base)
+
+        assert len(rows) == 6                     # one program x two arms x three targets
+        up = {r["target_id"]: r for r in rows
+              if r["desired_change"] == arm_keys.INCREASE}
+        down = {r["target_id"]: r for r in rows
+                if r["desired_change"] == arm_keys.DECREASE}
+
+        # every sign survives, and decrease is the EXACT negation — never a re-estimate
+        assert up["T1"]["value"] == 7.5 and down["T1"]["value"] == -7.5
+        assert up["T2"]["value"] == -3.25 and down["T2"]["value"] == 3.25
+        assert up["T3"]["value"] == 0.0 and down["T3"]["value"] == 0.0
+
+        # ...and the RANKS genuinely reverse, because negating the values reverses the order
+        assert up["T1"]["rank"] == 1 and down["T2"]["rank"] == 1
+        assert arm_bundle.expected_slots(["p"]) == 2
 
     def test_NO_joint_status_exists_anywhere_in_the_bundle(self, bundle):
         res, doc, prov = bundle

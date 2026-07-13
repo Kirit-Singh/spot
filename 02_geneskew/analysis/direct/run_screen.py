@@ -200,17 +200,43 @@ def prepare_bundle(args, *, cond: str) -> dict[str, Any]:
             "an arm-bundle run requires --stage1-release: the admitted program set is "
             "DERIVED from the bound release's scorer view, and an unbound release cannot "
             "say which programs it admits")
-    if lane == config.LANE_PRODUCTION:
-        release = trust.load_production_release(args.stage1_release)
-    elif lane == config.LANE_RESEARCH:
-        release = trust.load_research_release(args.stage1_release)
-    else:
-        release = trust.load_fixture_release(
-            args.registry, args.stage1_validation, args.stage1_gate_spec)
-
+    release = load_bundle_release(args, lane)
     ctx = _context(args, lane, None, release, None, {}, cond=cond)
     ctx["bundle_scoped"] = True
     return ctx
+
+
+def load_bundle_release(args, lane: str):
+    """Bind the Stage-1 release an all-arm bundle stands on.
+
+    The AUTHORITATIVE Stage-1 release is `spot.stage01_v3_release.v1` (55899ac). It is loaded
+    natively — components resolved under an EXPLICITLY staged root, self hash and every
+    component's raw/canonical bytes proved, the admitted set DERIVED from the executable
+    scorer view's `base_portable` flags. Direct used to refuse this release outright, because
+    its legacy loader accepts only `spot.stage01_release_manifest.v1`.
+
+    The legacy loaders remain for the legacy shapes. Dispatch is on the release's OWN declared
+    schema, never on the lane: what a file IS decides how it is read.
+    """
+    from . import stage1_release_v3 as rel_v3
+
+    path = getattr(args, "stage1_release", None)
+    if path and rel_v3.is_v3_release(path):
+        root = getattr(args, "stage1_release_root", None)
+        if not root:
+            raise sel_mod.SelectionError(
+                "a spot.stage01_v3_release.v1 release requires --stage1-release-root: its "
+                "components are declared by repo-relative path and are resolved under an "
+                "EXPLICITLY staged root. A loader that guessed the root from the release's "
+                "own location could be walked into a different tree by a relative path")
+        return rel_v3.load(path, root=root, lane=lane)
+
+    if lane == config.LANE_PRODUCTION:
+        return trust.load_production_release(args.stage1_release)
+    if lane == config.LANE_RESEARCH:
+        return trust.load_research_release(args.stage1_release)
+    return trust.load_fixture_release(
+        args.registry, args.stage1_validation, args.stage1_gate_spec)
 
 
 def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
