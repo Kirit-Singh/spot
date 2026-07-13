@@ -19,7 +19,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .acquisition import SourceAcquisitionRecord
+from .acquisition_records import SourceAcquisitionRecord
 from .contract_version import SCHEMA_TO_VERSION, ContractVersion
 from .contracts import EvidenceContext, SourceRecord
 from .pk_records import FractionUnboundRecord

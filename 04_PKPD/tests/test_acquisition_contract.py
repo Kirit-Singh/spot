@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from analysis.acquisition import (
+from analysis.acquisition_records import (
     EvidenceObservationState,
     ReviewStatus,
     SourceAcquisitionManifest,

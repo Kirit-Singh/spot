@@ -35,7 +35,7 @@ from .evidence_records import (
     SearchManifest,
     TransporterObservation,
 )
-from .acquisition import SourceAcquisitionRecord
+from .acquisition_records import SourceAcquisitionRecord
 from .assay_records import AssayBinding
 from .organ_system import OrganSystemEvidence
 from .method_config import STAGE4_DIR

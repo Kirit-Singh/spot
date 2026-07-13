@@ -13,7 +13,7 @@ from typing import Any, Optional
 from .cnsmpo import CnsMpoResult, score_cns_mpo
 from .contracts import EvidenceContext, SourceRecord, Stage3DrugCandidateSet
 from .delivery import DeliveryResult, resolve_delivery_requirement
-from .acquisition import SourceAcquisitionRecord
+from .acquisition_records import SourceAcquisitionRecord
 from .contract_profile import assert_contract_satisfied
 from .contract_version import ContractVersion
 from .pk_records import FractionUnboundRecord

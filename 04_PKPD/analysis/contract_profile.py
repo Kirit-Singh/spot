@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .acquisition import EvidenceObservationState
+from .acquisition_records import EvidenceObservationState
 from .contract_version import ContractVersion
 from .organ_system import UNSPECIFIED
 from .safety_records import EvidenceState

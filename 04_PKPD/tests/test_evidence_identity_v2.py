@@ -81,7 +81,12 @@ def test_v1_is_the_default_and_is_unchanged():
 # The v1 CONTENT digests, pinned to literals measured before v2 existed (at `6aed6d3`). These
 # are the "byte-for-byte" guarantee, and unlike a self-comparison they survive a code change.
 V1_EVIDENCE_INPUTS_SHA256 = "8999c5a38c8df8bb85ef2ca16cf5dd6decdddea81f4b48069cb61b680c47c6f5"
-V1_SOURCE_REGISTRY_SHA256 = "5d3c064a982700b0dce4d4390e99a73d60788029ba673f6849187d9af5d65df4"
+# The FIXTURE's source registry, re-pinned: W9's canonical fixtures gained acquisition source
+# records, so the registry over the fixture set legitimately grew. This is a fixture pin, not a
+# contract pin — the AUTHORITATIVE v1 freeze is the checked-in historical release
+# (`test_contract_version_freeze.py`), a real e410d72 artifact rather than a recomputation.
+# The line that must never move is the one above: the v1 evidence CONTENT digest.
+V1_SOURCE_REGISTRY_SHA256 = "2cf748aa73bae7a5b78b237b5038cfc5df27e11e6ccec3fea91c4f467befae21"
 
 
 def test_the_v1_evidence_CONTENT_is_byte_for_byte_unchanged():

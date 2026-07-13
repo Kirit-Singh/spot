@@ -29,7 +29,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from analysis.emit import emit
-from analysis.evidence_bundle import LANE_MODELS, load_evidence_bundle
+from analysis.evidence_bundle import LANE_MODELS_V1, load_evidence_bundle
 from analysis.label_adapters import parse_dailymed_spl
 from analysis.method_config import load_method_bundle
 from analysis.pipeline import run_pipeline
@@ -194,7 +194,7 @@ def test_a_v1_evidence_bundle_stays_loadable(tmp_path):
     base = stage4_inputs()
     bundle = {"schema_id": "spot.stage04_evidence_bundle.v1",
               "sources": {k: json.loads(v.model_dump_json()) for k, v in base.sources.items()}}
-    for lane in LANE_MODELS:
+    for lane in LANE_MODELS_V1:
         rows = getattr(base, lane, None)
         bundle[lane] = [json.loads(r.model_dump_json()) for r in (rows or [])]
 

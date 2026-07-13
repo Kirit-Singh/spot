@@ -40,6 +40,18 @@ from verifier.checks import verify_release
 HISTORICAL = os.path.join(os.path.dirname(__file__), "fixtures", "historical_v1_release",
                           "fed2a8347d155a23")
 
+# The METHOD the historical release was BOUND to, shipped beside it. Verifying a historical
+# artifact means recomputing it from ITS OWN bound inputs, not from today's.
+#
+# It is no longer identical to `method/`, and that is correct: W8's `9c857fb` corrected
+# `sources.json`, which used to claim DailyMed was "Public domain (NLM DailyMed)" — an overclaim
+# (source audit §4.6; DailyMed publishes no blanket licence). A method binding that did NOT move
+# when the method changed would be worthless, so a release emitted before the correction cannot
+# be reproduced from today's method. The alternative would be reverting a true statement about
+# licensing, or forging a hash. This test's claim is about the CONTRACT — today's v2-aware
+# verifier can still fully reconstruct a v1 release — not about the method being immutable.
+HISTORICAL_METHOD_DIR = os.path.join(os.path.dirname(HISTORICAL), "method_at_e410d72")
+
 # What the release ACTUALLY declared when it was written, at e410d72.
 HISTORICAL_SCORECARD_SET_ID = "fed2a8347d155a23"
 
@@ -135,14 +147,14 @@ def test_todays_verifier_still_verifies_the_historical_v1_release():
     pass — not report it unverifiable for lacking columns that did not exist when it was
     written.
     """
-    report = verify_release(HISTORICAL, METHOD_DIR)
+    report = verify_release(HISTORICAL, HISTORICAL_METHOD_DIR)
     failed = [c for c in report["checks"] if c["status"] == "fail"]
     assert report["status"] == "pass", f"historical v1 release no longer verifies: {failed}"
     assert report["scope"] == "full_reconstruction"
 
 
 def test_the_historical_release_reconstructs_on_the_v1_contract_not_the_v2_one():
-    report = verify_release(HISTORICAL, METHOD_DIR)
+    report = verify_release(HISTORICAL, HISTORICAL_METHOD_DIR)
     ids = {c["check_id"]: c for c in report["checks"]}
     assert ids["release_reconstructable"]["status"] == "pass"
     assert ids["evidence_inputs_sha256_recomputed_from_the_release"]["status"] == "pass"

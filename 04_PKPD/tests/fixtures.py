@@ -17,7 +17,8 @@ import os
 from typing import Any
 
 from analysis.canonical import canonical_json, sha256_bytes
-from analysis.acquisition import EvidenceObservationState, ReviewStatus, SourceAcquisitionRecord
+from analysis.acquisition_records import (EvidenceObservationState, ReviewStatus,
+                                          SourceAcquisitionRecord)
 from analysis.assay_records import AssayBinding, Relation
 from analysis.contract_version import ContractVersion
 from analysis.organ_system import LabelRef, extract_organ_system
