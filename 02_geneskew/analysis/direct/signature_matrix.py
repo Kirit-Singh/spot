@@ -617,6 +617,7 @@ def write(built: dict[str, Any], *, out_root: str, gene_axis: dict[str, Any],
                      dict(descriptor, bits_sha256=b_sha, kind="mask")),
                  "bits_sha256": b_sha},
         "sources": dict(sources),
+        "environment_lock": sources.get("environment_lock"),
         "mask_rule_id": MASK_RULE_ID,
         # WHOSE independent re-derivation this mask was checked against, and over WHICH Direct
         # bundle. Absent means UNANCHORED, and absent says so — it is not defaulted to a green.
@@ -857,8 +858,10 @@ def build_condition(args, cond: str, out_root: str) -> dict[str, Any]:
                 "is unverified, and a report with no bundle is about nothing")
 
     axis = write_gene_axis(out_root, gene_ids)
+    from . import envlock
     return write(built, out_root=out_root, gene_axis=axis,
                  sources={
+                     "environment_lock": envlock.block(getattr(args, "env_lock", None)),
                      "de_main_sha256": file_sha256(args.de_main),
                      "guide_manifest_sha256": (file_sha256(args.guide_manifest)
                                                if args.guide_manifest else None),

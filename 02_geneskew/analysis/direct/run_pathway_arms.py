@@ -34,13 +34,13 @@ from . import arm_bundle as ab
 from . import (
     config,
     emit,
+    envlock,
     gate,
     genesets,
     pathway_arms,
     pathway_evidence,
     preflight,
     run_arms,
-    runid,
     scorer_view,
     signature_matrix,
 )
@@ -170,7 +170,7 @@ def build_pathway_arms(args) -> dict[str, Any]:
         "release_gate": verdict["release_gate"],
         "code_identity": rs.code_identity_for(
             ctx["lane"], getattr(args, "allow_dirty_tree", False)),
-        "environment_lock": runid.env_lock_block(getattr(args, "env_lock", None)),
+        "environment_lock": envlock.block(getattr(args, "env_lock", None)),
         "direct_arm_rows_sha256": ab.rows_sha256(arm_rows),
         "convergence_sha256": conv["convergence_sha256"],
         "records_sha256": doc["records_sha256"],

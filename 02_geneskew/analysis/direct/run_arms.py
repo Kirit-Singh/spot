@@ -37,12 +37,12 @@ from . import (
     config,
     disposition,
     emit,
+    envlock,
     gate,
     guides,
     io_data,
     masks,
     preflight,
-    runid,
     scorer_view,
 )
 from . import projection as proj
@@ -227,7 +227,10 @@ def build_bundle(args) -> dict[str, Any]:
         "release_gate": verdict["release_gate"],
         "code_identity": rs.code_identity_for(
             ctx["lane"], getattr(args, "allow_dirty_tree", False)),
-        "environment_lock": runid.env_lock_block(getattr(args, "env_lock", None)),
+        # THE SOLVER LOCK, VERIFIED against the pin and bound by its FULL sha256. Recording it
+        # beside the run says which environment the producer HAD; binding it INTO the run id
+        # says which environment the numbers CAME FROM. Only the second survives a swap.
+        "environment_lock": envlock.block(getattr(args, "env_lock", None)),
         "arm_rows_sha256": doc["arm_rows_sha256"],
     }
     full = sha256_hex(canonical_json(binding))

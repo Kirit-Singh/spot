@@ -396,6 +396,11 @@ def write_stage1_release(d: str, registry: str, validation: str, gate_spec: str,
     return path
 
 
+_PINNED_LOCK = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "analysis", "stage02_solver_lock.txt")
+
+
 @dataclass
 class RunArgs:
     selection: str
@@ -411,7 +416,9 @@ class RunArgs:
     stage1_validation: Optional[str] = None
     stage1_gate_spec: Optional[str] = None
     donor_crosswalk: Optional[str] = None
-    env_lock: Optional[str] = None
+    # THE PINNED STAGE-2 SOLVER LOCK. Every production invocation binds it, and a run without
+    # it REFUSES — so a fixture without it would be testing a path production cannot take.
+    env_lock: Optional[str] = _PINNED_LOCK
     lane: str = "synthetic"        # fixtures are synthetic and stay synthetic
     # THE RELEASE GATE. A release-grade lane (production / research_only) may not stand
     # on the pinned replay report, and there is nothing it may present instead: it must

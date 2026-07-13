@@ -98,8 +98,26 @@ class TestTheArgvIsRight:
         assert [label for label, _ in inv] == \
             [f"pathway:{c}:{s}" for c in CONDITIONS for s in SOURCES]
 
-    def test_all_is_fifteen_invocations(self, env):
-        assert len(capture(env, "all")) == 15
+    def test_all_is_fifteen_BUNDLES_plus_three_STEP0_artifacts(self, env):
+        inv = capture(env, "all")
+        step0 = [lab for lab, _ in inv if lab.startswith("step0:")]
+        bundles = [lab for lab, _ in inv if not lab.startswith("step0:")]
+        # the 3 shared signature artifacts are INFRASTRUCTURE: they do not count toward the 15
+        assert len(step0) == 3
+        assert len(bundles) == 15
+
+    def test_STEP0_runs_BEFORE_any_pathway_bundle(self, env):
+        labels = [lab for lab, _ in capture(env, "all")]
+        first_pathway = next(i for i, lab in enumerate(labels)
+                             if lab.startswith("pathway:"))
+        last_step0 = max(i for i, lab in enumerate(labels) if lab.startswith("step0:"))
+        assert last_step0 < first_pathway
+
+    def test_EVERY_invocation_passes_the_env_lock(self, env):
+        # the solver-lock gate: all 15 production invocations bind the lock, and Step 0 too
+        for label, argv in capture(env, "all"):
+            assert "--env-lock" in argv, f"{label} does not pass --env-lock"
+            assert argv[argv.index("--env-lock") + 1], f"{label} passes an EMPTY --env-lock"
 
 
 class TestTheSelectionFlagGetsAPATHNotAConditionName:
@@ -108,25 +126,34 @@ class TestTheSelectionFlagGetsAPATHNotAConditionName:
     def _selection_arg(self, argv):
         return argv[argv.index("--stage1-v3-selection") + 1]
 
-    @pytest.mark.parametrize("what", ["direct", "temporal", "pathway"])
+    @pytest.mark.parametrize("what", ["temporal"])
     def test_every_selection_argument_is_an_EXISTING_FILE(self, env, what):
         for _label, argv in capture(env, what):
             path = self._selection_arg(argv)
             assert os.path.isfile(path), f"{path!r} is not a file"
 
-    @pytest.mark.parametrize("what", ["direct", "temporal", "pathway"])
-    def test_no_argument_is_a_BARE_CONDITION_NAME(self, env, what):
-        for _label, argv in capture(env, what):
-            for arg in argv:
-                assert arg not in CONDITIONS, \
-                    f"{arg!r} was passed as an argument — that is the $SEL_WITHIN_$COND bug"
+    @pytest.mark.parametrize("what", ["step0", "direct", "temporal", "pathway"])
+    def test_no_condition_name_lands_where_a_PATH_belongs(self, env, what):
+        """`--condition Rest` is CORRECT — a bundle names a context. The bug was a condition
+        name arriving where a FILE PATH was expected, which is a different thing and the only
+        thing this may forbid."""
+        for label, argv in capture(env, what):
+            for i, arg in enumerate(argv):
+                if not arg.startswith("--") or i + 1 >= len(argv):
+                    continue
+                if arg == "--condition":
+                    continue                     # a context, by design
+                assert argv[i + 1] not in CONDITIONS, (
+                    f"{label}: {arg} got the bare condition {argv[i+1]!r} — "
+                    "the $SEL_WITHIN_$COND bug")
 
-    def test_each_condition_gets_its_OWN_contract(self, env):
-        paths = {label: self._selection_arg(argv)
-                 for label, argv in capture(env, "direct")}
-        assert len(set(paths.values())) == 3
-        for cond in CONDITIONS:
-            assert os.path.basename(paths[f"direct:{cond}"]) == f"within_{cond}.v3.json"
+    def test_the_BUNDLE_SCOPED_lanes_name_a_CONTEXT_and_NO_pair(self, env):
+        # a reusable arm keyed on whichever pair was asked first is not reusable
+        for what in ("direct", "pathway", "step0"):
+            for label, argv in capture(env, what):
+                assert "--stage1-v3-selection" not in argv, \
+                    f"{label} names a PAIR; a bundle names a context"
+                assert "--condition" in argv, f"{label} names no context"
 
     def test_each_ORDERED_pair_gets_its_own_contract_and_the_two_directions_differ(
             self, env):
@@ -150,10 +177,11 @@ class TestItRefusesRatherThanGuessing:
         assert "DE" in proc.stderr
 
     def test_a_missing_contract_is_a_REFUSAL_in_a_real_run(self, env):
+        # the temporal lane is the one that still consumes a v3 selection contract
         real = dict(env)
         real.pop("SPOT_DRY_RUN")
         real["SEL_DIR"] = os.path.join(env["OUT"], "nonexistent")
-        proc = subprocess.run(["bash", SCRIPT, "direct"], env=real,
+        proc = subprocess.run(["bash", SCRIPT, "temporal"], env=real,
                               capture_output=True, text=True)
         assert proc.returncode == 2
         assert "does not exist" in proc.stderr
@@ -168,9 +196,10 @@ class TestTheFlagsItPassesActuallyEXIST:
     """A runbook whose flags argparse rejects is a runbook that has never been run."""
 
     @pytest.mark.parametrize("what,module", [
-        ("direct", "direct.cli"),
+        ("step0", "direct.signature_matrix"),
+        ("direct", "direct.run_arms"),
         ("temporal", "direct.temporal.cli"),
-        ("pathway", "direct.run_pathway"),
+        ("pathway", "direct.run_pathway_arms"),
     ])
     def test_every_flag_the_SCRIPT_passes_exists_in_that_entry_points_argparse(
             self, env, what, module):
