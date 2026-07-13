@@ -135,6 +135,11 @@ L1_RATIO_MIN = 0.0
 L1_RATIO_MAX = 1.0
 
 NONZERO_TOL = 1e-6
+# THE ONE coefficient precision rule, used by BOTH armfit and stability. A coefficient is
+# rounded to this many decimals FIRST, and its sign is the sign of the rounded value (0.0 ->
+# zero). There is no second, raw-value threshold anywhere: raw 1.4e-6 must not read nonzero
+# in one place and zero in another.
+COEFFICIENT_DECIMALS = 6
 
 # ``coef_sem`` from the upstream model is variation ACROSS OVERLAPPING FITS. It is not
 # inference, and it is never emitted under a name that could be read as one.
@@ -382,16 +387,7 @@ LOCK_ROLES = {
 DIRECT_LOCK_EXECUTES_P2S = False
 
 # --------------------------------------------------------------------------- #
-# STAGE-1 SCORES. The raw hash is AUTHORITATIVE and gated.
-#
-# The canonical (sorted-barcode / 5-decimal) hash was SUPPLIED but could NOT be independently
-# reproduced here: 25 formulations of the published recipe were tried against the parquet and
-# none yielded it. It is therefore RECORDED as declared, and NOT gated on.
-#
-# This is the repo's own standing rule, from stage01_input_manifest.json: "...NOT a current
-# verified hash. Its canonicalization algorithm is not fully specified and was not
-# independently reproduced this session; do not present it as verified merely because Phase-1
-# emitted it. The raw_file_sha256 is authoritative."
+# STAGE-1 SCORES. Both hashes are AUTHORITATIVE and HARD-GATED — raw AND canonical.
 # --------------------------------------------------------------------------- #
 STAGE1_SCORES_RAW_SHA256 = \
     "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f"

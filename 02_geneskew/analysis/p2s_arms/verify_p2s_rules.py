@@ -120,11 +120,10 @@ SUPPORT_COLUMNS = frozenset({
     "opposed", "primary_available",
     "sens_log_fc_sign_concordance", "n_log_fc",
     "sens_pca_off_sign_concordance", "n_pca_off",
-    "lodo_sign_concordance", "n_lodo",
-    "n_sensitivity_fits", "n_sensitivity_sign_concordant"})
+    "lodo_sign_concordance", "n_lodo"})
 COEF_COLUMNS = frozenset({
     "arm_key", "program_id", "desired_change", "condition", "target_id",
-    "coefficient", "coef_fit_variation", "nonzero", "sign",
+    "coefficient", "coef_fit_variation", "sign",
     "effect_layer", "model_config", "donor_scope", "quantity"})
 RECON_COLUMNS = frozenset({
     "arm_key", "program_id", "desired_change", "condition",
@@ -233,8 +232,9 @@ def canonical_support(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "primary_coefficient": num(r["primary_coefficient"]),
         "primary_sign": str(r["primary_sign"]),
         "opposed": bool(r["opposed"]),
-        "n_sensitivity_fits": int(r["n_sensitivity_fits"]),
-        "n_sensitivity_sign_concordant": int(r["n_sensitivity_sign_concordant"]),
+        "sens_log_fc_sign_concordance": num(r["sens_log_fc_sign_concordance"]),
+        "sens_pca_off_sign_concordance": num(r["sens_pca_off_sign_concordance"]),
+        "lodo_sign_concordance": num(r["lodo_sign_concordance"]),
     } for r in rows]
     out.sort(key=lambda r: (r["arm_key"], r["target_id"]))
     return out
@@ -245,8 +245,81 @@ def canonical_coefficients(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "arm_key": str(r["arm_key"]), "target_id": str(r["target_id"]),
         "effect_layer": str(r["effect_layer"]), "model_config": str(r["model_config"]),
         "donor_scope": str(r["donor_scope"]), "coefficient": num(r["coefficient"]),
-        "nonzero": bool(r["nonzero"]), "sign": int(r["sign"]),
+        "coef_fit_variation": num(r["coef_fit_variation"]),
+        "sign": int(r["sign"]),
     } for r in rows]
     out.sort(key=lambda r: (r["arm_key"], r["donor_scope"], r["effect_layer"],
                             r["model_config"], r["target_id"]))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# THE SCIENCE REPLAY. The verifier re-derives every support row FROM the coefficient parquet,
+# so an artifact cannot ship arbitrary support values that merely self-hash. Reimplemented
+# here, independently of the generator's stability module.
+# --------------------------------------------------------------------------- #
+COEFFICIENT_DECIMALS = 6
+SPEC_QUANTITY = "p2s_base_coefficient"
+
+
+def _sign_str(coef):
+    if coef is None:
+        return SIGN_ZERO
+    r = round(float(coef), COEFFICIENT_DECIMALS)
+    if r == 0.0:
+        return SIGN_ZERO
+    return SIGN_SUPPORTIVE if r > 0 else SIGN_OPPOSED
+
+
+def _fam(scope, layer, cfg):
+    if scope.startswith("lodo_") and layer == SPEC_PRIMARY_LAYER \
+            and cfg == SPEC_PRIMARY_MODEL_CONFIG:
+        return "donor_lodo"
+    if scope == SPEC_PRIMARY_SCOPE and cfg == SPEC_PRIMARY_MODEL_CONFIG and layer == "log_fc":
+        return "effect_layer_log_fc"
+    if scope == SPEC_PRIMARY_SCOPE and layer == SPEC_PRIMARY_LAYER and cfg == "pca_off":
+        return "model_config_pca_off"
+    return None
+
+
+def derive_support_from_coefficients(coefs):
+    """Re-derive the support rows FROM the coefficient parquet. The verifier's own copy."""
+    by_key = {}
+    for r in coefs:
+        by_key.setdefault((str(r["arm_key"]), str(r["target_id"])), []).append(r)
+    out = {}
+    for (arm_key, target_id), rows in by_key.items():
+        primary = next((r for r in rows
+                        if str(r["donor_scope"]) == SPEC_PRIMARY_SCOPE
+                        and str(r["effect_layer"]) == SPEC_PRIMARY_LAYER
+                        and str(r["model_config"]) == SPEC_PRIMARY_MODEL_CONFIG), None)
+        pc = round(float(primary["coefficient"]), COEFFICIENT_DECIMALS) if primary else None
+        psign = _sign_str(pc)
+        fams = {"donor_lodo": [], "effect_layer_log_fc": [], "model_config_pca_off": []}
+        for r in rows:
+            f = _fam(str(r["donor_scope"]), str(r["effect_layer"]), str(r["model_config"]))
+            if f:
+                fams[f].append(r)
+
+        def conc(fl):
+            if psign == SIGN_ZERO or not fl:
+                return None, len(fl)
+            agree = sum(1 for r in fl
+                        if _sign_str(round(float(r["coefficient"]), COEFFICIENT_DECIMALS))
+                        == psign)
+            return round(agree / len(fl), 6), len(fl)
+
+        lc, nl = conc(fams["donor_lodo"])
+        gc, ng = conc(fams["effect_layer_log_fc"])
+        oc, no = conc(fams["model_config_pca_off"])
+        out[(arm_key, target_id)] = {
+            "n_runs": len(rows),
+            "primary_coefficient": pc,
+            "primary_sign": psign,
+            "opposed": psign == SIGN_OPPOSED,
+            "primary_available": primary is not None,
+            "sens_log_fc_sign_concordance": gc, "n_log_fc": ng,
+            "sens_pca_off_sign_concordance": oc, "n_pca_off": no,
+            "lodo_sign_concordance": lc, "n_lodo": nl,
+        }
     return out

@@ -23,6 +23,7 @@ NO MACHINE-LOCAL PATHS ARE EMITTED. The path is how the software was found, not 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 from typing import Any, Optional
@@ -93,39 +94,72 @@ def probe() -> dict[str, Any]:
             f"({e}); there is no fallback estimator") from e
 
     pkg_dir = os.path.dirname(os.path.abspath(m.__file__))
-    # the checkout root: the package dir, or its parent when installed from a src layout
-    repo = pkg_dir
-    for _ in range(3):
-        if os.path.isdir(os.path.join(repo, ".git")):
-            break
-        parent = os.path.dirname(repo)
-        if parent == repo:
-            break
-        repo = parent
+
+    # THE SOURCE CHECKOUT. When the package is installed (a wheel under site-packages, as on
+    # the pinned tcefold venv), ``__file__`` is NOT in the git checkout, and walking parents
+    # for ``.git`` finds nothing — commit comes back None and every real run refuses. The
+    # install records where it came from in ``direct_url.json``; that is the authority.
+    repo = _source_checkout_from_direct_url() or pkg_dir
+    if not os.path.isdir(os.path.join(repo, ".git")):
+        # a src checkout: walk up a couple of levels for the .git
+        probe_dir = repo
+        for _ in range(3):
+            if os.path.isdir(os.path.join(probe_dir, ".git")):
+                repo = probe_dir
+                break
+            parent = os.path.dirname(probe_dir)
+            if parent == probe_dir:
+                break
+            probe_dir = parent
+
+    # hash the SOURCE tree (the checkout's src/), not the installed copy — the pin was taken
+    # over the source. Fall back to the package dir if the source layout is absent.
+    src_pkg = os.path.join(repo, "src", "pert2state_model")
+    tree_dir = src_pkg if os.path.isdir(src_pkg) else pkg_dir
 
     return {
         "commit": _git(repo, "rev-parse", "HEAD"),
         "dirty": (_git(repo, "status", "--porcelain") or "") != "",
         "version": str(getattr(m, "__version__", "") or ""),
-        "tree_sha256": tree_sha256(pkg_dir),
+        "tree_sha256": tree_sha256(tree_dir),
+        "located_via": "direct_url.json" if _source_checkout_from_direct_url() else "walk",
         # deliberately NOT emitted downstream — see ``identity``
         "_source_root": repo,
     }
 
 
-def identity(observed: Optional[dict[str, Any]] = None, *,
-             expect_tree_sha256: Optional[str] = _SENTINEL) -> dict[str, Any]:
-    """Verify the observed software against the pin, and return the EMITTABLE identity.
+def _source_checkout_from_direct_url() -> Optional[str]:
+    """The source checkout path from the install's ``direct_url.json`` (PEP 610).
 
-    ``expect_tree_sha256`` is optional: it is pinned once the tree hash has been recorded
-    from a verified checkout. Until then the commit and the version carry the pin, and the
-    observed tree hash is RECORDED so it can be pinned — recorded, not asserted.
+    A wheel installed from a local checkout records ``{"url": "file:///.../pert2state_model"}``.
+    That is where the git identity lives; the site-packages copy has no ``.git``.
     """
-    # THE TREE HASH IS MANDATORY. It defaults to the pin rather than to None: an optional
-    # integrity check is an integrity check nobody passes.
-    if expect_tree_sha256 is _SENTINEL:
-        expect_tree_sha256 = config.UPSTREAM_TREE_SHA256
+    try:
+        import importlib.metadata as md
+        raw = md.distribution("pert2state_model").read_text("direct_url.json")
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        url = (json.loads(raw) or {}).get("url", "")
+    except ValueError:
+        return None
+    prefix = "file://"
+    if url.startswith(prefix):
+        path = url[len(prefix):]
+        return path if os.path.isdir(path) else None
+    return None
 
+
+def identity(observed: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Verify the observed software against the pins, and return the EMITTABLE identity.
+
+    The commit, version AND tree-content hash are all MANDATORY and all come from config
+    literals. There is NO caller override: an integrity check a caller can pass ``None`` to
+    disable is an integrity check nobody passes.
+    """
+    expect_tree_sha256 = config.UPSTREAM_TREE_SHA256
     obs = observed if observed is not None else probe()
 
     commit = obs.get("commit")
@@ -137,8 +171,10 @@ def identity(observed: Optional[dict[str, Any]] = None, *,
             "commit produces numbers this lane cannot account for, so it is refused rather "
             "than annotated")
 
+    # EXACT version. A missing/blank observed version is drift, not a pass: an integrity
+    # check that accepts "unknown" is one somebody turns off.
     version = obs.get("version")
-    if config.UPSTREAM_VERSION and version and version != config.UPSTREAM_VERSION:
+    if version != config.UPSTREAM_VERSION:
         raise UpstreamDriftError(
             "upstream_version_drift",
             f"the upstream package reports version {version!r}, not the pinned "
@@ -164,7 +200,7 @@ def identity(observed: Optional[dict[str, Any]] = None, *,
         "verifier_id": VERIFIER_ID,
         "upstream_repository": config.UPSTREAM_REPOSITORY,
         "upstream_commit": config.UPSTREAM_COMMIT,
-        "upstream_version": config.UPSTREAM_VERSION,
+        "upstream_version": version,      # the OBSERVED, verified value
         "upstream_license": config.UPSTREAM_LICENSE,
         "upstream_tree_sha256": observed_tree,
         "upstream_tree_sha256_pinned": bool(expect_tree_sha256),

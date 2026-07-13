@@ -80,10 +80,28 @@ def scopes_for(donors: np.ndarray) -> list[tuple[str, Optional[str]]]:
 
 
 def grid(scope: str) -> list[tuple[str, config.ModelConfig]]:
-    """Which (layer, model config) pairs run in a scope. LODO runs the author layer only."""
+    """The ONE-FACTOR-AT-A-TIME grid. NEVER a Cartesian product.
+
+    A Cartesian ``layers x configs`` would create the ``log_fc + pca_off`` cell — TWO factors
+    changed at once, which no sensitivity family names, so it would sit in the coefficients
+    and the denominators would not account for it. OFAT changes exactly one thing from the
+    primary at a time:
+
+        all_donor:  (zscore, pca_on_60)   THE PRIMARY
+                    (log_fc, pca_on_60)   effect-layer sensitivity
+                    (zscore, pca_off)     model-config sensitivity
+        lodo_D*:    (zscore, pca_on_60)   donor sensitivity, one per donor
+
+    Four donors => 3 + 4 = SEVEN fits per (program, condition).
+    """
+    primary = (config.PRIMARY_LAYER, config.PRIMARY_CONFIG)
     if scope == ALL_DONOR:
-        return [(layer, cfg) for layer in config.EFFECT_LAYERS for cfg in config.CONFIGS]
-    return [(config.AUTHOR_LAYER, config.CONFIGS[0])]
+        return [
+            primary,
+            ("log_fc", config.PRIMARY_CONFIG),          # change ONLY the effect layer
+            (config.PRIMARY_LAYER, config.SENSITIVITY_CONFIG),   # change ONLY the config
+        ]
+    return [primary]                                    # LODO changes ONLY the donor set
 
 
 def run_grid(*, program_id: str, condition: str, cells: dict[str, Any],
@@ -297,7 +315,7 @@ def build(args, *, fit=None) -> dict[str, Any]:
         arm_key=args.arm_key, bundle_dir=args.direct_bundle, w10_report=args.w10_report,
         env_lock=args.env_lock, view=view, release=release, lane=args.lane,
         admitted=admitted)
-    up = upstream.identity(expect_tree_sha256=args.upstream_tree_sha256)
+    up = upstream.identity()      # commit + version + tree pin, all mandatory, no override
 
     return execute(
         bound=bound, release=release, view=view, up=up, paths=prep["paths"],
@@ -363,9 +381,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="OUTSIDE every tracked tree; the run dir is named for its content")
     ap.add_argument("--lane", default="production", choices=list(config.LANES))
     ap.add_argument("--seed", type=int, default=config.RANDOM_STATE)
-    ap.add_argument("--upstream-tree-sha256", default=None,
-                    help="pin the upstream source-tree content hash (catches an edited file "
-                         "under a pinned commit)")
     ap.add_argument("--derived-from-role", default=None,
                     choices=(None, "away_from_A", "toward_B"))
     ap.add_argument("--derived-from-pole", default=None, choices=(None, "high", "low"))

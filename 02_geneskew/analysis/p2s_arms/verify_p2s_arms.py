@@ -54,6 +54,7 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     SPEC_PRIMARY_LAYER,
     SPEC_PRIMARY_MODEL_CONFIG,
     SPEC_PRIMARY_SCOPE,
+    SPEC_QUANTITY,
     SPEC_RANDOM_STATE,
     SPEC_SIGN_TRANSFORM_TOL,
     SPEC_SIGN_VALUES,
@@ -66,6 +67,7 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     canonical_coefficients,
     canonical_support,
     content_sha256,
+    derive_support_from_coefficients,
     forbidden_keys,
     machine_paths,
     parse_arm_key,
@@ -151,8 +153,8 @@ def verify(out_dir: str) -> dict[str, Any]:
     # -- 2. exact column allowlists: a rank/gate column is rejected by ABSENCE -- #
     for fname, allowed in ALLOWLISTS.items():
         cols = set(pd.read_parquet(os.path.join(out_dir, fname)).columns)
-        rep.check(f"{fname} carries only allowlisted columns", cols <= allowed,
-                  f"unexpected {sorted(cols - allowed)}")
+        rep.check(f"{fname} carries EXACTLY the allowlisted columns", cols == allowed,
+                  f"unexpected {sorted(cols - allowed)}; missing {sorted(allowed - cols)}")
     for fname, rows in ((SUPPORT_FILE, support), (COEF_FILE, coefs), (RECON_FILE, recon)):
         bad = {c for r in rows for c in r if "rank" in c.lower()}
         rep.check(f"{fname} emits no rank column", not bad, f"found {sorted(bad)}")
@@ -253,6 +255,20 @@ def verify(out_dir: str) -> dict[str, Any]:
     # -- 7. CONTINUOUS support: primary estimand + no discrete verdict ---------- #
     rep.check(*_check_continuous_support(support, method))
 
+    # -- 7b. SCIENCE REPLAY: re-derive every support row FROM the coefficients --- #
+    rep.check(*_check_support_replay(support, coefs))
+
+    # -- 7c. every coefficient is the p2s base quantity, and columns match the key #
+    rep.check("every coefficient row is the p2s base quantity",
+              all(str(r.get("quantity")) == SPEC_QUANTITY for r in coefs),
+              f"expected quantity={SPEC_QUANTITY!r}")
+    rep.check("coef_fit_variation is finite and non-negative",
+              all(r.get("coef_fit_variation") is not None
+                  and float(r["coef_fit_variation"]) >= 0
+                  and float(r["coef_fit_variation"]) == float(r["coef_fit_variation"])
+                  for r in coefs))
+    rep.check(*_check_columns_match_key(support, coefs, recon))
+
     # -- 8. determinism and the model pin -------------------------------------- #
     m = method.get("model") or {}
     rep.check("the wrapper seed is 42", m.get("random_state") == SPEC_RANDOM_STATE,
@@ -275,12 +291,15 @@ def verify(out_dir: str) -> dict[str, Any]:
     paths = machine_paths(doc) + machine_paths(prov)
     rep.check("no machine-local path is emitted", not paths, f"at {paths[:5]}")
 
-    # -- 10. counting: every concordance ships its denominator ------------------ #
+    # -- 10. counting: each FAMILY ships its own denominator; no pooled aggregate -- #
     bad_den = [r["target_id"] for r in support
-               if int(r["n_sensitivity_sign_concordant"]) > int(r["n_sensitivity_fits"])]
-    rep.check("no concordance exceeds its sensitivity denominator", not bad_den,
+               if int(r["n_log_fc"]) < 0 or int(r["n_pca_off"]) < 0 or int(r["n_lodo"]) < 0]
+    rep.check("every sensitivity family ships a non-negative denominator", not bad_den,
               f"{bad_den[:4]}")
-    rep.check("every support row ships its denominator",
+    rep.check("no pooled sensitivity aggregate is emitted",
+              all("n_sensitivity_fits" not in r for r in support),
+              "pooling LODO (4x) with log_fc and pca_off weights donor deletion 4-fold")
+    rep.check("every support row ships its run denominator",
               all(int(r["n_runs"]) > 0 for r in support))
 
     return rep.document()
@@ -313,6 +332,56 @@ def _check_sign_transform(coefs: list[dict[str, Any]],
             f"{len(bad)} slot(s) where increase != -decrease, e.g. {bad[:3]}")
 
 
+def _check_support_replay(support, coefs) -> tuple[str, bool, str]:
+    """RE-DERIVE every support row from the coefficient parquet and compare, field by field.
+
+    Arbitrary support values that merely self-hash cannot pass: they must be what the
+    coefficients actually imply — primary from zscore/pca_on_60/all_donor, family-specific
+    concordance with exact 1/1/4 denominators, n_runs = 7.
+    """
+    want = derive_support_from_coefficients(coefs)
+    bad = []
+    for r in support:
+        k = (str(r["arm_key"]), str(r["target_id"]))
+        w = want.get(k)
+        if w is None:
+            bad.append((k, "no coefficients for this support row"))
+            continue
+        for field in ("n_runs", "primary_coefficient", "primary_sign", "opposed",
+                      "primary_available", "sens_log_fc_sign_concordance", "n_log_fc",
+                      "sens_pca_off_sign_concordance", "n_pca_off",
+                      "lodo_sign_concordance", "n_lodo"):
+            got, exp = r.get(field), w[field]
+            # parquet round-trips a null float to NaN; normalise before comparing
+            if isinstance(got, float) and got != got:
+                got = None
+            if isinstance(exp, float) and got is not None:
+                if abs(float(got) - exp) > 1e-9:
+                    bad.append((k, field, got, exp))
+            elif not isinstance(exp, float) and got != exp:
+                bad.append((k, field, got, exp))
+    return ("every support row RE-DERIVES from the coefficient parquet", not bad,
+            f"{bad[:3]}")
+
+
+def _check_columns_match_key(support, coefs, recon) -> tuple[str, bool, str]:
+    """program_id / desired_change / condition must equal what the arm_key parses to."""
+    bad = []
+    for name, rows in (("support", support), ("coefs", coefs), ("recon", recon)):
+        for r in rows:
+            try:
+                p = parse_arm_key(str(r["arm_key"]))
+            except ValueError as e:
+                bad.append((name, str(e)))
+                continue
+            if (str(r.get("program_id")) != p["program_id"]
+                    or str(r.get("desired_change")) != p["desired_change"]
+                    or str(r.get("condition")) != p["condition"]):
+                bad.append((name, r["arm_key"], "columns disagree with parsed key"))
+    return ("program_id/desired_change/condition match the parsed arm_key", not bad,
+            f"{bad[:3]}")
+
+
 def _check_continuous_support(support: list[dict[str, Any]],
                               method: dict[str, Any]) -> tuple[str, bool, str]:
     """Support is CONTINUOUS: a primary sign, sensitivity denominators, and NO discrete verdict.
@@ -328,9 +397,12 @@ def _check_continuous_support(support: list[dict[str, Any]],
         # opposed is EXACTLY the primary-sign-is-opposed fact, never a laundered verdict
         if bool(r["opposed"]) != (sign == "opposed"):
             bad.append((r["arm_key"], r["target_id"], "opposed", r["opposed"]))
-        # denominators must ship: a concordance without its n is not a fraction
-        if int(r["n_sensitivity_sign_concordant"]) > int(r["n_sensitivity_fits"]):
-            bad.append((r["arm_key"], r["target_id"], "concordance>denominator", None))
+        # a concordance without its n is not a fraction; each family carries its own n
+        for conc, n in (("sens_log_fc_sign_concordance", "n_log_fc"),
+                        ("sens_pca_off_sign_concordance", "n_pca_off"),
+                        ("lodo_sign_concordance", "n_lodo")):
+            if r.get(conc) is not None and int(r[n]) == 0:
+                bad.append((r["arm_key"], r["target_id"], f"{conc} without {n}", None))
 
     sup = method.get("support") or {}
     prim = sup.get("primary_estimand") or {}

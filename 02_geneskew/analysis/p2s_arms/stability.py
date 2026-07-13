@@ -30,9 +30,13 @@ LODO_SEMANTICS = ("agreement among OVERLAPPING leave-one-donor-out fits; they sh
 
 
 def _sign(coefficient: Optional[float]) -> str:
-    if coefficient is None or abs(coefficient) <= config.NONZERO_TOL:
+    """The ONE rule: round to the coefficient precision, then sign from the rounded value."""
+    if coefficient is None:
         return config.SIGN_ZERO
-    return config.SIGN_SUPPORTIVE if coefficient > 0 else config.SIGN_OPPOSED
+    rounded = round(float(coefficient), config.COEFFICIENT_DECIMALS)
+    if rounded == 0.0:
+        return config.SIGN_ZERO
+    return config.SIGN_SUPPORTIVE if rounded > 0 else config.SIGN_OPPOSED
 
 
 def _is_primary(r: dict[str, Any]) -> bool:
@@ -97,11 +101,6 @@ def compute(coef_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         logfc_conc, n_logfc = _concord(log_fc)
         pcaoff_conc, n_pcaoff = _concord(pca_off)
 
-        n_sens = n_lodo + n_logfc + n_pcaoff
-        n_concord = sum(int(round(c * n)) for c, n in
-                        ((lodo_conc, n_lodo), (logfc_conc, n_logfc), (pcaoff_conc, n_pcaoff))
-                        if c is not None)
-
         out.append({
             "arm_key": arm_key,
             "program_id": str(first["program_id"]),
@@ -123,8 +122,6 @@ def compute(coef_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             "n_pca_off": n_pcaoff,
             "lodo_sign_concordance": lodo_conc,
             "n_lodo": n_lodo,
-            "n_sensitivity_fits": n_sens,
-            "n_sensitivity_sign_concordant": n_concord,
         })
     return out
 
