@@ -131,15 +131,31 @@ def load_eligible(path: str, *, arm_key: Optional[str] = None) -> dict[str, Any]
     evaluable for another program's arm is not evaluable for this one.
     """
     df = pd.read_parquet(path)
-    for col in ("target_id",):
-        if col not in df.columns:
-            raise InputError("eligible_missing_column",
-                             f"the eligibility table has no {col!r} column")
+    if "target_id" not in df.columns:
+        raise InputError("eligible_missing_column",
+                         "the eligibility table has no 'target_id' column")
 
-    if arm_key is not None and "arm_key" in df.columns:
+    if arm_key is not None:
+        # NO GLOBAL FALLBACK. When an arm is being fitted, the table MUST carry both the
+        # arm_key and the evaluable flag: a missing column would silently widen the
+        # perturbation set to every arm's targets — precisely the arm-specificity this lane
+        # exists to preserve. So the columns are required, not opportunistically used.
+        for col in ("arm_key", "evaluable"):
+            if col not in df.columns:
+                raise InputError(
+                    "eligible_missing_column",
+                    f"the eligibility table has no {col!r} column, so this arm's evaluable "
+                    "set cannot be told apart from another's. This lane never falls back to "
+                    "the global target set")
         df = df[df["arm_key"].astype(str) == str(arm_key)]
-
-    if "evaluable" in df.columns:
+        if df.empty:
+            raise InputError(
+                "no_eligible_target",
+                f"the eligibility table carries no row for {arm_key!r}. Eligibility is "
+                "arm-specific, and an arm absent from the table is not the same as an arm "
+                "whose whole target set is evaluable")
+        df = df[df["evaluable"].astype(bool)]
+    elif "evaluable" in df.columns:
         df = df[df["evaluable"].astype(bool)]
 
     targets = sorted(df["target_id"].astype(str).unique())

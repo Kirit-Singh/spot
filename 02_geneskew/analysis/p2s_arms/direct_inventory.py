@@ -28,9 +28,10 @@ which is the most permissive possible mask and the exact opposite of the safe de
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
+from direct import target_identity as ti
 
 from . import armref, config
 from . import disposition as D
@@ -73,29 +74,106 @@ def main_estimate_masks(bundle_dir: str) -> dict[str, Any]:
     for r in rows.itertuples(index=False):
         by_target.setdefault(str(r.target_id), set()).add(str(r.gene_id))
 
-    # THE TARGET ENSEMBL id comes from the MAIN MASK rows, NOT from arms.parquet — Direct's
-    # ARM_ROW_COLUMNS carries no target_ensembl. It must be CONSISTENT per target (a target
-    # naming two Ensembl ids in its own mask is a contradiction). A symbol-namespace target
-    # whose mask carries no Ensembl id stays NULL — never guessed.
-    ens_by_target: dict[str, Optional[str]] = {}
-    if "target_ensembl" in scoped.columns:
-        for t, g in scoped.groupby("target_id"):
-            ids = {str(v) for v in g["target_ensembl"].dropna().tolist()
-                   if str(v) not in ("", "None", "nan")}
-            if len(ids) > 1:
-                raise D.RefusalError(
-                    D.REFUSE_BUNDLE_INCOMPLETE,
-                    f"target {t!r} names more than one target_ensembl in its main mask "
-                    f"({sorted(ids)[:3]}); a target's own Ensembl id is not a set")
-            ens_by_target[str(t)] = next(iter(ids)) if ids else None
-
     return {"rows": rows.to_dict("records"), "by_target": by_target,
-            "target_ensembl_by_target": ens_by_target,
             "n_rows_all_scopes": int(n_all), "n_rows_main": int(len(rows)),
             "scopes_unioned": config.MASK_SCOPES_MAY_BE_UNIONED,
             "estimate_type": config.MASK_MAIN_ESTIMATE_TYPE,
             "estimate_id": config.MASK_MAIN_ESTIMATE_ID,
             "gene_column": config.MASK_GENE_COLUMN}
+
+
+def load_target_identity(bundle_dir: str, *, scored_targets: set) -> dict[str, Any]:
+    """The bound per-target IDENTITY — through Direct's OWN shared loader. Never inferred.
+
+    ``direct.target_identity.load`` reopens the producer-emitted ``target_identity.json`` in
+    place, verifies it (namespace declared, symbol present, a gene_symbol row carries no
+    Ensembl id, every scored target covered and no extra), and returns the records plus BOTH
+    hashes. Nobody re-derives identity from a mask or from the shape of a target_id: the
+    release perturbs four bare SYMBOLS whose keys look nothing like an Ensembl id, so a string
+    heuristic is wrong for exactly the rows nobody thinks about.
+    """
+    loaded = ti.load(bundle_dir, scored_targets=scored_targets)
+    ensembl: dict[str, Any] = {}
+    namespace: dict[str, str] = {}
+    symbol: dict[str, str] = {}
+    for r in loaded["doc"]["records"]:
+        t = str(r["target_id"])
+        ensembl[t] = r["target_ensembl"] and str(r["target_ensembl"])
+        namespace[t] = str(r["target_id_namespace"])
+        symbol[t] = str(r["target_symbol"])
+    return {
+        "target_ensembl_by_target": ensembl,
+        "namespace_by_target": namespace,
+        "symbol_by_target": symbol,
+        "raw_sha256": loaded["raw_sha256"],
+        "canonical_sha256": loaded["canonical_sha256"],
+        "binding": ti.binding_block(loaded["doc"], loaded["raw_sha256"]),
+        "n_symbol_targets": loaded["doc"]["n_gene_symbol"],
+        "n_ensembl_targets": loaded["doc"]["n_ensembl_gene_id"],
+    }
+
+
+def all_scored_targets(bundle_dir: str) -> set[str]:
+    """Every unique ``target_id`` the bundle SCORED — the COMPLETE set identity.json covers.
+
+    Read off ``arms.parquet``, NOT off one arm's evaluable subset. ``target_identity.json`` is a
+    property of the whole condition bundle: it carries exactly the targets the condition scored,
+    and ``ti.load`` checks that in BOTH directions. Verifying it against a single arm's evaluable
+    targets would refuse every real bundle — each non-evaluable scored target would read as an
+    "extraneous" identity row.
+    """
+    arms = pd.read_parquet(os.path.join(bundle_dir, "arms.parquet"))
+    if "target_id" not in arms.columns:
+        raise D.RefusalError(
+            D.REFUSE_BUNDLE_INCOMPLETE,
+            "the bundle's arms.parquet has no target_id column, so the set of targets the "
+            "bundle scored — the set target_identity.json must cover — cannot be derived")
+    return set(arms["target_id"].astype(str).unique().tolist())
+
+
+def _self_gene_check(*, targets: list[str], target_ensembl: dict[str, Any],
+                     namespace: dict[str, Any], symbol: dict[str, Any],
+                     mask_by_target: dict[str, set],
+                     readout_crosswalk: dict[str, set] | None):
+    """Classify each target's self-gene readout coordinate: masked/absent (ok), or a leak.
+
+    An ensembl_gene_id target's self-gene is its OWN Ensembl id — it must be in the target's
+    mask (its positive control). A gene_symbol target has no Ensembl id by contract, so its
+    self-gene coordinate is resolved through the DE ``gene_name``/id crosswalk and is one of:
+
+      PRESENT     the symbol names exactly one readout coordinate — which must be masked;
+      ABSENT      the symbol names none — proven, and nothing can leak;
+      UNRESOLVED  no crosswalk was supplied, or the symbol names MORE THAN ONE coordinate —
+                  refuse rather than assume no self-gene can leak. Namespace = gene_symbol
+                  alone is NOT that proof.
+
+    Returns ``(leak, unmapped, unresolved)`` — ensembl self-genes left unmasked, symbol
+    self-coordinates present-but-unmasked, and symbol self-coordinates that cannot be resolved.
+    """
+    leak: list = []
+    unmapped: list = []
+    unresolved: list = []
+    for t in targets:
+        masked = mask_by_target.get(t, set())
+        if namespace.get(t) == ti.NAMESPACE_SYMBOL:
+            sym = symbol.get(t)
+            if readout_crosswalk is None:
+                unresolved.append((t, sym, "no DE gene_name crosswalk supplied"))
+                continue
+            coords = readout_crosswalk.get(str(sym)) or set()
+            if not coords:
+                continue                                    # ABSENT — proven; nothing to leak
+            if len(coords) > 1:
+                unresolved.append((t, sym, f"names {len(coords)} readout coordinates"))
+                continue
+            (coord,) = tuple(coords)
+            if coord not in masked:                         # PRESENT but unmasked
+                unmapped.append((t, sym, coord))
+        else:
+            ens = target_ensembl.get(t)
+            if ens and ens not in masked:
+                leak.append((t, ens))
+    return leak, unmapped, unresolved
 
 
 def evaluable_targets(bundle_dir: str, *, program_id: str, condition: str) -> dict[str, Any]:
@@ -147,8 +225,14 @@ def evaluable_targets(bundle_dir: str, *, program_id: str, condition: str) -> di
     }
 
 
-def bind(bundle_dir: str, *, program_id: str, condition: str) -> dict[str, Any]:
-    """Masks + arm-specific eligibility, cross-checked. A gap between them is a refusal."""
+def bind(bundle_dir: str, *, program_id: str, condition: str,
+         readout_crosswalk: dict[str, set] | None = None) -> dict[str, Any]:
+    """Masks + arm-specific eligibility + BOUND identity, cross-checked. A gap is a refusal.
+
+    ``readout_crosswalk`` is the DE ``gene_name`` -> set-of-Ensembl-ids pairing. It is what
+    resolves a gene_symbol target's self-gene readout coordinate; without it a symbol target
+    cannot be PROVEN free of a self-gene leak, and this refuses rather than exempt it silently.
+    """
     masks = main_estimate_masks(bundle_dir)
     elig = evaluable_targets(bundle_dir, program_id=program_id, condition=condition)
 
@@ -163,24 +247,61 @@ def bind(bundle_dir: str, *, program_id: str, condition: str) -> dict[str, Any]:
             "empty mask: it would withhold nothing, which is the most permissive mask there "
             "is and the exact opposite of the safe default")
 
-    # attach the target Ensembl id from the MAIN MASK rows, and — when it is known — require
-    # the target's OWN gene to be in its mask (Direct's main mask includes it; a mask missing
-    # it would leave the self-gene in the reconstruction as a positive control).
-    ens = masks.get("target_ensembl_by_target", {})
-    target_ensembl = {t: ens.get(t) for t in elig["targets"]}
-    unresolved = sorted(t for t in elig["targets"] if not target_ensembl[t])
-    self_gene_absent = sorted(
-        t for t in elig["targets"]
-        if target_ensembl[t] and target_ensembl[t] not in masks["by_target"].get(t, set()))
-    if self_gene_absent:
+    # IDENTITY comes from the bound target_identity.json — through Direct's shared loader,
+    # never from a mask or a target_id heuristic. It is loaded and VERIFIED ONCE against the
+    # bundle's COMPLETE scored set (every unique arms.parquet target_id), then SUBSET to this
+    # arm's eligible columns. Verifying against the eligible subset would refuse every real
+    # bundle: the artifact covers the whole condition, so each non-evaluable scored target
+    # would read as an extraneous identity row.
+    scored = all_scored_targets(bundle_dir)
+    identity = load_target_identity(bundle_dir, scored_targets=scored)
+    missing_identity = sorted(t for t in elig["targets"]
+                              if t not in identity["namespace_by_target"])
+    if missing_identity:
+        raise D.RefusalError(
+            D.REFUSE_BUNDLE_INCOMPLETE,
+            f"{len(missing_identity)} evaluable target(s) have no target_identity row (e.g. "
+            f"{missing_identity[:3]}), though every scored target should. The identity "
+            "artifact and the arm rows disagree about what this bundle measured")
+    target_ensembl = {t: identity["target_ensembl_by_target"].get(t) for t in elig["targets"]}
+    namespace = {t: identity["namespace_by_target"].get(t) for t in elig["targets"]}
+    symbol = {t: identity["symbol_by_target"].get(t) for t in elig["targets"]}
+    symbol_targets = sorted(t for t in elig["targets"]
+                            if namespace[t] == ti.NAMESPACE_SYMBOL)
+
+    # SELF-GENE: every target's self-gene readout coordinate must be MASKED (its positive
+    # control) or PROVEN absent. gene_symbol targets are NOT silently exempt — their self-gene
+    # is resolved through the DE crosswalk (present -> mask; absent -> ok; unresolved -> refuse).
+    leak, symbol_unmapped, unresolved = _self_gene_check(
+        targets=elig["targets"], target_ensembl=target_ensembl, namespace=namespace,
+        symbol=symbol, mask_by_target=masks["by_target"], readout_crosswalk=readout_crosswalk)
+    if leak:
         raise D.RefusalError(
             D.REFUSE_MASK_MISSING_FOR_ELIGIBLE,
-            f"{len(self_gene_absent)} target(s) with a known Ensembl id do not mask their "
-            f"OWN gene (e.g. {self_gene_absent[:3]}). The self-gene is the perturbation's "
-            "positive control; leaving it unmasked would let the target reconstruct itself")
+            f"{len(leak)} target(s) with a known Ensembl id do not mask their OWN gene (e.g. "
+            f"{leak[:3]}). The self-gene is the perturbation's positive control; leaving it "
+            "unmasked would let the target reconstruct itself")
+    if symbol_unmapped:
+        raise D.RefusalError(
+            D.REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED,
+            f"{len(symbol_unmapped)} gene_symbol target(s) name a readout coordinate that the "
+            f"mask does NOT withhold (e.g. {symbol_unmapped[:3]}). The symbol IS measured in "
+            "the readout, so its self-gene must be masked exactly as an Ensembl target's is")
+    if unresolved:
+        raise D.RefusalError(
+            D.REFUSE_SELF_GENE_UNRESOLVED,
+            f"{len(unresolved)} gene_symbol target(s) whose self-gene coordinate cannot be "
+            f"resolved (e.g. {unresolved[:3]}). A symbol was perturbed but the DE crosswalk "
+            "cannot say whether it names a readout coordinate; namespace=gene_symbol alone is "
+            "not proof no self-gene can leak, so this refuses rather than assume it")
 
     return {"masks": masks, "eligible": elig,
             "targets": elig["targets"], "mask_by_target": masks["by_target"],
             "target_ensembl_by_target": target_ensembl,
-            "n_symbol_targets_unresolved": len(unresolved),
-            "symbol_targets_unresolved": unresolved[:10]}
+            "namespace_by_target": namespace,
+            "target_identity_binding": identity["binding"],
+            "target_identity_raw_sha256": identity["raw_sha256"],
+            "target_identity_canonical_sha256": identity["canonical_sha256"],
+            "n_scored_targets": len(scored),
+            "n_symbol_namespace_targets": len(symbol_targets),
+            "symbol_namespace_targets": symbol_targets[:10]}

@@ -72,6 +72,24 @@ PINS = {"ntc": config.NTC_H5AD_SHA256, "de_main": config.DE_MAIN_SHA256,
         "stage1_scores": config.STAGE1_SCORES_RAW_SHA256}
 
 
+def _sanitized_argv() -> list[str]:
+    """The argv with machine-local PATHS replaced by their basenames.
+
+    A real invocation's argv is full of /home/... paths, and the machine-path firewall would
+    reject the whole run for emitting one. The FLAGS and the basenames are provenance; the
+    absolute directory is not, and it is the how-it-was-found, never the what-it-is.
+    """
+    out = []
+    for tok in sys.argv[1:]:
+        if tok.startswith("--"):
+            out.append(tok)
+        elif os.path.isabs(tok):
+            out.append(os.path.basename(tok.rstrip("/")) or tok)
+        else:
+            out.append(tok)
+    return out
+
+
 def refuse_fixture_path(name: str, path: str) -> None:
     low = str(path).lower()
     hit = [t for t in FIXTURE_TOKENS if t in low]
@@ -157,56 +175,58 @@ def effects_matrix(readout: dict[str, Any], targets: list[str]) -> dict[str, Any
     }
 
 
+def readout_symbol_crosswalk(readout: dict[str, Any]) -> dict[str, set]:
+    """The DE readout's OWN ``gene_name`` -> set-of-Ensembl-ids pairing.
+
+    A SET per symbol, ambiguity kept (not dropped): the self-gene check needs to SEE a symbol
+    that names more than one readout coordinate so it can refuse it as unresolved, rather than
+    quietly pick one. Absence (a symbol naming no coordinate) is a legitimate, provable state.
+    """
+    xw: dict[str, set] = {}
+    for ens, sym in zip(readout["gene_ids"], readout["symbols"]):
+        if sym:
+            xw.setdefault(str(sym), set()).add(str(ens))
+    return xw
+
+
 def from_bundle(bundle_dir: str, *, programs: list[str], condition: str,
-                readout_symbols: set) -> dict[str, Any]:
-    """MAIN-estimate masks and ARM-SPECIFIC eligibility, via ``direct_inventory``.
+                readout_crosswalk: dict[str, set] | None = None) -> dict[str, Any]:
+    """MAIN-estimate masks, ARM-SPECIFIC eligibility, and BOUND identity, via ``direct_inventory``.
 
     Masks are selected on the full estimate identity (main/main), never unioned across
     scopes, and an empty main mask is refused. Eligibility is ``evaluable`` on each program's
     OWN arm — and each program's two sign arms are proven to share one inventory. Every
-    evaluable target must carry a mask; a missing one refuses rather than defaulting to the
-    (most-permissive) empty mask.
+    evaluable target must carry a mask; a missing one refuses. IDENTITY comes from the bound
+    ``target_identity.json`` through Direct's shared loader — never inferred from a mask or a
+    target_id heuristic.
 
-    The eligible OUTPUT is arm-keyed, so the producer can filter to the arm it is fitting
-    rather than inheriting a global set.
+    The eligible OUTPUT is arm-keyed, so the producer can filter to the arm it is fitting.
     """
     masks = direct_inventory.main_estimate_masks(bundle_dir)
 
     eligible_rows: list[dict[str, Any]] = []
     union: set = set()
     per_program: dict[str, int] = {}
-    unresolved_total = 0
+    n_symbol_targets = 0
+    identity_binding = None
+    identity_raw_sha = None
     for program_id in programs:
-        inv = direct_inventory.bind(bundle_dir, program_id=program_id, condition=condition)
+        inv = direct_inventory.bind(bundle_dir, program_id=program_id, condition=condition,
+                                    readout_crosswalk=readout_crosswalk)
         per_program[program_id] = inv["eligible"]["n_evaluable"]
-        unresolved_total += inv["n_symbol_targets_unresolved"]
+        n_symbol_targets = max(n_symbol_targets, inv["n_symbol_namespace_targets"])
+        # the target_identity binding is a property of the BUNDLE, identical across programs
+        identity_binding = inv["target_identity_binding"]
+        identity_raw_sha = inv["target_identity_raw_sha256"]
         for arm_key in (inv["eligible"]["arm_key"], inv["eligible"]["sibling_arm_key"]):
             for t in inv["targets"]:
                 eligible_rows.append({
                     "arm_key": arm_key, "program_id": program_id, "condition": condition,
                     "target_id": t, "state": inv["eligible"]["base_state_by_target"][t],
-                    # target_ensembl from the MAIN MASK rows; null for symbol-namespace targets
                     "target_ensembl": inv["target_ensembl_by_target"].get(t),
+                    "target_id_namespace": inv["namespace_by_target"].get(t),
                     "evaluable": True})
         union |= set(inv["targets"])
-
-    # SYMBOL-NAMESPACE TARGETS: a null target_ensembl is legitimate ONLY IF the target's
-    # symbol is PROVEN ABSENT from the pinned DE gene_name crosswalk. If the symbol is present
-    # but was not uniquely mapped, its self-gene would go unmasked — REFUSE that target.
-    ens_by_target: dict[str, Any] = {}
-    for program_id in programs:
-        inv = direct_inventory.bind(bundle_dir, program_id=program_id, condition=condition)
-        ens_by_target.update(inv["target_ensembl_by_target"])
-    null_targets = [t for t in union if not ens_by_target.get(t)]
-    present_unmapped = sorted(t for t in null_targets if str(t) in readout_symbols)
-    if present_unmapped:
-        raise D.RefusalError(
-            D.REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED,
-            f"{len(present_unmapped)} target(s) have no target_ensembl yet their SYMBOL is "
-            f"present in the DE readout (e.g. {present_unmapped[:3]}). A symbol that the "
-            "crosswalk contains but did not map uniquely must be resolved or the target "
-            "refused — never left with its self-gene unmasked")
-    n_proven_absent = len([t for t in null_targets if str(t) not in readout_symbols])
 
     # every evaluable target (union across programs) MUST have a mask — checked here too, so
     # a target eligible for one program but unmasked cannot slip through on another's pass.
@@ -223,13 +243,14 @@ def from_bundle(bundle_dir: str, *, programs: list[str], condition: str,
                 "n_rows_main": masks["n_rows_main"], "scopes_unioned": masks["scopes_unioned"],
                 "estimate_type": masks["estimate_type"], "estimate_id": masks["estimate_id"],
                 "gene_column": masks["gene_column"],
-                "n_symbol_targets_unresolved": len(null_targets),
-                "n_symbol_targets_proven_absent_from_readout": n_proven_absent,
-                "null_target_ensembl_requires_proven_absence": True,
                 "target_genes_subtracted_globally": False},
             "eligible": eligible_rows,
             "targets": sorted(union),
-            "n_evaluable_by_program": per_program}
+            "n_evaluable_by_program": per_program,
+            # IDENTITY comes from the bound target_identity.json, NOT inferred
+            "target_identity_binding": identity_binding,
+            "target_identity_raw_sha256": identity_raw_sha,
+            "n_symbol_namespace_targets": n_symbol_targets}
 
 
 def build(args, *, release=None, view=None) -> dict[str, Any]:
@@ -293,19 +314,25 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
             "these are not the same arms")
 
     # base-portable programs carry arms; the activation covariate must be SCORED (for the
-    # design) but is NOT an arm and gets no eligibility of its own.
-    arm_programs = list(view["admitted_program_ids"])
-    score_programs = list(arm_programs)
+    # design) but is NOT an arm and gets no eligibility of its own. The real release admits
+    # diff_activated as base_portable, so it IS in admitted_program_ids — but binding refuses
+    # an arm for it (it would regress the program on itself). Preparing an arm for it here
+    # would build eligibility no run can use, guaranteeing a refusal and miscounting the units.
+    # So it is FILTERED OUT of the arm set and kept ONLY in the score set.
+    arm_programs = [p for p in view["admitted_program_ids"]
+                    if p != config.ACTIVATION_PROGRAM_ID]
+    score_programs = list(view["admitted_program_ids"])
     if config.ACTIVATION_PROGRAM_ID not in score_programs:
         score_programs.append(config.ACTIVATION_PROGRAM_ID)
 
-    # 5. THE READOUT (loaded first — its symbols prove/refuse null target identities).
+    # 5. THE READOUT.
     readout = load_readout(args.de_main, args.condition)
-    readout_symbols = {str(s) for s in readout["symbols"] if s}
 
-    # 4. THE BUNDLE'S OWN masks (main estimate) and ARM-SPECIFIC eligibility.
+    # 4. THE BUNDLE'S OWN masks, ARM-SPECIFIC eligibility, and BOUND target identity. The DE
+    #    crosswalk is threaded in so a gene_symbol target's self-gene can be proven masked or
+    #    proven absent — never silently exempted.
     bundle = from_bundle(args.direct_bundle, programs=arm_programs, condition=args.condition,
-                         readout_symbols=readout_symbols)
+                         readout_crosswalk=readout_symbol_crosswalk(readout))
     cells = prepare_cells.build(
         ntc_path=args.ntc, scores_path=args.stage1_scores, condition=args.condition,
         program_ids=score_programs, readout_gene_ids=readout["gene_ids"],
@@ -336,6 +363,7 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
             "direct_lock_executes_p2s": config.DIRECT_LOCK_EXECUTES_P2S,
         },
         "public_source": {"ntc": config.NTC_HF_SOURCE, "revision": config.NTC_HF_REVISION},
+        "cell_matrix_semantics": dict(config.CELL_MATRIX_SEMANTICS),
         "dims": cells["dims"],
         "n_effect_targets": len(eff["target_ids"]),
         "n_effect_genes": len(eff["gene_ids"]),
@@ -345,6 +373,11 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
         "n_eligible_targets": len(bundle["targets"]),
         "eligibility_is_arm_specific": True,
         "n_evaluable_by_program": bundle["n_evaluable_by_program"],
+        # IDENTITY is the BOUND target_identity.json (Direct's shared loader), never inferred
+        "target_identity": bundle["target_identity_binding"],
+        "target_identity_raw_sha256": bundle["target_identity_raw_sha256"],
+        "n_symbol_namespace_targets": bundle["n_symbol_namespace_targets"],
+        "identity_inferred_from_mask_or_target_id": False,
         "barcode_join": cells["join"],
         "gene_namespace": {
             "cells": config.GENE_NAMESPACE_CELLS,
@@ -352,7 +385,12 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
             **{k: v for k, v in cells["crosswalk"].items() if k != "symbol_to_ensembl"},
         },
         "subsample": cells["subsample"],
+        # ARM programs (carry a reusable arm) vs SCORE programs (arms + the activation
+        # covariate, which is scored for the design but is NOT an arm). Kept apart so a reader
+        # cannot mistake "scored" for "armed".
         "program_ids": sorted(arm_programs),
+        "score_program_ids": sorted(score_programs),
+        "activation_program_is_scored_not_armed": True,
         "scorer_view_sha256": view["scorer_view_sha256"],
         "donors": cells["donors_present"],
         "direct_binding": binding.bound_block(
@@ -365,37 +403,46 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
                            and not args.allow_dirty_tree)),
         "seed": args.seed,
     }
+    def _write_matrices(dest: str) -> dict[str, str]:
+        np.savez(os.path.join(dest, CELLS_FILE),
+                 condition=np.asarray(args.condition),      # the scalar condition, in-band
+                 barcodes=np.asarray(cells["barcodes"], dtype=object).astype("U"),
+                 donors=np.asarray(cells["donors"], dtype=object).astype("U"),
+                 gene_ids=np.asarray(cells["gene_ids"], dtype=object).astype("U"),
+                 expr=cells["expr"],
+                 **{f"score__{p}": v for p, v in cells["scores"].items()})
+        np.savez(os.path.join(dest, EFFECTS_FILE),
+                 target_ids=np.asarray(eff["target_ids"], dtype=object).astype("U"),
+                 gene_ids=np.asarray(eff["gene_ids"], dtype=object).astype("U"),
+                 zscore=eff["zscore"], log_fc=eff["log_fc"])
+        mask_out = [{"target_id": r["target_id"], "gene_id": r["gene_id"]}
+                    for r in bundle["masks"]]
+        pd.DataFrame(mask_out).to_parquet(os.path.join(dest, MASKS_FILE), index=False)
+        pd.DataFrame(bundle["eligible"]).to_parquet(os.path.join(dest, ELIGIBLE_FILE),
+                                                    index=False)
+        return {n: w10.file_sha256(os.path.join(dest, n)) for n in ARTIFACT_FILES}
+
+    # HASH THE MATRICES BEFORE THE RUN ID IS TAKEN, so the id COVERS them. Otherwise a matrix
+    # could be swapped (update the manifest's artifact_sha256, re-derive the id) and still
+    # self-verify. Write to a staging dir, hash, fold in, then take the id.
+    import tempfile
+    os.makedirs(args.out_root, exist_ok=True)
+    staging = tempfile.mkdtemp(prefix="p2s_prep_", dir=args.out_root)
+    artifact_sha256 = _write_matrices(staging)
+    inputs_binding = dict(inputs_binding, artifact_sha256=artifact_sha256)
     run_id = w10.content_sha256(inputs_binding)[:config.RUN_ID_LEN]
 
     out_dir = os.path.join(args.out_root, run_id)
     os.makedirs(out_dir, exist_ok=True)
-
-    np.savez(os.path.join(out_dir, CELLS_FILE),
-             condition=np.asarray(args.condition),          # the scalar condition, in-band
-             barcodes=np.asarray(cells["barcodes"], dtype=object).astype("U"),
-             donors=np.asarray(cells["donors"], dtype=object).astype("U"),
-             gene_ids=np.asarray(cells["gene_ids"], dtype=object).astype("U"),
-             expr=cells["expr"],
-             **{f"score__{p}": v for p, v in cells["scores"].items()})
-    np.savez(os.path.join(out_dir, EFFECTS_FILE),
-             target_ids=np.asarray(eff["target_ids"], dtype=object).astype("U"),
-             gene_ids=np.asarray(eff["gene_ids"], dtype=object).astype("U"),
-             zscore=eff["zscore"], log_fc=eff["log_fc"])
-    # the producer loader reads (target_id, gene_id); the main-estimate gene is masked_gene_ensembl
-    mask_out = [{"target_id": r["target_id"], "gene_id": r["gene_id"]}
-                for r in bundle["masks"]]
-    pd.DataFrame(mask_out).to_parquet(os.path.join(out_dir, MASKS_FILE), index=False)
-    # eligibility is ARM-KEYED: the producer filters to the arm it is fitting
-    pd.DataFrame(bundle["eligible"]).to_parquet(os.path.join(out_dir, ELIGIBLE_FILE),
-                                                index=False)
+    for n in ARTIFACT_FILES:
+        os.replace(os.path.join(staging, n), os.path.join(out_dir, n))
+    os.rmdir(staging)
 
     manifest = dict(
-        inputs_binding,
+        inputs_binding,                                     # already carries artifact_sha256
         p2s_inputs_run_id=run_id,
         created_at=created_at,
-        argv=list(sys.argv[1:]),
-        artifact_sha256={n: w10.file_sha256(os.path.join(out_dir, n))
-                         for n in ARTIFACT_FILES},
+        argv=_sanitized_argv(),
     )
     with open(os.path.join(out_dir, MANIFEST_FILE), "w") as fh:
         json.dump(manifest, fh, indent=2, sort_keys=True, default=str)

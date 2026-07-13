@@ -28,7 +28,61 @@ MATRIX_FILES = ("cells.npz", "effects.npz", "masks.parquet", "eligible.parquet")
 
 # The keys prepare_inputs adds to the binding AFTER hashing it into the self id. Stripped
 # before re-deriving, so the id is taken over exactly what it was taken over.
-_SELF_ID_EXCLUDED = ("p2s_inputs_run_id", "created_at", "argv", "artifact_sha256")
+# Only the id and non-scientific provenance are excluded from the self-id. artifact_sha256 is
+# INCLUDED: a run whose id did not cover the matrix hashes could have its matrices swapped
+# (update the manifest's artifact_sha256, re-derive the id) and still self-verify. The
+# producer computes the id AFTER hashing the files, folding them in.
+_SELF_ID_EXCLUDED = ("p2s_inputs_run_id", "created_at", "argv")
+
+# THE A-vs-B BINDING KEY SET. Every one of these authoritative Direct fields must be PRESENT
+# and NONEMPTY on BOTH sides — the manifest's ``direct_binding`` (A, the bundle the inputs
+# were prepared from) and the run's current W10 admission (B) — and A must EQUAL B. A missing
+# field is NOT a pass: a fail-open comparison (skip when either side is absent) is exactly how
+# matrices prepared from bundle A run under bundle B's provenance. Bundle identity, the WHOLE
+# artifact-map fingerprint, the arm rows, the scorer view, and BOTH identity hashes are all
+# bound — the whole of what W10 pinned, not a subset.
+_AB_BINDING_KEYS = (
+    "arm_bundle_run_id",
+    "arm_bundle_run_sha256",
+    "arm_rows_sha256",
+    "scorer_view_sha256",
+    "direct_bundle_artifact_map_sha256",
+    "target_identity_admitted_sha256",
+    "target_identity_canonical_sha256",
+)
+
+
+def _check_direct_binding_A_equals_B(m: dict[str, Any], admitted: dict[str, Any]) -> None:
+    """The prepared-from bundle (A) must be, field for field, the admitted bundle (B).
+
+    Presence is REQUIRED, not fail-open. The comparison covers exactly ``_AB_BINDING_KEYS``:
+    every key must be present and nonempty on both sides, and A must equal B. A run whose
+    inputs were prepared from a different admitted bundle is refused before a number is fit.
+    """
+    db = m.get("direct_binding")
+    if not isinstance(db, dict) or not db:
+        raise D.RefusalError(
+            D.REFUSE_PREPARED_PIN_DRIFT,
+            "the prepared manifest carries no direct_binding block, so there is nothing "
+            "saying WHICH admitted Direct bundle its matrices were built from. An absent "
+            "binding is a refusal, never a reason to skip the cross-check")
+
+    for key in _AB_BINDING_KEYS:
+        a, b = db.get(key), admitted.get(key)
+        if not a or not b:
+            raise D.RefusalError(
+                D.REFUSE_PREPARED_PIN_DRIFT,
+                f"the Direct binding field {key!r} is absent or empty on the prepared side "
+                f"({str(a)[:12]!r}) or the admitted side ({str(b)[:12]!r}). Every binding "
+                "field must be present and nonempty on both sides; a hole here is how a swap "
+                "slips past a comparison that only fires when both values happen to exist")
+        if a != b:
+            raise D.RefusalError(
+                D.REFUSE_PREPARED_PIN_DRIFT,
+                f"the prepared inputs were built from a Direct bundle whose {key} is "
+                f"{str(a)[:12]}..., but the run is admitting a bundle whose {key} is "
+                f"{str(b)[:12]}.... Matrices from one admitted bundle may not run under "
+                "another's provenance")
 
 
 def _literal(name: str) -> str:
@@ -46,8 +100,14 @@ def _require(got: Any, literal: str, what: str) -> None:
             "change the literal in this lane's code")
 
 
-def load_and_verify(inputs_dir: str, *, condition: str, lane: str) -> dict[str, Any]:
-    """Re-hash every matrix, compare bound identities to CODE LITERALS, re-derive the self id."""
+def load_and_verify(inputs_dir: str, *, condition: str, lane: str,
+                    admitted: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Re-hash every matrix, compare bound identities to CODE LITERALS, re-derive the self id.
+
+    ``admitted`` is the run's CURRENT W10 admission. When given, the manifest's Direct binding
+    (bundle A the inputs were prepared from) must equal the currently admitted bundle (B).
+    Otherwise matrices prepared from admitted bundle A could run while provenance binds B.
+    """
     manifest_path = os.path.join(inputs_dir, MANIFEST_FILE)
     if not os.path.isdir(inputs_dir) or not os.path.exists(manifest_path):
         raise D.RefusalError(
@@ -103,6 +163,14 @@ def load_and_verify(inputs_dir: str, *, condition: str, lane: str) -> dict[str, 
     _require(locks.get("p2s_runtime_lock_sha256"),
              _literal("P2S_RUNTIME_LOCK_SHA256"), "P2S runtime lock")
 
+    # THE RAW PUBLIC INPUTS, compared to CODE-PINNED bytes. The manifest carries its own
+    # observed hashes; comparing them to the pins in THIS lane's code (not to the manifest's
+    # copy of the pins) is what refuses a set of matrices prepared from a re-pinned or swapped
+    # NTC/DE readout. A forger can reseal the manifest's internal pins; the literal is not in it.
+    raw = m.get("raw_input_sha256") or {}
+    _require(raw.get("ntc_h5ad"), _literal("NTC_H5AD_SHA256"), "raw NTC h5ad")
+    _require(raw.get("de_main"), _literal("DE_MAIN_SHA256"), "raw DE readout")
+
     # 4. THE CONDITION and LANE the inputs were built for.
     if str(m.get("condition")) != condition:
         raise D.RefusalError(
@@ -113,6 +181,11 @@ def load_and_verify(inputs_dir: str, *, condition: str, lane: str) -> dict[str, 
             D.REFUSE_PREPARED_LANE,
             f"the prepared inputs were built in the {m.get('lane')!r} lane, and this is a "
             f"{lane!r} run")
+
+    # A-vs-B: the bundle the inputs were prepared from (A, recorded in the manifest's
+    # direct_binding) must be EXACTLY the bundle now admitted for this run (B).
+    if admitted is not None:
+        _check_direct_binding_A_equals_B(m, admitted)
 
     return {
         "manifest": m,

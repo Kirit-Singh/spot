@@ -102,6 +102,19 @@ NORMAL_EQUATIONS_PERMITTED = False
 # different score wearing the released one's name.
 STAGE1_VALUES_READ_BY_BARCODE = True
 
+# THE CELL MATRIX SEMANTICS — frozen, and NEVER called raw expression. The pinned
+# ntc_clustered.h5ad .X is already median-total normalised (target ~9819) then log1p, with NO
+# raw counts layer. The per-program WLS beta is computed on THIS scale, so a consumer that
+# assumed raw counts would misread every magnitude. Verified by the NTC pin (byte-exact) and
+# declared here + in the manifest.
+CELL_MATRIX_SEMANTICS = {
+    "normalization": "median_total_normalize(target~9819) then log1p",
+    "target_total": 9819,
+    "has_raw_counts_layer": False,
+    "is_raw_expression": False,
+    "source": "Stage-1 ntc_clustered.h5ad .X (pinned)",
+}
+
 # --------------------------------------------------------------------------- #
 # The perturbation matrix.
 # --------------------------------------------------------------------------- #
@@ -180,7 +193,8 @@ N_PCS = 60
 PCA_DETERMINISM_MECHANISM = (
     "seeded via deterministic_p2s.seeded_upstream_svd — it injects model.random_state into "
     "upstream TruncatedSVD, which omits it at commit 2c2e3095. Verified on tcefold: repeat "
-    "max coefficient delta = 0.0 for the seeded D=60 SVD (0.0666 unseeded)")
+    "max coefficient delta = 0.0 for the seeded D=60 SVD; the UNSEEDED magnitude is "
+    "data-dependent and materially nonzero, which is why the seed is required")
 DETERMINISM_SCOPE = (
     "seeded D=60 SVD is the method-faithful PRIMARY (Marson Methods p.46); pca_off is a NAMED "
     "SENSITIVITY that materially differs (coef rho 0.268) and is labelled as such")
@@ -300,13 +314,15 @@ PINNED_SOLVER_LOCK_SHA256 = \
     "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe"
 SOLVER_LOCK_FILENAME = "stage02_solver_lock.txt"
 
-# The files an ADMITTED Direct bundle ships. All ten are re-hashed and matched against the
-# report's `artifact_sha256` map: a bundle with a swapped parquet keeps its name.
-DIRECT_BUNDLE_FILES = (
-    "arm_bundle.json", "provenance.json", "arms.parquet", "masks.parquet",
-    "contributing_guides.parquet", "guide_support.parquet", "donor_support.parquet",
-    "input_manifest.json", "gene_universe.json", "verification.json",
-)
+# The files an ADMITTED Direct bundle ships — THE AUTHORITATIVE INVENTORY, imported from
+# Direct's own `arm_artifacts.VERIFIED_PATHS` (one shared constant, incl. target_identity.json).
+# Every one is re-hashed and matched EXACTLY against the report's `artifact_sha256` map.
+# `verification.json` is NOT in this set: it is the producer's empty slot that W10 fills, and
+# it is checked separately (self-admission), not as a producer artifact.
+from direct import arm_artifacts as _arm_artifacts  # noqa: E402
+
+DIRECT_BUNDLE_FILES = tuple(_arm_artifacts.VERIFIED_PATHS)
+TARGET_IDENTITY_FILE = _arm_artifacts.TARGET_IDENTITY_FILE
 
 # A RELEASE lane. `synthetic` is not one: synthetic arms may never carry production support.
 RELEASE_LANES = ("production", "research_only")
@@ -418,6 +434,9 @@ ACTIVATION_ARM_UNAVAILABLE_REASON = "program_is_the_activation_covariate_of_its_
 
 # The DIRECT screen's REAL eligibility states (the admitted bundle's own vocabulary).
 QC_PASS_STATES = ("qc_pass_single_guide", "qc_pass_two_guide", "qc_pass_multi_guide")
+# Eligibility is decided by the arms.parquet `evaluable` BOOLEAN (arm-specific), not by
+# matching base_state to a vocabulary. base_state is recorded as provenance; the real Direct
+# vocabulary is QC_PASS_STATES, and the fixtures use it.
 
 # The DIRECT mask contract: masks are selected by the FULL estimate identity, never unioned
 # across scopes. A guide-scope or donor-scope mask row is a mask for a DIFFERENT estimate.

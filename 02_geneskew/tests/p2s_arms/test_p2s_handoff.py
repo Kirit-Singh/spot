@@ -58,7 +58,12 @@ def test_ONE_INVOCATION_runs_the_whole_grid_and_emits_BOTH_arms(tmp_path, prepar
     """
     doc = _handoff(tmp_path, prepared, view, bundle_dir, w10_report)
 
-    assert doc["n_units"] == view["n_admitted_programs"]
+    # the activation covariate is admitted (base_portable) but is NOT an arm, so it gets NO
+    # unit: one unit per ARM program, not per admitted program.
+    from p2s_arms import config as P
+    assert doc["n_units"] == view["n_admitted_programs"] - 1
+    assert doc["activation_program_excluded_as_non_arm"] is True
+    assert P.ACTIVATION_PROGRAM_ID not in [u["program_id"] for u in doc["units"]]
     assert doc["n_arms"] == 2 * doc["n_units"]               # two sign arms per unit
     assert doc["one_invocation_per_program_condition"] is True
     assert doc["both_sign_arms_emitted_per_invocation"] is True
@@ -90,7 +95,8 @@ def test_the_worker_profile_prefers_ONE_condition_worker(tmp_path, prepared, vie
     wp = doc["worker_profile"]
     assert wp["max_condition_workers"] == 2
     assert wp["preferred_condition_workers"] == 1
-    assert wp["cells_and_effects_are_shared_within_a_condition"] is True
+    assert wp["units_are_separate_processes"] is True
+    assert wp["matrices_shared_in_memory_across_units"] is False
 
 
 def test_EVERY_argv_is_PARSER_VALID_against_the_producers_own_CLI(tmp_path, prepared, view,
@@ -118,7 +124,25 @@ def test_Th9_is_ABSENT_because_the_release_says_so(tmp_path, prepared, view, bun
                                                    w10_report):
     doc = _handoff(tmp_path, prepared, view, bundle_dir, w10_report)
     assert all(u["program_id"] != "th9_like" for u in doc["units"])
-    assert doc["n_admitted_programs"] == len(doc["units"])
+    # every admitted ARM program gets a unit; the admitted-but-non-arm activation covariate
+    # does not, so len(units) == n_arm_programs == n_admitted - 1.
+    assert doc["n_arm_programs"] == len(doc["units"])
+    assert doc["n_admitted_programs"] == len(doc["units"]) + len(doc["non_arm_programs"])
+
+
+def test_the_EXACT_unit_count_excludes_the_activation_covariate(tmp_path, prepared, view,
+                                                                bundle_dir, w10_report):
+    """The real release admits diff_activated (base_portable); it must NOT get an arm unit.
+
+    Fixture admits treg_like, diff_activated, th1_like (th9_like is not portable). So exactly
+    two arm units, and diff_activated is recorded as the excluded non-arm program.
+    """
+    from p2s_arms import config as P
+    doc = _handoff(tmp_path, prepared, view, bundle_dir, w10_report)
+    assert doc["n_units"] == 2
+    assert sorted(u["program_id"] for u in doc["units"]) == ["th1_like", "treg_like"]
+    assert doc["non_arm_programs"] == [P.ACTIVATION_PROGRAM_ID]
+    assert doc["n_admitted_programs"] == 3
 
 
 def test_the_handoff_is_NON_GATING_and_content_addressed(tmp_path, prepared, view,

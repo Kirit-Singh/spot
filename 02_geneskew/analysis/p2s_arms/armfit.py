@@ -115,7 +115,8 @@ def reconstruction_rows(*, program_id: str, condition: str, layer: str, scope: s
     """
     inc, dec = armref.both_arms(program_id, condition)
     return [
-        dict(recon, arm_key=ref.arm_key, program_id=ref.program_id,
+        dict({k: v for k, v in recon.items() if k != "seconds"},
+             arm_key=ref.arm_key, program_id=ref.program_id,
              desired_change=ref.desired_change, condition=ref.condition,
              effect_layer=layer, model_config=cfg_name, donor_scope=scope,
              metrics_are_sign_invariant=True)

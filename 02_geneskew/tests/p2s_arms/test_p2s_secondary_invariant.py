@@ -54,8 +54,9 @@ def test_MUTATION_direct_artifacts_are_byte_identical_with_p2s_executed_vs_omitt
     """The whole safety case for a secondary lane, in one test."""
     direct_dir = fx.write_full_bundle(str(tmp_path / "direct"), view)
     before = _snapshot(direct_dir)
-    assert set(before) == set(P2S_CONFIG.DIRECT_BUNDLE_FILES), \
-        "the fixture must ship a REAL ten-file Direct bundle, or this proves nothing"
+    # the verified-artifact inventory PLUS verification.json (the producer's slot)
+    assert set(before) == set(P2S_CONFIG.DIRECT_BUNDLE_FILES) | {"verification.json"}, \
+        "the fixture must ship a REAL Direct bundle, or this proves nothing"
 
     report = fx.write_w10_report(str(tmp_path / "w10.json"), direct_dir, view)
     out = fx.run_producer(tmp_path, view=view, bundle_dir=direct_dir,
@@ -195,18 +196,19 @@ def test_this_branch_changed_ZERO_bytes_under_analysis_direct():
         "that has nothing to do with Direct:\n" + changed.stdout)
 
 
-def test_the_legacy_pair_bound_lane_is_untouched_and_still_importable():
-    """v1 is PRESERVED for compatibility. v2 imports nothing from it, and vice versa."""
-    legacy = _analysis_dir() / "perturb2state"
-    assert (legacy / "run_p2s.py").exists()
-
-    for path in sorted(legacy.rglob("*.py")):
-        assert "p2s_arms" not in path.read_text(), f"legacy {path.name} references v2"
-
+def test_v2_is_isolated_from_the_ARCHIVED_legacy_pair_bound_lane():
+    """GATE 7 archived the pair-bound v1 lane out of the production package. v2 imports
+    NOTHING from it (and the archived lane names nothing in v2), so the isolation is total."""
     for path in sorted((_analysis_dir() / "p2s_arms").rglob("*.py")):
         src = path.read_text()
-        assert "from perturb2state" not in src and "import perturb2state" not in src, \
-            f"v2 {path.name} depends on the frozen legacy lane"
+        assert "from perturbate2state" not in src, path.name
+        assert "import perturb2state" not in src and "from perturb2state" not in src, \
+            f"v2 {path.name} depends on the archived legacy lane"
+
+    # the legacy lane is no longer in the production package (GATE 7 archived it)
+    assert not (_analysis_dir() / "perturb2state").exists() \
+        or not list((_analysis_dir() / "perturb2state").glob("*.py")), \
+        "the pair-bound legacy lane must not sit in the production analysis package"
 
 
 def test_v2_emits_no_pair_named_away_or_toward_output():

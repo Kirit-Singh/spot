@@ -99,7 +99,11 @@ FORBIDDEN_TOKEN_RE = re.compile(r"(^|_)[pq](_|$)", re.IGNORECASE)
 # statistic, and renaming it would break the join it exists to make.
 KEY_FIREWALL_EXCEPTIONS = frozenset({
     "scorer_view_sha256", "scorer_view_id", "stage1_scorer_view_canonical_sha256",
-    "registry_scorer_projection_sha256"})
+    "registry_scorer_projection_sha256",
+    # the Stage-1 SCORE-table hashes: "score" is in the name because it is Stage-1's own
+    # field, and these are HASHES/IDS, not statistics. Renaming them would break the bind.
+    "stage1_scores_raw_sha256", "stage1_scores_canonical_sha256",
+    "canonical_scores_sha256", "raw_sha256", "canonical_sha256"})
 
 # Exempt ONLY while they still say ``false``. An artifact must be able to write down its own
 # prohibition; it does not get to keep the exemption after flipping the prohibition off.
@@ -130,7 +134,7 @@ RECON_COLUMNS = frozenset({
     "effect_layer", "model_config", "donor_scope",
     "reconstruction_gene_cv_test_r2_mean", "reconstruction_gene_cv_test_r2_median",
     "reconstruction_gene_cv_test_spearman_mean", "reconstruction_gene_cv_train_r2_mean",
-    "n_folds", "cv_label", "cv_semantics", "seconds", "metrics_are_sign_invariant"})
+    "n_folds", "cv_label", "cv_semantics", "metrics_are_sign_invariant"})
 ALLOWLISTS = {SUPPORT_FILE: SUPPORT_COLUMNS, COEF_FILE: COEF_COLUMNS,
               RECON_FILE: RECON_COLUMNS}
 
@@ -149,6 +153,22 @@ def canonical_json(obj: Any) -> str:
 
 def content_sha256(obj: Any) -> str:
     return hashlib.sha256(canonical_json(obj).encode("utf-8")).hexdigest()
+
+
+# The files whose RAW bytes the provenance ``artifact_sha256`` map covers — every emitted file
+# except the provenance itself (a document cannot carry its own hash). The verifier re-hashes
+# each and compares, so a byte changed in ANY of them — including a support column that is not
+# in a canonical projection — is caught without the change having to touch a canonical hash.
+ARTIFACT_MAP_FILES = (SUPPORT_FILE, COEF_FILE, RECON_FILE, DOC_FILE)
+
+
+def file_sha256(path: str, chunk: int = 1 << 20) -> str:
+    """RAW file bytes, hashed. The verifier's OWN copy — never the generator's helper."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(chunk), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def num(v: Any) -> Any:
@@ -250,6 +270,30 @@ def canonical_coefficients(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     } for r in rows]
     out.sort(key=lambda r: (r["arm_key"], r["donor_scope"], r["effect_layer"],
                             r["model_config"], r["target_id"]))
+    return out
+
+
+def canonical_reconstruction(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The reconstruction metrics, hashable — the verifier's OWN copy, no wall-clock seconds.
+
+    Reimplemented here (not imported from ``emit``) so the reconstruction hash the verifier
+    re-derives is independent of the generator that wrote it. Timing is deliberately excluded:
+    a content-addressed scientific table may not depend on how long the fit happened to take.
+    """
+    out = [{
+        "arm_key": str(r["arm_key"]), "effect_layer": str(r["effect_layer"]),
+        "model_config": str(r["model_config"]), "donor_scope": str(r["donor_scope"]),
+        "reconstruction_gene_cv_test_r2_mean": num(r["reconstruction_gene_cv_test_r2_mean"]),
+        "reconstruction_gene_cv_test_r2_median":
+            num(r["reconstruction_gene_cv_test_r2_median"]),
+        "reconstruction_gene_cv_test_spearman_mean":
+            num(r["reconstruction_gene_cv_test_spearman_mean"]),
+        "reconstruction_gene_cv_train_r2_mean":
+            num(r["reconstruction_gene_cv_train_r2_mean"]),
+        "n_folds": int(r["n_folds"]),
+    } for r in rows]
+    out.sort(key=lambda r: (r["arm_key"], r["donor_scope"], r["effect_layer"],
+                            r["model_config"]))
     return out
 
 

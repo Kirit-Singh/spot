@@ -100,7 +100,7 @@ def base_deltas(program_id: str, *, seed: int = 7,
             "target_id": t,
             "delta": float(rng.normal()),
             "status": proj.OK,
-            "base_state": "eligible_two_guide",
+            "base_state": "qc_pass_two_guide",   # the REAL Direct vocabulary
             "base_passed": True,
             "n_panel_surviving": 0 if no_panel else 3,
             "n_control_surviving": 2,
@@ -214,11 +214,22 @@ def make_masks(path: str) -> str:
     return path
 
 
-def make_eligible(path: str, *, states: Optional[dict[str, str]] = None) -> str:
+def make_eligible(path: str, *, states: Optional[dict[str, str]] = None,
+                  program: str = PROGRAM, condition: str = CONDITION) -> str:
+    """The ARM-KEYED eligibility the producer eats — one row per (sign arm, target).
+
+    Real prepared eligibility carries ``arm_key`` and ``evaluable``: eligibility is a property
+    of the ARM, and the producer filters to the arm it is fitting. A table without those
+    columns is refused (no global fallback), so the fixture ships them for BOTH sign arms.
+    """
     states = states or {}
-    rows = [{"target_id": t,
-             "state": states.get(t, "eligible_two_guide"),
-             "target_ensembl": f"ENSGT{i:06d}"}
+    inc = f"direct|{program}|increase|{condition}"
+    dec = f"direct|{program}|decrease|{condition}"
+    rows = [{"arm_key": arm_key, "program_id": program, "condition": condition,
+             "target_id": t, "state": states.get(t, "qc_pass_two_guide"),
+             "target_ensembl": f"ENSGT{i:06d}",
+             "target_id_namespace": "ensembl_gene_id", "evaluable": True}
+            for arm_key in (inc, dec)
             for i, t in enumerate(target_ids())]
     pd.DataFrame(rows).to_parquet(path, index=False)
     return path
@@ -343,7 +354,8 @@ def write_full_bundle(out_root: str, view, *, condition: str = CONDITION,
                       lane: str = "synthetic", tamper_rank: bool = False,
                       self_admitted: bool = False, mask_scope_union: bool = False,
                       drop_mask_for: Optional[str] = None,
-                      no_main_mask: bool = False) -> str:
+                      no_main_mask: bool = False,
+                      symbol_namespace_target: bool = False) -> str:
     """All TEN files an admitted Direct bundle ships.
 
     ``masks.parquet`` carries the REAL schema: ``masked_gene_ensembl`` +
@@ -384,6 +396,29 @@ def write_full_bundle(out_root: str, view, *, condition: str = CONDITION,
                       for t in target_ids()[:2]]).to_parquet(os.path.join(d, name),
                                                              index=False)
 
+    # target_identity.json — the AUTHORITATIVE bound identity, in the producer's schema.
+    # Every scored target gets one row: ensembl_gene_id rows carry their Ensembl id (which is
+    # the target's OWN masked gene); a symbol row carries a null target_ensembl.
+    ti_records = []
+    for i, t in enumerate(target_ids()):
+        if i == 0 and symbol_namespace_target:
+            ti_records.append({"target_id": t, "target_id_namespace": "gene_symbol",
+                               "target_symbol": t, "target_ensembl": None,
+                               "observed_perturbation_modality": "CRISPRi_knockdown"})
+        else:
+            ti_records.append({"target_id": t, "target_id_namespace": "ensembl_gene_id",
+                               "target_symbol": f"SYM_{t}", "target_ensembl": genes[i],
+                               "observed_perturbation_modality": "CRISPRi_knockdown"})
+    n_ens = sum(1 for r in ti_records if r["target_id_namespace"] == "ensembl_gene_id")
+    direct_emit.write_json(os.path.join(d, "target_identity.json"), {
+        "schema_version": "spot.stage02_target_identity.v1", "condition": condition,
+        "columns": ["target_id", "target_id_namespace", "target_symbol", "target_ensembl",
+                    "observed_perturbation_modality"],
+        "observed_perturbation_modality": "CRISPRi_knockdown",
+        "modality_rule_id": "spot.stage02.target_identity.observed_modality.crispri_knockdown.v1",
+        "n_targets": len(ti_records), "n_ensembl_gene_id": n_ens,
+        "n_gene_symbol": len(ti_records) - n_ens, "records": ti_records})
+
     direct_emit.write_json(os.path.join(d, "input_manifest.json"), {"inputs": []})
     direct_emit.write_json(os.path.join(d, "gene_universe.json"),
                            {"gene_ids": gene_ids()[:5]})
@@ -422,9 +457,9 @@ def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDI
                      tamper_hash: bool = False) -> str:
     """A W10 ADMIT report, content-addressed exactly as W10 writes one."""
     doc = json.load(open(os.path.join(bundle_dir, "arm_bundle.json")))
-    files = {n: _fsha(os.path.join(bundle_dir, n))
-             for n in _cfg.DIRECT_BUNDLE_FILES
-             if os.path.exists(os.path.join(bundle_dir, n))}
+    # cover EXACTLY the authoritative inventory (VERIFIED_PATHS) — the exact-key check
+    # refuses a subset or an extra.
+    files = {n: _fsha(os.path.join(bundle_dir, n)) for n in _cfg.DIRECT_BUNDLE_FILES}
 
     body = {
         "schema_version": _cfg.W10_REPORT_SCHEMA,

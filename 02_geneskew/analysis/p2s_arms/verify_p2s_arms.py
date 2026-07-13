@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementation)
     ADMIT,
     ALLOWLISTS,
+    ARTIFACT_MAP_FILES,
     COEF_FILE,
     DECREASE,
     DESIRED_CHANGE_BY_ROLE_AND_POLE,
@@ -65,9 +66,11 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     W10_VERIFIER_CODE_SHA256,
     W10_VERIFIER_ID,
     canonical_coefficients,
+    canonical_reconstruction,
     canonical_support,
     content_sha256,
     derive_support_from_coefficients,
+    file_sha256,
     forbidden_keys,
     machine_paths,
     parse_arm_key,
@@ -149,6 +152,45 @@ def verify(out_dir: str) -> dict[str, Any]:
     rep.check("coefficient_rows_sha256 is the hash of the shipped coefficient rows",
               doc.get("coefficient_rows_sha256")
               == content_sha256(canonical_coefficients(coefs)))
+    rep.check("reconstruction_rows_sha256 is the hash of the shipped reconstruction rows",
+              doc.get("reconstruction_rows_sha256")
+              == content_sha256(canonical_reconstruction(recon)),
+              "every scientific table is hashed into the doc")
+
+    # -- 1c. RE-DERIVE the run id from provenance.run_binding, and match the directory ------ #
+    rb = prov.get("run_binding") or {}
+    rederived_id = content_sha256(rb)[:16]
+    claimed_id = prov.get("p2s_run_id")
+    dir_id = os.path.basename(os.path.normpath(out_dir))
+    rep.check("the p2s_run_id RE-DERIVES from provenance.run_binding and names the directory",
+              rederived_id == claimed_id == dir_id,
+              f"rederived {rederived_id}, claimed {claimed_id}, dir {dir_id}")
+    # the run binding must fold in every scientific table hash
+    for key in ("support_rows_sha256", "coefficient_rows_sha256",
+                "reconstruction_rows_sha256"):
+        rep.check(f"run_binding folds in {key}", rb.get(key) == doc.get(key))
+
+    # -- 1d. RAW-REHASH every emitted file against the provenance artifact map -------------- #
+    # This catches a byte changed in ANY file — including a support column that is not in a
+    # canonical projection (e.g. primary_abs_coefficient), or a top-level field edited in
+    # p2s_support.json — WITHOUT the change having to touch a canonical hash. The map itself
+    # is in the provenance, so a change that does not also reseal the map is refused here.
+    amap = prov.get("artifact_sha256") or {}
+    rep.check("the provenance carries a raw artifact_sha256 map for every emitted file",
+              set(amap) == set(ARTIFACT_MAP_FILES),
+              f"missing {sorted(set(ARTIFACT_MAP_FILES) - set(amap))}, "
+              f"extra {sorted(set(amap) - set(ARTIFACT_MAP_FILES))}")
+    rehash_bad = []
+    for name in ARTIFACT_MAP_FILES:
+        path = os.path.join(out_dir, name)
+        got = file_sha256(path) if os.path.exists(path) else None
+        if got != amap.get(name):
+            rehash_bad.append((name, str(amap.get(name))[:12], str(got)[:12]))
+    rep.check("every emitted file RAW-REHASHES to the provenance artifact map", not rehash_bad,
+              f"{rehash_bad[:4]}; a value edited without resealing the map is refused here")
+
+    # -- 1e. BIND the emitted key universe to the ROW keys — no vacuous top-level field ----- #
+    rep.check(*_check_key_universe(doc, rb, support, coefs, recon))
 
     # -- 2. exact column allowlists: a rank/gate column is rejected by ABSENCE -- #
     for fname, allowed in ALLOWLISTS.items():
@@ -249,6 +291,9 @@ def verify(out_dir: str) -> dict[str, Any]:
                   f"role={derived['role']!r} pole={derived['pole']!r} implies {want!r}, "
                   f"but the artifact carries {sorted(changes)}")
 
+    # -- 5b. EXACTLY 7 rows + 7 unique OFAT slots per (arm, target); recon ships the same 7 - #
+    rep.check(*_check_exact_grid(coefs, recon))
+
     # -- 6. the two arms are ONE measurement and a sign ------------------------- #
     rep.check(*_check_sign_transform(coefs, parsed))
 
@@ -273,6 +318,12 @@ def verify(out_dir: str) -> dict[str, Any]:
     m = method.get("model") or {}
     rep.check("the wrapper seed is 42", m.get("random_state") == SPEC_RANDOM_STATE,
               f"got {m.get('random_state')!r}")
+    # the ACTUAL RECORDED run seed — not only the method's declared wrapper seed. A run that
+    # was fitted under a different seed but declared 42 in its method block is caught here.
+    rep.check("the RUN recorded the pinned seed in its binding",
+              rb.get("seed") == SPEC_RANDOM_STATE,
+              f"got run_binding.seed={rb.get('seed')!r}; a release run is pinned to seed "
+              f"{SPEC_RANDOM_STATE}")
     rep.check("positive=False, so opposed contributors are kept, not zeroed",
               m.get("positive") is False)
     grid = m.get("l1_ratio_grid") or []
@@ -330,6 +381,151 @@ def _check_sign_transform(coefs: list[dict[str, Any]],
                 bad.append((slot[0], slot[2], arms[INCREASE], arms[DECREASE]))
     return ("the two arms are exact sign transforms of one base effect", not bad,
             f"{len(bad)} slot(s) where increase != -decrease, e.g. {bad[:3]}")
+
+
+def _sibling_of(arm_key: str) -> str:
+    """The canonical sibling arm — the SAME program and condition, the opposite sign."""
+    p = parse_arm_key(arm_key)
+    other = DECREASE if p["desired_change"] == INCREASE else INCREASE
+    return f"direct|{p['program_id']}|{other}|{p['condition']}"
+
+
+def _check_key_universe(doc, rb, support, coefs, recon) -> tuple[str, bool, str]:
+    """Every top-level program/condition/arm field must RE-DERIVE from the ROW keys.
+
+    A top-level field that NO row constrains can be edited to anything and still self-hash —
+    which is how ``p2s_support.json.condition`` could be forged to FORGED_CONDITION and pass.
+    So the row keys are the authority: EXACTLY the requested arm and its canonical sibling, ONE
+    program, ONE condition, and a COMPLETE arm pair for every (target, fit slot). Missing all
+    sibling rows, or a third program/condition, is refused here rather than passing vacuously.
+    """
+    row_keys = sorted({str(r["arm_key"]) for r in (support + coefs + recon)})
+    if not row_keys:
+        return ("top-level arm/program/condition fields re-derive from the row keys",
+                False, "no row carries an arm_key — nothing binds the top-level fields")
+    try:
+        parsed = {k: parse_arm_key(k) for k in row_keys}
+    except ValueError as e:
+        return ("top-level arm/program/condition fields re-derive from the row keys",
+                False, f"a row arm_key does not parse: {e}")
+
+    programs = {p["program_id"] for p in parsed.values()}
+    conditions = {p["condition"] for p in parsed.values()}
+    bad = []
+    if len(programs) != 1:
+        bad.append(("programs", sorted(programs)))
+    if len(conditions) != 1:
+        bad.append(("conditions", sorted(conditions)))
+
+    requested = doc.get("arm_key")
+    sibling = _sibling_of(requested) if requested else None
+    want_keys = sorted({str(requested), sibling}) if requested else []
+    if set(row_keys) != set(want_keys):
+        bad.append(("arm_keys", f"rows carry {row_keys}, want {want_keys}"))
+
+    prog = next(iter(programs)) if len(programs) == 1 else None
+    cond = next(iter(conditions)) if len(conditions) == 1 else None
+    for name, got, exp in (
+            ("program_id", doc.get("program_id"), prog),
+            ("condition", doc.get("condition"), cond),
+            ("sibling_arm_key", doc.get("sibling_arm_key"), sibling),
+            ("n_arms", doc.get("n_arms"), len(want_keys)),
+            ("arm_keys", sorted(str(k) for k in (doc.get("arm_keys") or [])), want_keys),
+            ("run_binding.arm_key", rb.get("arm_key"), requested)):
+        if got != exp:
+            bad.append((name, f"doc {got!r} != derived {exp!r}"))
+
+    # COMPLETE arm pairs: every (target, fit slot) present on one arm must appear on BOTH.
+    by_cell: dict[tuple, set] = {}
+    for r in coefs:
+        p = parsed.get(str(r["arm_key"]))
+        if not p:
+            continue
+        cell = (str(r["target_id"]), str(r["effect_layer"]), str(r["model_config"]),
+                str(r["donor_scope"]))
+        by_cell.setdefault(cell, set()).add(p["desired_change"])
+    incomplete = [c for c, ch in by_cell.items() if ch != {INCREASE, DECREASE}]
+    if incomplete:
+        bad.append(("incomplete_arm_pairs",
+                    f"{len(incomplete)} (target, fit slot) cell(s) lack a sign arm, e.g. "
+                    f"{incomplete[:2]}"))
+
+    return ("top-level arm/program/condition fields re-derive from the row keys",
+            not bad, f"{bad[:4]}")
+
+
+EXPECTED_ALL_DONOR = frozenset({
+    ("all_donor", "zscore", "pca_on_60"),
+    ("all_donor", "log_fc", "pca_on_60"),
+    ("all_donor", "zscore", "pca_off")})
+N_EXPECTED_FITS = 7            # 3 all_donor OFAT + 4 distinct LODO donors
+N_EXPECTED_LODO = 4
+LODO_PRIMARY = ("zscore", "pca_on_60")     # a LODO fit changes ONLY the donor set
+
+
+def _slots_ok(slots: set) -> tuple[bool, str]:
+    """The unique slot SET is exactly the 3 all_donor OFAT + 4 distinct LODO-donor fits."""
+    all_donor = {s for s in slots if s[0] == "all_donor"}
+    lodo = {s for s in slots if s[0].startswith("lodo_")}
+    other = slots - all_donor - lodo
+    if other:
+        return False, f"non-OFAT slot(s) {sorted(other)}"
+    if all_donor != EXPECTED_ALL_DONOR:
+        return False, f"all_donor slots {sorted(all_donor)}"
+    off = [s for s in lodo if (s[1], s[2]) != LODO_PRIMARY]
+    if off:
+        return False, f"a LODO slot changed more than the donor: {sorted(off)}"
+    donors = {s[0] for s in lodo}
+    if len(lodo) != N_EXPECTED_LODO or len(donors) != N_EXPECTED_LODO:
+        return False, f"{len(lodo)} LODO slot(s), {len(donors)} distinct donor(s)"
+    if len(slots) != N_EXPECTED_FITS:
+        return False, f"{len(slots)} unique slots"
+    return True, ""
+
+
+def _check_exact_grid(coefs, recon) -> tuple[str, bool, str]:
+    """Per (arm, target): EXACTLY 7 coefficient ROWS and 7 UNIQUE slots — 3 all_donor OFAT +
+    4 distinct LODO donors — and the reconstruction ships those SAME 7 fit slots per arm.
+
+    A set-only check is not enough: it passes a DUPLICATED row (8 rows, 7 unique slots) and an
+    EMPTY parquet (no keys, so nothing disagrees) vacuously. So the ROW COUNT is compared to 7
+    and the key set is required non-empty, on both the coefficient and the reconstruction table.
+    """
+    rows_by_key: dict[tuple, list] = {}
+    for r in coefs:
+        k = (str(r["arm_key"]), str(r["target_id"]))
+        rows_by_key.setdefault(k, []).append(
+            (str(r["donor_scope"]), str(r["effect_layer"]), str(r["model_config"])))
+    if not rows_by_key:
+        return ("exactly 7 OFAT slots per (arm, target); reconstruction ships the same 7",
+                False, "the coefficient parquet is EMPTY — a set-only check would pass it "
+                       "vacuously, so the empty table is refused")
+
+    bad = []
+    coef_slots_by_arm: dict[str, set] = {}
+    for k, slot_list in rows_by_key.items():
+        coef_slots_by_arm.setdefault(k[0], set()).update(slot_list)
+        if len(slot_list) != N_EXPECTED_FITS:
+            bad.append((k, f"{len(slot_list)} coefficient ROWS (want {N_EXPECTED_FITS}); "
+                           f"{len(set(slot_list))} unique"))
+            continue
+        ok, why = _slots_ok(set(slot_list))
+        if not ok:
+            bad.append((k, why))
+
+    # the reconstruction must carry those SAME 7 fit slots per arm — no more, no fewer, once each
+    recon_by_arm: dict[str, list] = {}
+    for r in recon:
+        recon_by_arm.setdefault(str(r["arm_key"]), []).append(
+            (str(r["donor_scope"]), str(r["effect_layer"]), str(r["model_config"])))
+    for arm, want in coef_slots_by_arm.items():
+        got = recon_by_arm.get(arm, [])
+        if len(got) != N_EXPECTED_FITS or set(got) != want:
+            bad.append((arm, f"reconstruction slots {sorted(set(got))} (n={len(got)}) != "
+                             f"coefficient slots {sorted(want)}"))
+
+    return ("exactly 7 OFAT slots per (arm, target); reconstruction ships the same 7",
+            not bad, f"{bad[:3]}")
 
 
 def _check_support_replay(support, coefs) -> tuple[str, bool, str]:

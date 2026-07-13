@@ -36,10 +36,13 @@ import json
 import os
 from typing import Any, Optional
 
+from direct import target_identity as ti
+
 from . import config
 from . import disposition as D
 
 REPORT_SELF_HASH_FIELD = "report_sha256"
+BUNDLE_FILE = "arm_bundle.json"
 
 
 def canonical_json(obj: Any) -> str:
@@ -308,6 +311,19 @@ def check_bundle_files(report: dict[str, Any], bundle_dir: str) -> dict[str, str
             "the report carries no artifact_sha256 map, so there is nothing tying it to the "
             "bytes of any particular bundle")
 
+    # THE KEY SET MUST BE EXACTLY THE AUTHORITATIVE INVENTORY. Not a subset that happens to be
+    # non-empty: a resealed report that dropped target_identity.json (or added a decoy) would
+    # otherwise pass by covering only the files it kept. Missing AND extra are both refused.
+    required = set(config.DIRECT_BUNDLE_FILES)
+    keys = set(admitted)
+    if keys != required:
+        raise D.RefusalError(
+            D.REFUSE_BUNDLE_SWAPPED_FILE,
+            f"the report's artifact_sha256 key set is not the authoritative bundle inventory: "
+            f"missing {sorted(required - keys)}, extra {sorted(keys - required)}. Every "
+            f"required file — including {config.TARGET_IDENTITY_FILE} — must be admitted, and "
+            "nothing else may be")
+
     missing = [f for f in config.DIRECT_BUNDLE_FILES
                if not os.path.exists(os.path.join(bundle_dir, f))]
     if missing:
@@ -335,7 +351,41 @@ def check_bundle_files(report: dict[str, Any], bundle_dir: str) -> dict[str, str
             f"{len(swapped)} file(s) in the Direct bundle do not hash to the values W10 "
             f"admitted: {swapped[:3]}. The bundle on disk is not the bundle that was "
             "admitted — a directory keeps its name when its contents are edited")
+
+    # THE REPORT'S arm_bundle_run_id must equal BOTH the directory name AND arm_bundle.json's
+    # own id. A report about bundle B beside directory A is refused even if every file hashes
+    # (they can't, but the identity check is the belt to the hash's braces).
+    claimed_id = bound.get("arm_bundle_run_id")
+    dir_id = os.path.basename(os.path.normpath(bundle_dir))
+    with open(os.path.join(bundle_dir, BUNDLE_FILE)) as fh:
+        bundle_doc = json.load(fh)
+    doc_id = bundle_doc.get("arm_bundle_run_id")
+    if claimed_id != dir_id or claimed_id != doc_id:
+        raise D.RefusalError(
+            D.REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE,
+            f"the report's arm_bundle_run_id ({str(claimed_id)[:16]}) does not match the "
+            f"bundle directory ({dir_id[:16]}) and/or arm_bundle.json ({str(doc_id)[:16]}). "
+            "A report about a different bundle beside this directory is refused")
     return observed
+
+
+def target_identity_canonical(bundle_dir: str) -> str:
+    """The CANONICAL hash of the bound target_identity.json — through Direct's own loader.
+
+    W10 re-hashes every shipped file's RAW bytes; the canonical hash is a separate statement
+    the prepare side also records (``direct.target_identity`` computes it with
+    ``direct.hashing.content_hash``). Computing it HERE with the same loader is what lets a run
+    prove the identity it is admitting is the identity its inputs were prepared against — not
+    merely the same file NAME. A malformed artifact is a typed refusal, not a raw exception.
+    """
+    try:
+        return ti.load(bundle_dir)["canonical_sha256"]
+    except ti.TargetIdentityError as e:
+        raise D.RefusalError(
+            D.REFUSE_BUNDLE_INCOMPLETE,
+            f"the admitted bundle's {config.TARGET_IDENTITY_FILE} does not verify through "
+            f"Direct's shared loader ({e}). W10 admitted its bytes, but the bound identity is "
+            "the artifact this lane joins on, and it must parse") from e
 
 
 def admit(*, bundle_dir: str, report_path: Optional[str], run_lock_sha256: str,
@@ -355,6 +405,7 @@ def admit(*, bundle_dir: str, report_path: Optional[str], run_lock_sha256: str,
     check_lock(report, bundle_dir, run_lock_sha256)     # three-way
     lane = check_lane(report, run_lane)
     observed = check_bundle_files(report, bundle_dir)
+    ti_canonical = target_identity_canonical(bundle_dir)
 
     bound = report.get("bound_artifact") or {}
     return {
@@ -380,5 +431,12 @@ def admit(*, bundle_dir: str, report_path: Optional[str], run_lock_sha256: str,
         "n_arm_slots": bound.get("n_arm_slots"),
         "n_arm_rows": bound.get("n_arm_rows"),
         "direct_bundle_artifact_sha256": observed,
+        "direct_bundle_artifact_map_sha256": content_sha256(observed),
+        "target_identity_admitted_sha256": observed.get(config.TARGET_IDENTITY_FILE),
+        # BOTH hashes of the bound identity: the RAW file bytes (above, what W10 re-hashed) and
+        # the CANONICAL doc hash — the same function the prepare side uses, so the two can be
+        # compared byte-for-byte when a run cross-checks that the inputs were prepared from the
+        # bundle it is admitting (see prepared.load_and_verify's A-vs-B binding).
+        "target_identity_canonical_sha256": ti_canonical,
         "bundle_is_real_and_admitted": True,
     }

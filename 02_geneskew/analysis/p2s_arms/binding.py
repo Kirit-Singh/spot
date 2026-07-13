@@ -398,4 +398,10 @@ def bound_block(bound: dict[str, Any]) -> dict[str, Any]:
         "arm_rows_sha256": bound["arm_rows_sha256"],
         "scorer_view_sha256": bound["scorer_view_sha256"],
         "direct_bundle_artifact_sha256": a["direct_bundle_artifact_sha256"],
+        # the WHOLE-BUNDLE fingerprint and BOTH identity hashes, so a run can prove its inputs
+        # were prepared from the exact bundle it is admitting — the A-vs-B binding, field for
+        # field, not a subset that a fail-open comparison would wave through.
+        "direct_bundle_artifact_map_sha256": a["direct_bundle_artifact_map_sha256"],
+        "target_identity_admitted_sha256": a["target_identity_admitted_sha256"],
+        "target_identity_canonical_sha256": a["target_identity_canonical_sha256"],
     }

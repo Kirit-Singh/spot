@@ -156,8 +156,13 @@ def build(args, *, view=None) -> dict[str, Any]:
             release_path=args.stage1_release, kind=args.release_kind)
 
     # DERIVED from the release, never a copied count. Th9 is absent because the release says
-    # it is not base_portable — not because a constant here says "10".
-    programs = list(view["admitted_program_ids"])
+    # it is not base_portable — not because a constant here says "10". The activation covariate
+    # IS base_portable and so is admitted, but it is NOT an arm (an arm for it would regress the
+    # program on itself); scheduling a unit for it would queue a guaranteed refusal and miscount
+    # the work. So it is excluded from the arm units and recorded as a typed non-arm program.
+    all_admitted = list(view["admitted_program_ids"])
+    programs = [p for p in all_admitted if p != config.ACTIVATION_PROGRAM_ID]
+    non_arm_programs = [p for p in all_admitted if p == config.ACTIVATION_PROGRAM_ID]
 
     manifest_path = os.path.join(args.inputs, "p2s_inputs.json")
     if not os.path.exists(manifest_path):
@@ -201,13 +206,22 @@ def build(args, *, view=None) -> dict[str, Any]:
         "worker_profile": {
             "max_condition_workers": 2,
             "preferred_condition_workers": 1,
-            "why": ("one condition worker reuses this condition's cells.npz and effects.npz "
-                    "serially across its programs; a second worker re-reads the same 396k "
-                    "cell matrix for no scientific gain"),
-            "cells_and_effects_are_shared_within_a_condition": True,
+            "why": ("each program-condition unit is a SEPARATE PROCESS that re-reads the "
+                    "prepared cells.npz/effects.npz from disk — the matrices are not shared "
+                    "in memory across units. Preferring ONE condition worker keeps at most "
+                    "one 396k-cell read in flight at a time; a second doubles peak I/O and RSS "
+                    "for no scientific gain, and more than two is refused"),
+            "units_are_separate_processes": True,
+            "matrices_shared_in_memory_across_units": False,
         },
         "counts_toward_completeness": False,
         "n_admitted_programs": view["n_admitted_programs"],
+        # the activation covariate is admitted (base_portable) but is NOT an arm and gets no
+        # unit; recorded as a typed non-arm exclusion so the counts are auditable.
+        "n_arm_programs": len(unit_list),
+        "non_arm_programs": non_arm_programs,
+        "activation_program_excluded_as_non_arm":
+            config.ACTIVATION_PROGRAM_ID in non_arm_programs,
         "scorer_view_sha256": view["scorer_view_sha256"],
         "p2s_inputs_run_id": inputs_manifest.get("p2s_inputs_run_id"),
         "arm_bundle_run_id": admission.get("arm_bundle_run_id"),

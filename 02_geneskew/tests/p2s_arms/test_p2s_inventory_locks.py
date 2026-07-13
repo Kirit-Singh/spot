@@ -117,6 +117,78 @@ def test_MUTATION_an_arm_with_nothing_evaluable_is_REFUSED(tmp_path, view):
 
 
 # --------------------------------------------------------------------------- #
+# TARGET IDENTITY — verified against the COMPLETE scored set, then subset to the arm.
+# --------------------------------------------------------------------------- #
+def _set_non_evaluable(bundle_dir, targets):
+    """Make some targets non-evaluable on BOTH sign arms (kept symmetric)."""
+    path = os.path.join(bundle_dir, "arms.parquet")
+    df = pd.read_parquet(path)
+    df.loc[df["target_id"].astype(str).isin(targets), "evaluable"] = False
+    df.to_parquet(path, index=False)
+
+
+def test_identity_is_verified_against_the_WHOLE_scored_set_then_subset_to_the_arm(tmp_path,
+                                                                                  view):
+    """target_identity.json covers the whole condition; a non-evaluable scored target STAYS in it.
+
+    Verifying identity against only the arm's evaluable subset would read every non-evaluable
+    scored target as an 'extraneous' identity row and refuse every real bundle.
+    """
+    d = fx.write_full_bundle(str(tmp_path / "b"), view)
+    _set_non_evaluable(d, ["T05", "T06", "T07", "T08", "T09", "T10", "T11"])
+
+    inv = direct_inventory.bind(d, program_id=PROGRAM, condition=CONDITION)
+    # the arm's evaluable set shrank, but identity still covers ALL scored targets
+    assert set(inv["targets"]) == {"T00", "T01", "T02", "T03", "T04"}
+    assert inv["n_scored_targets"] == len(fx.target_ids())        # the whole bundle
+    assert inv["n_scored_targets"] > len(inv["targets"])          # strictly larger than the arm
+
+
+def test_a_symbol_target_self_gene_PRESENT_and_masked_is_OK(tmp_path, view):
+    d = fx.write_full_bundle(str(tmp_path / "b"), view, symbol_namespace_target=True)
+    xw = {"T00": {fx.gene_ids()[0]}}       # names T00's own masked coordinate
+    inv = direct_inventory.bind(d, program_id=PROGRAM, condition=CONDITION,
+                                readout_crosswalk=xw)
+    assert inv["n_symbol_namespace_targets"] == 1
+
+
+def test_a_symbol_target_self_gene_ABSENT_from_the_readout_is_OK(tmp_path, view):
+    """A symbol the DE crosswalk does not name has no self-gene coordinate; nothing can leak."""
+    d = fx.write_full_bundle(str(tmp_path / "b"), view, symbol_namespace_target=True)
+    xw = {"SOME_OTHER_SYMBOL": {fx.gene_ids()[3]}}      # T00 is absent -> proven absent
+    inv = direct_inventory.bind(d, program_id=PROGRAM, condition=CONDITION,
+                                readout_crosswalk=xw)
+    assert inv["n_symbol_namespace_targets"] == 1
+
+
+def test_a_symbol_target_PRESENT_but_UNMASKED_is_REFUSED(tmp_path, view):
+    d = fx.write_full_bundle(str(tmp_path / "b"), view, symbol_namespace_target=True)
+    xw = {"T00": {fx.gene_ids()[5]}}       # a readout coordinate T00 does NOT mask
+    with pytest.raises(D.RefusalError) as e:
+        direct_inventory.bind(d, program_id=PROGRAM, condition=CONDITION,
+                              readout_crosswalk=xw)
+    assert e.value.reason == D.REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED
+
+
+def test_a_symbol_target_AMBIGUOUS_in_the_crosswalk_is_REFUSED_as_unresolved(tmp_path, view):
+    d = fx.write_full_bundle(str(tmp_path / "b"), view, symbol_namespace_target=True)
+    xw = {"T00": {fx.gene_ids()[0], fx.gene_ids()[1]}}      # names two coordinates
+    with pytest.raises(D.RefusalError) as e:
+        direct_inventory.bind(d, program_id=PROGRAM, condition=CONDITION,
+                              readout_crosswalk=xw)
+    assert e.value.reason == D.REFUSE_SELF_GENE_UNRESOLVED
+
+
+def test_a_symbol_target_with_NO_crosswalk_is_REFUSED_as_unresolved(tmp_path, view):
+    """namespace=gene_symbol alone is not proof no self-gene can leak."""
+    d = fx.write_full_bundle(str(tmp_path / "b"), view, symbol_namespace_target=True)
+    with pytest.raises(D.RefusalError) as e:
+        direct_inventory.bind(d, program_id=PROGRAM, condition=CONDITION,
+                              readout_crosswalk=None)
+    assert e.value.reason == D.REFUSE_SELF_GENE_UNRESOLVED
+
+
+# --------------------------------------------------------------------------- #
 # TWO ENVIRONMENTS, TWO LOCKS.
 # --------------------------------------------------------------------------- #
 def test_MUTATION_a_MISSING_p2s_runtime_lock_is_REFUSED():

@@ -117,11 +117,25 @@ REFUSE_FIXTURE_PATH = "a_fixture_or_synthetic_path_may_not_feed_a_production_run
 REFUSE_CONDITION_MISMATCH = "the_condition_is_not_the_admitted_bundles_condition"
 REFUSE_PROGRAM_SET_MISMATCH = "the_score_table_does_not_cover_the_admitted_program_set"
 REFUSE_SUBSAMPLE_IN_PRODUCTION = "a_subsampled_cell_matrix_may_not_feed_a_production_run"
+REFUSE_NONCANONICAL_SEED = "a_release_run_must_use_the_pinned_seed"
 
 REFUSAL_REASONS = REFUSAL_REASONS + (
     REFUSE_INPUT_NOT_PINNED, REFUSE_DUPLICATE_BARCODE, REFUSE_MISSING_BARCODE,
     REFUSE_NAMESPACE_DRIFT, REFUSE_FIXTURE_PATH, REFUSE_CONDITION_MISMATCH,
-    REFUSE_PROGRAM_SET_MISMATCH, REFUSE_SUBSAMPLE_IN_PRODUCTION,
+    REFUSE_PROGRAM_SET_MISMATCH, REFUSE_SUBSAMPLE_IN_PRODUCTION, REFUSE_NONCANONICAL_SEED,
+)
+
+
+# -- prepared-input verification (load_and_verify) ----------------------------- #
+REFUSE_PREPARED_MANIFEST_MISSING = "the_prepared_inputs_carry_no_manifest"
+REFUSE_PREPARED_FILE_SUBSTITUTED = "a_prepared_matrix_does_not_hash_to_its_manifest"
+REFUSE_PREPARED_PIN_DRIFT = "a_prepared_binding_does_not_equal_this_lanes_code_literal"
+REFUSE_PREPARED_CONDITION = "the_prepared_inputs_are_for_another_condition"
+REFUSE_PREPARED_LANE = "the_prepared_inputs_were_built_in_another_lane"
+
+REFUSAL_REASONS = REFUSAL_REASONS + (
+    REFUSE_PREPARED_MANIFEST_MISSING, REFUSE_PREPARED_FILE_SUBSTITUTED,
+    REFUSE_PREPARED_PIN_DRIFT, REFUSE_PREPARED_CONDITION, REFUSE_PREPARED_LANE,
 )
 
 
@@ -147,5 +161,10 @@ REFUSAL_REASONS = REFUSAL_REASONS + (
 
 # -- symbol-namespace target identity ------------------------------------------ #
 REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED = "a_symbol_target_is_in_the_readout_but_not_mapped"
+# The self-gene coordinate of a gene_symbol target cannot be RESOLVED: no DE gene_name/id
+# crosswalk was supplied, or the symbol names more than one readout coordinate. Namespace =
+# gene_symbol alone is not proof that no self-gene can leak, so this refuses rather than assume.
+REFUSE_SELF_GENE_UNRESOLVED = "a_symbol_targets_self_gene_coordinate_cannot_be_resolved"
 
-REFUSAL_REASONS = REFUSAL_REASONS + (REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED,)
+REFUSAL_REASONS = REFUSAL_REASONS + (
+    REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED, REFUSE_SELF_GENE_UNRESOLVED)

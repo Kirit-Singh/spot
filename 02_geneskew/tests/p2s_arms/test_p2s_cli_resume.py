@@ -175,7 +175,10 @@ def test_RESUME_a_DIFFERENT_DIRECT_BUNDLE_gets_a_different_run_id(tmp_path, view
 
     d2 = fx.write_full_bundle(str(tmp_path / "d2"), view, condition="Rest")
     r2 = fx.write_w10_report(str(tmp_path / "r2.json"), d2, view, condition="Rest")
-    b = fx.run_producer(tmp_path, view=view, bundle_dir=d2, w10_report=r2, inputs=inputs,
+    # eligibility is arm-specific (no global fallback), so a Rest arm needs Rest-keyed rows.
+    rest_inputs = dict(inputs, eligible=fx.make_eligible(
+        str(tmp_path / "elig_rest.parquet"), condition="Rest"))
+    b = fx.run_producer(tmp_path, view=view, bundle_dir=d2, w10_report=r2, inputs=rest_inputs,
                         arm_key=f"direct|{fx.PROGRAM}|increase|Rest")
 
     assert a["p2s_run_id"] != b["p2s_run_id"]

@@ -199,6 +199,16 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
             f"provenance, so it may run only in the {LANE_SYNTHETIC!r} lane. Everywhere "
             "else the pinned upstream model is not optional")
 
+    # A RELEASE run is pinned to seed 42. The seed goes into the run binding and hence the run
+    # id; a release run under a different seed would produce real-looking numbers a re-run
+    # cannot reproduce, so it is refused (and the verifier re-checks the recorded seed).
+    if lane in config.RELEASE_LANES and seed != config.RANDOM_STATE:
+        raise D.RefusalError(
+            D.REFUSE_NONCANONICAL_SEED,
+            f"a {lane!r} run was given seed {seed}, not the pinned {config.RANDOM_STATE}. The "
+            "seed is bound into the run identity; a release result under an off-pin seed is "
+            "one nobody else can reproduce")
+
     created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
     ref = bound["arm"]
 
@@ -259,6 +269,7 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
         "prepared_inputs": (prepared or {}).get("manifest_binding"),
         "support_rows_sha256": doc["support_rows_sha256"],
         "coefficient_rows_sha256": doc["coefficient_rows_sha256"],
+        "reconstruction_rows_sha256": doc["reconstruction_rows_sha256"],
         "seed": seed,
     }
     run_id, run_sha = emit.run_id_for(run_binding)
@@ -300,7 +311,8 @@ def build(args, *, fit=None) -> dict[str, Any]:
     ref = armref.parse(args.arm_key)
     # VERIFY THE PREPARED INPUTS before a number is computed: re-hash every matrix against its
     # manifest and re-check the pins it bound. A substituted matrix keeps its filename.
-    prep = prepared.load_and_verify(args.inputs, condition=ref.condition, lane=args.lane)
+    prep = prepared.load_and_verify(args.inputs, condition=ref.condition, lane=args.lane,
+                                    admitted=admitted["admission"])
 
     try:
         release, view = binding.load_release(
@@ -326,17 +338,37 @@ def build(args, *, fit=None) -> dict[str, Any]:
 
 
 def _prepared_binding(prep: dict[str, Any]) -> dict[str, Any]:
-    """The verified prepared-inputs binding that goes into the run identity."""
+    """The verified prepared-inputs binding that goes into the run identity.
+
+    It carries the WHOLE of what the prepared inputs were built from — not only their id — so a
+    swap of any source input, lock, or the Direct bundle/identity they were prepared against
+    MOVES the run id. Binding only the prepared id would let two source-different input sets
+    that happened to share an id (they cannot, but the binding must not rely on that) speak for
+    each other.
+    """
     m = prep["manifest"]
     return {
         "p2s_inputs_run_id": prep["p2s_inputs_run_id"],
         "condition": prep["condition"],
         "artifact_sha256": m.get("artifact_sha256"),
         "artifact_sha256_verified": True,
+        # the RAW public inputs, hashed from the bytes handed in at preparation
+        "raw_input_sha256": m.get("raw_input_sha256"),
         "stage1_scores_raw_sha256": prep["stage1_scores"].get("raw_sha256"),
         "stage1_scores_canonical_sha256":
             prep["stage1_scores"].get("canonical_scores_sha256"),
         "public_source": m.get("public_source"),
+        # BOTH environment locks the inputs were prepared under
+        "environment_locks": prep.get("environment_locks"),
+        # the COMPLETE Direct bundle + identity binding — the bundle A the inputs came from,
+        # cross-checked against the run's admitted bundle B in prepared.load_and_verify
+        "direct_binding": m.get("direct_binding"),
+        "target_identity": m.get("target_identity"),
+        "target_identity_raw_sha256": m.get("target_identity_raw_sha256"),
+        # the code that prepared the inputs, and that this binding was compared to literals
+        "code_identity": m.get("code_identity"),
+        "compared_to_code_literals": prep.get("compared_to_code_literals"),
+        "self_id_rederived": prep.get("self_id_rederived"),
     }
 
 

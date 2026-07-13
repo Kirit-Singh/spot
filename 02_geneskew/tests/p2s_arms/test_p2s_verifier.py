@@ -165,6 +165,150 @@ def test_MUTATION_a_missing_file_REJECTS_rather_than_passing_vacuously(run_dir):
     assert rep["verdict"] == V.REJECT
 
 
+def _failed(rep, needle):
+    return any(needle in c["check"] for c in rep["checks"] if c["status"] == "fail")
+
+
+# --------------------------------------------------------------------------- #
+# THE GRID — exactly 7 rows AND 7 unique slots (3 all_donor + 4 distinct LODO donors),
+# and the reconstruction ships those same 7 fit slots. A set-only check misses duplicates
+# and passes an empty table vacuously.
+# --------------------------------------------------------------------------- #
+def test_MUTATION_a_DUPLICATED_coefficient_row_is_REJECTED(run_dir):
+    """8 rows / 7 unique slots must fail: a set-only grid check would pass it."""
+    path = os.path.join(run_dir, "p2s_coefficients.parquet")
+    df = pd.read_parquet(path)
+    df = pd.concat([df, df.iloc[[0]]], ignore_index=True)     # duplicate one (arm, target, slot)
+    df.to_parquet(path, index=False)
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "7 OFAT slots")
+
+
+def test_MUTATION_an_EMPTY_coefficient_table_is_REJECTED_not_vacuous(run_dir):
+    """No keys is not 'nothing wrong'; the empty table is refused explicitly."""
+    path = os.path.join(run_dir, "p2s_coefficients.parquet")
+    df = pd.read_parquet(path)
+    df.iloc[0:0].to_parquet(path, index=False)                # same columns, zero rows
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "7 OFAT slots")
+
+
+def test_MUTATION_a_MISSING_fit_slot_is_REJECTED(run_dir):
+    """Drop one LODO donor's rows: 6 rows / 3 LODO donors per (arm, target) must fail."""
+    path = os.path.join(run_dir, "p2s_coefficients.parquet")
+    df = pd.read_parquet(path)
+    lodo = sorted(s for s in df["donor_scope"].unique() if str(s).startswith("lodo_"))
+    df = df[df["donor_scope"] != lodo[0]]
+    df.to_parquet(path, index=False)
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "7 OFAT slots")
+
+
+def test_MUTATION_an_EXTRA_fit_slot_is_REJECTED(run_dir):
+    """Add the forbidden log_fc+pca_off Cartesian cell: 8 unique slots must fail."""
+    path = os.path.join(run_dir, "p2s_coefficients.parquet")
+    df = pd.read_parquet(path)
+    row = df.iloc[0].to_dict()
+    row.update(effect_layer="log_fc", model_config="pca_off", donor_scope="all_donor")
+    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    df.to_parquet(path, index=False)
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "7 OFAT slots")
+
+
+# --------------------------------------------------------------------------- #
+# THE KEY UNIVERSE — top-level program/condition/arm fields RE-DERIVE from the row keys.
+# --------------------------------------------------------------------------- #
+def test_MUTATION_dropping_ALL_sibling_rows_is_REJECTED(run_dir):
+    """One arm with no sibling rows is not a valid pair — refused, not passed vacuously."""
+    for f in ("p2s_arm_support.parquet", "p2s_coefficients.parquet",
+              "p2s_reconstruction.parquet"):
+        path = os.path.join(run_dir, f)
+        df = pd.read_parquet(path)
+        df = df[df["desired_change"] != "decrease"]           # strip every sibling row
+        df.to_parquet(path, index=False)
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "re-derive from the row keys")
+
+
+def test_MUTATION_a_THIRD_program_in_the_rows_is_REJECTED(run_dir):
+    """More than one program among the row keys must fail: this lane fits ONE."""
+    path = os.path.join(run_dir, "p2s_arm_support.parquet")
+    df = pd.read_parquet(path)
+    row = df.iloc[0].to_dict()
+    row.update(arm_key="direct|th1_like|increase|Stim48hr", program_id="th1_like")
+    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    df.to_parquet(path, index=False)
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "re-derive from the row keys")
+
+
+# --------------------------------------------------------------------------- #
+# CONCRETE reproducibility attacks that a self-hash-only verifier ADMITTED.
+# --------------------------------------------------------------------------- #
+def test_MUTATION_a_NON_PROJECTED_support_column_is_caught_by_the_raw_rehash(run_dir):
+    """primary_abs_coefficient is NOT in the canonical projection; editing it once ADMITTED.
+
+    Changing it without resealing leaves every canonical hash intact, so only a RAW re-hash of
+    the emitted file against the provenance artifact map catches it. This is the exact attack
+    the neutral check reproduced (support value -> 987654.0, no hashes touched, still admit).
+    """
+    from p2s_arms import emit
+    # the column really is outside the canonical support projection (or the test is moot)
+    assert "primary_abs_coefficient" not in emit.canonical_support(
+        [{"arm_key": "a", "target_id": "t", "n_runs": 1, "primary_coefficient": 1.0,
+          "primary_sign": "supportive", "opposed": False,
+          "sens_log_fc_sign_concordance": None, "sens_pca_off_sign_concordance": None,
+          "lodo_sign_concordance": None}])[0]
+
+    path = os.path.join(run_dir, "p2s_arm_support.parquet")
+    df = pd.read_parquet(path)
+    df.loc[0, "primary_abs_coefficient"] = 987654.0
+    df.to_parquet(path, index=False)
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "RAW-REHASHES to the provenance artifact map")
+
+
+def test_MUTATION_a_FORGED_top_level_condition_is_REJECTED(run_dir):
+    """p2s_support.json.condition -> FORGED_CONDITION without resealing once ADMITTED."""
+    path = os.path.join(run_dir, "p2s_support.json")
+    doc = json.load(open(path))
+    doc["condition"] = "FORGED_CONDITION"
+    json.dump(doc, open(path, "w"))
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    # caught two ways: the raw re-hash of the edited doc, AND the row-key re-derivation
+    assert _failed(rep, "RAW-REHASHES to the provenance artifact map")
+    assert _failed(rep, "re-derive from the row keys")
+
+
+def test_the_RECORDED_run_seed_is_checked_not_only_the_declared_wrapper_seed(run_dir):
+    """A run fitted under an off-pin seed but declaring 42 in its method block is caught."""
+    path = os.path.join(run_dir, "p2s_provenance.json")
+    prov = json.load(open(path))
+    prov["run_binding"]["seed"] = 7
+    json.dump(prov, open(path, "w"))
+
+    rep = V.verify(run_dir)
+    assert rep["verdict"] == V.REJECT
+    assert _failed(rep, "RUN recorded the pinned seed")
+
+
 # --------------------------------------------------------------------------- #
 # The verifier's own independence.
 # --------------------------------------------------------------------------- #

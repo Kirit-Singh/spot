@@ -150,7 +150,7 @@ def test_masks_and_eligibility_come_from_the_ADMITTED_BUNDLE_not_recomputed(real
     assert set(got["target_id"]) <= set(src["target_id"].astype(str))
 
     elig = pd.read_parquet(out["paths"]["eligible"])
-    assert set(elig["state"]) <= set(config.ELIGIBLE_STATES)
+    assert set(elig["state"]) <= set(config.QC_PASS_STATES)
 
 
 def test_the_manifest_BINDS_hashes_dims_joins_programs_condition_and_code(real_inputs,
@@ -162,7 +162,10 @@ def test_the_manifest_BINDS_hashes_dims_joins_programs_condition_and_code(real_i
     assert m["dims"]["n_cells"] > 0 and m["dims"]["n_genes"] > 0
     assert m["condition"] == CONDITION
     assert sorted(m["program_ids"]) == m["program_ids"]
-    assert config.ACTIVATION_PROGRAM_ID in m["program_ids"]
+    # the activation covariate is SCORED (for the design) but is NOT an arm: it appears in the
+    # score programs and is excluded from the arm programs, so no run queues a guaranteed refusal.
+    assert config.ACTIVATION_PROGRAM_ID in m["score_program_ids"]
+    assert config.ACTIVATION_PROGRAM_ID not in m["program_ids"]
     assert m["code_identity"]["commit"]
     assert m["direct_binding"]["solver_lock_sha256"].startswith("2983d140")
     assert m["direct_binding"]["w10_verdict"] == "ADMIT"
@@ -342,36 +345,21 @@ def test_the_CLI_refuses_with_exit_2_and_a_named_reason(real_inputs, tmp_path, m
     assert err["reason"] == D.REFUSE_INPUT_NOT_PINNED
 
 
-def test_MUTATION_a_null_target_whose_SYMBOL_is_in_the_readout_is_REFUSED(
-        tmp_path, view, bundle_dir, w10_report, p2s_lock, monkeypatch):
-    """A symbol the crosswalk contains but did not map must be resolved or refused —
-    never left with its self-gene unmasked. (Real absentees: MTRNR2L1/4/8, OCLM.)"""
+def test_identity_comes_from_the_BOUND_target_identity_json_not_inferred(real_inputs,
+                                                                          tmp_path):
+    """A symbol-namespace target's null target_ensembl is legitimate BY DECLARATION.
+
+    The producer's target_identity.json declares each target's namespace; the shared loader
+    verifies a gene_symbol row carries no Ensembl id. So a null is authoritative, never
+    inferred from a mask or a target_id heuristic.
+    """
+    m = _build(real_inputs, tmp_path)["manifest"]
+    assert m["identity_inferred_from_mask_or_target_id"] is False
+    ti = m["target_identity"]
+    assert ti["schema_version"] == "spot.stage02_target_identity.v1"
+    assert len(ti["raw_sha256"]) == 64 and len(ti["canonical_sha256"]) == 64
+    assert ti["observed_perturbation_modality"] == "CRISPRi_knockdown"
+    # the eligible rows carry the DECLARED namespace, not a guess
     import pandas as pd
-    from p2s_arms import prepare_inputs
-
-    # blank one target's target_ensembl in the MAIN mask -> null identity
-    mpath = os.path.join(bundle_dir, "masks.parquet")
-    m = pd.read_parquet(mpath)
-    victim = m.loc[m["estimate_type"] == "main", "target_id"].iloc[0]
-    m.loc[m["target_id"] == victim, "target_ensembl"] = None
-    m.loc[m["target_id"] == victim, "masked_gene_ensembl"] = "ENSG00000000000"  # not self
-    m.to_parquet(mpath, index=False)
-    w10_report = fx.write_w10_report(str(tmp_path / "w10.json"), bundle_dir, view)
-
-    ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
-    scores = fx.write_stage1_scores(str(tmp_path / "s.parquet"), ntc,
-                                    view["admitted_program_ids"])
-    # the readout NAMES a symbol equal to the victim target_id -> present but unmapped
-    de = fx.write_de_readout(str(tmp_path / "de.h5ad"), fx.target_ids(),
-                             symbols=[str(victim)] + fx.CELL_SYMBOLS[1:],
-                             gene_ids=[f"ENSG{i:011d}" for i in range(len(fx.CELL_SYMBOLS))])
-    monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
-    monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
-    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
-    _pin_canonical(scores, monkeypatch)
-
-    ri = {"ntc": ntc, "scores": scores, "de": de, "bundle": bundle_dir,
-          "w10": w10_report, "view": view, "p2s_lock": p2s_lock}
-    with pytest.raises(D.RefusalError) as e:
-        _build(ri, tmp_path)
-    assert e.value.reason == D.REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED
+    elig = pd.read_parquet(_build(real_inputs, tmp_path)["paths"]["eligible"])
+    assert "target_id_namespace" in elig.columns

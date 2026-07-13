@@ -58,7 +58,7 @@ RECON_COLUMNS = (
     "effect_layer", "model_config", "donor_scope",
     "reconstruction_gene_cv_test_r2_mean", "reconstruction_gene_cv_test_r2_median",
     "reconstruction_gene_cv_test_spearman_mean", "reconstruction_gene_cv_train_r2_mean",
-    "n_folds", "cv_label", "cv_semantics", "seconds", "metrics_are_sign_invariant",
+    "n_folds", "cv_label", "cv_semantics", "metrics_are_sign_invariant",
 )
 
 
@@ -98,6 +98,7 @@ def method_block(bound: dict[str, Any]) -> dict[str, Any]:
         "solver": config.SOLVER,
         "normal_equations_permitted": config.NORMAL_EQUATIONS_PERMITTED,
         "stage1_values_read_by_barcode_never_recomputed": config.STAGE1_VALUES_READ_BY_BARCODE,
+        "cell_matrix_semantics": dict(config.CELL_MATRIX_SEMANTICS),
         "activation_program_id": config.ACTIVATION_PROGRAM_ID,
         "arms_are_sign_transforms_of_one_base_effect": True,
         "arm_key_carries_pole_or_role": False,
@@ -138,6 +139,8 @@ def support_document(*, bound: dict[str, Any], support_rows: list[dict[str, Any]
         "gene_universe": universe,
         "support_rows_sha256": content_hash(canonical_support(support_rows)),
         "coefficient_rows_sha256": content_hash(canonical_coefficients(coef_rows)),
+        # EVERY scientific table is hashed into the doc — a recon row cannot mutate silently.
+        "reconstruction_rows_sha256": content_hash(canonical_reconstruction(recon_rows)),
     }
 
 
@@ -176,6 +179,25 @@ def canonical_support(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "lodo_sign_concordance": _num(r["lodo_sign_concordance"]),
         })
     out.sort(key=lambda r: (r["arm_key"], r["target_id"]))
+    return out
+
+
+def canonical_reconstruction(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The reconstruction metrics, hashable. NO wall-clock seconds — that is not science."""
+    out = [{
+        "arm_key": str(r["arm_key"]), "effect_layer": str(r["effect_layer"]),
+        "model_config": str(r["model_config"]), "donor_scope": str(r["donor_scope"]),
+        "reconstruction_gene_cv_test_r2_mean": _num(r["reconstruction_gene_cv_test_r2_mean"]),
+        "reconstruction_gene_cv_test_r2_median":
+            _num(r["reconstruction_gene_cv_test_r2_median"]),
+        "reconstruction_gene_cv_test_spearman_mean":
+            _num(r["reconstruction_gene_cv_test_spearman_mean"]),
+        "reconstruction_gene_cv_train_r2_mean":
+            _num(r["reconstruction_gene_cv_train_r2_mean"]),
+        "n_folds": int(r["n_folds"]),
+    } for r in rows]
+    out.sort(key=lambda r: (r["arm_key"], r["donor_scope"], r["effect_layer"],
+                            r["model_config"]))
     return out
 
 
