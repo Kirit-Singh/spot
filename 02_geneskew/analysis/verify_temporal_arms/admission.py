@@ -213,8 +213,9 @@ def _stage1_binding(f: Failures, sb: Any, bound) -> None:
             f"view hashes to {bound.scorer_view_sha256}")
     f.check("the_stage1_release_self_identity_rederives",
             sb.get("release_self_sha256") == bound.release_self_sha256, "release",
-            f"binds {sb.get('release_self_sha256')}, the Stage-1 release on disk hashes to "
-            f"{bound.release_self_sha256}")
+            f"binds {sb.get('release_self_sha256')}, the Stage-1 release's native "
+            f"self_release_sha256 re-derives to {bound.release_self_sha256}. The complete "
+            f"file bytes are bound separately as {bound.release_raw_sha256}")
 
     # THE SCALAR: one number for the whole admitted axis. "Is this the same axis?"
     f.check("the_scalar_scorer_projection_identity_rederives",
@@ -401,5 +402,4 @@ def write_envelope(*, report: dict[str, Any], inventory: Optional[dict[str, Any]
     with open(path, "wb") as fh:
         fh.write(canonical_json(envelope).encode("utf-8"))
     return os.path.relpath(path, root) if not admission_out else path
-
 

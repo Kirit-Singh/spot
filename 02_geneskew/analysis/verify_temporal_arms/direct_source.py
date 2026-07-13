@@ -38,6 +38,7 @@ checking that a release is self-consistent and checking that it is true.
 from __future__ import annotations
 
 import json
+import math
 import os
 from typing import Any, Optional
 
@@ -77,22 +78,82 @@ ENDPOINT_SOURCE_REQUIRED = "two_admitted_direct_all_arm_bundles"
 DESIRED_CHANGES = ("increase", "decrease")
 SIGN = {"increase": 1, "decrease": -1}
 
+# THE EXACT W10-ADMITTED ARM TABLE. Restated here rather than imported from W10: this lane
+# independently reopens the same artifact and must hash the same canonical VIEW of its rows,
+# not whatever dict shape pandas happens to return. ``arm_bundle_run_id`` is stamped after
+# the row content has been named and is therefore present in parquet but excluded from the
+# row-content hash.
+ARM_ROW_COLUMNS = (
+    "arm_key", "program_id", "desired_change", "condition", "target_id",
+    "base_delta", "value", "rank", "evaluable", "projection_status",
+    "base_state", "base_passed", "n_panel_surviving", "n_control_surviving",
+)
+ARM_ROW_EXTRA_COLUMNS = ("arm_bundle_run_id",)
+_STR_COLS = ("arm_key", "program_id", "desired_change", "condition", "target_id",
+             "projection_status", "base_state")
+_NUM_COLS = ("base_delta", "value")
+_INT_COLS = ("rank", "n_panel_surviving", "n_control_surviving")
+_BOOL_COLS = ("evaluable", "base_passed")
+
 
 def _json(path: str) -> dict[str, Any]:
     with open(path) as fh:
         return json.load(fh)
 
 
-def _rows(bundle_dir: str) -> list[dict[str, Any]]:
-    """The arm rows. A NaN round-tripped through parquet is a null, not a number."""
+def _direct_num(x: Any) -> Optional[float]:
+    """W10's exact finite-float projection for Direct scientific values."""
+    if x is None:
+        return None
+    try:
+        value = float(x)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(value) or math.isinf(value) else value
+
+
+def _direct_int(x: Any) -> Optional[int]:
+    """W10's exact parquet integer projection: an integer value or null."""
+    value = _direct_num(x)
+    return None if value is None else int(value)
+
+
+def canonical_rows(rows) -> list[dict[str, Any]]:
+    """The W10-admitted canonical row projection, independently reimplemented."""
+    out = []
+    for source in rows:
+        row = {column: str(source[column]) for column in _STR_COLS}
+        row.update({column: _direct_num(source[column]) for column in _NUM_COLS})
+        row.update({column: _direct_int(source[column]) for column in _INT_COLS})
+        row.update({column: bool(source[column]) for column in _BOOL_COLS})
+        out.append(row)
+    out.sort(key=lambda row: (row["arm_key"], row["target_id"]))
+    return out
+
+
+def rows_sha256(rows) -> str:
+    """Hash exactly the Direct row content W10 admitted, never the stamped run id."""
+    return content_hash(canonical_rows(rows))
+
+
+def _endpoint_state(row: dict[str, Any]) -> dict[str, Any]:
+    """The endpoint fields shared by the two arms, with parquet nulls normalized."""
+    return {
+        "evaluable": bool(row.get("evaluable")),
+        "base_passed": bool(row.get("base_passed")),
+        "projection_status": str(row.get("projection_status")),
+        "base_state": str(row.get("base_state")),
+        "n_panel_surviving": _direct_int(row.get("n_panel_surviving")),
+        "n_control_surviving": _direct_int(row.get("n_control_surviving")),
+    }
+
+
+def _rows(bundle_dir: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """The arm rows plus the shipped parquet schema, before any projection."""
     import pandas as pd
 
-    out = pd.read_parquet(os.path.join(bundle_dir, ROWS_FILE)).to_dict("records")
-    for r in out:
-        for k, v in list(r.items()):
-            if isinstance(v, float) and v != v:
-                r[k] = None
-    return out
+    frame = pd.read_parquet(os.path.join(bundle_dir, ROWS_FILE))
+    return frame.to_dict("records"), list(frame.columns)
 
 
 def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], *,
@@ -159,8 +220,15 @@ def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], 
             f"solved under {str(env_sha)[:16]}…, not the authoritative "
             f"{AUTHORITATIVE_ENV_LOCK_SHA256[:16]}…")
 
-    rows = _rows(str(bundle_dir))
-    rows_sha = content_hash(rows)
+    rows, columns = _rows(str(bundle_dir))
+    allowed_columns = set(ARM_ROW_COLUMNS) | set(ARM_ROW_EXTRA_COLUMNS)
+    if not f.check("the_direct_rows_use_the_exact_w10_admitted_schema",
+                   set(columns) == allowed_columns, where,
+                   f"unexpected={sorted(set(columns) - allowed_columns)}; "
+                   f"missing={sorted(set(ARM_ROW_COLUMNS) - set(columns))}"):
+        return None
+
+    rows_sha = rows_sha256(rows)
     declared_rows = rb.get("arm_rows_sha256") or doc.get("arm_rows_sha256")
     f.check("the_direct_rows_hash_to_what_the_bundle_declares",
             declared_rows == rows_sha, where,
@@ -226,7 +294,7 @@ def _w10(f, condition: str, bundle_dir: str, w10_path: Optional[str],
 
 
 def _dedupe(f, rows: list[dict[str, Any]], where: str) -> dict[str, dict[str, Any]]:
-    """increase/decrease -> ONE base delta per (program, target), and they must AGREE."""
+    """Two real ``value`` rows -> one complete Direct endpoint, proved to agree."""
     grouped: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for r in rows:
         key = (str(r.get("program_id")), str(r.get("target_id")))
@@ -247,7 +315,8 @@ def _dedupe(f, rows: list[dict[str, Any]], where: str) -> dict[str, dict[str, An
                        f"{pid}/{tid} is missing {missing}"):
             continue
 
-        deltas = {c: by_change[c].get("base_delta") for c in DESIRED_CHANGES}
+        deltas = {c: _direct_num(by_change[c].get("base_delta"))
+                  for c in DESIRED_CHANGES}
         if not f.check("the_two_direct_arms_agree_about_the_base_delta_they_share",
                        deltas["increase"] == deltas["decrease"], where,
                        f"{pid}/{tid}: increase says {deltas['increase']!r}, decrease says "
@@ -256,24 +325,30 @@ def _dedupe(f, rows: list[dict[str, Any]], where: str) -> dict[str, dict[str, An
                        "temporal run would inherit the disagreement while looking consistent"):
             continue
 
-        bd = deltas["increase"]
+        increase_state = _endpoint_state(by_change["increase"])
+        decrease_state = _endpoint_state(by_change["decrease"])
+        f.check("the_two_direct_arms_agree_about_the_endpoint_state_they_share",
+                increase_state == decrease_state, where,
+                f"{pid}/{tid}: increase state {increase_state!r}, decrease state "
+                f"{decrease_state!r}")
 
-        # A Direct row the Direct lane DECLINED to score is not a number to difference.
-        # Differencing a declined score would smuggle it back in under a new name — the
-        # temporal lane's own rule, applied to the source it now stands on.
-        row = by_change["increase"]
-        if not (bool(row.get("base_passed")) and bool(row.get("evaluable"))):
-            bd = None
+        bd = deltas["increase"]
+        endpoint_state = increase_state
 
         for c in DESIRED_CHANGES:
-            raw_bd = deltas["increase"]
-            want = None if raw_bd is None else (0.0 if raw_bd == 0 else SIGN[c] * raw_bd)
+            # The shipped Direct field is named exactly ``value``. There is no
+            # ``arm_value`` alias. A non-evaluable row must carry null even when its raw
+            # base_delta exists; only an evaluable row carries the sign transform.
+            want = (None if not bool(by_change[c].get("evaluable")) or bd is None
+                    else (0.0 if bd == 0 else SIGN[c] * bd))
+            got = _direct_num(by_change[c].get("value"))
             f.check("every_direct_arm_value_is_the_sign_transform_of_its_base_delta",
-                    by_change[c].get("value") == want, where,
-                    f"{pid}/{tid} {c}: value {by_change[c].get('value')!r}, "
-                    f"SIGN[{c}] * {raw_bd!r} = {want!r}")
+                    got == want, where,
+                    f"{pid}/{tid} {c}: value {got!r}, expected {want!r} from "
+                    f"evaluable={bool(by_change[c].get('evaluable'))!r} and "
+                    f"SIGN[{c}] * {bd!r}")
 
-        base.setdefault(pid, {})[tid] = bd
+        base.setdefault(pid, {})[tid] = dict(endpoint_state, base_delta=bd)
     return base
 
 
@@ -287,20 +362,65 @@ def recompute(f, doc: dict[str, Any], from_base: dict[str, dict[str, Any]],
     n = 0
     for rec in doc.get("base_records", []):
         pid, tid = str(rec.get("program_id")), str(rec.get("target_id"))
-        a = (from_base.get(pid) or {}).get(tid)
-        b = (to_base.get(pid) or {}).get(tid)
         if pid not in from_base or pid not in to_base:
             f.check("the_direct_bundles_cover_every_admitted_program", False, where, pid)
             continue
-        if tid not in from_base[pid] or tid not in to_base[pid]:
-            f.check("the_direct_bundles_cover_every_target_the_release_reports", False,
-                    where, f"{pid}/{tid}")
-            continue
-        want = None if (a is None or b is None) else b - a
+
+        actual_from = tid in from_base[pid]
+        actual_to = tid in to_base[pid]
+        declared_from = rec.get("from_present") is True
+        declared_to = rec.get("to_present") is True
+
+        # Coverage is directional. A union record explicitly declaring that a target is
+        # absent at one condition is evidence to verify, not a missing Direct row to invent.
+        # The first gate retains the original positive-coverage contract; the second proves
+        # the converse too, so a producer cannot call a present row absent.
+        f.check("the_direct_bundles_cover_every_target_the_release_reports",
+                (not declared_from or actual_from) and (not declared_to or actual_to),
+                where, f"{pid}/{tid}: declared from/to presence "
+                       f"{declared_from}/{declared_to}, actual {actual_from}/{actual_to}")
+        f.check("the_temporal_endpoint_presence_flags_exactly_match_the_direct_bundles",
+                (declared_from, declared_to) == (actual_from, actual_to), where,
+                f"{pid}/{tid}: declared from/to presence "
+                f"{declared_from}/{declared_to}, actual {actual_from}/{actual_to}")
+
+        a = from_base[pid].get(tid)
+        b = to_base[pid].get(tid)
+        for end, declared, actual, endpoint in (
+                ("from", declared_from, actual_from, a),
+                ("to", declared_to, actual_to, b)):
+            if not (declared and actual and endpoint is not None):
+                continue
+            f.check("the_temporal_endpoint_delta_matches_the_admitted_direct_row",
+                    _direct_num(rec.get(f"{end}_delta")) == endpoint["base_delta"],
+                    where, f"{pid}/{tid} {end}: release "
+                           f"{rec.get(f'{end}_delta')!r}, Direct "
+                           f"{endpoint['base_delta']!r}")
+            f.check("the_temporal_endpoint_evaluability_matches_the_admitted_direct_row",
+                    (rec.get(f"{end}_evaluable") is True) == endpoint["evaluable"],
+                    where, f"{pid}/{tid} {end}: release "
+                           f"{rec.get(f'{end}_evaluable')!r}, Direct "
+                           f"{endpoint['evaluable']!r}")
+            f.check("the_temporal_endpoint_state_matches_the_admitted_direct_row",
+                    rec.get(f"{end}_projection_status") == endpoint["projection_status"]
+                    and (rec.get(f"{end}_base_qc_passed") is True)
+                    == endpoint["base_passed"]
+                    and rec.get(f"{end}_base_qc_state") == endpoint["base_state"]
+                    and _direct_int(rec.get(f"{end}_n_panel_surviving"))
+                    == endpoint["n_panel_surviving"]
+                    and _direct_int(rec.get(f"{end}_n_control_surviving"))
+                    == endpoint["n_control_surviving"], where,
+                    f"{pid}/{tid} {end}: temporal endpoint state differs from Direct")
+
+        want = None
+        if (actual_from and actual_to and a is not None and b is not None
+                and a["evaluable"] and b["evaluable"]
+                and a["base_delta"] is not None and b["base_delta"] is not None):
+            want = b["base_delta"] - a["base_delta"]
         f.check("every_temporal_base_delta_recomputes_from_the_admitted_direct_bundles",
-                rec.get("base_delta") == want, where,
+                _direct_num(rec.get("base_delta")) == want, where,
                 f"{pid}/{tid}: the release says {rec.get('base_delta')!r}; the admitted "
-                f"Direct bundles give {b!r} - {a!r} = {want!r}")
+                f"Direct bundles rederive {want!r}")
         n += 1
     return n
 
@@ -365,5 +485,3 @@ def verify_endpoints(f, bound, docs: list[dict[str, Any]],
     f.check("every_ordered_pair_was_re_differenced_from_the_direct_bundles",
             not loaded or n == sum(len(x["doc"].get("base_records", [])) for x in docs),
             "release", f"{n} base deltas re-differenced")
-
-

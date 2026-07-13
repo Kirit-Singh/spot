@@ -264,6 +264,31 @@ def w10_pins():
         is_production=False)
 
 
+def _fixture_w10_rows_sha256(rows: list[dict[str, Any]]) -> str:
+    """Independently stage the exact canonical row view the fixture's W10 report admits.
+
+    This deliberately does not call the verifier under test. The fixture and verifier must
+    reach the same hash through separate implementations or the test would only prove that a
+    function agrees with itself.
+    """
+    strings = ("arm_key", "program_id", "desired_change", "condition", "target_id",
+               "projection_status", "base_state")
+    numbers = ("base_delta", "value")
+    integers = ("rank", "n_panel_surviving", "n_control_surviving")
+    booleans = ("evaluable", "base_passed")
+    projected = []
+    for source in rows:
+        row = {key: str(source[key]) for key in strings}
+        row.update({key: None if source[key] is None else float(source[key])
+                    for key in numbers})
+        row.update({key: None if source[key] is None else int(source[key])
+                    for key in integers})
+        row.update({key: bool(source[key]) for key in booleans})
+        projected.append(row)
+    projected.sort(key=lambda row: (row["arm_key"], row["target_id"]))
+    return canonical.content_hash(projected)
+
+
 def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
     """One admitted Direct all-arm bundle per condition, in the REAL MULTI-FILE shape.
 
@@ -275,7 +300,7 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
     place would not be admitted by anybody.
     """
     import pandas as pd
-    from direct.hashing import canonical_num, content_hash
+    from direct.hashing import canonical_num
     from direct.temporal.arms import arm_env
     from direct.temporal.arms import arm_estimand as est
 
@@ -283,6 +308,7 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
     os.makedirs(root, exist_ok=True)
     bundles, reports = {}, {}
     for cond in CONDITIONS:
+        run_id = f"direct-{cond}"
         rows = []
         for i in range(len(P.TARGETS)):
             deltas = est.project_programs(P.effect_row(i, cond), P.admitted(),
@@ -293,7 +319,8 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
                 bd = canonical_num(d["delta"])
                 for change in ("increase", "decrease"):
                     sign = 1 if change == "increase" else -1
-                    value = None if bd is None else (0.0 if bd == 0 else sign * bd)
+                    value = (None if not passed or bd is None
+                             else (0.0 if bd == 0 else sign * bd))
                     rows.append({
                         "arm_key": f"direct|{pid}|{change}|{cond}", "program_id": pid,
                         "desired_change": change, "condition": cond,
@@ -304,10 +331,11 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
                                        else "excluded_low_target_expression"),
                         "base_passed": passed,
                         "n_panel_surviving": d["n_panel_surviving"],
-                        "n_control_surviving": d["n_control_surviving"]})
+                        "n_control_surviving": d["n_control_surviving"],
+                        # Stamped in the parquet but excluded from the canonical row hash.
+                        "arm_bundle_run_id": run_id})
 
-        run_id = f"direct-{cond}"
-        rows_sha = content_hash(rows)
+        rows_sha = _fixture_w10_rows_sha256(rows)
         d = os.path.join(root, f"direct_{cond}")
         os.makedirs(d, exist_ok=True)
         pd.DataFrame(rows).to_parquet(os.path.join(d, "arms.parquet"))

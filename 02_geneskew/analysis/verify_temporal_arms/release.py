@@ -118,7 +118,13 @@ class BoundRelease:
     release_root: str
     release_path: str
     content_root: str
-    self_release_sha256: str
+    # The native release has TWO different identities. ``release_self_sha256`` is the
+    # content address Stage-1 declares and re-derives after excluding its own self field;
+    # ``release_raw_sha256`` is the sha256 of the complete file bytes.  They are deliberately
+    # not aliases: comparing a producer's native self binding with the raw-file hash is an
+    # interface error, not evidence that the release moved.
+    release_self_sha256: str
+    release_raw_sha256: str
     schema_version: str
     method_version: str
     conditions: tuple[str, ...]
@@ -131,7 +137,6 @@ class BoundRelease:
     scorer_projection_sha256: str
     program_projection_sha256: dict[str, str]
     per_program_projection_sha256: str
-    release_self_sha256: str
     component_hashes: dict[str, str]
 
     @property
@@ -164,6 +169,7 @@ class BoundRelease:
             "selector_identity_rule_id": SELECTOR_IDENTITY_RULE_ID,
             "selector_condition_sequence": list(self.conditions),
             "stage1_release_self_sha256": self.release_self_sha256,
+            "stage1_release_raw_sha256": self.release_raw_sha256,
         }
 
 
@@ -439,7 +445,8 @@ def load_release(release_root: str, filename: str = RELEASE_FILENAME,
         release_root=os.path.dirname(path),
         release_path=path,
         content_root=root,
-        self_release_sha256=declared_self,
+        release_self_sha256=declared_self,
+        release_raw_sha256=file_sha256(path),
         schema_version=declared,
         method_version=str(doc.get("method_version", "")),
         conditions=conds,
@@ -455,7 +462,6 @@ def load_release(release_root: str, filename: str = RELEASE_FILENAME,
         per_program_projection_sha256=content_hash(
             [{"program_id": pid, "projection_sha256": content_hash(program_projection(prog))}
              for pid, prog in sorted(admitted.items())]),
-        release_self_sha256=file_sha256(path),
         component_hashes={name: c["raw_sha256"] for name, c in loaded.items()},
     )
 

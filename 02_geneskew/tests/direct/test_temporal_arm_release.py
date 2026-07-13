@@ -333,10 +333,17 @@ class TestTheREALStage1Release:
         rel = release.load_release(os.path.join(stage1_checkout, _STAGE1_RELEASE))
 
         # its own identity, by its own declared rule
-        assert rel.self_release_sha256 == (
-            "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11")
         assert rel.release_self_sha256 == (
+            "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11")
+        assert rel.release_raw_sha256 == (
             "0c336546db10746bba1569ccc6bef7dedf9679effd24e17d0c07a5ab04dbef73")
+
+        # The native self identity and complete-file hash are distinct bindings. There is
+        # no backwards alias whose ambiguous name can silently swap one for the other.
+        assert not hasattr(rel, "self_release_sha256")
+        assert rel.binding_block()["stage1_release_self_sha256"] == \
+            rel.release_self_sha256
+        assert rel.binding_block()["stage1_release_raw_sha256"] == rel.release_raw_sha256
 
         # the scorer identity — RE-DERIVED from the registry it binds, not read off the release
         assert rel.scorer_view_sha256.startswith("5d1d8c36")
