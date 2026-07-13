@@ -232,3 +232,77 @@ def test_the_readme_does_not_hard_code_a_drifting_test_count():
     assert not counts, (
         f"README hard-codes a test count {counts}; it drifts with every commit. State the command "
         "and its expected exit status instead.")
+
+
+# ---------------- the second re-audit: the scan itself was the hole (it only read .md)
+
+# `RETIRED_CLAIMS` above scanned Markdown only. So `analysis/schemas_export.py` went on
+# GENERATING "Stage 3 ... has not landed (03_druglink/ is scaffolding and emits nothing)" into
+# `schemas/spot.stage03_drug_candidate_set.v1.schema.json` — a SERVED artifact — and every scan
+# passed. A doc nobody reads is embarrassing; a served schema that tells a consumer the upstream
+# stage does not exist is a contract lie, and it was being emitted by code.
+#
+# So: scan the artifacts a consumer is actually handed — Python, JSON, and the generated schemas.
+SERVED_RETIRED = {
+    "has not landed":
+        "the two-gate Stage-3 admission is wired; the schema itself declares "
+        "stage3_implementation_landed: true, so the artifact contradicted itself",
+    "scaffolding and emits nothing":
+        "Stage 3 emits real bundles and Stage 4 admits them",
+    "NOT agreed with":
+        "the contract is reconciled through the adapters, not authored unilaterally",
+    "no_real_evidence_adapters_wired":
+        "a refusal code that exists nowhere in the codebase",
+}
+
+# A drifting count in a SERVED artifact is worse than in a README: a consumer cannot tell a
+# dropped test from a deleted one, and it is baked into the schema a downstream stage validates
+# against.
+SERVED_TEST_COUNT = re.compile(r"\b\d{2,5}\s+tests\b")
+
+# The ONLY exemptions, each an immutable snapshot that may not be rewritten:
+FROZEN_SNAPSHOTS = (
+    # A real v1 release + the method it was BOUND to. Rewriting either would forge history.
+    "04_PKPD/tests/fixtures/historical_v1_release/",
+    # v1 method prose. Its bytes are hashed into the identity of every v1 release ever emitted,
+    # so it CANNOT change — which is exactly why v2 must not inherit its status claim. It carries
+    # `stage3_frozen: false` and an r5 pin that were true when v1 was cut and are not true now.
+    # The repair is not to edit this file; it is that v2 no longer serves it. See
+    # tests/test_stage3_status_is_run_bound_not_frozen.py.
+    "04_PKPD/method/stage4_prose_v1.json",
+)
+
+SERVED_SUFFIXES = (".py", ".json", ".md")
+
+
+def _served_files() -> list[str]:
+    return [rel for rel in _tracked("04_PKPD")
+            if rel.endswith(SERVED_SUFFIXES)
+            and not rel.startswith(FROZEN_SNAPSHOTS)
+            and "test_release_hygiene_scan.py" not in rel]
+
+
+def test_no_retired_stage3_claim_is_SERVED_by_code_or_a_generated_schema():
+    """Not only READMEs. The generator, and what the generator writes."""
+    offenders = {}
+    for rel in _served_files():
+        body = _read(rel)
+        hits = [p for p in SERVED_RETIRED if p in body]
+        if hits:
+            offenders[rel] = hits
+
+    assert not offenders, "\n".join(
+        f"{rel}: {p!r} — {SERVED_RETIRED[p]}" for rel, ps in offenders.items() for p in ps)
+
+
+def test_no_served_artifact_bakes_in_a_drifting_test_count():
+    """`03_druglink/ (106 tests + independent verifier)` was compiled into the exported schema."""
+    offenders = {}
+    for rel in _served_files():
+        hits = sorted(set(SERVED_TEST_COUNT.findall(_read(rel))))
+        if hits:
+            offenders[rel] = hits
+
+    assert not offenders, (
+        f"a served artifact hard-codes a test count: {offenders}. Counts drift; state the "
+        "verifier command and its expected exit status instead.")

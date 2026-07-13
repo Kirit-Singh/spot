@@ -88,10 +88,14 @@ def stage3_schema() -> dict[str, Any]:
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$id"] = STAGE3_SCHEMA_ID
     schema["description"] = (
-        "PROVISIONAL, ADAPTER-BOUND — authored unilaterally by Stage 4 and NOT agreed with "
-        "Stage 3, which has not landed (03_druglink/ is scaffolding and emits nothing). This "
-        "is what Stage 4 is willing to CONSUME, not a description of an existing producer. "
-        "Expect reconciliation via a Stage-3 -> Stage-4 adapter plus a version bump here. "
+        "ADAPTER-BOUND, STAGE-4-INTERNAL. This is the NORMALIZED shape the Stage-4 pipeline "
+        "consumes. It is NOT Stage 3's wire format: Stage 3 emits its own documents "
+        "(spot.stage03_drug_annotation.v1, spot.stage03_drug_candidate_set.v1, "
+        "spot.stage03_research_annotation.v1, spot.fixture.stage03_bundle.v1) and they reach "
+        "this shape only through the Stage-4 adapters, which re-verify Stage-3's "
+        "canonical/document/table hashes and preserve namespace, source status and eligibility. "
+        "Admission takes TWO gates: Stage 4 restates the bundle byte-for-byte, AND Stage 3's own "
+        "verifier must pass out-of-process. Schema-valid is not admitted. "
         "Content-addressed: candidate_rows_sha256 is the sha256 of the canonical JSON of the "
         "candidate rows (sorted by candidate_id, sorted keys, no whitespace, floats rounded to "
         "10 dp, timestamps/labels/paths excluded), and the Stage-4 firewall recomputes it "

@@ -245,7 +245,7 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
         # ...and the guards must be PRESENT. `no_unbound_prose` catches a rewrite; it cannot
         # catch a DELETION, and in a resealed release the artifact hashes would agree. Silence
         # is the cheapest way to lie.
-        missing = required_prose_failures(out_dir, method_dir)
+        missing = required_prose_failures(out_dir, method_dir, version)
         _c(checks, "required_guards_present_verbatim", not missing,
            f"every guard sentence is present, exactly as the method declares it: {missing}")
 

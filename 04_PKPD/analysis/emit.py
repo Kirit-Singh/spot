@@ -297,7 +297,7 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
             "candidate_rows_sha256": inputs.candidate_set.candidate_rows_sha256,
             "namespace": inputs.candidate_set.namespace.value,
             "is_fixture": inputs.candidate_set.is_fixture,
-            "stage3_contract_status": method.prose["stage3_contract_status"],
+            **_stage3_upstream(inputs, method),
         },
         "ordering": {
             "by": "candidate_id",
@@ -318,6 +318,44 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
     }
     assert_no_forbidden_fields(doc, method.forbidden_fields, "scorecards.json")
     return doc
+
+
+def _stage3_upstream(inputs: Stage4Inputs, method: MethodBundle) -> dict[str, Any]:
+    """What the release says about the stage above it. v1 froze a STATUS; v2 binds the RUN.
+
+    v1 copies `method/stage4_prose_v1.json :: stage3_contract_status` verbatim. That file is
+    immutable and its bytes are hashed into the identity of every v1 release ever emitted, which
+    is correct for a method PARAMETER and wrong for a STATUS: it still says `stage3_frozen: false`
+    and pins the r5 contract, and it cannot be corrected without rewriting releases that already
+    exist. v1 keeps emitting it anyway — a historical artifact records what was believed when it
+    was written, and is not judged against a rule invented afterwards.
+
+    v2 does not inherit it. A current-status field does not belong in immutable method prose at
+    all, so v2 serves none; it binds the Stage-3 document THIS RUN actually admitted, taken from
+    `Stage3Binding`. Every field below is already inside `scorecard_set_id_inputs` (the id key
+    binds the whole binding), so it is anti-tampered and prose-bound for free: rewrite what the
+    release says about its upstream and the release id moves. A status blob could never offer
+    that, because it described the world rather than the run.
+    """
+    if inputs.contract_version is not ContractVersion.V2:
+        return {"stage3_contract_status": method.prose["stage3_contract_status"]}
+
+    binding = inputs.candidate_set.stage3_binding
+    if binding is None:
+        # No Stage-3 document came through a door (the engine's own fixtures). Say so; do not
+        # imply a provenance that does not exist.
+        return {"stage3_admission": {"stage3_document_admitted": False}}
+
+    return {
+        "stage3_admission": {
+            "stage3_document_admitted": True,
+            "stage3_schema_version": binding.stage3_schema_version,
+            "stage3_document_id": binding.stage3_document_id,
+            "stage3_namespace": binding.stage3_namespace.value,
+            "canonical_content_sha256": binding.canonical_content_sha256,
+            "document_sha256": binding.document_sha256,
+        }
+    }
 
 
 def build_selection(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4Result,

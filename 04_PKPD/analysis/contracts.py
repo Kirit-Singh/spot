@@ -1,18 +1,29 @@
 """Stage-4 input contracts.
 
-`Stage3DrugCandidateSet` below is the NORMALIZED, Stage-4-internal candidate set the
-pipeline consumes. It is not a claim about Stage 3's wire format.
+`Stage3DrugCandidateSet` below is the NORMALIZED, Stage-4-internal candidate set the pipeline
+consumes. **It is not Stage 3's wire format**, and nothing here should be read as a description
+of what Stage 3 emits. Keeping the two apart is the whole point: Stage 4 never widens these
+models to absorb whatever arrives.
 
-Stage 3 HAS now landed (`03_druglink/`, 106 tests + its own independent verifier) and
-emits three different documents in three namespaces:
+Stage 3 has landed and emits its own documents. They reach the shape below through exactly TWO
+adapters, one per document family:
 
-    spot.stage03_drug_candidate_set.v1   production      primary/secondary_candidates
-    spot.stage03_research_annotation.v1  research_only   annotated/inspectable_candidates
-    spot.fixture.stage03_bundle.v1       fixture         fixture_candidates
+    spot.stage03_drug_annotation.v1      -> stage3_annotation.py  (spot.stage34_annotation_adapter.v1)
+                                            admission signal: stage4_assessment_status=queued
 
-The ONLY path from any of those into the shape below is `stage3_adapter.py`, which
-re-verifies Stage-3's canonical/document/table hashes and preserves namespace, source
-status and eligibility. Stage 4 never widens these models to absorb whatever arrives.
+    spot.stage03_drug_candidate_set.v1   -> stage3_adapter.py     (spot.stage34_adapter.v1)
+    spot.stage03_research_annotation.v1     research_only: INSPECTION ONLY, zero candidates
+    spot.fixture.stage03_bundle.v1          fixture
+
+Both adapters re-verify Stage-3's canonical/document/table hashes and preserve namespace, source
+status and eligibility. Admission takes **two gates**: Stage 4 restates the bundle byte-for-byte,
+AND Stage 3's own `verifier.verify_stage3` must pass out-of-process. Schema-valid is not admitted.
+
+Nothing here states Stage 3's internal condition (how many tests it has, whether it is frozen,
+what it can produce today). Stage 4 cannot verify those, they drift the moment Stage 3 moves, and
+they were being compiled into a SERVED schema. What a release says about its upstream is bound to
+the bundle it actually admitted -- see `Stage3Binding` and the v2 `upstream.stage3_admission`
+block, which are derived from the bytes, not declared here.
 """
 
 from __future__ import annotations
@@ -29,24 +40,43 @@ STAGE4_METHOD_VERSION = "stage4-evidence-v2"
 STAGE3_CONTRACT_STATUS = {
     "status": "reconciled_via_adapter",
     "stage3_implementation_landed": True,
-    "stage3_location": "03_druglink/ (106 tests + independent verifier)",
-    "stage3_documents": [
-        "spot.stage03_drug_candidate_set.v1 (production)",
-        "spot.stage03_research_annotation.v1 (research_only)",
-        "spot.fixture.stage03_bundle.v1 (fixture)",
-    ],
-    "adapter": "analysis/stage3_adapter.py (spot.stage34_adapter.v1)",
     "internal_form_note": (
-        "Stage3DrugCandidateSet is the Stage-4-internal normalized form, NOT Stage 3's "
-        "wire format. Stage 3's real schemas live in 03_druglink/schemas/."
+        "Stage3DrugCandidateSet is the Stage-4-internal NORMALIZED form, NOT Stage 3's wire "
+        "format. Stage 3's real schemas live in 03_druglink/schemas/."
     ),
-    "validated_against_real_stage3_output": True,
-    "production_stage3_producible_today": False,
-    "production_blocked_because": (
-        "Stage 3 reports 0 selectable Stage-1 pairs, so no production "
-        "spot.stage03_drug_candidate_set.v1 instance exists yet."
+    # One entry per document Stage 4 actually admits, and the adapter that admits it. This is a
+    # statement about STAGE 4's doors -- which Stage 4 can verify -- not about Stage 3's health.
+    "adapters": {
+        "spot.stage34_annotation_adapter.v1": {
+            "module": "analysis/stage3_annotation.py",
+            "consumes": ["spot.stage03_drug_annotation.v1"],
+            "admission_signal": "stage4_assessment_status=queued",
+        },
+        "spot.stage34_adapter.v1": {
+            "module": "analysis/stage3_adapter.py",
+            "consumes": [
+                "spot.stage03_drug_candidate_set.v1",
+                "spot.stage03_research_annotation.v1",
+                "spot.fixture.stage03_bundle.v1",
+            ],
+            "research_only_note": "a research annotation is INSPECTED, never admitted",
+        },
+    },
+    "admission_gates": [
+        "gate 1: Stage 4 restates the bundle byte-for-byte (canonical/document/table hashes)",
+        "gate 2: Stage 3's own verifier.verify_stage3 passes out-of-process",
+        "schema-valid is NOT admitted; both gates are required",
+    ],
+    # Deliberately absent: any test count, freeze flag or producible-today claim about Stage 3.
+    # They are unverifiable from here, they drift the moment Stage 3 moves, and a served schema
+    # is the worst place to freeze them. A run's actual upstream binding is emitted instead.
+    "real_result_status": (
+        "No selection-specific real run has been admitted in this repo state: every candidate in "
+        "the test corpus is a labelled FIXTURE-*. A real Stage-4 result is gated on an "
+        "externally admitted real Stage-3 bundle."
     ),
 }
+
 
 # An id that will be used in a filesystem path or a join key. Deliberately strict.
 ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"

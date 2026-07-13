@@ -105,7 +105,7 @@ against every intermediate state**, not just the final one.
    wins** — mine is a copy, not a fork.
 3. **Re-run the frozen-v1 proof on the merge commit** — this is the gate, and it is one command:
    ```
-   pytest 04_PKPD/tests/test_contract_version_freeze.py -q     # 15 tests
+   pytest 04_PKPD/tests/test_contract_version_freeze.py -q     # must exit 0
    ```
    It asserts the v1 digest is `8999c5a3…`, that a v1 bundle carries no v2 cell (not even a null
    one), that the seven v1 method files are unedited, and that the checked-in historical release

@@ -357,7 +357,7 @@
   "$id": "spot.stage03_drug_candidate_set.v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "PROVISIONAL, ADAPTER-BOUND — authored unilaterally by Stage 4 and NOT agreed with Stage 3, which has not landed (03_druglink/ is scaffolding and emits nothing). This is what Stage 4 is willing to CONSUME, not a description of an existing producer. Expect reconciliation via a Stage-3 -> Stage-4 adapter plus a version bump here. Content-addressed: candidate_rows_sha256 is the sha256 of the canonical JSON of the candidate rows (sorted by candidate_id, sorted keys, no whitespace, floats rounded to 10 dp, timestamps/labels/paths excluded), and the Stage-4 firewall recomputes it rather than trusting it.",
+  "description": "ADAPTER-BOUND, STAGE-4-INTERNAL. This is the NORMALIZED shape the Stage-4 pipeline consumes. It is NOT Stage 3's wire format: Stage 3 emits its own documents (spot.stage03_drug_annotation.v1, spot.stage03_drug_candidate_set.v1, spot.stage03_research_annotation.v1, spot.fixture.stage03_bundle.v1) and they reach this shape only through the Stage-4 adapters, which re-verify Stage-3's canonical/document/table hashes and preserve namespace, source status and eligibility. Admission takes TWO gates: Stage 4 restates the bundle byte-for-byte, AND Stage 3's own verifier must pass out-of-process. Schema-valid is not admitted. Content-addressed: candidate_rows_sha256 is the sha256 of the canonical JSON of the candidate rows (sorted by candidate_id, sorted keys, no whitespace, floats rounded to 10 dp, timestamps/labels/paths excluded), and the Stage-4 firewall recomputes it rather than trusting it.",
   "properties": {
     "candidate_rows_sha256": {
       "pattern": "^[0-9a-f]{64}$",
@@ -448,18 +448,32 @@
   "title": "Stage3DrugCandidateSet",
   "type": "object",
   "x-spot-stage3-contract-status": {
-    "adapter": "analysis/stage3_adapter.py (spot.stage34_adapter.v1)",
-    "internal_form_note": "Stage3DrugCandidateSet is the Stage-4-internal normalized form, NOT Stage 3's wire format. Stage 3's real schemas live in 03_druglink/schemas/.",
-    "production_blocked_because": "Stage 3 reports 0 selectable Stage-1 pairs, so no production spot.stage03_drug_candidate_set.v1 instance exists yet.",
-    "production_stage3_producible_today": false,
-    "stage3_documents": [
-      "spot.stage03_drug_candidate_set.v1 (production)",
-      "spot.stage03_research_annotation.v1 (research_only)",
-      "spot.fixture.stage03_bundle.v1 (fixture)"
+    "adapters": {
+      "spot.stage34_adapter.v1": {
+        "consumes": [
+          "spot.stage03_drug_candidate_set.v1",
+          "spot.stage03_research_annotation.v1",
+          "spot.fixture.stage03_bundle.v1"
+        ],
+        "module": "analysis/stage3_adapter.py",
+        "research_only_note": "a research annotation is INSPECTED, never admitted"
+      },
+      "spot.stage34_annotation_adapter.v1": {
+        "admission_signal": "stage4_assessment_status=queued",
+        "consumes": [
+          "spot.stage03_drug_annotation.v1"
+        ],
+        "module": "analysis/stage3_annotation.py"
+      }
+    },
+    "admission_gates": [
+      "gate 1: Stage 4 restates the bundle byte-for-byte (canonical/document/table hashes)",
+      "gate 2: Stage 3's own verifier.verify_stage3 passes out-of-process",
+      "schema-valid is NOT admitted; both gates are required"
     ],
+    "internal_form_note": "Stage3DrugCandidateSet is the Stage-4-internal NORMALIZED form, NOT Stage 3's wire format. Stage 3's real schemas live in 03_druglink/schemas/.",
+    "real_result_status": "No selection-specific real run has been admitted in this repo state: every candidate in the test corpus is a labelled FIXTURE-*. A real Stage-4 result is gated on an externally admitted real Stage-3 bundle.",
     "stage3_implementation_landed": true,
-    "stage3_location": "03_druglink/ (106 tests + independent verifier)",
-    "status": "reconciled_via_adapter",
-    "validated_against_real_stage3_output": true
+    "status": "reconciled_via_adapter"
   }
 }

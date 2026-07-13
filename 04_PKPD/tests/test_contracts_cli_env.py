@@ -5,6 +5,7 @@ the environment lock.
 from __future__ import annotations
 
 import json
+import re
 import hashlib
 import os
 
@@ -76,17 +77,53 @@ def test_table_schema_export_matches_the_parquet_writer():
         assert exported[name]["sort_key"] == list(SORT_KEYS[name])
 
 
-# ------------------------------------------------- Stage-3 contract is provisional
+# -------------------------------------------- Stage-3 contract: BOTH doors, and no Stage-3 gossip
 
-def test_stage3_contract_is_reconciled_against_the_real_stage3():
-    """Stage 3 has landed. Stage 4 consumes its real documents through the adapter, and
-    says so — including that a production Stage-3 lock is not producible yet."""
+def test_the_contract_status_names_both_real_adapters_and_every_document_they_admit():
+    """It used to name ONE adapter and three documents, omitting the annotation door entirely —
+    the door the current Stage-3 bundles actually come through."""
     assert STAGE3_CONTRACT_STATUS["status"] == "reconciled_via_adapter"
     assert STAGE3_CONTRACT_STATUS["stage3_implementation_landed"] is True
-    assert STAGE3_CONTRACT_STATUS["validated_against_real_stage3_output"] is True
-    assert STAGE3_CONTRACT_STATUS["production_stage3_producible_today"] is False
-    assert "stage3_adapter" in STAGE3_CONTRACT_STATUS["adapter"]
-    assert len(STAGE3_CONTRACT_STATUS["stage3_documents"]) == 3
+
+    adapters = STAGE3_CONTRACT_STATUS["adapters"]
+    assert set(adapters) == {"spot.stage34_annotation_adapter.v1", "spot.stage34_adapter.v1"}
+    assert adapters["spot.stage34_annotation_adapter.v1"]["module"] == "analysis/stage3_annotation.py"
+    assert adapters["spot.stage34_adapter.v1"]["module"] == "analysis/stage3_adapter.py"
+
+    admitted = {d for a in adapters.values() for d in a["consumes"]}
+    assert "spot.stage03_drug_annotation.v1" in admitted, (
+        "the annotation document — the current door — was missing from the served contract")
+    assert admitted == {
+        "spot.stage03_drug_annotation.v1",
+        "spot.stage03_drug_candidate_set.v1",
+        "spot.stage03_research_annotation.v1",
+        "spot.fixture.stage03_bundle.v1",
+    }
+
+
+def test_the_contract_status_declares_the_two_admission_gates():
+    gates = " ".join(STAGE3_CONTRACT_STATUS["admission_gates"]).lower()
+    assert "byte-for-byte" in gates
+    assert "verify_stage3" in gates
+    assert "not admitted" in gates, "schema-valid must not read as admitted"
+
+
+def test_the_contract_status_makes_no_unverifiable_claim_about_stage3s_internals():
+    """A served schema is the worst place to freeze somebody else's condition.
+
+    A hard-coded Stage-3 test count, `production_stage3_producible_today`, `stage3_frozen` —
+    Stage 4 cannot verify any of them, they drift the moment Stage 3 moves, and they were being
+    compiled into `spot.stage03_drug_candidate_set.v1.schema.json`, which downstream consumers
+    read.
+    """
+    blob = json.dumps(STAGE3_CONTRACT_STATUS)
+    for gone in ("production_stage3_producible_today", "stage3_location",
+                 "validated_against_real_stage3_output", "stage3_frozen"):
+        assert gone not in blob, f"{gone!r} is an unverifiable claim about Stage 3's internals"
+    assert not re.search(r"\b\d{2,5}\s+tests\b", blob), "a test count is baked into the schema"
+
+    # what it DOES say is Stage-4-checkable, and honest about the limit
+    assert "FIXTURE-*" in STAGE3_CONTRACT_STATUS["real_result_status"]
 
 
 def test_stage3_schema_file_carries_the_contract_status():

@@ -296,7 +296,65 @@ def unbound_prose(out_dir: str, method_dir: str, version: str = "v1") -> dict[st
 
 # --------------------------------------------------------------- required prose
 
-def required_prose_failures(out_dir: str, method_dir: str) -> list[str]:
+def _stage3_upstream_failures(out_dir: str, sc: dict, prose: dict, version: str) -> list[str]:
+    """What the release says about the stage above it — checked against the right authority.
+
+    v1 declared a STATUS in immutable method prose and copied it into the release, so the check
+    is a prose binding: the release must repeat the method verbatim. That stays, exactly, for v1.
+    A historical release is not judged against a rule invented after it was written — and the v1
+    prose is stale (`stage3_frozen: false`, an r5 pin) precisely because a status was frozen into
+    a file whose bytes are hashed into releases that already exist.
+
+    v2 serves no status. It binds the Stage-3 document the run ACTUALLY admitted, so the check is
+    a provenance one: every displayed field must equal the `stage3_binding` inside the release's
+    own id key. That is the stronger guarantee — rewrite the display and the id no longer
+    reproduces, whereas a copied sentence could be edited in both places and still agree.
+    """
+    if version != "v2":
+        got = sc.get("upstream", {}).get("stage3_contract_status")
+        if got != prose["stage3_contract_status"]:
+            return [f"upstream.stage3_contract_status: the release says {got!r}, "
+                    f"the method declares {prose['stage3_contract_status']!r}"]
+        return []
+
+    bad: list[str] = []
+    upstream = sc.get("upstream", {})
+    if "stage3_contract_status" in upstream:
+        bad.append("upstream.stage3_contract_status: a v2 release must not serve the frozen v1 "
+                   "status snapshot; it binds the bundle it admitted instead")
+
+    adm = upstream.get("stage3_admission")
+    if not isinstance(adm, dict):
+        return bad + ["upstream.stage3_admission: missing from a v2 release"]
+
+    with open(os.path.join(out_dir, "manifest.json"), encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    binding = (manifest.get("scorecard_set_id_inputs", {})
+               .get("stage3", {}).get("stage3_binding"))
+
+    if binding is None:
+        if adm.get("stage3_document_admitted") is not False:
+            bad.append("upstream.stage3_admission: claims a Stage-3 document was admitted, but "
+                       "the release's id key binds no stage3_binding")
+        return bad
+
+    if adm.get("stage3_document_admitted") is not True:
+        bad.append("upstream.stage3_admission: the id key binds a Stage-3 document, but the "
+                   "release does not admit to it")
+    for field, want_value in (
+            ("stage3_schema_version", binding.get("stage3_schema_version")),
+            ("stage3_document_id", binding.get("stage3_document_id")),
+            ("stage3_namespace", binding.get("stage3_namespace")),
+            ("canonical_content_sha256", binding.get("canonical_content_sha256")),
+            ("document_sha256", binding.get("document_sha256"))):
+        if adm.get(field) != want_value:
+            bad.append(f"upstream.stage3_admission.{field}: the release displays "
+                       f"{adm.get(field)!r}, its own id key binds {want_value!r}")
+    return bad
+
+
+def required_prose_failures(out_dir: str, method_dir: str,
+                            version: str = "v1") -> list[str]:
     """The guards must be PRESENT, verbatim, where they belong.
 
     `unbound_prose` catches a REWRITE. It cannot catch a DELETION: removing
@@ -322,9 +380,7 @@ def required_prose_failures(out_dir: str, method_dir: str) -> list[str]:
     want("set_level.lanes_are_independent", sc.get("set_level", {}).get("lanes_are_independent"),
          prose["set_level"]["lanes_are_independent"])
     want("schema_id", sc.get("schema_id"), prose["schema_ids"]["scorecard_set"])
-    want("upstream.stage3_contract_status",
-         sc.get("upstream", {}).get("stage3_contract_status"),
-         prose["stage3_contract_status"])
+    bad.extend(_stage3_upstream_failures(out_dir, sc, prose, version))
 
     display = prose["safety"]["evidence_state_display"]
     for cand in sc.get("candidates", []):
