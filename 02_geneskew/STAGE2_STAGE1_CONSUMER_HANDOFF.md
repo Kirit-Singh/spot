@@ -14,7 +14,7 @@ change is merged, and nothing Stage-1 owns is copied into `02_geneskew/`.
 | selection schema (raw) | `f8104283…c4c1d` | `stage1_v3.SCHEMA_SHA256`, checked in `load_schema()` before use |
 | v3 release (raw) | `0c336546…bef73` | `stage1_release_v3.ADMITTED_STAGE1_V3`, checked in `load(admit=…)` |
 | v3 release (self) | `2262430931…24a11` | same, re-derived from bytes, never read |
-| temporal method | `343f20db…587c4b5` | **bound, not gated** — see the escalation below |
+| temporal method | `343f20db…587c4b5` | **bound + preserved, never re-derived here** — a different quantity from this branch's code-tree hash; see *The method identity* below |
 
 The previous pins were **stale**: schema `f4c2c2cc…` (a superseded schema whose only copy
 lived at `~/.spot-runs/…/stage1-ui-contract/`, outside the repo — so every Gate-B test was
@@ -56,12 +56,17 @@ bound endpoints against that axis. The legacy path is untouched.
 **`analysis/direct/run_screen.py`** (+12) — the v3 `id_check` now publishes `question_id`,
 `question_id_rederived`, `endpoints` and the contract marker.
 
-**Tests** — `fixtures_stage1_contract.py` (new, 200): stages the schema / release / Stage-1's own
-fixtures from git at `539431dd`, skipping loudly when the ref is absent, and re-implements the
-question_id recipe **independently** (a test where the gate agrees with itself proves nothing).
-`test_stage1_question_id.py` (new, 348) and `test_verify_identity_v3.py` (new, 183).
-`test_v3_axis_identity.py`: the test asserting the *defect* — that same program+direction across
-different times is refused — is **inverted**; it contradicted its own module docstring.
+- `declared_method_identity()` + `REFUSE_METHOD_IDENTITY_MISSING` (`2044da8`) — the declared
+  estimand identity, carried verbatim and labelled; see *The method identity* below.
+
+**Tests** — `fixtures_stage1_contract.py` (new): stages the schema / release / Stage-1's own
+fixtures from git at `539431dd`, skipping loudly when the ref is absent, exposes the release's
+real enum space (`release_selector()`), and re-implements the question_id recipe
+**independently** (a test where the gate agrees with itself proves nothing). New suites:
+`test_stage1_question_id.py`, `test_stage1_tuple_space.py`, `test_stage1_method_identity.py`,
+`test_verify_identity_v3.py`. `test_v3_axis_identity.py`: the test asserting the *defect* — that
+same program+direction across different times is refused — is **inverted**; it contradicted its
+own module docstring.
 
 ## Test counts
 
