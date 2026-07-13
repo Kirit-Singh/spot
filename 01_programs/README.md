@@ -9,8 +9,10 @@ programs — scored from the Marson genome-scale CD4 perturb-seq non-targeting-c
 > program-compatibility does not demonstrate lineage stability, protein expression, cytotoxicity,
 > or suppressive function.** See `REMEDIATION_STATEMENT.md`.
 
-Stage-1 hands Stage-2 a **candidate Treg-like transcriptional program** to study, **not** a
-confirmed Treg identity.
+Stage-1 hands Stage-2 a **generic v3 selection contract** — any two of the continuous programs,
+independent directions (`high`/`low`), at the same or different timepoints — **not** a fixed
+biological pair and **not** a confirmed cell identity. Treg-like → Th1-like is a labelled demo
+default only.
 
 ## Layout
 - `app/` — the workbench (`01_page.html`), the rendered methodology report (`01_notebook.html`),
@@ -54,15 +56,19 @@ frozen per-barcode hashes is `analysis/requirements.txt` — pinned to the exact
    CPU, and **per-barcode reproducible** — this is what runs here.
 
 ### Fetch the embedded object (pinned)
-Published (**public, MIT**) at
-[**KiritSingh/spot-CD4-Marson**](https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson),
-superseding revision **`e5fcf98b`**. `ntc_clustered.h5ad` is **3.84 GB** (SHA-256 `2edc6d31…`,
-verified by `reproduce.sh`). Fetch:
+The source object `ntc_clustered.h5ad` (**3.84 GB**, SHA-256 `2edc6d31…`, verified by `reproduce.sh`) is
+published (**public**; dataset **MIT** per the CZI source page) at
+[**KiritSingh/spot-CD4-Marson**](https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson), revision
+`e5fcf98b56a9302921d402e97fc5a190bd88f9a6`. Fetch:
 ```bash
 export SPOT_DATA=./spot_scvi
-hf download KiritSingh/spot-CD4-Marson ntc_clustered.h5ad stage01_umap_seed.json \
+hf download KiritSingh/spot-CD4-Marson ntc_clustered.h5ad \
     --repo-type dataset --revision e5fcf98b56a9302921d402e97fc5a190bd88f9a6 --local-dir "$SPOT_DATA"
 ```
+> The current published revision still carries the **historical Stage-1 v2** manifest/display seed. A
+> **superseding, history-preserving v3 revision** (current registry/score/selection-contract identities,
+> reproduce + verifier receipt, v2 marked historical) is prepared and pending owner-reviewed upload — the
+> source `ntc_clustered.h5ad` above is unchanged.
 
 ### Run the scoring tier
 ```bash
@@ -106,61 +112,58 @@ follows Masopust et al., *Guidelines for T cell nomenclature*, Nat Rev Immunol 2
 the naming consensus the program labels follow. The gene panels themselves are **curated canonical
 markers** (restricted to genes measurable in this dataset), not gene lists taken from that paper.
 
-## Stage-1 v3 T8 production contract (fail-closed) + measurement bundle
-The frozen T7b validation (`app/data/stage01_validation.json`, raw SHA-256 `1c14cd28…`) yields
-**0 of 33 program×condition pairs passing** the pre-registered Stage-1 production gate. The T8 layer
-makes that outcome machine-enforced — via **independent re-derivation**, not trust-by-self-hash —
-without altering the immutable validation or any pre-registered gate/panel/score/seed/threshold.
+## Stage-1 v3 generic selection contract + measurement bundle
+Stage-1 is a **continuous measurement system + generic selector**. There is **no production/research
+split and no 0-of-33 gate** anywhere in the active contract. Any supported (program A, direction A,
+program B, direction B, condition/mode) yields the **same typed** `spot.stage01_selection.v3` contract:
+- `execution_status` — `ready` | `refused` | `awaiting_estimator`;
+- `analysis_mode` — `within_condition` | `temporal_cross_condition` (same or different timepoints);
+- two **ordered, separate poles** A/B — **no combined/balanced objective** (that belongs to Stage-2);
+- two **independent per-program arms** (`away_from_A` on A, `toward_B` on B) keyed by the perturbation's
+  **desired change** (`increase|decrease`), never the pole `high|low` — joined by the UI with no combined
+  score. Refuse only an exactly-identical `(program, pole, condition)` tuple.
 
-**Separate release statuses** (never conflated): a reproducible *measurement bundle* can be lockable
-while *production selection* stays fail-closed and *overlay/app deployment* stays blocked.
-- `measurement_bundle_lockable` — **true**: v3 registry (`20f91fdd…`), full 396k×15 scores
-  (`de63b496…`, canonical content `43c4296d…`), regenerated `by_program_condition` summary, scoring
-  code, independent verifier + mutation suite, and a real Linux solver lock are all present and
-  independently verified. This implies **nothing** about selectability or identity.
-- `production_stage2_ready` — **false** (0/33). `panel_provenance_status` —
-  **`PRIMARY_LOCATORS_VERIFIED_BOUNDED`**: all 53 measured marker-program pairs now carry a bounded
-  primary-source locator in the registry `marker_provenance`/`panel_provenance` (18 prior-ledger + 14
-  lineage + 21 state/CTL completions, source SHAs pinned and enforced by `verify_stage1_provenance.py`;
-  Masopust stays naming-only). This is bounded/association-level provenance, not a scorer change and not
-  a production/overlay/app promotion. `overlay_release_ok` — **false** (the built v3 overlay is proven
-  `overlay==full` but **not** deployed). `app_deployment_ready` — **false**. The current pointer is
-  therefore a **`candidate`**, never `current`/`locked`.
+`selection_id = sha256(canonical_content)[:16]` binds the executable **scorer VIEW**
+(`app/data/stage01_stage2_registry_view.json`, canonical `5d1d8c36…`), so a display/citation edit never
+moves it. Constants: `dataset_id=marson2025_gwcd4_perturbseq`, `source_h5ad_sha256=2edc6d31…`,
+`source_hf_revision=e5fcf98b…`, `stage1_method_version=stage1-continuous-v3.0.1`. Treg-like → Th1-like is
+a **labelled demo default only**, never canonical.
 
-Artifacts (served contracts in `app/data/`):
-- `stage01_selectability_v3.json` — 33 records, all `production_selectable=false`, each with the exact
-  failing/undefined hard-gate **multiset** (base portability never confers selectability).
-- `stage01_validation_semantics.json` — **row-identifiable** interpretation of every one of the 841
-  results (`source_result_index` + `source_row_canonical_sha256`), preserving **two dimensions**
-  (`metric_predicate_met`/`metric_defined`/`undefined_reason` vs `gate_outcome`/`flagged`); a false
-  hard-gate is never reinterpreted as advisory; Th9 zero-IQR / observed-None stay **undefined**.
-- `stage01_current.json` — fail-closed `candidate` pointer with the separate statuses above; the v2
-  registry is `HISTORICAL_NOT_CURRENT`; the v3 registry is bound for provenance (not a served selectability source).
-- `stage01_release_manifest.json` — distinct release gates + raw hashes of every artifact (served,
-  analysis, and gitignored release-staging bound by hash).
+**Frozen scientific identities** (stable, citation-invariant — cite these, not the registry self/raw
+hash, which legitimately re-derives on provenance edits): scores canonical content `43c4296d…`, frozen
+T7b validation raw `1c14cd28…`, scorer projection `008c1da1…`, scorer VIEW canonical `5d1d8c36…`. The
+current registry self/raw and the full binding set are re-derived and checked by
+`verify_stage1_provenance.py` (do not hard-code them here).
 
-Code + verification (in `analysis/`):
-- `stage1_t8_derive.py` — pure derivation used **only** by the generator `gen_stage1_t8.py`.
-- `verify_stage1_t8.py` — **independent** verifier (re-implements the derivation from scratch;
-  re-derives the 33 records + 841 semantics rows from the raw validation and **exact-multiset**-compares,
-  recomputes all declared counts, checks every cross-pointer). Generator ≠ verifier.
-- `test_stage1_t8.py` — mutation/forgery suite: even a **fully-resealed** forgery (self-hashes +
-  manifest bookkeeping recomputed) is caught by the independent re-derivation.
-- `stage1_t8_preflight.py` — fail-closed selection preflight: verifies the whole bundle **before**
-  reading selectability, then requires the complete binding set (validation/gate-spec/input-manifest/
-  selectability/current-pointer/method + v3 registry namespace), `namespace=production`, one shared real
-  timepoint, allowed direction + selectable primary role, and per-pole `production_selectable`. Every
-  current A/B pair is non-executable.
-- `stage01_v3_recovery_verification.json` (receipt), `stage01_solver_lock.txt` (conda `--explicit` +
-  in-env pip freeze), `stage01_full_release_verification.json` (outer attestation binding code/env/
-  inputs/outputs + scope). `stage01_validation_independent_check.json` remains an intentionally **limited**
-  sampled observation and is not broadened.
-- `reproduce_t8.sh` — regenerates the layer from pinned inputs (gen → independent verify → mutation
-  suite → full-release attestation) **without** overwriting historical v2 or deploying the v3 overlay.
+**Measurement bundle** (present + independently verified): the v3 registry, full 396k×15 scores
+(canonical `43c4296d…`), regenerated `by_program_condition` summary, activation-association table,
+scoring code, independent verifier + mutation suite, and a Linux solver lock. The current pointer is a
+**`candidate`** (the built v3 overlay is proven `overlay==full` but **not** deployed).
 
-The Stage-1 app (`01_page.html`) and the Stage-2 direct CLI (`02_geneskew/analysis/direct/run_screen.py`)
-both load this fail-closed contract and **cannot** emit a production selection (0/33) — the app shows a
-muted inline reason (no banner, appearance unchanged); the CLI rejects before any computation.
+Served/analysis artifacts:
+- `stage01_stage2_registry_view.json` — the executable scorer VIEW `selection_id` binds (canonical
+  `5d1d8c36…`); excludes display labels / citations / provenance.
+- `stage01_selectability_v3.json` (raw `7c326a86…`) — the frozen within-condition LOMO validation kept
+  **only as historical provenance** (`active_gate:false`); it is **not** a selection gate. Arm eligibility
+  uses the existing frozen **base portability** from the validation (Th9-like is non-portable).
+- `stage01_validation.json` (raw `1c14cd28…`) — the immutable frozen T7b validation, referenced for
+  provenance; never re-interpreted.
+- `stage01_current.json` — the `candidate` pointer; the v2 registry is `HISTORICAL_NOT_CURRENT`.
+- `stage01_release_manifest.json` — release gates + raw hashes of every bound artifact.
 
-This records only that **no current program-condition pair cleared the frozen production gate** — not
-that any program is biologically invalid, nor that panel provenance is confirmed.
+Code + verification (in `analysis/`, generator ≠ verifier throughout):
+- `stage2_bridge/emit_selection_contract.py` — the deterministic **materializer** `build_contract` for
+  ANY pair; `stage2_bridge/arm_keys.py` is the single source of truth for the desired_change arm keying.
+- `verify_selection_contract.py` — independent semantic verifier of an emitted v3 contract (re-derives
+  `selection_id`, the estimator/mode/execution tuple, and the arm identity from local frozen rules).
+- `verify_stage1_provenance.py`, `verify_stage1_t8.py` — independent re-derivation of the marker
+  provenance and the measurement bundle from the raw inputs; mutation/forgery suites catch even a
+  fully-resealed forgery.
+- `stage01_solver_lock.txt`, `stage01_full_release_verification.json` — the environment lock and the
+  outer attestation binding code/env/inputs/outputs + scope.
+- `reproduce_t8.sh` — regenerates the whole layer from pinned inputs (gen → independent verify → mutation
+  suite → attestation) **without** overwriting historical v2 or deploying the v3 overlay. Prefer running
+  it (**expect exit 0**) over trusting any hard-coded count/hash in this file.
+
+This records a reproducible measurement + a generic, verifiable selection contract — **not** that any
+program is a confirmed cell identity, nor that panel provenance is clinically confirmed.
