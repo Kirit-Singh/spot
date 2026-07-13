@@ -37,8 +37,24 @@ describe('reviewer landing interaction', () => {
     expect(details).not.toHaveAttribute('open')
     expect(summary).toHaveAccessibleName('Open reviewer access')
     expect(summary).toHaveAttribute('aria-expanded', 'false')
-    expect(getComputedStyle(summary as Element).width).toBe('48px')
     expect(mark).toHaveAttribute('fill', '#3E7D8C')
+  })
+
+  it('presents the mark as a pressable target that never falls below 48 pixels', () => {
+    mountLanding()
+    const summary = document.querySelector('summary') as Element
+    const mark = document.querySelector('.mark') as Element
+
+    // The visible box tracks the wordmark's ascender band and can be smaller than the
+    // target on a narrow viewport, so the hit area is sized independently by --hit,
+    // whose 48px floor is the accessibility guarantee that must never regress.
+    expect(getComputedStyle(summary).width).toBe('var(--hit)')
+    expect(getComputedStyle(summary).cursor).toBe('pointer')
+    expect(landingHtml).toContain('--hit:max(48px,var(--mark))')
+    // The box must read as pressable, not decorative.
+    expect(getComputedStyle(mark).borderRadius).toBe('25%')
+    expect(landingHtml).toContain('summary:hover .mark')
+    expect(landingHtml).toContain('summary:focus-visible .mark')
   })
 
   it('opens, focuses the password field, and returns focus on Escape', async () => {

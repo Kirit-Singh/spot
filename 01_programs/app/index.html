@@ -16,6 +16,17 @@
     --accent:#3E7D8C;
     --serif:'Newsreader','Iowan Old Style','Palatino Linotype',Georgia,serif;
     --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --wordmark:clamp(58px,13vw,84px);
+    /* Measured ink of "spot" in this serif: ascender .572em, descender .252em.
+       The mark spans the ascender band only — top of the "t" down to the baseline —
+       so the dot's centre passes through the optical centre of the word, ignoring the
+       "p" tail. The hit target stays >=48px even when the visible box is smaller, so
+       both offsets back out that slack. Everything tracks the wordmark clamp. */
+    --mark:calc(var(--wordmark) * .572);
+    --hit:max(48px,var(--mark));
+    --slack:calc((var(--hit) - var(--mark)) / 2);
+    --mark-drop:calc(var(--wordmark) * .06 - var(--slack));
+    --gap:calc(var(--wordmark) * .1 - var(--slack));
   }
   *{box-sizing:border-box}
   html{height:100%;color-scheme:light}
@@ -36,32 +47,44 @@
   h1{
     margin:0;
     font-family:var(--serif);
-    font-size:clamp(58px,13vw,84px);
+    font-size:var(--wordmark);
     font-weight:500;
     line-height:.82;
     letter-spacing:-.045em;
   }
-  details{position:static;margin:0 0 -8px 2px}
+  details{position:static;margin:0 0 var(--mark-drop) var(--gap)}
   summary{
-    width:48px;
-    height:48px;
+    width:var(--hit);   /* >=48px target, may exceed the visible box */
+    height:var(--hit);
     display:grid;
     place-items:center;
-    border-radius:50%;
     cursor:pointer;
     list-style:none;
     -webkit-tap-highlight-color:transparent;
   }
   summary::-webkit-details-marker{display:none}
   summary::marker{content:''}
-  summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  summary:focus-visible{outline:none}
+  summary:focus-visible .mark{outline:2px solid var(--accent);outline-offset:3px}
+  /* The tab-icon lockup: rounded square (rx 4/16 = 25%) holding the teal dot.
+     Raised and reactive, so it reads as pressable rather than decorative. */
   .mark{
-    width:21px;
-    height:21px;
+    width:var(--mark);
+    height:var(--mark);
     display:block;
-    transition:transform 140ms ease;
+    border:1px solid var(--line);
+    border-radius:25%;
+    background:var(--surface);
+    box-shadow:0 2px 6px rgba(30,27,22,.10),0 1px 2px rgba(30,27,22,.05);
+    transition:transform 140ms ease,box-shadow 140ms ease,border-color 140ms ease;
   }
-  summary:hover .mark,details[open] .mark{transform:scale(1.1)}
+  summary:hover .mark{
+    border-color:var(--accent);
+    box-shadow:0 6px 16px rgba(30,27,22,.16),0 2px 4px rgba(30,27,22,.07);
+    transform:translateY(-2px);
+  }
+  summary:active .mark{transform:translateY(0);box-shadow:0 1px 3px rgba(30,27,22,.12)}
+  details[open] .mark{border-color:var(--accent)}
   .mark svg{width:100%;height:100%;display:block}
   .panel{
     position:absolute;
@@ -133,10 +156,12 @@
   }
   @media (prefers-reduced-motion:reduce){
     .mark{transition:none}
+    summary:hover .mark,summary:active .mark{transform:none}
     .panel{animation:none}
   }
   @media (forced-colors:active){
     .control{border-color:CanvasText;box-shadow:none}
+    .mark{border-color:CanvasText;box-shadow:none}
     .mark circle{fill:ButtonText}
   }
 </style>
@@ -149,7 +174,6 @@
       <summary aria-label="Open reviewer access">
         <span class="mark" aria-hidden="true">
           <svg viewBox="0 0 16 16" focusable="false">
-            <rect width="16" height="16" rx="4" fill="#FAF9F7"/>
             <circle cx="8" cy="8" r="4.6" fill="#3E7D8C"/>
           </svg>
         </span>

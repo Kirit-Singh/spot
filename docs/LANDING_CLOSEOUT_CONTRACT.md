@@ -16,7 +16,14 @@ The root page contains only a centered `spot` wordmark and its clickable dot, fo
 
 Reuse the Stage-1 source-of-truth tokens from `01_programs/app/01_page.html`: warm background `#FAF9F7`, ink `#1E1B16`, teal accent `#3E7D8C`, line `#E7E3DC`, the `Newsreader` font stack for the wordmark, the `IBM Plex Mono` stack for the access control, and the existing focus ring. The landing must not call Google Fonts or any other third party; closeout may self-host admitted font files, otherwise the declared system fallbacks apply. The mark is the exact current tab geometry: a `16 × 16` viewBox, warm rounded-square background (`rx=4`), and centered teal circle (`cx=8`, `cy=8`, `r=4.6`). Do not use the unrelated purple-bolt `favicon.svg`.
 
-The dot has a 48-pixel interaction box even though the visible circle is smaller. Activation expands one 44-pixel-high password field with a 44-pixel submit action. The control is no wider than 272 pixels and remains inside a 20-pixel mobile gutter.
+The mark is the tab icon rendered at wordmark scale: a rounded square (radius 25%, matching the favicon's `rx=4` on a 16 viewBox) in `--surface` with a `--line` hairline, holding the teal circle at the icon's own proportion. It is **boxed, not a bare dot** — the favicon's rounded square is filled with the page background, so leaving it unstyled renders an invisible box and a naked dot.
+
+Geometry is derived from the measured ink of "spot" in this serif (ascender `.572em`, descender `.252em`) and tracks the wordmark clamp, so the lockup scales as one unit:
+
+- The box spans the **ascender band** — the top of the "t" down to the baseline (`--mark: .572em`). Its centre, and therefore the circle's centre, passes through the optical centre of the word **ignoring the "p" descender**.
+- `--hit: max(48px, var(--mark))` sizes the interaction target independently, so the visible box may be smaller than the target on a narrow viewport but the target never drops below 48 pixels. Both offsets back out that slack.
+
+The mark must read as **pressable, not decorative**: a raised shadow at rest, and on hover a lift with an `--accent` border; focus-visible rings the visible box, not the larger target. Activation expands one 44-pixel-high password field with a 44-pixel submit action. The control is no wider than 272 pixels and remains inside a 20-pixel mobile gutter. The post-auth placeholder repeats the same lockup, statically.
 
 ## Interaction and accessibility
 
