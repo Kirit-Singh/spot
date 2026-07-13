@@ -105,7 +105,11 @@ KEY_FIREWALL_EXCEPTIONS = frozenset({
     # the Stage-1 SCORE-table hashes: "score" is in the name because it is Stage-1's own
     # field, and these are HASHES/IDS, not statistics. Renaming them would break the bind.
     "stage1_scores_raw_sha256", "stage1_scores_canonical_sha256",
-    "canonical_scores_sha256", "raw_sha256", "canonical_sha256"})
+    "canonical_scores_sha256", "raw_sha256", "canonical_sha256",
+    # the RAW-INPUT hash map keys mirror the pinned input filenames; `stage1_scores` is the
+    # Stage-1 SCORE table INPUT, and its entry here is that file's raw sha256 — a provenance
+    # hash, not a statistic. (ntc_h5ad / de_main carry no "score" and never trip the firewall.)
+    "stage1_scores"})
 
 # Exempt ONLY while they still say ``false``. An artifact must be able to write down its own
 # prohibition; it does not get to keep the exemption after flipping the prohibition off.

@@ -49,7 +49,7 @@ import pandas as pd
 from direct import code_digest
 from direct import io_data as direct_io
 
-from . import binding, config, direct_inventory, prepare_cells, w10
+from . import argvutil, binding, config, direct_inventory, prepare_cells, w10
 from . import disposition as D
 
 CELLS_FILE = "cells.npz"
@@ -73,21 +73,8 @@ PINS = {"ntc": config.NTC_H5AD_SHA256, "de_main": config.DE_MAIN_SHA256,
 
 
 def _sanitized_argv() -> list[str]:
-    """The argv with machine-local PATHS replaced by their basenames.
-
-    A real invocation's argv is full of /home/... paths, and the machine-path firewall would
-    reject the whole run for emitting one. The FLAGS and the basenames are provenance; the
-    absolute directory is not, and it is the how-it-was-found, never the what-it-is.
-    """
-    out = []
-    for tok in sys.argv[1:]:
-        if tok.startswith("--"):
-            out.append(tok)
-        elif os.path.isabs(tok):
-            out.append(os.path.basename(tok.rstrip("/")) or tok)
-        else:
-            out.append(tok)
-    return out
+    """The argv with machine-local PATHS replaced by their basenames (shared sanitizer)."""
+    return argvutil.sanitize_argv(list(sys.argv[1:]))
 
 
 def refuse_fixture_path(name: str, path: str) -> None:

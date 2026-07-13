@@ -48,6 +48,7 @@ from direct import runid
 from direct.hashing import content_hash
 
 from . import (
+    argvutil,
     armfit,
     armref,
     binding,
@@ -281,7 +282,9 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
         "created_at": created_at,
         "run_binding": run_binding,
         "signatures": got["signatures"],
-        "argv": list(argv if argv is not None else sys.argv[1:]),
+        # sanitized: machine-local PATHS become basenames, so the content-addressed provenance
+        # does not carry a /home/... path the machine-path firewall would (correctly) reject.
+        "argv": argvutil.sanitize_argv(list(argv if argv is not None else sys.argv[1:])),
         # role and pole are SELECTION metadata, recorded as provenance. They are never part
         # of the arm key, and neither may alter a cached arm's values.
         "derived_from": derived_from or {"role": None, "pole": None},
@@ -439,7 +442,7 @@ def emit_deferred(out_root: str, refusal: "D.RefusalError", *, arm_key: str,
     for, and this says which. It NEVER fills a primary slot and it carries no support.
     """
     rec = refusal.record(arm_key=arm_key)
-    rec["argv"] = list(argv)
+    rec["argv"] = argvutil.sanitize_argv(list(argv))
     rec["lane_role"] = config.LANE_ROLE
     rec["counts_toward_completeness"] = False
     rec["filled_a_primary_slot"] = False

@@ -310,6 +310,36 @@ def test_the_RECORDED_run_seed_is_checked_not_only_the_declared_wrapper_seed(run
 
 
 # --------------------------------------------------------------------------- #
+# REGRESSIONS the REAL bounded smoke surfaced (the synthetic fixture cannot: it passes no
+# prepared binding and no absolute-path argv).
+# --------------------------------------------------------------------------- #
+def test_the_stage1_scores_raw_input_key_is_EXEMPT_from_the_firewall():
+    """`raw_input_sha256.stage1_scores` is a provenance HASH, not a statistic — permitted."""
+    from p2s_arms import verify_p2s_rules as R
+    prov = {"run_binding": {"prepared_inputs": {"raw_input_sha256": {
+        "stage1_scores": "de63b496" * 8, "ntc_h5ad": "2edc6d31" * 8, "de_main": "c355f535" * 8}}}}
+    assert R.forbidden_keys(prov) == []
+    # ...but a genuine statistic key is still refused
+    assert R.forbidden_keys({"p_value": 0.01})
+    assert R.forbidden_keys({"combined_score": 1.0})
+
+
+def test_the_run_argv_is_SANITIZED_of_machine_local_paths():
+    """run_p2s_arms records a content-addressed provenance; a /home/... path must not survive."""
+    from p2s_arms import argvutil, verify_p2s_rules as R
+    raw = ["--direct-bundle", "/home/tcelab/.spot-runs/x/output/direct/bbc582a9c3096f9a",
+           "--inputs", "/home/tcelab/.spot-scratch/prep/60c761a9ff0c524c",
+           "--arm-key", "direct|treg_like|increase|Stim48hr", "--seed", "42"]
+    clean = argvutil.sanitize_argv(raw)
+    assert clean == ["--direct-bundle", "bbc582a9c3096f9a",
+                     "--inputs", "60c761a9ff0c524c",
+                     "--arm-key", "direct|treg_like|increase|Stim48hr", "--seed", "42"]
+    # the sanitized argv carries no machine-local path the verifier would reject
+    assert R.machine_paths({"argv": clean}) == []
+    assert R.machine_paths({"argv": raw})        # the raw one WOULD be rejected
+
+
+# --------------------------------------------------------------------------- #
 # The verifier's own independence.
 # --------------------------------------------------------------------------- #
 def test_the_verifier_imports_NOTHING_from_the_generator_or_from_direct():
