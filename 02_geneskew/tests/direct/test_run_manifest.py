@@ -1,118 +1,266 @@
-"""The aggregate run manifest: which lane outputs belong to the SAME Stage-2 run.
+"""The aggregate run manifest: which ARMS belong to the same Stage-2 run, and is it whole.
 
-Each lane was already content-addressed and verified. What did not exist was anything that
-said which of them are the same science — so a screen from one commit could be cited beside
-a pathway result from another and nothing would notice. "The per-lane outputs are the
-contract" holds right up until somebody has to assemble them, and then it becomes the
-reader's problem.
+Counting invocations was never completeness. Three copies of one Direct result counted as
+three and passed. A run is complete when every LOGICAL ARM SLOT the frozen release implies
+is filled exactly once — and the arms are keyed by DESIRED CHANGE, because that, and not
+the pole direction, is what fixes the sign of the arm value.
+
+All bundles here are FIXTURES (``fixtures_run_manifest``). The cardinality is real.
 """
 from __future__ import annotations
 
 import json
 import os
 
+import fixtures_run_manifest as F
 import pytest
-from direct import run_manifest
+from direct import arm_topology as T
+from direct import config, run_manifest
 
 
-def _lane_dir(tmp_path, lane, run_id):
-    d = os.path.join(str(tmp_path), lane, run_id)
-    os.makedirs(d, exist_ok=True)
-    for name in run_manifest.LANE_ARTIFACTS[lane]:
-        with open(os.path.join(d, name), "w") as fh:
-            fh.write(f"{lane}/{run_id}/{name}")
-    return d
+def _build(tmp_path, run, **kw):
+    scorer = run_manifest.load_scorer_view(run["scorer_view"])
+    bundles = [run_manifest.bind_bundle(d)
+               for d in run["direct"] + run["temporal"] + run["pathway"]]
+    return run_manifest.build(
+        bundles=bundles, out_path=os.path.join(str(tmp_path), "manifest.json"),
+        scorer_view=scorer, conditions=run["conditions"], sources=run["sources"],
+        code_identity={"commit": "f" * 40, "clean_tree": True,
+                       "manifest_sha256": "0" * 64, "canonical_digest": "0" * 16},
+        **kw)
 
 
-def _complete(tmp_path):
-    inv = []
-    for i in range(3):
-        inv.append(run_manifest.bind_lane(
-            run_manifest.LANE_DIRECT,
-            _lane_dir(tmp_path, "direct", f"d{i}"), run_id=f"d{i}"))
-    for i in range(6):
-        inv.append(run_manifest.bind_lane(
-            run_manifest.LANE_TEMPORAL,
-            _lane_dir(tmp_path, "temporal", f"t{i}"), run_id=f"t{i}"))
-    for i in range(6):
-        inv.append(run_manifest.bind_lane(
-            run_manifest.LANE_PATHWAY,
-            _lane_dir(tmp_path, "pathway", f"p{i}"), run_id=f"p{i}"))
-    return inv
+class TestTheDesiredChangeMapping:
+    """The arm key is the DESIRED CHANGE. Role and pole decide it only jointly."""
+
+    @pytest.mark.parametrize("role,pole,expected", [
+        ("away_from_A", "high", T.DECREASE),
+        ("away_from_A", "low", T.INCREASE),
+        ("toward_B", "high", T.INCREASE),
+        ("toward_B", "low", T.DECREASE),
+    ])
+    def test_all_four_role_x_pole_combinations(self, role, pole, expected):
+        assert T.desired_change_for(role, pole) == expected
+
+    def test_the_mapping_is_DERIVED_from_the_producers_own_arm_algebra(self):
+        # not transcribed: it falls out of ARM_FORMULA x POLE_SIGN, so it cannot drift
+        # away from the arithmetic the screen actually performs
+        for role in config.ARMS:
+            for pole, sign in config.POLE_SIGN.items():
+                mult = -sign if role == config.ARM_A else sign
+                want = T.INCREASE if mult > 0 else T.DECREASE
+                assert T.desired_change_for(role, pole) == want
+
+    def test_the_same_pole_in_the_two_ROLES_is_the_OPPOSITE_desired_change(self):
+        # THE bug the pole-direction key would have shipped: away_from_A(high) DECREASES
+        # the program and toward_B(high) INCREASES it. Keyed by pole, they collide.
+        assert (T.desired_change_for("away_from_A", "high")
+                != T.desired_change_for("toward_B", "high"))
+        assert (T.desired_change_for("away_from_A", "low")
+                != T.desired_change_for("toward_B", "low"))
+
+    def test_the_two_origins_that_mean_the_SAME_thing_share_one_arm(self):
+        # away_from_A(high) and toward_B(low) both compute -delta: ONE arm, two origins.
+        assert (T.desired_change_for("away_from_A", "high")
+                == T.desired_change_for("toward_B", "low") == T.DECREASE)
+        assert (T.desired_change_for("away_from_A", "low")
+                == T.desired_change_for("toward_B", "high") == T.INCREASE)
+
+    def test_the_same_program_and_pole_ACROSS_TIME_is_one_desired_change_two_slots(self):
+        # same program, same pole, two ordered pairs -> the SAME desired change, and two
+        # DISTINCT temporal slots. A cross-time question is not a within-condition one.
+        dc = T.desired_change_for("toward_B", "high")
+        a = T.arm_key("temporal", "treg_like", dc,
+                      {"from_condition": "Rest", "to_condition": "Stim8hr"})
+        b = T.arm_key("temporal", "treg_like", dc,
+                      {"from_condition": "Stim8hr", "to_condition": "Rest"})
+        assert a != b
+        assert a == "temporal|treg_like|increase|Rest|Stim8hr"
+
+    def test_the_key_carries_neither_the_role_nor_the_pole(self):
+        key = T.arm_key("direct", "treg_like", T.DECREASE, {"condition": "Rest"})
+        assert key == "direct|treg_like|decrease|Rest"
+        for token in ("away_from_A", "toward_B", "high", "low"):
+            assert token not in key
 
 
-class TestItBindsEveryLaneOutput:
-    def test_a_complete_run_is_15_invocations(self, tmp_path):
-        doc = run_manifest.build(invocations=_complete(tmp_path),
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
+class TestTheTopology:
+    def test_a_complete_run_is_300_arm_slots_over_15_bundles(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = _build(tmp_path, run)
         assert doc["complete"] is True
-        assert doc["n_invocations"] == run_manifest.N_EXPECTED == 15
-        assert doc["invocation_counts"] == {"direct": 3, "temporal": 6, "pathway": 6}
+        assert doc["n_expected_arm_slots"] == doc["n_bound_arm_slots"] == 300
+        assert doc["n_bundles"] == doc["n_expected_bundles"] == 15
+        assert {lane: doc["per_lane"][lane]["n_expected_slots"] for lane in T.LANES} == {
+            "direct": 60, "temporal": 120, "pathway": 120}
+        assert {lane: doc["per_lane"][lane]["n_bundles_expected"] for lane in T.LANES} == {
+            "direct": 3, "temporal": 6, "pathway": 6}
 
-    def test_every_artifact_of_every_lane_is_hashed(self, tmp_path):
-        doc = run_manifest.build(invocations=_complete(tmp_path),
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
-        for inv in doc["invocations"]:
-            expected = run_manifest.LANE_ARTIFACTS[inv["lane"]]
-            assert set(inv["files"]) == set(expected)
-            for sha in inv["files"].values():
-                assert len(sha) == 64
-            assert len(inv["artifact_sha256"]) == 64
+    def test_every_bundle_carries_EVERY_program_arm(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = _build(tmp_path, run)
+        for b in doc["bundles"]:
+            assert b["n_arms"] == 2 * len(F.FIXTURE_PROGRAMS) == 20
 
-    def test_the_manifest_is_content_addressed(self, tmp_path):
-        p = os.path.join(str(tmp_path), "m.json")
-        doc = run_manifest.build(invocations=_complete(tmp_path), out_path=p)
-        with open(p) as fh:
-            on_disk = json.load(fh)
-        assert on_disk["manifest_sha256"] == doc["manifest_sha256"]
-        assert len(doc["manifest_sha256"]) == 64
+    def test_the_slot_algebra_is_derived_from_the_scorer_view(self):
+        # 4 programs, 2 conditions -> 4*2*2 direct, 4*2*2 temporal (2 ordered pairs),
+        # 4*2*2*2 pathway. Nothing is hard-coded.
+        slots = T.expected_slots(["a", "b", "c", "d"], ["C1", "C2"], ["s1", "s2"])
+        assert len(slots["direct"]) == 16
+        assert len(slots["temporal"]) == 16
+        assert len(slots["pathway"]) == 32
 
-    def test_it_binds_the_shared_code_identity(self, tmp_path):
-        doc = run_manifest.build(invocations=_complete(tmp_path),
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
-        ci = doc["code_identity"]
-        assert set(ci) >= {"commit", "clean_tree", "manifest_sha256",
-                           "canonical_digest"}
+    def test_the_selection_capacity_is_3540(self):
+        cap = T.selection_capacity(n_programs=10, n_conditions=3)
+        assert cap["pole_states_per_condition"] == 20
+        assert cap["within_condition_selections"] == 3 * 20 * 19 == 1140
+        assert cap["temporal_selections"] == 6 * 20 * 20 == 2400
+        assert cap["total_valid_ordered_selections"] == 3540
 
-    def test_it_produces_no_science_and_says_so(self, tmp_path):
-        doc = run_manifest.build(invocations=_complete(tmp_path),
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
-        assert doc["produces_scientific_values"] is False
-        assert doc["binds_lane_outputs"] is True
+    def test_the_manifest_publishes_no_fixed_pair(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = _build(tmp_path, run)
+        assert doc["combined_objective"] is None
+        assert doc["cross_arm_score_or_order"] is None
+        assert doc["combined_objective_permitted"] is False
+        assert doc["pair_derived_views"]["stored_in_reusable_arm_bundles"] is False
+        assert doc["pair_derived_views"]["part_of_release_completeness"] is False
+
+
+class TestTheScorerViewIsTheSourceOfTruth:
+    def test_the_program_set_is_REDERIVED_not_read(self, tmp_path):
+        path = F.scorer_view(tmp_path)
+        doc = json.load(open(path))
+        doc["base_portable_programs"] = doc["base_portable_programs"] + ["th9_like"]
+        with open(path, "w") as fh:
+            json.dump(doc, fh)
+        with pytest.raises(T.RunManifestError, match="declared list is not believed"):
+            run_manifest.load_scorer_view(path)
+
+    def test_the_non_portable_programs_are_excluded(self, tmp_path):
+        scorer = run_manifest.load_scorer_view(F.scorer_view(tmp_path))
+        assert scorer["n_programs"] == 10
+        for excluded in F.FIXTURE_NON_PORTABLE:
+            assert excluded not in scorer["programs"]
+
+    def test_there_is_no_default_and_no_legacy_registry_fallback(self):
+        with pytest.raises(T.RunManifestError, match="legacy"):
+            run_manifest.load_scorer_view(None)
+
+    def test_every_arm_binds_its_programs_scorer_projection(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        scorer = run_manifest.load_scorer_view(run["scorer_view"])
+        inv = json.load(open(os.path.join(run["direct"][0], "arm_bundle.json")))
+        for arm in inv["arms"]:
+            assert (arm["program_method_hash"]
+                    == scorer["scorer_projection_sha256"][arm["program_id"]])
+
+
+class TestPathwayBindsTheBytesItsCountsCameFrom:
+    def test_the_ranking_and_the_membership_are_bound_on_disk(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        b = run_manifest.bind_bundle(run["pathway"][0])
+        for what in T.BUNDLE_BINDINGS["pathway"]:
+            assert b["bound_artifacts"][what]["raw_sha256"]
+        assert any(k.endswith("::ranking") for k in b["bound_artifacts"])
+
+    def test_a_binding_whose_bytes_moved_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        with open(os.path.join(run["pathway"][0], "gene_set_membership.json"), "w") as fh:
+            json.dump({"sets": {}}, fh)
+        with pytest.raises(T.RunManifestError, match="hashes to"):
+            run_manifest.bind_bundle(run["pathway"][0])
+
+    def test_convergence_is_ONE_artifact_per_bundle_shared_by_its_20_arms(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        ids = set()
+        for d in run["pathway"]:
+            inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+            cid = inv["convergence"]["convergence_id"]
+            ids.add(cid)
+            assert {a["convergence_id"] for a in inv["arms"]} == {cid}
+            assert len(inv["arms"]) == 20
+        # six bundles, six DISTINCT convergence artifacts — not one duplicated 20 times
+        assert len(ids) == 6
 
 
 class TestAPartialRunIsVisiblyPartial:
-    def test_a_missing_invocation_REFUSES_to_be_called_complete(self, tmp_path):
-        inv = _complete(tmp_path)[:-1]          # one pathway invocation short
-        with pytest.raises(run_manifest.RunManifestError, match="PARTIAL"):
-            run_manifest.build(invocations=inv,
-                               out_path=os.path.join(str(tmp_path), "m.json"))
+    def test_a_missing_bundle_REFUSES_to_be_called_complete(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        run["pathway"] = run["pathway"][:-1]
+        with pytest.raises(T.RunManifestError, match="PARTIAL"):
+            _build(tmp_path, run)
 
-    def test_a_partial_run_MAY_be_manifested_but_is_flagged(self, tmp_path):
-        inv = _complete(tmp_path)[:-1]
-        doc = run_manifest.build(invocations=inv, allow_partial=True,
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
+    def test_a_partial_run_MAY_be_manifested_but_is_NEVER_release_admissible(
+            self, tmp_path):
+        run = F.complete_run(tmp_path)
+        run["pathway"] = run["pathway"][:-1]
+        doc = _build(tmp_path, run, allow_partial=True)
         assert doc["complete"] is False
-        assert doc["n_invocations"] == 14
+        assert doc["release_admissible"] is False
+        assert doc["per_lane"]["pathway"]["n_filled_slots"] == 100
+        assert len(doc["per_lane"]["pathway"]["missing_slots"]) == 20
 
-    def test_a_lane_MISSING_AN_ARTIFACT_is_refused(self, tmp_path):
-        d = _lane_dir(tmp_path, "direct", "d0")
-        os.remove(os.path.join(d, "screen.parquet"))
-        with pytest.raises(run_manifest.RunManifestError, match="missing"):
-            run_manifest.bind_lane(run_manifest.LANE_DIRECT, d, run_id="d0")
+    def test_a_pair_specific_bundle_leaves_18_of_its_20_slots_empty(self, tmp_path):
+        # the failure the reusable-arm topology introduces, and the reason 15 bundles is
+        # only sufficient IF each one carries every program arm
+        run = F.complete_run(tmp_path)
+        F.build_bundle(run["root"], "direct", {"condition": run["conditions"][0]},
+                       run["scorer_view"],
+                       arms_for=[("treg_like", T.DECREASE), ("th1_like", T.INCREASE)])
+        doc = _build(tmp_path, run, allow_partial=True)
+        assert doc["complete"] is False
 
 
-class TestPerturb2StateIsExplicitlyDeferred:
-    def test_the_manifest_names_its_state(self, tmp_path):
-        doc = run_manifest.build(invocations=_complete(tmp_path),
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
-        p2s = doc["perturb2state"]
-        assert p2s["state"] == "deferred_not_part_of_this_run"
-        assert p2s["tier"] == "secondary_method"
-        assert p2s["gates_the_run"] is False
+class TestItIsAnIndexAndSaysSo:
+    def test_it_produces_no_science(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        assert doc["produces_scientific_values"] is False
+        assert doc["binds_arm_outputs"] is True
+        assert doc["emits_p_q_or_fdr"] is False
 
-    def test_complete_stage2_is_direct_pareto_temporal_pathway(self, tmp_path):
-        doc = run_manifest.build(invocations=_complete(tmp_path),
-                                 out_path=os.path.join(str(tmp_path), "m.json"))
-        assert list(doc["perturb2state"]["complete_stage2_is"]) == [
-            "direct", "pareto", "temporal", "pathway"]
+    def test_it_is_content_addressed(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = _build(tmp_path, run)
+        on_disk = json.load(open(doc["path"]))
+        assert on_disk["manifest_sha256"] == doc["manifest_sha256"]
+        assert len(doc["manifest_sha256"]) == 64
+
+    def test_it_records_the_exact_per_lane_CLI_invocation_contract(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        for lane in T.LANES:
+            c = doc["cli_invocation_contracts"][lane]
+            assert c["command"].startswith("python -m direct")
+            assert c["required_arguments"] and c["output_filenames"]
+            assert c["expected_row_count_source"]
+            assert c["expected_exit_code"] == 0
+        # the pathway hit count is RECONSTRUCTED, never declared
+        assert "RECONSTRUCTED" in (
+            doc["cli_invocation_contracts"]["pathway"]["expected_hit_count_source"])
+
+    def test_it_binds_the_frozen_addendum_it_was_built_against(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        assert doc["frozen_topology_addendum_sha256"] == (
+            "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
+
+
+class TestPairDerivedOrderingsAreJoinTimeOnly:
+    def test_a_bundle_that_STORES_a_pareto_tier_is_refused(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["direct"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        inv["arms"][0]["pareto_tier"] = 1
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh)
+        with pytest.raises(T.RunManifestError, match="JOIN-TIME"):
+            run_manifest.bind_bundle(d)
+
+    def test_a_bundle_that_STORES_a_concordance_class_is_refused(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["direct"][1]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        inv["concordance_class"] = "CONCORDANT"
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh)
+        with pytest.raises(T.RunManifestError, match="JOIN-TIME"):
+            run_manifest.bind_bundle(d)
