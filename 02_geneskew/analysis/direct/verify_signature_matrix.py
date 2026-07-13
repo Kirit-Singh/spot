@@ -15,9 +15,12 @@ SHIPPED bytes off disk — the three shared artifacts and each bundle's `signatu
               their equality) and the source-mask identity re-derive from the bitmap and are
               bound into the run identity.
     V5        all-zero == n_unresolved_no_signature; the resolved all-ones set re-derives from
-              the bitmap and equals the declared resolved_no_masked_readout_gene disposition.
-              A resolved all-ones row is the amended VALID state (its mask misses the readout
-              axis); an all-zero row is unresolved / NO SIGNATURE, never an unmasked vector.
+              the bitmap and equals the declared resolved_no_masked_readout_gene disposition;
+              and the first-class resolution counts (n_resolved, n_resolved_masked_readout_genes)
+              recount from the bitmap and their arithmetic closes (resolved + unresolved ==
+              n_targets; masked + all-ones == resolved). A resolved all-ones row is the amended
+              VALID state (its mask misses the readout axis); an all-zero row is unresolved / NO
+              SIGNATURE, never an unmasked vector.
     V6        convergence re-derives from (matrix, bitmap) with the sorted-gene left fold,
               BITWISE — a 5e-07 numpy drift is a refusal.
     V7        member_target_ids re-derive from the bound gene sets ∩ condition targets ∩ resolved.
@@ -399,7 +402,26 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
         if declared_ids != all_ones_targets:
             v5.append("resolved_no_masked_readout_gene_target_ids does not equal the "
                       "resolved all-ones rows recounted from the bitmap")
-        checks.append(_check(V5, not v5, f"{cond}: " + "; ".join(v5[:3])))
+
+        # THE FIRST-CLASS RESOLUTION FIELDS, recounted from the bitmap (Step-0, e5f71df).
+        # A resolved row has ANY unmasked readout gene (popcount > 0); of those, a "masked
+        # readout" row has at least one masked one (popcount < n_genes) and an all-ones row has
+        # none. Every declared count is independently recomputed, and the arithmetic must close.
+        n_resolved = int((popcount > 0).sum())
+        n_masked = int(((popcount > 0) & (popcount < n_genes)).sum())
+        n_targets = len(m_targets)
+        if man.get("n_resolved") != n_resolved:
+            v5.append(f"n_resolved declared {man.get('n_resolved')} != recounted {n_resolved}")
+        if man.get("n_resolved_masked_readout_genes") != n_masked:
+            v5.append(f"n_resolved_masked_readout_genes declared "
+                      f"{man.get('n_resolved_masked_readout_genes')} != recounted {n_masked}")
+        if n_resolved + n_zero != n_targets:
+            v5.append("n_resolved + n_unresolved != n_targets — the resolution split does not "
+                      "account for every row")
+        if n_masked + n_all_ones != n_resolved:
+            v5.append("n_resolved_masked_readout_genes + n_resolved_all_ones != n_resolved — "
+                      "the two resolved dispositions do not partition the resolved rows")
+        checks.append(_check(V5, not v5, f"{cond}: " + "; ".join(v5[:4])))
 
         # ---- V_QC: the per-target QC table re-derives (file, hash, rows, content) ----
         checks.append(_check(V_QC, *_verify_qc(cond_dir, man, m_targets)))

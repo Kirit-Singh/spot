@@ -732,6 +732,33 @@ class TestQCandStaleSource:
         r = verify(shipped)
         assert r["verdict"] == V.REJECT and V.V_QC in failed(r)
 
+    def test_a_forged_n_resolved_is_REJECTED(self, shipped):
+        # inflate the resolved count, reseal manifest/ref/run id — the bitmap recount refuses it
+        man = _man(shipped)
+        man["n_resolved"] = man["n_resolved"] + 3
+        write_manifest(shipped, man)
+        sync_identity(shipped)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V5 in failed(r)
+        assert V.V_IDENTITY not in failed(r)          # fully resealed; only the recount catches it
+
+    def test_a_forged_n_resolved_masked_readout_genes_is_REJECTED(self, shipped):
+        man = _man(shipped)
+        man["n_resolved_masked_readout_genes"] = man["n_resolved_masked_readout_genes"] + 1
+        write_manifest(shipped, man)
+        sync_identity(shipped)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V5 in failed(r)
+
+    def test_the_resolution_split_arithmetic_must_close(self, shipped):
+        # move a row from unresolved to resolved in the counts (leaving the bitmap) — the
+        # partition no longer accounts for every row.
+        man = _man(shipped)
+        man["n_unresolved_no_signature"] = man["n_unresolved_no_signature"] + 1
+        write_manifest(shipped, man)
+        sync_identity(shipped)
+        assert V.V5 in failed(verify(shipped))
+
     def test_a_STALE_de_source_is_REJECTED(self, shipped):
         # the manifest says it was built from de_main X; the auditor supplies de_main Y.
         man = _man(shipped)
