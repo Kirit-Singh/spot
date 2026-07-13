@@ -65,6 +65,20 @@ describe('EffectRankPlot', () => {
     expect(decrease[decrease.length - 1]).toBeLessThan(decrease[0]);
   });
 
+  it('reserves the detail card whether or not a gene is active, so hovering cannot reflow the page', () => {
+    // If the card collapsed when idle, hovering a table row would grow the facet, push the table
+    // down, slide the row out from under the cursor and un-hover it — a flicker loop.
+    const idle = render(<EffectRankPlot facet={facet} />);
+    const idleCard = idle.container.querySelector('[aria-live="polite"]');
+    expect(idleCard?.className).toContain('min-h-[56px]');
+    cleanup();
+
+    const active = render(<EffectRankPlot facet={facet} activeId="ENSG10000000001" />);
+    const activeCard = active.container.querySelector('[aria-live="polite"]');
+    expect(activeCard?.className).toContain('min-h-[56px]'); // same reserved height, occupied
+    expect(activeCard?.textContent).toContain('DOWN1');
+  });
+
   it('emphasises the active gene and pins it on click, without navigating away', () => {
     const onPin = vi.fn();
     const onHover = vi.fn();

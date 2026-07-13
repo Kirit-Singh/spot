@@ -84,7 +84,7 @@ export interface LabelBounds {
   bottom: number;
 }
 
-const CHAR_W = 6.7; // ~11px mono advance width — keep in step with the label font size
+const CHAR_W = 6.3; // ~11px Inter Tight advance width — keep in step with the label font/face
 const GAP = 13; // minimum vertical distance between two labels on the same side
 const OFFSET = 6; // horizontal distance from the point to its text
 

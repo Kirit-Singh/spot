@@ -269,14 +269,23 @@ function bothArmTargets(view: CompactStage2SelectionView): ReadonlySet<string> {
   return new Set(view.geneArmA.rows.map((row) => row.target_id).filter((id) => inB.has(id)));
 }
 
-/** The A → B transition the selection describes, shown once between the two facets. */
-function TransitionArrow({ from, to }: { from: string; to: string }) {
+/** The A → B transition, marked the whole way down the gap between the two facets. Bare glyphs, no
+ *  chrome; the run of them reads as a direction of travel rather than a single badge. */
+const ARROW_RUN = 7;
+
+function TransitionArrows({ from, to, down = false }: { from: string; to: string; down?: boolean }) {
   return (
     <span
       aria-label={`from ${from} to ${to}`}
-      className="pointer-events-none z-10 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-[12px] text-ink-2 shadow-sm"
+      className={`pointer-events-none flex select-none text-[13px] leading-none text-muted ${
+        down ? 'flex-row justify-center gap-6' : 'h-full flex-col items-center justify-between'
+      }`}
     >
-      →
+      {Array.from({ length: down ? 1 : ARROW_RUN }, (_, i) => (
+        <span key={i} aria-hidden="true">
+          {down ? '↓' : '→'}
+        </span>
+      ))}
     </span>
   );
 }
@@ -303,8 +312,8 @@ export function TargetsCanvas({
       data-route="targets"
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
     >
-      <div className="font-mono text-[9.5px] text-muted">
-        Hover a target for detail · click to pin it across both facets
+      <div className="text-[11.5px] text-muted">
+        Select or hover a gene in the map or table for detail · click to pin it across both facets
       </div>
 
       {/* One column per program: its facet, and directly beneath it the arm that facet's objective
@@ -323,8 +332,8 @@ export function TargetsCanvas({
                 onPin={setPinned}
               />
               {index === 0 && (
-                <span className="absolute -right-[18px] top-1/2 hidden -translate-y-1/2 xl:flex">
-                  <TransitionArrow from={name(a.program_id)} to={name(b.program_id)} />
+                <span className="absolute -right-[15px] bottom-16 top-14 hidden xl:block">
+                  <TransitionArrows from={name(a.program_id)} to={name(b.program_id)} />
                 </span>
               )}
             </div>
@@ -342,7 +351,7 @@ export function TargetsCanvas({
             />
             {index === 0 && (
               <span className="flex justify-center xl:hidden">
-                <TransitionArrow from={name(a.program_id)} to={name(b.program_id)} />
+                <TransitionArrows from={name(a.program_id)} to={name(b.program_id)} down />
               </span>
             )}
           </div>

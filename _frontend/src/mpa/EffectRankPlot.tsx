@@ -94,13 +94,18 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Compact detail for the hovered / pinned gene. Holds its height whether or not a gene is active, so
- *  moving across 200 points never reflows the page; when idle it is blank rather than an empty box. */
+/**
+ * Compact detail for the hovered / pinned gene.
+ *
+ * Its height is RESERVED whether or not a gene is active. That is load-bearing, not cosmetic: if the
+ * card collapsed when idle, hovering a table row would grow the facet, push the table down, slide the
+ * row out from under the cursor, and un-hover it — a flicker loop. Fixed height, no reflow, no loop.
+ */
 function DetailCard({ point: p, pinned, inBoth }: { point: PlotPoint | null; pinned: boolean; inBoth: boolean }) {
   const href = p ? hpaUrl(p.id) : null;
   return (
     <div
-      className={`px-3 font-mono text-[10.5px] ${p ? 'border-t border-line py-2' : ''}`}
+      className="min-h-[56px] border-t border-line px-3 py-2 font-mono text-[10.5px]"
       aria-live="polite"
     >
       {!p ? null : (
@@ -210,7 +215,7 @@ export function EffectRankPlot({
           {ticksFrom(yAxis).map((tick) => (
             <g key={`y${tick}`}>
               <line x1={M.left} y1={y(tick)} x2={W - M.right} y2={y(tick)} stroke="#EFECE6" />
-              <text x={M.left - 7} y={y(tick) + 4} textAnchor="end" className="fill-muted font-mono text-[11px]">
+              <text x={M.left - 7} y={y(tick) + 4} textAnchor="end" className="fill-muted text-[11px]">
                 {fmt(tick)}
               </text>
             </g>
@@ -226,13 +231,13 @@ export function EffectRankPlot({
               x={x(tick)}
               y={H - 38}
               textAnchor="middle"
-              className="fill-muted font-mono text-[11px]"
+              className="fill-muted text-[11px]"
             >
               {fmt(tick)}
             </text>
           ))}
 
-          <text x={M.left + plotW / 2} y={H - 21} textAnchor="middle" className="fill-ink-2 font-mono text-[12px]">
+          <text x={M.left + plotW / 2} y={H - 21} textAnchor="middle" className="fill-ink-2 text-[12px]">
             Signed program shift
           </text>
           {/* which way each half of the axis runs — the reconstructed sign, spelled out */}
@@ -240,7 +245,7 @@ export function EffectRankPlot({
             x={x(-xAxis.bound / 2)}
             y={H - 5}
             textAnchor="middle"
-            className="fill-muted font-mono text-[11px]"
+            className="fill-muted text-[11px]"
           >
             ← decreasing
           </text>
@@ -248,14 +253,14 @@ export function EffectRankPlot({
             x={x(xAxis.bound / 2)}
             y={H - 5}
             textAnchor="middle"
-            className="fill-muted font-mono text-[11px]"
+            className="fill-muted text-[11px]"
           >
             increasing →
           </text>
           <text
             transform={`translate(13 ${M.top + plotH / 2}) rotate(-90)`}
             textAnchor="middle"
-            className="fill-ink-2 font-mono text-[12px]"
+            className="fill-ink-2 text-[12px]"
           >
             Rank evidence −log10(rank/N)
           </text>
@@ -328,7 +333,7 @@ export function EffectRankPlot({
               x={l.x}
               y={l.y}
               textAnchor={l.anchor}
-              className={`font-mono text-[11px] ${l.id === activeId ? 'fill-accent' : 'fill-ink'}`}
+              className={`text-[11px] font-medium ${l.id === activeId ? 'fill-accent' : 'fill-ink'}`}
               pointerEvents="none"
             >
               {l.text}
