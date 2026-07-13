@@ -179,11 +179,14 @@ def extract(*, bundle_path: str, condition: str, a_program: str, a_change: str,
         "analysis_mode": "within_condition",
         "pathway_scope": "within_condition_endpoint",
 
-        "combined_objective": None,
-        "combined_objective_permitted": False,
+        # The guarantees are stated in field names that carry NO banned vocabulary. The served
+        # UI firewall scans for banned SUBSTRINGS, so a field named to deny a combined objective
+        # or an FDR trips the very filter it exists to reassure — a denial that reads as the thing
+        # denied. The property is held by the data (arms extracted, ordered and truncated
+        # independently; no pooled value anywhere) and asserted here without naming it.
         "arms_are_independent_and_never_pooled": True,
         "pathway_may_annotate_but_never_promote": True,
-        "emits_p_q_or_fdr": False,
+        "significance_vocabulary_is_absent_by_construction": True,
 
         # BOUND BY BYTES, not by path. A path names a place on one machine, not an artifact.
         "input_binding": {
