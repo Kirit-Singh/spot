@@ -124,6 +124,57 @@ REFUSE_CONDITIONS = "condition_count_does_not_match_the_analysis_mode"
 
 REFUSE_SELECTION_ID = "selection_id_does_not_derive_from_its_own_canonical_content"
 REFUSE_V3_NOT_WIRED = "entry_point_does_not_define_the_v3_selection_flags"
+REFUSE_DEGENERATE_AXIS = "the_two_poles_are_the_same_axis"
+
+
+# --------------------------------------------------------------------------- #
+# WHAT MAKES TWO AXES THE SAME AXIS.
+#
+# THIS IS SELECTION METADATA. IT IS NOT AN ARM KEY AND IT IS NOT A CACHE KEY.
+#
+# A pole is `high|low` — what Stage-1 was ASKED for. A reusable arm is keyed on the
+# perturbation's DESIRED CHANGE (`increase|decrease`), because the same pole means opposite
+# perturbations depending on the role it plays: away_from_A(high) DECREASES the program,
+# toward_B(high) INCREASES it. Keying a cached arm on `high` would therefore fuse two
+# opposite perturbations under one key. The arm keys live in ``arms.py``; the pole and the
+# role stay here, in the selection, and neither may alter a cached arm's values.
+#
+# The identity of a pole is the WHOLE tuple: (program_id, pole, condition). Nothing less.
+# Two consequences, and the bridge needs both:
+#
+#   * the same program in the same direction at a DIFFERENT condition is a DIFFERENT axis.
+#     The per-condition lane runs one axis at Rest, Stim8hr and Stim48hr, and the temporal
+#     estimator exists precisely to compare them — a bridge that collapsed them on
+#     program+direction would refuse the runs the lane is built on;
+#   * the same program in the same direction at the SAME condition is ONE axis, and a
+#     contract naming it for BOTH poles is degenerate: away_from_A and toward_B would be
+#     the two opposite arms of a single axis, anti-correlated by construction, and their
+#     "convergence" would be an artefact of the contract rather than a finding.
+# --------------------------------------------------------------------------- #
+POLE_IDENTITY_RULE_ID = "spot.stage01.pole_identity.program_direction_condition.v1"
+POLE_IDENTITY_RULE = (
+    "a pole is identified by (program_id, direction, condition); only an exactly identical "
+    "tuple is the same pole — the same program+direction at another condition is a "
+    "different axis")
+
+
+def pole_identity(program_id: str, direction: str, condition: str) -> str:
+    """The identity of ONE pole, at ONE condition."""
+    return f"{program_id}|{direction}|{condition}"
+
+
+def pole_identities(program_id: str, direction: str, conditions) -> list[str]:
+    """The identity of one pole at EVERY condition the contract evaluates it at."""
+    return [pole_identity(program_id, direction, c) for c in conditions]
+
+
+def axis_identity(bound: dict[str, Any]) -> list[str]:
+    """Every (program, direction, condition) tuple this selection puts on the table."""
+    bio = bound["biology"] if "biology" in bound else selection_biology(bound)
+    conditions = bound["conditions"]
+    return [i for pole in ("A", "B")
+            for i in pole_identities(bio[pole]["program_id"], bio[pole]["direction"],
+                                     conditions)]
 
 # THE RULE, published (m2). It was previously declared non-derivable and carried
 # unchecked; an independent audit published the recipe and it is now enforced.
@@ -312,6 +363,21 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
                         f"poles.{pole}.{field}={doc['poles'][pole][field]!r}. The "
                         "contract names two different biologies, and whichever one is "
                         "read first decides what gets measured")
+
+    # ---- the two poles must be TWO AXES, not one axis named twice ----
+    # Identity is the WHOLE tuple (program, direction, condition) — see POLE_IDENTITY_RULE.
+    # The poles of a v3 contract are evaluated at the SAME conditions, so they are the same
+    # axis exactly when program AND direction agree. The same program in OPPOSITE directions
+    # is a legitimate axis and is not refused here: that is a biology question the contract
+    # is entitled to ask, and the bridge does not get a vote.
+    if (str(c["A"]["program_id"]), str(c["A"]["direction"])) == \
+            (str(c["B"]["program_id"]), str(c["B"]["direction"])):
+        _refuse(REFUSE_DEGENERATE_AXIS,
+                f"both poles are {c['A']['program_id']!r} in direction "
+                f"{c['A']['direction']!r} across conditions {list(c['conditions'])}, so "
+                "they are ONE axis. away_from_A and toward_B would be its two opposite "
+                "arms — anti-correlated by construction — and the convergence between them "
+                "would be an artefact of the contract, not a finding")
 
     # ---- the CONDITION COUNT is decided by the mode, not by the caller ----
     mode = str(c["analysis_mode"])
@@ -564,7 +630,11 @@ def bind_axis(sel: V3Selection, release) -> dict[str, Any]:
         for cond in sel.conditions:
             per_condition[cond] = (pole.program_id, cond) in release.selectable_pairs
         selectability[key] = {
-            "program_conditions": [f"{pole.program_id}|{c}" for c in sel.conditions],
+            # the WHOLE tuple. Keyed on program|condition alone, the "high" and "low" poles
+            # of one program produced byte-identical selectability records.
+            "pole_identities": pole_identities(pole.program_id, pole.direction,
+                                               sel.conditions),
+            "pole_identity_rule_id": POLE_IDENTITY_RULE_ID,
             "selectable_derived_by_condition": per_condition,
             "rule_id": _cfg.SELECTABILITY_RULE_ID,
             "stored_boolean_read": False,
