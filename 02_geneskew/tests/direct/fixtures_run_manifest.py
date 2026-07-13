@@ -187,6 +187,9 @@ def _selection_release(staged: dict) -> dict[str, Any]:
     """W5's NATIVE Stage-1 binding: the scorer view its arms actually stood on."""
     return {"registry_scorer_view_sha256":
                 staged["release"]["registry_scorer_view_canonical_sha256"],
+            # the PER-PROGRAM PROJECTION identity — null here would bind nothing
+            "registry_scorer_projection_sha256":
+                staged["release"]["registry_scorer_projection_sha256"],
             "programs_derived_from": "bound_stage1_v3_scorer_view",
             "effect_universe_sha256": _canon("FIXTURE-effect-universe")}
 
@@ -452,8 +455,11 @@ def _bundle_entry(root: str, d: str) -> dict[str, Any]:
         p = os.path.join(d, name)
         files[name] = {"raw_sha256": _raw(p),
                        "canonical_sha256": _canon(json.load(open(p)))}
-    for arm in inv["arms"]:
-        rel = arm["ranking"]["path"]
+    # The producer hashes WHAT IS ON DISK under rankings/ — which is exactly how an extra,
+    # perfectly-valid ranking file gets inventoried while belonging to no arm.
+    rdir = os.path.join(d, "rankings")
+    for fn in sorted(os.listdir(rdir)):
+        rel = f"rankings/{fn}"
         p = os.path.join(d, rel)
         rankings[rel] = {"raw_sha256": _raw(p),
                          "canonical_sha256": _canon(json.load(open(p)))}

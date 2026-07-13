@@ -185,6 +185,15 @@ def check_code_identity(code: Any, pinned: Any, bundle_id: str) -> list[str]:
     if not isinstance(pinned, dict) or not pinned:
         return [f"{bundle_id}: no expected code identity was pinned; a run's code identity "
                 "may not be taken from the run"]
+    # THE DIGEST RULE, RE-DERIVED: canonical_digest is the first 16 hex of the manifest
+    # hash. A fabricated tuple that never satisfied its own rule is not a checkout — and a
+    # forger who does satisfy it still has to match the pin below.
+    for who, ident in (("the bundle", code), ("the pinned build", pinned)):
+        man, dig = ident.get("manifest_sha256"), ident.get("canonical_digest")
+        if man and dig and str(dig) != str(man)[:len(str(dig))]:
+            bad.append(f"{bundle_id}: {who}'s canonical_digest {str(dig)[:16]!r} is not "
+                       f"the head of its manifest_sha256 {str(man)[:16]!r}")
+
     shared = [f for f in pinned if f in code]
     if not shared:
         return [f"{bundle_id}: the pinned code identity {sorted(pinned)[:4]} shares no "

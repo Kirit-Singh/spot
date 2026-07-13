@@ -350,6 +350,12 @@ def check_keyed_provenance(prov: Any, bundle_id: str) -> list[str]:
         unknown = sorted(k for k in inputs if k not in KEYED_STAGE2_INPUTS)
         if unknown:
             bad.append(f"{bundle_id}: stage2_inputs carries unallowlisted key(s) {unknown}")
+        # A KEY WITH A NULL VALUE IS NOT A BINDING. The canonical object must be complete:
+        # W5 defaulted every one of these to None and validated none of them.
+        missing = sorted(k for k in KEYED_STAGE2_INPUTS if not inputs.get(k))
+        if missing:
+            bad.append(f"{bundle_id}: stage2_inputs is missing or NULL for {missing} — a "
+                       "keyed object whose values are null binds nothing")
     hits = _scan(prov, lambda k: k.lower() in FORBIDDEN_PROVENANCE_KEYS)
     if hits:
         bad.append(f"{bundle_id}: provenance carries selection vocabulary {hits[:4]}")
@@ -411,82 +417,3 @@ class Report:
             "verdict": ADMIT if not self.failed else REJECT,
             **extra,
         }
-
-
-
-# --------------------------------------------------------------------------- #
-# THE W5 AUDIT DEFECTS. Each fails CLOSED here.
-# --------------------------------------------------------------------------- #
-def stale_rankings(bundle_dir: str, inv: Any, bundle_id: str) -> list[str]:
-    """A ranking file NOBODY BINDS is a ranking nobody checked.
-
-    It sits in the release looking exactly like evidence, and a reader who globs the
-    rankings directory would read it. Every file under ``rankings/`` must be bound by
-    exactly one arm.
-    """
-    rdir = os.path.join(bundle_dir, "rankings")
-    if not os.path.isdir(rdir):
-        return []
-    bound = {str((a.get("ranking") or {}).get("path"))
-             for a in ((inv or {}).get("arms") or [])}
-    on_disk = {f"rankings/{f}" for f in os.listdir(rdir)
-               if os.path.isfile(os.path.join(rdir, f))}
-    extra = sorted(on_disk - bound)
-    return [f"{bundle_id}: {len(extra)} STALE ranking file(s) nothing binds "
-            f"(e.g. {extra[:3]}); an unbound ranking is unverified and indistinguishable "
-            "from evidence"] if extra else []
-
-
-# The Stage-1 fields a bundle MUST actually carry. A null binding binds nothing.
-STAGE1_REQUIRED = ("registry_scorer_view_sha256",)
-
-
-def null_stage1_fields(prov: Any, bundle_id: str) -> list[str]:
-    """A Stage-1 binding whose fields are NULL is not a binding, it is a placeholder."""
-    bad: list[str] = []
-    sel = ((prov or {}).get("run_binding") or {}).get("selection_release") or {}
-    for field in STAGE1_REQUIRED:
-        if not sel.get(field):
-            bad.append(f"{bundle_id}: selection_release.{field} is "
-                       f"{sel.get(field)!r} — a null Stage-1 field binds nothing")
-    adm = (prov or {}).get("program_admission") or {}
-    if not (adm.get("programs") or []):
-        bad.append(f"{bundle_id}: program_admission.programs is empty — the arms stand on "
-                   "no declared program axis")
-    if not adm.get("registry_scorer_view_sha256"):
-        bad.append(f"{bundle_id}: program_admission.registry_scorer_view_sha256 is null")
-    return bad
-
-
-CROSS_BUNDLE_TOL = 1e-9
-
-
-def check_cross_bundle(arm_values: dict) -> list[str]:
-    """THE REVERSE-DIRECTION IDENTITY, re-derived ACROSS bundles.
-
-    ``base_delta(A->B) = -base_delta(B->A)`` by construction, and an arm value is a fixed
-    sign times that base. So for the SAME (program, desired_change) and the SAME target::
-
-        arm_value(A->B) == -arm_value(B->A)
-
-    Nothing WITHIN one bundle can see this. Six bundles that were each internally perfect
-    could still disagree with one another about the same measurement, and the aggregate is
-    the only place that can notice.
-    """
-    bad: list[str] = []
-    for (frm, to, prog, dc), values in sorted(arm_values.items()):
-        rev = arm_values.get((to, frm, prog, dc))
-        if rev is None:
-            continue
-        for target, v in sorted(values.items()):
-            w = rev.get(target)
-            if v is None or w is None:
-                if v is not None or w is not None:
-                    bad.append(f"{prog}|{dc}: {target} is measured {frm}->{to} but not "
-                               f"{to}->{frm}")
-                continue
-            if abs(float(v) + float(w)) > CROSS_BUNDLE_TOL:
-                bad.append(
-                    f"{prog}|{dc}|{target}: {frm}->{to} is {v} but {to}->{frm} is {w}; the "
-                    "reverse of an ordered pair must be the exact negation")
-    return bad

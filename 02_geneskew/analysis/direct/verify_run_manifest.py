@@ -53,8 +53,9 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import verify_bundle_scan as S  # noqa: E402  (the per-bundle scan)
-import verify_manifest_rules as R  # noqa: E402  (independent reimplementation)
+import verify_manifest_rules as R  # noqa: E402
 import verify_release_envelope as E  # noqa: E402  (the inventory + the external envelope)
+import verify_release_rules as W  # noqa: E402  (the W5-audit rules)  (independent reimplementation)
 
 VERIFIER_ID = "spot.stage02.run_manifest.verifier.v1"
 SCHEMA_VERSION = "spot.stage02_run_manifest_verification.v1"
@@ -101,6 +102,7 @@ G_CROSS_BUNDLE = "the_REVERSE_of_every_ordered_pair_is_the_exact_negation_ACROSS
 G_NO_STALE = "no_STALE_unbound_ranking_file_sits_in_a_bundle_looking_like_evidence"
 G_STAGE1_NONNULL = "no_Stage1_release_projection_or_selector_field_is_NULL"
 G_PREFLIGHT = "the_PREFLIGHT_proves_the_FINAL_bytes_and_admits_NOTHING"
+G_INVENTORY_ARMS = "the_INVENTORY_binds_EXACTLY_the_rankings_the_ARMS_bind"
 
 
 def _one(rep, pairs, gate, what):
@@ -194,7 +196,8 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     filled: dict[str, list[str]] = {lane: [] for lane in R.LANES}
     found = S.scan(bundles=bundles, bundles_root=bundles_root, programs=programs,
                    projection=projection, pinned=pinned,
-                   expect_verifiers=expect_verifiers, expected_code=expected_code)
+                   expect_verifiers=expect_verifiers, expected_code=expected_code,
+                   release=release)
     filled, ids = found["filled"], found["ids"]
     codes, selections = found["codes"], found["selections"]
     inputs, methods = found["inputs"], found["methods"]
@@ -210,7 +213,7 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     bad_keyed, bad_ranks = found["bad_keyed"], found["bad_ranks"]
     stale, null_stage1 = found["stale"], found["null_stage1"]
     bad_preflight = found["bad_preflight"]
-    bad_cross = R.check_cross_bundle(found["arm_values"])
+    bad_cross = W.check_cross_bundle(found["arm_values"])
 
     rep.gate(G_FILES, not missing and not unloadable,
              "; ".join((missing + unloadable)[:4]))
@@ -232,11 +235,6 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
             bad_projection.append(
                 f"{b.get('bundle_id')}: binds scorer view {str(bound_view)[:16]}; this "
                 f"release publishes {str(want_view)[:16]}")
-        admitted = b.get("admitted_programs")
-        if admitted is not None and sorted(admitted) != programs:
-            bad_projection.append(
-                f"{b.get('bundle_id')}: its arms stand on {sorted(admitted)[:3]}…; the "
-                f"release admits {programs[:3]}…")
     rep.gate(G_PROJECTION, not bad_projection, "; ".join(bad_projection[:4]))
     rep.gate(G_RECONSTRUCT, not bad_hits, "; ".join(bad_hits[:3]))
     rep.gate(G_RANKS, not bad_ranks, "; ".join(bad_ranks[:3]))
@@ -357,6 +355,8 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
         root, expect_bundles=n_temporal_bundles,
         expect_arms=len(want[R.LANE_TEMPORAL]))
     rep.gate(G_INVENTORY, not bad_inv, "; ".join(bad_inv[:4]))
+    bad_inv_arms = W.inventory_matches_arms(inventory, found["bound_rankings"])
+    rep.gate(G_INVENTORY_ARMS, not bad_inv_arms, "; ".join(bad_inv_arms[:3]))
 
     pinned_temporal = (expect_verifiers.get(R.LANE_TEMPORAL) or {}).get("verifier_id")
     envelope, bad_env = E.check_external_admission(root, inventory, pinned_temporal)

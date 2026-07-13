@@ -679,7 +679,7 @@ class TestTheNativeStage1AndCodeBindings:
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
-        assert V.G_PROJECTION in doc["failed_gates"]
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
 
     def test_a_bundle_that_binds_NO_code_identity_is_REJECTED(self, tmp_path):
         # an arm nobody can attribute to a build is an arm that could have come from
@@ -910,6 +910,135 @@ class TestTheW11EnvelopeContractIsCanonical:
 
         assert doc["verdict"] == V.R.REJECT
         assert V.G_EXTERNAL_BINDS in doc["failed_gates"]
+
+
+class TestTheThreePostE122Blockers:
+    """Each survives a FULL reseal. That is the point: every hash is correct."""
+
+    @pytest.mark.parametrize("field", [
+        "registry_scorer_view_sha256", "registry_scorer_projection_sha256"])
+    def test_1_a_NULL_stage1_identity_is_REFUSED_even_fully_resealed(
+            self, tmp_path, field):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update({field: None}))
+        F.seal_release(run)                    # inventory + envelope re-derived: all valid
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_1b_a_stage1_identity_that_is_NOT_THE_RELEASES_is_REFUSED(self, tmp_path):
+        # non-null is not enough: it must be the identity the RELEASE publishes
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"registry_scorer_projection_sha256": "9" * 64}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_1c_a_NULL_selector_sequence_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][2], "temporal_provenance.json",
+               lambda d: d["program_admission"].update({"programs": None}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_2_an_ABSENT_stage2_inputs_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"].pop("stage2_inputs"))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_KEYED_PROVENANCE in doc["failed_gates"]
+
+    def test_2b_a_KEYED_object_with_NULL_VALUES_is_REFUSED(self, tmp_path):
+        # W5 defaulted every one of these to None and validated none of them: a keyed
+        # object whose values are null binds nothing
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["stage2_inputs"].update(
+                   {"effect_source_sha256": None}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_KEYED_PROVENANCE in doc["failed_gates"]
+
+    def test_3_an_EXTRA_fully_hashed_ranking_file_121_vs_120_is_REFUSED(self, tmp_path):
+        """The 121st file. Real JSON, correct hashes, vouched for by the inventory."""
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        n_arms = len(inv["arms"])
+
+        # a VALID ranking — it just belongs to no arm
+        extra = json.load(open(os.path.join(d, inv["arms"][0]["ranking"]["path"])))
+        with open(os.path.join(d, "rankings", "EXTRA__valid.json"), "w") as fh:
+            json.dump(extra, fh, indent=2, sort_keys=True)
+        F.seal_release(run)                    # the inventory now hashes and vouches for it
+
+        inventory = json.load(open(os.path.join(run["root"], F.INVENTORY_FILE)))
+        entry = next(b for b in inventory["bundles"]
+                     if b["relative_dir"].endswith(os.path.basename(d)))
+        assert len(entry["rankings"]) == n_arms + 1        # 121 inventoried...
+        assert n_arms == 20                                 # ...against 20 bound arms
+
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_INVENTORY_ARMS in doc["failed_gates"]
+
+    def test_4_a_NON_FIRST_bundle_with_a_fake_but_SELF_CONSISTENT_commit_is_REFUSED(
+            self, tmp_path):
+        """W11 pins only the FIRST sorted bundle. The aggregate pins all six.
+
+        The fake satisfies its own digest rule (canonical_digest == manifest_sha256[:16]),
+        so nothing INSIDE that bundle can see it. Only comparing the six bundles to each
+        other, and to the pinned build, can.
+        """
+        run = F.complete_run(tmp_path)
+        fake = "b" * 64
+        _patch(run["temporal"][3], "temporal_provenance.json",      # NOT the first
+               lambda d: d["run_binding"]["code_identity"].update(
+                   {"commit": "c" * 40, "manifest_sha256": fake,
+                    "canonical_digest": fake[:16], "clean_tree": True}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_CODE in doc["failed_gates"]
+
+    def test_4b_a_code_identity_that_BREAKS_ITS_OWN_DIGEST_RULE_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][2], "temporal_provenance.json",
+               lambda d: d["run_binding"]["code_identity"].update(
+                   {"canonical_digest": "0000000000000000"}))   # not the head of the hash
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_CODE in doc["failed_gates"]
+
+    def test_the_SELECTOR_CONDITION_ORDER_is_preserved_not_sorted(self, tmp_path):
+        # Rest, Stim8hr, Stim48hr is TEMPORAL order. Sorting would give Rest, Stim48hr,
+        # Stim8hr — which is a different sequence, and the release's order is the truth.
+        run = F.complete_run(tmp_path)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["conditions"] == ["Rest", "Stim8hr", "Stim48hr"]
+        assert doc["conditions"] != sorted(doc["conditions"])
+        assert doc["verdict"] == V.R.ADMIT, doc["failed_gates"]
 
 
 class TestOneNativeFilenameSet:

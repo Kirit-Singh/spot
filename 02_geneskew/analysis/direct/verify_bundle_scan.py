@@ -14,14 +14,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import verify_bundle_rules as B  # noqa: E402
 import verify_manifest_rules as R  # noqa: E402
+import verify_release_rules as W  # noqa: E402  (the W5-audit rules)
 
 
 def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
-         pinned: dict, expect_verifiers: dict, expected_code: dict) -> dict[str, Any]:
+         pinned: dict, expect_verifiers: dict, expected_code: dict,
+         release: dict = None) -> dict[str, Any]:
     """Every finding the bundles yield, collected. No verdicts."""
     filled: dict[str, list] = {lane: [] for lane in R.LANES}
     arm_values: dict = {}          # (from, to, program, dc) -> {target: value}
     stale, null_stage1, bad_preflight = [], [], []
+    bound_rankings: dict = {}      # relative_dir -> {ranking paths the arms bind}
     ids, codes, selections, inputs, methods = [], [], [], [], []
     geneset_by_source: dict[str, list] = {}
     convergences: list[tuple] = []
@@ -60,7 +63,7 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
 
         # STALE RANKING FILES. A ranking nobody binds is a ranking nobody checked, and it
         # sits in the release looking exactly like evidence.
-        stale += R.stale_rankings(path, R.load_json(
+        stale += W.stale_rankings(path, R.load_json(
             os.path.join(path, "arm_bundle.json")), bid)
 
         inv = R.load_json(os.path.join(path, "arm_bundle.json"))
@@ -89,6 +92,8 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
                 f"is {len(want_keys)} ({len(programs)} programs x 2 desired changes). A "
                 "pair-specific bundle leaves the rest of its slots empty")
         filled[lane] += got_keys
+        bound_rankings[os.path.relpath(path, bundles_root).replace(os.sep, "/")] = {
+            str((a.get("ranking") or {}).get("path")) for a in arms}
 
         membership = (R.load_json(os.path.join(
             path, ((inv.get("bindings") or {}).get("gene_set_membership") or {})
@@ -139,8 +144,8 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
                         f"recomputing from the bound membership and ranking bytes gives "
                         f"{dict(list(recomputed_hits.items())[:3])}")
 
-        # NULL STAGE-1 FIELDS. A binding whose fields are null binds nothing at all.
-        null_stage1 += R.null_stage1_fields(prov, bid)
+        # THE STAGE-1 IDENTITIES: present, non-null, and EXACTLY the release's own.
+        null_stage1 += W.stage1_bindings(prov, release, programs, bid)
 
         binding = prov.get("run_binding") or {}
         codes.append((bid, R.content_sha256(B.code_binding(prov))))
@@ -191,5 +196,5 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         "bad_gene_sets": bad_gene_sets, "batch_stored": batch_stored,
         "bad_keyed": bad_keyed, "bad_ranks": bad_ranks,
         "arm_values": arm_values, "stale": stale, "null_stage1": null_stage1,
-        "bad_preflight": bad_preflight,
+        "bad_preflight": bad_preflight, "bound_rankings": bound_rankings,
     }
