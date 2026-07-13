@@ -6,11 +6,14 @@
 import fs from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO = '/Users/kiritsingh/spot';
-const PAGE = REPO + '/01_programs/app/01_page.html';
-const DATA = REPO + '/01_programs/app/data';
-const BRIDGE = REPO + '/01_programs/analysis/stage2_bridge';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, '..', '..');
+const PAGE = path.join(REPO, '01_programs', 'app', '01_page.html');
+const DATA = path.join(REPO, '01_programs', 'app', 'data');
+const BRIDGE = path.join(REPO, '01_programs', 'analysis', 'stage2_bridge');
 const html = fs.readFileSync(PAGE, 'utf8');
 
 function extract(sig) {
