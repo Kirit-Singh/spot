@@ -275,8 +275,15 @@ def test_a_symbol_namespace_whose_target_id_is_an_accession_is_refused():
 
 
 def test_an_empty_target_symbol_is_refused():
-    assert_refused(ROW_VALIDATOR, ensembl_row(target_symbol=""),
-                   "target_symbol", "too short")
+    errors = list(ROW_VALIDATOR.iter_errors(ensembl_row(target_symbol="")))
+    matching = [error for error in errors
+                if list(error.absolute_path) == ["target_symbol"]
+                and error.validator == "minLength"
+                and error.validator_value == 1]
+    assert matching, (
+        "the schema must reject an empty target_symbol through its minLength=1 rule; "
+        f"got {[(list(e.absolute_path), e.validator, e.validator_value) for e in errors]}"
+    )
 
 
 def test_a_malformed_target_ensembl_is_refused():

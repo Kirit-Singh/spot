@@ -67,9 +67,10 @@ def verify_release(*, release_root: str, bundle_root: str,
                    host_denylist=()) -> dict[str, Any]:
     """Verify the whole temporal arm release. Returns a TYPED, CONTENT-ADDRESSED report.
 
-    ``sign=True`` also WRITES the authoritative ``temporal_verification.json`` beside each
-    bundle — the verdict downstream reads. It is written HERE, by the lane that reopened the
-    bytes, and never by the lane that produced them.
+    ``sign=True`` also WRITES one authoritative external-admission envelope. By default it
+    is filed at the release root; ``admission_out`` may instead select the caller's aggregate
+    root. It is written HERE, by the lane that reopened the bytes, and never into a producer
+    bundle directory.
     """
     f = Failures()
 
