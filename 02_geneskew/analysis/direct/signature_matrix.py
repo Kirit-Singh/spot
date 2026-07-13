@@ -58,6 +58,15 @@ GENE_AXIS_FILE = "gene_axis.arrow"
 MATRIX_FILE = "signatures.matrix.arrow"
 MASK_FILE = "signatures.mask.arrow"
 MANIFEST_FILE = "signature_manifest.json"
+QC_FILE = "signature_qc.parquet"
+QC_KEY = "qc"
+# The per-target QC a consumer needs to know WHICH targets are evaluable. The matrix carries
+# the masked vectors; without these it carries no way to tell a target Direct refused from one
+# it scored, and a consumer would either re-derive them (a SECOND source of truth for the same
+# facts, free to disagree) or quietly project everything.
+QC_COLUMNS = ("target_id", "base_state", "base_passed", "mask_resolved",
+              "target_identity_resolved", "n_cells", "n_guides",
+              "low_target_gex", "ontarget_significant")
 REF_FILE = "signature_ref.json"
 
 DTYPE = "float64"
@@ -144,6 +153,7 @@ REFUSE_MANIFEST_IDENTITY_ABSENT = "REFUSE_MANIFEST_IDENTITY_ABSENT"
 REFUSE_DIRECT_MASK_ANCHOR_ABSENT = "REFUSE_DIRECT_MASK_ANCHOR_ABSENT"
 REFUSE_DIRECT_MASK_MISMATCH = "REFUSE_DIRECT_MASK_MISMATCH"
 REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE = "REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE"
+REFUSE_STALE_SIGNATURE_SOURCE = "signature_artifact_was_built_from_another_de_source"
 REFUSE_PADDING_BITS = "REFUSE_PADDING_BITS"
 REFUSE_NONFINITE_UNDECLARED = "REFUSE_NONFINITE_UNDECLARED"
 REFUSE_MASK_ARTIFACT_ABSENT = "REFUSE_MASK_ARTIFACT_ABSENT"
@@ -547,6 +557,13 @@ def write(built: dict[str, Any], *, out_root: str, gene_axis: dict[str, Any],
     })
     mask_raw = _write_table(mask_tbl, mask_path)
 
+    # THE PER-TARGET QC. Without it the matrix says what every target's masked vector IS and
+    # nothing about which targets may be USED — so a consumer projects the ones Direct refused.
+    from . import emit as _emit
+    qc_rows = built.get("qc_rows") or []
+    qc_path = os.path.join(cond_dir, QC_FILE)
+    _emit.write_parquet(qc_rows, qc_path, ["target_id"])
+
     # P8: the mask artifact EXISTS. A matrix without a bitmap is not a valid artifact.
     if not os.path.exists(mask_path):
         _refuse(REFUSE_MASK_ARTIFACT_ABSENT,
@@ -612,6 +629,12 @@ def write(built: dict[str, Any], *, out_root: str, gene_axis: dict[str, Any],
         "matrix": {"path_in_bundle": MATRIX_FILE, "raw_sha256": matrix_raw,
                    "canonical_sha256": content_hash(descriptor),
                    "values_sha256": v_sha},
+        QC_KEY: {"path_in_bundle": QC_FILE,
+                 "columns": list(QC_COLUMNS),
+                 "raw_sha256": file_sha256(qc_path),
+                 "canonical_sha256": content_hash(qc_rows),
+                 "n_rows": len(qc_rows),
+                 "n_base_passed": sum(1 for r in qc_rows if r["base_passed"])},
         "mask": {"path_in_bundle": MASK_FILE, "raw_sha256": mask_raw,
                  "canonical_sha256": content_hash(
                      dict(descriptor, bits_sha256=b_sha, kind="mask")),
@@ -774,6 +797,70 @@ def signature_ref(*, manifest: dict[str, Any], condition: str, source: str,
 # --------------------------------------------------------------------------- #
 # STEP 0: emit the shared artifacts ONCE, before any pathway bundle.
 # --------------------------------------------------------------------------- #
+def scan_condition(args, cond: str, main: dict[str, Any]) -> dict[str, Any]:
+    """The masks AND the per-target QC, from ONE pass over the same inputs.
+
+    They must come from the same scan. A consumer that took the mask from here and the QC from
+    its own re-derivation would hold two statements about one target that are free to disagree,
+    and nothing would notice which one it acted on.
+    """
+    from . import disposition
+
+    mask_sets = mask_sets_for_condition(args, cond, main)
+    identity_map = identity.load_identity_map(getattr(args, "target_identity_map", None))
+    raw = io_data.load_main_identity_universe(args.de_main)
+    identities = {
+        t: identity.resolve(r["released_estimate_id"], r["target_id"],
+                            r["target_symbol"], identity_map)
+        for t, r in raw[cond].items()
+    }
+    meta = main["meta"]
+    qc_rows = []
+    for i, target in enumerate(str(t) for t in meta["target_id"]):
+        ident = identities[target]
+        n_guides = _f(meta["n_guides"][i])
+        n_cells = _f(meta["n_cells_target"][i])
+        resolved = mask_sets[target] is not None
+        low = _b(meta["low_target_gex"][i])
+        sig = _b(meta["ontarget_significant"][i])
+        state, passed, _reasons = disposition.base_qc(
+            row_present=True, mask_resolved=resolved, n_cells=n_cells,
+            low_target_gex=low, ontarget_significant=sig, n_guides=n_guides,
+            target_identity_resolved=ident.ensembl_resolved)
+        qc_rows.append({
+            "target_id": target,
+            "base_state": state,
+            "base_passed": bool(passed),
+            "mask_resolved": bool(resolved),
+            "target_identity_resolved": bool(ident.ensembl_resolved),
+            "n_cells": n_cells,
+            "n_guides": n_guides,
+            "low_target_gex": low,
+            "ontarget_significant": sig,
+        })
+    qc_rows.sort(key=lambda r: r["target_id"].encode("utf-8"))
+    return {"mask_sets": mask_sets, "qc_rows": qc_rows}
+
+
+def _b(v):
+    return None if v is None else bool(v)
+
+
+def check_not_stale(manifest: dict[str, Any], de_main_sha256: str) -> None:
+    """The artifact must have been built from THE SAME DE source the consumer is bound to.
+
+    A stale signature root is the quietest failure available here: the schemas match, the hashes
+    are internally consistent, the vectors load — and they are last week's numbers.
+    """
+    built_from = (manifest.get("sources") or {}).get("de_main_sha256")
+    if built_from != de_main_sha256:
+        _refuse(REFUSE_STALE_SIGNATURE_SOURCE,
+                f"this signature artifact was built from DE source {str(built_from)[:16]}..., "
+                f"but the run is bound to {de_main_sha256[:16]}.... The vectors would load and "
+                "the hashes would agree with themselves; they would simply be another run's "
+                "numbers")
+
+
 def mask_sets_for_condition(args, cond: str, main: dict[str, Any]) -> dict[str, Optional[set]]:
     """Masks, DERIVED by ``masks.build_estimate_mask`` from the contributor manifest and the
     sgRNA library (P2). There is no ad-hoc mask here and no default-empty one: a target whose
@@ -838,8 +925,10 @@ def build_condition(args, cond: str, out_root: str) -> dict[str, Any]:
     main = io_data.load_main(args.de_main, cond)
     gene_ids = [str(g) for g in main["gene_ids"]]
 
-    mask_sets = mask_sets_for_condition(args, cond, main)
+    scanned = scan_condition(args, cond, main)
+    mask_sets, qc_rows = scanned["mask_sets"], scanned["qc_rows"]
     built = build(condition=cond, main=main, mask_sets=mask_sets, gene_ids=gene_ids)
+    built["qc_rows"] = qc_rows
 
     # THE CROSS-LANE ANCHOR. Everything above is self-consistency; this is the only check a
     # coherently forged mask cannot satisfy, because it is compared to a table somebody else

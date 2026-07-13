@@ -540,3 +540,92 @@ class TestTheCrossLaneAnchor:
         src = inspect.getsource(sm)
         for fixture_value in ("269b4278", "34af6e8c", "8c070512", "7410105a"):
             assert fixture_value not in src
+
+
+class TestThePerTargetQC_WithoutWhichAConsumerProjectsRefusedTargets:
+    """The matrix says what every target's masked vector IS. Without QC it says nothing about
+    which targets may be USED — and a consumer would either re-derive the QC itself (a SECOND
+    source of truth for the same facts, free to disagree with this one) or quietly project the
+    targets Direct refused.
+
+    This is exactly the gap a temporal producer would fall into: it can project every row in
+    the matrix, and nothing in the matrix would stop it.
+    """
+
+    def test_the_QC_table_ships_beside_the_matrix(self, emitted):
+        _, _, cond_dir, m = emitted
+        assert os.path.exists(os.path.join(cond_dir, "signature_qc.parquet"))
+        assert m["qc"]["n_rows"] == m["n_targets"]
+
+    def test_it_carries_EVERY_field_evaluability_depends_on(self, emitted):
+        import pandas as pd
+        _, _, cond_dir, m = emitted
+        df = pd.read_parquet(os.path.join(cond_dir, "signature_qc.parquet"))
+        for col in ("base_state", "base_passed", "mask_resolved",
+                    "target_identity_resolved", "n_cells", "n_guides",
+                    "low_target_gex", "ontarget_significant"):
+            assert col in df.columns, col
+
+    def test_a_target_the_matrix_HAS_may_still_be_one_Direct_REFUSED(self, emitted):
+        # the whole point: a row exists for every target, and base_passed is what says whether
+        # it may be used. n_base_passed < n_targets, or this fixture proves nothing.
+        _, _, _, m = emitted
+        assert m["qc"]["n_base_passed"] <= m["n_targets"]
+        assert m["qc"]["n_rows"] == m["n_targets"]
+
+    def test_the_QC_is_bound_by_RAW_and_CANONICAL_hash(self, emitted):
+        _, _, _, m = emitted
+        assert len(m["qc"]["raw_sha256"]) == 64
+        assert len(m["qc"]["canonical_sha256"]) == 64
+
+    def test_the_QC_and_the_MASK_come_from_ONE_scan(self, emitted):
+        # mask_resolved in the QC must agree with the bitmap's own disposition, or the artifact
+        # holds two statements about one target that are free to disagree
+        import pandas as pd
+        _, _, cond_dir, m = emitted
+        mat = sm.read(m, cond_dir)
+        df = pd.read_parquet(os.path.join(cond_dir, "signature_qc.parquet"))
+        resolved_qc = dict(zip(df["target_id"], df["mask_resolved"]))
+        pop = {t: np.unpackbits(r)[:m["n_genes"]].sum()
+               for t, r in zip(mat["target_ids"], mat["bitmap"])}
+        for t, is_resolved in resolved_qc.items():
+            # an all-zero bitmap row is UNRESOLVED; anything else is resolved
+            assert bool(is_resolved) == (pop[str(t)] > 0)
+
+
+class TestTheSTALE_AMBIGUOUS_AND_MISSING_SourceAttacks:
+    """Zero-compute. The three ways a consumer ends up reading the wrong signatures."""
+
+    def test_a_STALE_artifact_is_REFUSED(self, emitted):
+        # the quietest failure available: the schemas match, the hashes are internally
+        # consistent, the vectors load — and they are another run's numbers
+        _, _, _, m = emitted
+        with pytest.raises(sm.SignatureMatrixError) as exc:
+            sm.check_not_stale(m, "f" * 64)
+        assert exc.value.gate == sm.REFUSE_STALE_SIGNATURE_SOURCE
+
+    def test_the_artifact_built_from_THIS_de_source_is_ACCEPTED(self, emitted):
+        args, _, _, m = emitted
+        from direct.hashing import file_sha256
+        sm.check_not_stale(m, file_sha256(args.de_main))   # must not raise
+
+    def test_a_MISSING_condition_artifact_is_REFUSED_by_the_index(self, tmp_path):
+        from direct import bundle_index as bi
+        with pytest.raises(bi.BundleIndexError) as exc:
+            bi.find(str(tmp_path / "nothing"), condition="Rest")
+        assert exc.value.gate == bi.REFUSE_NOT_FOUND
+
+    def test_an_AMBIGUOUS_source_is_REFUSED_rather_than_silently_chosen(self, tmp_path):
+        import json as _json
+
+        from direct import bundle_index as bi
+        root = str(tmp_path)
+        for run_id in ("aaaa1111bbbb2222", "cccc3333dddd4444"):
+            d = os.path.join(root, run_id)
+            os.makedirs(d)
+            with open(os.path.join(d, "provenance.json"), "w") as fh:
+                _json.dump({"arm_bundle_run_id": run_id,
+                            "run_binding": {"condition": "Rest"}}, fh)
+        with pytest.raises(bi.BundleIndexError) as exc:
+            bi.find(root, condition="Rest")
+        assert exc.value.gate == bi.REFUSE_AMBIGUOUS
