@@ -65,11 +65,12 @@ def _binding_block(src, gs_raw, effect=EFFECT_U, target=TARGET_U):
             "gene_set_release": {"source": src, "release_id": f"{src}-2024", "sha256": gs_raw,
                                  "n_sets": 10},
             "gene_set_license": "CC-BY", "gene_set_license_reference": "ref://license",
-            "gene_id_namespace": "ensembl", "gene_id_namespace_effect": "ensembl",
+            "gene_id_namespace": "ensembl_gene_id", "gene_id_namespace_effect": "ensembl_gene_id",
             "effect_universe_sha256": effect, "n_effect_universe_genes": 100,
-            "effect_universe_role": "readout",
+            "effect_universe_role": "de_readout_signature_vector_space_and_effect_matrix_columns",
             "target_universe_sha256": target, "n_target_universe_genes": 50,
-            "target_universe_role": "perturbation", "target_id_namespace": "ensembl",
+            "target_universe_role": "perturbation_target_ranked_population_gene_set_membership",
+            "target_id_namespace": "mixed_ensembl_gene_id_and_released_gene_symbol",
             "symbol_targets_preserved": False, "single_universe_binding": False,
             "canonical_sha256": hashlib.sha256(f"canon:{src}".encode()).hexdigest(),
             "min_set_size": 5, "max_set_size": 500, "pathway_layer_available": True}
@@ -78,13 +79,15 @@ def _binding_block(src, gs_raw, effect=EFFECT_U, target=TARGET_U):
 def _bundle(root, cond, src, *, scorer=SCORER_VIEW, code=None, release_scorer=SCORER_CANON,
             method=METHOD, env_lock=LOCK, records=None, doc_source=None, gene_tag=None,
             effect=EFFECT_U, target=TARGET_U, rb_effect=None, rb_target=None,
-            rb_n_effect=100, rb_n_target=50, mgs_override=None, bundle_mgs="_",
+            rb_n_effect=100, rb_n_target=50, mgs_override=None, mgs_patch=None, bundle_mgs="_",
             top_level_gene_sets=False, no_method=False, arm_extra=None, binding_extra=None):
     tag = gene_tag or src
     gs_doc = _gene_doc(tag)
     gs_bytes = (json.dumps(gs_doc, indent=2, sort_keys=True) + "\n").encode()
     gs_raw = hashlib.sha256(gs_bytes).hexdigest()
     mgs = mgs_override or _binding_block(tag, gs_raw, effect, target)
+    if mgs_patch:                                    # mutate ONE descriptor, rest stays canonical
+        mgs = {**mgs, **mgs_patch}
     binding = {
         "condition": cond, "source": src,
         "scorer_view_sha256": scorer,
@@ -390,10 +393,29 @@ class TestTheUniverseCrossBinding:
         assert VR.G_UNIVERSE in _failed(_verify(rel))
 
     def test_a_missing_universe_role_is_REFUSED(self, tmp_path):
-        block = _binding_block("reactome", "b" * 64)
-        del block["effect_universe_role"]
-        rel = _build(tmp_path, mgs_override=block)
+        rel = _build(tmp_path, mgs_patch={"effect_universe_role": None})
         assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+    def test_a_WRONG_BUT_TRUTHY_effect_universe_role_is_REFUSED(self, tmp_path):
+        # the exact re-audit defect: a truthy-but-noncanonical role that must NOT admit
+        rel = _build(tmp_path, mgs_patch={"effect_universe_role": "analysis_universe"})
+        res = _verify(rel)
+        assert res["verdict"] == VR.REFUSE and VR.G_UNIVERSE in _failed(res)
+
+    def test_a_WRONG_BUT_TRUTHY_target_role_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, mgs_patch={"target_universe_role": "some_target_space"})
+        assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+    def test_a_NONCANONICAL_gene_id_namespace_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, mgs_patch={"gene_id_namespace": "ensembl"})   # not ensembl_gene_id
+        assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+    def test_a_NONCANONICAL_target_id_namespace_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, mgs_patch={"target_id_namespace": "ensembl_gene_id"})
+        assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+    def test_the_honest_release_carries_the_canonical_descriptors(self, release):
+        assert VR.G_UNIVERSE not in _failed(_verify(release))
 
 
 class TestTheInferentialFirewall:

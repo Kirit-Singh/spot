@@ -114,8 +114,20 @@ PASS, FAIL = "pass", "fail"
 # The inferential firewall: a pathway arm is a rank position, never a test statistic. These
 # substrings (normalized) are forbidden at ANY depth of ANY shipped document — a resealed
 # forgery that self-consistently carries a q-value is still refused.
-FORBIDDEN_INFERENTIAL = ("p_value", "q_value", "empirical_q", "pvalue", "qvalue", "p_adj",
-                         "q_adj", "padj", "adjusted_p", "fdr", "false_discovery")
+FORBIDDEN_INFERENTIAL = ("p_value", "q_value", "empirical_q", "empirical_p", "pvalue", "qvalue",
+                         "p_adj", "q_adj", "padj", "adjusted_p", "fdr", "false_discovery")
+
+# The CANONICAL values of every universe descriptor the gene-set binding must carry (genesets.py
+# UNIVERSE_ROLE / ENSEMBL_GENE_ID / TARGET_ID_NAMESPACE). A wrong-but-truthy role — e.g.
+# "analysis_universe" — is a different claim about what the universe IS; only the exact string is
+# the readout-signature space, so these are matched by value, never by truthiness.
+CANONICAL_UNIVERSE_DESCRIPTORS = {
+    "effect_universe_role": "de_readout_signature_vector_space_and_effect_matrix_columns",
+    "target_universe_role": "perturbation_target_ranked_population_gene_set_membership",
+    "gene_id_namespace": "ensembl_gene_id",
+    "gene_id_namespace_effect": "ensembl_gene_id",
+    "target_id_namespace": "mixed_ensembl_gene_id_and_released_gene_symbol",
+}
 
 # THE NAMED GATE INVENTORY — the exact list the envelope carries.
 G_RELEASE_ANCHOR = "the_condition_and_source_universe_comes_from_the_authoritative_stage1_release"
@@ -403,9 +415,8 @@ def _gene_sets(bundles, auth_src_set, report_paths):
         got = attested.get(b["run_id"])
         if got is not None and pinned_sha is not None and got != pinned_sha:
             bad.append(f"{b['dir']}: the independent report attested a different gene-set file")
-        # crosswalk + BOTH universes must be present and identical across the release.
-        if not mgs.get("gene_id_namespace"):
-            bad.append(f"{b['dir']}: the gene-set binding declares no gene_id_namespace crosswalk")
+        # BOTH universe hashes must be present (their exact identity — value, role, namespace,
+        # count — is bound against the authoritative run_binding fields in G_UNIVERSE).
         for u in ("effect_universe_sha256", "target_universe_sha256"):
             if not mgs.get(u):
                 bad.append(f"{b['dir']}: the gene-set binding declares no {u}")
@@ -450,10 +461,12 @@ def _universe(bundles):
             elif mgs.get(mkey) != b[bkey]:
                 bad.append(f"{b['dir']}: method.gene_sets {label} {mgs.get(mkey)!r} != the "
                            f"authoritative run_binding {b[bkey]!r}")
-        for role in ("effect_universe_role", "target_universe_role", "gene_id_namespace_effect",
-                     "target_id_namespace"):
-            if not mgs.get(role):
-                bad.append(f"{b['dir']}: the gene-set binding declares no {role}")
+        # EXACT canonical values, not mere presence: a wrong-but-truthy role/namespace is a
+        # different claim about what the universe IS, and must refuse.
+        for desc, want in CANONICAL_UNIVERSE_DESCRIPTORS.items():
+            if mgs.get(desc) != want:
+                bad.append(f"{b['dir']}: gene-set {desc} is {str(mgs.get(desc))[:32]!r}, not the "
+                           f"canonical {want!r}")
         eff_auth.add(b["rb_effect_universe_sha256"])
         tgt_auth.add(b["rb_target_universe_sha256"])
     if bundles and len(eff_auth) > 1:
