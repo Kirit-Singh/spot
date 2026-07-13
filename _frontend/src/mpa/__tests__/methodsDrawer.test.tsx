@@ -68,6 +68,24 @@ describe('contextual Methods & Provenance drawer', () => {
     expect(d2).toBe(d1); // the same single shell drawer node
   });
 
+  it('states the source-tissue fact in the drawer (stage-appropriate, not a canvas banner)', () => {
+    goto('/02_page.html');
+    const { unmount } = renderStage('targets', 'Targets');
+    const d1 = openDrawer();
+    expect(
+      within(d1).getByText(/Primary human CD4 T cells.*no multi-tissue expression analysis/i),
+    ).toBeInTheDocument();
+    // it lives in the drawer, not as a banner on the canvas
+    expect(within(document.querySelector('main')!).queryByText(/CD4 T cells/i)).toBeNull();
+    unmount();
+
+    goto('/02_page.html');
+    renderStage('pksafety', 'PK & Safety');
+    expect(
+      within(openDrawer()).getByText(/label evidence, never inferred from tissue expression/i),
+    ).toBeInTheDocument();
+  });
+
   it('production shows "unavailable" values and never a fixture (values never invented)', () => {
     goto('/02_page.html');
     renderStage('targets', 'Targets');

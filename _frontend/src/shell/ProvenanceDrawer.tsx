@@ -107,6 +107,7 @@ function MethodsSection({ m }: { m: MethodsBlock }) {
     <section className="mb-3 border-b border-line pb-3">
       <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-muted">Methods</div>
       <Row label="Data / input"><Val v={m.data_input} /></Row>
+      <Row label="Source"><Val v={m.source_tissue} /></Row>
       <Row label="Estimand"><Val v={m.estimand} /></Row>
       <Row label="Masks / QC"><Val v={m.masks_qc} /></Row>
       <Row label="Upstream"><Val v={m.upstream_model} /></Row>

@@ -3,12 +3,14 @@
 // render as "unavailable"). Values are visibly synthetic.
 
 import type { StageMethodsManifest } from '../domain/methodsManifest';
+import { stageSourceTissue } from '../domain/methodsManifest';
 
 export function demoMethodsManifest(stage_label: string): StageMethodsManifest {
   return {
     stage_label,
     methods: {
       data_input: 'Marson GWCD4i (synthetic fixture) · masked target arms',
+      source_tissue: stageSourceTissue(stage_label),
       estimand: 'Two independent arm projections (away_from_A, toward_b); no combined score',
       masks_qc: 'Target-neighborhood mask; QC = on-target significance + guide/donor concordance',
       upstream_model: 'Stage-1 continuous program scorer view (fixture)',
