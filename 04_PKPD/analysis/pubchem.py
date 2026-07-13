@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 from .acquire_http import Client
 from .acquisition import AcquisitionRecord, RunRoot, record_from_response
@@ -84,6 +85,26 @@ def assert_descriptor_is_public(name: str) -> None:
                 "label-safety or NEBPI lanes, and is not a licence to fabricate the value.")
 
 
+def name_to_cids_path(name: str) -> str:
+    """The name->CIDs PUG path, with ONLY the free-text name segment percent-encoded.
+
+    PubChem embeds the compound name in the URL path. A raw space (`SALMETEROL XINAFOATE`) makes
+    urllib raise InvalidURL before the request is sent — and in a bulk warm-up that is an uncaught
+    crash, not a counted miss. `quote(name, safe="")` escapes the space (-> %20), the reserved
+    characters (`,` `/` `?` -> %2C %2F %3F) and any non-ASCII (UTF-8 percent bytes), while the path
+    SEPARATORS and the `/cids/JSON` structure are built here and never touched. A simple ASCII name
+    is returned byte-for-byte unchanged, so no cache entry that already worked can move.
+    """
+    return f"compound/name/{quote(name, safe='')}/cids/JSON"
+
+
+def cid_to_property_path(cid: str) -> str:
+    """The CID->properties PUG path. The CID is numeric and the property commas are PubChem's list
+    SEPARATOR — encoding them would ask for one property literally named 'A,B,C'. So this path is
+    built from trusted structure and carries no free text to escape."""
+    return f"compound/cid/{cid}/property/{','.join(PROPERTIES)}/JSON"
+
+
 def parse_cids(raw: bytes) -> list[str]:
     payload = _json(raw, "compound/name/.../cids")
     cids = (payload.get("IdentifierList") or {}).get("CID") or []
@@ -118,7 +139,7 @@ def parse_properties(raw: bytes, cid: str) -> PubChemIdentity:
 def acquire_pubchem_identity(client: Client, run_root: RunRoot,
                              name: str) -> tuple[PubChemIdentity, list[AcquisitionRecord]]:
     """name -> (identity, the two responses it rests on). Ambiguity is a refusal."""
-    cid_resp = client.get(SOURCE_KEY, f"compound/name/{name}/cids/JSON")
+    cid_resp = client.get(SOURCE_KEY, name_to_cids_path(name))
     cids = parse_cids(cid_resp.body)
     if not cids:
         raise Rejection(
@@ -133,8 +154,7 @@ def acquire_pubchem_identity(client: Client, run_root: RunRoot,
             "Stage 4 has not established, and every downstream join would inherit the guess.")
 
     cid = cids[0]
-    prop_resp = client.get(
-        SOURCE_KEY, f"compound/cid/{cid}/property/{','.join(PROPERTIES)}/JSON")
+    prop_resp = client.get(SOURCE_KEY, cid_to_property_path(cid))
     identity = parse_properties(prop_resp.body, cid)
 
     records = [
