@@ -153,10 +153,22 @@ admitted a word*. It is generic over any estimator, so the next one inherits it.
 Program ids are policed by the **effect universe**, not the schema (they are free strings
 there) — so that is asserted where the check actually lives, not where it would look tidier.
 
-## Debt (flagged, not silently fixed)
+## The identity split (done)
 
-`stage1_v3.py` is now 1092 lines (793 at base) against the ≤500-line rule — a pre-existing
-breach I have grown. The natural split is the identity derivations (`question_id`,
-`selection_id`, endpoints, the declared method identity, and their published rules) into
-`stage1_v3_ids.py`. I did not do it here: it would balloon the diff an independent verifier must
-check, and CLAUDE.md says never reorganize silently. **Recommend it as the next small change.**
+`stage1_v3.py` was 1092 lines against the ≤500 rule. The identity derivations — `question_id`,
+`selection_id`, the pole/endpoint identities, the declared method identity, the biology key, and
+their published rule ids — now live in **`analysis/direct/stage1_v3_ids.py`** (300 lines).
+`stage1_v3.py` is **859**. **This module GATES; that one DERIVES.**
+
+Behaviour is preserved exactly: all 29 identity names are **re-exported** from `stage1_v3` and
+resolve to the *same objects* (asserted, not assumed — a shadowing copy would drift in silence),
+so every lane, runner and test keeps naming them through the module it always did. An identity
+that quietly changed its import path would be an identity that changed.
+
+`stage1_v3_ids` imports **nothing but `hashing.content_hash`** (asserted by AST): identity must
+not be able to move because a config, a policy or a release moved.
+
+`stage1_v3.py` at 859 lines is still over the 500-line rule. What remains is genuinely the gate
+(the refusal ladder in `validate`) plus the release/axis binding and the run-id block; the next
+natural cut is `bind_axis` + `stage2_run_binding`/`stage2_run_id`. Not done here — it is a
+different seam, and CLAUDE.md says never reorganize silently.
