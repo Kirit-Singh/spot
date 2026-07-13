@@ -81,6 +81,21 @@ MODE_WITHIN = "within_condition"
 MODE_TEMPORAL = "temporal_cross_condition"
 ANALYSIS_MODES = (MODE_WITHIN, MODE_TEMPORAL)
 
+# THE PATHWAY-VIEW FIREWALL, extended from the estimator firewall to the pathway lane: the
+# pathway view of a temporal selection is its OWN temporal pathway bundle over the DiD ranking,
+# never a within-condition pathway bundle. Until that bundle exists the status is this named
+# awaiting state — the pathway lane never borrows a condition-specific bundle for a temporal
+# selection. (Named like EXECUTION_AWAITING; the temporal pathway producer lives in
+# ``temporal_pathway`` and asserts the same constant.)
+PATHWAY_AWAITING_TEMPORAL = "awaiting_temporal_pathway_bundle"
+
+
+def pathway_status_for_mode(mode: str) -> Optional[str]:
+    """The pathway-view availability for a selection's analysis_mode. Temporal -> awaiting its own
+    temporal pathway bundle (never a within-condition one); within-condition -> None (its lane
+    answers directly)."""
+    return PATHWAY_AWAITING_TEMPORAL if str(mode) == MODE_TEMPORAL else None
+
 PROJECTION_AVAILABLE = "available"
 PROJECTION_UNAVAILABLE = "unavailable"
 PROJECTION_STATUSES = (PROJECTION_AVAILABLE, PROJECTION_UNAVAILABLE)
@@ -231,8 +246,11 @@ def estimator_registry() -> dict[str, Any]:
             "n_conditions": 2,
             "status": (ESTIMATOR_AVAILABLE if ESTIMATOR_TEMPORAL in
                        IMPLEMENTED_ESTIMATORS else ESTIMATOR_NOT_IMPLEMENTED),
+            # the pathway view is its OWN temporal pathway bundle, never a within-condition one
+            "pathway_status": pathway_status_for_mode(MODE_TEMPORAL),
         },
     }
+    reg[ESTIMATOR_WITHIN]["pathway_status"] = pathway_status_for_mode(MODE_WITHIN)
     from .temporal.arms import config as tconfig
 
     reg[ESTIMATOR_TEMPORAL].update({
