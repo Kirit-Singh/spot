@@ -1,7 +1,7 @@
 {
   "schema": "spot.stage01_v3_release.v1",
   "method_version": "stage1-continuous-v3.0.1",
-  "stage1_registry_sha256": "43cfc7bbd3272147377db0ae64462c797e0ac0bed3571a680c6f6896c7f79029",
+  "stage1_registry_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
   "registry_scorer_projection_sha256": "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85",
   "registry_scorer_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
   "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
@@ -86,8 +86,8 @@
   "components": {
     "registry_v3": {
       "path": "01_programs/app/data/stage01_program_registry_v3.json",
-      "raw_sha256": "c16076283bcc83717a62157bd7ad1710b4fbbb9e6527f37909f3e9bc688207fe",
-      "canonical_content_sha256": "21ef50b27abc36724f980f1003c07de082f318e4fc9ad84e9501b80084008f02",
+      "raw_sha256": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664",
+      "canonical_content_sha256": "17eaea374b86d78268c06cfd7d54efa4f47adc2d4a418db1bd7e1e8258834dd5",
       "role": "program_registry",
       "universe": "effect_universe_gwcd4i"
     },
@@ -145,5 +145,5 @@
       "active_gate": false
     }
   },
-  "self_release_sha256": "9bc851709595adb0953a3affffa8c2bbb1fd8355112fbd9565b4b97deb29866d"
+  "self_release_sha256": "182510e37415f70d892a0f0cd8a66952fbbd344ed0207e6bb1bb711c0c8eb6f1"
 }

@@ -100,12 +100,12 @@
     "scoring_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c"
   },
   "provenance_bindings": {
-    "primary_registry_v3_raw_sha256": "c16076283bcc83717a62157bd7ad1710b4fbbb9e6527f37909f3e9bc688207fe"
+    "primary_registry_v3_raw_sha256": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664"
   },
   "historical_validation_provenance": {
     "kind": "frozen_lomo_within_condition_validation_v3",
     "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "active_gate": false
   },
-  "full_contract_content_sha256": "73f766e1e2260161620fb04b2f129459bc67e4470be1fe9f7eb9aeac21038354"
+  "full_contract_content_sha256": "34d44350f91ff2d73483b63506e7e0de4567ca47966dde0828b15d80d8e7ef85"
 }

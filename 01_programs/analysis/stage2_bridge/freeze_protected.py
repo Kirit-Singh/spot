@@ -92,10 +92,13 @@ def _self_check(base: dict) -> None:
     Reseal history (registry raw + self move on provenance/display edits; scorer-projection + Stage-2 view
     stay — they exclude citations/provenance/display): (1) Tier-2 display de-bake dropped display_label
     (self 2493896a→84da49c9, scorer-proj 9621067b→008c1da1, raw 91ba78df→20f91fdd); (2) S1-M5 provenance
-    fix (TOX citation + FOXP3 human corroboration) moved self 84da49c9→070e798e, raw 20f91fdd→04ce0a25 while
-    scorer-projection 008c1da1, Stage-2 view 5d1d8c36 and scores 43c4296d are byte-identical."""
+    fix (TOX citation + FOXP3 human corroboration) moved self 84da49c9→070e798e, raw 20f91fdd→04ce0a25;
+    (3) Round-4 Rule-1 provisional-citation policy moved self →43cfc7bb, raw →c1607628; (4) W17 independent
+    citation-correction (3 verified human primary additions + FOXP3 nested support_level rename) moved
+    self 43cfc7bb→d287e332, raw c1607628→bcb536d0 — while scorer-projection 008c1da1, Stage-2 view 5d1d8c36
+    and scores 43c4296d stay byte-identical."""
     assert base["registry_self_declared_sha256"] == \
-        "43cfc7bbd3272147377db0ae64462c797e0ac0bed3571a680c6f6896c7f79029", \
+        "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2", \
         "registry self-declared sha drift"
     # Validates canonical_json + content_hash (sort_keys, compact seps, ensure_ascii)
     # against the registry's own frozen rule.
@@ -105,7 +108,7 @@ def _self_check(base: dict) -> None:
         "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85", \
         "scorer-projection invariant drift"
     assert base["raw_sha256"]["registry_v3"] == \
-        "c16076283bcc83717a62157bd7ad1710b4fbbb9e6527f37909f3e9bc688207fe", \
+        "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664", \
         "served registry raw sha drift"
     # The Stage-2 scorer VIEW (what selection_id binds) must reproduce its known raw + canonical hashes.
     assert base["stage2_view_canonical_sha256"] == \
@@ -122,7 +125,7 @@ if __name__ == "__main__":
     with open(BASELINE_PATH, "w") as fh:
         json.dump(base, fh, indent=2, sort_keys=True)
         fh.write("\n")
-    print("canonical.py self-check PASSED (43cfc7bb + 008c1da1 reproduced; Rule-1 provisional citation)")
+    print("canonical.py self-check PASSED (d287e332 + 008c1da1 reproduced; W17 citation-correction applied)")
     print("wrote", os.path.relpath(BASELINE_PATH, ANALYSIS))
     for k, v in base["raw_sha256"].items():
         print(f"  {k:26s} {v}")

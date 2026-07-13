@@ -82,14 +82,31 @@
      "exact_locator": "Szabo 2000 abstract: 'isolation of T-bet, a Th1-specific T box transcription factor'",
      "support_level": "directly_supported_primary",
      "support_basis": "abstract_located",
-     "species_lineage_scope": "mouse+human Th",
+     "species_lineage_scope": "human_supported_mouse_mechanistic_origin",
      "claim_scope_limit": "T-bet also in CD8/NK/B; lineage-defining TF not CD4-exclusive",
      "bounded_rationale": "T-bet is the primary-supported Th1 master TF; high-T-bet marks a Th1-type program, not CD4 identity.",
      "measured_in_object": true,
      "contributes_to_score": true,
      "provenance_inherited": false,
      "provenance_origin": "prior_ledger_primary_located",
-     "citation_key": "szabo"
+     "citation_key": "szabo",
+     "mouse_mechanistic_origin_pmid": "10761931",
+     "human_primary_support": {
+      "source_type": "primary_research",
+      "pmid": "23232398",
+      "pmcid": "PMC3535338",
+      "doi": "10.1038/ncomms2260",
+      "source_title": "T-bet and GATA3 orchestrate Th1 and Th2 differentiation through lineage-specific targeting of distal regulatory elements.",
+      "source_year": "2012",
+      "source_url": "https://pubmed.ncbi.nlm.nih.gov/23232398/",
+      "license": "PMC full text CC BY-NC-SA 3.0 (PMC3535338)",
+      "content_sha256": "70c51efc58b347fff8b9efbce3bca29c69b250428423d951fc5ce25fd7df2f78",
+      "exact_locator": "Kanhere et al. 2012 (Nat Commun): T-bet ChIP-seq in primary human Th1 cells differentiated in vitro from naive CD4+ precursors; T-bet binds distal sites at TBX21 and directly activates its own expression (Results, Fig. 5, Discussion; Methods 'Naive human CD4+ T cells were isolated and polarized').",
+      "species_lineage_scope": "human",
+      "support_level": "direct_primary_human",
+      "verification_status": "verified",
+      "verification_reason": "W17 independent citation-verifier: PMID/DOI/PMCID/title/authors resolve against PubMed + PMC; MeSH indexes Humans AND CD4-Positive T-Lymphocytes; direct human primary CD4 source for TBX21->Th1."
+     }
     },
     "IFNG": {
      "source_type": "primary_research",
@@ -102,14 +119,31 @@
      "exact_locator": "Szabo 2000 abstract: 'hallmark Th1 cytokine, IFNgamma; T-bet expression correlates with IFN'",
      "support_level": "directly_supported_primary",
      "support_basis": "abstract_located",
-     "species_lineage_scope": "mouse+human Th",
+     "species_lineage_scope": "human_supported_mouse_mechanistic_origin",
      "claim_scope_limit": "pan-effector cytokine: CD8/NK/NKT and general activation",
      "bounded_rationale": "IFNG association with the Th1 program is primary-supported; it is not CD4- or Th1-specific.",
      "measured_in_object": true,
      "contributes_to_score": true,
      "provenance_inherited": false,
      "provenance_origin": "prior_ledger_primary_located",
-     "citation_key": "szabo"
+     "citation_key": "szabo",
+     "mouse_mechanistic_origin_pmid": "10761931",
+     "human_primary_support": {
+      "source_type": "primary_research",
+      "pmid": "9419219",
+      "pmcid": "PMC2199181",
+      "doi": "10.1084/jem.187.1.129",
+      "source_title": "Differential expression of chemokine receptors and chemotactic responsiveness of type 1 T helper cells (Th1s) and Th2s.",
+      "source_year": "1998",
+      "source_url": "https://pubmed.ncbi.nlm.nih.gov/9419219/",
+      "license": "PMC full text CC BY-NC-SA 4.0 (PMC2199181)",
+      "content_sha256": "a33ed37499c37173ec7e0e7f1e08c617c38b56ce0259244043d40f0a1db4fd44",
+      "exact_locator": "Bonecchi et al. 1998 (J Exp Med): human CD4+ T-cell clones able to produce IFN-gamma but not IL-4 categorized as Th1 clones (Results, single-cell cytokine analysis); 'Th1s secrete IFN-gamma' (Introduction). Same human source already cited in the registry for th1_like.CXCR3.",
+      "species_lineage_scope": "human",
+      "support_level": "direct_primary_human",
+      "verification_status": "verified",
+      "verification_reason": "W17 independent citation-verifier: PMID/DOI/PMCID/title/authors resolve against PubMed + PMC; MeSH indexes Humans; text defines human CD4 Th1 clones by IFN-gamma production. Direct human primary CD4 source for IFNG->Th1."
+     }
     },
     "IL12RB2": {
      "source_type": "primary_research",
@@ -768,14 +802,31 @@
      "exact_locator": "Ivanov 2006 abstract: 'genes encoding IL-17 and the related cytokine IL-17F in naive CD4+ T helper cells' (MOUSE)",
      "support_level": "directly_supported_primary",
      "support_basis": "abstract_located",
-     "species_lineage_scope": "mixed_mouse_human",
+     "species_lineage_scope": "human_supported_mouse_mechanistic_origin",
      "claim_scope_limit": "also gd T/ILC3; defensible among conventional Th subsets but not lineage-exclusive",
      "bounded_rationale": "IL17F is a primary-supported Th17 effector cytokine.",
      "measured_in_object": true,
      "contributes_to_score": true,
      "provenance_inherited": false,
      "provenance_origin": "prior_ledger_primary_located",
-     "citation_key": "ivanov"
+     "citation_key": "ivanov",
+     "mouse_mechanistic_origin_pmid": "16990136",
+     "human_primary_support": {
+      "source_type": "primary_research",
+      "pmid": "28763457",
+      "pmcid": "PMC5538713",
+      "doi": "10.1371/journal.pone.0181868",
+      "source_title": "RORgammat and RORalpha signature genes in human Th17 cells.",
+      "source_year": "2017",
+      "source_url": "https://pubmed.ncbi.nlm.nih.gov/28763457/",
+      "license": "PMC full text CC BY 4.0 (PMC5538713)",
+      "content_sha256": "7821f7deb7a09eb531c95a65ab14013cb9d0be16045c3c35e009d41d85e78cc1",
+      "exact_locator": "Castro et al. 2017 (PLoS ONE): IL-17F is one of 12 RORgammat-dependent Th17 signature genes reduced by RORgammat siRNA / inverse-agonist treatment in purified primary human CD4 T cells (Results, Fig 5A; Methods 'Human CD4 T cell purification' from two healthy donors, 'Th17 assay'). Authoritative DOI is the PLoS ONE 10.1371/journal.pone.0181868, NOT the spurious reference-list DOI.",
+      "species_lineage_scope": "human",
+      "support_level": "direct_primary_human",
+      "verification_status": "verified",
+      "verification_reason": "W17 independent citation-verifier: article-own PubmedData ArticleIdList + ELocationID confirm PLoS ONE DOI 10.1371/journal.pone.0181868, PMC5538713, title, Humans MeSH; direct human primary CD4 source for IL17F->Th17. A spurious reference-list Sci Transl Med DOI (10.1126/scitranslmed.3001107) was explicitly rejected."
+     }
     },
     "IL23R": {
      "source_type": "primary_research",
@@ -1380,8 +1431,8 @@
       "doi": "10.1002/eji.200636435",
       "exact_locator": "Wang et al. 2007 (Eur J Immunol 37:129-138): activation induces transient FOXP3 in human conventional CD4 T cells without regulatory function",
       "species_lineage_scope": "human",
-      "support_level": "corroborating_secondary_human",
-      "verification_status": "provisional",
+      "support_level": "direct_primary_human_counterevidence",
+      "verification_status": "verified",
       "claim_scope_limit": "Wang et al. 2007 (PMID 17154262): human \u2014 activated conventional CD4 T cells transiently induce FOXP3; not Treg-exclusive"
      }
     },
@@ -4285,12 +4336,17 @@
     "role": "state_ctl_integration_map",
     "file": "analysis/provenance_sources/STATE_CTL_REGISTRY_INTEGRATION_MAP.md",
     "sha256": "9a9afb132b9808bf1db51bebe90a8136d4b8051f65408f16ad746ffc43b03a22"
+   },
+   {
+    "role": "citation_correction",
+    "file": "analysis/provenance_sources/stage01_citation_correction_v1.json",
+    "sha256": "db95a8d7e6780dd550f75c8c358bd561ae0561edba2c23c20efd99303d4da580"
    }
   ],
   "method_version_unchanged": "stage1-continuous-v3.0.1",
   "not_a_scorer_method_revision": "Literature/provenance metadata revision only. Panels, gene ids, controls, bins, seeds, coefficients, normalization and all scores are byte-identical; this is an additive panel_provenance sub-schema, not a scorer method_version bump.",
   "not_a_production_or_selectability_promotion": "Provenance-only. The frozen 0/33 production-selectability result, overlay/app deployment gates, and the candidate pointer are unchanged."
  },
- "citations_provenance_note": "Per-program `citations` remain program-level references; per-marker PRIMARY provenance is now carried in structured `marker_provenance` and summarized in `panel_provenance`. 53/53 measured marker-program pairs carry a bounded primary-source locator, independently completed by the lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a naming framework only and is never attached to any marker as evidence. SOURCE-VALIDATION POLICY (Round-4 Rule 1): every marker-source citation here is PROVISIONAL \u2014 internally located/bounded, but NOT independently verified. A SEPARATE citation-verifier lane must resolve each DOI/PMID/URL + claim-match and emit an evidence record; only `verification_status=verified` references may render in the UI. The producer never upgrades a citation to accepted.",
- "registry_sha256": "43cfc7bbd3272147377db0ae64462c797e0ac0bed3571a680c6f6896c7f79029"
+ "citations_provenance_note": "Per-program `citations` remain program-level references; per-marker PRIMARY provenance is now carried in structured `marker_provenance` and summarized in `panel_provenance`. 53/53 measured marker-program pairs carry a bounded primary-source locator, independently completed by the lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a naming framework only and is never attached to any marker as evidence. SOURCE-VALIDATION POLICY (Round-4 Rule 1): every marker-source citation is PROVISIONAL until a SEPARATE citation-verifier lane resolves each DOI/PMID/URL + claim-match; only `verification_status=verified` references may render in the UI, and the producer never self-upgrades. INDEPENDENT CITATION AUDIT (STAGE1_CITATION_INDEPENDENT_AUDIT.md sha256 c157ef22ca850404b34980d143cba6085672b4d5a49530fc64562a92cc6c4a35): 50/53 pair citations verified as-written; 3 pairs (th1_like.TBX21, th1_like.IFNG, th17_like.IL17F) cited mouse-only papers overstated as human/mixed. CORRECTION (W17 separate citation-verifier lane, evidence sha256 61146d7692e73c722156d5754131449da13d3cd6f9c7f2f9b6f091a9f5cb5201, independently verified): each retains its mouse paper as the mechanistic origin and ADDS an independently-VERIFIED direct human primary CD4 source in `marker_provenance.<gene>.human_primary_support` (TBX21<-Kanhere 2012 PMID 23232398; IFNG<-Bonecchi 1998 PMID 9419219; IL17F<-Castro 2017 PMID 28763457, PLoS ONE DOI 10.1371/journal.pone.0181868). FOXP3 nested support_level corrected corroborating_secondary_human -> direct_primary_human_counterevidence (Wang 2007 PMID 17154262). These 4 citations now carry verification_status=verified from that separate lane.",
+ "registry_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2"
 }

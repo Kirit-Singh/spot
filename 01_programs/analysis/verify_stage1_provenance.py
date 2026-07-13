@@ -40,7 +40,9 @@ PINNED_SOURCE_SHA = {
     "LINEAGE_REGISTRY_INTEGRATION_MAP.md": "776c75d905d0a0d76e4f7dacc154e48161993006e33449ba87662174be45678c",
     "state_ctl_primary_source_completion.csv": "febef35db329de0ecae95ca2654d6b3afd0e1b3b804b19fd46d11e0fe76df42f",
     "STATE_CTL_REGISTRY_INTEGRATION_MAP.md": "9a9afb132b9808bf1db51bebe90a8136d4b8051f65408f16ad746ffc43b03a22",
+    "stage01_citation_correction_v1.json": "db95a8d7e6780dd550f75c8c358bd561ae0561edba2c23c20efd99303d4da580",
 }
+CITATION_CORRECTION_FILE = "stage01_citation_correction_v1.json"
 
 PROV_TOP = ("citations_provenance_note", "registry_sha256",
             "panel_provenance_schema_version", "panel_provenance")
@@ -232,6 +234,41 @@ def run_checks(reg, src_dir=SRC_DEFAULT):
         fails.append("panel_provenance_coverage_breakdown_mismatch")
     if pp.get("status") != PROVENANCE_STATUS or "UNVERIFIED" in str(pp.get("status")):
         fails.append("panel_provenance_status_not_bounded")
+
+    # 5b) W17 citation-correction overlay applied VERBATIM from the pinned artifact (generator != verifier:
+    #     re-read the pin directly here; its sha is checked in step 0). Mouse paper retained as main origin;
+    #     verified direct human primary added as human_primary_support; FOXP3 nested support_level corrected.
+    try:
+        corr = json.load(open(os.path.join(src_dir, CITATION_CORRECTION_FILE)))
+    except Exception as ex:  # noqa: BLE001
+        corr = None
+        fails.append(f"citation_correction_unreadable:{ex}")
+    if corr is not None:
+        for pg, spec in corr.get("human_primary_additions", {}).items():
+            prog, gene = pg.split(".")
+            rec = base_records.get((prog, gene))
+            if rec is None:
+                fails.append(f"citation_correction_pair_missing:{pg}"); continue
+            if rec.get("pmid") != spec["mouse_mechanistic_origin_pmid"]:
+                fails.append(f"citation_correction_main_pmid_not_mouse_origin:{pg}")   # mouse paper retained as origin
+            if rec.get("mouse_mechanistic_origin_pmid") != spec["mouse_mechanistic_origin_pmid"]:
+                fails.append(f"citation_correction_mouse_origin_missing:{pg}")
+            if rec.get("species_lineage_scope") != spec["corrected_species_lineage_scope"]:
+                fails.append(f"citation_correction_scope_not_applied:{pg}")
+            if rec.get("human_primary_support") != spec["human_primary_support"]:
+                fails.append(f"citation_correction_human_block_mismatch:{pg}")
+            hps = rec.get("human_primary_support") or {}
+            if hps.get("verification_status") != "verified" or hps.get("species_lineage_scope") != "human":
+                fails.append(f"citation_correction_human_block_not_verified_human:{pg}")
+        for pg, spec in corr.get("nested_support_level_corrections", {}).items():
+            prog, gene = pg.split(".")
+            block = (base_records.get((prog, gene)) or {}).get(spec["nested_key"]) or {}
+            if block.get("pmid") != spec["pmid"]:
+                fails.append(f"citation_correction_nested_pmid_mismatch:{pg}")
+            if block.get("support_level") != spec["to_support_level"]:
+                fails.append(f"citation_correction_nested_support_level_not_applied:{pg}")
+            if block.get("verification_status") != spec["verification_status"]:
+                fails.append(f"citation_correction_nested_not_verified:{pg}")
 
     # 6) scoring projection unchanged
     if _canon(_scoring_projection(reg)) != PRE_SCORING_PROJECTION_SHA256:

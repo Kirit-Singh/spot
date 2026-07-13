@@ -42,7 +42,12 @@ SOURCE_ARTIFACTS = [
      "sha256": "febef35db329de0ecae95ca2654d6b3afd0e1b3b804b19fd46d11e0fe76df42f"},
     {"role": "state_ctl_integration_map", "file": "STATE_CTL_REGISTRY_INTEGRATION_MAP.md",
      "sha256": "9a9afb132b9808bf1db51bebe90a8136d4b8051f65408f16ad746ffc43b03a22"},
+    # W17 independent citation-correction (separate verifier lane): adds verified direct human primary sources
+    # for the 3 audit-flagged species-scope pairs + renames FOXP3 nested support_level. Provenance-only.
+    {"role": "citation_correction", "file": "stage01_citation_correction_v1.json",
+     "sha256": "db95a8d7e6780dd550f75c8c358bd561ae0561edba2c23c20efd99303d4da580"},
 ]
+CITATION_CORRECTION_FILE = "stage01_citation_correction_v1.json"
 
 PROV_TOP = ("citations_provenance_note", "registry_sha256",
             "panel_provenance_schema_version", "panel_provenance")
@@ -343,10 +348,20 @@ def integrate(reg, base, intended_only, actadj_inherited, predictor_inherited, c
         "lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). "
         "Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a "
         "naming framework only and is never attached to any marker as evidence. "
-        "SOURCE-VALIDATION POLICY (Round-4 Rule 1): every marker-source citation here is PROVISIONAL — "
-        "internally located/bounded, but NOT independently verified. A SEPARATE citation-verifier lane must "
-        "resolve each DOI/PMID/URL + claim-match and emit an evidence record; only `verification_status=verified` "
-        "references may render in the UI. The producer never upgrades a citation to accepted.")
+        "SOURCE-VALIDATION POLICY (Round-4 Rule 1): every marker-source citation is PROVISIONAL until a "
+        "SEPARATE citation-verifier lane resolves each DOI/PMID/URL + claim-match; only "
+        "`verification_status=verified` references may render in the UI, and the producer never self-upgrades. "
+        "INDEPENDENT CITATION AUDIT (STAGE1_CITATION_INDEPENDENT_AUDIT.md sha256 "
+        "c157ef22ca850404b34980d143cba6085672b4d5a49530fc64562a92cc6c4a35): 50/53 pair citations verified "
+        "as-written; 3 pairs (th1_like.TBX21, th1_like.IFNG, th17_like.IL17F) cited mouse-only papers "
+        "overstated as human/mixed. CORRECTION (W17 separate citation-verifier lane, evidence sha256 "
+        "61146d7692e73c722156d5754131449da13d3cd6f9c7f2f9b6f091a9f5cb5201, independently verified): each "
+        "retains its mouse paper as the mechanistic origin and ADDS an independently-VERIFIED direct human "
+        "primary CD4 source in `marker_provenance.<gene>.human_primary_support` (TBX21<-Kanhere 2012 "
+        "PMID 23232398; IFNG<-Bonecchi 1998 PMID 9419219; IL17F<-Castro 2017 PMID 28763457, PLoS ONE DOI "
+        "10.1371/journal.pone.0181868). FOXP3 nested support_level corrected "
+        "corroborating_secondary_human -> direct_primary_human_counterevidence (Wang 2007 PMID 17154262). "
+        "These 4 citations now carry verification_status=verified from that separate lane.")
     # Tier-2 display-only fields (labels) never enter the Tier-1 scientific content hash (see DISPLAY_ONLY_FIELDS)
     _strip_display_only(reg)
     # move schema key next to schema_version, keep registry_sha256 last
@@ -390,11 +405,39 @@ def _strip_display_only(reg):
                 p.pop(f, None)
 
 
+def apply_citation_correction(base):
+    """Apply the W17 independent citation-correction overlay to the built base records (provenance-only).
+
+    For the 3 audit-flagged pairs: retain the cited MOUSE paper as the mechanistic origin (main pmid/doi/
+    exact_locator/bounded_rationale unchanged), correct the overstated species_lineage_scope, and attach the
+    independently-verified DIRECT HUMAN PRIMARY source as a nested `human_primary_support` block. For FOXP3:
+    rename the nested `human_corroboration` support_level and mark it verified. Never touches scores/panels."""
+    corr = json.load(open(os.path.join(SRC, CITATION_CORRECTION_FILE)))
+    for pg, spec in corr["human_primary_additions"].items():
+        prog, gene = pg.split(".")
+        rec = base[(prog, gene)]
+        assert rec.get("pmid") == spec["mouse_mechanistic_origin_pmid"], \
+            f"citation-correction: {pg} cited pmid != declared mouse mechanistic origin"
+        rec["species_lineage_scope"] = spec["corrected_species_lineage_scope"]
+        rec["mouse_mechanistic_origin_pmid"] = spec["mouse_mechanistic_origin_pmid"]
+        rec["human_primary_support"] = spec["human_primary_support"]
+    for pg, spec in corr["nested_support_level_corrections"].items():
+        prog, gene = pg.split(".")
+        block = base[(prog, gene)][spec["nested_key"]]
+        assert block.get("pmid") == spec["pmid"], f"citation-correction: {pg} nested pmid mismatch"
+        assert block.get("support_level") == spec["from_support_level"], \
+            f"citation-correction: {pg} nested support_level != expected pre-value"
+        block["support_level"] = spec["to_support_level"]
+        block["verification_status"] = spec["verification_status"]
+    return corr
+
+
 def main():
     verify_sources()
     reg = json.load(open(REGISTRY_SERVED))
     assert reg["method_version"] == METHOD_VERSION, "scorer method_version must not change"
     base, intended_only, actadj_inherited, predictor_inherited, counts = build_records()
+    apply_citation_correction(base)   # W17 independent citation-correction overlay (provenance-only)
     reg = integrate(reg, base, intended_only, actadj_inherited, predictor_inherited, counts)
     text = json.dumps(reg, indent=1, ensure_ascii=True, sort_keys=False)
     for path in (REGISTRY_SERVED, REGISTRY_STAGED):
