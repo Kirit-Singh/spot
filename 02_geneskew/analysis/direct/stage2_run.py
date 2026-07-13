@@ -157,8 +157,8 @@ def build_run_identity(cfg: Cfg) -> dict:
         "verifier_pins": {
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
-                "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",
-            "direct_verifier_head": "dd1130026d3bddcfdf108545d0b7553e7d05e9f0",  # W10 FINAL adapter (6 release cross-pins)
+                "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f",
+            "direct_verifier_head": "2c3031e00bd6df8d6683a0da1054197f01d8e449",  # W10 FINAL adapter (6 release cross-pins)
             "direct_verifier_tree_sha256": (("tree:" + tree_sha256(cfg.direct_verifier))
                                             if (not DRY and os.path.isdir(cfg.direct_verifier))
                                             else "<unbound>"),
@@ -391,7 +391,7 @@ def native_report_path(cfg, cond):
 
 
 BINDING_SCHEMA = "spot.stage02.direct_admission_binding.v1"
-W10_VERIFIER_CODE = "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
+W10_VERIFIER_CODE = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
 W10_BUNDLE_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
 
 
