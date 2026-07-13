@@ -12,6 +12,7 @@ venv/
 node_modules/
 dist/
 .vite/
+.wrangler/
 
 # Data / scratch / outputs — NEVER commit data
 .scratch/
@@ -22,6 +23,8 @@ outputs/
 
 # Secrets / local (infra.env is tracked and non-secret; .env is NOT)
 .env
+.dev.vars*
+!.dev.vars.example
 *.local
 
 # OS

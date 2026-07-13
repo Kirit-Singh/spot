@@ -1,0 +1,20 @@
+{
+  "name": "spotpathways",
+  "pages_build_output_dir": "./dist/cloudflare-pages",
+  "compatibility_date": "2026-07-13",
+  "vars": {
+    "SITE_MODE": "local"
+  },
+  "env": {
+    "production": {
+      "vars": {
+        "SITE_MODE": "production"
+      }
+    },
+    "preview": {
+      "vars": {
+        "SITE_MODE": "preview"
+      }
+    }
+  }
+}
