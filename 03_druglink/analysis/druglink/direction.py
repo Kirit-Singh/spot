@@ -64,6 +64,32 @@ from . import workflow as wf
 
 DIRECTION_POLICY_VERSION = "stage3-direction-v4-workflow-states"
 
+
+def vocabulary_digest() -> str:
+    """A content address for the CLOSED direction vocabulary itself.
+
+    Compatibility is decided HERE, in Stage 3 — never in the extractor and never in the
+    cache. The cache's job is to preserve ``action_type`` **verbatim**; the moment a cache
+    starts classifying, the classification silently forks from the frozen rule and nobody
+    can tell which vocabulary a stored row was judged under.
+
+    So the vocabulary is hashed and bound into every bundle. If someone adds an action type
+    to a set, moves one between sets, or edits the policy version, the digest moves and the
+    change is visible instead of being inferred from a drug that quietly started ranking.
+    """
+    import hashlib
+    import json
+
+    payload = json.dumps({
+        "policy_version": DIRECTION_POLICY_VERSION,
+        "abundance_reduction": sorted(ACTION_ABUNDANCE_REDUCTION),
+        "functional_inhibition": sorted(ACTION_FUNCTIONAL_INHIBITION),
+        "functional_activation": sorted(ACTION_FUNCTIONAL_ACTIVATION),
+        "explicit_unknown": sorted(ACTION_EXPLICIT_UNKNOWN),
+        "intervention_effects": list(INTERVENTION_EFFECTS),
+    }, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 # What the SCREEN did. CRISPRi knockdown lowers target abundance; that is the only
 # genetic direction this lane has evidence about.
 MODALITY_ABUNDANCE_DIRECTION = {
