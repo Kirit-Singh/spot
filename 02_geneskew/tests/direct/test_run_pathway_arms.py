@@ -29,6 +29,10 @@ def built(synthetic_run, tmp_path):
         ctx["gene_universe"]["sha256"], target_universe_sha256=tu["sha256"])
     args.condition = "StimX"
     args.out_root = str(tmp_path / "pw")
+    # STEP 0: the SHARED per-condition signature artifacts, emitted ONCE, before any bundle.
+    from direct import signature_matrix as sm
+    args.signature_matrix_root = str(tmp_path / "signatures")
+    sm.build_condition(args, "StimX", args.signature_matrix_root)
     res = run_pathway_arms.build_pathway_arms(args)
 
     def load(name):
@@ -47,7 +51,27 @@ class TestThePhysicalContract:
         assert sorted(os.listdir(res["out_dir"])) == [
             "arm_bundle.json", "convergence.json", "gene_sets.source.json",
             "pathway_evidence.json", "pathway_provenance.json",
-            "pathway_signatures.parquet", "pathway_verification.json"]
+            "pathway_verification.json", "signature_ref.json"]
+
+    def test_the_bundle_ships_NO_signature_bytes(self, built):
+        # P11 / A12: keeping signatures.parquet "for compatibility" brings the 29.5 GiB peak
+        # straight back, and it is the least-change instinct that would do it.
+        res, _, prov, _ = built
+        assert not os.path.exists(
+            os.path.join(res["out_dir"], "pathway_signatures.parquet"))
+        with open(os.path.join(res["out_dir"], "signature_ref.json")) as fh:
+            ref = json.load(fh)
+        assert ref["ships_signature_bytes"] is False
+        assert ref["reduction_order_id"] == \
+            "spot.stage02.convergence.reduction.sorted_gene_left_fold.v1"
+
+    def test_the_reference_binds_the_MATRIX_and_the_BITMAP_hashes(self, built):
+        _, _, prov, _ = built
+        ref = prov["run_binding"]["signature_ref"]
+        for key in ("matrix_raw_sha256", "matrix_canonical_sha256", "matrix_values_sha256",
+                    "mask_raw_sha256", "mask_canonical_sha256", "mask_bits_sha256",
+                    "gene_axis_raw_sha256"):
+            assert len(ref[key]) == 64, key
 
     def test_the_producer_does_NOT_admit_its_own_output(self, built):
         res, _, _, _ = built
@@ -190,17 +214,19 @@ class TestTheRunIDIsTakenLASTOverEVERYBinding:
 
 
 class TestTheSignatureReferenceIsCONTENTAddressedAndDropsNoGene:
-    def test_it_references_by_CONTENT_so_a_condition_store_can_share_it(self, built):
+    def test_the_member_list_is_RE_DERIVABLE_not_authoritative(self, built):
         _, _, prov, _ = built
-        ref = prov["signature_reference"]
-        assert ref["content_sha256"]
-        assert ref["shareable_scope"] == "condition"
-        assert ref["readout_universe_sha256"]
+        ref = prov["signature_ref"]
+        assert ref["n_member_targets"] == len(ref["member_target_ids"])
+        assert ref["member_rule_id"]
 
-    def test_NO_gene_is_dropped_to_make_it_smaller(self, built):
-        # a signature with genes removed is a different signature
+    def test_the_shared_manifest_is_bound_so_a_STALE_reference_is_catchable(self, built):
         _, _, prov, _ = built
-        assert prov["signature_reference"]["genes_dropped"] == 0
+        m = prov["signature_manifest"]
+        assert m["reduction_order_id"]
+        assert m["mask"]["bits_sha256"]
+        assert prov["run_binding"]["signature_ref"]["mask_bits_sha256"] \
+            == m["mask"]["bits_sha256"]
 
 
 class TestTheCountsAreRECOUNTABLEFromTheShippedEvidence:

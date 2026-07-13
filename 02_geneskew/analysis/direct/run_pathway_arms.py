@@ -42,10 +42,11 @@ from . import (
     run_arms,
     runid,
     scorer_view,
+    signature_matrix,
 )
 from . import run_screen as rs
 from . import universe as uni
-from .hashing import canonical_json, content_hash, sha256_hex
+from .hashing import canonical_json, sha256_hex
 
 SCHEMA_REQUEST = "spot.stage02_pathway_arm_request.v1"
 SCHEMA_PROVENANCE = "spot.stage02_pathway_arm_provenance.v1"
@@ -88,14 +89,27 @@ def build_pathway_arms(args) -> dict[str, Any]:
             "There is no default and no fallback")
     source = str(bundle["gene_set_release"]["source"])
 
-    # ONE scan: the base deltas every arm is a sign transform of, the masks they were taken
-    # under, and the signatures convergence is computed from — all under the SAME mask.
+    # The base deltas every arm is a sign transform of, and the masks they were taken under.
+    # NO signatures are built here: they come from the SHARED per-condition matrix.
     members = {g for s in bundle["sets"].values() for g in s["genes_target"]}
-    scan = run_arms.base_deltas(ctx=ctx, args=args, cond=cond, admitted=admitted,
-                                signature_targets=members)
+    scan = run_arms.base_deltas(ctx=ctx, args=args, cond=cond, admitted=admitted)
     arm_rows = ab.build_rows(condition=cond, admitted=admitted,
                              base_by_program=scan["base"])
-    signatures = scan["signatures"]
+
+    # ---- THE SHARED SIGNATURE MATRIX (W7). This bundle ships NO signature bytes. ----
+    # A signature value depends on (condition, target, gene) and on nothing else — the
+    # gene-set source only chooses WHICH targets are asked about. So the two bundles at a
+    # condition were writing byte-identical values for every target they share: 521M rows and
+    # a 29.5 GiB worst-bundle peak, which is an OOM kill at four concurrent workers on a host
+    # with no swap left. One matrix per condition, six tiny references.
+    sig_manifest, sig_mat = load_shared_signatures(args, cond)
+    # reconstruct_signatures is the ONLY consumer path: it rebuilds production's exact dicts
+    # so convergence.cosine_on_shared runs UNCHANGED, folding left over sorted(shared). A
+    # numpy reduction over the dense matrix would agree to ~5e-07 and disagree at the 0.5
+    # `supportive` threshold — the values are the same, the summation order is not.
+    resolved_members = sorted(members & set(sig_mat["target_ids"]))
+    signatures = signature_matrix.reconstruct_signatures(
+        sig_mat, [str(g) for g in gene_universe["gene_ids"]], resolved_members)
 
     # THE ONE convergence claim for this (condition, source) — no program, no direction.
     conv = pathway_arms.convergence_artifact(
@@ -113,8 +127,7 @@ def build_pathway_arms(args) -> dict[str, Any]:
             for i, (t, v) in enumerate(r)]
         for k, r in pathway_arms.ranked_by_arm(arm_rows).items()
     }
-    sig_rows = pathway_evidence.signature_rows(signatures)
-    manifest = rs.stage2_input_manifest(args)
+    manifest = rs.bundle_input_manifest(args)
 
     binding = {
         "runner_id": RUNNER_ID,
@@ -143,8 +156,14 @@ def build_pathway_arms(args) -> dict[str, Any]:
             [{"name": i["name"], "sha256": i["sha256"], "size_bytes": i["size_bytes"]}
              for i in manifest], key=lambda i: i["name"]),
         "evidence_artifacts": pathway_evidence.binding_block(
-            evidence_doc, sig_rows,
+            evidence_doc, None,
             gene_sets=pathway_evidence.gene_set_source_block(args.gene_sets, bundle)),
+        # the SHARED artifacts, by every hash W4 re-derives. The bundle cites them; it does
+        # not carry them.
+        "signature_ref": signature_matrix.signature_ref(
+            manifest=sig_manifest, condition=cond, source=source,
+            member_target_ids=signatures.keys()),
+        "contributor_manifest": rs.contributor_manifest_identity(args, ctx),
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
         "code_identity": rs.code_identity_for(
@@ -164,8 +183,12 @@ def build_pathway_arms(args) -> dict[str, Any]:
     emit.write_json(os.path.join(out_dir, BUNDLE_FILE), dict(doc, pathway_run_id=run_id))
     emit.write_json(os.path.join(out_dir, CONVERGENCE_FILE),
                     dict(conv, pathway_run_id=run_id))
-    evidence_paths = pathway_evidence.write(evidence_doc, sig_rows, out_dir,
+    evidence_paths = pathway_evidence.write(evidence_doc, None, out_dir,
                                             gene_sets_source=args.gene_sets)
+    # P11: a tiny reference, and NOT one byte of signature. The 29.5 GiB peak came back the
+    # moment a bundle kept its own copy "for compatibility".
+    emit.write_json(os.path.join(out_dir, signature_matrix.REF_FILE),
+                    binding["signature_ref"])
 
     prov = {
         "schema_version": SCHEMA_PROVENANCE,
@@ -180,16 +203,8 @@ def build_pathway_arms(args) -> dict[str, Any]:
         # reference is the hash; where the bytes live is the store's business. No gene is
         # dropped to make it smaller — a signature with genes removed is a different
         # signature.
-        "signature_reference": {
-            "content_sha256": content_hash(sig_rows),
-            "readout_universe_sha256": gene_universe["sha256"],
-            "n_signature_targets": len(signatures),
-            "n_rows": len(sig_rows),
-            "columns": list(pathway_evidence.SIGNATURE_COLUMNS),
-            "path_in_bundle": pathway_evidence.SIGNATURES_FILE,
-            "shareable_scope": "condition",
-            "genes_dropped": 0,
-        },
+        "signature_ref": binding["signature_ref"],
+        "signature_manifest": sig_manifest,
         "n_records": doc["n_records"],
         "n_arm_slots": doc["n_arm_slots"],
         "n_expected_arm_slots": doc["n_expected_arm_slots"],
@@ -212,7 +227,8 @@ def build_pathway_arms(args) -> dict[str, Any]:
         "verified_paths": [BUNDLE_FILE, PROVENANCE_FILE, CONVERGENCE_FILE,
                            pathway_evidence.EVIDENCE_FILE,
                            pathway_evidence.GENE_SETS_FILE,
-                           pathway_evidence.SIGNATURES_FILE],
+                           signature_matrix.REF_FILE],
+        "ships_signature_bytes": False,
         "records_sha256": doc["records_sha256"],
         "convergence_sha256": conv["convergence_sha256"],
     })
@@ -256,8 +272,27 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--pseudobulk", default=None)
     ap.add_argument("--env-lock", default=None)
     ap.add_argument("--allow-dirty-tree", action="store_true")
+    ap.add_argument("--signature-matrix-root", required=True,
+                    help="the SHARED per-condition signature artifacts (Step 0). This bundle "
+                         "references them and ships no signature bytes of its own.")
     ap.add_argument("--out-root", required=True)
     return ap
+
+
+def load_shared_signatures(args, cond: str):
+    """The condition's shared matrix + MANDATORY bitmap, mmap'd. Zero-copy."""
+    root = args.signature_matrix_root
+    cond_dir = os.path.join(root, cond)
+    manifest_path = os.path.join(cond_dir, signature_matrix.MANIFEST_FILE)
+    if not os.path.exists(manifest_path):
+        raise gate.GateError(
+            f"no shared signature manifest for condition {cond!r} under "
+            f"--signature-matrix-root. The shared matrix is Step 0 and runs BEFORE any "
+            "pathway bundle; a bundle that "
+            "rebuilt its own signatures would reintroduce the duplication this design removes")
+    with open(manifest_path) as fh:
+        sig_manifest = json.load(fh)
+    return sig_manifest, signature_matrix.read(sig_manifest, cond_dir)
 
 
 def main(argv=None) -> dict[str, Any]:

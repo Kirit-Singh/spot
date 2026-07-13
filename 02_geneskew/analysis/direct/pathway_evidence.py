@@ -183,16 +183,24 @@ def gene_set_source_block(source_path: str,
     return block
 
 
-def write(doc: dict[str, Any], sig_rows: list[dict[str, Any]], out_dir: str, *,
+def write(doc: dict[str, Any], sig_rows: Optional[list[dict[str, Any]]], out_dir: str, *,
           gene_sets_source: Optional[str] = None) -> dict[str, str]:
-    """Write the evidence artifacts INTO the bundle. Returns their paths."""
+    """Write the evidence artifacts INTO the bundle. Returns their paths.
+
+    ``sig_rows=None`` is the ONLY correct call for a pathway arm bundle: signatures live in
+    the SHARED per-condition matrix (W7) and a bundle ships a tiny reference to it, never
+    bytes of its own. The long per-bundle parquet is RETIRED — keeping it "for compatibility"
+    is attack A12, and it brings the 29.5 GiB peak straight back.
+    """
     from . import emit
     evidence_path = os.path.join(out_dir, EVIDENCE_FILE)
     emit.write_json(evidence_path, doc)
-    signatures_path = os.path.join(out_dir, SIGNATURES_FILE)
-    emit.write_parquet(sig_rows, signatures_path, sort_by=["target_id", "gene_id"])
 
-    paths = {"evidence": evidence_path, "signatures": signatures_path}
+    paths = {"evidence": evidence_path}
+    if sig_rows is not None:
+        signatures_path = os.path.join(out_dir, SIGNATURES_FILE)
+        emit.write_parquet(sig_rows, signatures_path, sort_by=["target_id", "gene_id"])
+        paths["signatures"] = signatures_path
     if gene_sets_source:
         # BYTE FOR BYTE. Not re-serialised: a re-emitted JSON is a different file that
         # happens to mean the same thing, and its raw hash would not be the hash the run
@@ -203,7 +211,7 @@ def write(doc: dict[str, Any], sig_rows: list[dict[str, Any]], out_dir: str, *,
     return paths
 
 
-def binding_block(doc: dict[str, Any], sig_rows: list[dict[str, Any]],
+def binding_block(doc: dict[str, Any], sig_rows: Optional[list[dict[str, Any]]],
                   gene_sets: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """WHAT evidence this run stands on — bound into the RUN IDENTITY, by CONTENT.
 
@@ -232,7 +240,9 @@ def binding_block(doc: dict[str, Any], sig_rows: list[dict[str, Any]],
             "n_ranked_by_arm": {arm: len(r) for arm, r in doc["arm_rankings"].items()},
         },
         **({GENE_SETS_KEY: gene_sets} if gene_sets else {}),
-        SIGNATURES_KEY: {
+        # RETIRED for arm bundles: signatures are the shared per-condition matrix, referenced
+        # by signature_ref.json. Only a legacy pair-bound run still passes rows here.
+        **({SIGNATURES_KEY: {
             "logical_name": SIGNATURES_FILE,
             "path_in_bundle": SIGNATURES_FILE,
             "columns": list(SIGNATURE_COLUMNS),
@@ -240,7 +250,7 @@ def binding_block(doc: dict[str, Any], sig_rows: list[dict[str, Any]],
             "n_rows": len(sig_rows),
             "n_signature_targets": len({r["target_id"] for r in sig_rows}),
             "readout_universe_sha256": doc["readout_universe_sha256"],
-        },
+        }} if sig_rows is not None else {}),
     }
 
 
@@ -254,7 +264,8 @@ def written_block(binding: dict[str, Any], paths: dict[str, str]) -> dict[str, A
     out = {k: v for k, v in binding.items()
            if k not in (EVIDENCE_KEY, SIGNATURES_KEY, GENE_SETS_KEY)}
     for key, path_key in ((EVIDENCE_KEY, "evidence"), (SIGNATURES_KEY, "signatures")):
-        out[key] = dict(binding[key], raw_sha256=file_sha256(paths[path_key]))
+        if key in binding and path_key in paths:
+            out[key] = dict(binding[key], raw_sha256=file_sha256(paths[path_key]))
 
     if GENE_SETS_KEY in binding:
         block = dict(binding[GENE_SETS_KEY])
