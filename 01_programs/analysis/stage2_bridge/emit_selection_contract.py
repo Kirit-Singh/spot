@@ -63,9 +63,11 @@ ESTIMATOR_FOR_MODE = {"within_condition": "within_condition_v1",
                       "temporal_cross_condition": "temporal_cross_condition_v1"}
 # Bound METHOD identity per estimator: a contract that says "available" while naming no method hash has
 # admitted only a word. Mirror of the Stage-2 stage1_v3.estimator_registry() entry (handoff W18->W13 §4).
-# method_sha256 covers the temporal method + the within-condition method it differences + the batch-confound
-# policy + k + the display policy + BOTH code trees. CROSS-LANE PIN: re-sync when the Stage-2 temporal method
-# moves — Stage-2's gate fail-closes on a mismatch. Live value as of Stage-2 commit 5001e36.
+# The temporal method_sha256 is the GENERIC temporal method IDENTITY hash (content_hash of the estimand block:
+# a population-level difference-in-differences on program projections, no calibrated null) — NOT a code-tree or
+# batch/confound policy hash (the retired fixed-pair lane owned those; Stage-2 GATE-7 removed them). CROSS-LANE
+# PIN: re-sync when the Stage-2 temporal method moves; Stage-2's gate fail-closes on a mismatch. Re-derived from
+# spot-stage2-temporal-arms @ 276a9ad via stage1_v3.estimator_registry() -> temporal.arms.config.method_sha256().
 ESTIMATOR_REGISTRY = {
     "temporal_cross_condition_v1": {
         "estimator_id": "temporal_cross_condition_v1",
@@ -77,7 +79,7 @@ ESTIMATOR_REGISTRY = {
         "estimand_level": "population",
         "estimand_is_per_cell_fate": False,
         "inference_status": "not_calibrated",
-        "method_sha256": "c05baa8f847f284a6cb187df24668ac0e5197dfdf2d238ced04c7847b7226e77",
+        "method_sha256": "343f20db53aed3f34f45f6c4adebc2cdf26985ab179b7df264dbd0d02587c4b5",
     },
 }
 
@@ -234,6 +236,18 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
         "stage1_method_version": STAGE1_METHOD_VERSION,
     }
     sel_id = hashlib.sha256(canonical.canonical_json(cc).encode("utf-8")).hexdigest()
+    # question_id: the BIOLOGY-ONLY ordered-question identity — the two poles' (program, direction, condition)
+    # and analysis_mode, with NO method/input binding — so the SAME biological question keeps ONE question_id
+    # across method/registry/source revisions. selection_id (over canonical_content) additionally binds the
+    # scorer VIEW + source h5ad + method version, so it is the method/input-bound identity. RECIPE (authoritative):
+    #   question_id = sha256(canonical_json({A:{program_id,direction,condition:from}, B:{program_id,direction,
+    #   condition:to}, analysis_mode}))[:16]   with canonical_json = sort_keys, (",",":"), ensure_ascii=True.
+    question_content = {
+        "A": {"program_id": a_program_id, "direction": a_direction, "condition": ordered_conditions[0]},
+        "B": {"program_id": b_program_id, "direction": b_direction, "condition": ordered_conditions[-1]},
+        "analysis_mode": mode,
+    }
+    question_id = hashlib.sha256(canonical.canonical_json(question_content).encode("utf-8")).hexdigest()[:16]
 
     sem = json.load(open(os.path.join(DATA, "stage01_validation_semantics.json")))
     ce = sem.get("constituent_evidence", {})
@@ -247,6 +261,7 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
         "estimator": estimator,
         "selection_id": sel_id[:16],
         "selection_full_sha256": sel_id,
+        "question_id": question_id,
         "canonical_content": cc,
         "poles": {"A": pole_a, "B": pole_b},
         # the pair expressed as two INDEPENDENT per-program arm references (no fused pair object, no combined
