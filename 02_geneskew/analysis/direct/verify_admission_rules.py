@@ -36,7 +36,9 @@ W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
 # refuses real evidence is not a strict gate, it is a broken one. The reports were never the
 # problem; the constant was. (This is why the pin is RE-DERIVED in a test rather than copied.)
 W10_VERIFIER_CODE = "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174"
-W10_VERIFIER_CODE_PREVIOUS = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"        # pre producer-code-root; MUST be refused
+# pre producer-code-root. NAMED so it cannot be reintroduced by accident, and REFUSED.
+W10_VERIFIER_CODE_PREVIOUS = (
+    "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f")
 W10_RECOMPUTE_MODE = "all"
 W10_MIN_GATES = 50
 W10_REQUIRED_GATE_MARKERS = ("BYTES ON DISK",
