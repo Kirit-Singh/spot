@@ -209,7 +209,20 @@ VERIFICATION_SLOT_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
 # a weak report is refused under them.
 FIXTURE_W10_SPEC_SHA256 = "a1" * 32
 FIXTURE_W10_CODE_SHA256 = "b2" * 32
-FIXTURE_W10_GATES = [f"fixture gate {i:02d}" for i in range(12)]
+def _fixture_w10_gates():
+    """The SECURITY-CRITICAL gates W10 must have run, plus filler.
+
+    They are enforced ALWAYS — a fixture may override the exact-inventory hash (it cannot
+    reproduce 80 gate names verbatim) but it may not thereby switch the gate CONTENT check
+    off. So the fixture's inventory carries them, exactly as a real report would.
+    """
+    from verify_temporal_arms import w10
+
+    return list(w10.REQUIRED_GATE_SUBSTRINGS) + [
+        f"fixture filler gate {i:02d}" for i in range(4)]
+
+
+FIXTURE_W10_GATES = _fixture_w10_gates()
 
 
 def w10_pins():

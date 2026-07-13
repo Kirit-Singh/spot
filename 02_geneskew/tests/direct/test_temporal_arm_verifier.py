@@ -434,6 +434,51 @@ class TestTheDirectEndpointSource:
                                {"n_arm_rows": 7}))
         assert "the_w10_arm_row_count_is_the_bundles_own" in fired
 
+    def test_a_RESEALED_DELETION_of_a_security_critical_gate_is_refused(self, tmp_path):
+        """The exact-inventory hash is the strong check, and a fixture may override it. That
+        override must not switch the gate CONTENT check off — otherwise a report that quietly
+        deleted the MASK check could reseal its own inventory hash and sail through on a
+        number it chose for itself.
+
+        These gates are enforced ALWAYS, pins or no pins."""
+        from direct.hashing import content_hash
+        from verify_temporal_arms import w10
+
+        _staged(tmp_path)
+        dropped = w10.REQUIRED_GATE_SUBSTRINGS[1]        # the mask-identity gate
+
+        def delete_the_mask_gate(b):
+            kept = [g for g in b["gate_inventory"] if g != dropped]
+            b["gate_inventory"] = kept
+            b["gates"] = [g for g in b["gates"] if g["gate"] != dropped]
+            # ...and RESEAL every count and hash around the hole
+            b["gate_inventory_sha256"] = content_hash(kept)
+            b["n_gates"] = len(kept)
+            b["n_passed"] = len(kept)
+
+        fired = self._load(tmp_path, FX.CONDITIONS[0], mutate=delete_the_mask_gate)
+        assert "the_w10_inventory_contains_every_security_critical_gate" in fired
+        # every count/hash check PASSES on it — the deletion is internally perfect
+        assert "the_w10_gate_inventory_hash_covers_the_gates_it_lists" not in fired
+        assert "the_w10_counts_agree_with_the_records_they_count" not in fired
+        assert "the_w10_gate_records_ARE_the_inventory_they_claim" not in fired
+
+    def test_an_EMPTY_gate_inventory_is_refused_even_if_it_hashes(self, tmp_path):
+        """A report that ran no gates and hashed the empty list."""
+        from direct.hashing import content_hash
+
+        _staged(tmp_path)
+
+        def no_gates(b):
+            b["gate_inventory"] = []
+            b["gates"] = []
+            b["gate_inventory_sha256"] = content_hash([])
+            b["n_gates"] = 0
+            b["n_passed"] = 0
+
+        fired = self._load(tmp_path, FX.CONDITIONS[0], mutate=no_gates)
+        assert "the_w10_inventory_contains_every_security_critical_gate" in fired
+
     def test_THE_WEAK_REPORT_the_probe_forged_is_REFUSED(self, tmp_path):
         """THE FORGERY A PARTIAL PARSER INVITES.
 
@@ -491,17 +536,49 @@ class TestTheDirectEndpointSource:
         assert "every_w10_gate_actually_PASSED" in fired
         assert "the_w10_artifact_map_is_the_EXACT_COMPLETE_bundle_file_set" in fired
 
+    def test_the_w10_code_sha_RE_DERIVES_from_the_pinned_commit(self):
+        """The pin is to a COMMIT, not a branch — a branch moves, and a verification does
+        not. This re-derives the code hash from that commit with W10's OWN recipe (sha256 of
+        the canonical {module: sha256} map over its eight modules), so a stale or mistyped pin
+        fails HERE, loudly, instead of silently admitting a verifier nobody checked."""
+        import hashlib
+        import json as _json
+        import subprocess
+
+        from verify_temporal_arms import w10
+
+        repo = os.path.abspath(os.path.join(_ANALYSIS, "..", ".."))
+        base = "02_geneskew/analysis/direct/"
+        per = {}
+        for m in sorted(w10.W10_VERIFIER_MODULES):
+            blob = subprocess.run(
+                ("git", "-C", repo, "show",
+                 f"{w10.W10_PINNED_VERIFIER_COMMIT}:{base}{m}"),
+                capture_output=True).stdout
+            assert blob, f"{m} is not in the pinned W10 commit"
+            per[m] = hashlib.sha256(blob).hexdigest()
+
+        derived = hashlib.sha256(
+            _json.dumps(per, sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=True).encode()).hexdigest()
+        assert derived == w10.FROZEN_VERIFIER_CODE_SHA256, (
+            f"the pinned W10 code sha is {w10.FROZEN_VERIFIER_CODE_SHA256[:16]}…, but the "
+            f"pinned commit re-derives to {derived[:16]}…")
+
     def test_the_production_pins_are_the_frozen_W10_identity(self):
         """WHICH verifier, WHICH spec, and WHAT it checked — the frozen production values."""
         from verify_temporal_arms import w10
 
         assert w10.FROZEN_SPEC_SHA256 == (
             "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
+        # RE-PINNED to W10's repaired verifier: new code sha, and the PRODUCTION BUNDLE
+        # profile (--stage1-v3-release --expect-h5ad-sha256 --recompute all) — 80 gates, not 90
         assert w10.FROZEN_VERIFIER_CODE_SHA256 == (
-            "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f")
+            "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834")
         assert w10.FROZEN_GATE_INVENTORY_SHA256 == (
-            "e6b5da89f1e4e7bf39380318769342cc585630c781c2226fa25b2df8aaf24d45")
-        assert w10.FROZEN_N_GATES == 90
+            "d98200175b528dec569655e558944d065c1280c19874c4e555ff0bbdb66c1cc4")
+        assert w10.FROZEN_N_GATES == 80
+        assert w10.PROFILE_BUNDLE_PRODUCTION == "spot.stage02.direct.bundle.production.v1"
         assert len(w10.EXPECTED_FILES) == 11
         assert w10.Pins().is_production is True
 

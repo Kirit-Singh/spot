@@ -50,14 +50,58 @@ PENDING_VERDICT = "pending_independent_verification"
 
 # --------------------------------------------------------------------------- #
 # THE FROZEN PRODUCTION PINS. WHICH verifier, WHICH spec, and WHAT it checked.
+#
+# Pinned to a COMMIT, not to a branch. A branch moves; a verification does not — and a pin
+# that follows a branch is not a pin. ``test_the_w10_code_sha_rederives_from_the_pinned_commit``
+# re-derives the code hash from that commit with W10's own recipe (sha256 of the canonical
+# {module: sha256} map over its eight modules), so a stale or mistyped pin fails loudly here
+# rather than silently admitting a verifier nobody checked.
+#
+# The PRODUCTION BUNDLE profile is the invocation that actually admits: it binds the Stage-1
+# v3 release, pins the H5AD object, and recomputes EVERY target
+# (``--stage1-v3-release --expect-h5ad-sha256 --recompute all``). 80 gates, exactly, in order.
 # --------------------------------------------------------------------------- #
+W10_PINNED_VERIFIER_COMMIT = "9965d64e50cd4a38fb6067a35c00bd7a5a7babef"
+W10_VERIFIER_MODULES = (
+    "verify_arm_bundle.py", "verify_arm_gates.py", "verify_arm_report.py",
+    "verify_arm_rules.py", "verify_arm_science.py", "verify_arm_view.py",
+    "verify_arm_recompute.py", "verify_direct_release.py",
+)
+
 FROZEN_SPEC_SHA256 = (
     "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
 FROZEN_VERIFIER_CODE_SHA256 = (
-    "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f")
+    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834")
+
+PROFILE_BUNDLE_PRODUCTION = "spot.stage02.direct.bundle.production.v1"
 FROZEN_GATE_INVENTORY_SHA256 = (
-    "e6b5da89f1e4e7bf39380318769342cc585630c781c2226fa25b2df8aaf24d45")
-FROZEN_N_GATES = 90
+    "d98200175b528dec569655e558944d065c1280c19874c4e555ff0bbdb66c1cc4")
+FROZEN_N_GATES = 80
+
+# THE GATES THAT MUST HAVE RUN — whatever profile is pinned.
+#
+# The exact-inventory hash is the strong check, and a caller may override it (a synthetic
+# fixture cannot reproduce 80 gate names verbatim). But an override must not turn the gate
+# content check OFF: that would leave a fixture-pinned run checking no gates at all, and a
+# resealed report that quietly deleted the mask check would sail through.
+#
+# So these substrings are enforced ALWAYS, pins or no pins. They are the security-critical
+# gates, matched as substrings so W10 can reword a detail without silently dropping the
+# requirement.
+REQUIRED_GATE_SUBSTRINGS = (
+    "matches the BYTES ON DISK",
+    "the MASK's identity is bound into the run and RE-DERIVES from the shipped "
+    "masks.parquet",
+    "every SHIPPED mask is the one the verifier independently derives",
+    "the supplied solver lock's BYTES hash to the hard-pinned Stage-2 lock",
+    "the lock the bundle bound IS the hard-pinned Stage-2 lock",
+    "the PRODUCER did not admit its own output",
+    "the bundle's admitted set EQUALS the independently derived set",
+    "every arm value is the EXACT sign transform",
+    "every rank RE-DERIVES per arm",
+    "every emitted base delta RE-DERIVES from the bound DE data",
+    "the run id RE-DERIVES from its own binding",
+)
 
 # THE EXACT, COMPLETE artifact set a Direct all-arm bundle is made of. Eleven files, and an
 # admission binds all eleven: a map naming fewer would leave the others unadmitted while
@@ -154,6 +198,16 @@ def _gates(f, rep: dict[str, Any], pins: Pins, where: str) -> None:
     f.check("the_w10_gate_inventory_hash_covers_the_gates_it_lists",
             rep.get("gate_inventory_sha256") == content_hash(inventory), where,
             "the gate inventory does not hash to what the report says it hashes to")
+
+    # ENFORCED ALWAYS, pins or no pins. Overriding the exact-inventory hash (as a synthetic
+    # fixture must) may not turn the gate CONTENT check off — that would leave a run checking
+    # no gates at all, and a resealed report that quietly deleted the mask check would sail
+    # through on a hash it chose for itself.
+    listed = "\n".join(str(x) for x in inventory)
+    absent = [g for g in REQUIRED_GATE_SUBSTRINGS if g not in listed]
+    f.check("the_w10_inventory_contains_every_security_critical_gate", not absent, where,
+            f"{[a[:48] for a in absent[:3]]} did not run. A report that dropped one of these "
+            "checked less than it says it did, whatever its inventory hashes to")
 
     # THE RECORDS MUST BE THE INVENTORY. Not merely the same length: the same gates, in the
     # same order, each appearing once. A report whose records and inventory disagree is a

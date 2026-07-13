@@ -727,7 +727,12 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert ev["verifier_code_sha256"] == W.FROZEN_VERIFIER_CODE_SHA256
         # ...and the gate profile it must have run
         assert ev["gate_inventory_sha256"] == W.FROZEN_GATE_INVENTORY_SHA256
-        assert ev["n_gates"] == W.FROZEN_N_GATES == 90
+        assert ev["n_gates"] == W.FROZEN_N_GATES == 80        # the PRODUCTION bundle profile
+        assert ev["gate_profile"] == W.PROFILE_BUNDLE_PRODUCTION
+        assert ev["w10_pinned_verifier_commit"] == W.W10_PINNED_VERIFIER_COMMIT
+        # the always-on gates survive a pin override
+        assert sorted(ev["required_gates_always_enforced"]) == \
+            sorted(W.REQUIRED_GATE_SUBSTRINGS)
         assert direct_source.W10_ADMIT in ev["verdict"]
         assert ev["gate_records"]
         # ...and the EXACT, COMPLETE artifact set — a subset is not an admission

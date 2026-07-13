@@ -113,6 +113,12 @@ def integration_contract() -> dict[str, Any]:
                 "verifier_code_sha256": w10.FROZEN_VERIFIER_CODE_SHA256,
                 "gate_inventory_sha256": w10.FROZEN_GATE_INVENTORY_SHA256,
                 "n_gates": w10.FROZEN_N_GATES,
+                "gate_profile": w10.PROFILE_BUNDLE_PRODUCTION,
+                "w10_pinned_verifier_commit": w10.W10_PINNED_VERIFIER_COMMIT,
+                # ENFORCED ALWAYS, pins or no pins: overriding the exact-inventory hash may
+                # not switch the gate CONTENT check off, or a resealed deletion of the mask
+                # check would sail through on a hash it chose for itself.
+                "required_gates_always_enforced": list(w10.REQUIRED_GATE_SUBSTRINGS),
                 "verdict": f"{w10.W10_ADMIT!r}, with n_failed 0 and failed_gates empty",
                 "independent_of_generator": "true",
                 "report_sha256": "sha256(canonical JSON excluding report_sha256)",
