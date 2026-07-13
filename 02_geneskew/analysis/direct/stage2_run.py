@@ -491,12 +491,20 @@ def bundle_args(cfg):
 
 def lane_direct(cfg):
     _phase("B direct")
+    # ONE authoritative all-conditions run: run_arms --all-conditions derives the condition set from
+    # the BOUND Stage-1 release (never a number written here) and produces every condition's
+    # content-addressed bundle in a single invocation. Per-condition IMMUTABLE bundle receipts are
+    # still bound (the bundles still exist; only the invocation changed) over the ONE shared argv.
+    argv = _py("run_arms", "--all-conditions", *bundle_args(cfg),
+               "--out-root", os.path.join(cfg.out, "direct"))
+    # produce direct:root (the aggregate lane consumes it — nothing produced it before) alongside
+    # each per-condition endpoint.
+    run("direct:all-conditions", argv,
+        produces=[f"direct:{c}" for c in CONDITIONS] + ["direct:root"])   # exact executed command
     for cond in CONDITIONS:
-        argv = _py("run_arms", "--condition", cond, *bundle_args(cfg),
-                   "--out-root", os.path.join(cfg.out, "direct"))
-        run(f"direct:{cond}", argv, produces=[f"direct:{cond}"])   # exact executed command
         # bind the IMMUTABLE content-addressed bundle dir, NOT the shared mutable OUT/direct root
-        # (so the Rest receipt stays valid as Stim8hr/Stim48hr are added later)
+        # (so each receipt stays valid as the sibling condition bundles are added). All three
+        # receipts share the same all-conditions argv — one run produced all three.
         bdir = direct_bundle_for(cfg, cond)
         _write_receipt(cfg, f"B.direct.{cond}", argv=argv,
                        inputs=[cfg.de, cfg.sgrna, cfg.stage1_release],

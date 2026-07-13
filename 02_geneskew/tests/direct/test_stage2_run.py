@@ -68,15 +68,22 @@ def test_temporal_is_one_all_pairs_over_admitted_endpoints():
 
 def test_native_loaders_get_the_staged_release_root():
     out = _dry()
-    assert "--stage1-release-root" in _block(out, "direct:Rest")
+    assert "--stage1-release-root" in _block(out, "direct:all-conditions")
     assert "--stage1-release-root" in _block(out, "pathway:Rest:reactome")
 
 
-def test_topology_is_exactly_3_6_6():
+def test_topology_direct_all_conditions_pathway_6():
+    """Direct is now ONE all-conditions run (was 3 per-condition); pathway stays 6, temporal is one
+    all-pairs run over 6 pairs, and the W10 verify/adapter stay per-condition (3 each)."""
     out = _dry()
-    assert out.count("=== BEGIN direct:") == 3
-    assert len(_tpairs(out)) == 6
+    assert out.count("=== BEGIN direct:") == 1
+    dblk = _block(out, "direct:all-conditions")
+    assert "--all-conditions" in dblk and "--stage1-release-root" in dblk
     assert out.count("=== BEGIN pathway:") == 6
+    assert len(_tpairs(out)) == 6
+    assert out.count("=== BEGIN temporal:all-pairs") == 1
+    assert out.count("=== BEGIN w10-verify:") == 3
+    assert out.count("=== BEGIN w10-adapter:") == 3
 
 
 def test_phase_C_invokes_external_verifier_and_adapter():
