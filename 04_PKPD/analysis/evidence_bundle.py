@@ -19,7 +19,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .acquisition import SourceAcquisitionRecord
+from .acquisition import AcquisitionRecord
 from .contract_version import SCHEMA_TO_VERSION, ContractVersion
 from .contracts import EvidenceContext, SourceRecord
 from .pk_records import FractionUnboundRecord
@@ -62,7 +62,7 @@ LANE_MODELS_V1: dict[str, Any] = {
 LANE_MODELS_V2: dict[str, Any] = {
     **LANE_MODELS_V1,
     "fraction_unbound": FractionUnboundRecord,
-    "source_acquisition": SourceAcquisitionRecord,
+    "source_acquisition": AcquisitionRecord,
 }
 
 LANE_MODELS = {

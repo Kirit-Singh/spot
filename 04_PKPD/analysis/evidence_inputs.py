@@ -103,18 +103,16 @@ V2_ONLY_COLUMNS: dict[str, tuple[str, ...]] = {
         "raw_response_sha256", "extraction_transform",
     ),
     "source_acquisition": (
-        "acquisition_id", "source_record_id", "request_url", "canonical_query",
-        "accessed_at_utc", "http_status", "raw_media_type", "response_headers_json",
-        "release_or_last_updated", "license_or_terms_url", "license_exception_note",
-        "raw_bytes", "raw_sha256", "content_sha256", "content_hash_rule",
-        "extraction_transform", "adapter_id", "adapter_code_sha256", "review_status",
-        "observation_state", "search_id", "conflict_note", "not_applicable_reason",
-        # `selection.py`'s vocabulary, not a second one: exactly_one (matched on an identity
-        # PIN) or sorted_unique (collect-all). Plus the source's own match total against what
-        # actually arrived -- which is what makes a `limit=1` truncation visible instead of
-        # invisible.
-        "selection_disposition", "selection_pin", "match_total_reported", "records_returned",
-        "result_set_complete",
+        # W8's `AcquisitionRecord`, field for field (`analysis/acquisition.py`). Not a second
+        # declaration of the same evidence -- a rival record was exactly the duplication this
+        # lane was told not to create, and the two would have drifted.
+        "acquisition_record_id", "source_key", "source_name", "source_type", "origin",
+        "stable_record_id", "url", "canonical_query", "canonical_query_sha256",
+        "accessed_at_utc", "access_date", "http_status", "raw_media_type",
+        "response_headers_json", "release_or_last_updated", "license", "license_or_terms_url",
+        "license_status", "redistribution", "raw_bytes", "raw_sha256", "content_sha256",
+        "content_hash_rule", "cache_relpath", "extraction_transform", "adapter_code_sha256",
+        "review_status", "evidence_state", "stage3_source_record_id", "note",
     ),
 }
 

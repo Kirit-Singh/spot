@@ -1,318 +1,469 @@
-"""What a fetch has to be able to SHOW before its bytes count as evidence.
+"""The acquisition manifest — the record that makes a source re-fetchable and checkable.
 
-Stage 4 has no network code and this module adds none. It is the typed record an acquisition
-would have to produce — the thing a reviewer re-runs a year later to get the same bytes.
+The audit's finding (§4.7): Stage 4's source contract carried an access DATE and nothing that
+would let a reviewer reconstruct the request — no UTC timestamp, no canonical query, no HTTP
+status, no response headers, no terms URL, and no hash of the adapter that did the extracting.
+This module is that record.
 
-The audit's finding, in one line: `SourceRecord` recorded an access **date**, no canonical
-query, no terms URL, no HTTP status and no adapter build. So a source could be re-fetched only
-approximately, its terms were an adjective rather than a document, and a parser bugfix could
-change every extracted value while the bytes, the transform string and the hash all stayed put.
+Three origins, and no path between them:
 
-Four separable things are kept separate here, because collapsing any two of them loses a fact:
+  fetched_public       Stage 4 put the request on the wire. It must show the locator (URL +
+                       canonical query + UTC time + HTTP 200) and the bytes (count + SHA-256 +
+                       a cache entry under the run root). Missing any of it -> refused.
+  reused_from_stage3   the bytes were acquired, hashed and released by Stage 3. Carried
+                       VERBATIM (see stage3_reuse.py). Stage 4 does not re-query them and does
+                       not re-interpret them.
+  synthetic_fixture    a labelled synthetic response. It has a hash — of exactly the bytes the
+                       parser was handed — and it can never become a public record.
 
-  raw_sha256        the exact bytes that came back
-  content_sha256    the stable scientific content inside a volatile envelope (the PMC BioC
-                    endpoint stamps the retrieval date into every response, so an UNCHANGED
-                    paper hashes differently every day)
-  extraction_transform   WHAT was taken out of those bytes
-  adapter_code_sha256    WHICH build took it out
-
-`observation_state` is the fifth: it is the difference between "we looked and found nothing",
-"nobody looked", and "the sources disagree" — three sentences that a single null would render
-identical.
+Raw bytes live OUTSIDE Git, under a caller-supplied run root, addressed by their own SHA-256.
+Git holds small synthetic fixtures and manifests only. `RunRoot` refuses to write a cache
+inside the working tree, because a cached live label committed by accident is a licence
+problem that no later `git rm` undoes.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
-from enum import Enum
-from typing import Literal, Optional
+from functools import lru_cache
+from typing import Any, Final, Literal, Optional, cast
 
 from pydantic import Field, model_validator
 
-from .canonical import content_sha256
-from .contracts import ID_PATTERN, SHA256_PATTERN, Strict
+from .canonical import LOCAL_PATH_RE, sha256_bytes, short_id, strict_content_sha256
+from .contracts import ID_PATTERN, SHA256_PATTERN, AcquisitionStatus, SourceRecord, Strict
+from .firewall import Rejection
+from .method_config import STAGE4_DIR
 
-# RFC-3339, UTC, to the second. A DATE is not a timestamp: a database that publishes twice a
-# day cannot be pinned to a day, and "which release did you actually read" is the question the
-# whole record exists to answer.
-UTC_TIMESTAMP_PATTERN = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$"
+ACQUISITION_SCHEMA_ID: Final = "spot.stage04_acquisition_manifest.v1"
+MANIFEST_FILE = "acquisition_manifest.json"
+RAW_DIR = "raw"
 
-# A terms URL is a document you can read, not an adjective. `license: "Public domain"` is the
-# exact overclaim the audit found in the ledger for DailyMed and ClinicalTrials.gov.
-_URL = re.compile(r"^https?://[^\s]+$")
+REPO_ROOT = os.path.dirname(STAGE4_DIR)
+UTC_PATTERN = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 
-# Never hashed into a public artifact, never written to disk. A response header set is useful
-# provenance (etag, last-modified, content-type, an API's release header); a credential in it
-# is a leak, and an artifact that carries one cannot be published.
-CREDENTIAL_HEADERS = frozenset({
-    "authorization", "proxy-authorization", "cookie", "set-cookie",
-    "x-api-key", "api-key", "x-auth-token", "authentication",
-})
+Origin = Literal["fetched_public", "reused_from_stage3", "synthetic_fixture"]
+SourceType = Literal[
+    "primary_literature", "regulatory_label", "public_database", "public_api",
+    "structure_probe", "fixture",
+]
+ReviewStatus = Literal["unreviewed", "machine_verified", "human_reviewed", "not_applicable"]
+EvidenceState = Literal[
+    "observed",
+    "not_evaluated",
+    "not_found_after_reproducible_search",
+    "conflicting",
+    "not_applicable",
+]
+
+SOURCE_TYPES: tuple[str, ...] = (
+    "primary_literature", "regulatory_label", "public_database", "public_api",
+    "structure_probe", "fixture",
+)
 
 
-class EvidenceObservationState(str, Enum):
-    """The five states the audit requires. A null is not one of them.
+def as_source_type(value: str) -> SourceType:
+    """A source type Stage 4 does not know is a refusal, not a cast.
 
-    `NOT_EVALUATED` and `NOT_FOUND_AFTER_SEARCH` are the pair that matters most: "nobody
-    looked" and "we ran this exact query against this exact release and it came back empty"
-    are different scientific claims, and only the second one is evidence.
+    The ledger is data, and data can be edited. A typo there must not quietly widen the set of
+    provenance classes the engine believes in.
     """
+    if value not in SOURCE_TYPES:
+        raise Rejection(
+            "unknown_source_type",
+            f"{value!r} is not a Stage-4 source type (known: {list(SOURCE_TYPES)}).")
+    return cast(SourceType, value)
 
-    OBSERVED = "observed"
-    NOT_EVALUATED = "not_evaluated"
-    NOT_FOUND_AFTER_SEARCH = "not_found_after_reproducible_search"
-    CONFLICTING = "conflicting"
-    NOT_APPLICABLE = "not_applicable"
+# What a fetched record must show before it is allowed to be evidence about anything.
+PUBLIC_REQUIRED = (
+    "url", "canonical_query", "accessed_at_utc", "http_status", "raw_media_type",
+    "raw_bytes", "raw_sha256", "cache_relpath", "license_or_terms_url",
+)
+
+HARD_RULES = [
+    "Raw bytes are cached outside Git under the run root; Git holds synthetic fixtures only.",
+    "A source does not declare itself free: every acquired record carries its terms URL.",
+    "ChEMBL and UniProt are reuse_only — their records come from the admitted Stage-3 bundle, "
+    "verbatim, and are never re-queried here.",
+    "An absent lane is a stated absence (`not_evaluated`), never an empty field.",
+    "No descriptor source here supplies logD7.4 or most-basic pKa; CNS-MPO stays incomplete "
+    "rather than fabricated.",
+    "This manifest acquires evidence. It ranks no drug and asserts nothing about safety, "
+    "brain penetrance or benefit.",
+]
 
 
-class ReviewStatus(str, Enum):
-    """Who, if anyone, checked that the extraction says what the source says."""
+class AcquisitionRecord(Strict):
+    """One response, one record. Every scientific number will bind to one of these."""
 
-    NOT_REVIEWED = "not_reviewed"
-    MACHINE_EXTRACTED = "machine_extracted"
-    HUMAN_REVIEWED = "human_reviewed"
-    DUAL_REVIEWED = "dual_independently_reviewed"
-    DISPUTED = "disputed"
+    acquisition_record_id: str = Field(pattern=ID_PATTERN)
+    source_key: str
+    source_name: str
+    source_type: SourceType
+    origin: Origin
 
+    # --- the locator ---------------------------------------------------------------
+    stable_record_id: Optional[str] = None
+    url: Optional[str] = None
+    canonical_query: Optional[str] = None
+    # Stage 3 records the canonical query as a HASH, not as text. When that is all that
+    # exists, this is where it goes — the text is NOT reconstructed from it.
+    canonical_query_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
+    accessed_at_utc: Optional[str] = Field(default=None, pattern=UTC_PATTERN)
+    # Stage-3-reused records carry Stage 3's acquisition DATE; a UTC timestamp Stage 3 never
+    # recorded is not invented here.
+    access_date: Optional[str] = Field(default=None, pattern=DATE_PATTERN)
 
-class SourceAcquisitionRecord(Strict):
-    """One response, and everything needed to get it again and prove what was read out of it."""
-
-    acquisition_id: str = Field(pattern=ID_PATTERN)
-    # The `SourceRecord` these bytes belong to. One source record is one response.
-    source_record_id: str = Field(pattern=ID_PATTERN)
-
-    request_url: str
-    # The exact, reproducible query — not "I searched ChEMBL". Method + path + sorted params.
-    canonical_query: str = Field(min_length=1)
-    accessed_at_utc: str = Field(pattern=UTC_TIMESTAMP_PATTERN)
-
-    http_status: Optional[int] = Field(default=None, ge=100, le=599)
+    # --- the response --------------------------------------------------------------
+    http_status: Optional[int] = None
     raw_media_type: Optional[str] = None
-    # A SELECTED subset: etag / last-modified / content-type / an API's release header.
     response_headers: dict[str, str] = Field(default_factory=dict)
-
-    # The source's own statement of which release this is: a version, or an API `last_updated`.
     release_or_last_updated: Optional[str] = None
-    # The exact terms document. An adjective ("public domain") is refused.
-    license_or_terms_url: Optional[str] = None
-    license_exception_note: Optional[str] = None
 
+    # --- the terms -----------------------------------------------------------------
+    license: Optional[str] = None
+    license_or_terms_url: Optional[str] = None
+    license_status: Optional[str] = None
+    redistribution: Optional[str] = None
+
+    # --- the bytes -----------------------------------------------------------------
     raw_bytes: Optional[int] = Field(default=None, ge=0)
     raw_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
-    # The stable content identity when the transport envelope is volatile. Equal to
-    # `raw_sha256` when it is not.
+    # Only when the transport envelope is volatile (a retrieval date stamped into every
+    # response). The RULE is recorded with it: a hash whose derivation is undeclared is not
+    # reproducible by a reviewer.
     content_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
     content_hash_rule: Optional[str] = None
+    cache_relpath: Optional[str] = None
 
-    extraction_transform: str = Field(min_length=1)
-    adapter_id: str = Field(pattern=ID_PATTERN)
-    adapter_code_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
-
+    # --- what was done with it ------------------------------------------------------
+    extraction_transform: str
+    adapter_code_sha256: str = Field(pattern=SHA256_PATTERN)
     review_status: ReviewStatus
-    observation_state: EvidenceObservationState
+    evidence_state: EvidenceState = "observed"
 
-    # --- how a SINGLE record was chosen among the ones the query MATCHED.
-    #
-    # The vocabulary here is `analysis/selection.py`'s, not a second one invented next to it:
-    # a selection is `exactly_one` (matched on an identity PIN, with zero and many both typed
-    # refusals) or `sorted_unique` (collect-all in canonical order, nothing dropped, nothing
-    # chosen). There is no third option and there is no `results[0]`.
-    #
-    # `match_total_reported` is the SOURCE's own count of what its query matched, and
-    # `records_returned` is what actually arrived. A `limit=1` makes those differ — which is why
-    # it did not merely risk the wrong record, it removed the evidence that would have shown the
-    # risk. A truncated result set cannot prove uniqueness, so it cannot be `observed`.
-    selection_disposition: Optional[Literal["exactly_one", "sorted_unique"]] = None
-    selection_pin: Optional[str] = None
-    match_total_reported: Optional[int] = Field(default=None, ge=0)
-    records_returned: Optional[int] = Field(default=None, ge=0)
-    result_set_complete: bool = False
+    stage3_source_record_id: Optional[str] = None
+    note: Optional[str] = None
 
-    # Required by `not_found_after_reproducible_search`: the SearchManifest whose acquired
-    # bytes ARE the empty response.
-    search_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
-    conflict_note: Optional[str] = None
-    not_applicable_reason: Optional[str] = None
+    @model_validator(mode="after")
+    def _origin_evidence(self) -> "AcquisitionRecord":
+        if self.origin == "fetched_public":
+            missing = [f for f in PUBLIC_REQUIRED if not getattr(self, f)]
+            if missing:
+                raise ValueError(
+                    f"a fetched_public record ({self.acquisition_record_id!r}) is missing "
+                    f"{sorted(missing)}. A fetch that cannot show its locator, its terms and "
+                    "its bytes is not a public source record; it is a claim.")
+            if self.http_status != 200:
+                raise ValueError(
+                    f"http_status={self.http_status} is not evidence. Only a 200 response "
+                    "carries bytes Stage 4 will read.")
+            if self.source_type == "fixture":
+                raise ValueError("source_type='fixture' cannot be origin='fetched_public'")
+        elif self.origin == "synthetic_fixture":
+            if not self.raw_sha256:
+                raise ValueError("a synthetic fixture still hashes the exact bytes it parsed")
+            if self.evidence_state == "observed":
+                raise ValueError(
+                    "a synthetic fixture is not an observation of anything; its evidence_state "
+                    "may not be 'observed'")
+        elif self.origin == "reused_from_stage3":
+            if not self.stage3_source_record_id:
+                raise ValueError(
+                    "a reused record must name the Stage-3 source_record_id it was carried from")
+            if self.raw_sha256 and not self.raw_bytes:
+                raise ValueError("a hash without a byte count is not a checkable record")
+            if not self.raw_sha256 and self.evidence_state == "observed":
+                raise ValueError(
+                    "there are no bytes behind this Stage-3 record, so there is no observation "
+                    "behind it; evidence_state must say so")
+
+        if self.cache_relpath:
+            if os.path.isabs(self.cache_relpath) or LOCAL_PATH_RE.search(self.cache_relpath):
+                raise ValueError(
+                    f"cache_relpath {self.cache_relpath!r} is machine-local. The manifest records "
+                    "the path relative to the run root; an absolute path is not content and "
+                    "cannot be re-verified on the reviewer's machine.")
+        if self.content_sha256 and not self.content_hash_rule:
+            raise ValueError(
+                "a content hash without its declared rule cannot be reproduced by a reviewer")
+        return self
 
     @property
     def has_bytes(self) -> bool:
         return bool(self.raw_sha256)
 
-    @model_validator(mode="after")
-    def _rules(self) -> "SourceAcquisitionRecord":
-        self._check_urls()
-        self._check_headers()
-        self._check_content_hash()
-        self._check_state()
-        self._check_selection()
-        if not self.adapter_code_sha256:
-            raise ValueError(
-                f"acquisition {self.acquisition_id!r}: adapter_code_sha256 is required. The "
-                "extraction transform says WHAT was taken out of the bytes; only the adapter "
-                "hash says WHICH build took it out — a parser repair changes the extracted "
-                "value while the bytes, the transform and the response hash all stay identical."
-            )
-        return self
 
-    def _check_urls(self) -> None:
-        if not _URL.match(self.request_url):
-            raise ValueError(f"request_url is not a URL: {self.request_url!r}")
-        if self.license_or_terms_url is not None and not _URL.match(self.license_or_terms_url):
-            raise ValueError(
-                f"license_or_terms_url must be the exact terms DOCUMENT, not a licence name: "
-                f"got {self.license_or_terms_url!r}. 'Public domain' is an assertion; "
-                "https://open.fda.gov/terms/ is a thing a reviewer can read."
-            )
+class MissingEvidence(Strict):
+    """A stated absence. `missingness_explicit` -> refuse_artifact."""
 
-    def _check_headers(self) -> None:
-        leaked = sorted(h for h in self.response_headers if h.lower() in CREDENTIAL_HEADERS)
-        if leaked:
-            raise ValueError(
-                f"acquisition {self.acquisition_id!r} carries credential header(s) {leaked}. "
-                "Response headers are provenance and get written into a public artifact; a "
-                "credential in one is a leak, not a header."
-            )
-
-    def _check_content_hash(self) -> None:
-        if self.content_sha256 and self.raw_sha256 and self.content_sha256 != self.raw_sha256:
-            if not self.content_hash_rule:
-                raise ValueError(
-                    f"acquisition {self.acquisition_id!r}: content_sha256 differs from "
-                    "raw_sha256 but no content_hash_rule declares the normalisation. A content "
-                    "hash whose rule is unstated is not reproducible — state exactly what was "
-                    "blanked (e.g. the BioC envelope's retrieval <date>)."
-                )
-        if self.content_sha256 and not self.raw_sha256:
-            raise ValueError("content_sha256 without raw_sha256: there are no bytes to normalise")
-
-    def _check_state(self) -> None:
-        st = self.observation_state
-        if st == EvidenceObservationState.OBSERVED:
-            self._require_bytes("observed")
-            if self.http_status is None or not (200 <= self.http_status < 300):
-                raise ValueError(
-                    f"observed requires a 2xx HTTP status (got {self.http_status!r}). A 404 or a "
-                    "challenge page has bytes too; they are not an observation of the thing that "
-                    "was asked for."
-                )
-            if self.search_id:
-                raise ValueError("search_id is only meaningful for "
-                                 "not_found_after_reproducible_search")
-        elif st == EvidenceObservationState.NOT_FOUND_AFTER_SEARCH:
-            if not self.search_id:
-                raise ValueError(
-                    "not_found_after_reproducible_search requires a search_id -> a SearchManifest "
-                    "(canonical query, endpoint, release, scope, the hash of the empty response). "
-                    "Without it, 'we looked and found nothing' is the same sentence as 'nobody "
-                    "looked', and only one of them is evidence."
-                )
-            self._require_bytes("not_found_after_reproducible_search")
-        elif st == EvidenceObservationState.NOT_EVALUATED:
-            if self.has_bytes or self.raw_bytes or self.content_sha256:
-                raise ValueError(
-                    "not_evaluated means nobody looked, so there are no bytes; a hash here would "
-                    "be a fiction. If a query WAS run and came back empty, the state is "
-                    "not_found_after_reproducible_search."
-                )
-        elif st == EvidenceObservationState.CONFLICTING:
-            if not self.conflict_note:
-                raise ValueError(
-                    "conflicting requires conflict_note: which sources disagree, and about what. "
-                    "An unstated conflict cannot be adjudicated or reproduced."
-                )
-        elif st == EvidenceObservationState.NOT_APPLICABLE:
-            if not self.not_applicable_reason:
-                raise ValueError("not_applicable requires not_applicable_reason")
-
-    def _check_selection(self) -> None:
-        """The record must be able to show that its selection was not a pick.
-
-        These are `selection.py`'s guarantees, restated as invariants of the artifact, so that a
-        selection which never had them cannot be written down as though it did.
-        """
-        if self.selection_disposition is None:
-            return
-
-        if self.selection_disposition == "exactly_one" and not self.selection_pin:
-            raise ValueError(
-                "selection_disposition='exactly_one' must name the identity PIN it matched on. "
-                "Matching on position is not matching on identity, and `results[0]` is a bet "
-                "that the result set had one element -- a bet that fails silently, on the one "
-                "drug where it matters."
-            )
-
-        total, returned = self.match_total_reported, self.records_returned
-        if self.result_set_complete:
-            if total is None or returned is None or total != returned:
-                raise ValueError(
-                    f"result_set_complete=True but the source reported {total!r} matching "
-                    f"record(s) and {returned!r} arrived. Completeness is the source's own total "
-                    "agreeing with what we can actually see; it is not a flag to be asserted."
-                )
-        elif total is not None and returned is not None and total == returned:
-            raise ValueError(
-                "the source's total equals what arrived, so the result set IS complete; saying "
-                "otherwise understates the evidence"
-            )
-
-        # The `limit=1` failure, closed. A response that says `total: 7` and hands back 1 row has
-        # not shown us the other 6, so nothing about that row can be called unique -- and an
-        # observation is exactly a claim that we saw the thing we asked for.
-        if (self.observation_state == EvidenceObservationState.OBSERVED
-                and self.selection_disposition == "exactly_one"
-                and not self.result_set_complete):
-            raise ValueError(
-                f"acquisition {self.acquisition_id!r} claims to have observed exactly one "
-                f"record, but the result set is not complete (source total="
-                f"{total!r}, returned={returned!r}). A truncated page cannot prove uniqueness. "
-                "Raise the query limit or pin the record explicitly; do not read the rows that "
-                "happened to arrive. If the candidates genuinely cannot be separated, the state "
-                "is 'conflicting' and it names the conflict."
-            )
-
-    def _require_bytes(self, state: str) -> None:
-        if not self.raw_sha256 or not self.raw_bytes:
-            raise ValueError(
-                f"{state} requires the bytes it rests on: raw_sha256 and a non-zero raw_bytes. "
-                "A response nobody kept cannot be re-checked."
-            )
+    lane: str
+    evidence_state: Literal[
+        "not_evaluated", "not_found_after_reproducible_search", "conflicting", "not_applicable"
+    ]
+    reason: str
+    source_key: Optional[str] = None
+    search_manifest_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
 
 
-class SourceAcquisitionManifest(Strict):
-    """The content-addressed set of acquisitions behind one evidence bundle.
+class AcquisitionManifest(Strict):
+    """Every response this run stands on, plus everything it did NOT acquire."""
 
-    `manifest_content_sha256` is a hash of the RECORDS, not of their order: a re-serialisation
-    that permutes them is the same manifest, and a single changed bound field is not.
+    schema_id: Literal["spot.stage04_acquisition_manifest.v1"]
+    run_id: str = Field(pattern=ID_PATTERN)
+    # The admitted Stage-3 bundle these records were acquired for. Hashes, never a path.
+    stage3_binding: dict[str, str] = Field(default_factory=dict)
+    source_ledger_sha256: str = Field(pattern=SHA256_PATTERN)
+    records: list[AcquisitionRecord] = Field(default_factory=list)
+    missing: list[MissingEvidence] = Field(default_factory=list)
+
+    def content(self) -> dict[str, Any]:
+        """The identity content: sorted records, the binding, the terms ledger. No wall clock
+        beyond the access timestamps that are themselves part of a record."""
+        return {
+            "schema_id": self.schema_id,
+            "stage3_binding": dict(sorted(self.stage3_binding.items())),
+            "source_ledger_sha256": self.source_ledger_sha256,
+            "records": [
+                r.model_dump(exclude_none=True)
+                for r in sorted(self.records, key=lambda r: r.acquisition_record_id)
+            ],
+            "missing": [
+                m.model_dump(exclude_none=True)
+                for m in sorted(self.missing, key=lambda m: (m.lane, m.reason))
+            ],
+        }
+
+    def as_document(self) -> dict[str, Any]:
+        doc = self.content()
+        doc["run_id"] = self.run_id
+        doc["hard_rules"] = list(HARD_RULES)
+        doc["content_sha256"] = manifest_content_sha256(self)
+        return doc
+
+
+def manifest_content_sha256(manifest: AcquisitionManifest) -> str:
+    return strict_content_sha256(manifest.content())
+
+
+# ------------------------------------------------------------------------- the run root
+
+
+class RunRoot:
+    """A caller-supplied directory OUTSIDE Git that holds the raw bytes and the manifest."""
+
+    def __init__(self, root: str) -> None:
+        self.root = os.path.abspath(root)
+        _refuse_inside_git(self.root)
+        os.makedirs(self.root, exist_ok=True)
+
+    def store(self, data: bytes, *, source_key: str, suffix: str = "") -> tuple[str, str]:
+        """Cache raw bytes, addressed by their own SHA-256. -> (relpath, sha256)."""
+        sha = sha256_bytes(data)
+        relpath = f"{RAW_DIR}/{_safe(source_key)}/{sha}{_safe_suffix(suffix)}"
+        path = os.path.join(self.root, relpath)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not os.path.exists(path):  # content-addressed: the same bytes are one entry
+            tmp = path + ".part"
+            with open(tmp, "wb") as fh:
+                fh.write(data)
+            os.replace(tmp, path)
+        return relpath, sha
+
+    def read(self, relpath: str) -> bytes:
+        with open(os.path.join(self.root, relpath), "rb") as fh:
+            return fh.read()
+
+    def write_manifest(self, manifest: AcquisitionManifest, filename: str = MANIFEST_FILE) -> str:
+        path = os.path.join(self.root, filename)
+        tmp = path + ".part"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(manifest.as_document(), fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        os.replace(tmp, path)
+        return path
+
+
+def _refuse_inside_git(root: str) -> None:
+    """The run root may not be inside a Git working tree.
+
+    A live DailyMed label committed by accident is a licensing problem that no later `git rm`
+    undoes — the bytes stay in history. So the cache simply cannot be opened in the tree.
     """
+    probe = root
+    while True:
+        if os.path.exists(os.path.join(probe, ".git")):
+            raise Rejection(
+                "run_root_inside_git",
+                f"the run root {root!r} is inside the Git working tree at {probe!r}. Raw source "
+                "bytes (live labels above all) are cached OUTSIDE Git — Git holds synthetic "
+                "fixtures only. Point --run-root at a scratch or run directory.")
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            return
+        probe = parent
 
-    manifest_id: str = Field(pattern=ID_PATTERN)
-    records: list[SourceAcquisitionRecord] = Field(default_factory=list)
 
-    @model_validator(mode="after")
-    def _unique(self) -> "SourceAcquisitionManifest":
-        seen_acq: set[str] = set()
-        seen_src: set[str] = set()
-        for r in self.records:
-            if r.acquisition_id in seen_acq:
-                raise ValueError(f"duplicate acquisition_id {r.acquisition_id!r}: a row id is "
-                                 "supplied once, so nothing downstream can pick")
-            seen_acq.add(r.acquisition_id)
-            if r.source_record_id in seen_src:
-                raise ValueError(
-                    f"source_record_id {r.source_record_id!r} is acquired twice. One source "
-                    "record is one response; two acquisitions for it would let a reader choose "
-                    "which bytes the evidence rests on."
-                )
-            seen_src.add(r.source_record_id)
-        return self
+_SAFE = re.compile(r"[^A-Za-z0-9._-]")
 
-    @property
-    def manifest_content_sha256(self) -> str:
-        rows = sorted((r.model_dump(mode="json") for r in self.records),
-                      key=lambda r: r["acquisition_id"])
-        return content_sha256(rows)
 
-    def by_source_record_id(self) -> dict[str, SourceAcquisitionRecord]:
-        return {r.source_record_id: r for r in self.records}
+def _safe(name: str) -> str:
+    return _SAFE.sub("_", name)
+
+
+def _safe_suffix(suffix: str) -> str:
+    return "." + _safe(suffix.lstrip(".")) if suffix else ""
+
+
+def verify_cached_bytes(record: AcquisitionRecord, run_root: RunRoot) -> bytes:
+    """Re-hash the cached response. FAIL-CLOSED: `source_bytes_bound` -> refuse_row."""
+    if not record.cache_relpath or not record.raw_sha256:
+        raise Rejection(
+            "acquisition_no_cached_bytes",
+            f"record {record.acquisition_record_id!r} has no cached bytes to verify")
+    try:
+        data = run_root.read(record.cache_relpath)
+    except OSError as exc:
+        raise Rejection(
+            "acquisition_cache_missing",
+            f"the cached response for {record.acquisition_record_id!r} is not in the run root "
+            f"({exc}). A record whose bytes are gone is not evidence.") from exc
+
+    got = sha256_bytes(data)
+    if got != record.raw_sha256:
+        raise Rejection(
+            "acquisition_raw_hash_mismatch",
+            f"{record.acquisition_record_id!r}: the cached bytes hash to {got}, but the manifest "
+            f"records {record.raw_sha256}. The bytes are the evidence; a record that no longer "
+            "matches them is refused, not repaired.")
+    if record.raw_bytes is not None and len(data) != record.raw_bytes:
+        raise Rejection(
+            "acquisition_raw_byte_count_mismatch",
+            f"{record.acquisition_record_id!r}: {len(data)} bytes cached, {record.raw_bytes} "
+            "recorded")
+    return data
+
+
+# ------------------------------------------------------------------------- constructors
+
+
+def fixture_record(*, acquisition_record_id: str, source_key: str, raw: bytes,
+                   extraction_transform: str, adapter_code_sha256: str,
+                   note: Optional[str] = None) -> AcquisitionRecord:
+    """A labelled synthetic response. It hashes the exact bytes the parser was handed, and it
+    can never become a public record."""
+    return AcquisitionRecord(
+        acquisition_record_id=acquisition_record_id,
+        source_key=source_key,
+        source_name=f"synthetic {source_key} fixture",
+        source_type="fixture",
+        origin="synthetic_fixture",
+        raw_bytes=len(raw),
+        raw_sha256=sha256_bytes(raw),
+        license="synthetic fixture (no licence: not real data)",
+        extraction_transform=extraction_transform,
+        adapter_code_sha256=adapter_code_sha256,
+        review_status="not_applicable",
+        evidence_state="not_applicable",
+        note=note or "synthetic, response-shaped bytes. Not evidence about any drug.",
+    )
+
+
+def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: str,
+                         extraction_transform: str, adapter_file: str,
+                         release: str, suffix: str = "",
+                         review_status: ReviewStatus = "unreviewed",
+                         content_sha256: Optional[str] = None,
+                         content_hash_rule: Optional[str] = None,
+                         note: Optional[str] = None) -> AcquisitionRecord:
+    """A fetched response -> a cached, hashed, terms-bound acquisition record.
+
+    `release` is passed in by the adapter because only the adapter knows where its source puts
+    one: openFDA has `meta.last_updated`, DailyMed has a per-SPL version, and PubChem PUG REST
+    has none at all — which is recorded as `not_reported_by_source`, not left blank and not
+    filled with a plausible-looking date.
+    """
+    from .public_sources import source as ledger_source
+
+    entry = ledger_source(response.source_key)
+    relpath, sha = run_root.store(response.body, source_key=response.source_key, suffix=suffix)
+    return AcquisitionRecord(
+        acquisition_record_id=new_record_id("acq", response.source_key, response.canonical_query),
+        source_key=response.source_key,
+        source_name=str(entry["source_name"]),
+        source_type=as_source_type(str(entry["source_type"])),
+        origin="fetched_public",
+        stable_record_id=stable_record_id,
+        url=response.url,
+        canonical_query=response.canonical_query,
+        accessed_at_utc=response.accessed_at_utc,
+        access_date=response.accessed_at_utc[:10],
+        http_status=response.status,
+        raw_media_type=response.media_type,
+        response_headers=dict(response.headers),
+        release_or_last_updated=release,
+        license=str(entry["license"]),
+        license_or_terms_url=str(entry["license_or_terms_url"]),
+        license_status=str(entry["license_status"]),
+        redistribution=str(entry.get("redistribution") or "bytes_cached_outside_git"),
+        raw_bytes=len(response.body),
+        raw_sha256=sha,
+        content_sha256=content_sha256,
+        content_hash_rule=content_hash_rule,
+        cache_relpath=relpath,
+        extraction_transform=extraction_transform,
+        adapter_code_sha256=code_sha256(adapter_file),
+        review_status=review_status,
+        evidence_state="observed",
+        note=note,
+    )
+
+
+def to_source_record(record: AcquisitionRecord) -> SourceRecord:
+    """The bridge into the Stage-4 evidence contract (W9's `SourceRecord`).
+
+    Acquisition does not widen that contract — it fills it. A record with no bytes becomes
+    `not_acquired`, never a hash.
+    """
+    if record.origin == "synthetic_fixture":
+        status = AcquisitionStatus.SYNTHETIC_FIXTURE
+    elif record.has_bytes:
+        status = AcquisitionStatus.ACQUIRED_PUBLIC
+    else:
+        status = AcquisitionStatus.NOT_ACQUIRED
+
+    access_date = (record.accessed_at_utc or "")[:10] or record.access_date or "1970-01-01"
+    return SourceRecord(
+        source_record_id=record.acquisition_record_id,
+        source_type=record.source_type,
+        source_name=record.source_name,
+        acquisition_status=status,
+        url=record.url,
+        record_id=record.stable_record_id,
+        access_date=access_date,
+        release_version=record.release_or_last_updated,
+        license=record.license,
+        raw_sha256=record.raw_sha256,
+        raw_bytes=record.raw_bytes,
+        raw_media_type=record.raw_media_type,
+    )
+
+
+def new_record_id(prefix: str, *parts: str) -> str:
+    """A content-addressed record id: the same request, re-run, is the same id."""
+    return f"{prefix}_{short_id(sha256_bytes('|'.join(parts).encode('utf-8')))}"
+
+
+@lru_cache(maxsize=32)
+def code_sha256(module_file: str) -> str:
+    """The hash of the adapter source that did the extracting.
+
+    An extraction transform named in prose ("parsed the warnings section") is not reproducible;
+    the bytes of the code that did it are. Change the adapter and every record it writes gets a
+    new identity, which is the point.
+    """
+    with open(module_file, "rb") as fh:
+        return sha256_bytes(fh.read())

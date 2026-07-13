@@ -34,7 +34,12 @@ from .evidence_records import (
     SearchManifest,
     TransporterObservation,
 )
-from .acquisition import SourceAcquisitionRecord
+from .acquisition import (
+    ACQUISITION_SCHEMA_ID,
+    HARD_RULES,
+    AcquisitionManifest,
+    AcquisitionRecord,
+)
 from .assay_records import AssayBinding
 from .organ_system import OrganSystemEvidence
 from .method_config import STAGE4_DIR
@@ -71,7 +76,7 @@ EVIDENCE_MODELS: dict[str, Any] = {
     "SearchManifest": SearchManifest,
     # v2. The acquisition contract, the assay binding, and the PK context that makes a
     # clinical concentration mean something. Published so a producer can build against them.
-    "SourceAcquisitionRecord": SourceAcquisitionRecord,
+    "AcquisitionRecord": AcquisitionRecord,
     "FractionUnboundRecord": FractionUnboundRecord,
     "OrganSystemEvidence": OrganSystemEvidence,
     "AssayBinding": AssayBinding,
@@ -110,6 +115,23 @@ def _json_schema(model: Any) -> dict[str, Any]:
     if hasattr(model, "model_json_schema"):
         return model.model_json_schema()
     return TypeAdapter(model).json_schema()
+
+
+def acquisition_manifest_schema() -> dict[str, Any]:
+    schema = AcquisitionManifest.model_json_schema()
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["$id"] = ACQUISITION_SCHEMA_ID
+    schema["description"] = (
+        "One record per source response: canonical URL + query, UTC access time, HTTP status, "
+        "media type and selected response headers, source release/last_updated, licence/terms "
+        "URL, raw byte count + SHA-256 (plus a stable content hash where the transport envelope "
+        "is volatile), the adapter code hash, the exact extraction transform, and the review "
+        "status. Raw bytes are cached OUTSIDE Git under a caller-supplied run root and are "
+        "addressed by their own SHA-256; `cache_relpath` is relative to that root. Absent "
+        "evidence is stated in `missing`, never left as an empty field."
+    )
+    schema["x-spot-hard-rules"] = list(HARD_RULES)
+    return schema
 
 
 def evidence_inputs_schema() -> dict[str, Any]:
@@ -189,6 +211,8 @@ def tables_schema() -> dict[str, Any]:
 
 GENERATED = {
     "spot.stage03_drug_candidate_set.v1.schema.json": stage3_schema,
+    # W8's acquisition manifest, published from W8's own model.
+    "spot.stage04_acquisition_manifest.v1.schema.json": acquisition_manifest_schema,
     "spot.stage04_evidence_inputs.v2.schema.json": evidence_inputs_schema,
     "spot.stage04_evidence_tables.v2.schema.json": tables_schema,
 }

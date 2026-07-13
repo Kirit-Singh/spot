@@ -20,7 +20,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .acquisition import EvidenceObservationState
 from .contract_version import ContractVersion
 from .organ_system import UNSPECIFIED
 from .safety_records import EvidenceState
@@ -154,9 +153,15 @@ def _safety_violations(inputs: Any) -> list[ProfileViolation]:
 
 
 def _acquisition_violations(inputs: Any) -> list[ProfileViolation]:
-    """Every source whose BYTES are consumed must say how those bytes were obtained."""
+    """Every source whose BYTES are consumed must say how those bytes were obtained.
+
+    The record is W8's `AcquisitionRecord` (`analysis/acquisition.py`), consumed as-is. It keys
+    on `source_key` -- W8's join to the source registry -- and its `origin` says whether Stage 4
+    fetched the bytes, carried them verbatim from Stage 3, or made them up (a labelled fixture,
+    which can never become a public record).
+    """
     out: list[ProfileViolation] = []
-    acquired = {a.source_record_id for a in inputs.acquisitions}
+    acquired = {a.source_key for a in inputs.acquisitions}
 
     for sid, rec in sorted(inputs.sources.items()):
         if not rec.raw_sha256:
@@ -169,24 +174,44 @@ def _acquisition_violations(inputs: Any) -> list[ProfileViolation]:
                 "build is a byte nobody can get again."))
 
     seen: set[str] = set()
+    seen_source: set[str] = set()
     for a in inputs.acquisitions:
-        if a.acquisition_id in seen:
+        if a.acquisition_record_id in seen:
             out.append(ProfileViolation(
-                "duplicate_acquisition_id", a.acquisition_id,
+                "duplicate_acquisition_id", a.acquisition_record_id,
                 "a row id is supplied once, so nothing downstream can pick"))
-        seen.add(a.acquisition_id)
-        if a.source_record_id not in inputs.sources:
+        seen.add(a.acquisition_record_id)
+
+        if a.source_key in seen_source:
             out.append(ProfileViolation(
-                "acquisition_of_unknown_source", a.acquisition_id,
-                f"acquisition names source {a.source_record_id!r}, which is not registered"))
+                "duplicate_acquisition_for_source", a.acquisition_record_id,
+                f"source {a.source_key!r} is acquired twice. One source record is one response; "
+                "two acquisitions would let a reader choose which bytes the evidence rests on."))
+        seen_source.add(a.source_key)
+
+        if a.source_key not in inputs.sources:
+            out.append(ProfileViolation(
+                "acquisition_of_unknown_source", a.acquisition_record_id,
+                f"acquisition names source {a.source_key!r}, which is not registered"))
+
+        # Bytes that are CONSUMED must match the bytes the acquisition says it got.
+        rec = inputs.sources.get(a.source_key)
+        if rec is not None and a.raw_sha256 and rec.raw_sha256 != a.raw_sha256:
+            out.append(ProfileViolation(
+                "acquisition_hash_mismatch", a.acquisition_record_id,
+                f"the acquisition of {a.source_key!r} hashes to {a.raw_sha256[:12]}... but the "
+                f"source registry pins {(rec.raw_sha256 or '')[:12]}.... These are not the same "
+                "bytes, and the evidence rests on one of them."))
+
         # A negative search is a claim about a search that was actually run.
-        if (a.observation_state == EvidenceObservationState.NOT_FOUND_AFTER_SEARCH
-                and a.search_id not in {s.search_id for s in inputs.search_manifests}):
-            out.append(ProfileViolation(
-                "negative_search_manifest_missing", a.acquisition_id,
-                f"acquisition claims not_found_after_reproducible_search but its search_id "
-                f"{a.search_id!r} resolves to no manifest. 'We looked and found nothing' is a "
-                "claim about a search; without the search it is 'nobody looked'."))
+        if a.evidence_state == "not_found_after_reproducible_search":
+            manifested = {s.search_id for s in inputs.search_manifests}
+            if not manifested:
+                out.append(ProfileViolation(
+                    "negative_search_manifest_missing", a.acquisition_record_id,
+                    "acquisition claims not_found_after_reproducible_search but the bundle "
+                    "carries no search manifest. 'We looked and found nothing' is a claim about "
+                    "a search; without the search it is 'nobody looked'."))
     return out
 
 

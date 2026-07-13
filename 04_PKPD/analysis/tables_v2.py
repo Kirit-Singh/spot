@@ -83,18 +83,16 @@ FRACTION_UNBOUND_SCHEMA = pa.schema([
 # time, the HTTP status, the terms URL, the adapter build, and how a single record was SELECTED
 # among the candidates the query matched.
 SOURCE_ACQUISITION_SCHEMA = pa.schema([
-    ("acquisition_id", _STR), ("source_record_id", _STR), ("request_url", _STR),
-    ("canonical_query", _STR), ("accessed_at_utc", _STR), ("http_status", pa.int64()),
-    ("raw_media_type", _STR), ("response_headers_json", _STR),
-    ("release_or_last_updated", _STR), ("license_or_terms_url", _STR),
-    ("license_exception_note", _STR), ("raw_bytes", pa.int64()), ("raw_sha256", _STR),
-    ("content_sha256", _STR), ("content_hash_rule", _STR), ("extraction_transform", _STR),
-    ("adapter_id", _STR), ("adapter_code_sha256", _STR), ("review_status", _STR),
-    ("observation_state", _STR), ("search_id", _STR), ("conflict_note", _STR),
-    ("not_applicable_reason", _STR),
-    ("selection_disposition", _STR), ("selection_pin", _STR),
-    ("match_total_reported", pa.int64()), ("records_returned", pa.int64()),
-    ("result_set_complete", _BOOL),
+    ("acquisition_record_id", _STR), ("source_key", _STR), ("source_name", _STR),
+    ("source_type", _STR), ("origin", _STR), ("stable_record_id", _STR), ("url", _STR),
+    ("canonical_query", _STR), ("canonical_query_sha256", _STR), ("accessed_at_utc", _STR),
+    ("access_date", _STR), ("http_status", pa.int64()), ("raw_media_type", _STR),
+    ("response_headers_json", _STR), ("release_or_last_updated", _STR), ("license", _STR),
+    ("license_or_terms_url", _STR), ("license_status", _STR), ("redistribution", _STR),
+    ("raw_bytes", pa.int64()), ("raw_sha256", _STR), ("content_sha256", _STR),
+    ("content_hash_rule", _STR), ("cache_relpath", _STR), ("extraction_transform", _STR),
+    ("adapter_code_sha256", _STR), ("review_status", _STR), ("evidence_state", _STR),
+    ("stage3_source_record_id", _STR), ("note", _STR),
 ])
 
 _V2_ONLY_SCHEMAS = {
@@ -116,7 +114,7 @@ TABLE_SCHEMAS_V2 = {
 SORT_KEYS_V2 = {
     **SORT_KEYS_V1,
     "fraction_unbound": ("fraction_unbound_id",),
-    "source_acquisition": ("acquisition_id",),
+    "source_acquisition": ("acquisition_record_id",),
 }
 
 TABLE_SCHEMAS: dict[ContractVersion, dict[str, Any]] = {

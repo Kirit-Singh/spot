@@ -17,7 +17,7 @@ import os
 from typing import Any
 
 from analysis.canonical import canonical_json, sha256_bytes
-from analysis.acquisition import EvidenceObservationState, ReviewStatus, SourceAcquisitionRecord
+from analysis.acquisition import AcquisitionRecord, fixture_record
 from analysis.assay_records import AssayBinding, Relation
 from analysis.contract_version import ContractVersion
 from analysis.organ_system import LabelRef, extract_organ_system
@@ -493,72 +493,30 @@ def fraction_unbound() -> list[FractionUnboundRecord]:
     ]
 
 
-def acquisitions() -> list[SourceAcquisitionRecord]:
-    """One acquisition record per fixture source that carries bytes.
+def acquisitions() -> list[AcquisitionRecord]:
+    """One acquisition record per fixture source that carries bytes — built with W8's own
+    `fixture_record`, not a look-alike of it.
 
-    The three interesting states are all present: an `observed` fetch, a
-    `not_found_after_reproducible_search` bound to the negative-search manifest, and a
-    `conflicting` one -- so the sweep exercises the fields each state requires.
+    Every one is `origin='synthetic_fixture'` and `evidence_state='not_applicable'`: labelled
+    synthetic bytes are not an observation of anything and can never become a public record.
+    That is W8's rule, and a fixture that pretended otherwise would be the exact laundering the
+    source-class firewall exists to stop.
     """
     reg = source_registry()
-
-    def acq(sid: str, **over) -> SourceAcquisitionRecord:
-        base: dict[str, Any] = dict(
-            acquisition_id=f"ACQ-{sid.split('.')[-1].upper()}",
-            source_record_id=sid,
-            request_url=f"https://fixture.invalid/{sid}",
-            canonical_query=f"GET /fixture/{sid}",
-            accessed_at_utc="2026-07-11T09:15:00Z",
-            http_status=200,
-            raw_media_type="application/json",
-            response_headers={"content-type": "application/json", "etag": f'W/"{sid}"'},
-            release_or_last_updated="fixture-release-1",
-            license_or_terms_url="https://fixture.invalid/terms",
-            raw_bytes=reg[sid].raw_bytes,
-            raw_sha256=reg[sid].raw_sha256,
-            content_sha256=reg[sid].raw_sha256,
-            extraction_transform="fixture extraction",
-            adapter_id="fixture_adapter",
+    return [
+        fixture_record(
+            acquisition_record_id=f"ACQ-{sid.split('.')[-1].upper()}",
+            source_key=sid,
+            raw=(fixture_bytes("dailymed_spl_fixture.xml")
+                 if sid == "src.fixture.label.dailymed"
+                 else fixture_bytes("openfda_label_fixture.json")
+                 if sid == "src.fixture.label.openfda"
+                 else cached_response_bytes(sid)),
+            extraction_transform=f"FIXTURE extraction from {sid}",
             adapter_code_sha256=sha256_bytes(f"FIXTURE adapter build for {sid}".encode()),
-            review_status=ReviewStatus.HUMAN_REVIEWED,
-            observation_state=EvidenceObservationState.OBSERVED,
-            # The fixture query matches exactly one record by its own id. It is not a
-            # `limit=1` truncation of a larger match, and it says so.
-            # selection.py's vocabulary: matched on an identity PIN, and the source's own
-            # total agrees with what arrived -- so the result set is complete and the
-            # uniqueness was actually PROVEN rather than assumed.
-            selection_disposition="exactly_one",
-            selection_pin="the fixture source_record_id",
-            match_total_reported=1,
-            records_returned=1,
-            result_set_complete=True,
         )
-        base.update(over)
-        return SourceAcquisitionRecord(**base)
-
-    # EVERY source that carries bytes needs one: under v2 a byte with no canonical query,
-    # access time, terms URL and adapter build is a byte nobody can get again. The special
-    # states are attached to the two label sources.
-    special = {
-        # "We ran this exact query against this release and it came back empty" -- bound to the
-        # manifest AND to the bytes that came back empty. Not the same claim as "nobody looked".
-        "src.fixture.label.openfda": dict(
-            observation_state=EvidenceObservationState.NOT_FOUND_AFTER_SEARCH,
-            search_id="SRCH-001-periop-bleed"),
-        # The sources disagree, and the disagreement is stated rather than silently resolved.
-        "src.fixture.label.dailymed": dict(
-            observation_state=EvidenceObservationState.CONFLICTING,
-            conflict_note=("FIXTURE: the cached SPL and the cached openFDA record give "
-                           "different effective dates for the same setid."),
-            content_sha256=sha256_bytes(b"FIXTURE normalised dailymed content"),
-            content_hash_rule=("sha256 over the SPL with the volatile <effectiveTime> stamp "
-                               "blanked (fixture rule)."),
-            review_status=ReviewStatus.DISPUTED),
-        "src.fixture.transporter": dict(
-            license_exception_note="FIXTURE: third-party rights may attach to some rows."),
-    }
-    return [acq(sid, **special.get(sid, {}))
-            for sid, rec in sorted(reg.items()) if rec.raw_sha256]
+        for sid, rec in sorted(reg.items()) if rec.raw_sha256
+    ]
 
 
 def stage4_inputs_v2() -> Stage4Inputs:

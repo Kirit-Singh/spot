@@ -4,6 +4,342 @@
   "description": "One row per actual observation, each bound to a public source response (source_record_id + access_date + raw_response_sha256 + exact extraction transform). Nothing here is derived, imputed or summarized. v2 adds the acquisition contract: a SourceAcquisitionRecord per source (canonical query, accessed_at_utc, HTTP status/media type/headers, release, terms URL, raw bytes + hash, stable content hash, transform, adapter code hash, review status and an explicit observation state), structured assay/PK bindings, and reported-vs-derived ratios. v1 documents remain readable and remain NOT acquisition-complete.",
   "migration": "v1 -> v2 is additive: every new field is optional on the model, so a v1 document validates unchanged. It does NOT become acquisition-complete by validating. To reach v2 a document must declare schema_id spot.stage04_evidence_bundle.v2 and satisfy analysis/contract_profile.py, which requires the acquisition manifest and the per-lane bindings above.",
   "records": {
+    "AcquisitionRecord": {
+      "additionalProperties": false,
+      "description": "One response, one record. Every scientific number will bind to one of these.",
+      "properties": {
+        "access_date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Date"
+        },
+        "accessed_at_utc": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessed At Utc"
+        },
+        "acquisition_record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Acquisition Record Id",
+          "type": "string"
+        },
+        "adapter_code_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Adapter Code Sha256",
+          "type": "string"
+        },
+        "cache_relpath": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Relpath"
+        },
+        "canonical_query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Query"
+        },
+        "canonical_query_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Query Sha256"
+        },
+        "content_hash_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Hash Rule"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "evidence_state": {
+          "default": "observed",
+          "enum": [
+            "observed",
+            "not_evaluated",
+            "not_found_after_reproducible_search",
+            "conflicting",
+            "not_applicable"
+          ],
+          "title": "Evidence State",
+          "type": "string"
+        },
+        "extraction_transform": {
+          "title": "Extraction Transform",
+          "type": "string"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License"
+        },
+        "license_or_terms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Or Terms Url"
+        },
+        "license_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Status"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "origin": {
+          "enum": [
+            "fetched_public",
+            "reused_from_stage3",
+            "synthetic_fixture"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "raw_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Bytes"
+        },
+        "raw_media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Media Type"
+        },
+        "raw_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Sha256"
+        },
+        "redistribution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Redistribution"
+        },
+        "release_or_last_updated": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release Or Last Updated"
+        },
+        "response_headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Response Headers",
+          "type": "object"
+        },
+        "review_status": {
+          "enum": [
+            "unreviewed",
+            "machine_verified",
+            "human_reviewed",
+            "not_applicable"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "source_key": {
+          "title": "Source Key",
+          "type": "string"
+        },
+        "source_name": {
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "primary_literature",
+            "regulatory_label",
+            "public_database",
+            "public_api",
+            "structure_probe",
+            "fixture"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "stable_record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stable Record Id"
+        },
+        "stage3_source_record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage3 Source Record Id"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "acquisition_record_id",
+        "source_key",
+        "source_name",
+        "source_type",
+        "origin",
+        "extraction_transform",
+        "adapter_code_sha256",
+        "review_status"
+      ],
+      "title": "AcquisitionRecord",
+      "type": "object"
+    },
     "AssayBinding": {
       "additionalProperties": false,
       "description": "The activity / assay / target / document a potency or transporter number came from.\n\nEvery id here is the SOURCE's stable id, so an independent reader can pull the same\nrecord and see the same number. That is the difference between evidence and a citation.",
@@ -2925,320 +3261,6 @@
         "provenance"
       ],
       "title": "SearchManifest",
-      "type": "object"
-    },
-    "SourceAcquisitionRecord": {
-      "$defs": {
-        "EvidenceObservationState": {
-          "description": "The five states the audit requires. A null is not one of them.\n\n`NOT_EVALUATED` and `NOT_FOUND_AFTER_SEARCH` are the pair that matters most: \"nobody\nlooked\" and \"we ran this exact query against this exact release and it came back empty\"\nare different scientific claims, and only the second one is evidence.",
-          "enum": [
-            "observed",
-            "not_evaluated",
-            "not_found_after_reproducible_search",
-            "conflicting",
-            "not_applicable"
-          ],
-          "title": "EvidenceObservationState",
-          "type": "string"
-        },
-        "ReviewStatus": {
-          "description": "Who, if anyone, checked that the extraction says what the source says.",
-          "enum": [
-            "not_reviewed",
-            "machine_extracted",
-            "human_reviewed",
-            "dual_independently_reviewed",
-            "disputed"
-          ],
-          "title": "ReviewStatus",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "description": "One response, and everything needed to get it again and prove what was read out of it.",
-      "properties": {
-        "accessed_at_utc": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
-          "title": "Accessed At Utc",
-          "type": "string"
-        },
-        "acquisition_id": {
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
-          "title": "Acquisition Id",
-          "type": "string"
-        },
-        "adapter_code_sha256": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Adapter Code Sha256"
-        },
-        "adapter_id": {
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
-          "title": "Adapter Id",
-          "type": "string"
-        },
-        "canonical_query": {
-          "minLength": 1,
-          "title": "Canonical Query",
-          "type": "string"
-        },
-        "conflict_note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Conflict Note"
-        },
-        "content_hash_rule": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Content Hash Rule"
-        },
-        "content_sha256": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Content Sha256"
-        },
-        "extraction_transform": {
-          "minLength": 1,
-          "title": "Extraction Transform",
-          "type": "string"
-        },
-        "http_status": {
-          "anyOf": [
-            {
-              "maximum": 599,
-              "minimum": 100,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Http Status"
-        },
-        "license_exception_note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "License Exception Note"
-        },
-        "license_or_terms_url": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "License Or Terms Url"
-        },
-        "match_total_reported": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Match Total Reported"
-        },
-        "not_applicable_reason": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Not Applicable Reason"
-        },
-        "observation_state": {
-          "$ref": "#/$defs/EvidenceObservationState"
-        },
-        "raw_bytes": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Raw Bytes"
-        },
-        "raw_media_type": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Raw Media Type"
-        },
-        "raw_sha256": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Raw Sha256"
-        },
-        "records_returned": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Records Returned"
-        },
-        "release_or_last_updated": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Release Or Last Updated"
-        },
-        "request_url": {
-          "title": "Request Url",
-          "type": "string"
-        },
-        "response_headers": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "title": "Response Headers",
-          "type": "object"
-        },
-        "result_set_complete": {
-          "default": false,
-          "title": "Result Set Complete",
-          "type": "boolean"
-        },
-        "review_status": {
-          "$ref": "#/$defs/ReviewStatus"
-        },
-        "search_id": {
-          "anyOf": [
-            {
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Search Id"
-        },
-        "selection_disposition": {
-          "anyOf": [
-            {
-              "enum": [
-                "exactly_one",
-                "sorted_unique"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Selection Disposition"
-        },
-        "selection_pin": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Selection Pin"
-        },
-        "source_record_id": {
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
-          "title": "Source Record Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "acquisition_id",
-        "source_record_id",
-        "request_url",
-        "canonical_query",
-        "accessed_at_utc",
-        "extraction_transform",
-        "adapter_id",
-        "review_status",
-        "observation_state"
-      ],
-      "title": "SourceAcquisitionRecord",
       "type": "object"
     },
     "SourceRecord": {

@@ -13,7 +13,7 @@ from typing import Any, Optional
 from .cnsmpo import CnsMpoResult, score_cns_mpo
 from .contracts import EvidenceContext, SourceRecord, Stage3DrugCandidateSet
 from .delivery import DeliveryResult, resolve_delivery_requirement
-from .acquisition import SourceAcquisitionRecord
+from .acquisition import AcquisitionRecord
 from .contract_profile import assert_contract_satisfied
 from .contract_version import ContractVersion
 from .pk_records import FractionUnboundRecord
@@ -68,7 +68,7 @@ class Stage4Inputs:
     # v2. The acquisition manifest behind the sources: canonical query, accessed_at_utc, HTTP
     # status, terms URL, adapter code hash, observation state. Content-addressed and bound
     # into the scorecard_set_id.
-    acquisitions: list[SourceAcquisitionRecord] = field(default_factory=list)
+    acquisitions: list[AcquisitionRecord] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
     # Which evidence contract these rows speak. A v1 bundle stays v1 forever: it does not
     # become acquisition-complete because newer code can read it, and its rows do not acquire

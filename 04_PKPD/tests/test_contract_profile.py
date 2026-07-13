@@ -63,8 +63,9 @@ def test_the_v2_fixture_is_acquisition_complete(v2):
 
 
 def test_v2_requires_an_acquisition_record_for_every_source_that_carries_bytes(v2):
+    # W8's record keys on `source_key`, which is its join to the source registry.
     v2.acquisitions = [a for a in v2.acquisitions
-                       if a.source_record_id != "src.fixture.potency"]
+                       if a.source_key != "src.fixture.potency"]
     codes = {v.code for v in contract_violations(v2)}
     assert "source_not_acquired" in codes
 

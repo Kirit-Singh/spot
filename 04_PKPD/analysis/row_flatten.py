@@ -11,6 +11,16 @@ from typing import Any
 
 from .canonical import canonical_json
 
+# W8's AcquisitionRecord, minus `response_headers` (carried as canonical JSON, below).
+_ACQ_FIELDS = (
+    "acquisition_record_id", "source_key", "source_name", "source_type", "origin",
+    "stable_record_id", "url", "canonical_query", "canonical_query_sha256", "accessed_at_utc",
+    "access_date", "http_status", "raw_media_type", "release_or_last_updated", "license",
+    "license_or_terms_url", "license_status", "redistribution", "raw_bytes", "raw_sha256",
+    "content_sha256", "content_hash_rule", "cache_relpath", "extraction_transform",
+    "adapter_code_sha256", "review_status", "evidence_state", "stage3_source_record_id", "note",
+)
+
 
 def _unbound(m: Any) -> dict[str, Any]:
     """Was the free concentration measured, or calculated from a total and an fu?"""
@@ -36,42 +46,16 @@ def _ratio(prefix: str, r: Any) -> dict[str, Any]:
 
 
 def _acquisition_row(a: Any) -> dict[str, Any]:
-    """The acquisition manifest row.
+    """W8's AcquisitionRecord, flattened.
 
     `response_headers` is a verbatim capture of a selected header set, so it is carried as ONE
     canonical JSON string rather than exploded into columns: it is opaque provenance, not a
     scientific field anything reads. Canonical (sorted keys, no whitespace) so the digest is
     stable across re-serialisation.
     """
-
-    return {
-        "acquisition_id": a.acquisition_id, "source_record_id": a.source_record_id,
-        "request_url": a.request_url, "canonical_query": a.canonical_query,
-        "accessed_at_utc": a.accessed_at_utc, "http_status": a.http_status,
-        "raw_media_type": a.raw_media_type,
-        "response_headers_json": canonical_json(dict(sorted(a.response_headers.items()))),
-        "release_or_last_updated": a.release_or_last_updated,
-        "license_or_terms_url": a.license_or_terms_url,
-        "license_exception_note": a.license_exception_note,
-        "raw_bytes": a.raw_bytes, "raw_sha256": a.raw_sha256,
-        "content_sha256": a.content_sha256, "content_hash_rule": a.content_hash_rule,
-        "extraction_transform": a.extraction_transform, "adapter_id": a.adapter_id,
-        "adapter_code_sha256": a.adapter_code_sha256,
-        "review_status": a.review_status.value,
-        "observation_state": a.observation_state.value,
-        "search_id": a.search_id, "conflict_note": a.conflict_note,
-        "not_applicable_reason": a.not_applicable_reason,
-        # How a single record was chosen among the ones the query MATCHED -- in selection.py's
-        # vocabulary. A `limit=1` shows up here as a total that exceeds what arrived.
-        "selection_disposition": a.selection_disposition,
-        "selection_pin": a.selection_pin,
-        "match_total_reported": a.match_total_reported,
-        "records_returned": a.records_returned,
-        "result_set_complete": a.result_set_complete,
-    }
-
-
-# ------------------------------------------------------------------- the input rows
+    row = {f: getattr(a, f) for f in _ACQ_FIELDS}
+    row["response_headers_json"] = canonical_json(dict(sorted(a.response_headers.items())))
+    return row
 
 
 def _prov(p: Any) -> dict[str, Any]:

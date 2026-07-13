@@ -84,9 +84,9 @@ REQUIRED_COLUMNS_V2: dict[str, tuple[str, ...]] = {
     "potency_evidence": REQUIRED_COLUMNS_V1["potency_evidence"] + ("relation",),
     "fraction_unbound": ("fraction_unbound_id", "candidate_id", "active_moiety_id", "matrix",
                          "value_source_string", "source_record_id", "raw_response_sha256"),
-    "source_acquisition": ("acquisition_id", "source_record_id", "canonical_query",
-                           "accessed_at_utc", "observation_state", "adapter_code_sha256",
-                           "review_status", "selection_uniqueness"),
+    "source_acquisition": ("acquisition_record_id", "source_key", "origin",
+                           "extraction_transform", "adapter_code_sha256", "review_status",
+                           "evidence_state", "raw_sha256"),
 }
 
 REQUIRED_COLUMNS = {"v1": REQUIRED_COLUMNS_V1, "v2": REQUIRED_COLUMNS_V2}
