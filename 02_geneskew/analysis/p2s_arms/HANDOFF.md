@@ -253,17 +253,45 @@ tcefold) and one git-topology guard.
 
 ---
 
-## 7. Known defect in the frozen legacy lane (reported, NOT fixed)
+## 7. Legacy defect — FIXED (owner-authorised)
 
-`analysis/perturb2state/run_p2s.py:180` is **dead**:
+`analysis/perturb2state/run_p2s.py` was **dead at its first line of work**:
 
 ```python
-programs, reg_sha, reg = io_data.load_registry(args.registry)   # 3 names
+programs, reg_sha, reg = io_data.load_registry(args.registry)   # 3 names, 4-key dict
 ```
 
-`direct.io_data.load_registry` returns a **4-key dict**. Unpacking it into 3 names raises
-`ValueError: too many values to unpack`. No test calls `build()`, so nothing caught it.
-(`temporal_exploration/screen_th1_treg_temporal.py:10` has the identical stale unpack.)
+`direct.io_data.load_registry` returns a **4-key dict** (`programs`, `file_sha256`,
+`declared_sha256`, `raw`), so this raised `ValueError: too many values to unpack` before
+`build()` did anything. `direct.io_data` changed under the lane and nothing noticed, because
+**no test ever called `build()`** — the orchestrator was entirely untested. `reg` was bound
+and never used.
 
-Not fixed here: the lane is frozen for compatibility, and editing it would change bytes this
-handoff promises are unchanged. v2 imports nothing from it, so v2 is unaffected.
+**Fixed.** The load is now a named, testable function, `run_p2s.load_program_registry(path)`:
+
+```python
+doc = io_data.load_registry(path)
+return doc["programs"], doc["file_sha256"]
+```
+
+It binds the **derived** `file_sha256`, never the registry's self-declared `registry_sha256`
+— per `direct.trust`: *"a file cannot contain its own hash; a self-declared hash proves
+nothing and is trivially forged."* The declared value is deliberately not bound.
+
+The identical stale unpack at `temporal_exploration/screen_th1_treg_temporal.py:10` is fixed
+the same way.
+
+**Regression test:** `tests/perturb2state/test_run_p2s_registry.py` (4 tests). It pins the
+*contract that broke* — the arity of `load_registry`'s return and which of its two hashes may
+be bound — not merely the happy path, which would go green again the next time
+`direct.io_data` grows a key. Verified to fail (3 of 4) when the bug is re-introduced.
+
+**Blast radius: none for Direct.** `analysis/direct/` imports nothing from `perturb2state`
+(`run_manifest.py:73,149` mention it only as a *string literal* in a disposition record,
+`deferred_not_part_of_this_run`). Direct's arm values, ranks and `arm_rows_sha256` are
+unchanged. The v2 `p2s_arms` lane imports nothing from the legacy lane, so its contract is
+untouched and remains selection-independent.
+
+**Note for W1:** this edits a `.py` under `02_geneskew/`, so it moves the repository code
+digest — exactly as §2 describes. It is one more reason to freeze **once**, with this branch
+already integrated.
