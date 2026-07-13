@@ -1,7 +1,13 @@
-// Valid-selection arithmetic for the generic release (frozen — ROUND4_ADDENDUM.md Rule 2 +
-// the topology correction). This is the SELECTION space (ordered A→B tuples a user may
-// pick), distinct from the 300 reusable ARM slots. A selection is realized as a cheap UI
-// join of two reusable arms; it is never a rerun.
+// Valid-selection arithmetic for the generic release (frozen — ROUND4_ADDENDUM.md,
+// sha c4773562). This is the SELECTION space (ordered A→B tuples a user may pick), distinct
+// from the 300 reusable ARM slots. A selection is realized as a cheap UI join of two reusable
+// arms; it is never a rerun.
+//
+// INTERNAL contract/test metadata ONLY. These counts (3,540 selections, 300 arm slots) exist
+// to verify release completeness and the manifest — they are NEVER rendered. The page shows
+// no counts, gate banners, topology explanations, or editorial badges. The user-facing flow
+// stays clean: choose program/pole/time for A and B, inspect the two arms, an OPTIONAL Pareto
+// display ordering (off by default), then genes / pathways / drugs / PK.
 //
 // With `n` admitted programs there are `n * 2` states per condition (program × pole
 // high|low). Ordered selections:
