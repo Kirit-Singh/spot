@@ -41,6 +41,7 @@ import json
 import os
 from typing import Any, Optional
 
+from . import w10 as w10_mod
 from .canonical import content_hash, file_sha256
 
 DIRECT_BUNDLE_SCHEMA = "spot.stage02_direct_arm_bundle.v1"
@@ -52,22 +53,14 @@ ROWS_FILE = "arms.parquet"
 PROVENANCE_FILE = "provenance.json"
 VERIFICATION_FILE = "verification.json"
 
-# THE PRODUCER'S PLACEHOLDER SLOT. Not an admission, and it says so itself: it ships with a
-# PENDING verdict under the SLOT schema, waiting for an independent lane to fill it.
-PENDING_VERDICT = "pending_independent_verification"
-VERIFICATION_SLOT_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
-
-# THE REAL W10 REPORT. Its own schema, its own id, and — the point — its own EVIDENCE.
-#
-# It carries no ``admitted`` boolean, and it does not need one: a boolean is a claim, and
-# this report ships the thing the claim would have been about. It is self-hashed, it lists
-# every gate it ran, it records that it did not import the generator, and its
-# ``bound_artifact`` says WHICH bundle it is about — by condition, by rows hash, by solver
-# lock, and by a map of every file's sha256. So the admission is checked against the bundle
-# in hand rather than taken on the word of a flag that could be set by anyone.
-W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
-W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
-W10_ADMIT = "ADMIT"
+# The W10 admission contract lives in ``w10``: the WHOLE of it, not the parts that were easy
+# to parse. Re-exported here so a caller has one import site.
+PENDING_VERDICT = w10_mod.PENDING_VERDICT
+VERIFICATION_SLOT_SCHEMA = w10_mod.VERIFICATION_SLOT_SCHEMA
+W10_REPORT_SCHEMA = w10_mod.W10_REPORT_SCHEMA
+W10_VERIFIER_ID = w10_mod.W10_VERIFIER_ID
+W10_ADMIT = w10_mod.W10_ADMIT
+W10_EXPECTED_FILES = w10_mod.EXPECTED_FILES
 
 AUTHORITATIVE_ENV_LOCK_SHA256 = (
     "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe")
@@ -105,7 +98,8 @@ def _rows(bundle_dir: str) -> list[dict[str, Any]]:
 def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], *,
          expect_bundle_sha256: Optional[str] = None,
          expect_w10_sha256: Optional[str] = None,
-         expect_rows_sha256: Optional[str] = None) -> Optional[dict[str, Any]]:
+         expect_rows_sha256: Optional[str] = None,
+         w10_pins=None) -> Optional[dict[str, Any]]:
     """ONE admitted Direct endpoint, proved from its four files."""
     where = f"direct:{condition}"
     if not f.check("a_direct_all_arm_bundle_was_supplied_for_every_condition",
@@ -177,7 +171,12 @@ def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], 
                 declared_rows == str(expect_rows_sha256), where,
                 f"the release bound rows {str(expect_rows_sha256)[:16]}…")
 
-    _w10(f, condition, str(bundle_dir), w10_path, expect_w10_sha256, declared_rows)
+    # WHAT THE BUNDLE ACTUALLY IS — so the report's recomputation counts can be checked
+    # against it rather than against themselves.
+    facts = {"n_targets": len({str(r.get("target_id")) for r in rows}),
+             "n_arm_rows": len(rows)}
+    _w10(f, condition, str(bundle_dir), w10_path, expect_w10_sha256, declared_rows,
+         pins=w10_pins, bundle_facts=facts)
 
     return {"bundle_id": doc.get("arm_bundle_run_id"), "condition": str(condition),
             "raw_sha256": raw, "arm_rows_sha256": declared_rows,
@@ -185,20 +184,16 @@ def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], 
 
 
 def _w10(f, condition: str, bundle_dir: str, w10_path: Optional[str],
-         expect_w10_sha256: Optional[str], rows_sha256: Optional[str]) -> None:
-    """The INDEPENDENT admission — validated against its OWN evidence, not a boolean.
+         expect_w10_sha256: Optional[str], rows_sha256: Optional[str],
+         pins=None, bundle_facts=None) -> None:
+    """The INDEPENDENT admission, checked against the WHOLE W10 contract.
 
-    W10's report carries no ``admitted`` flag, and requiring one would be requiring a field
-    that does not exist: a false refusal of a sound report. It does not need one. A boolean is
-    a claim; this report ships the thing the claim would have been about — it is self-hashed,
-    it names every gate it ran, it records that it never imported the generator, and its
-    ``bound_artifact`` says WHICH bundle it admitted, by condition, by rows hash, by solver
-    lock and by a map of every file's sha256.
+    Not against the fields that were easy to parse. A partial parser is a forger's
+    specification: check the schema, the id, the verdict and a self-hash, and you have
+    described exactly the document an attacker will write — correct everywhere you looked and
+    fabricated everywhere else.
 
-    So the admission is checked against the bundle IN HAND. That is strictly stronger than a
-    flag, because a flag can be set by anyone about anything.
-
-    The producer's own ``verification.json`` is still refused, by path and by content: it
+    The producer's own ``verification.json`` is refused by PATH as well as by content: it
     ships PENDING under the SLOT schema and is an empty slot, not a verdict.
     """
     where = f"direct:{condition}"
@@ -224,83 +219,10 @@ def _w10(f, condition: str, bundle_dir: str, w10_path: Optional[str],
                 f"the report on disk hashes to {raw[:16]}…; the release bound "
                 f"{str(expect_w10_sha256)[:16]}…")
 
-    rep = _json(str(w10_path))
-    verdict = str(rep.get("verdict") or "")
-
-    if not f.check("the_w10_report_is_the_native_independent_direct_verifiers_report",
-                   rep.get("schema_version") == W10_REPORT_SCHEMA
-                   and rep.get("verifier_id") == W10_VERIFIER_ID
-                   and rep.get("schema_version") != VERIFICATION_SLOT_SCHEMA
-                   and verdict != PENDING_VERDICT, where,
-                   f"schema {rep.get('schema_version')!r} / verifier "
-                   f"{rep.get('verifier_id')!r} / verdict {verdict!r}. The admission is the "
-                   f"NATIVE {W10_REPORT_SCHEMA!r} report; the producer's PENDING slot is not "
-                   "one, and neither is anything else"):
-        return
-
-    # THE VERDICT, and the gates behind it. An ADMIT with a failed gate is not an admit.
-    f.check("the_w10_report_actually_ADMITS_this_direct_bundle",
-            verdict == W10_ADMIT and int(rep.get("n_failed") or 0) == 0
-            and not (rep.get("failed_gates") or []), where,
-            f"verdict={verdict!r} n_failed={rep.get('n_failed')!r} "
-            f"failed_gates={(rep.get('failed_gates') or [])[:3]}")
-    f.check("the_w10_report_was_written_by_a_lane_that_did_not_produce_the_bytes",
-            rep.get("independent_of_generator") is True, where,
-            "a report that imported the generator is the generator's opinion of itself")
-
-    # THE SELF-HASH. A report that could be edited after it was cited is a claim, not a
-    # result: the verdict could be swapped for a friendlier one, or the report re-attributed
-    # to a bundle it is not about.
-    body = {k: v for k, v in rep.items() if k != "report_sha256"}
-    f.check("the_w10_report_sha256_covers_its_own_content",
-            rep.get("report_sha256") == content_hash(body), where,
-            f"shipped {str(rep.get('report_sha256'))[:16]}…, its own content hashes to "
-            f"{content_hash(body)[:16]}…")
-    f.check("the_w10_gate_inventory_hash_covers_the_gates_it_lists",
-            rep.get("gate_inventory_sha256")
-            == content_hash(list(rep.get("gate_inventory") or [])), where, "")
-
-    _w10_bound(f, rep, condition, bundle_dir, rows_sha256, where)
-
-
-def _w10_bound(f, rep: dict[str, Any], condition: str, bundle_dir: str,
-               rows_sha256: Optional[str], where: str) -> None:
-    """WHICH bundle the report admitted. Checked against the bundle actually in hand."""
-    bound = rep.get("bound_artifact") or {}
-
-    f.check("the_w10_report_admitted_THIS_condition",
-            str(bound.get("condition")) == str(condition), where,
-            f"the report admits condition {bound.get('condition')!r}; this endpoint is "
-            f"{condition!r}. An admission of another condition admits something else")
-    if rows_sha256:
-        f.check("the_w10_report_admitted_THESE_arm_rows",
-                bound.get("arm_rows_sha256") == str(rows_sha256), where,
-                f"the report admits rows {str(bound.get('arm_rows_sha256'))[:16]}…; the rows "
-                f"on disk hash to {str(rows_sha256)[:16]}…. An admission of other rows is an "
-                "admission of other numbers")
-    f.check("the_w10_report_admitted_a_bundle_solved_under_the_authoritative_lock",
-            bound.get("solver_lock_sha256") == AUTHORITATIVE_ENV_LOCK_SHA256, where,
-            f"the report admits a bundle solved under "
-            f"{str(bound.get('solver_lock_sha256'))[:16]}…, not the authoritative "
-            f"{AUTHORITATIVE_ENV_LOCK_SHA256[:16]}…")
-
-    # THE ARTIFACT MAP. Every file the report says it admitted must still hash to what it
-    # hashed to when the report was written — otherwise the admission is of bytes that are
-    # no longer there.
-    amap = bound.get("artifact_sha256") or {}
-    f.check("the_w10_artifact_map_names_the_files_it_admitted", bool(amap), where,
-            "the report binds no artifact map; an admission that does not say WHICH bytes it "
-            "admitted cannot be checked against them")
-    drift = []
-    for rel, sha in sorted(amap.items()):
-        fp = os.path.join(bundle_dir, os.path.basename(str(rel)))
-        if not os.path.exists(fp):
-            drift.append(f"{rel}:absent")
-        elif file_sha256(fp) != sha:
-            drift.append(f"{rel}:changed")
-    f.check("every_file_the_w10_report_admitted_still_hashes_to_what_it_admitted",
-            not drift, where,
-            f"{drift[:4]}. The admission is of bytes that are no longer on disk")
+    w10_mod.check(f, _json(str(w10_path)), condition=condition, bundle_dir=bundle_dir,
+                  rows_sha256=rows_sha256,
+                  solver_lock_sha256=AUTHORITATIVE_ENV_LOCK_SHA256, where=where, pins=pins,
+                  bundle_facts=bundle_facts or {})
 
 
 def _dedupe(f, rows: list[dict[str, Any]], where: str) -> dict[str, dict[str, Any]]:
@@ -383,7 +305,7 @@ def recompute(f, doc: dict[str, Any], from_base: dict[str, dict[str, Any]],
     return n
 
 def verify_endpoints(f, bound, docs: list[dict[str, Any]],
-                     direct_bundles: dict, w10_reports: dict) -> None:
+                     direct_bundles: dict, w10_reports: dict, w10_pins=None) -> None:
     """RE-DIFFERENCE the whole release from the ADMITTED DIRECT bundles it stood on.
 
     The temporal bundle's own account of its endpoints is not evidence for the endpoints: it
@@ -424,7 +346,7 @@ def verify_endpoints(f, bound, docs: list[dict[str, Any]],
         bid, bsha, wsha, rsha = pinned.get(cond, (None, None, None, None))
         got = load(f, cond, direct_bundles.get(cond), w10_reports.get(cond),
                    expect_bundle_sha256=bsha, expect_w10_sha256=wsha,
-                   expect_rows_sha256=rsha)
+                   expect_rows_sha256=rsha, w10_pins=w10_pins)
         if got is None:
             continue
         f.check("the_direct_bundle_is_the_one_the_release_names",

@@ -35,6 +35,7 @@ _REPO = os.path.abspath(os.path.join(_ANALYSIS, "..", ".."))
 
 
 def _verify(release_root, bundle_root, **kw):
+    kw.setdefault("w10_pins", FX.w10_pins())      # the SYNTHETIC W10, not the production one
     root = os.path.dirname(os.path.dirname(os.path.abspath(str(bundle_root))))
     ctx = _CTX.get(root) or _CTX.get(str(os.path.dirname(os.path.abspath(str(bundle_root)))))
     if ctx:
@@ -352,6 +353,190 @@ class TestTheDirectEndpointSource:
         assert report["verdict"] == verify.REJECT
         assert "no_fixture_json_may_stand_in_for_a_direct_bundle" in gates(report)
 
+    def test_the_REAL_NATIVE_SAMPLE_REPORT_shape_is_refused(self, tmp_path):
+        """THE ACTUAL W10 SAMPLE REPORT, in its native shape and with its real numbers:
+
+            recompute_mode        = "sample"
+            n_targets_recomputed  = 8
+            n_targets_in_bundle   = 11281
+            n_masks_rederived     = 11281
+            n_arm_rows            = 225620
+
+        Eight targets out of eleven thousand. It is a perfectly valid report — same 90 gates,
+        same inventory hash, same everything a gate-profile check would look at — and it is a
+        DIAGNOSTIC. Admitting it would leave 11,273 targets unverified while the release read
+        as fully admitted."""
+        _staged(tmp_path)
+
+        def native_sample(b):
+            b["bound_artifact"].update({
+                "recompute_mode": "sample",
+                "n_targets_recomputed": 8,
+                "n_targets_in_bundle": 11281,
+                "n_masks_rederived": 11281,
+                "n_arm_rows": 225620,
+            })
+
+        fired = self._load(tmp_path, FX.CONDITIONS[0], mutate=native_sample)
+        assert "the_w10_report_recomputed_the_bundle_in_FULL_not_a_sample" in fired
+        assert "the_w10_recomputation_covered_EVERY_target_in_the_bundle" in fired
+        # the identity and gate-profile checks all PASS on it — which is the whole point
+        assert "the_w10_report_names_the_frozen_verifier_spec_and_code" not in fired
+        assert "the_w10_report_ran_the_pinned_gate_profile" not in fired
+        assert "the_w10_report_actually_ADMITS_this_direct_bundle" not in fired
+
+    def test_a_VALID_SAMPLE_MODE_report_is_DIAGNOSTIC_and_is_refused(self, tmp_path):
+        """W10's ``--recompute`` DEFAULTS to ``sample``. Such a report is entirely valid, and
+        entirely useless as an admission: it re-derives a handful of targets and reports on
+        those. It carries the SAME 90 gates and the SAME inventory hash as a full run, so a
+        checker that stopped at the gate profile cannot tell them apart — and would take a
+        spot-check of eight targets for a verification of the bundle, leaving every temporal
+        number resting on numbers nobody re-derived."""
+        _staged(tmp_path)
+
+        def sample_mode(b):
+            b["bound_artifact"].update({
+                "recompute_mode": "sample",
+                "n_targets_recomputed": 8,      # a sample, not the bundle
+                "n_masks_rederived": 8,
+            })
+
+        fired = self._load(tmp_path, FX.CONDITIONS[0], mutate=sample_mode)
+        assert "the_w10_report_recomputed_the_bundle_in_FULL_not_a_sample" in fired
+        assert "the_w10_recomputation_covered_EVERY_target_in_the_bundle" in fired
+        # ...and it passed every OTHER check, which is exactly why it is dangerous
+        assert "the_w10_report_ran_the_pinned_gate_profile" not in fired
+        assert "the_w10_report_names_the_frozen_verifier_spec_and_code" not in fired
+        assert "the_w10_artifact_map_is_the_EXACT_COMPLETE_bundle_file_set" not in fired
+
+    def test_an_ALL_mode_report_whose_COUNTS_do_not_cover_the_bundle_is_refused(
+            self, tmp_path):
+        """"all" has to mean all. Saying ``all`` while recomputing a sample is worse than
+        saying ``sample``: it is the same spot-check wearing the production label."""
+        _staged(tmp_path)
+        fired = self._load(tmp_path, FX.CONDITIONS[0],
+                           mutate=lambda b: b["bound_artifact"].update(
+                               {"n_targets_recomputed": 2}))
+        assert "the_w10_recomputation_covered_EVERY_target_in_the_bundle" in fired
+
+    def test_a_report_whose_target_count_is_not_THIS_bundles_is_refused(self, tmp_path):
+        _staged(tmp_path)
+        fired = self._load(tmp_path, FX.CONDITIONS[0],
+                           mutate=lambda b: b["bound_artifact"].update(
+                               {"n_targets_in_bundle": 999, "n_targets_recomputed": 999,
+                                "n_masks_rederived": 999}))
+        assert "the_w10_target_count_is_the_bundles_own" in fired
+
+    def test_a_report_whose_arm_row_count_is_not_THIS_bundles_is_refused(self, tmp_path):
+        _staged(tmp_path)
+        fired = self._load(tmp_path, FX.CONDITIONS[0],
+                           mutate=lambda b: b["bound_artifact"].update(
+                               {"n_arm_rows": 7}))
+        assert "the_w10_arm_row_count_is_the_bundles_own" in fired
+
+    def test_THE_WEAK_REPORT_the_probe_forged_is_REFUSED(self, tmp_path):
+        """THE FORGERY A PARTIAL PARSER INVITES.
+
+        Correct schema, correct verifier id, correct verdict, and a valid self-hash — every
+        field a shallow check looks at. And underneath: ONE invented passing gate, no spec or
+        code identity, and an artifact map naming only ``arm_bundle.json``, leaving every
+        other byte in the bundle unadmitted while reading as an admission of the bundle.
+
+        This loaded with ZERO failures before. It is what a partial parser is: a
+        specification for the document that defeats it."""
+        from direct.hashing import content_hash
+        from verify_temporal_arms import direct_source, w10
+        from verify_temporal_arms.failures import Failures
+
+        _staged(tmp_path)
+        direct, _, _ = _CTX[str(tmp_path)]
+        cond = FX.CONDITIONS[0]
+        d = direct[cond]
+        with open(os.path.join(d, "arm_bundle.json"), "rb") as fh:
+            raw = fh.read()
+        bundle_doc = json.loads(raw)
+
+        gates_ = ["the bundle is fine"]                       # ONE invented gate
+        body = {
+            "schema_version": w10.W10_REPORT_SCHEMA,          # correct
+            "verifier_id": w10.W10_VERIFIER_ID,               # correct
+            "verdict": "ADMIT",                               # correct
+            "n_gates": 1, "n_passed": 1, "n_failed": 0, "failed_gates": [],
+            "gate_inventory": gates_,
+            "gate_inventory_sha256": content_hash(gates_),    # internally consistent
+            "gates": [{"gate": gates_[0], "passed": True, "detail": ""}],
+            "independent_of_generator": True,
+            "bound_artifact": {
+                "arm_bundle_run_id": bundle_doc["arm_bundle_run_id"],
+                "condition": cond,
+                "solver_lock_sha256": FX.env_lock_sha256(),
+                "arm_rows_sha256": bundle_doc["arm_rows_sha256"],
+                # A SUBSET: one file out of eleven
+                "artifact_sha256": {"arm_bundle.json": canonical.sha256_hex(raw)},
+            },
+            # no spec_sha256, no verifier_code_sha256
+        }
+        forged = dict(body, report_sha256=content_hash(body))  # a VALID self-hash
+        path = os.path.join(str(tmp_path), "forged_w10.json")
+        with open(path, "w") as fh:
+            fh.write(canonical.canonical_json(forged))
+
+        f = Failures()
+        # PRODUCTION pins — the strict default a caller who supplies nothing gets
+        direct_source.load(f, cond, d, path)
+        fired = {x["gate"] for x in f.items}
+
+        assert "the_w10_report_names_the_frozen_verifier_spec_and_code" in fired
+        assert "the_w10_report_ran_the_pinned_gate_profile" in fired
+        assert "every_w10_gate_actually_PASSED" in fired
+        assert "the_w10_artifact_map_is_the_EXACT_COMPLETE_bundle_file_set" in fired
+
+    def test_the_production_pins_are_the_frozen_W10_identity(self):
+        """WHICH verifier, WHICH spec, and WHAT it checked — the frozen production values."""
+        from verify_temporal_arms import w10
+
+        assert w10.FROZEN_SPEC_SHA256 == (
+            "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
+        assert w10.FROZEN_VERIFIER_CODE_SHA256 == (
+            "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f")
+        assert w10.FROZEN_GATE_INVENTORY_SHA256 == (
+            "e6b5da89f1e4e7bf39380318769342cc585630c781c2226fa25b2df8aaf24d45")
+        assert w10.FROZEN_N_GATES == 90
+        assert len(w10.EXPECTED_FILES) == 11
+        assert w10.Pins().is_production is True
+
+    def test_an_artifact_map_SUPERSET_or_DUPLICATE_is_refused(self, tmp_path):
+        _staged(tmp_path)
+        extra = self._load(tmp_path, FX.CONDITIONS[0],
+                           mutate=lambda b: b["bound_artifact"]["artifact_sha256"].update(
+                               {"not_part_of_the_bundle.json": "e" * 64}))
+        assert "the_w10_artifact_map_is_the_EXACT_COMPLETE_bundle_file_set" in extra
+
+    def test_gate_RECORDS_that_are_not_the_inventory_they_claim_are_refused(self, tmp_path):
+        """A report that lists one set of checks and evidences another."""
+        _staged(tmp_path)
+        fired = self._load(tmp_path, FX.CONDITIONS[0],
+                           mutate=lambda b: b.update(
+                               {"gates": [{"gate": "something else", "passed": True,
+                                           "detail": ""}
+                                          for _ in b["gate_inventory"]]}))
+        assert "the_w10_gate_records_ARE_the_inventory_they_claim" in fired
+
+    def test_a_report_with_a_FAILED_gate_record_is_refused(self, tmp_path):
+        _staged(tmp_path)
+
+        def fail_one(b):
+            b["gates"][0]["passed"] = False
+
+        fired = self._load(tmp_path, FX.CONDITIONS[0], mutate=fail_one)
+        assert "every_w10_gate_actually_PASSED" in fired
+
+    def test_counts_that_do_not_agree_with_the_records_they_count_are_refused(self, tmp_path):
+        _staged(tmp_path)
+        fired = self._load(tmp_path, FX.CONDITIONS[0],
+                           mutate=lambda b: b.update({"n_passed": 999}))
+        assert "the_w10_counts_agree_with_the_records_they_count" in fired
+
     def test_the_REAL_native_W10_report_is_ADMITTED_with_no_booleans_at_all(self, tmp_path):
         """W10's native report carries NO ``admitted`` and NO ``self_admitted``. It never did.
         Requiring them is requiring fields that do not exist — a FALSE REFUSAL of a sound
@@ -384,7 +569,7 @@ class TestTheDirectEndpointSource:
             fh.write(canonical.canonical_json(rep))
 
         f = Failures()
-        got = direct_source.load(f, cond, d, pure)
+        got = direct_source.load(f, cond, d, pure, w10_pins=FX.w10_pins())
         assert got is not None
         assert f.items == [], f.items          # not one refusal on a sound native report
         assert "the_w10_report_sha256_covers_its_own_content" in f.evaluated
@@ -411,7 +596,7 @@ class TestTheDirectEndpointSource:
         if tamper_file:
             tamper_file(path)
         f = Failures()
-        direct_source.load(f, cond, d, path)
+        direct_source.load(f, cond, d, path, w10_pins=FX.w10_pins())
         return {x["gate"] for x in f.items}
 
     def test_a_w10_report_whose_self_hash_does_not_cover_it_is_refused(self, tmp_path):

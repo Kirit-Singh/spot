@@ -60,6 +60,7 @@ def verify_release(*, release_root: str, bundle_root: str,
                    env_lock: Optional[str] = None,
                    direct_bundles: Optional[dict] = None,
                    w10_reports: Optional[dict] = None,
+                   w10_pins: Optional[Any] = None,
                    expect_env_lock_sha256: Optional[str] =
                    code_identity.FROZEN_STAGE2_ENV_LOCK_SHA256,
                    host_denylist=()) -> dict[str, Any]:
@@ -110,7 +111,7 @@ def verify_release(*, release_root: str, bundle_root: str,
     code_identity.check_env_lock(f, _one_env_lock(f, docs), env_lock,
                                 expect_sha256=expect_env_lock_sha256)
     direct_source.verify_endpoints(f, bound, docs, direct_bundles or {},
-                                  w10_reports or {})
+                                  w10_reports or {}, w10_pins=w10_pins)
 
     if producer_checkout:
         code_identity.check(f, recorded,

@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import release, verify
+from . import release, verify, w10
 from .canonical import canonical_json
 
 
@@ -85,6 +85,18 @@ def main(argv=None) -> int:
                     help="the INDEPENDENT (W10) admission report for that condition's Direct "
                          "bundle. It is READ, not merely hashed: a report that is present "
                          "admits nothing.")
+    # THE W10 PINS. Production by default — a caller who supplies nothing gets the strict
+    # check against the frozen verifier, its spec, and the exact gate profile it ran.
+    # Overriding them says out loud that this is NOT the production verifier, which is the
+    # only honest thing a synthetic fixture can say.
+    ap.add_argument("--w10-spec-sha256", default=None,
+                    help="override the pinned W10 spec sha256 (fixtures only)")
+    ap.add_argument("--w10-code-sha256", default=None,
+                    help="override the pinned W10 verifier-code sha256 (fixtures only)")
+    ap.add_argument("--w10-gate-inventory-sha256", default=None,
+                    help="override the pinned W10 gate-inventory sha256 (fixtures only)")
+    ap.add_argument("--w10-n-gates", type=int, default=None,
+                    help="override the pinned W10 gate count (fixtures only)")
     ap.add_argument("--allow-dirty-producer", action="store_true",
                     help="RECORD, rather than refuse, a dirty producer checkout. A digest "
                          "over uncommitted bytes does not identify the commit printed "
@@ -128,6 +140,20 @@ def main(argv=None) -> int:
             out[cond] = path
         return out
 
+    overrides = {
+        "spec_sha256": args.w10_spec_sha256,
+        "verifier_code_sha256": args.w10_code_sha256,
+        "gate_inventory_sha256": args.w10_gate_inventory_sha256,
+        "n_gates": args.w10_n_gates,
+    }
+    given = {k: v for k, v in overrides.items() if v is not None}
+    # PARTIAL pins are refused: a caller who overrode the spec but kept the production gate
+    # profile would be checking half a verifier against the other half's evidence.
+    if given and len(given) != len(overrides):
+        ap.error("--w10-* pins must be supplied together or not at all; got "
+                 f"{sorted(given)} and not {sorted(set(overrides) - set(given))}")
+    w10_pins = w10.Pins(**given, is_production=False) if given else None
+
     report = verify.verify_release(
         release_root=args.stage1_release_root,
         bundle_root=args.bundle_root,
@@ -140,6 +166,7 @@ def main(argv=None) -> int:
         env_lock=args.env_lock,
         direct_bundles=_pairs(args.direct_bundle),
         w10_reports=_pairs(args.w10_report),
+        w10_pins=w10_pins,
         expect_env_lock_sha256=(
             args.expect_env_lock_sha256
             or verify.code_identity.FROZEN_STAGE2_ENV_LOCK_SHA256),

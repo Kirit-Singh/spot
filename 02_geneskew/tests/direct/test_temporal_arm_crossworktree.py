@@ -154,6 +154,17 @@ def _verify_from_this_checkout(w5: str, release_root: str, bundle_root: str, *ex
     # the detached replay uses the AUTHORITATIVE Stage-2 lock (2983d140…) and the frozen
     # default pin — the same lock bytes Direct, pathway and the real run are pinned to
     lock = ["--env-lock", env_lock] if env_lock else []
+    if direct:
+        # the SYNTHETIC W10 pins — this suite does not run the production verifier, and
+        # overriding says so out loud rather than quietly weakening the default
+        sys.path.insert(0, _HERE)
+        import fixtures_arm_verifier as FX
+
+        pins = FX.w10_pins()
+        lock += ["--w10-spec-sha256", pins.spec_sha256,
+                 "--w10-code-sha256", pins.verifier_code_sha256,
+                 "--w10-gate-inventory-sha256", pins.gate_inventory_sha256,
+                 "--w10-n-gates", str(pins.n_gates)]
     for cond, path in (direct or {}).items():
         lock += ["--direct-bundle", f"{cond}:{path}"]
     for cond, path in (w10 or {}).items():
@@ -435,12 +446,17 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert "temporal_arm_external_admission.json" not in before
 
         env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+        pins = FX.w10_pins()
         argv = [sys.executable, "-m", "verify_temporal_arms.cli",
                 "--stage1-release-root", release_root,
                 "--bundle-root", bundle_root,
                 "--producer-checkout", producer_checkout,
                 "--env-lock", lock,
                 "--expect-conditions", *FX.CONDITIONS,
+                "--w10-spec-sha256", pins.spec_sha256,
+                "--w10-code-sha256", pins.verifier_code_sha256,
+                "--w10-gate-inventory-sha256", pins.gate_inventory_sha256,
+                "--w10-n-gates", str(pins.n_gates),
                 "--sign"]
         for cond, path in direct.items():
             argv += ["--direct-bundle", f"{cond}:{path}"]
@@ -484,6 +500,9 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
 
         sys.path.insert(0, _HERE)
 
+        sys.path.insert(0, _HERE)
+        import fixtures_arm_verifier as FX
+
         release_root, bundle_root, lock, direct, w10 = _stage(producer_checkout, tmp_path)
 
         # the aggregate root is the PARENT of the producer's native temporal root
@@ -503,13 +522,18 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         before = snapshot()
         assert "temporal_arm_release.json" in before      # the native inventory is READ
 
+        pins = FX.w10_pins()
         env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
         argv = [sys.executable, "-m", "verify_temporal_arms.cli",
                 "--stage1-release-root", release_root,
                 "--bundle-root", bundle_root,                 # the NATIVE producer root
                 "--admission-out", admission,                 # ...the AGGREGATE's root
                 "--producer-checkout", producer_checkout,
-                "--env-lock", lock, "--sign"]
+                "--env-lock", lock,
+                "--w10-spec-sha256", pins.spec_sha256,
+                "--w10-code-sha256", pins.verifier_code_sha256,
+                "--w10-gate-inventory-sha256", pins.gate_inventory_sha256,
+                "--w10-n-gates", str(pins.n_gates), "--sign"]
         for cond, path in direct.items():
             argv += ["--direct-bundle", f"{cond}:{path}"]
         for cond, path in w10.items():
@@ -546,15 +570,23 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         not the same claim. Collapsing them is how a contract starts lying."""
         import hashlib
 
+        sys.path.insert(0, _HERE)
+        import fixtures_arm_verifier as FX
+
         c = _contract()
         w = c["writes"]
         name = w["external_admission_file"]
 
         def run(bundle_root, release_root, lock, direct, w10, out=None):
             env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+            pins = FX.w10_pins()
             argv = [sys.executable, "-m", "verify_temporal_arms.cli",
                     "--stage1-release-root", release_root, "--bundle-root", bundle_root,
-                    "--producer-checkout", producer_checkout, "--env-lock", lock, "--sign"]
+                    "--producer-checkout", producer_checkout, "--env-lock", lock,
+                    "--w10-spec-sha256", pins.spec_sha256,
+                    "--w10-code-sha256", pins.verifier_code_sha256,
+                    "--w10-gate-inventory-sha256", pins.gate_inventory_sha256,
+                    "--w10-n-gates", str(pins.n_gates), "--sign"]
             if out:
                 argv += ["--admission-out", out]
             for cond, path in direct.items():
@@ -606,6 +638,23 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert w["path_is_not_the_binding"] is True
         assert env_doc["binds"]["producer_release_raw_sha256"] == \
             hashlib.sha256(inv).hexdigest()
+
+        # THE POINTER THE CONTRACT PROMISES. A reader holding the receipt at the aggregate
+        # root needs a way BACK to the native release it admits — relative, so the pair can be
+        # moved or archived together, and inside the signed body, so it cannot be redirected
+        # at a different release after the fact.
+        nrr = env_doc["binds"]["native_release_root"]
+        assert nrr and not os.path.isabs(nrr)
+        resolved = os.path.join(os.path.dirname(out), nrr,
+                                c["reads"]["producer_inventory_file"])
+        assert os.path.exists(resolved)
+        with open(resolved, "rb") as fh:
+            assert hashlib.sha256(fh.read()).hexdigest() == \
+                env_doc["binds"]["producer_release_raw_sha256"]
+        body = {k: v for k, v in env_doc.items() if k != "report_id"}
+        assert env_doc["report_id"] == hashlib.sha256(
+            json.dumps(body, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True).encode()).hexdigest()
 
     def test_a_REJECT_is_a_nonzero_exit_code_from_the_production_cli(
             self, producer_checkout, tmp_path):
@@ -670,13 +719,27 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert "admitted" not in w10.get("required_evidence", {})
         assert "self_admitted" not in w10.get("required_evidence", {})
 
+        from verify_temporal_arms import w10 as W
+
         ev = w10["required_evidence"]
+        # the FROZEN identity of the verifier that must have signed it
+        assert ev["spec_sha256"] == W.FROZEN_SPEC_SHA256
+        assert ev["verifier_code_sha256"] == W.FROZEN_VERIFIER_CODE_SHA256
+        # ...and the gate profile it must have run
+        assert ev["gate_inventory_sha256"] == W.FROZEN_GATE_INVENTORY_SHA256
+        assert ev["n_gates"] == W.FROZEN_N_GATES == 90
         assert direct_source.W10_ADMIT in ev["verdict"]
-        assert ev["bound_artifact.solver_lock_sha256"] == \
+        assert ev["gate_records"]
+        # ...and the EXACT, COMPLETE artifact set — a subset is not an admission
+        assert sorted(ev["artifact_file_set"]) == sorted(W.EXPECTED_FILES)
+        assert ev["n_artifact_files"] == 11
+        assert ev["bound_artifact"]["solver_lock_sha256"] == \
             direct_source.AUTHORITATIVE_ENV_LOCK_SHA256
-        for k in ("report_sha256", "gate_inventory_sha256", "bound_artifact.condition",
-                  "bound_artifact.arm_rows_sha256", "bound_artifact.artifact_sha256"):
-            assert ev[k]
+        # a SAMPLE report wears the same 90 gates; the contract must say it is not an admission
+        assert ev["recompute_mode"] == W.RECOMPUTE_ALL == "all"
+        assert ev["sample_mode_is_admissible"] is False
+        assert ev["recompute_completeness"]
+        assert sorted(ev["bound_artifact"]["required_fields"]) == sorted(W.BOUND_REQUIRED)
         assert w10["must_not_be"]["schema_version"] == \
             direct_source.VERIFICATION_SLOT_SCHEMA
         assert w10["must_not_be"]["verdict"] == direct_source.PENDING_VERDICT

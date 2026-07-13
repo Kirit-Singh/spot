@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import direct_source, schema
+from . import direct_source, schema, w10
 
 VERIFIER_ID = "spot.stage02.temporal.arm.independent_verifier.v1"
 
@@ -104,23 +104,44 @@ def integration_contract() -> dict[str, Any]:
                         "checked against the bundle in hand, which a flag cannot be"),
             },
 
-            # THE EVIDENCE THAT IS REQUIRED, and what each of it rules out.
+            # THE EVIDENCE THAT IS REQUIRED, and what each of it rules out. A PARTIAL
+            # PARSER IS A FORGER'S SPECIFICATION: check only the schema, the id, the verdict
+            # and a self-hash, and you have described exactly the document that defeats you —
+            # correct everywhere you looked, fabricated everywhere else.
             "required_evidence": {
-                "verdict": f"{direct_source.W10_ADMIT!r}",
-                "n_failed": "0, and failed_gates empty — an ADMIT with a failed gate is "
-                            "not an admit",
-                "independent_of_generator": "true — a report that imported the generator is "
-                                            "the generator's opinion of itself",
-                "report_sha256": "sha256(canonical JSON excluding report_sha256) — a report "
-                                 "editable after it was cited is a claim, not a result",
-                "gate_inventory_sha256": "sha256(canonical JSON of gate_inventory)",
-                "bound_artifact.condition": "the condition this endpoint asked for",
-                "bound_artifact.arm_rows_sha256": "the rows on disk",
-                "bound_artifact.solver_lock_sha256":
-                    direct_source.AUTHORITATIVE_ENV_LOCK_SHA256,
-                "bound_artifact.artifact_sha256":
-                    "a map of every file the report admitted; each must STILL hash to what "
-                    "it hashed to when the report was written",
+                "spec_sha256": w10.FROZEN_SPEC_SHA256,
+                "verifier_code_sha256": w10.FROZEN_VERIFIER_CODE_SHA256,
+                "gate_inventory_sha256": w10.FROZEN_GATE_INVENTORY_SHA256,
+                "n_gates": w10.FROZEN_N_GATES,
+                "verdict": f"{w10.W10_ADMIT!r}, with n_failed 0 and failed_gates empty",
+                "independent_of_generator": "true",
+                "report_sha256": "sha256(canonical JSON excluding report_sha256)",
+                "gate_records": ("must BE the gate_inventory they claim: same names, same "
+                                 "order, no duplicates, every one passed, and the counts "
+                                 "consistent with the records rather than with each other"),
+                "bound_artifact": {
+                    "required_fields": list(w10.BOUND_REQUIRED),
+                    "condition": "the condition this endpoint asked for",
+                    "arm_rows_sha256": "the rows on disk",
+                    "solver_lock_sha256": direct_source.AUTHORITATIVE_ENV_LOCK_SHA256,
+                    "artifact_sha256": (
+                        "the EXACT, COMPLETE bundle file set — no subset, no superset, no "
+                        "duplicates — and every file must still hash to what it hashed to "
+                        "when the report was written"),
+                },
+                "artifact_file_set": sorted(w10.EXPECTED_FILES),
+                "n_artifact_files": len(w10.EXPECTED_FILES),
+                # A SAMPLE REPORT IS A DIAGNOSTIC, NOT AN ADMISSION. W10's --recompute
+                # DEFAULTS to 'sample': it re-derives a handful of targets. It carries the
+                # SAME 90 gates and the SAME inventory hash as a full run, so the gate profile
+                # cannot tell them apart — and taking one for the other leaves every temporal
+                # number standing on numbers nobody re-derived.
+                "recompute_mode": w10.RECOMPUTE_ALL,
+                "recompute_completeness": (
+                    "n_targets_recomputed == n_masks_rederived == n_targets_in_bundle, and "
+                    "n_targets_in_bundle / n_arm_rows must be THIS bundle's own counts — "
+                    "'all' has to mean all, and the counts are what say whether it did"),
+                "sample_mode_is_admissible": False,
             },
 
             "must_not_be": {

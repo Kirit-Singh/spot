@@ -202,6 +202,29 @@ W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
 W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
 VERIFICATION_SLOT_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
 
+# The SYNTHETIC W10 verifier. It is not the production one and says so: the production spec,
+# code and 90-gate profile are FROZEN, and a fixture cannot forge a gate list that hashes to
+# the real inventory. So the suite pins its OWN, and
+# ``TestTheW10Contract`` checks the production pins against the real frozen values and proves
+# a weak report is refused under them.
+FIXTURE_W10_SPEC_SHA256 = "a1" * 32
+FIXTURE_W10_CODE_SHA256 = "b2" * 32
+FIXTURE_W10_GATES = [f"fixture gate {i:02d}" for i in range(12)]
+
+
+def w10_pins():
+    """The SYNTHETIC pins. ``is_production=False`` — this is not the production verifier."""
+    from direct.hashing import content_hash
+    from verify_temporal_arms import w10
+
+    return w10.Pins(
+        spec_sha256=FIXTURE_W10_SPEC_SHA256,
+        verifier_code_sha256=FIXTURE_W10_CODE_SHA256,
+        gate_inventory_sha256=content_hash(FIXTURE_W10_GATES),
+        n_gates=len(FIXTURE_W10_GATES),
+        expected_files=w10.EXPECTED_FILES,
+        is_production=False)
+
 
 def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
     """One admitted Direct all-arm bundle per condition, in the REAL MULTI-FILE shape.
@@ -254,6 +277,24 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
             json.dump({"schema_version": DIRECT_BUNDLE_SCHEMA,
                        "arm_bundle_run_id": run_id, "condition": cond,
                        "arm_rows_sha256": rows_sha, "n_arm_rows": len(rows)}, fh)
+        # THE EXACT ELEVEN FILES a Direct all-arm bundle is made of. W10 binds all of them,
+        # and an artifact map that named fewer would leave the rest unadmitted.
+        pd.DataFrame([{"target_id": t, "n": 1} for t in P.TARGETS]).to_parquet(
+            os.path.join(d, "masks.parquet"))
+        pd.DataFrame([{"target_id": t, "guide": "g1"} for t in P.TARGETS]).to_parquet(
+            os.path.join(d, "contributing_guides.parquet"))
+        pd.DataFrame([{"target_id": t, "n_guides": 2} for t in P.TARGETS]).to_parquet(
+            os.path.join(d, "guide_support.parquet"))
+        pd.DataFrame([{"target_id": t, "n_donors": 2} for t in P.TARGETS]).to_parquet(
+            os.path.join(d, "donor_support.parquet"))
+        for name, doc_ in (("input_manifest.json", {"inputs": []}),
+                           ("gene_universe.json", {"genes": list(P.GENES)}),
+                           ("target_identity.json",
+                            {"targets": [{"target_id": t, "namespace": "fixture"}
+                                         for t in P.TARGETS]})):
+            with open(os.path.join(d, name), "w") as fh:
+                json.dump(doc_, fh)
+
         with open(os.path.join(d, "provenance.json"), "w") as fh:
             json.dump({"run_binding": {
                 "condition": cond, "scorer_view_sha256": "5" * 64,
@@ -278,11 +319,17 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
 
 
 def w10_report(bundle_dir: str, condition: str, run_id: str, rows_sha: str,
-               *, mutate=None, legacy_booleans: bool = True) -> dict[str, Any]:
+               *, mutate=None, legacy_booleans: bool = True,
+               n_targets: Optional[int] = None,
+               n_arm_rows: Optional[int] = None) -> dict[str, Any]:
     """W10's NATIVE report: self-hashed, gate-listing, artifact-binding, and carrying NO
     ``admitted`` boolean — because it ships the evidence a boolean would have stood for."""
     from direct.hashing import content_hash
     from direct.temporal.arms import arm_env
+
+    n_targets = len(P.TARGETS) if n_targets is None else n_targets
+    n_arm_rows = (len(PORTABLE_IDS) * len(P.TARGETS) * 2 if n_arm_rows is None
+                  else n_arm_rows)
 
     artifact_sha256 = {}
     for name in sorted(os.listdir(bundle_dir)):
@@ -291,14 +338,12 @@ def w10_report(bundle_dir: str, condition: str, run_id: str, rows_sha: str,
             with open(fp, "rb") as fh:
                 artifact_sha256[name] = canonical.sha256_hex(fh.read())
 
-    gates = ["the arm rows hash to what the bundle declares",
-             "the producer did not admit its own output",
-             "the target identity is independently derived"]
+    gates = list(FIXTURE_W10_GATES)
     body = {
         "schema_version": W10_REPORT_SCHEMA,
         "verifier_id": W10_VERIFIER_ID,
-        "spec_sha256": "c4" * 32,
-        "verifier_code_sha256": "d4" * 32,
+        "spec_sha256": FIXTURE_W10_SPEC_SHA256,
+        "verifier_code_sha256": FIXTURE_W10_CODE_SHA256,
         "independent_of_generator": True,
         "generator_modules_not_imported": ["direct.arm_bundle"],
         "gate_inventory": gates,
@@ -309,6 +354,13 @@ def w10_report(bundle_dir: str, condition: str, run_id: str, rows_sha: str,
             "solver_lock_sha256": arm_env.AUTHORITATIVE_ENV_LOCK_SHA256,
             "arm_rows_sha256": rows_sha,
             "artifact_sha256": artifact_sha256,
+            # PRODUCTION mode: every base delta re-derived, and the counts say so.
+            # W10's DEFAULT is ``sample`` — a spot-check, wearing the same 90 gates.
+            "recompute_mode": "all",
+            "n_targets_recomputed": n_targets,
+            "n_masks_rederived": n_targets,
+            "n_targets_in_bundle": n_targets,
+            "n_arm_rows": n_arm_rows,
         },
         "gates": [{"gate": g, "passed": True, "detail": ""} for g in gates],
         "n_gates": len(gates), "n_passed": len(gates), "n_failed": 0,

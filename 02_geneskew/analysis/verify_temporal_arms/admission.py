@@ -306,6 +306,11 @@ def write_envelope(*, report: dict[str, Any], inventory: Optional[dict[str, Any]
     with open(ipath, "rb") as fh:
         iraw = fh.read()
 
+    # the path from WHERE THE RECEIPT IS FILED back to the release it admits
+    dest = os.path.abspath(str(admission_out)) if admission_out \
+        else os.path.join(root, schema.ENVELOPE_FILENAME)
+    native_release_root = os.path.relpath(root, os.path.dirname(dest)).replace(os.sep, "/")
+
     envelope = {
         "schema_version": schema.SCHEMA_ENVELOPE,
         "verifier_id": verifier_id,
@@ -318,6 +323,13 @@ def write_envelope(*, report: dict[str, Any], inventory: Optional[dict[str, Any]
         "gate_inventory": sorted(report["gates_run"]),
         # WHAT THIS ADMISSION IS AN ADMISSION OF
         "binds": {
+            # WHERE THE RELEASE IS, relative to this admission. The contract promises this
+            # pointer and the envelope must actually carry it: when the receipt is filed at
+            # the aggregate root, a reader holding it needs a way BACK to the native release
+            # root it admits. RELATIVE, never absolute — so the pair can be moved, archived
+            # or republished together and still resolve. And it is inside the signed body, so
+            # it cannot be redirected at a different release after the fact.
+            "native_release_root": native_release_root,
             # THE RELEASE THIS ADMITS. Its identity AND its exact bytes: a reader holding
             # the release can prove the admission is over the one in its hands, and an
             # envelope that admits a different release admits something else.
