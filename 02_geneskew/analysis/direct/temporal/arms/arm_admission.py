@@ -74,7 +74,7 @@ ARM_NEGATIVE_DECLARATIONS = {"bundle_carries_role_or_pole": False}
 # contract's own spelling; nothing ranks, gates or sorts on them. Exempt by EXACT spelling.
 INHERITED_FIREWALL_EXCEPTIONS = frozenset({
     "registry_scorer_view_sha256", "scorer_view_raw_sha256",
-    "scorer_view_canonical_sha256"})
+    "scorer_view_canonical_sha256", "registry_scorer_projection_sha256"})
 
 
 def inherited_forbidden_keys(obj: Any) -> list[str]:
@@ -335,6 +335,15 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     check("stage1_binding_scorer_view_matches_program_admission",
           s1.get("scorer_view_canonical_sha256") == pa.get("registry_scorer_view_sha256"),
           "the stage1 scorer-view hash disagrees with program_admission")
+    # the SCALAR projection identity and the per-program MAP are BOTH bound and DISTINCT —
+    # the map keyed exactly on the admitted programs, never collapsed into the scalar.
+    s1_map = s1.get("per_program_projection_sha256")
+    check("stage1_scalar_and_per_program_projection_both_bound",
+          bool(s1.get("registry_scorer_projection_sha256"))
+          and isinstance(s1_map, dict)
+          and sorted(s1_map) == list(s1.get("admitted_programs") or []),
+          "the scalar registry_scorer_projection_sha256 and the per-program projection map "
+          "must both be bound, with the map keyed exactly on the admitted programs")
 
     # ---- the inventory: n_programs x 2, complete and not invented ----
     programs = bundle["program_admission"]["programs"]

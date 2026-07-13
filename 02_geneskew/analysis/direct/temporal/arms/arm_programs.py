@@ -160,9 +160,14 @@ def require_ordered_pair(conditions: list[str], from_condition: str,
 # away), the admitted programs, and a per-program projection hash for each. None of these
 # may be null in a release-ready bundle — a null identity is the NO-GO the audit found.
 # --------------------------------------------------------------------------- #
+# The SCALAR overall projection identity (the Stage-2-bound registry_scorer_projection_sha256
+# the release publishes) and the 10-key per-program projection MAP are TWO distinct bindings.
+# Carry both; collapse neither into the other. W3 verifies the scalar against the release and
+# the map's exact key set, and rejects a missing or disagreeing either.
 STAGE1_REQUIRED_NONNULL = ("release_self_sha256", "scorer_view_raw_sha256",
-                           "scorer_view_canonical_sha256", "effect_universe_sha256",
-                           "effect_source_sha256")
+                           "scorer_view_canonical_sha256",
+                           "registry_scorer_projection_sha256",
+                           "effect_universe_sha256", "effect_source_sha256")
 
 
 def stage1_binding_block(stage1: dict[str, Any], admitted: dict[str, dict[str, Any]], *,
@@ -186,10 +191,16 @@ def stage1_binding_block(stage1: dict[str, Any], admitted: dict[str, dict[str, A
         "release_self_sha256": stage1.get("release_self_sha256"),
         "scorer_view_raw_sha256": stage1.get("scorer_view_raw_sha256"),
         "scorer_view_canonical_sha256": stage1.get("scorer_view_canonical_sha256"),
+        # (a) the SCALAR Stage-2-bound overall projection identity the release publishes —
+        # checked by W3 against the release's registry_scorer_projection_sha256;
+        "registry_scorer_projection_sha256":
+            stage1.get("registry_scorer_projection_sha256"),
         "selector_condition_sequence": seq,
         "n_conditions": len(seq),
         "admitted_programs": programs,
         "n_programs": len(programs),
+        # (b) the INDEPENDENTLY recomputed 10-key per-program projection MAP — distinct from
+        # the scalar above, keyed EXACTLY on the admitted programs, never collapsed into it.
         "per_program_projection_sha256": {p: per.get(p) for p in programs},
         "effect_universe_sha256": effect_universe_sha256,
         "effect_source_sha256": effect_source_sha256,
@@ -198,13 +209,21 @@ def stage1_binding_block(stage1: dict[str, Any], admitted: dict[str, dict[str, A
 
 
 def stage1_binding_nulls(block: dict[str, Any]) -> list[str]:
-    """Every REQUIRED stage-1 field that is still null/absent. Empty means release-ready."""
-    missing = [f for f in STAGE1_REQUIRED_NONNULL if not (block or {}).get(f)]
-    if not (block or {}).get("selector_condition_sequence"):
+    """Every REQUIRED stage-1 field that is still null/absent, or a map with the wrong keys.
+
+    Empty means release-ready. The SCALAR projection identity and the per-program MAP are
+    both required (and distinct); the map must be keyed EXACTLY on the admitted programs.
+    """
+    block = block or {}
+    missing = [f for f in STAGE1_REQUIRED_NONNULL if not block.get(f)]
+    if not block.get("selector_condition_sequence"):
         missing.append("selector_condition_sequence")
-    proj = (block or {}).get("per_program_projection_sha256") or {}
+    proj = block.get("per_program_projection_sha256") or {}
     if not proj or any(v is None for v in proj.values()):
         missing.append("per_program_projection_sha256")
+    elif sorted(proj) != sorted(block.get("admitted_programs") or []):
+        # the map must cover EXACTLY the admitted programs — no missing, no extra key
+        missing.append("per_program_projection_sha256_key_set")
     return missing
 
 

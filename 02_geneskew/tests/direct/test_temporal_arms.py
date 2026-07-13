@@ -483,7 +483,7 @@ class TestNoForbiddenFields:
         # scorer VIEW content hashes; nothing ranks or gates on them. Exact-spelling exempt.
         assert arm_admission.INHERITED_FIREWALL_EXCEPTIONS == {
             "registry_scorer_view_sha256", "scorer_view_raw_sha256",
-            "scorer_view_canonical_sha256"}
+            "scorer_view_canonical_sha256", "registry_scorer_projection_sha256"}
         raw = {h.rsplit(".", 1)[-1] for h in direct_admission.forbidden_keys(FX.build())}
         assert raw <= arm_admission.INHERITED_FIREWALL_EXCEPTIONS
         assert arm_admission.inherited_forbidden_keys(FX.build()) == []
@@ -1280,6 +1280,32 @@ class TestAuditDefectsClosed:
         report = arm_admission.verify_bundle(b)
         assert report["admitted"] is False
         assert any("stage1_binding" in f for f in report["failures"])
+
+    def test_1_the_scalar_and_the_per_program_projection_map_are_BOTH_carried(self):
+        s1 = FX.build()["stage1_binding"]
+        # (a) the SCALAR overall projection identity — a single hash string
+        assert isinstance(s1["registry_scorer_projection_sha256"], str)
+        # (b) the 10-key per-program MAP — one hash per admitted program
+        m = s1["per_program_projection_sha256"]
+        assert isinstance(m, dict) and sorted(m) == sorted(FX.PORTABLE_IDS)
+        assert all(v is not None for v in m.values())
+        # DISTINCT — neither collapsed into the other
+        assert s1["registry_scorer_projection_sha256"] not in m.values()
+
+    def test_1_a_missing_scalar_projection_identity_does_not_survive(self):
+        b = FX.build()
+        b["stage1_binding"]["registry_scorer_projection_sha256"] = None
+        arm_bundle_reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+
+    def test_1_a_per_program_map_with_the_wrong_key_set_does_not_survive(self):
+        b = FX.build()
+        b["stage1_binding"]["per_program_projection_sha256"].pop(FX.PORTABLE_IDS[0])
+        arm_bundle_reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("stage1" in f or "projection" in f for f in report["failures"])
 
     def test_2_stage2_inputs_is_a_fixed_keyed_object_not_a_role_list(self, tmp_path):
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))

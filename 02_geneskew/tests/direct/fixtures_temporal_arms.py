@@ -96,8 +96,12 @@ def stage1(release=None):
         "release_self_sha256": "b" * 64,                   # FIXTURE v3 release self-hash
         "scorer_view_raw_sha256": "a" * 64,                # FIXTURE scorer view raw
         "scorer_view_canonical_sha256": "a" * 64,          # == scorer_view_sha256 below
+        # (a) the SCALAR overall projection identity — DISTINCT from the per-program map.
+        # FIXTURE value; the real frozen production identity is 008c1da1… (W3/W11 pin that).
+        "registry_scorer_projection_sha256": "c0" * 32,
         # the DECLARED selector sequence — carried verbatim, NOT canonical-sorted away
         "selector_condition_sequence": list(CONDITIONS),
+        # (b) the 10-key per-program projection MAP — one hash per admitted program
         "per_program_projection_sha256": {
             pid: reg[pid]["method_hash"] for pid in PORTABLE_IDS},
     }
