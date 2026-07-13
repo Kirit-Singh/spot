@@ -394,6 +394,97 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert result["inventory"] == [], result["inventory"]
         assert result["admission"], "the aggregate admitted a release nobody verified"
 
+    def test_the_FULL_PRODUCTION_CLI_admits_and_leaves_producer_bytes_untouched(
+            self, producer_checkout, tmp_path):
+        """THE PRODUCTION INVOCATION, exactly as an aggregate runs it — every flag, through
+        the shipped parser, in its own process.
+
+        And the thing an aggregate has to be able to trust: the verifier REOPENS the
+        producer's root inventory and WRITES ONE file beside it, and it changes NOTHING the
+        producer wrote. Proved by hashing every producer byte before and after."""
+        import hashlib
+
+        sys.path.insert(0, _HERE)
+        import fixtures_arm_verifier as FX
+
+        release_root, bundle_root, lock, direct, w10 = _stage(producer_checkout, tmp_path)
+
+        def snapshot():
+            out = {}
+            for dirpath, _, names in os.walk(bundle_root):
+                for n in sorted(names):
+                    fp = os.path.join(dirpath, n)
+                    rel = os.path.relpath(fp, bundle_root)
+                    with open(fp, "rb") as fh:
+                        out[rel] = hashlib.sha256(fh.read()).hexdigest()
+            return out
+
+        before = snapshot()
+        # the producer's MANDATORY root inventory is there to be reopened
+        assert "temporal_arm_release.json" in before
+        assert "temporal_arm_external_admission.json" not in before
+
+        env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+        argv = [sys.executable, "-m", "verify_temporal_arms.cli",
+                "--stage1-release-root", release_root,
+                "--bundle-root", bundle_root,
+                "--producer-checkout", producer_checkout,
+                "--env-lock", lock,
+                "--expect-conditions", *FX.CONDITIONS,
+                "--sign"]
+        for cond, path in direct.items():
+            argv += ["--direct-bundle", f"{cond}:{path}"]
+        for cond, path in w10.items():
+            argv += ["--w10-report", f"{cond}:{path}"]
+
+        proc = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=_W11_REPO)
+        assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-800:]
+        report = json.loads(proc.stdout)
+        assert report["verdict"] == "ADMIT"
+
+        after = snapshot()
+
+        # ONE new file, at the RELEASE ROOT, and it is ours
+        added = sorted(set(after) - set(before))
+        assert added == ["temporal_arm_external_admission.json"], added
+
+        # EVERY producer byte is exactly as the producer left it
+        changed = sorted(k for k in before if after[k] != before[k])
+        assert changed == [], f"the verifier rewrote producer bytes: {changed}"
+
+        with open(os.path.join(bundle_root,
+                               "temporal_arm_external_admission.json")) as fh:
+            envelope = json.load(fh)
+        assert envelope["schema_version"] == \
+            "spot.stage02_temporal_arm_external_admission.v1"
+        assert envelope["verifier_id"] == \
+            "spot.stage02.temporal.arm.independent_verifier.v1"
+        assert envelope["verdict"] == "ADMIT"
+        assert len(envelope["report_id"]) == 64
+        assert envelope["binds"]["producer_release_id"]
+        assert envelope["binds"]["env_lock_sha256"] == FX.env_lock_sha256()
+
+    def test_a_REJECT_is_a_nonzero_exit_code_from_the_production_cli(
+            self, producer_checkout, tmp_path):
+        """A rejected release is an exit code, not a log line an aggregate has to read."""
+        sys.path.insert(0, _HERE)
+        import fixtures_arm_verifier as FX
+
+        release_root, bundle_root, lock, direct, w10 = _stage(producer_checkout, tmp_path)
+        env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+        proc = subprocess.run(
+            [sys.executable, "-m", "verify_temporal_arms.cli",
+             "--stage1-release-root", release_root, "--bundle-root", bundle_root,
+             "--producer-checkout", producer_checkout, "--env-lock", lock,
+             # the time axis, reversed: a different claim about which way time runs
+             "--expect-conditions", *reversed(FX.CONDITIONS)],
+            capture_output=True, text=True, env=env, cwd=_W11_REPO)
+        assert proc.returncode == 1
+        report = json.loads(proc.stdout)
+        assert report["verdict"] == "REJECT"
+        assert "release_conditions_match_the_pinned_universe" in \
+            {x["gate"] for x in report["failures"]}
+
     def test_neither_process_imports_the_others_rules(self):
         """Asserted in the process that actually ran, not by reading the source."""
         env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
