@@ -8,7 +8,13 @@ from __future__ import annotations
 from typing import Any, Optional
 
 # ONE-WAY: the per-artifact rules build on the core. The core never imports back.
-from verify_manifest_rules import ADMIT, PASS, _scan, content_sha256  # noqa: F401
+from verify_manifest_rules import (  # noqa: F401
+    ADMIT,
+    FORBIDDEN_IN_BUNDLE,
+    PASS,
+    _scan,
+    content_sha256,
+)
 
 # --------------------------------------------------------------------------- #
 # WHAT A LANE VERIFICATION REPORT MUST BE (round-4 review, seam 2).
@@ -190,3 +196,42 @@ def check_code_identity(code: Any, pinned: Any, bundle_id: str) -> list[str]:
                        f"pinned build is {str(pinned[field])[:20]!r}")
     return bad
 
+
+
+def check_preflight(pre: Any, bundle_dir_files: set, lane: str, bundle_id: str,
+                    independent_id: Optional[str], arm_raw: Optional[str],
+                    prov_raw: Optional[str]) -> list[str]:
+    """The producer's PREFLIGHT: it must prove the FINAL bytes, and admit nothing.
+
+    Two failures this closes. A preflight written before the provenance was finalised binds
+    stale bytes and proves nothing about what shipped. And a producer that signs its own
+    directory with the INDEPENDENT verifier's id is not producing an admission — it is
+    producing a forgery of one, and the only reason it ever passed is that the file it wrote
+    was the file being read.
+    """
+    bad: list[str] = []
+    if not isinstance(pre, dict):
+        return [f"{bundle_id}: the preflight is not a document"]
+
+    forbidden = FORBIDDEN_IN_BUNDLE.get(lane)
+    if forbidden and forbidden in bundle_dir_files:
+        bad.append(f"{bundle_id}: ships {forbidden!r} inside the PRODUCER's directory. An "
+                   "external admission cannot live where the producer writes; the "
+                   "admission is the one root envelope")
+
+    if independent_id and pre.get("verifier_id") == independent_id:
+        bad.append(f"{bundle_id}: the preflight signs itself with the INDEPENDENT "
+                   f"verifier's id ({independent_id!r}). A producer cannot sign as the "
+                   "verifier of its own output")
+
+    binds = pre.get("binds") or {}
+    if arm_raw and binds.get("arm_bundle_sha256") != arm_raw:
+        bad.append(f"{bundle_id}: the preflight binds arm inventory "
+                   f"{str(binds.get('arm_bundle_sha256'))[:16]}, not the FINAL "
+                   f"{arm_raw[:16]}")
+    if prov_raw and binds.get("provenance_sha256") != prov_raw:
+        bad.append(f"{bundle_id}: the preflight binds provenance "
+                   f"{str(binds.get('provenance_sha256'))[:16]}, not the FINAL "
+                   f"{prov_raw[:16]} — a preflight taken before the provenance was "
+                   "finalised proves nothing about what shipped")
+    return bad

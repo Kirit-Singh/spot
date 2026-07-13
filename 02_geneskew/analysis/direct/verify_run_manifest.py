@@ -25,29 +25,13 @@ The temporal BATCH POLICY is NOT an authority here and is no longer read: batch 
 the reusable temporal chain, and a confound diagnostic was never the right place to learn
 which conditions exist. The DiD estimand stays population-level.
 
-The manifest's own ``conditions``, ``gene_set_sources``, ``scorer_view``, counts,
-``complete`` flag and ``manifest_sha256`` are CHECKED against those. None is believed.
+The manifest's own ``conditions``, ``gene_set_sources``, counts, ``topology_complete`` flag
+and ``manifest_sha256`` are CHECKED against those. None is believed.
 
-THREE SEAMS AN INDEPENDENT REVIEW FOUND, AND WHAT CLOSED THEM
--------------------------------------------------------------
-* A gene-set source NAME is not an identity. Checking only that the two sources differed
-  and agreed within themselves let a FORGED "reactome" pass, because nothing compared it
-  to the Reactome that was actually pinned. Now every field — release, raw and canonical
-  hash, both namespaces, licence, both universe bindings — is compared to the pin.
-* ``report["verdict"] == "admit"`` is a string, not an admission. A two-byte file saying
-  ``{"verdict": "admit"}`` passed. A report is now a TYPED artifact from the PINNED lane
-  verifier, carrying its gate inventory, and it must BIND THE BUNDLE IT JUDGED — an ADMIT
-  that names no bundle can be copied onto any bundle.
-* ``clean_tree: true`` was believed because the artifact said so. A bundle now RECORDS its
-  tree state and its ``code_identity``; the VERIFIER decides the final clean-tree status
-  against an independently pinned build. A run does not get to be the witness for its own
-  checkout.
-
-PAIR AGNOSTICISM. A reusable arm carries NO role, NO pole and NO pair-derived program id,
-and none is required of it — requiring one would drag a pair back into an artifact whose
-whole purpose is to be reusable. What a bundle MUST bind is the Stage-1 identity its arms
-stand on (the release's scorer view + admitted program ids) and the BUILD that produced it
-(``code_identity``), kept explicitly separate from WHAT THE CODE DID (the method digests).
+Seams closed by earlier reviews (see the git log for the reasoning): a gene-set source NAME
+is not an identity; ``verdict == "admit"`` is a string, not an admission; ``clean_tree`` is
+attested by an external pin, never by the artifact itself. A reusable arm is PAIR-AGNOSTIC —
+no role, no pole, no pair-derived program id is required of it.
 
 Counts are RECONSTRUCTED, never read: ``n_hits_in_ranking`` is recomputed from the bytes
 the bundle bound (its gene-set membership INTERSECT its arm's ranked target ids).
@@ -113,6 +97,10 @@ G_EXTERNAL_ADMISSION = "an_INDEPENDENT_ROOT_ADMISSION_ENVELOPE_admits_this_relea
 G_EXTERNAL_BINDS = "the_external_admission_BINDS_THIS_EXACT_producer_inventory"
 G_KEYED_PROVENANCE = "stage2_inputs_is_a_FIXED_KEYED_OBJECT_never_a_role_value_list"
 G_RANKS = "every_declared_RANK_rederives_from_that_arms_own_values"
+G_CROSS_BUNDLE = "the_REVERSE_of_every_ordered_pair_is_the_exact_negation_ACROSS_bundles"
+G_NO_STALE = "no_STALE_unbound_ranking_file_sits_in_a_bundle_looking_like_evidence"
+G_STAGE1_NONNULL = "no_Stage1_release_projection_or_selector_field_is_NULL"
+G_PREFLIGHT = "the_PREFLIGHT_proves_the_FINAL_bytes_and_admits_NOTHING"
 
 
 def _one(rep, pairs, gate, what):
@@ -220,6 +208,9 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
                                        found["bad_code"])
     bad_gene_sets, batch_stored = found["bad_gene_sets"], found["batch_stored"]
     bad_keyed, bad_ranks = found["bad_keyed"], found["bad_ranks"]
+    stale, null_stage1 = found["stale"], found["null_stage1"]
+    bad_preflight = found["bad_preflight"]
+    bad_cross = R.check_cross_bundle(found["arm_values"])
 
     rep.gate(G_FILES, not missing and not unloadable,
              "; ".join((missing + unloadable)[:4]))
@@ -250,6 +241,10 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_RECONSTRUCT, not bad_hits, "; ".join(bad_hits[:3]))
     rep.gate(G_RANKS, not bad_ranks, "; ".join(bad_ranks[:3]))
     rep.gate(G_KEYED_PROVENANCE, not bad_keyed, "; ".join(bad_keyed[:3]))
+    rep.gate(G_CROSS_BUNDLE, not bad_cross, "; ".join(bad_cross[:3]))
+    rep.gate(G_NO_STALE, not stale, "; ".join(stale[:3]))
+    rep.gate(G_STAGE1_NONNULL, not null_stage1, "; ".join(null_stage1[:3]))
+    rep.gate(G_PREFLIGHT, not bad_preflight, "; ".join(bad_preflight[:3]))
     rep.gate(G_PAIR_VIEW, not pair_stored,
              f"a reusable arm bundle stores pair-derived ordering(s) {pair_stored[:5]}; "
              "Pareto tiers and concordance labels are join-time display only")

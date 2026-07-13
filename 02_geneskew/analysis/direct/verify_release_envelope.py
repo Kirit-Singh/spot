@@ -33,8 +33,27 @@ import json
 import os
 from typing import Any, Optional
 
+# --------------------------------------------------------------------------- #
+# THE ONE CANONICAL EXTERNAL-ADMISSION ARTIFACT (W3 <-> W11 reconciliation).
+#
+# W11 was emitting a root ``temporal_verification.json`` with a 16-hex ``envelope_id`` and
+# ``binds.inventory_raw_sha256``. Three problems, and a rename fixes none of them:
+#
+#   * THE FILENAME COLLIDES. ``temporal_verification.json`` already means "this bundle's
+#     verification", inside every bundle. The same name at the root, holding a different
+#     schema, is a name that means two things — and a reader that globs for it gets both.
+#   * A 16-HEX CONTENT ADDRESS. This id is what makes the admission immutable. Truncating
+#     it to 64 bits to look tidy is halving the collision resistance of the one field that
+#     stops an admission being swapped, for nothing.
+#   * THE WRONG BINDING. ``inventory_raw_sha256`` says which FILE was read.
+#     ``producer_release_raw_sha256`` says which RELEASE was admitted. W3 must verify the
+#     admission is over the ACTUAL W5 release, so the release identity is REQUIRED; the
+#     inventory hash is accepted alongside it and must agree.
+# --------------------------------------------------------------------------- #
 INVENTORY_FILE = "temporal_arm_release.json"
 ADMISSION_FILE = "temporal_arm_external_admission.json"
+REPORT_ID_FIELD = "report_id"
+SHA256_LEN = 64
 
 INVENTORY_SCHEMA = "spot.stage02_temporal_arm_release.v1"
 ADMISSION_SCHEMA = "spot.stage02_temporal_arm_external_admission.v1"
@@ -160,11 +179,18 @@ def check_external_admission(root: str, inventory: Optional[dict],
         bad.append(f"{ADMISSION_FILE}: schema {doc.get('schema_version')!r} is not "
                    f"{ADMISSION_SCHEMA!r}")
 
-    claimed = doc.get("report_id")
-    derived = self_hash(doc, "report_id")
+    if doc.get("envelope_id") is not None and doc.get(REPORT_ID_FIELD) is None:
+        bad.append(f"{ADMISSION_FILE}: carries a 16-hex 'envelope_id' instead of the "
+                   f"canonical '{REPORT_ID_FIELD}'. The content address of an admission is "
+                   "what stops it being swapped; it is a full sha256, not a prefix")
+    claimed = doc.get(REPORT_ID_FIELD)
+    if not isinstance(claimed, str) or len(claimed) != SHA256_LEN:
+        bad.append(f"{ADMISSION_FILE}: {REPORT_ID_FIELD} is {str(claimed)[:20]!r} — it "
+                   f"must be a full {SHA256_LEN}-hex sha256 of its own canonical content")
+    derived = self_hash(doc, REPORT_ID_FIELD)
     if claimed != derived:
-        bad.append(f"{ADMISSION_FILE}: report_id {str(claimed)[:16]} does not follow its "
-                   f"own content ({derived[:16]})")
+        bad.append(f"{ADMISSION_FILE}: {REPORT_ID_FIELD} {str(claimed)[:16]} does not "
+                   f"follow its own content ({derived[:16]})")
 
     if expect_verifier_id and doc.get("verifier_id") != expect_verifier_id:
         bad.append(f"{ADMISSION_FILE}: signed {doc.get('verifier_id')!r}; the pinned "
@@ -183,9 +209,17 @@ def check_external_admission(root: str, inventory: Optional[dict],
                 f"{str(binds.get('producer_release_id'))[:16]}; this run's producer "
                 f"inventory is {str(want_id)[:16]}. That is an admission of something else")
         want_raw = _raw(os.path.join(root, INVENTORY_FILE))
+        # REQUIRED: which RELEASE was admitted. This is what proves the admission is over
+        # the actual W5 release and not over some other bytes.
         if binds.get("producer_release_raw_sha256") != want_raw:
             bad.append(
                 f"{ADMISSION_FILE}: it binds inventory bytes "
                 f"{str(binds.get('producer_release_raw_sha256'))[:16]}; the inventory on "
                 f"disk hashes to {want_raw[:16]}")
+        # ACCEPTED alongside it, and it must agree — never instead of it.
+        alias = binds.get("inventory_raw_sha256")
+        if alias is not None and alias != want_raw:
+            bad.append(
+                f"{ADMISSION_FILE}: binds.inventory_raw_sha256 {str(alias)[:16]} "
+                f"disagrees with the inventory on disk ({want_raw[:16]})")
     return doc, bad

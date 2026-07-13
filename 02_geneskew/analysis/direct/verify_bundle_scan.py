@@ -20,6 +20,8 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
          pinned: dict, expect_verifiers: dict, expected_code: dict) -> dict[str, Any]:
     """Every finding the bundles yield, collected. No verdicts."""
     filled: dict[str, list] = {lane: [] for lane in R.LANES}
+    arm_values: dict = {}          # (from, to, program, dc) -> {target: value}
+    stale, null_stage1, bad_preflight = [], [], []
     ids, codes, selections, inputs, methods = [], [], [], [], []
     geneset_by_source: dict[str, list] = {}
     convergences: list[tuple] = []
@@ -56,11 +58,18 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
                 bad_bytes.append(f"{bid}/{fn}: bound {str(bound_sha)[:16]}, on disk "
                                  f"{R.file_sha256(fp)[:16]}")
 
+        # STALE RANKING FILES. A ranking nobody binds is a ranking nobody checked, and it
+        # sits in the release looking exactly like evidence.
+        stale += R.stale_rankings(path, R.load_json(
+            os.path.join(path, "arm_bundle.json")), bid)
+
         inv = R.load_json(os.path.join(path, "arm_bundle.json"))
         prov = R.load_json(os.path.join(path, R.PROVENANCE_OF[lane]))
-        report = R.load_json(os.path.join(path, R.REPORT_OF[lane]))
-        if not isinstance(inv, dict) or not isinstance(prov, dict) \
-                or not isinstance(report, dict):
+        report = (R.load_json(os.path.join(path, R.REPORT_OF[lane]))
+                  if lane in R.REPORT_OF else None)
+        if not isinstance(inv, dict) or not isinstance(prov, dict):
+            continue
+        if lane in R.REPORT_OF and not isinstance(report, dict):
             continue
 
         forbidden += R.forbidden_keys(inv) + R.forbidden_keys(prov)
@@ -108,6 +117,12 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
             # THE RANKS THEMSELVES, re-derived from the arm's own values. A resealed
             # rank-SWAP preserves every count and every hash, and reorders the evidence.
             bad_ranks += R.check_ranks(ranking, key)
+            if lane == R.LANE_TEMPORAL:
+                arm_values[(str(ctx.get("from_condition")),
+                            str(ctx.get("to_condition")),
+                            str(a.get("program_id")), str(dc))] = {
+                    str(r.get("target_id")): r.get("arm_value")
+                    for r in R.arm_records(ranking)}
             if a.get("n_ranked") is not None and \
                     int(a["n_ranked"]) != R.n_ranked(ranking):
                 bad_hits.append(
@@ -124,18 +139,29 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
                         f"recomputing from the bound membership and ranking bytes gives "
                         f"{dict(list(recomputed_hits.items())[:3])}")
 
+        # NULL STAGE-1 FIELDS. A binding whose fields are null binds nothing at all.
+        null_stage1 += R.null_stage1_fields(prov, bid)
+
         binding = prov.get("run_binding") or {}
         codes.append((bid, R.content_sha256(B.code_binding(prov))))
         selections.append((bid, R.content_sha256(binding.get("selection_release"))))
         inputs.append((bid, R.content_sha256(binding.get("stage2_inputs"))))
         methods.append((bid, R.content_sha256(B.method_binding(prov))))
 
-        # The report must be a TYPED admission from the PINNED verifier, ABOUT THIS
-        # BUNDLE. A file that merely says {"verdict": "admit"} is not one.
-        bad_reports += B.check_report(
-            report, lane, bid, expect_verifiers,
-            R.file_sha256(os.path.join(path, "arm_bundle.json")),
-            R.file_sha256(os.path.join(path, R.PROVENANCE_OF[lane])))
+        arm_raw = R.file_sha256(os.path.join(path, "arm_bundle.json"))
+        prov_raw = R.file_sha256(os.path.join(path, R.PROVENANCE_OF[lane]))
+        independent_id = (expect_verifiers.get(lane) or {}).get("verifier_id")
+        if lane in R.REPORT_OF:
+            # Lanes that still ship a per-bundle report: it must be a TYPED admission from
+            # the PINNED verifier, about THIS bundle.
+            bad_reports += B.check_report(report, lane, bid, expect_verifiers,
+                                          arm_raw, prov_raw)
+        if lane in R.PREFLIGHT_OF:
+            # Temporal ships a PREFLIGHT. It proves the FINAL bytes and admits NOTHING;
+            # the admission is the one root envelope.
+            bad_preflight += B.check_preflight(
+                R.load_json(os.path.join(path, R.PREFLIGHT_OF[lane])),
+                set(os.listdir(path)), lane, bid, independent_id, arm_raw, prov_raw)
         # Every bundle's code identity, against an INDEPENDENTLY pinned checkout.
         bad_code += B.check_code_identity(B.code_binding(prov), expected_code, bid)
 
@@ -164,4 +190,6 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         "bad_hits": bad_hits, "bad_reports": bad_reports, "bad_code": bad_code,
         "bad_gene_sets": bad_gene_sets, "batch_stored": batch_stored,
         "bad_keyed": bad_keyed, "bad_ranks": bad_ranks,
+        "arm_values": arm_values, "stale": stale, "null_stage1": null_stage1,
+        "bad_preflight": bad_preflight,
     }

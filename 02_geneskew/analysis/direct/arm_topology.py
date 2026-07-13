@@ -51,9 +51,13 @@ ADMIT = "admit"
 BUNDLE_FILES = {
     LANE_DIRECT: {"bundle": "arm_bundle.json", "provenance": "provenance.json",
                   "verification": "verification.json"},
+    # W5's REAL physical set (62fbf8b): a producer PREFLIGHT, and NO verifier output in
+    # the bundle. An external admission cannot live in the producer's own directory — the
+    # admission is the ONE root envelope. Requiring a per-bundle verification file here is
+    # what made bind_bundle exit 1 on a real W5 directory.
     LANE_TEMPORAL: {"bundle": "arm_bundle.json",
                     "provenance": "temporal_provenance.json",
-                    "verification": "temporal_verification.json"},
+                    "preflight": "temporal_preflight.json"},
     LANE_PATHWAY: {"bundle": "arm_bundle.json",
                    "provenance": "pathway_provenance.json",
                    "verification": "pathway_verification.json",

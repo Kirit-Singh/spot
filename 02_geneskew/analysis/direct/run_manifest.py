@@ -143,8 +143,11 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
             "batch stays out of the reusable temporal chain")
 
     prov = _load(os.path.join(out_dir, names["provenance"]), "provenance")
-    report = _load(os.path.join(out_dir, names["verification"]),
-                   "independent verification report")
+    # Temporal ships a PREFLIGHT (the producer's own self-check); the other lanes still
+    # ship a per-bundle report. Neither is an admission: that is the root envelope.
+    report_name = names.get("verification") or names.get("preflight")
+    report = _load(os.path.join(out_dir, report_name),
+                   "verification report" if names.get("verification") else "preflight")
 
     files: dict[str, str] = {}
     for base, _dirs, filenames in os.walk(out_dir):
@@ -190,6 +193,7 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
         "program_admission": prov.get("program_admission") or {},
         "stage2_inputs": (prov.get("run_binding") or {}).get("stage2_inputs") or [],
         "verification_verdict": report.get("verdict"),
+        "preflight_is_not_an_admission": bool(names.get("preflight")),
         "files": files,
         "artifact_sha256": content_hash(files),
     }

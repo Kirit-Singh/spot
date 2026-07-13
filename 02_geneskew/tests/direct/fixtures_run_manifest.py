@@ -222,7 +222,13 @@ def _ranking(program: str, dc: str, ctx: dict) -> dict[str, Any]:
     ranked = ([t for t in FIXTURE_SETS["FIXTURE-SET-1"] if t != UNRANKABLE_MEMBER]
               + FIXTURE_SETS["FIXTURE-SET-2"] + ["OTHER_1"])
     sign = 1.0 if dc == INCREASE else -1.0
-    records = [{"target_id": t, "arm_value": sign * (len(ranked) - i),
+    # THE REVERSE-DIRECTION IDENTITY: base_delta(A->B) = -base_delta(B->A). A fixture that
+    # gave both directions the same value would be physically impossible, and the
+    # cross-bundle gate says so.
+    orient = 1.0
+    if "from_condition" in ctx:
+        orient = 1.0 if str(ctx["from_condition"]) < str(ctx["to_condition"]) else -1.0
+    records = [{"target_id": t, "arm_value": sign * orient * (len(ranked) - i),
                 "evaluable": True, "rank": None}
                for i, t in enumerate(ranked)]
     # THE FROZEN RULE: value DESCENDING, ties broken on target_id ASCENDING. The verifier
@@ -273,7 +279,8 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
             ctx["condition"], "provenance.json", "verification.json")
     elif lane == "temporal":
         slug = f"{ctx['from_condition']}__{ctx['to_condition']}"
-        prov_name, ver_name = "temporal_provenance.json", "temporal_verification.json"
+        # W5's REAL set: a producer PREFLIGHT, and no verifier output in the bundle.
+        prov_name, ver_name = "temporal_provenance.json", "temporal_preflight.json"
     else:
         slug = f"{ctx['condition']}__{ctx['gene_set_source']}"
         prov_name, ver_name = "pathway_provenance.json", "pathway_verification.json"
@@ -371,6 +378,20 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
     # A TYPED admission from the pinned lane verifier, BINDING THE BUNDLE IT JUDGED.
     # A file that merely says {"verdict": "admit"} is not an independent admission.
     pin = LANE_VERIFIERS[lane]
+    if lane == "temporal":
+        # The PRODUCER's preflight. It is signed by the PRODUCER, it binds the FINAL bytes,
+        # and it admits nothing: the admission is the one root envelope.
+        _write(os.path.join(out_dir, ver_name), {
+            "fixture": True,
+            "schema_version": "spot.stage02_temporal_arm_preflight.v1",
+            "verifier_id": "spot.stage02.temporal_arm.producer_preflight.v1",
+            "is_an_external_admission": False,
+            "bundle_id": inv["bundle_id"],
+            "binds": {"arm_bundle_sha256": arm_raw, "provenance_sha256": prov_raw},
+            "checks": [{"gate": g, "status": "pass"} for g in pin["required_gates"]],
+            "n_failed": 0,
+        })
+        return out_dir
     _write(os.path.join(out_dir, ver_name), {
         "fixture": True,
         "schema_version": pin["schema_version"],
@@ -427,7 +448,7 @@ def _bundle_entry(root: str, d: str) -> dict[str, Any]:
     inv = json.load(open(os.path.join(d, "arm_bundle.json")))
     files, rankings = {}, {}
     for name in ("arm_bundle.json", "temporal_provenance.json",
-                 "temporal_verification.json"):
+                 "temporal_preflight.json"):
         p = os.path.join(d, name)
         files[name] = {"raw_sha256": _raw(p),
                        "canonical_sha256": _canon(json.load(open(p)))}
@@ -488,8 +509,11 @@ def write_external_admission(run: dict, release_id=None, verdict="ADMIT") -> str
         "verifier_id": INDEPENDENT_VERIFIER_ID,
         "verdict": verdict,
         "binds": {
+            # WHICH RELEASE was admitted (required)...
             "producer_release_id": release_id or inv["release_id"],
             "producer_release_raw_sha256": _raw(inv_path),
+            # ...and which FILE was read (accepted alongside; must agree)
+            "inventory_raw_sha256": _raw(inv_path),
             "stage1_release_sha256": run["staged"]["release_canonical_sha256"],
         },
     }

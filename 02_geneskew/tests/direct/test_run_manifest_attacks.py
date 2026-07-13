@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 
 import fixtures_run_manifest as F
@@ -365,7 +366,7 @@ class TestAnAdmitStringIsNotAnIndependentAdmission:
 
     def test_a_report_from_the_WRONG_VERIFIER_is_REJECTED(self, tmp_path):
         run = F.complete_run(tmp_path)
-        _patch(run["temporal"][0], "temporal_verification.json",
+        _patch(run["pathway"][0], "pathway_verification.json",
                lambda d: d.update({"verifier_id": "FIXTURE.a.verifier.nobody.pinned"}))
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
@@ -809,6 +810,108 @@ class TestTheFiveRequiredNegatives:
         assert V.G_INVENTORY in doc["failed_gates"]
 
 
+class TestTheW5AuditDefectsFailClosed:
+    """Each defect the independent W5 audit named must REFUSE, not merely be noticed."""
+
+    def test_a_STALE_unbound_ranking_file_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        # a leftover from an earlier run: nothing binds it, so nothing checked it — and it
+        # sits in the release looking exactly like evidence
+        with open(os.path.join(d, "rankings", "STALE__leftover.json"), "w") as fh:
+            json.dump({"records": []}, fh)
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_NO_STALE in doc["failed_gates"]
+
+    def test_a_NULL_stage1_field_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"registry_scorer_view_sha256": None}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_an_EMPTY_program_axis_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["program_admission"].update({"programs": []}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_a_BROKEN_REVERSE_DIRECTION_IDENTITY_is_REFUSED(self, tmp_path):
+        """Six internally-perfect bundles can still disagree with each other."""
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        arm = inv["arms"][0]
+        rpath = os.path.join(d, arm["ranking"]["path"])
+        ranking = json.load(open(rpath))
+        # negate ONE target's value: this bundle stays internally consistent (its ranks
+        # still re-derive), and now it contradicts its own reverse pair
+        for r in ranking["records"]:
+            if r["arm_value"] is not None:
+                r["arm_value"] = -r["arm_value"]
+                break
+        for i, r in enumerate(sorted(
+                [x for x in ranking["records"] if x["arm_value"] is not None],
+                key=lambda x: (-x["arm_value"], x["target_id"]))):
+            r["rank"] = i + 1
+        with open(rpath, "w") as fh:
+            json.dump(ranking, fh, indent=2, sort_keys=True)
+        arm["ranking"] = F._binding(d, arm["ranking"]["path"], ranking)
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh, indent=2, sort_keys=True)
+        F.seal_release(run)
+
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_CROSS_BUNDLE in doc["failed_gates"]
+
+
+class TestTheW11EnvelopeContractIsCanonical:
+    """The current W11 head is REFUSED — a rename would not have been enough."""
+
+    def test_a_16_HEX_envelope_id_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = os.path.join(run["root"], F.ADMISSION_FILE)
+        doc_e = json.load(open(path))
+        doc_e.pop("report_id")
+        doc_e["envelope_id"] = "0123456789abcdef"          # W11's 16-hex id
+        with open(path, "w") as fh:
+            json.dump(doc_e, fh, indent=2, sort_keys=True)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_EXTERNAL_ADMISSION in doc["failed_gates"]
+
+    def test_binding_ONLY_the_inventory_hash_is_REFUSED(self, tmp_path):
+        # `inventory_raw_sha256` says which FILE was read; `producer_release_raw_sha256`
+        # says which RELEASE was admitted. W3 must verify the latter.
+        run = F.complete_run(tmp_path)
+        path = os.path.join(run["root"], F.ADMISSION_FILE)
+        doc_e = json.load(open(path))
+        doc_e["binds"].pop("producer_release_raw_sha256")
+        doc_e["report_id"] = F._canon(
+            {k: v for k, v in doc_e.items() if k != "report_id"})
+        with open(path, "w") as fh:
+            json.dump(doc_e, fh, indent=2, sort_keys=True)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_EXTERNAL_BINDS in doc["failed_gates"]
+
+
 class TestOneNativeFilenameSet:
     """The legacy ``temporal_arm_*`` names are not the native set and are refused.
 
@@ -821,7 +924,7 @@ class TestOneNativeFilenameSet:
         d = run["temporal"][0]
         os.rename(os.path.join(d, "arm_bundle.json"),
                   os.path.join(d, "temporal_arm_bundle.json"))
-        os.rename(os.path.join(d, "temporal_verification.json"),
+        os.rename(os.path.join(d, "temporal_preflight.json"),
                   os.path.join(d, "temporal_arm_verification.json"))
         with pytest.raises(run_manifest.RunManifestError):
             run_manifest.bind_bundle(d)
@@ -830,21 +933,90 @@ class TestOneNativeFilenameSet:
         run = F.complete_run(tmp_path)
         shipped = set(os.listdir(run["temporal"][0]))
         assert {"arm_bundle.json", "temporal_provenance.json",
-                "temporal_verification.json", "rankings"} <= shipped
+                "temporal_preflight.json", "rankings"} <= shipped
+        # NO verifier output inside the producer's directory
+        assert "temporal_verification.json" not in shipped
         assert not any(f.startswith("temporal_arm_") for f in shipped)
+
+    def test_the_required_set_MATCHES_W5s_ACTUAL_emitted_set(self):
+        """The parity check that would have caught the fabricated file.
+
+        The fixtures agreed with W3's contract, not with W5's producer — so a bundle W5
+        actually emits would have failed to bind, and every green test said otherwise.
+        """
+        import subprocess
+
+        from direct import arm_topology as T
+        src = subprocess.run(
+            ["git", "show",
+             "62fbf8b:02_geneskew/analysis/direct/temporal/arms/arm_bundle.py"],
+            capture_output=True, text=True, cwd=os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__))))))
+        if src.returncode != 0:
+            pytest.skip("W5 62fbf8b is not in this object store")
+        w5 = dict(re.findall(r'^(\w*FILENAME) = "([^"]+)"', src.stdout, re.M))
+        required = set(T.BUNDLE_FILES[T.LANE_TEMPORAL].values())
+        assert w5["BUNDLE_FILENAME"] in required
+        assert w5["PROVENANCE_FILENAME"] in required
+        assert w5["PREFLIGHT_FILENAME"] in required
+        # W5 defines the name but does NOT emit it per bundle; W3 must not require it
+        assert w5["VERIFICATION_FILENAME"] not in required
+
+    def test_bind_bundle_INGRESS_on_W5s_exact_physical_set(self, tmp_path):
+        """The ingress that exited 1 on a real W5 directory.
+
+        The fixtures now ship W5's ACTUAL set — arm_bundle.json, temporal_provenance.json,
+        temporal_preflight.json, rankings/ — and NO verifier output. bind_bundle must
+        accept it, because that is what the producer emits.
+        """
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        shipped = {f for f in os.listdir(d) if os.path.isfile(os.path.join(d, f))}
+        assert shipped == {"arm_bundle.json", "temporal_provenance.json",
+                           "temporal_preflight.json"}, shipped
+
+        bound = run_manifest.bind_bundle(d)          # must NOT raise
+        assert bound["lane"] == "temporal"
+        assert bound["n_arms"] == 20
+        assert bound["preflight_is_not_an_admission"] is True
 
 
 class TestTheAdmissionMustComeFromTheINDEPENDENTVerifier:
-    def test_a_PRODUCER_SELF_VERIFICATION_id_is_REJECTED(self, tmp_path):
-        # the producer's own `spot.stage02.temporal_arm.verifier.v1` is not the independent
-        # verifier contract, and a bundle may not admit itself
+    def test_a_PREFLIGHT_signed_with_the_INDEPENDENT_id_is_REJECTED(self, tmp_path):
+        # a producer cannot sign as the verifier of its own output — and the only reason
+        # that ever passed is that the file it wrote was the file being read
         run = F.complete_run(tmp_path)
-        _patch(run["temporal"][0], "temporal_verification.json",
-               lambda d: d.update({"verifier_id": "spot.stage02.temporal_arm.verifier.v1"}))
+        _patch(run["temporal"][0], "temporal_preflight.json",
+               lambda d: d.update({
+                   "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1"}))
+        F.seal_release(run)
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
-        assert V.G_VERDICT in doc["failed_gates"]
+        assert V.G_PREFLIGHT in doc["failed_gates"]
+
+    def test_an_EXTERNAL_report_INSIDE_the_producer_directory_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        with open(os.path.join(d, "temporal_verification.json"), "w") as fh:
+            json.dump({"verdict": "admit"}, fh)      # an admission where the producer writes
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_PREFLIGHT in doc["failed_gates"]
+
+    def test_a_STALE_PREFLIGHT_that_does_not_bind_the_FINAL_provenance_is_REJECTED(
+            self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_preflight.json",
+               lambda d: d["binds"].update({"provenance_sha256": "a" * 64}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_PREFLIGHT in doc["failed_gates"]
 
     def test_a_report_that_admits_ITSELF_is_REJECTED(self, tmp_path):
         run = F.complete_run(tmp_path)

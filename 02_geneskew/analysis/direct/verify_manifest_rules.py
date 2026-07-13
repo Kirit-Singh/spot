@@ -37,15 +37,27 @@ SPEC_DESIRED_CHANGE = {
     ("toward_B", "low"): DECREASE,
 }
 
+# W5's REAL physical set (62fbf8b): the temporal bundle ships a PREFLIGHT and NO verifier
+# output. A per-bundle "verification" file was this verifier's own invention — the fixtures
+# fabricated it, so the suite was green against an artifact set the producer never emits,
+# and bind_bundle would have exited 1 on a real W5 directory.
+#
+# An external admission cannot live in the producer's directory anyway. The preflight is the
+# producer's self-check; the ADMISSION is the ONE root envelope.
 BUNDLE_FILES = {
     LANE_DIRECT: ("arm_bundle.json", "provenance.json", "verification.json"),
     LANE_TEMPORAL: ("arm_bundle.json", "temporal_provenance.json",
-                    "temporal_verification.json"),
+                    "temporal_preflight.json"),
     LANE_PATHWAY: ("arm_bundle.json", "pathway_provenance.json",
                    "pathway_verification.json", "convergence.json"),
 }
 PROVENANCE_OF = {lane: files[1] for lane, files in BUNDLE_FILES.items()}
-REPORT_OF = {lane: files[2] for lane, files in BUNDLE_FILES.items()}
+# Only these lanes still carry a per-bundle report. Temporal's admission is the root envelope.
+REPORT_OF = {LANE_DIRECT: "verification.json",
+             LANE_PATHWAY: "pathway_verification.json"}
+PREFLIGHT_OF = {LANE_TEMPORAL: "temporal_preflight.json"}
+# A file that would be an EXTERNAL admission, sitting in the producer's own directory.
+FORBIDDEN_IN_BUNDLE = {LANE_TEMPORAL: "temporal_verification.json"}
 
 # Bindings whose BYTES a pathway count must be reconstructible from.
 PATHWAY_BINDINGS = ("gene_set_membership", "target_universe", "masked_signatures",
@@ -279,20 +291,11 @@ def n_ranked(ranking: Any) -> int:
     return len(ranked_target_ids(ranking))
 
 
-# --------------------------------------------------------------------------- #
-# THE RANK ARITHMETIC, RE-DERIVED. Counts were never enough.
-#
-# An adversarial probe RESEALED a ranking with two ranks SWAPPED — every hash recomputed,
-# every count unchanged — and it was ADMITTED. Of course it was: this layer checked how
-# MANY ranks there were, never WHICH target held which. A swap preserves n_ranked and
-# preserves n_hits_in_ranking exactly, and it silently reorders the evidence.
-#
-# So the rank is re-derived from the arm's own values, by the frozen rule:
-#   population : evaluable rows with a non-null arm value
-#   order      : arm value DESCENDING
-#   tie-break  : target_id ASCENDING
-#   ranks      : a contiguous 1..n
-# --------------------------------------------------------------------------- #
+# THE RANK ARITHMETIC, RE-DERIVED. Counts were never enough: a probe RESEALED a ranking with
+# two ranks SWAPPED — every hash recomputed, every count unchanged — and it was ADMITTED,
+# because this layer checked how MANY ranks there were, never WHICH target held which.
+# Frozen rule: population = evaluable rows with a non-null value; order = value DESCENDING;
+# tie-break = target_id ASCENDING; ranks = a contiguous 1..n.
 SPEC_RANK_DIRECTION = "descending"
 SPEC_RANK_TIE_BREAK = "target_id_ascending"
 
@@ -409,3 +412,81 @@ class Report:
             **extra,
         }
 
+
+
+# --------------------------------------------------------------------------- #
+# THE W5 AUDIT DEFECTS. Each fails CLOSED here.
+# --------------------------------------------------------------------------- #
+def stale_rankings(bundle_dir: str, inv: Any, bundle_id: str) -> list[str]:
+    """A ranking file NOBODY BINDS is a ranking nobody checked.
+
+    It sits in the release looking exactly like evidence, and a reader who globs the
+    rankings directory would read it. Every file under ``rankings/`` must be bound by
+    exactly one arm.
+    """
+    rdir = os.path.join(bundle_dir, "rankings")
+    if not os.path.isdir(rdir):
+        return []
+    bound = {str((a.get("ranking") or {}).get("path"))
+             for a in ((inv or {}).get("arms") or [])}
+    on_disk = {f"rankings/{f}" for f in os.listdir(rdir)
+               if os.path.isfile(os.path.join(rdir, f))}
+    extra = sorted(on_disk - bound)
+    return [f"{bundle_id}: {len(extra)} STALE ranking file(s) nothing binds "
+            f"(e.g. {extra[:3]}); an unbound ranking is unverified and indistinguishable "
+            "from evidence"] if extra else []
+
+
+# The Stage-1 fields a bundle MUST actually carry. A null binding binds nothing.
+STAGE1_REQUIRED = ("registry_scorer_view_sha256",)
+
+
+def null_stage1_fields(prov: Any, bundle_id: str) -> list[str]:
+    """A Stage-1 binding whose fields are NULL is not a binding, it is a placeholder."""
+    bad: list[str] = []
+    sel = ((prov or {}).get("run_binding") or {}).get("selection_release") or {}
+    for field in STAGE1_REQUIRED:
+        if not sel.get(field):
+            bad.append(f"{bundle_id}: selection_release.{field} is "
+                       f"{sel.get(field)!r} — a null Stage-1 field binds nothing")
+    adm = (prov or {}).get("program_admission") or {}
+    if not (adm.get("programs") or []):
+        bad.append(f"{bundle_id}: program_admission.programs is empty — the arms stand on "
+                   "no declared program axis")
+    if not adm.get("registry_scorer_view_sha256"):
+        bad.append(f"{bundle_id}: program_admission.registry_scorer_view_sha256 is null")
+    return bad
+
+
+CROSS_BUNDLE_TOL = 1e-9
+
+
+def check_cross_bundle(arm_values: dict) -> list[str]:
+    """THE REVERSE-DIRECTION IDENTITY, re-derived ACROSS bundles.
+
+    ``base_delta(A->B) = -base_delta(B->A)`` by construction, and an arm value is a fixed
+    sign times that base. So for the SAME (program, desired_change) and the SAME target::
+
+        arm_value(A->B) == -arm_value(B->A)
+
+    Nothing WITHIN one bundle can see this. Six bundles that were each internally perfect
+    could still disagree with one another about the same measurement, and the aggregate is
+    the only place that can notice.
+    """
+    bad: list[str] = []
+    for (frm, to, prog, dc), values in sorted(arm_values.items()):
+        rev = arm_values.get((to, frm, prog, dc))
+        if rev is None:
+            continue
+        for target, v in sorted(values.items()):
+            w = rev.get(target)
+            if v is None or w is None:
+                if v is not None or w is not None:
+                    bad.append(f"{prog}|{dc}: {target} is measured {frm}->{to} but not "
+                               f"{to}->{frm}")
+                continue
+            if abs(float(v) + float(w)) > CROSS_BUNDLE_TOL:
+                bad.append(
+                    f"{prog}|{dc}|{target}: {frm}->{to} is {v} but {to}->{frm} is {w}; the "
+                    "reverse of an ordered pair must be the exact negation")
+    return bad
