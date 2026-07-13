@@ -1,0 +1,71 @@
+{
+  "alters_scores_or_ranks": false,
+  "classification": "read_only_diagnostic_non_gating",
+  "drawer_block_id": "spot.stage02.marson_concordance.drawer.v1",
+  "hashes": {
+    "authors_code_commit": "848d62fc2b7027f7218d6fc5f5b0c37255dc94af",
+    "concordance_artifact_sha256": "6c32eb084fc05b666b0304e91317bf3693a1fc6a840644df09cfce5ec6c52dc0",
+    "de_object_sha256": "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62",
+    "preprint_pdf_sha256": "7539856ecfea9a2b70f809c925013b9d54866f006f37bf4b95bc2ce6c27ad890",
+    "program_registry_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
+    "sign_control_spec_sha256": "6f5886e1b657abcc224720e9d1a270524224941506ef21b52bdac808cb7d4b96"
+  },
+  "hpa": "Human Protein Atlas is link-out context only; no HPA value enters any score or rank.",
+  "locators": [
+    {
+      "claim": "blood-derived primary human CD4+ T cells; 4 healthy donors x 3 stimulation conditions; not multi-tissue",
+      "locator": "p.4 (Suppl. Fig 1A)"
+    },
+    {
+      "claim": "screen significance threshold FDR < 10% (paper inference; spot displays none)",
+      "locator": "p.5"
+    },
+    {
+      "claim": "mRNA vs. protein readouts explicitly distinguished by the authors",
+      "locator": "p.8 (Fig 1F)"
+    },
+    {
+      "claim": "sign convention; CD3/LCP2 -> IL2 and GATA3 -> IL13 identified after re-stimulation",
+      "locator": "p.9 (Fig 2A, Suppl. Fig 10)"
+    },
+    {
+      "claim": "TCR components, Mediator (MED12, MED24), SAGA (TAF6L, TADA1, TADA2B, SUPT20H, USP22)",
+      "locator": "p.9"
+    },
+    {
+      "claim": "arrayed validation by bulk RNAseq AND intracellular protein staining / flow cytometry; FDR stars *<5% **<1% ***<0.1%",
+      "locator": "p.11 (Fig 2E, Fig 2F)"
+    },
+    {
+      "claim": "NFKB2 -> IL10 protein levels did NOT mirror the transcriptional phenotype",
+      "locator": "p.11 (Fig 2F)"
+    }
+  ],
+  "methods_text": "Marson preprint concordance (read-only). The paper's claim is a per-cytokine log2FC on regulator knockdown (mRNA, CRISPRi Perturb-seq; FDR-based). The released Stage-2 estimand is a target-masked DE-space program projection, delta_p(X) = mean(panel \\ mask) - mean(control \\ mask), over the SAME released per-gene log2FC. The substrate is shared, so the paper's direction is checked against it exactly; a program delta is NOT a per-cytokine effect, so the two are never equated and no verdict is drawn from the projection. Stage-2 displays no p/q and draws no inference.",
+  "result": {
+    "comparable_at_program_level": [
+      "IL13 (th2_like)",
+      "IL21 (tfh_like)"
+    ],
+    "condition_note": "the paper's directional claims are re-stimulation-specific (p.9); no pooled cross-condition ratio is reported",
+    "not_comparable": [
+      "IL2 and IL10 are panel members of NO released program, so the Stage-2 estimand says nothing about them",
+      "broad TCR/Mediator/SAGA breadth: the released estimand carries no per-cytokine breadth measure",
+      "protein readouts: this analysis is mRNA-only"
+    ],
+    "shared_substrate_by_condition": {
+      "Rest": {
+        "concordant": 11,
+        "n": 19
+      },
+      "Stim48hr": {
+        "concordant": 18,
+        "n": 19
+      },
+      "Stim8hr": {
+        "concordant": 19,
+        "n": 19
+      }
+    }
+  }
+}

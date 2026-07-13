@@ -1,0 +1,1502 @@
+{
+  "alters_scores_or_ranks": false,
+  "artifact_id": "spot.stage02.marson_concordance.v1",
+  "classification": "read_only_diagnostic_non_gating",
+  "dataset_scope": {
+    "axes": "4 healthy human donors x 3 stimulation conditions (Rest / Stim8hr / Stim48hr)",
+    "cells": "blood-derived primary human CD4+ T cells (CRISPRi Perturb-seq)",
+    "hpa": "Human Protein Atlas is LINK-OUT context only; no HPA value is incorporated into any score or rank",
+    "locator": "preprint p.4 (12 pools, four healthy human donors, 3 stimulation conditions; Suppl. Fig 1A)",
+    "multi_tissue": false
+  },
+  "estimands": {
+    "note": "both are functions of the SAME released per-gene log2FC, so the substrate is shared; a program delta is NOT a per-cytokine effect and the two are never equated",
+    "paper": {
+      "inference": "FDR (paper-reported; screen-level FDR < 10%, figure stars 5%/1%/0.1%)",
+      "modality": "mRNA (CRISPRi Perturb-seq differential expression)",
+      "quantity": "per-cytokine log2FC on regulator knockdown"
+    },
+    "stage2_released": {
+      "inference": "none \u2014 production displays no p/q and draws no inference",
+      "modality": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+      "quantity": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)"
+    }
+  },
+  "inputs": {
+    "authors_code_commit": "848d62fc2b7027f7218d6fc5f5b0c37255dc94af",
+    "de_matches_pin": true,
+    "de_object_sha256": "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62",
+    "preprint_doi": "10.64898/2025.12.23.696273",
+    "preprint_pdf_sha256": "7539856ecfea9a2b70f809c925013b9d54866f006f37bf4b95bc2ce6c27ad890",
+    "registry_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
+    "spec_sha256": "6f5886e1b657abcc224720e9d1a270524224941506ef21b52bdac808cb7d4b96"
+  },
+  "protein_vs_mrna": {
+    "comparable_here": false,
+    "documented_exception": "NFKB2 -> IL10: 'protein level changes did not mirror the transcriptional phenotype' (p.11)",
+    "our_analysis": "mRNA only",
+    "paper_protein_validation": "arrayed knockdown measured by bulk RNAseq AND intracellular protein staining / flow cytometry (p.11, Fig 2E-2F)",
+    "tier": "not_comparable_protein_modality"
+  },
+  "read_only": true,
+  "results": [
+    {
+      "comparability_by_cytokine": {
+        "IL10": {
+          "programs": [],
+          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "tier": "not_comparable_cytokine_absent_from_all_panels"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "MEN1",
+          "regulator_ensembl": "ENSG00000133895",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "MEN1",
+          "regulator_ensembl": "ENSG00000133895",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "MEN1",
+          "regulator_ensembl": "ENSG00000133895",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        }
+      ],
+      "control_id": "men1_il10_negative",
+      "kind": "directional",
+      "regulators": [
+        "MEN1"
+      ],
+      "source": {
+        "figure": "Figure 2C",
+        "page": 9,
+        "quote": "MEN1, a component of the MLL1/2 complex known to repress IL10 expression [30], was among the top negative regulators of IL10"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL10": {
+          "programs": [],
+          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "tier": "not_comparable_cytokine_absent_from_all_panels"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "SGF29",
+          "regulator_ensembl": "ENSG00000176476",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "SGF29",
+          "regulator_ensembl": "ENSG00000176476",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "SGF29",
+          "regulator_ensembl": "ENSG00000176476",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "ATXN7L3",
+          "regulator_ensembl": "ENSG00000087152",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "ATXN7L3",
+          "regulator_ensembl": "ENSG00000087152",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "ATXN7L3",
+          "regulator_ensembl": "ENSG00000087152",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "USP22",
+          "regulator_ensembl": "ENSG00000124422",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "USP22",
+          "regulator_ensembl": "ENSG00000124422",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "USP22",
+          "regulator_ensembl": "ENSG00000124422",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        }
+      ],
+      "control_id": "saga_il10_negative",
+      "kind": "directional",
+      "regulators": [
+        "SGF29",
+        "ATXN7L3",
+        "USP22"
+      ],
+      "source": {
+        "figure": "Figure 2D",
+        "page": 9,
+        "quote": "negative regulation of IL10 by members of the SAGA complex (SGF29, ATXN7L3, USP22)"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL10": {
+          "programs": [],
+          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "tier": "not_comparable_cytokine_absent_from_all_panels"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "ELOB",
+          "regulator_ensembl": "ENSG00000103363",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "ELOB",
+          "regulator_ensembl": "ENSG00000103363",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "ELOB",
+          "regulator_ensembl": "ENSG00000103363",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        }
+      ],
+      "control_id": "elob_il10_negative",
+      "kind": "directional",
+      "regulators": [
+        "ELOB"
+      ],
+      "source": {
+        "figure": "Figure 2D",
+        "page": 9,
+        "quote": "ELOB, a regulatory subunit of the Elongin complex"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL21": {
+          "programs": [
+            "tfh_like"
+          ],
+          "reason": "IL21 is one panel member of tfh_like; delta_p is a panel mean minus a control mean, so a per-cytokine equivalence is not claimed and no verdict is emitted",
+          "tier": "program_projection_not_equivalent"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "CYB5R4",
+          "regulator_ensembl": "ENSG00000065615",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -0.3918963683234457,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "CYB5R4",
+          "regulator_ensembl": "ENSG00000065615",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -1.4291622265730635,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "CYB5R4",
+          "regulator_ensembl": "ENSG00000065615",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.5187745352351457,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        }
+      ],
+      "control_id": "cyb5r4_il21_positive",
+      "kind": "directional",
+      "regulators": [
+        "CYB5R4"
+      ],
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "perturb-seq identified oxidoreductase CYB5R4 as a positive regulator of IL21"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL21": {
+          "programs": [
+            "tfh_like"
+          ],
+          "reason": "IL21 is one panel member of tfh_like; delta_p is a panel mean minus a control mean, so a per-cytokine equivalence is not claimed and no verdict is emitted",
+          "tier": "program_projection_not_equivalent"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "ATP2A2",
+          "regulator_ensembl": "ENSG00000174437",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 2.0720533359617135,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "ATP2A2",
+          "regulator_ensembl": "ENSG00000174437",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.34511986751020163,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "ATP2A2",
+          "regulator_ensembl": "ENSG00000174437",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 1.2463302979123545,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "ORAI1",
+          "regulator_ensembl": "ENSG00000276045",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -0.024630885896663825,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "ORAI1",
+          "regulator_ensembl": "ENSG00000276045",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.9734734004879296,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "ORAI1",
+          "regulator_ensembl": "ENSG00000276045",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.23708416219854128,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        }
+      ],
+      "control_id": "calcium_il21_negative",
+      "kind": "directional",
+      "regulators": [
+        "ATP2A2",
+        "ORAI1"
+      ],
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "regulators of calcium homeostasis (ATP2A2, ORAI1) ... as negative regulators of IL21"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL21": {
+          "programs": [
+            "tfh_like"
+          ],
+          "reason": "IL21 is one panel member of tfh_like; delta_p is a panel mean minus a control mean, so a per-cytokine equivalence is not claimed and no verdict is emitted",
+          "tier": "program_projection_not_equivalent"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "ELP2",
+          "regulator_ensembl": "ENSG00000134759",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -0.14062089782416218,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "ELP2",
+          "regulator_ensembl": "ENSG00000134759",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 1.1928114168018547,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "ELP2",
+          "regulator_ensembl": "ENSG00000134759",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.4555765317533833,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "ELP3",
+          "regulator_ensembl": "ENSG00000134014",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -0.5021915752549516,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "ELP3",
+          "regulator_ensembl": "ENSG00000134014",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.9614638626160914,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "ELP3",
+          "regulator_ensembl": "ENSG00000134014",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.5074537127459195,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        }
+      ],
+      "control_id": "elongator_il21_negative",
+      "kind": "directional",
+      "regulators": [
+        "ELP2",
+        "ELP3"
+      ],
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "the Elongator complex (ELP2, ELP3) as negative regulators of IL21"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL10": {
+          "programs": [],
+          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "tier": "not_comparable_cytokine_absent_from_all_panels"
+        },
+        "IL21": {
+          "programs": [
+            "tfh_like"
+          ],
+          "reason": "IL21 is one panel member of tfh_like; delta_p is a panel mean minus a control mean, so a per-cytokine equivalence is not claimed and no verdict is emitted",
+          "tier": "program_projection_not_equivalent"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "NFKB2",
+          "regulator_ensembl": "ENSG00000077150",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "NFKB2",
+          "regulator_ensembl": "ENSG00000077150",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "NFKB2",
+          "regulator_ensembl": "ENSG00000077150",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "NFKB2",
+          "regulator_ensembl": "ENSG00000077150",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.1106369682073117,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "NFKB2",
+          "regulator_ensembl": "ENSG00000077150",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.6667882648555882,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "NFKB2",
+          "regulator_ensembl": "ENSG00000077150",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.6681170878895029,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        }
+      ],
+      "control_id": "nfkb2_divergent_il10_il21",
+      "kind": "directional",
+      "regulators": [
+        "NFKB2"
+      ],
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "NFKB2 ... as divergent regulators - acting as positive regulators for IL10 but negative regulators for IL21"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL10": {
+          "programs": [],
+          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "tier": "not_comparable_cytokine_absent_from_all_panels"
+        },
+        "IL21": {
+          "programs": [
+            "tfh_like"
+          ],
+          "reason": "IL21 is one panel member of tfh_like; delta_p is a panel mean minus a control mean, so a per-cytokine equivalence is not claimed and no verdict is emitted",
+          "tier": "program_projection_not_equivalent"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "regulator": "KDM1A",
+          "regulator_ensembl": "ENSG00000004487",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "regulator": "KDM1A",
+          "regulator_ensembl": "ENSG00000004487",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "regulator": "KDM1A",
+          "regulator_ensembl": "ENSG00000004487",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "regulator": "KDM1A",
+          "regulator_ensembl": "ENSG00000004487",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -0.29581981664520196,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "regulator": "KDM1A",
+          "regulator_ensembl": "ENSG00000004487",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.3040281669262908,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "regulator": "KDM1A",
+          "regulator_ensembl": "ENSG00000004487",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "positive",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": 0.6750571452299013,
+              "delta_p_sign": "positive",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 93,
+              "n_panel_surviving": 3,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "tfh_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        }
+      ],
+      "control_id": "kdm1a_divergent_il10_il21",
+      "kind": "directional",
+      "regulators": [
+        "KDM1A"
+      ],
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "the lysine-specific demethylase KDM1A as divergent regulators - acting as positive regulators for IL10 but negative regulators for IL21"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL2": {
+          "programs": [],
+          "reason": "IL2 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "tier": "not_comparable_cytokine_absent_from_all_panels"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "regulator": "CD3D",
+          "regulator_ensembl": "ENSG00000167286",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "regulator": "CD3D",
+          "regulator_ensembl": "ENSG00000167286",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "regulator": "CD3D",
+          "regulator_ensembl": "ENSG00000167286",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "regulator": "CD3E",
+          "regulator_ensembl": "ENSG00000198851",
+          "shared_substrate": {
+            "concordant": false,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "positive",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "regulator": "CD3E",
+          "regulator_ensembl": "ENSG00000198851",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "regulator": "CD3E",
+          "regulator_ensembl": "ENSG00000198851",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "regulator": "CD3G",
+          "regulator_ensembl": "ENSG00000160654",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "regulator": "CD3G",
+          "regulator_ensembl": "ENSG00000160654",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "regulator": "CD3G",
+          "regulator_ensembl": "ENSG00000160654",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "regulator": "LCP2",
+          "regulator_ensembl": "ENSG00000043462",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "regulator": "LCP2",
+          "regulator_ensembl": "ENSG00000043462",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "regulator": "LCP2",
+          "regulator_ensembl": "ENSG00000043462",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": []
+        }
+      ],
+      "control_id": "cd3_lcp2_il2_positive",
+      "kind": "directional",
+      "regulators": [
+        "CD3D",
+        "CD3E",
+        "CD3G",
+        "LCP2"
+      ],
+      "source": {
+        "figure": "Figure 2A",
+        "page": 9,
+        "quote": "positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation (e.g., CD3 and LCP2 for IL2 ...)"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "IL13": {
+          "programs": [
+            "th2_like"
+          ],
+          "reason": "IL13 is one panel member of th2_like; delta_p is a panel mean minus a control mean, so a per-cytokine equivalence is not claimed and no verdict is emitted",
+          "tier": "program_projection_not_equivalent"
+        }
+      },
+      "comparisons": [
+        {
+          "condition": "Rest",
+          "cytokine": "IL13",
+          "regulator": "GATA3",
+          "regulator_ensembl": "ENSG00000107485",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -0.9484915570517573,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 113,
+              "n_panel_surviving": 4,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "th2_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim8hr",
+          "cytokine": "IL13",
+          "regulator": "GATA3",
+          "regulator_ensembl": "ENSG00000107485",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -2.909970789112985,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 113,
+              "n_panel_surviving": 4,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "th2_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        },
+        {
+          "condition": "Stim48hr",
+          "cytokine": "IL13",
+          "regulator": "GATA3",
+          "regulator_ensembl": "ENSG00000107485",
+          "shared_substrate": {
+            "concordant": true,
+            "expected_log_fc_sign": "negative",
+            "modality_ours": "mRNA (same released per-gene log2FC, projected onto a program panel)",
+            "modality_paper": "mRNA (CRISPRi Perturb-seq differential expression)",
+            "observed_log_fc_sign": "negative",
+            "tier": "same_substrate_exact"
+          },
+          "stage2_projection": [
+            {
+              "delta_p": -2.138462630003093,
+              "delta_p_sign": "negative",
+              "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
+              "inference": "none \u2014 production displays no p/q and draws no inference",
+              "n_control_surviving": 113,
+              "n_panel_surviving": 4,
+              "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
+              "program_id": "th2_like",
+              "projection_status": "ok",
+              "verdict": null
+            }
+          ]
+        }
+      ],
+      "control_id": "gata3_il13_positive",
+      "kind": "directional",
+      "regulators": [
+        "GATA3"
+      ],
+      "source": {
+        "figure": "Figure 2A",
+        "page": 9,
+        "quote": "positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation (e.g., ... GATA3 for IL13)"
+      }
+    },
+    {
+      "comparability_by_cytokine": {
+        "*": {
+          "programs": [],
+          "reason": "the paper's claim is a COUNT of affected cytokines; the released Stage-2 estimand is a single program projection and carries no per-cytokine breadth measure",
+          "tier": "not_comparable_no_breadth_estimand"
+        }
+      },
+      "comparisons": [],
+      "control_id": "broad_tcr_mediator_saga",
+      "kind": "broad_effect",
+      "regulators": [
+        "MED12",
+        "MED24",
+        "TAF6L",
+        "TADA1",
+        "TADA2B",
+        "SUPT20H",
+        "USP22"
+      ],
+      "source": {
+        "figure": "Figure 2A-B",
+        "page": 9,
+        "quote": "regulators that controlled a large set of cytokines, including expected TCR signaling components and subunits of the ubiquitous transcriptional coactivator complexes Mediator (MED12, MED24) and SAGA (TAF6L, TADA1, TADA2B, SUPT20H, USP22) ... caused stimulation-specific effects on multiple cytokines, including TNF and IL-16"
+      }
+    }
+  ],
+  "summary": {
+    "condition_aware_result_reference": {
+      "lane": "02_geneskew/paper_concordance (sign-control lane)",
+      "note": "that lane consults paper FDR ONLY inside provenance_diagnostics; this artifact draws no inference and displays no p/q",
+      "result": "10/10 directional controls concordant at a condition where the effect is significant; broad effect confirmed"
+    },
+    "no_pooled_ratio_reported": "a single pooled concordance ratio across all conditions is deliberately NOT emitted: it would mix conditions in which the paper makes no directional claim",
+    "paper_claim_is_condition_specific": {
+      "locator": "preprint p.9 (Figure 2A, Suppl. Figure 10)",
+      "statement": "the paper identifies positive regulators (knockdown log2FC < 0) mainly FOLLOWING RE-STIMULATION, so a Rest-condition sign mismatch is not evidence of discordance"
+    },
+    "shared_substrate_by_condition": {
+      "Rest": {
+        "concordant": 11,
+        "n": 19
+      },
+      "Stim48hr": {
+        "concordant": 18,
+        "n": 19
+      },
+      "Stim8hr": {
+        "concordant": 19,
+        "n": 19
+      }
+    }
+  }
+}
