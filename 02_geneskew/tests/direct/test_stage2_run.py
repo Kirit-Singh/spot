@@ -493,3 +493,17 @@ def test_phase_C_release_invokes_pinned_verify_direct_release():
     assert "--release" in blk and "--report" in blk
     assert "/o/direct" in blk                       # native release dir, not a top-level copy
     assert "direct_release_admission.json" in blk   # admission at the native lane root
+
+
+def test_receipts_bind_exact_executed_argv():
+    """Every confirmed lane block's producer argv is captured; the phase receipts bind the EXACT
+    executed argv(s), never a bare label. Checked structurally in DRY: each per-command block's
+    module invocation must appear (a label like 'verify-direct' alone is not the executed command)."""
+    out = _dry()
+    # multi-command phases emit one BEGIN block per exact command
+    assert out.count("=== BEGIN w10-verify:") == 3 and out.count("=== BEGIN w10-adapter:") == 3
+    assert out.count("=== BEGIN step0:") == 3
+    assert out.count("=== BEGIN pathway:") == 6
+    # each executed block carries the real module + real flags (the argv the receipt binds)
+    assert "verify_direct_release.py" in _block(out, "direct-release-verify")
+    assert "signature_matrix" in _block(out, "step0:Rest") and "--direct-mask-report" in _block(out, "step0:Rest")

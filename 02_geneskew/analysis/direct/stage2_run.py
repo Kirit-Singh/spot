@@ -590,29 +590,33 @@ def verify_direct_gate(cfg):
         return   # resume: W10 admission verifies -> skip (never re-invoke over admitted bytes)
     _require_clean_verifier(cfg, "direct", cfg.direct_verifier)
     dv = cfg.direct_verifier
+    argvs = []
     for cond in CONDITIONS:
         nrep = native_report_path(cfg, cond)
         binding = w10_binding_path(cfg, cond)
         # 1) native report from the pinned verifier checkout (absolute path; no PYTHONPATH)
-        run(f"w10-verify:{cond}",
-            [("python" if DRY else sys.executable), os.path.join(dv, "verify_arm_bundle.py"),
-             "--bundle", direct_bundle_for(cfg, cond), "--condition", cond,
-             "--de-main", cfg.de, "--sgrna", cfg.sgrna, "--by-guide", cfg.guide,
-             "--by-donors", cfg.donor, "--guide-manifest", cfg.manifest,
-             "--source-registry", cfg.srcreg, "--pseudobulk", cfg.pb,
-             "--stage1-v3-release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
-             "--env-lock", cfg.env_lock,
-             "--expect-h5ad-sha256", ("<sha256:DE.h5ad>" if DRY else file_sha256(cfg.de)),
-             "--recompute", "all", "--report", nrep],
+        v_argv = [("python" if DRY else sys.executable), os.path.join(dv, "verify_arm_bundle.py"),
+                  "--bundle", direct_bundle_for(cfg, cond), "--condition", cond,
+                  "--de-main", cfg.de, "--sgrna", cfg.sgrna, "--by-guide", cfg.guide,
+                  "--by-donors", cfg.donor, "--guide-manifest", cfg.manifest,
+                  "--source-registry", cfg.srcreg, "--pseudobulk", cfg.pb,
+                  "--stage1-v3-release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
+                  "--env-lock", cfg.env_lock,
+                  "--expect-h5ad-sha256", ("<sha256:DE.h5ad>" if DRY else file_sha256(cfg.de)),
+                  "--recompute", "all", "--report", nrep]
+        run(f"w10-verify:{cond}", v_argv,
             consumes=[f"direct:{cond}"], produces=[f"w10_report:{cond}"], cwd=dv)
         # 2) the neutral adapter normalizes native report -> self-hashed binding
-        run(f"w10-adapter:{cond}",
-            [("python" if DRY else sys.executable), os.path.join(dv, "verify_arm_contract.py"),
-             "--report", nrep, "--bundle", direct_bundle_for(cfg, cond), "--out", binding],
+        a_argv = [("python" if DRY else sys.executable), os.path.join(dv, "verify_arm_contract.py"),
+                  "--report", nrep, "--bundle", direct_bundle_for(cfg, cond), "--out", binding]
+        run(f"w10-adapter:{cond}", a_argv,
             consumes=[f"w10_report:{cond}"], produces=[f"w10_admission:{cond}"], cwd=dv)
+        argvs += [v_argv, a_argv]                             # every EXACT executed command
     require_admitted_direct(cfg)
-    _write_receipt(cfg, "C.direct_admitted", argv=["verify-direct"],
-                   inputs=[], outputs=[w10_binding_path(cfg, c) for c in CONDITIONS],
+    _write_receipt(cfg, "C.direct_admitted", argv=argvs,
+                   inputs=[direct_bundle_for(cfg, c) for c in CONDITIONS],
+                   outputs=[native_report_path(cfg, c) for c in CONDITIONS]
+                           + [w10_binding_path(cfg, c) for c in CONDITIONS],
                    prereqs=[f"B.direct.{c}" for c in CONDITIONS])
 
 
@@ -630,16 +634,16 @@ def verify_direct_release(cfg):
     rel_dir = os.path.join(cfg.out, "direct")                     # native release dir (holds direct_release.json)
     native_release = os.path.join(rel_dir, "direct_release.json")
     admission = os.path.join(rel_dir, "direct_release_admission.json")   # native lane-root admission
-    run("direct-release-verify",
-        [("python" if DRY else sys.executable), os.path.join(dv, "verify_direct_release.py"),
-         "--release", rel_dir,
-         "--de-main", cfg.de, "--sgrna", cfg.sgrna, "--by-guide", cfg.guide,
-         "--by-donors", cfg.donor, "--guide-manifest", cfg.manifest,
-         "--source-registry", cfg.srcreg, "--pseudobulk", cfg.pb,
-         "--stage1-v3-release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
-         "--env-lock", cfg.env_lock,
-         "--expect-h5ad-sha256", ("<sha256:DE.h5ad>" if DRY else file_sha256(cfg.de)),
-         "--recompute", "all", "--report", admission],
+    argv = [("python" if DRY else sys.executable), os.path.join(dv, "verify_direct_release.py"),
+            "--release", rel_dir,
+            "--de-main", cfg.de, "--sgrna", cfg.sgrna, "--by-guide", cfg.guide,
+            "--by-donors", cfg.donor, "--guide-manifest", cfg.manifest,
+            "--source-registry", cfg.srcreg, "--pseudobulk", cfg.pb,
+            "--stage1-v3-release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
+            "--env-lock", cfg.env_lock,
+            "--expect-h5ad-sha256", ("<sha256:DE.h5ad>" if DRY else file_sha256(cfg.de)),
+            "--recompute", "all", "--report", admission]
+    run("direct-release-verify", argv,
         consumes=[f"w10_admission:{c}" for c in CONDITIONS], produces=["direct_release_admission"], cwd=dv)
     if not DRY:
         try:
@@ -651,7 +655,7 @@ def verify_direct_release(cfg):
             raise SchedulerError(
                 "Phase C REFUSED: the Direct release was not independently ADMITTED "
                 f"(verdict={adm.get('verdict')!r}, verifier_id={adm.get('verifier_id')!r})")
-    _write_receipt(cfg, "C.direct_release_admitted", argv=["verify_direct_release"],
+    _write_receipt(cfg, "C.direct_release_admitted", argv=argv,
                    inputs=[native_release], outputs=[admission], prereqs=["C.direct_admitted"])
 
 
@@ -660,18 +664,21 @@ def lane_step0(cfg):
     if _completed(cfg, "D.step0"):
         return
     require_admitted_direct(cfg)
+    argvs = []
     for cond in CONDITIONS:
         # Step0 reads the native W10 MASK report (--direct-mask-report) + the Direct bundle and
         # internally binds the mask via signature_matrix.w10_anchor. signature_matrix takes NO
         # --stage1-release* flags (not in its CLI); its accepted flags are exactly these.
-        run(f"step0:{cond}",
-            _py("signature_matrix", "--condition", cond, "--de-main", cfg.de, "--sgrna", cfg.sgrna,
-                "--guide-manifest", cfg.manifest, "--source-registry", cfg.srcreg,
-                "--direct-bundle", direct_bundle_for(cfg, cond),
-                "--direct-mask-report", native_report_path(cfg, cond),
-                "--env-lock", cfg.env_lock, "--out-root", cfg.sigroot),
+        argv = _py("signature_matrix", "--condition", cond, "--de-main", cfg.de, "--sgrna", cfg.sgrna,
+                   "--guide-manifest", cfg.manifest, "--source-registry", cfg.srcreg,
+                   "--direct-bundle", direct_bundle_for(cfg, cond),
+                   "--direct-mask-report", native_report_path(cfg, cond),
+                   "--env-lock", cfg.env_lock, "--out-root", cfg.sigroot)
+        run(f"step0:{cond}", argv,
             consumes=[f"direct:{cond}", f"w10_admission:{cond}"], produces=[f"signatures:{cond}"])
-    _write_receipt(cfg, "D.step0", argv=["signature_matrix"], inputs=[cfg.de],
+        argvs.append(argv)
+    _write_receipt(cfg, "D.step0", argv=argvs,
+                   inputs=[cfg.de, cfg.sgrna] + [native_report_path(cfg, c) for c in CONDITIONS],
                    outputs=[cfg.sigroot], prereqs=["C.direct_admitted"])
 
 
@@ -684,14 +691,16 @@ def lane_temporal(cfg):
     for cond in CONDITIONS:
         dargs += ["--direct-bundle", f"{cond}:{direct_bundle_for(cfg, cond)}",
                   "--w10-report", f"{cond}:{native_report_path(cfg, cond)}"]
-    run("temporal:all-pairs",
-        _py("temporal.arms.run_temporal_arms", "--stage1-view", cfg.stage1_view,
-            "--stage1-release", cfg.stage1_release, *dargs, "--env-lock", cfg.env_lock,
-            "--conditions", ",".join(CONDITIONS), "--all-pairs",
-            "--out-root", os.path.join(cfg.out, "temporal")),
+    argv = _py("temporal.arms.run_temporal_arms", "--stage1-view", cfg.stage1_view,
+               "--stage1-release", cfg.stage1_release, *dargs, "--env-lock", cfg.env_lock,
+               "--conditions", ",".join(CONDITIONS), "--all-pairs",
+               "--out-root", os.path.join(cfg.out, "temporal"))
+    run("temporal:all-pairs", argv,
         consumes=[f"w10_admission:{c}" for c in CONDITIONS],
         produces=[f"temporal:{p}" for p in PAIRS] + ["temporal:root"])
-    _write_receipt(cfg, "D.temporal", argv=["run_temporal_arms", "--all-pairs"], inputs=[],
+    _write_receipt(cfg, "D.temporal", argv=argv,
+                   inputs=[cfg.stage1_view, cfg.stage1_release]
+                          + [native_report_path(cfg, c) for c in CONDITIONS],
                    outputs=[os.path.join(cfg.out, "temporal")], prereqs=["C.direct_admitted"])
 
 
@@ -700,16 +709,19 @@ def lane_pathway(cfg):
     if _completed(cfg, "D.pathway"):
         return
     require_admitted_direct(cfg)
+    argvs = []
     for cond in CONDITIONS:
         for src in SOURCES:
-            run(f"pathway:{cond}:{src}",
-                _py("run_pathway_arms", "--condition", cond, *bundle_args(cfg),
-                    "--gene-sets", {"reactome": cfg.genesets_reactome,
-                                    "go_bp": cfg.genesets_go_bp}[src],
-                    "--signature-matrix-root", cfg.sigroot,
-                    "--out-root", os.path.join(cfg.out, "pathway")),
+            argv = _py("run_pathway_arms", "--condition", cond, *bundle_args(cfg),
+                       "--gene-sets", {"reactome": cfg.genesets_reactome,
+                                       "go_bp": cfg.genesets_go_bp}[src],
+                       "--signature-matrix-root", cfg.sigroot,
+                       "--out-root", os.path.join(cfg.out, "pathway"))
+            run(f"pathway:{cond}:{src}", argv,
                 consumes=[f"signatures:{cond}"], produces=[f"pathway:{cond}:{src}"])
-    _write_receipt(cfg, "D.pathway", argv=["run_pathway_arms"], inputs=[],
+            argvs.append(argv)
+    _write_receipt(cfg, "D.pathway", argv=argvs,
+                   inputs=[cfg.genesets_reactome, cfg.genesets_go_bp, cfg.sigroot],
                    outputs=[os.path.join(cfg.out, "pathway")], prereqs=["D.step0"])
 
 
