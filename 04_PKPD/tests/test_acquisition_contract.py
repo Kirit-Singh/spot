@@ -44,6 +44,18 @@ def _record(**over) -> SourceAcquisitionRecord:
         adapter_code_sha256=SHA_B,
         review_status=ReviewStatus.HUMAN_REVIEWED,
         observation_state=EvidenceObservationState.OBSERVED,
+        # This fixture is `GET /molecule/CHEMBL1201585.json` — ONE named record, fetched by its
+        # stable ChEMBL id. That is an IDENTITY GET, not a search: there is no result set, so there
+        # is no total to report and `result_set_complete` has nothing to be true OR false about.
+        # Both stay null; inventing either here would be the exact fabrication the record contract
+        # now refuses. It still must name the identity it fetched — a GET with no pin is a GET of
+        # nothing.
+        #
+        # The helper previously stated NO disposition at all, which the fail-closed validator now
+        # correctly refuses: this is an OBSERVED, Stage-4-FETCHED row, so Stage 4 did the selecting
+        # and has no upstream to delegate to. Silence is not a disposition.
+        selection_disposition="identity_get",
+        selection_pin="CHEMBL1201585",
     )
     base.update(over)
     return SourceAcquisitionRecord(**base)
@@ -287,7 +299,7 @@ def test_two_acquisitions_of_one_source_record_are_refused():
 def test_an_exactly_one_selection_must_name_the_identity_pin_it_matched_on():
     """Matching on position is not matching on identity."""
     with pytest.raises(ValidationError) as exc:
-        _record(selection_disposition="exactly_one",
+        _record(selection_disposition="exactly_one", selection_pin=None,  # the point of the test
                 match_total_reported=1, records_returned=1, result_set_complete=True)
     assert "PIN" in str(exc.value) or "pin" in str(exc.value)
 
@@ -327,7 +339,7 @@ def test_a_total_the_source_never_reported_cannot_prove_uniqueness():
 def test_a_collect_all_selection_needs_no_pin_because_it_chooses_nothing():
     """`sorted_unique` drops nothing and picks nothing — every application, every marketing
     status — so there is no choice to justify."""
-    rec = _record(selection_disposition="sorted_unique",
+    rec = _record(selection_disposition="sorted_unique", selection_pin=None,
                   match_total_reported=6, records_returned=6, result_set_complete=True)
     assert rec.selection_pin is None
 
