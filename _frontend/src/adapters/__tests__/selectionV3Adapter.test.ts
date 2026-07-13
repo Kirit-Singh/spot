@@ -149,6 +149,24 @@ describe('parseSelectionV3 — temporal cross-condition', () => {
 });
 
 describe('parseSelectionV3 — fail-closed rejections', () => {
+  it('rejects a hash-consistent temporal contract with duplicated endpoints', async () => {
+    await expectCode(
+      () => build({ mode: 'temporal_cross_condition', conditions: ['Rest', 'Rest'] }).then(parseSelectionV3),
+      'invalid_condition_axis',
+    );
+  });
+
+  it('rejects hash-consistent empty or noncanonical condition values', async () => {
+    await expectCode(
+      () => build({ mode: 'temporal_cross_condition', conditions: ['Bogus', ''] }).then(parseSelectionV3),
+      'invalid_condition_axis',
+    );
+  });
+
+  it('rejects a hash-consistent blank program id before it can reach the header', async () => {
+    await expectCode(() => build({ aId: '' }).then(parseSelectionV3), 'invalid_program_id');
+  });
+
   it('rejects a v1 selection object at the named schema gate', async () => {
     const v1 = {
       schema_version: 'spot.stage01_selection.v1',

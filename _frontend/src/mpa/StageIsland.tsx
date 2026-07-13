@@ -35,6 +35,7 @@ import { loadProgramLabels, programLabel } from './programLabels';
 import { StatePill } from '../shell/chips';
 import { renderRouteReal } from './renderReal';
 import type { RealRouteResolution } from './renderReal';
+import type { SelectionDisplayContext } from '../domain/selectionDisplay';
 
 export interface StageIslandProps {
   page: PageKey;
@@ -83,6 +84,35 @@ export function contrastFromV3(sel: SelectionV3, labels: Map<string, string>): S
   };
 }
 
+/** Drawer projection from the same verified v3 object used for routing and the visible title. */
+export function selectionDisplayFromV3(
+  sel: SelectionV3,
+  labels: Map<string, string>,
+): SelectionDisplayContext {
+  const conditionA = sel.conditions[0];
+  const conditionB = sel.conditions[1] ?? conditionA;
+  return {
+    selection_id: sel.selection_id,
+    question_id: sel.question_id,
+    analysis_mode: sel.analysis_mode,
+    execution_status: sel.execution_status,
+    estimator_id: sel.estimator_id,
+    estimator_status: sel.estimator_status,
+    A: {
+      program_id: sel.A.program_id,
+      display_label: programLabel(labels, sel.A.program_id),
+      direction: sel.A.direction,
+      condition: conditionA,
+    },
+    B: {
+      program_id: sel.B.program_id,
+      display_label: programLabel(labels, sel.B.program_id),
+      direction: sel.B.direction,
+      condition: conditionB,
+    },
+  };
+}
+
 interface ProdState {
   loading: boolean;
   selection: SelectionV3 | null; // verified v3 (null → prompt); NEVER an unverified/forged contract
@@ -123,6 +153,9 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
   // Header contrast: production → the VERIFIED v3 ONLY (never a forged or synthetic contrast), with
   // Tier-2 display labels resolved from the registry (never a raw program_id when the registry names it).
   const contrast = prod.selection ? contrastTitle(contrastFromV3(prod.selection, prod.labels)) : null;
+  const selectionDisplay = prod.selection
+    ? selectionDisplayFromV3(prod.selection, prod.labels)
+    : null;
   const headerTitle = contrast ?? NO_SELECTION_TITLE;
   const headerNode = contrast ? undefined : (
     <>
@@ -162,6 +195,7 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
       subtitle={headerTitle}
       subtitleNode={headerNode}
       onClearSelection={onClearSelection}
+      selectionV3={selectionDisplay}
       methodsManifest={methodsManifest}
     >
       {prod.real ? (

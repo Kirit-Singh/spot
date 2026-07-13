@@ -12,12 +12,14 @@ import { ProvenanceProvider } from '../shell/provenanceContext';
 import type { ProvNote, DrawerSection } from '../shell/provenanceContext';
 import { MpaNav } from './MpaNav';
 import type { PageKey } from './pages';
+import type { SelectionDisplayContext } from '../domain/selectionDisplay';
 
 interface DrawerState {
   open: boolean;
   title: string;
   provenance: Provenance | null;
   selection: StageSelection | null;
+  selectionV3: SelectionDisplayContext | null;
   notes: ProvNote[];
   methods: StageMethodsManifest | null;
   focus: DrawerSection;
@@ -29,6 +31,7 @@ export function PageShell({
   subtitleNode,
   onClearSelection,
   selection = null,
+  selectionV3 = null,
   methodsProvenance = null,
   methodsNotes = [],
   methodsManifest = null,
@@ -39,6 +42,7 @@ export function PageShell({
   subtitleNode?: React.ReactNode;
   onClearSelection?: () => void;
   selection?: StageSelection | null;
+  selectionV3?: SelectionDisplayContext | null;
   methodsProvenance?: Provenance | null;
   methodsNotes?: ProvNote[];
   methodsManifest?: StageMethodsManifest | null;
@@ -49,6 +53,7 @@ export function PageShell({
     title: '',
     provenance: null,
     selection: null,
+    selectionV3: null,
     notes: [],
     methods: null,
     focus: 'methods',
@@ -67,9 +72,9 @@ export function PageShell({
         notes: ProvNote[] = [],
         methods: StageMethodsManifest | null = null,
         section: DrawerSection = 'methods',
-      ) => setDrawer({ open: true, title, provenance, selection, notes, methods, focus: section }),
+      ) => setDrawer({ open: true, title, provenance, selection, selectionV3, notes, methods, focus: section }),
     }),
-    [selection],
+    [selection, selectionV3],
   );
 
   return (
@@ -106,6 +111,7 @@ export function PageShell({
         title={drawer.title}
         provenance={drawer.provenance}
         selection={drawer.selection}
+        selectionV3={drawer.selectionV3}
         notes={drawer.notes}
         methods={drawer.methods}
         focus={drawer.focus}

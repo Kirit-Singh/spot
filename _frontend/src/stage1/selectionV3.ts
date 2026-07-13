@@ -30,6 +30,8 @@ export type SelectionErrorCode =
   | 'estimator_mode_mismatch'
   | 'pole_identity_mismatch'
   | 'invalid_condition_count'
+  | 'invalid_condition_axis'
+  | 'invalid_program_id'
   | 'temporal_labeled_ready'
   | 'execution_status_mismatch'
   | 'active_gate_true';
@@ -136,11 +138,19 @@ export async function verifySelectionV3(input: unknown): Promise<VerifiedSelecti
 
   const ccA = cc.A as Record<string, unknown>;
   const ccB = cc.B as Record<string, unknown>;
-  if (str(pA.program_id, 'poles.A.program_id') !== str(ccA?.program_id, 'canonical_content.A.program_id') ||
+  const programA = str(ccA?.program_id, 'canonical_content.A.program_id');
+  const programB = str(ccB?.program_id, 'canonical_content.B.program_id');
+  if (!programA || programA !== programA.trim()) {
+    fail('invalid_program_id', 'canonical_content.A.program_id must be non-empty and trimmed');
+  }
+  if (!programB || programB !== programB.trim()) {
+    fail('invalid_program_id', 'canonical_content.B.program_id must be non-empty and trimmed');
+  }
+  if (str(pA.program_id, 'poles.A.program_id') !== programA ||
       str(pA.direction, 'poles.A.direction') !== str(ccA?.direction, 'canonical_content.A.direction')) {
     fail('pole_identity_mismatch', 'poles.A identity != canonical_content.A');
   }
-  if (str(pB.program_id, 'poles.B.program_id') !== str(ccB?.program_id, 'canonical_content.B.program_id') ||
+  if (str(pB.program_id, 'poles.B.program_id') !== programB ||
       str(pB.direction, 'poles.B.direction') !== str(ccB?.direction, 'canonical_content.B.direction')) {
     fail('pole_identity_mismatch', 'poles.B identity != canonical_content.B');
   }
@@ -149,6 +159,15 @@ export async function verifySelectionV3(input: unknown): Promise<VerifiedSelecti
   const wantConditions = analysis_mode === 'within_condition' ? 1 : 2;
   if (conditions.length !== wantConditions) {
     fail('invalid_condition_count', `${analysis_mode} requires ${wantConditions} condition(s), got ${conditions.length}`);
+  }
+  const namedConditions = conditions.map((condition, i) => str(condition, `canonical_content.conditions[${i}]`));
+  for (const condition of namedConditions) {
+    if (!(CONDITIONS as readonly string[]).includes(condition)) {
+      fail('invalid_condition_axis', `condition "${condition}" is not in ${CONDITIONS.join('|')}`);
+    }
+  }
+  if (analysis_mode === 'temporal_cross_condition' && namedConditions[0] === namedConditions[1]) {
+    fail('invalid_condition_axis', 'temporal_cross_condition requires two distinct ordered conditions');
   }
 
   // ── re-derive routing and enforce it against the declared status ──

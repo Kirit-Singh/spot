@@ -10,6 +10,7 @@ import type { MethodsBlock, ProvenanceBlock, SourceChainLink, StageMethodsManife
 import { isAdmittedVerifier } from '../domain/uiReleaseManifest';
 import type { DrawerSection, ProvNote } from './provenanceContext';
 import { NamespaceChip, EligibilityChip } from './chips';
+import type { SelectionDisplayContext } from '../domain/selectionDisplay';
 
 function Mono({ children }: { children: React.ReactNode }) {
   return <code className="break-all font-mono text-[11px] text-ink-2">{children}</code>;
@@ -76,6 +77,30 @@ function SelectionSection({ selection }: { selection: StageSelection }) {
               <Mono>{b[k]}</Mono>
             </Row>
           ))}
+    </section>
+  );
+}
+
+/** Verified v3 endpoint context. Temporal A and B retain their own ordered conditions. */
+function SelectionV3Section({ selection }: { selection: SelectionDisplayContext }) {
+  return (
+    <section className="mb-3 border-b border-line pb-3" data-selection-v3>
+      <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-muted">
+        Stage-1 selection
+      </div>
+      <Row label="A endpoint">
+        {selection.A.display_label} · {selection.A.direction} · {selection.A.condition}
+      </Row>
+      <Row label="B endpoint">
+        {selection.B.display_label} · {selection.B.direction} · {selection.B.condition}
+      </Row>
+      <Row label="Mode">{selection.analysis_mode}</Row>
+      <Row label="Execution">{selection.execution_status}</Row>
+      <Row label="Estimator">
+        {selection.estimator_id} · {selection.estimator_status}
+      </Row>
+      <Row label="Question"><Mono>{selection.question_id}</Mono></Row>
+      <Row label="Selection"><Mono>{selection.selection_id}</Mono></Row>
     </section>
   );
 }
@@ -318,6 +343,7 @@ export interface ProvenanceDrawerProps {
   title: string;
   provenance: Provenance | null;
   selection?: StageSelection | null;
+  selectionV3?: SelectionDisplayContext | null;
   notes?: ProvNote[];
   /** Stage Methods & Provenance manifest (the MPA per-tab content). When present it replaces
    *  the raw provenance block; the App SPA passes none and keeps its existing rendering. */
@@ -332,6 +358,7 @@ export function ProvenanceDrawer({
   title,
   provenance,
   selection,
+  selectionV3,
   notes,
   methods,
   focus = 'methods',
@@ -411,7 +438,11 @@ export function ProvenanceDrawer({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-[2px] pb-[12px]">
-          {selection && <SelectionSection selection={selection} />}
+          {selectionV3 ? (
+            <SelectionV3Section selection={selectionV3} />
+          ) : selection ? (
+            <SelectionSection selection={selection} />
+          ) : null}
 
           {methods && (
             <>

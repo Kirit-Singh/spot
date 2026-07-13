@@ -7,6 +7,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it } from 'vitest';
 import { StageIsland } from '../StageIsland';
 import type { PageKey } from '../pages';
+import { ProvenanceDrawer } from '../../shell/ProvenanceDrawer';
 
 function goto(url: string) {
   window.history.pushState({}, '', url);
@@ -53,6 +54,31 @@ describe('contextual Methods & Provenance drawer', () => {
       expect(window.location.href).toBe(before); // NO navigation — one shell drawer
       unmount();
     }
+  });
+
+  it('renders distinct verified v3 temporal endpoints instead of one shared condition', () => {
+    render(
+      <ProvenanceDrawer
+        open
+        onClose={() => {}}
+        title="Targets"
+        provenance={null}
+        selectionV3={{
+          selection_id: 'selection-1',
+          question_id: 'question-1',
+          analysis_mode: 'temporal_cross_condition',
+          execution_status: 'ready',
+          estimator_id: 'temporal_cross_condition_v1',
+          estimator_status: 'available',
+          A: { program_id: 'diff_activated', display_label: 'Activated', direction: 'high', condition: 'Stim8hr' },
+          B: { program_id: 'diff_activated', display_label: 'Activated', direction: 'high', condition: 'Stim48hr' },
+        }}
+      />,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Activated · high · Stim8hr')).toBeInTheDocument();
+    expect(within(dialog).getByText('Activated · high · Stim48hr')).toBeInTheDocument();
+    expect(within(dialog).getByText('temporal_cross_condition')).toBeInTheDocument();
   });
 
   it('the ONE combined action opens the single drawer with BOTH sections (no separate provenance action)', () => {

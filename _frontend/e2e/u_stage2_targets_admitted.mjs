@@ -23,6 +23,7 @@ async function checkSelection(browser, temporal) {
       hpaLinks: document.querySelectorAll('main a[href^="https://www.proteinatlas.org/ENSG"][target="_blank"][rel~="noopener"]').length,
       axisLabels: [...document.querySelectorAll('main svg text')].map((node) => node.textContent || ''),
       text: document.querySelector('main')?.textContent || '',
+      headerTitle: (document.querySelector('header span[title]')?.textContent || '').replace(/\s+/g, ' ').trim(),
     }));
     assert(result.rows > 0, `${temporal ? 'temporal' : 'within'} Targets rendered no rows`);
     assert(result.facets === 2, `${temporal ? 'temporal' : 'within'} Targets did not render exactly two selected-program facets`);
@@ -30,6 +31,17 @@ async function checkSelection(browser, temporal) {
     assert(result.axisLabels.includes('Rank evidence −log10(rank/N)'), `${temporal ? 'temporal' : 'within'} rank-evidence axis is missing`);
     assert(!/pending independent admission|not generated|fixture|demo|combined|balanced|p[_ -]?value|q[_ -]?value/i.test(result.text),
       `${temporal ? 'temporal' : 'within'} Targets canvas contains pending/forbidden text`);
+    const conditions = selected.contract?.canonical_content?.conditions || [];
+    const conditionLabel = (c) => ({ Rest: 'rest', Stim8hr: '8 hr', Stim48hr: '48 hr' }[c] || String(c).toLowerCase());
+    const labelA = conditionLabel(conditions[0]);
+    const labelB = conditionLabel(conditions[1] ?? conditions[0]);
+    assert(result.headerTitle.includes(`(at ${labelA})`), `Targets header lost A endpoint condition ${conditions[0]}`);
+    assert(result.headerTitle.includes(`(at ${labelB})`), `Targets header lost B endpoint condition ${conditions[1] ?? conditions[0]}`);
+    if (temporal) {
+      assert(conditions[0] !== conditions[1], 'temporal acceptance did not select distinct conditions');
+      assert(result.headerTitle.indexOf(`(at ${labelA})`) < result.headerTitle.lastIndexOf(`(at ${labelB})`),
+        `Targets header collapsed or reversed temporal endpoints: ${result.headerTitle}`);
+    }
     await openDrawer(page);
     const rows = await drawerRows(page);
     assert(rows.provenance.Verifier === 'admitted', 'Targets drawer is not bound to admitted verifier status');

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { loadProgramLabels, programLabel } from '../programLabels';
-import { contrastFromV3 } from '../StageIsland';
+import { contrastFromV3, selectionDisplayFromV3 } from '../StageIsland';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
 
 const REGISTRY = JSON.stringify({
@@ -62,5 +62,24 @@ describe('Tier-2 program label resolution', () => {
     expect(contrast.condition_a).toBe('Stim8hr');
     expect(contrast.condition_b).toBe('Stim48hr');
     expect(contrast.analysis_condition).toBeUndefined();
+  });
+
+  it('selectionDisplayFromV3 preserves distinct endpoints for the provenance drawer', async () => {
+    const labels = await loadProgramLabels(fetchRegistry);
+    const sel = {
+      selection_id: 'selection-1',
+      question_id: 'question-1',
+      analysis_mode: 'temporal_cross_condition',
+      execution_status: 'ready',
+      estimator_id: 'temporal_cross_condition_v1',
+      estimator_status: 'available',
+      A: { program_id: 'diff_activated', direction: 'high' },
+      B: { program_id: 'diff_activated', direction: 'high' },
+      conditions: ['Stim8hr', 'Stim48hr'],
+    } as unknown as SelectionV3;
+    const display = selectionDisplayFromV3(sel, labels);
+    expect(display.A.condition).toBe('Stim8hr');
+    expect(display.B.condition).toBe('Stim48hr');
+    expect(display.analysis_mode).toBe('temporal_cross_condition');
   });
 });
