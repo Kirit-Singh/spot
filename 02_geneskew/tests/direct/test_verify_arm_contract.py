@@ -447,3 +447,49 @@ class TestTheRealCrossContractBindingAdmitsAndMutationsRefuse:
         other_bundle = run_arms.build_bundle(other)["out_dir"]
         ok, got = _refuses(report_path, other_bundle, C.REFUSE_BUNDLE_BYTES)
         assert ok, got
+
+
+class TestTheEmittedBindingValidatesAgainstThePublishedSchemaFile:
+    """The coordinator's explicit re-verification: the normalized binding must validate
+    against schemas/stage02_direct_admission_binding.schema.json with a REAL jsonschema
+    validator — not only the adapter's own validate_binding — for BOTH subject_kinds. A
+    release binding whose arm_rows_sha256 is legitimately null must still be schema-valid.
+    """
+
+    def test_a_real_BUNDLE_binding_validates_against_the_schema_FILE(self, real):
+        import jsonschema
+        _, report_path, bundle, _ = real
+        binding = C.load_and_normalize(report_path, bundle)
+        assert binding["subject_kind"] == "bundle"
+        jsonschema.validate(binding, json.load(open(C.SCHEMA_PATH)))
+
+    def test_a_real_RELEASE_binding_validates_against_the_schema_FILE(
+            self, synthetic_run, tmp_path):
+        import jsonschema
+
+        import fixtures_v3_release as V3
+        import verify_direct_release as VR
+        from direct import arm_release
+        conds = ("Rest", "Stim8hr", "Stim48hr")
+        prod = synthetic_run(conditions=conds)
+        root = str(tmp_path / "root")
+        stage1 = V3.stage_release(root, conditions=conds)
+        prod.stage1_release, prod.stage1_release_root = stage1, root
+        prod.env_lock, prod.out_root = LOCK, str(tmp_path / "rel")
+        res = arm_release.build_release(prod)
+        argv = ["--release", res["out_dir"], "--de-main", prod.de_main,
+                "--sgrna", prod.sgrna, "--by-guide", prod.by_guide,
+                "--by-donors", prod.by_donors, "--guide-manifest", prod.guide_manifest,
+                "--registry", prod.registry, "--stage1-v3-release", stage1,
+                "--release-root", root, "--recompute", "all", "--env-lock", LOCK]
+        for flag, attr in (("--source-registry", "source_registry"),
+                           ("--pseudobulk", "pseudobulk")):
+            v = getattr(prod, attr, None)
+            if v:
+                argv += [flag, v]
+        rel_path = str(tmp_path / "release_verification.json")
+        assert VR.main(argv + ["--report", rel_path]) == 0
+        binding = C.load_and_normalize(rel_path, None)
+        assert binding["subject_kind"] == "release"
+        assert binding["arm_rows_sha256"] is None      # legitimate for a release subject
+        jsonschema.validate(binding, json.load(open(C.SCHEMA_PATH)))
