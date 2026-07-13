@@ -13,7 +13,9 @@ node_modules/
 dist/
 .vite/
 
-# Data / scratch / outputs — NEVER commit data
+# Untracked bulk inputs, caches and run outputs. Intentionally tracked, reviewed
+# release artifacts (for example 01_programs/app/data/) remain tracked; see
+# DATA_POLICY.md. A .gitignore rule never removes an already tracked release file.
 .scratch/
 /data/
 outputs/
@@ -27,11 +29,11 @@ outputs/
 # OS
 .DS_Store
 
-# pipeline runtime data (re-fetchable via manifest)
+# Pipeline runtime data (re-fetchable from a content-addressed manifest)
 pipeline/datasets/
 
 # e2e run outputs
 pipeline/tests/e2e/work/
 01_programs/analysis/_t8_staging/
-# Stage-1 -> Stage-2 bridge: generated/large release bundle (projections + hardlinked parquet)
+# Stage-1 -> Stage-2 bridge: generated/large staging bundle (projections + hardlinked parquet)
 01_programs/analysis/stage2_bridge/_release_staging/

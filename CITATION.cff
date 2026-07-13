@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use spot, please cite this software and the source datasets named by the release manifest."
+type: software
+title: "spot: a traceable T-cell program-to-drug decision-support workbench"
+authors:
+  - family-names: Singh
+    given-names: Kirit
+repository-code: "https://github.com/Kirit-Singh/spot"
+url: "https://github.com/Kirit-Singh/spot"
+license: MIT
+abstract: >-
+  An open, provenance-first workbench connecting continuous CD4 T-cell
+  transcriptional programs to measured perturbation effects, pathway context,
+  drug links, and brain pharmacokinetic and safety evidence.
+keywords:
+  - perturb-seq
+  - single-cell RNA sequencing
+  - CD4 T cells
+  - drug repurposing
+  - glioblastoma

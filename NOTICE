@@ -1,0 +1,14 @@
+spot
+Copyright (c) 2026 Kirit Singh
+
+The spot software is licensed under the MIT License in LICENSE.
+
+This distribution contains derived data and refers to third-party software and
+databases whose terms do not change to MIT. Verified source notices, versions and
+license scopes are recorded in THIRD_PARTY_NOTICES.md and DATA_LICENSES.md. Release
+manifests identify the exact third-party bytes used by each analysis.
+
+The Virtual Cells Platform declares the Primary Human CD4+ T Cell Perturb-seq dataset
+MIT-licensed but does not expose a copyright notice on its dataset record. No copyright
+holder is inferred here. Exact upstream notices are reproduced only when their official
+source supplies them.

@@ -1,44 +1,38 @@
-# Data & Reference Licenses
+# Data and reference licenses
 
-spot's own code is **MIT** (see `LICENSE`). This file records the licenses and required
-attributions for the third-party **datasets, databases, and reference frameworks** spot
-queries. **No third-party data is bundled in this repo** — spot fetches public data at
-run time, and every stage records the license per source in its provenance.
+spot's original code is MIT-licensed; see `LICENSE`. Dataset and database content does
+**not** become MIT merely because it is processed by spot. The table below records the
+terms verified for sources that are bundled, referenced by executable analysis code, or
+admitted to the current release design. `THIRD_PARTY_NOTICES.md` gives the corresponding
+attribution and version details.
 
-**Intended use:** academic / non-commercial (e.g. the Life Sciences hackathon). All
-sources below permit this. Sources marked ⚠ are *non-commercial* — swap them before any
-commercial or data-redistribution use (swaps noted).
+Verified against official provider records on **2026-07-13**.
 
-## Open — permissive (incl. commercial), attribution required
-| Source | License | Attribution / citation |
-|---|---|---|
-| DepMap / CCLE / DEMETER2 / PRISM | CC BY 4.0 | Broad Institute DepMap — Corsello 2020 (PRISM), Ghandi 2019 (CCLE), McFarland 2018 (DEMETER2) |
-| LINCS L1000 / Connectivity Map | CC BY 4.0 | Broad Institute LINCS / CMap |
-| Open Targets | CC0 1.0 | Open Targets Platform |
-| DGIdb | open | Drug–Gene Interaction Database |
-| FAERS / OpenFDA | US public domain | U.S. FDA |
-| ClinicalTrials.gov | US public domain | U.S. NIH / NLM |
-| RDKit (CNS-MPO descriptors) | BSD-3-Clause | RDKit |
-| Grossman et al., Neuro-Oncology 2026 (NEBPI) | CC BY 4.0 | doi:10.1093/neuonc/noag051 |
-| Masopust et al., Nat Rev Immunol 2026 (nomenclature) | CC BY 4.0 | doi:10.1038/s41577-025-01238-2 |
-| Marson CD4 Perturb-seq (CZI Virtual Cells Platform) | MIT | Zhu, Dann, … Marson 2025; cite bioRxiv doi:10.64898/2025.12.23.696273; CZI Acceptable Use Policy applies |
+| Source and material used | Status in spot | Verified terms | Release obligation |
+|---|---|---|---|
+| **Primary Human CD4+ T Cell Perturb-seq** (Marson GWCD4i), Virtual Cells Platform | Source of the derived Stage-1 artifacts and Stage-2 effect-universe crosswalk; large source/derived matrices live in the pinned HF dataset | The official dataset page identifies release v1.0 (22 Dec 2025) as **MIT**. Platform access/use is also governed by the Virtual Cells Platform Acceptable Use Policy. The accompanying preprint text is separately CC BY 4.0. | Preserve the provider's MIT declaration and standard terms, attribution and dataset identity; cite DOI `10.64898/2025.12.23.696273`; record the immutable source revision and hashes. Do not infer a copyright holder not supplied by the dataset record. |
+| **Reactome pathway data** | Pinned Stage-2 pathway cache/output; raw cache remains outside Git | Reactome database data and data-derived files are **CC0 1.0**. This does not describe Reactome software (generally Apache-2.0) or illustrations/branding (CC BY 4.0). | Attribution is encouraged. Record the exact Reactome release and source-file hashes. Current frozen cache: V97 (23 Jun 2026). |
+| **Gene Ontology ontology and annotation data** | Pinned Stage-2 GO Biological Process cache/output; raw cache remains outside Git | GO data and data products are **CC BY 4.0**. The human GAF is produced through UniProt-GOA/EMBL-EBI; copyrightable UniProt database content is also CC BY 4.0. | Attribute the Gene Ontology Consortium and UniProt-GOA, link the licenses, identify the exact ontology and annotation releases, and retain notices of changes. Current frozen inputs: `go-basic` 2026-06-15 and `goa_human` GOC snapshot 2026-05-21. |
+| **ChEMBL database content** | Stage-3 source when a release-specific query/cache is admitted; no unpinned database dump belongs in Git | **CC BY-SA 3.0 Unported**. ChEMBL also warns that some included calculated properties originate from commercial software and may carry additional restrictions. | Give attribution and identify the ChEMBL release/DOI. Redistributed adaptations of ChEMBL content must use CC BY-SA 3.0; exclude commercially calculated fields unless their terms are separately cleared. |
+| **UniProt database content** | Identifier/target evidence source when admitted by a Stage-3 manifest | Copyrightable database content is **CC BY 4.0**. UniProt notes that patents or other third-party rights may still apply and disclaims medical use. | Attribute UniProt, link the license, pin the release/query and preserve source accessions. Do not imply that CC BY clears patents or other rights. |
+| **Perturb2StateModel** (`emdann/pert2state_model`) | Optional, secondary Stage-2 software; not a replacement for measured perturbation effects | **MIT**, copyright (c) 2025 Emma Dann, verified at commit `2c2e30959ffafadecc6af5d4d7b5bde868ab5313`. | If copied or substantially vendored, preserve the upstream copyright and permission notice. Always identify the exact commit and keep its outputs secondary and separately attributed. |
+| **Authors' GWCD4i analysis code** (`emdann/GWT_perturbseq_analysis_2025`) | Reference/reproduction code; not the license source for the biological dataset | **MIT**, copyright (c) 2025 Emma Dann, verified at commit `848d62fc2b7027f7218d6fc5f5b0c37255dc94af`. | Preserve its MIT notice if code is copied or substantially vendored. Dataset terms still come from the Virtual Cells Platform record. |
 
-## Share-alike — usable; copyleft on redistributed derivatives
-| Source | License | Note |
-|---|---|---|
-| ChEMBL | CC BY-SA 3.0 | share-alike applies only if we redistribute *derived* ChEMBL data |
+## Not admitted by this file
 
-## ⚠ Non-commercial — OK for academic/hackathon; swap before commercial
-| Source | License | Commercial swap |
-|---|---|---|
-| DrugBank | academic CC BY-NC (commercial = paid) | DGIdb + ChEMBL |
-| SIDER | CC BY-NC-SA 4.0 | OpenFDA / FAERS |
-| DrugComb | CC BY-NC-SA 4.0 | academic-only / open alternative |
+A source mentioned in a plan is not automatically cleared for use or redistribution.
+DrugBank, SIDER, DrugComb, LINCS, DepMap, Open Targets, DGIdb, FAERS/openFDA,
+ClinicalTrials.gov and other prospective sources require their own version-specific
+verification before their data enters an artifact. This file deliberately makes no
+blanket license claim for them.
 
-## To confirm
-- _(none outstanding — the Marson CZI Perturb-seq license was confirmed **MIT** from the
-  dataset's Croissant metadata across all 12 splits; listed above. The derived NTC-subset
-  embedding is redistributed on HF ([KiritSingh/spot-CD4-Marson](https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson))
-  under MIT with attribution.)_
+No Human Protein Atlas data is included in the current release inventory.
 
-_Licenses per knowledge as of 2026-01; verify current terms for any commercial use._
+Official license records:
+
+- Virtual Cells dataset: <https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq>
+- Virtual Cells Acceptable Use Policy: <https://virtualcellmodels.cziscience.com/acceptable-use-policy>
+- Reactome: <https://reactome.org/license>
+- Gene Ontology: <https://geneontology.org/docs/go-citation-policy/>
+- ChEMBL: <https://chembl.gitbook.io/chembl-interface-documentation/frequently-asked-questions/general-questions>
+- UniProt: <https://www.uniprot.org/help/license>
