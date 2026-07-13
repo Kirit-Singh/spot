@@ -2,13 +2,22 @@
 
 THE PHYSICAL CONTRACT, EMITTED NATIVELY
 ---------------------------------------
-Each ordered-pair bundle directory carries, under names the aggregate run-manifest and
-W11's verifier read directly — no rename, no post-hoc copy, no shim:
+The PRODUCER writes exactly these, under names the aggregate run-manifest and W11's
+verifier read directly — no rename, no post-hoc copy, no shim:
 
-    arm_bundle.json            the reusable-arm inventory (base records + arms + rankings)
-    temporal_provenance.json   what produced it, binding the bundle by content hash
-    temporal_verification.json the INDEPENDENT verifier's typed report, binding the bundle
-    rankings/<program>__<change>.json   the bytes each arm's rank/counts stand on
+    per bundle dir <from>__to__<to>/:
+        arm_bundle.json          the reusable-arm inventory (base records + arms + rankings)
+        temporal_provenance.json what produced it, binding the bundle by content hash
+        temporal_preflight.json  the producer's own self-check — a STATUS, never an admission
+        rankings/<program>__<change>.json  the bytes each arm's rank/counts stand on
+    at the release root:
+        temporal_arm_release.json  the content-addressed six-bundle inventory (every file +
+                                   ranking hash), external_verification.status=pending
+
+The authoritative ``temporal_verification.json`` is NOT written here. It is the INDEPENDENT
+verifier's (W11's) artifact, written after W11 reopens the shipped bytes — a producer may
+not sign an admission under an independent verifier's identity for code it invoked itself.
+The producer's own re-derivation is a fail-closed emission gate recorded as a preflight.
 
 PORTABLE BY CONSTRUCTION
 ------------------------
@@ -35,13 +44,24 @@ import shutil
 from typing import Any, Optional
 
 from ...hashing import canonical_json, content_hash, sha256_hex
-from . import arm_admission, arm_bundle, arm_provenance, arm_report
+from . import (
+    arm_admission,
+    arm_bundle,
+    arm_preflight,
+    arm_provenance,
+    arm_release,
+    arm_report,
+)
 
 BUNDLE_FILENAME = arm_bundle.BUNDLE_FILENAME
 PROVENANCE_FILENAME = arm_bundle.PROVENANCE_FILENAME
+PREFLIGHT_FILENAME = "temporal_preflight.json"
 VERIFICATION_FILENAME = arm_bundle.VERIFICATION_FILENAME
+RELEASE_FILENAME = arm_release.RELEASE_FILENAME
 SCHEMA_PROVENANCE = arm_provenance.SCHEMA_PROVENANCE
+SCHEMA_PREFLIGHT = arm_preflight.SCHEMA_PREFLIGHT
 SCHEMA_VERIFICATION = arm_report.SCHEMA_VERIFICATION
+SCHEMA_RELEASE = arm_release.SCHEMA_RELEASE
 SCHEMA_ADDRESS = "spot.stage02_temporal_arm_release_address.v1"
 
 
@@ -78,11 +98,17 @@ def _refuse_machine_local(obj: Any, what: str) -> None:
 
 
 def emit_bundle(bundle: dict[str, Any], out_root: str) -> dict[str, Any]:
-    """Write one bundle's four artifact kinds, verify what LANDED, return relative addresses.
+    """Write the PRODUCER's artifacts, self-check what LANDED, return relative addresses.
 
-    Fail-closed: if the independent verifier refuses the shipped bytes, the whole bundle
-    directory is removed and ``EmitRefused`` is raised — no provenance and no verification
-    report survive beside a bundle that did not pass.
+    The producer emits exactly ``arm_bundle.json``, ``temporal_provenance.json`` and
+    ``rankings/*.json`` — and NOT ``temporal_verification.json``. The authoritative
+    verification is written by the INDEPENDENT verifier (W11) after it reopens these bytes;
+    a producer cannot be the independent witness for code it invokes itself.
+
+    Fail-closed: the producer runs its OWN re-derivation as an INTERNAL emission gate. It is
+    a producer SELF-CHECK, not an admission — if it fails, the whole bundle directory is
+    removed and ``EmitRefused`` is raised, so no artifact survives that the producer could
+    not itself reconstruct. It writes no verdict, under no verifier id.
     """
     out_dir = os.path.join(out_root,
                            bundle_dirname(bundle["from_condition"],
@@ -109,38 +135,43 @@ def _emit_into(bundle: dict[str, Any], out_dir: str) -> None:
     with open(bundle_path, "wb") as fh:
         fh.write(bundle_bytes(bundle))
 
-    # 3. VERIFY WHAT LANDED — read back, re-derive from the shipped bytes off disk.
+    # 3. PRODUCER SELF-CHECK (fail-closed) — read the bytes back off disk and re-derive.
+    # This is NOT an independent admission: the producer invoked it, so it may not claim
+    # independence. It refuses to leave behind bytes it cannot itself reconstruct.
     result = arm_admission.verify_shipped(out_dir)
     if not result["admitted"]:
         raise EmitRefused(
-            f"the emitted bundle {bundle['bundle_key']!r} did not survive its own "
-            f"verifier: {result['failures'][:8]}")
+            f"the emitted bundle {bundle['bundle_key']!r} did not survive the producer "
+            f"self-check: {result['failures'][:8]}")
 
     with open(bundle_path, "rb") as fh:
         arm_raw = sha256_hex(fh.read())
 
-    # 4. provenance — binds the arm inventory by hash
+    # 4. provenance — binds the arm inventory by hash.
     prov = arm_provenance.build_provenance(bundle, bundle_file=BUNDLE_FILENAME,
                                            bundle_raw_sha256=arm_raw)
     _refuse_machine_local(prov, "provenance")
-    _, prov_raw = _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
+    _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
 
-    # 5. the INDEPENDENT report — binds the bundle AND the provenance it judged
-    report = arm_report.build_report(result, bundle_id=bundle["bundle_id"],
-                                     arm_bundle_sha256=arm_raw, provenance_sha256=prov_raw)
-    _refuse_machine_local(report, "verification report")
-    _write(os.path.join(out_dir, VERIFICATION_FILENAME), report)
+    # 5. the PRODUCER PREFLIGHT — the self-check recorded as a status, never an admission.
+    # The authoritative temporal_verification.json is W11's, written after it reopens these.
+    preflight = arm_preflight.build_preflight(result, bundle_id=bundle["bundle_id"],
+                                              arm_bundle_sha256=arm_raw)
+    _refuse_machine_local(preflight, "producer preflight")
+    _write(os.path.join(out_dir, PREFLIGHT_FILENAME), preflight)
 
 
 def _address(bundle: dict[str, Any], out_dir: str) -> dict[str, Any]:
-    """The RELATIVE content address of an emitted bundle. No absolute path, at any depth.
+    """The RELATIVE content address of the PRODUCER's emitted bytes. No absolute path.
 
     ``dir`` and every key of ``files`` are bundle-relative; a test or a local caller that
     needs a runtime absolute path reconstructs it with ``resolve_local_paths`` — which lives
-    OUTSIDE this contract precisely so a machine-local path can never enter it.
+    OUTSIDE this contract precisely so a machine-local path can never enter it. The address
+    carries NO verdict: the producer does not admit its own bytes, and it names WHERE the
+    independent verification will live (``verification.status = pending_external_verification``).
     """
     files: dict[str, dict[str, str]] = {}
-    for fname in (BUNDLE_FILENAME, PROVENANCE_FILENAME, VERIFICATION_FILENAME):
+    for fname in (BUNDLE_FILENAME, PROVENANCE_FILENAME, PREFLIGHT_FILENAME):
         with open(os.path.join(out_dir, fname), "rb") as fh:
             raw = fh.read()
         files[fname] = {"raw_sha256": sha256_hex(raw),
@@ -160,7 +191,13 @@ def _address(bundle: dict[str, Any], out_dir: str) -> dict[str, Any]:
         "n_targets": bundle["n_targets"],
         "n_base_records": bundle["n_base_records"],
         "arm_keys": list(bundle["arm_keys"]),
-        "verdict": "admit",
+        # the producer does NOT admit its own bytes; it points at the independent verifier
+        "verification": {
+            "file": VERIFICATION_FILENAME,
+            "verifier_id": arm_report.VERIFIER_ID,
+            "status": "pending_external_verification",
+            "written_by": "independent_verifier",
+        },
     }
     _refuse_machine_local(address, "release address")
     return address
@@ -181,11 +218,12 @@ def resolve_local_paths(out_root: str, address: dict[str, Any]) -> dict[str, str
 
 def emit_release(bundles: list[dict[str, Any]], out_root: str,
                  expect_n_bundles: Optional[int] = None) -> dict[str, Any]:
-    """Emit every ordered-pair bundle, and account for the release as a whole.
+    """Emit every ordered-pair bundle AND the content-addressed root release inventory.
 
-    The inventory is DERIVED from the bundles that were actually emitted, and it is
-    RELATIVE-ONLY: no absolute path, hostname or private address enters the returned release
-    object, which a caller may serialise into a run manifest.
+    Writes ``temporal_arm_release.json`` at ``out_root``: the six-bundle inventory with
+    every native file and ranking hash, ``external_verification.status = pending`` (the
+    authoritative admission is W11's), and a self-addressed ``release_id``. Relative-only —
+    no absolute path, hostname or timestamp enters it, so it is byte-stable across hosts.
     """
     addresses = [emit_bundle(b, out_root) for b in
                  sorted(bundles, key=lambda b: b["bundle_key"])]
@@ -208,18 +246,24 @@ def emit_release(bundles: list[dict[str, Any]], out_root: str,
             "A partial release cannot satisfy completeness, and a short bundle set that "
             "reported success would be indistinguishable from a whole one")
 
-    release = {
+    manifest = arm_release.build_release(addresses, out_root)
+    _refuse_machine_local(manifest, "release inventory")
+    _write(os.path.join(out_root, RELEASE_FILENAME), manifest)
+
+    return {
         "schema_version": SCHEMA_ADDRESS,
+        "release_id": manifest["release_id"],
+        "release_file": RELEASE_FILENAME,
         "n_bundles": len(addresses),
         "n_logical_arms": len(arm_keys),
         "bundles": addresses,
         "arm_keys": sorted(arm_keys),
+        "release": manifest,
     }
-    _refuse_machine_local(release, "release inventory")
-    return release
 
 
-__all__ = ["BUNDLE_FILENAME", "PROVENANCE_FILENAME", "VERIFICATION_FILENAME",
-           "SCHEMA_PROVENANCE", "SCHEMA_VERIFICATION", "SCHEMA_ADDRESS", "EmitRefused",
-           "bundle_bytes", "bundle_dirname", "emit_bundle", "emit_release",
+__all__ = ["BUNDLE_FILENAME", "PROVENANCE_FILENAME", "PREFLIGHT_FILENAME",
+           "VERIFICATION_FILENAME", "RELEASE_FILENAME", "SCHEMA_PROVENANCE",
+           "SCHEMA_PREFLIGHT", "SCHEMA_VERIFICATION", "SCHEMA_RELEASE", "SCHEMA_ADDRESS",
+           "EmitRefused", "bundle_bytes", "bundle_dirname", "emit_bundle", "emit_release",
            "resolve_local_paths", "arm_bundle"]

@@ -130,8 +130,15 @@ BUNDLE_KEYS = frozenset({
     "bundle_id", "from_condition", "to_condition",
     "n_programs", "n_desired_changes", "n_arms", "n_targets", "n_base_records",
     "arm_keys", "base_records", "arms", "program_admission", "estimand", "perturbation",
-    "method", "verification_ref", "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
+    "method", "code_identity", "verification_ref", "bundle_is_pair_agnostic",
+    "bundle_carries_role_or_pole",
 })
+
+# The two roles the run binding must keep DISTINCT. ``code_identity`` = WHICH BUILD (the
+# shared code-digest tuple); the method digest = WHAT THE CODE DID. Structural presence only
+# — the producer records its tree state and NEVER self-admits clean; the independent
+# verifier re-derives the tuple and decides the final clean-tree status against a pin.
+CODE_IDENTITY_FIELDS = ("commit", "clean_tree", "manifest_sha256", "canonical_digest")
 
 ARM_KEYS_ALLOWED = frozenset({
     "arm_key", "program_id", "desired_change", "from_condition", "to_condition",
@@ -181,6 +188,27 @@ def _exempt(key: str, value: Any) -> bool:
         # `is` on the literal, so a truthy 1 or "false" cannot pose as the prohibition
         return value is ARM_NEGATIVE_DECLARATIONS[key]
     return False
+
+
+# A reusable arm is PAIR-AGNOSTIC. It never carries a pole-derived quantity or a pair-based
+# program projection: those belong to a pair somebody chose, and the Stage-1 binding a
+# consumer verifies is the SCORER VIEW + admitted programs, not a projection keyed on poles.
+_PAIR_PROJECTION_RE = re.compile(r"derived_from_pole|program_projection", re.IGNORECASE)
+
+
+def _pair_projection_keys(obj: Any, path: str = "") -> list[str]:
+    """Every ``derived_from_pole*`` / ``program_projection*`` key, at ANY depth."""
+    hits: list[str] = []
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            here = f"{path}.{key}" if path else str(key)
+            if _PAIR_PROJECTION_RE.search(str(key)):
+                hits.append(here)
+            hits.extend(_pair_projection_keys(value, here))
+    elif isinstance(obj, list):
+        for i, value in enumerate(obj):
+            hits.extend(_pair_projection_keys(value, f"{path}[{i}]"))
+    return hits
 
 
 def _unknown(got: Any, allowed: frozenset, what: str) -> list[str]:
@@ -267,6 +295,24 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
                     if b.get("perturbation_modality") != modality]
     check("every_base_record_carries_the_same_modality", not bad_modality,
           f"base records with a divergent modality: {bad_modality[:4]}")
+
+    # ---- gate 7: the code_identity + method-digest roles, both present, kept distinct ----
+    # STRUCTURAL only. The producer records its tree state; it does not get to declare
+    # itself clean, so this checks presence of the tuple, NOT clean_tree == True.
+    code = bundle.get("code_identity") or {}
+    missing_ci = [f for f in CODE_IDENTITY_FIELDS if f not in code]
+    check("bundle_binds_a_structural_code_identity_without_self_admitting_clean",
+          isinstance(bundle.get("code_identity"), dict) and not missing_ci,
+          f"code_identity is absent or omits {missing_ci}")
+    check("method_digest_and_code_identity_are_both_bound_as_distinct_roles",
+          bool((bundle.get("method") or {}).get("temporal_method_sha256"))
+          and bool(code),
+          "a method digest is not a build and a build is not a method; both must be bound")
+
+    # ---- gate 8: the reusable arm stays PAIR-AGNOSTIC — no pole-derived projection ----
+    projection_hits = [h for h in _pair_projection_keys(bundle)]
+    check("no_pole_derived_or_pair_based_program_projection_field", not projection_hits,
+          f"pair/pole-derived projection keys: {projection_hits[:6]}")
 
     # ---- the inventory: n_programs x 2, complete and not invented ----
     programs = bundle["program_admission"]["programs"]

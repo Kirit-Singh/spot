@@ -155,6 +155,21 @@ def method():
 
 
 _UNSET = object()
+_CODE_IDENTITY = None
+
+
+def code_identity():
+    """The REAL shared code-digest tuple of this checkout, computed ONCE and cached.
+
+    Not a fabricated constant — it is the actual ``code_digest.run_binding`` over the
+    Stage-2 tree. Cached so every fixture bundle in a run shares one build identity (the
+    honest answer: they were all built by the same code) and the whole-tree hash is paid
+    once, not per bundle.
+    """
+    global _CODE_IDENTITY
+    if _CODE_IDENTITY is None:
+        _CODE_IDENTITY = arm_bundle.code_identity()
+    return _CODE_IDENTITY
 
 
 def build(from_condition="FixRest", to_condition="FixStim48", **kw):
@@ -169,6 +184,7 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
     to = kw.pop("to_endpoints", _UNSET)
     meth = kw.pop("method", _UNSET)
     conds = kw.pop("conditions", _UNSET)
+    code = kw.pop("code", _UNSET)
     return arm_bundle.build_bundle(
         from_condition=from_condition, to_condition=to_condition,
         admitted=admitted() if progs is _UNSET else progs,
@@ -177,6 +193,7 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
         method=method() if meth is _UNSET else meth,
         conditions=list(CONDITIONS) if conds is _UNSET else conds,
         scorer_view_sha256=kw.pop("scorer_view_sha256", "a" * 64),
+        code=code_identity() if code is _UNSET else code,
         **kw)
 
 

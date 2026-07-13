@@ -54,22 +54,33 @@ def build_provenance(bundle: dict[str, Any], *, bundle_file: str,
         # WHAT the run stood on. The aggregate re-derives each against a pin; the producer
         # binds what it actually read, and leaves externally-pinned identities to the run.
         "run_binding": {
+            # WHICH BUILD produced the bytes — the shared code-digest tuple the aggregate
+            # reads from here and re-derives against a pinned checkout. The producer records
+            # its tree state; it does not declare itself clean.
+            "code_identity": dict(bundle["code_identity"]),
+            # WHAT THE CODE DID — the estimator/method/config digests, kept EXPLICIT beside
+            # code_identity: a method hash is not a build, and a build is not a method.
+            # A FIXED EXACT-KEY OBJECT: each is its own named field. There is NO generic
+            # ``role`` key and no list mini-language — a role vocabulary a reader has to
+            # interpret is a role vocabulary that drifts; the field name IS the role.
             "estimator_id": method.get("estimator_id"),
             "estimator_version": method.get("estimator_version"),
             "temporal_method_sha256": method.get("temporal_method_sha256"),
+            "direct_method_version": method.get("direct_method_version"),
+            "direct_config_sha256": method.get("direct_config_sha256"),
+            "effect_source_sha256": method.get("effect_source_sha256"),
+            "effect_universe_sha256": method.get("effect_universe_sha256"),
+            # the STAGE-1 binding, independently verifiable: the scorer-view hash the
+            # admitted program set was re-derived from, the programs themselves, and the
+            # release/source hashes — no pair or pole field, and no fabricated value.
             "selection_release": {
                 "registry_scorer_view_sha256":
                     admission.get("registry_scorer_view_sha256"),
                 "programs_derived_from": admission.get("programs_derived_from"),
+                "admitted_programs": list(admission.get("programs") or []),
+                "n_programs": admission.get("n_programs"),
                 "effect_universe_sha256": method.get("effect_universe_sha256"),
+                "effect_source_sha256": method.get("effect_source_sha256"),
             },
-            "stage2_inputs": [
-                {"role": "direct_method_version",
-                 "value": method.get("direct_method_version")},
-                {"role": "direct_config_sha256",
-                 "value": method.get("direct_config_sha256")},
-                {"role": "effect_source_sha256",
-                 "value": method.get("effect_source_sha256")},
-            ],
         },
     }

@@ -700,38 +700,64 @@ class TestEmissionAndVerification:
             arm_emit.emit_release([FX.build(), FX.build()], str(tmp_path))
 
 
+def _w11_verify(out_dir):
+    """STAND IN for W11's INDEPENDENT verifier: reopen the shipped producer bytes off disk,
+    re-derive, and write the authoritative temporal_verification.json.
+
+    In production this is W11's OWN lane, in its own process — the producer never runs it.
+    Here it lets the cross-contract test exercise the full aggregate contract. It is honest
+    for THIS caller (not the generator) to declare generator_is_not_verifier and to admit.
+    """
+    from direct.hashing import sha256_hex
+    result = arm_admission.verify_shipped(out_dir)
+    bundle = json.loads(open(os.path.join(out_dir, arm_emit.BUNDLE_FILENAME), "rb").read())
+    arm_raw = sha256_hex(open(os.path.join(out_dir, arm_emit.BUNDLE_FILENAME), "rb").read())
+    prov_raw = sha256_hex(
+        open(os.path.join(out_dir, arm_emit.PROVENANCE_FILENAME), "rb").read())
+    report = arm_report.build_report(result, bundle_id=bundle["bundle_id"],
+                                     arm_bundle_sha256=arm_raw, provenance_sha256=prov_raw)
+    with open(os.path.join(out_dir, arm_emit.VERIFICATION_FILENAME), "wb") as fh:
+        fh.write(json.dumps(report, sort_keys=True, separators=(",", ":")).encode())
+    return report
+
+
 # =========================================================================== #
 # 10b. THE W3 PHYSICAL FILENAME CONTRACT — EMITTED NATIVELY, NO SHIM
 # =========================================================================== #
 class TestContractFilenames:
     """W3 aggregate keys on exact filenames; W11 reads the shipped bytes at them. The
-    producer emits them NATIVELY — no rename or copy after the fact."""
+    producer emits its OWN bytes natively — no rename or copy after the fact — and does NOT
+    write the independent verification, which is W11's."""
 
-    def test_the_three_contract_filenames_are_the_canonical_ones(self):
+    def test_the_contract_filenames_are_the_canonical_ones(self):
         assert arm_emit.BUNDLE_FILENAME == "arm_bundle.json"
         assert arm_emit.PROVENANCE_FILENAME == "temporal_provenance.json"
         assert arm_emit.VERIFICATION_FILENAME == "temporal_verification.json"
 
-    def test_emit_writes_the_three_contract_files_at_the_top_of_the_bundle_dir(
+    def test_the_producer_emits_bundle_provenance_preflight_rankings_NOT_verification(
             self, tmp_path):
         arm_emit.emit_bundle(FX.build(), str(tmp_path))
         d = tmp_path / arm_emit.bundle_dirname("FixRest", "FixStim48")
         top = {p.name for p in d.iterdir() if p.is_file()}
         assert {"arm_bundle.json", "temporal_provenance.json",
-                "temporal_verification.json"} <= top
+                "temporal_preflight.json"} <= top
+        assert (d / "rankings").is_dir()
+        # the authoritative verification is W11's — the producer must not write it
+        assert "temporal_verification.json" not in top
 
-    def test_no_legacy_arm_prefixed_filename_is_emitted(self, tmp_path):
+    def test_no_legacy_arm_prefixed_bundle_or_verification_filename_is_emitted(
+            self, tmp_path):
         arm_emit.emit_bundle(FX.build(), str(tmp_path))
         d = tmp_path / arm_emit.bundle_dirname("FixRest", "FixStim48")
         names = {p.name for p in d.iterdir()}
         assert "temporal_arm_bundle.json" not in names
         assert "temporal_arm_verification.json" not in names
 
-    def test_the_release_inventory_names_the_contract_files(self, tmp_path):
+    def test_the_release_inventory_names_the_producer_files(self, tmp_path):
         rel = arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
         for b in rel["bundles"]:
             assert set(b["files"]) == {"arm_bundle.json", "temporal_provenance.json",
-                                       "temporal_verification.json"}
+                                       "temporal_preflight.json"}
 
 
 # =========================================================================== #
@@ -762,13 +788,20 @@ class TestNoMachineLocalLeak:
         on_disk = json.loads(open(paths[arm_emit.BUNDLE_FILENAME], "rb").read())
         assert arm_admission.machine_local_strings(on_disk) == []
 
-    def test_the_on_disk_provenance_and_verification_carry_no_machine_local_string(
+    def test_the_on_disk_provenance_and_preflight_carry_no_machine_local_string(
             self, tmp_path):
         paths = arm_emit.resolve_local_paths(
             str(tmp_path), arm_emit.emit_bundle(FX.build(), str(tmp_path)))
-        for fname in (arm_emit.PROVENANCE_FILENAME, arm_emit.VERIFICATION_FILENAME):
+        for fname in (arm_emit.PROVENANCE_FILENAME, arm_emit.PREFLIGHT_FILENAME):
             doc = json.loads(open(paths[fname], "rb").read())
             assert arm_admission.machine_local_strings(doc) == [], fname
+
+    def test_the_root_release_manifest_carries_no_machine_local_string(self, tmp_path):
+        rel = arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        on_disk = json.loads(
+            open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
+        assert arm_admission.machine_local_strings(on_disk) == []
+        assert arm_admission.machine_local_strings(rel) == []
 
     def test_the_returned_address_has_no_path_abs_field(self, tmp_path):
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
@@ -830,55 +863,47 @@ class TestFailClosedOnAbsolutePath:
 # 10e. PROVENANCE + VERIFICATION AS SEPARATE TYPED ARTIFACTS
 # =========================================================================== #
 class TestSeparateTypedArtifacts:
-    """The independent report is a SEPARATE TYPED ARTIFACT. No producer self-verdict is
-    embedded in the bundle, so nothing in the bundle can satisfy aggregate admission on its
-    own — W11 re-derives from the shipped bytes and W3 keys on the separate files."""
-
-    def _load(self, tmp_path, fname):
-        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
-        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
-        return json.loads(open(paths[fname], "rb").read()), addr
+    """The independent verification is a SEPARATE TYPED ARTIFACT written by W11, not the
+    producer. The producer's bytes carry NO verdict; the bundle only POINTS at where the
+    independent verification will live."""
 
     def test_the_bundle_carries_no_embedded_admission_verdict(self):
         keys = _all_keys(FX.build())
-        for verdict in ("admitted", "verification", "verdict", "admission_result",
-                        "self_verified", "passed"):
+        for verdict in ("admitted", "verdict", "admission_result", "self_verified",
+                        "passed"):
             assert verdict not in keys, f"{verdict!r} embeds a self-verdict in the bundle"
 
     def test_provenance_is_typed_and_binds_the_bundle_by_content_hash(self, tmp_path):
-        prov, addr = self._load(tmp_path, arm_emit.PROVENANCE_FILENAME)
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        prov = json.loads(open(paths[arm_emit.PROVENANCE_FILENAME], "rb").read())
         assert prov["schema_version"] == arm_emit.SCHEMA_PROVENANCE
         assert prov["bundle_id"] == addr["bundle_id"]
-        # it names the bundle FILE and the exact bytes it stands for
         assert prov["bundle_file"] == arm_emit.BUNDLE_FILENAME
         assert prov["bundle_raw_sha256"] == \
             addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"]
         assert "method" in prov and "program_admission" in prov and "estimand" in prov
 
-    def test_verification_is_a_typed_report_that_binds_the_bundle_it_judged(self, tmp_path):
-        # The exact fields the aggregate's check_report reads (verify_manifest_rules).
-        ver, addr = self._load(tmp_path, arm_emit.VERIFICATION_FILENAME)
+    def test_W11s_verification_report_binds_the_bundle_it_judged(self, tmp_path):
+        # The report SHAPE the aggregate's check_report reads. Written by the INDEPENDENT
+        # verifier (here, the W11 stand-in) after reopening the producer's shipped bytes.
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        out_dir = os.path.dirname(
+            arm_emit.resolve_local_paths(str(tmp_path), addr)[arm_emit.BUNDLE_FILENAME])
+        ver = _w11_verify(out_dir)
         assert ver["schema_version"] == arm_report.SCHEMA_VERIFICATION
         assert ver["verifier_id"] == arm_report.VERIFIER_ID
-        assert ver["verdict"] == "admit"
-        assert ver["n_failed"] == 0 and not ver.get("failed_gates")
-        assert ver["fail_closed"] is True
-        assert ver["generator_is_not_verifier"] is True
-        # it BINDS this bundle — an admit that names no bundle can be copied onto any
+        assert ver["verdict"] == "admit" and ver["n_failed"] == 0
+        assert ver["fail_closed"] is True and ver["generator_is_not_verifier"] is True
         assert ver["bundle_id"] == addr["bundle_id"]
         assert ver["binds"]["arm_bundle_sha256"] == \
             addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"]
         assert ver["binds"]["provenance_sha256"] == \
             addr["files"][arm_emit.PROVENANCE_FILENAME]["raw_sha256"]
-
-    def test_the_verifier_records_its_pinned_gate_inventory_as_passed(self, tmp_path):
-        ver, _ = self._load(tmp_path, arm_emit.VERIFICATION_FILENAME)
         passed = {c["gate"] for c in ver["checks"] if c["status"] == "pass"}
         assert set(arm_report.REQUIRED_GATES) <= passed
 
-    def test_the_report_signs_the_INDEPENDENT_verifier_contract_not_a_self_verifier(self):
-        # The producer references the independent verifier (W11's contract), never a
-        # producer-private self-verifier id.
+    def test_the_verification_contract_is_the_INDEPENDENT_verifier_id(self):
         assert arm_report.VERIFIER_ID == "spot.stage02.temporal.arm.independent_verifier.v1"
         assert "self" not in arm_report.VERIFIER_ID
 
@@ -892,6 +917,51 @@ class TestSeparateTypedArtifacts:
 
 
 # =========================================================================== #
+# 10e2. THE PRODUCER CANNOT SELF-ADMIT (trust boundary)
+# =========================================================================== #
+class TestProducerCannotSelfAdmit:
+    """A producer may not sign an admission under the independent verifier's identity for
+    code it invoked itself. Its own re-derivation is an INTERNAL fail-closed gate; the
+    authoritative admission is W11's, written after W11 reopens the shipped bytes."""
+
+    def test_the_producer_writes_no_verification_file_at_all(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        d = tmp_path / addr["dir"]
+        assert not (d / arm_emit.VERIFICATION_FILENAME).exists()
+        # ...and nothing else the producer wrote is an admit under the independent id
+        for p in d.rglob("*.json"):
+            doc = json.loads(p.read_bytes())
+            if isinstance(doc, dict):
+                assert not (doc.get("verifier_id") == arm_report.VERIFIER_ID
+                            and doc.get("verdict") == "admit")
+
+    def test_the_producer_address_defers_to_the_independent_verifier(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        assert "verdict" not in addr           # the producer does not admit its own bytes
+        assert addr["verification"]["status"] == "pending_external_verification"
+        assert addr["verification"]["written_by"] == "independent_verifier"
+        assert addr["verification"]["verifier_id"] == arm_report.VERIFIER_ID
+
+    def test_the_producer_self_check_still_fails_closed_on_bad_bytes(self, tmp_path):
+        # internal gate: a bundle the producer cannot itself reconstruct is not left behind
+        b = FX.build()
+        b["arms"][0]["records"][0]["arm_value"] = 99.0
+        with pytest.raises(arm_emit.EmitRefused):
+            arm_emit.emit_bundle(b, str(tmp_path))
+        d = tmp_path / arm_emit.bundle_dirname(b["from_condition"], b["to_condition"])
+        assert not d.exists() or not any(d.iterdir())
+
+    def test_the_build_report_shape_declares_independence_for_its_caller(self):
+        # build_report is the CONTRACT W11 fills; its generator_is_not_verifier=True is
+        # honest for W11 (not the generator), and the producer simply never calls it.
+        result = arm_admission.verify_bundle(FX.build())
+        report = arm_report.build_report(result, bundle_id="x", arm_bundle_sha256="a",
+                                         provenance_sha256="b")
+        assert report["generator_is_not_verifier"] is True
+        assert report["verifier_id"] == arm_report.VERIFIER_ID
+
+
+# =========================================================================== #
 # 10f. RUNTIME PATHS ARE A TEST-ONLY HELPER, OUTSIDE THE RELEASE CONTRACT
 # =========================================================================== #
 class TestRuntimePathsAreOutsideTheContract:
@@ -900,7 +970,7 @@ class TestRuntimePathsAreOutsideTheContract:
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
         paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
         for fname in ("arm_bundle.json", "temporal_provenance.json",
-                      "temporal_verification.json"):
+                      "temporal_preflight.json"):
             assert os.path.isabs(paths[fname]) and os.path.exists(paths[fname])
 
     def test_the_reconstructed_paths_are_never_stored_in_the_contract(self, tmp_path):
@@ -1053,6 +1123,130 @@ class TestStage3ConsumerContract:
 
 
 # =========================================================================== #
+# 10g3. CODE IDENTITY (WHICH BUILD) + METHOD DIGEST (WHAT THE CODE DID)
+# =========================================================================== #
+class TestCodeIdentityBinding:
+    """The bundle binds the BUILD that produced it via the shared Stage-2 code-digest
+    convention — commit + digest + recorded tree state — kept explicit BESIDE the method
+    digest. The producer records its tree state; it never self-admits clean."""
+
+    def test_the_bundle_binds_a_code_identity_tuple(self):
+        code = FX.build()["code_identity"]
+        for f in ("commit", "clean_tree", "manifest_sha256", "canonical_digest",
+                  "digest_id"):
+            assert f in code
+
+    def test_code_identity_uses_the_shared_code_digest_convention(self):
+        from direct import code_digest
+        code = FX.build()["code_identity"]
+        assert code["digest_id"] == code_digest.DIGEST_ID
+        # it is the REAL run_binding of this checkout, not a fabricated constant
+        assert code["manifest_sha256"] == code_digest.run_binding()["manifest_sha256"]
+
+    def test_the_producer_does_not_self_admit_clean_tree(self):
+        # code_identity RECORDS clean_tree (bool/None); the verifier does not gate on it,
+        # so a dirty-tree bundle is still admissible by the producer's own re-derivation —
+        # the final clean-tree call belongs to the independent verifier against a pin.
+        b = FX.build()
+        b["code_identity"]["clean_tree"] = False
+        b["code_identity"]["n_dirty_paths"] = 3
+        arm_bundle_reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is True, report["failures"]
+
+    def test_a_bundle_with_no_code_identity_is_refused(self):
+        b = FX.build()
+        b["code_identity"] = {}
+        arm_bundle_reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("code_identity" in f for f in report["failures"])
+
+    def test_method_digest_and_code_identity_are_both_bound_distinctly(self):
+        b = FX.build()
+        # WHAT THE CODE DID
+        assert b["method"]["temporal_method_sha256"] is not None
+        # WHICH BUILD — a different object, not the same hash
+        assert b["code_identity"]["canonical_digest"] != \
+            b["method"]["temporal_method_sha256"]
+
+    def test_provenance_run_binding_carries_code_identity_and_the_stage1_binding(
+            self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        prov = json.loads(open(paths[arm_emit.PROVENANCE_FILENAME]).read())
+        rb = prov["run_binding"]
+        assert rb["code_identity"]["commit"] == FX.build()["code_identity"]["commit"]
+        # the Stage-1 binding, independently verifiable: scorer view + programs + release
+        sr = rb["selection_release"]
+        assert sr["registry_scorer_view_sha256"] is not None
+        assert sorted(sr["admitted_programs"]) == sorted(FX.PORTABLE_IDS)
+        # method digest role stays explicit beside code_identity
+        assert rb["temporal_method_sha256"] is not None
+
+    def test_no_derived_from_poles_or_pair_based_program_projection_field(self):
+        b = FX.build()
+        keys = _all_keys(b)
+        assert not any("derived_from_pole" in k.lower() for k in keys)
+        assert not any("program_projection" in k.lower() for k in keys)
+
+    def test_a_pole_derived_projection_field_does_not_survive(self):
+        b = FX.build()
+        b["method"]["program_projection_by_pole"] = {"high": 1.0}
+        arm_bundle_reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("projection" in f for f in report["failures"])
+
+
+def arm_bundle_reseal(bundle):
+    """Recompute bundle_id after a mutation — the resealed-attack helper."""
+    from direct.hashing import content_hash
+    payload = {k: v for k, v in bundle.items() if k != "bundle_id"}
+    bundle["bundle_id"] = content_hash(payload)[:arm_bundle.BUNDLE_ID_LEN]
+    return bundle
+
+
+# =========================================================================== #
+# 10g4. THE RANKING-BYTE GATE — refuses a tampered ranking file under a reseal
+# =========================================================================== #
+class TestRankingByteGate:
+    """The independent verifier reads and recomputes EVERY ranking byte from disk. A
+    ranking file changed on disk while the bundle JSON is resealed to stay internally
+    consistent is caught at the ranking-byte gate — the exact W11 defect this guards."""
+
+    def test_a_tampered_ranking_file_under_a_resealed_bundle_is_refused(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        out_dir = os.path.dirname(paths[arm_emit.BUNDLE_FILENAME])
+        # the standalone verifier admits the pristine shipped bytes
+        assert arm_admission.verify_shipped(out_dir)["admitted"] is True
+        # now TAMPER a ranking file on disk...
+        bundle = json.loads(open(paths[arm_emit.BUNDLE_FILENAME]).read())
+        rel = bundle["arms"][0]["ranking"]["path"]
+        rpath = os.path.join(out_dir, rel)
+        doc = json.loads(open(rpath).read())
+        doc["ranked"][0]["arm_value"] = 42.0                 # a value nobody ranked
+        with open(rpath, "wb") as fh:
+            fh.write(json.dumps(doc, separators=(",", ":")).encode())
+        # ...the bundle JSON is untouched, so it is still internally consistent (a reseal
+        # would not even be needed) — yet the ranking BYTES no longer match the binding.
+        report = arm_admission.verify_shipped(out_dir)
+        assert report["admitted"] is False
+        assert any("ranking_file_hash_mismatch" in f for f in report["failures"])
+
+    def test_a_deleted_ranking_file_is_refused(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        out_dir = os.path.dirname(paths[arm_emit.BUNDLE_FILENAME])
+        bundle = json.loads(open(paths[arm_emit.BUNDLE_FILENAME]).read())
+        os.remove(os.path.join(out_dir, bundle["arms"][0]["ranking"]["path"]))
+        report = arm_admission.verify_shipped(out_dir)
+        assert report["admitted"] is False
+        assert any("ranking_file_missing" in f for f in report["failures"])
+
+
+# =========================================================================== #
 # 10h. IT READS GREEN AGAINST THE REAL AGGREGATE CONTRACT (W3 / W11)
 # =========================================================================== #
 _RUNMANIFEST = "/home/tcelab/worktrees/spot-stage2-runmanifest/02_geneskew/analysis"
@@ -1075,13 +1269,20 @@ pin = {"temporal": {"verifier_id": verifier_id, "schema_version": schema,
                     "required_gates": gates.split(",")}}
 bad = R.check_report(report, "temporal", bundle_id, pin, arm_raw, prov_raw)
 assert bad == [], bad
+# the aggregate re-derives WHICH BUILD from provenance.run_binding.code_identity and
+# admits it against a pin built from the shared code-digest tuple.
+prov = json.load(open(os.path.join(out_dir, "temporal_provenance.json")))
+code = R.code_binding(prov)
+code_pin = {f: code[f] for f in ("commit", "manifest_sha256", "canonical_digest")}
+cbad = R.check_code_identity(code, code_pin, bundle_id)
+assert cbad == [], cbad
 print("GREEN")
 '''
 
 
 class TestReadsGreenAgainstTheRealAggregate:
-    """W11/W3 read the SHIPPED BYTES this producer wrote and admit them. Skips cleanly when
-    the run-manifest worktree is not checked out."""
+    """W11/W3 read the SHIPPED BYTES this producer wrote and admit them, in a SEPARATE
+    PROCESS. Skips cleanly when the run-manifest worktree is not checked out."""
 
     def test_the_real_aggregate_binds_and_admits_the_shipped_bytes(self, tmp_path):
         import subprocess
@@ -1090,6 +1291,9 @@ class TestReadsGreenAgainstTheRealAggregate:
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
         out_dir = os.path.dirname(
             arm_emit.resolve_local_paths(str(tmp_path), addr)[arm_emit.BUNDLE_FILENAME])
+        # the INDEPENDENT verifier (W11 stand-in) reopens the producer bytes and writes the
+        # authoritative temporal_verification.json; only THEN is the bundle aggregate-ready.
+        _w11_verify(out_dir)
         proc = subprocess.run(
             [sys.executable, "-c", _CROSS_CHECK, out_dir, addr["bundle_id"],
              addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"],
@@ -1100,6 +1304,59 @@ class TestReadsGreenAgainstTheRealAggregate:
             capture_output=True, text=True)
         assert proc.returncode == 0 and "GREEN" in proc.stdout, \
             f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
+
+
+# =========================================================================== #
+# 10i. THE PRODUCER PREFLIGHT AND THE CONTENT-ADDRESSED ROOT RELEASE
+# =========================================================================== #
+class TestPreflightAndReleaseManifest:
+
+    def test_the_preflight_is_a_status_never_an_admission(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        pf = json.loads(open(paths[arm_emit.PREFLIGHT_FILENAME], "rb").read())
+        assert pf["schema_version"] == arm_emit.SCHEMA_PREFLIGHT
+        assert pf["role"] == "producer_preflight"
+        assert pf["status"] == "pending_external_verification"
+        assert pf["is_admission"] is False
+        assert pf["generator_is_not_verifier"] is False   # the producer ran it
+        assert "verdict" not in pf                          # never an admit
+        assert pf["self_check_passed"] is True
+        assert pf["authoritative_verification"]["verifier_id"] == arm_report.VERIFIER_ID
+
+    def test_the_root_release_manifest_is_content_addressed(self, tmp_path):
+        from direct.hashing import content_hash
+        rel = arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        manifest = json.loads(
+            open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
+        assert manifest["schema_version"] == "spot.stage02_temporal_arm_release.v1"
+        assert manifest["n_bundles"] == 6 and manifest["n_logical_arms"] == 120
+        assert manifest["external_verification"]["status"] == "pending"
+        # release_id re-derives over everything but itself — a self-addressed inventory
+        payload = {k: v for k, v in manifest.items() if k != "release_id"}
+        assert manifest["release_id"] == content_hash(payload)[:16]
+        assert rel["release_id"] == manifest["release_id"]
+
+    def test_the_release_binds_every_native_file_and_ranking_hash(self, tmp_path):
+        from direct.hashing import sha256_hex
+        arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        manifest = json.loads(
+            open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
+        assert len(manifest["bundles"]) == 6
+        for b in manifest["bundles"]:
+            d = os.path.join(str(tmp_path), b["dir"])
+            # arm_bundle + provenance + preflight + 20 ranking files = 23 files
+            assert len(b["files"]) == 23
+            assert any(f.startswith("rankings/") for f in b["files"])
+            # each recorded hash matches the byte on disk
+            for rel_path, h in b["files"].items():
+                raw = open(os.path.join(d, rel_path), "rb").read()
+                assert sha256_hex(raw) == h["raw_sha256"]
+
+    def test_reemitting_the_release_is_byte_stable(self, tmp_path):
+        a = arm_emit.emit_release(FX.build_all(), str(tmp_path / "a"), expect_n_bundles=6)
+        b = arm_emit.emit_release(FX.build_all(), str(tmp_path / "b"), expect_n_bundles=6)
+        assert a["release_id"] == b["release_id"]
 
 
 # =========================================================================== #

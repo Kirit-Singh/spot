@@ -40,6 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from ... import code_digest
 from ...arm_keys import DESIRED_CHANGES
 from ...hashing import canonical_json, content_hash, sha256_hex
 from .. import config, estimand
@@ -292,13 +293,27 @@ def base_record(*, program_id: str, target_id: str, from_ep: Optional[TargetEndp
     return rec
 
 
+def code_identity() -> dict[str, Any]:
+    """WHICH BUILD produced these bytes — the shared Stage-2 code-digest tuple.
+
+    ``(commit, clean_tree, manifest_sha256, canonical_digest)`` over the Stage-2 tree, via
+    the ONE shared convention (``code_digest.run_binding``). The producer RECORDS its tree
+    state; it never SELF-ADMITS clean — ``require_clean`` is deliberately not set, so a dirty
+    checkout is recorded as ``clean_tree=false`` rather than refused. The independent
+    verifier re-derives this tuple and decides the FINAL clean-tree status against an
+    externally pinned build; a run is not the witness for its own checkout.
+    """
+    return code_digest.run_binding()
+
+
 def build_bundle(*, from_condition: str, to_condition: str,
                  admitted: dict[str, dict[str, Any]],
                  from_endpoints: list[TargetEndpoint],
                  to_endpoints: list[TargetEndpoint],
                  method: dict[str, Any],
                  conditions: Optional[list[str]] = None,
-                 scorer_view_sha256: Optional[str] = None) -> dict[str, Any]:
+                 scorer_view_sha256: Optional[str] = None,
+                 code: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The complete, deterministic bundle for ONE frozen ordered condition pair.
 
     Contains every admitted program's ``increase`` and ``decrease`` arm, each ranked over
@@ -369,7 +384,13 @@ def build_bundle(*, from_condition: str, to_condition: str,
         "estimand": est.estimand_block(),
         # the perturbation modality + the SUGGESTIVE modulation rule, stated once
         "perturbation": est.perturbation_block(),
+        # TWO ROLES, KEPT EXPLICIT. ``method`` is WHAT THE CODE DID (estimator/method/config
+        # digests); ``code_identity`` is WHICH BUILD produced the bytes (commit + digest +
+        # recorded tree state). A method hash is not a build and a build is not a method;
+        # both are bound, neither stands in for the other. Bound into the bundle AND its id,
+        # so an arm inventory cannot be lifted onto a build that did not produce it.
         "method": dict(method),
+        "code_identity": dict(code if code is not None else code_identity()),
         # WHERE the independent verification lives and WHO signs it — a POINTER, never a
         # verdict. The verdict is the separate ``temporal_verification.json``, which binds
         # this bundle's hash; embedding one here would be the self-verdict the aggregate
