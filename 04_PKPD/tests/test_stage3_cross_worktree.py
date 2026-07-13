@@ -17,9 +17,12 @@ The build runs in a SUBPROCESS (`_build_real_stage3_bundle.py`) so the Stage-3
 name already lives.
 
 Skips ONLY when no Stage-3 checkout is reachable (`SPOT_STAGE3_ROOT` unset) — the same rule
-as the pin tests. A configured-but-unbuildable Stage 3 FAILS. The one honest exception is the
-known UPSTREAM Direct-verifier defect (a Stage-2 blocker Stage 3 records the same way): that
-skips with its exact reason, because it is not a Stage-4 contract failure.
+as the pin tests. A configured Stage 3 that FAILS to build for a Stage-3/Stage-4 reason FAILS
+the test. The one honest exception is an UPSTREAM Stage-2 PRECONDITION — the Direct worktree
+being dirty (a sibling lane mid-edit, so Direct refuses a release-grade run), or the known
+Direct-verifier defect: that skips with its exact reason, because it is a Stage-2 state, not a
+Stage-4 contract failure, and gate-1 admission of the real current shape is proven on every
+run by the committed fixture regardless.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ import sys
 
 import pytest
 
+from analysis.firewall import Rejection
 from analysis.method_config import STAGE4_DIR
 from analysis.stage3_admission import (
     ENV_CACHE_ROOT,
@@ -45,6 +49,17 @@ from analysis.stage3_admission import (
 BUILDER = os.path.join(STAGE4_DIR, "tests", "_build_real_stage3_bundle.py")
 UPSTREAM_EXIT = 3
 BUILD_TIMEOUT_S = 900
+
+
+def _stage2_now_dirty(roots: dict) -> bool:
+    """Is the Stage-2 Direct worktree dirty RIGHT NOW? A sibling lane editing it between the
+    build and gate-2 re-verify is an upstream race, not a Stage-4 contract failure."""
+    wt = roots.get("stage2_wt")
+    if not wt:
+        return False
+    out = subprocess.run(["git", "-C", wt, "status", "--porcelain"],
+                         capture_output=True, text=True, check=False)
+    return out.returncode == 0 and bool(out.stdout.strip())
 
 
 def _stage3_root() -> str | None:
@@ -79,8 +94,10 @@ def test_a_current_frozen_stage3_bundle_is_admitted_end_to_end(tmp_path, monkeyp
                           capture_output=True, text=True, timeout=BUILD_TIMEOUT_S, check=False)
 
     if proc.returncode == UPSTREAM_EXIT:
-        pytest.skip("UPSTREAM Stage-2 blocker (Direct standalone verifier): "
-                    + proc.stdout.strip())
+        # A Stage-2 PRECONDITION not met (a dirty Direct worktree mid-edit, or the known
+        # Direct-verifier defect) — not a Stage-3/Stage-4 contract break. Gate-1 admission of
+        # the real current shape is proven on every run by the committed fixture regardless.
+        pytest.skip("UPSTREAM Stage-2 precondition: " + proc.stdout.strip())
     assert proc.returncode == 0, (
         "building a bundle from the current frozen Stage-3 engine FAILED — that is a real "
         f"cross-stage break, not a skip.\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
@@ -96,7 +113,18 @@ def test_a_current_frozen_stage3_bundle_is_admitted_end_to_end(tmp_path, monkeyp
     monkeypatch.setenv(ENV_DIRECT_INPUTS, roots["direct_inputs"])
     monkeypatch.setenv(ENV_DIRECT_ANALYSIS, roots["direct_analysis"])
 
-    admission = admit(roots["bundle"], require_external_verifier=True)
+    try:
+        admission = admit(roots["bundle"], require_external_verifier=True)
+    except Rejection as exc:
+        # gate 2 re-runs Direct's verifier over the Stage-2 tree. If a sibling lane edited that
+        # tree BETWEEN the build and this re-verify, the code identity no longer reproduces —
+        # an upstream race, not a Stage-4 defect. Only skip if the tree is genuinely dirty now;
+        # a clean-tree refusal is real and must fail.
+        if exc.code == "stage3_external_verifier_refused" and _stage2_now_dirty(roots):
+            pytest.skip("UPSTREAM Stage-2 precondition: the Direct worktree was edited between "
+                        "the build and gate-2 re-verify, so the code identity no longer "
+                        f"reproduces. {exc}")
+        raise
 
     assert admission.external_verifier == PASSED
     assert admission.gates == ("stage4_restatement", "verifier.verify_stage3")
@@ -111,15 +139,25 @@ def test_a_current_frozen_stage3_bundle_is_admitted_end_to_end(tmp_path, monkeyp
 
 
 def test_the_builder_never_lets_a_stage3_build_failure_masquerade_as_a_skip():
-    """The guard on the guard: only the UPSTREAM Direct defect (exit 3) skips. Every other
-    non-zero build exit is asserted to FAIL in the test above — never skipped."""
+    """The guard on the guard: every skip is an UPSTREAM Stage-2 precondition or a missing
+    checkout. A real Stage-3/Stage-4 break must FAIL, never skip.
+
+    Exactly THREE skips are allowed, and only these three:
+      1. no Stage-3 checkout reachable (`SPOT_STAGE3_ROOT` unset);
+      2. the build returns UPSTREAM_EXIT (Stage-2 tree dirty, or Direct-verifier defect);
+      3. gate 2 refuses AND the Stage-2 tree is dirty NOW (a mid-test edit race).
+    A bare `returncode != 0` skip, or a gate-2 refusal skip that did NOT re-check dirtiness,
+    would be a NO-GO wearing a pass's clothes.
+    """
     with open(__file__, encoding="utf-8") as fh:
         source = fh.read()
-    # the sole skips on a build outcome are no-checkout and the exit-3 upstream branch; a bare
-    # `returncode != 0` skip would be a NO-GO wearing a pass's clothes. (Split literal so this
-    # very check does not count itself.)
-    marker = "pytest" + ".skip("
-    assert source.count(marker) == 2, (
-        "exactly two skips are allowed here: no-checkout, and the UPSTREAM Direct defect. A "
-        "third skip risks hiding a real cross-stage build failure.")
+    marker = "pytest" + ".skip("  # split literal so this check does not count itself
+    assert source.count(marker) == 3, (
+        "exactly three skips are allowed here — no-checkout, build-time UPSTREAM (exit 3), and "
+        "the gate-2 mid-test dirty-tree race. A fourth skip risks hiding a real failure.")
+    # a failed build that is NOT upstream still asserts, and gate-2's skip is gated on dirtiness
     assert "returncode == 0, (" in source, "a failed build must be an assertion, not a skip."
+    assert "returncode == UPSTREAM_EXIT" in source
+    assert "_stage2_now_dirty(roots)" in source, (
+        "the gate-2 refusal skip MUST re-check the Stage-2 tree is genuinely dirty; an "
+        "unconditional skip there would hide a real verifier refusal.")

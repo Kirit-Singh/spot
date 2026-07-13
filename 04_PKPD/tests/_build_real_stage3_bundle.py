@@ -14,18 +14,65 @@ four admission roots to `<dest>/roots.json`.
 
 Exit codes are a CONTRACT the caller depends on:
     0  bundle built, Stage-3 verifier passed, roots.json written
-    3  UPSTREAM: Direct's standalone verifier is unavailable (a Stage-2 blocker, not ours)
+    3  UPSTREAM precondition not met — a Stage-2 state, not a Stage-3/Stage-4 contract break:
+         * Direct's standalone verifier is unavailable (the known NameError blocker), OR
+         * the Stage-2 Direct worktree is DIRTY, so Direct refuses a release-grade run
+           (a sibling lane mid-edit; the committed fixture already proves gate-1 admission)
     1  anything else — a real failure the caller must surface, never skip
 """
 import json
 import os
+import subprocess
 import sys
 
 UPSTREAM_EXIT = 3
 
+# The Stage-2 Direct worktree, resolved exactly as Stage-3's direct_fixture resolves it.
+STAGE2_WT = os.environ.get("SPOT_DIRECT_WT", "/home/tcelab/worktrees/spot-stage2-direct")
+
+
+def stage2_tree_is_dirty() -> str | None:
+    """-> a short description of the dirt, or None if the Stage-2 tree is clean/absent.
+
+    A dirty upstream tree cannot produce a release-grade, reproducible Direct run: Direct's
+    own `code_digest` binds the code identity into the run, and uncommitted bytes do not
+    identify a commit. So this is a PRECONDITION, checked up front and deterministically, not
+    a failure to race on: when a sibling lane is mid-edit on Stage 2, the end-to-end proof
+    cannot run, and the committed fixture carries gate-1 in the meantime.
+    """
+    try:
+        out = subprocess.run(["git", "-C", STAGE2_WT, "status", "--porcelain"],
+                             capture_output=True, text=True, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    lines = [ln for ln in out.stdout.splitlines() if ln.strip()]
+    return f"{len(lines)} uncommitted path(s), e.g. {lines[:3]}" if lines else None
+
+# Signatures of an UPSTREAM Stage-2 precondition, recognised by message so this file imports
+# nothing from Direct. A dirty upstream tree is a transient state of a worktree Stage 4 does
+# not own; Direct correctly refuses a release-grade run from uncommitted bytes.
+_UPSTREAM_MARKERS = ("NameError", "SOURCE_CLASSIFICATION_RULE_ID",
+                     "DirtyTreeError", "code_tree_is_dirty", "working tree is dirty")
+
+
+def _is_upstream(exc: BaseException) -> bool:
+    text = f"{type(exc).__name__}: {exc}"
+    return any(m in text for m in _UPSTREAM_MARKERS)
+
 
 def main() -> int:
     s3_root, dest = sys.argv[1], sys.argv[2]
+
+    # PRECONDITION, checked first and deterministically: a clean Stage-2 Direct tree. A sibling
+    # lane editing Stage 2 would make the build's code identity non-reproducible and race the
+    # re-verify. Skip up front rather than emit a bundle nothing can reproduce.
+    dirt = stage2_tree_is_dirty()
+    if dirt:
+        print(f"UPSTREAM_STAGE2_PRECONDITION: Stage-2 Direct worktree is dirty ({dirt})")
+        return UPSTREAM_EXIT
+
     for p in (s3_root, os.path.join(s3_root, "analysis"), os.path.join(s3_root, "tests")):
         sys.path.insert(0, p)
 
@@ -37,18 +84,19 @@ def main() -> int:
 
     os.makedirs(dest, exist_ok=True)
 
-    direct = direct_fixture.build_direct_run(os.path.join(dest, "direct_rq"),
-                                             lane="research_only")
-    os.environ.setdefault("SPOT_DIRECT_ANALYSIS", direct["analysis"])
-
+    # Building the Direct run and admitting it both touch the Stage-2 worktree. Either can hit
+    # an UPSTREAM precondition (dirty tree, or Direct's verifier defect) — a Stage-2 state, not
+    # a Stage-3/Stage-4 contract break. Classified as exit 3 so the caller skips with a reason
+    # rather than reporting a cross-stage failure that is not there.
     try:
+        direct = direct_fixture.build_direct_run(os.path.join(dest, "direct_rq"),
+                                                 lane="research_only")
+        os.environ.setdefault("SPOT_DIRECT_ANALYSIS", direct["analysis"])
         loaded = dr.load(direct["run_dir"], direct["inputs_root"], artifact_class="analysis",
                          direct_analysis=direct["analysis"])
-    except dr.DirectRunError as exc:
-        # Direct's standalone verifier crashing is an UPSTREAM Stage-2 defect, recorded
-        # honestly by Stage 3 too. It is not a Stage-4 contract failure.
-        if "NameError" in str(exc) or "SOURCE_CLASSIFICATION_RULE_ID" in str(exc):
-            print(f"UPSTREAM_DIRECT_VERIFIER_DEFECT: {exc}")
+    except Exception as exc:  # noqa: BLE001 — re-raised unless it is a known upstream state
+        if _is_upstream(exc):
+            print(f"UPSTREAM_STAGE2_PRECONDITION: {type(exc).__name__}: {exc}")
             return UPSTREAM_EXIT
         raise
 
@@ -69,12 +117,18 @@ def main() -> int:
                                direct_inputs_root=direct["inputs_root"],
                                artifact_class="analysis", direct_analysis=direct["analysis"])
     if rep.failures:
+        # If the tree went dirty DURING the build, the verify failure is that race, not a
+        # Stage-3/Stage-4 defect — classify it upstream. Otherwise it is a real failure.
+        dirt = stage2_tree_is_dirty()
+        if dirt:
+            print(f"UPSTREAM_STAGE2_PRECONDITION: Stage-2 tree went dirty mid-build ({dirt})")
+            return UPSTREAM_EXIT
         print("STAGE3_VERIFIER_FAILED:\n" + rep.render())
         return 1
 
     roots = {"bundle": bundle, "cache": cache, "direct_run": direct["run_dir"],
              "direct_inputs": direct["inputs_root"], "direct_analysis": direct["analysis"],
-             "n_verifier_checks": len(rep.checks)}
+             "stage2_wt": STAGE2_WT, "n_verifier_checks": len(rep.checks)}
     with open(os.path.join(dest, "roots.json"), "w", encoding="utf-8") as fh:
         json.dump(roots, fh, indent=2)
     print("OK n_checks=%d bundle=%s" % (len(rep.checks), os.path.basename(bundle)))
