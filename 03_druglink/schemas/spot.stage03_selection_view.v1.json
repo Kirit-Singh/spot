@@ -71,6 +71,64 @@
         "toward_B"
       ]
     },
+    "row_order_meaning": {
+      "additionalProperties": false,
+      "description": "WHERE ORDER IS MEANING, and where it is not. Published so a consumer can tell which of its lists it may safely re-sort.",
+      "properties": {
+        "arm_evidence": {
+          "const": true
+        },
+        "arm_evidence_reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tables": {
+          "const": false
+        },
+        "tables_reason": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "tables",
+        "tables_reason",
+        "arm_evidence",
+        "arm_evidence_reason"
+      ],
+      "type": "object"
+    },
+    "sealed_table": {
+      "additionalProperties": false,
+      "description": "EXACT identity for ONE PROJECTED table. TWO hashes, over TWO DIFFERENT SCOPES, and the distinction is load-bearing: they fail differently and neither alone is sufficient. `raw_sha256` is the RAW FILE BYTES of the STORE table this subset was drawn FROM (<name>.parquet). The subset has no file of its own, so this is the only RAW identity that exists for it, and it is what catches a byte-level edit to the store that canonicalisation would smooth over. `content_sha256` is the CANONICAL CONTENT of the PROJECTED ROWS THEMSELVES \u2014 every column, including the display-only ones the store's content hash excludes and the join-time `selection_roles` annotation the projection adds \u2014 and it is what moves when one cell of one projected row is edited after sealing. It is ROW-ORDER-INVARIANT: a row set is a SET, and the view already guarantees row order is by content id and is not a ranking. A DUPLICATED row identity is still refused.",
+      "properties": {
+        "content_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "sha256 of the CANONICAL CONTENT of the PROJECTED ROWS in this view."
+        },
+        "raw_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "sha256 of the RAW FILE BYTES of the STORE table on disk that this projection was taken from. NOT a digest of the subset."
+        },
+        "row_count": {
+          "description": "Rows THIS QUESTION projected. An added or deleted row moves it.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "description": "The column contract this table was sealed under. Bound by EXACT equality in code (druglink.view_projection.table_schema_id) \u2014 never by substring, never by pattern.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw_sha256",
+        "content_sha256",
+        "row_count",
+        "schema_id"
+      ],
+      "type": "object"
+    },
     "selected_arm": {
       "additionalProperties": false,
       "properties": {
@@ -149,19 +207,24 @@
         "bridge_raw_sha256": {
           "$ref": "#/$defs/sha256"
         },
+        "projection_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The PROJECTION this receipt is about. A receipt is a statement about specific bytes; lifted from another view it would admit rows it never saw, and the rows this document carries would have been admitted by nobody."
+        },
         "receipt_schema": {
           "const": "spot.stage02_stage3_receipt.v1"
         }
       },
       "required": [
-        "receipt_schema",
-        "aggregate_manifest_raw_sha256",
         "aggregate_manifest_canonical_sha256",
+        "aggregate_manifest_raw_sha256",
         "aggregate_report_raw_sha256",
-        "bridge_raw_sha256",
-        "bridge_canonical_sha256",
+        "aggregate_verdict",
         "aggregate_verifier_id",
-        "aggregate_verdict"
+        "bridge_canonical_sha256",
+        "bridge_raw_sha256",
+        "projection_sha256",
+        "receipt_schema"
       ],
       "type": "object"
     },
@@ -276,23 +339,29 @@
       },
       "description": "What a consumer may rely on. Bound into the view id, so revoking one moves every identifier instead of quietly changing what the view means.",
       "required": [
-        "the_view_is_a_pure_function_of_the_admitted_store_and_the_selection",
-        "the_view_never_re_ranks_or_re_orders_the_store",
-        "the_view_never_promotes_an_evidence_class",
-        "the_view_never_writes_back_to_the_store",
-        "the_view_is_not_a_release_artifact_and_no_release_holds_one_selection",
-        "the_view_only_filters_and_annotates_rows_the_store_already_contains",
-        "roles_are_assigned_at_join_time_never_stored_on_an_arm",
+        "a_cached_view_is_regenerable_from_the_store_and_discardable",
+        "a_null_rank_is_never_a_zero_and_never_sorts_as_best",
+        "a_pathway_record_never_sources_a_drug_edge",
+        "a_receipt_that_was_written_about_another_projection_is_refused",
+        "a_row_set_is_a_set_and_a_reorder_is_not_a_finding_but_a_duplicate_is_refused",
+        "a_single_cell_edited_after_sealing_is_refused_by_name",
+        "an_inverse_direction_hypothesis_is_never_observed_support_and_is_never_promoted",
         "arm_keys_are_matched_by_exact_string_equality_never_by_prefix",
         "direct_and_temporal_are_distinct_estimands_never_fused",
-        "a_pathway_record_never_sources_a_drug_edge",
-        "an_inverse_direction_hypothesis_is_never_observed_support_and_is_never_promoted",
-        "a_null_rank_is_never_a_zero_and_never_sorts_as_best",
+        "every_projected_table_carries_its_own_raw_and_canonical_identity",
         "filtered_out_rows_are_reported_as_counts_never_silently_dropped",
-        "a_cached_view_is_regenerable_from_the_store_and_discardable",
+        "roles_are_assigned_at_join_time_never_stored_on_an_arm",
         "row_order_is_by_content_id_and_is_not_a_ranking",
+        "the_arm_evidence_order_is_meaning_and_a_swap_of_the_poles_is_refused",
+        "the_global_store_carries_no_selection_identity_at_any_depth",
+        "the_projected_rows_are_re_hashed_before_the_view_is_admitted_never_copied",
         "the_stores_eight_table_hashes_are_re_derived_before_projection_never_copied",
-        "the_global_store_carries_no_selection_identity_at_any_depth"
+        "the_view_is_a_pure_function_of_the_admitted_store_and_the_selection",
+        "the_view_is_not_a_release_artifact_and_no_release_holds_one_selection",
+        "the_view_never_promotes_an_evidence_class",
+        "the_view_never_re_ranks_or_re_orders_the_store",
+        "the_view_never_writes_back_to_the_store",
+        "the_view_only_filters_and_annotates_rows_the_store_already_contains"
       ],
       "type": "object"
     },
@@ -366,6 +435,115 @@
     },
     "p_q_fdr_permitted": {
       "const": false
+    },
+    "projection": {
+      "additionalProperties": false,
+      "description": "THE PROJECTION'S OWN IDENTITY \u2014 the rows THIS view ships, sealed table by table. The `store` block names the GLOBAL store: all eight tables, every row in the release. It says NOTHING about the SUBSET a consumer actually reads. Without this block the projected tables are a BARE ROW LIST, and a single cell edited after the view was sealed leaves every hash in the document mutually consistent \u2014 the store's digest is still honest, because the store was never touched \u2014 while the rows Stage 4 consumes are not the rows anybody admitted. A mismatch is a REFUSAL: the recomputed value is never reconciled and never adopted.",
+      "properties": {
+        "arm_evidence_order_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The ORDERED (arm_key, role) pairing of `arm_evidence`. UNLIKE a row set, this order IS meaning: index 0 is the arm the question moves AWAY FROM, index 1 the arm it moves TOWARD. A swap is refused by name."
+        },
+        "n_tables_sealed": {
+          "const": 7
+        },
+        "projection_checks": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 10,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "projection_disk_checks": {
+          "description": "The gates only a verifier HOLDING THE STORE ON DISK can run. Enumerated so a consumer can tell a contract check from a full verification.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "projection_schema_set_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest of the COLUMN contract of every projected table. An added, renamed or dropped column moves it \u2014 which is schema-set drift, and it is a refusal."
+        },
+        "projection_seal_schema": {
+          "const": "spot.stage03_selection_view.projection_seal.v1"
+        },
+        "projection_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The seal's OWN identity, recomputed by the verifier. A seal that never recomputes its own id can be handed a forged one \u2014 and it is the first thing an attacker who understood the check would rewrite."
+        },
+        "projection_verifier_id": {
+          "const": "spot.stage03.selection_view.projection_identity.v1"
+        },
+        "row_order_carries_meaning": {
+          "$ref": "#/$defs/row_order_meaning"
+        },
+        "schemas_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The schema set this projection was sealed under. Bound EXACTLY, and compared with the digest re-derived from the schema files on disk."
+        },
+        "tables": {
+          "additionalProperties": false,
+          "properties": {
+            "arm_slots": {
+              "$ref": "#/$defs/sealed_table"
+            },
+            "arm_summaries": {
+              "$ref": "#/$defs/sealed_table"
+            },
+            "candidates": {
+              "$ref": "#/$defs/sealed_table"
+            },
+            "dispositions": {
+              "$ref": "#/$defs/sealed_table"
+            },
+            "pathway_context": {
+              "$ref": "#/$defs/sealed_table"
+            },
+            "source_records": {
+              "$ref": "#/$defs/sealed_table"
+            },
+            "target_drug_edges": {
+              "$ref": "#/$defs/sealed_table"
+            }
+          },
+          "required": [
+            "arm_slots",
+            "arm_summaries",
+            "candidates",
+            "dispositions",
+            "pathway_context",
+            "source_records",
+            "target_drug_edges"
+          ],
+          "type": "object"
+        },
+        "the_projected_rows_carry_an_identity_of_their_own_not_the_global_stores": {
+          "const": true
+        },
+        "the_seal_is_never_reconciled_with_the_rows_a_mismatch_is_a_refusal": {
+          "const": true
+        }
+      },
+      "required": [
+        "arm_evidence_order_sha256",
+        "n_tables_sealed",
+        "projection_checks",
+        "projection_disk_checks",
+        "projection_schema_set_sha256",
+        "projection_seal_schema",
+        "projection_sha256",
+        "projection_verifier_id",
+        "row_order_carries_meaning",
+        "schemas_sha256",
+        "tables",
+        "the_projected_rows_carry_an_identity_of_their_own_not_the_global_stores",
+        "the_seal_is_never_reconciled_with_the_rows_a_mismatch_is_a_refusal"
+      ],
+      "type": "object"
     },
     "schema_version": {
       "const": "spot.stage03_selection_view.v1"
@@ -643,6 +821,10 @@
         "n_tables_verified": {
           "const": 8
         },
+        "projection_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The PROJECTION this receipt is about. A receipt is a statement about specific bytes; lifted from another view it would admit rows it never saw, and the rows this document carries would have been admitted by nobody."
+        },
         "schemas_sha256": {
           "type": [
             "string",
@@ -741,6 +923,7 @@
         "document_sha256",
         "method_sha256",
         "n_tables_verified",
+        "projection_sha256",
         "stage2_manifest_self_hash",
         "store_identity_checks",
         "store_identity_verifier_id",
@@ -819,27 +1002,28 @@
     }
   },
   "required": [
-    "schema_version",
-    "artifact_class",
-    "view_method_id",
-    "view_id",
-    "view_content_sha256",
-    "selection",
-    "selected_arms",
-    "store",
     "admission",
-    "origin_type",
-    "origin_types_present",
     "arm_evidence",
-    "tables",
+    "artifact_class",
+    "candidate_rank_permitted",
+    "combined_objective_permitted",
     "counts",
     "guarantees",
-    "missingness",
-    "inference_status",
-    "combined_objective_permitted",
-    "candidate_rank_permitted",
     "headline_arm_permitted",
-    "p_q_fdr_permitted"
+    "inference_status",
+    "missingness",
+    "origin_type",
+    "origin_types_present",
+    "p_q_fdr_permitted",
+    "projection",
+    "schema_version",
+    "selected_arms",
+    "selection",
+    "store",
+    "tables",
+    "view_content_sha256",
+    "view_id",
+    "view_method_id"
   ],
   "title": "Stage-3 selection view \u2014 a PURE PROJECTION of the selection-independent v2 store onto ONE verified Stage-1 v3 selection",
   "type": "object"

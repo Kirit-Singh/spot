@@ -1,6 +1,17 @@
-# Stage-3 v2 real emission — everything is staged except W3's bridge
+# Stage-3 v2 real emission — the universe is staged; the BRIDGE CONSUMER IS NOT BUILT
 
-Ready to run. The only substitution left is the three W3 bridge paths.
+**NOT READY. This document previously claimed the W3 paths were "the only substitution left".
+That was FALSE, and it is corrected here.**
+
+`run_stage3_v2.bridge_consumer_ready()` is `hasattr(stage2_aggregate, "admit_bridge")`, and
+`admit_bridge` DOES NOT EXIST. So substituting W3's real paths today would still refuse — BEFORE
+the CLI ever reads them. The refusal is honest, but a documented refusal is not a working seam,
+and describing it as "one substitution away" overstated it.
+
+The universe store below IS real, local, admitted and verified. The bridge CONSUMER is being
+built now. This document is promoted to READY only when BOTH hold:
+  1. `bridge_consumer_ready()` is genuinely TRUE, and
+  2. a dry-run REACHES EMISSION and writes a bundle.
 
 ## The universe store is REAL, LOCAL, and ADMITTED
 
@@ -62,13 +73,15 @@ PYTHONPATH=analysis python -m verifier.verify_stage3_v2 \
 
 **`<W3>` is the only unknown.** Everything else is staged and verified.
 
-## What it will refuse today, and why that is correct
+## What it refuses today — and note WHERE it refuses
 
-W3's bridge is still code-only — no `stage3_bridge.json` exists on this host. The v2 path
-therefore refuses at `the_stage3_bridge_consumer_is_not_implemented_yet` (exit 3, **nothing
-written**).
+```
+REFUSED [analysis]: [the_stage3_bridge_consumer_is_not_implemented_yet]   exit 3, nothing written
+```
 
-That refusal is the honest state, not an obstacle. The native ranking rows carry
+Read that gate name carefully: it refuses because **Stage-3 has not built the consumer**, not
+because W3's bytes are missing. Both are true, but the near blocker is ours. Even with W3's real
+bridge in hand, this command would refuse at the same line. The native ranking rows carry
 `{target_id, arm_value, evaluable, rank}` — **no namespace, no modality**. Those two facts exist
 only in the bridge. A run without it would have to infer identity from an id's string shape and
 default a modality from a config constant — a *setting* wearing the costume of an assay. Stage-3

@@ -55,6 +55,7 @@ from . import direction as dr
 from . import pathway_context_v2 as pc2
 from . import selection_v3 as s3
 from . import stage2_aggregate as sa
+from . import view_projection as vp
 from . import view_store as vst
 from . import workflow as wf
 from .hashing import content_hash, file_sha256, without
@@ -366,7 +367,8 @@ def materialize(*, selection: s3.VerifiedSelection, aggregate: sa.AdmittedAggreg
 
     return _document(selection=selection, arms=arms, document=document,
                      admission=admission, origin=origin, view_rows=view_rows, store=store,
-                     arm_evidence=arm_evidence, store_identity=store_identity)
+                     arm_evidence=arm_evidence, store_identity=store_identity,
+                     bundle_dir=bundle_dir)
 
 
 def _document(*, selection: s3.VerifiedSelection, arms: asel.SelectedArms,
@@ -375,8 +377,16 @@ def _document(*, selection: s3.VerifiedSelection, arms: asel.SelectedArms,
               view_rows: Mapping[str, list[dict[str, Any]]],
               store: Mapping[str, list[dict[str, Any]]],
               arm_evidence: list[dict[str, Any]],
-              store_identity: Mapping[str, Any]) -> dict[str, Any]:
-    """The view document. Content-addressed; no paths, no clock, no re-ranking."""
+              store_identity: Mapping[str, Any], bundle_dir: str) -> dict[str, Any]:
+    """The view document. Content-addressed; no paths, no clock, no re-ranking.
+
+    THE PROJECTED ROWS ARE SEALED HERE. The ``store`` block above names the GLOBAL store; it says
+    NOTHING about the SUBSET this question ships, and Stage 4 reads the subset. So every projected
+    table gets an identity of its own (:mod:`druglink.view_projection`) — and the two receipts,
+    ``store`` and ``admission``, are stamped with the seal, so a receipt lifted from another view
+    cannot travel with rows it never admitted.
+    """
+    seal = vp.seal(view_rows=view_rows, arm_evidence=arm_evidence, bundle_dir=bundle_dir)
     view: dict[str, Any] = {
         "schema_version": VIEW_SCHEMA,
         "artifact_class": document.get("artifact_class"),
@@ -390,8 +400,16 @@ def _document(*, selection: s3.VerifiedSelection, arms: asel.SelectedArms,
         # Every hash here was RE-DERIVED by `view_store.bind` from the rows in hand and the
         # store on disk, and PROVEN equal to what the document declares. None of it is copied.
         "store": {**dict(store_identity),
-                  "selection_view_vocabulary_digest": content_hash(vocabularies())},
-        "admission": dict(admission),
+                  "selection_view_vocabulary_digest": content_hash(vocabularies()),
+                  "projection_sha256": seal["projection_sha256"]},
+        "admission": {**dict(admission), "projection_sha256": seal["projection_sha256"]},
+
+        # --- EXACTLY WHICH ROWS THIS QUESTION SHIPS ------------------------------------ #
+        # The identity of the PROJECTION itself, per table: the raw bytes of the store table it
+        # was drawn from, the canonical content of the rows it actually carries, the row count
+        # and the column contract. Without it the tables are a bare row list, and a cell edited
+        # after sealing reaches Stage 4 with every other hash in the document still agreeing.
+        "projection": seal,
 
         # --- THE ANSWER --------------------------------------------------------------- #
         "origin_type": origin,
@@ -439,6 +457,9 @@ def guarantees() -> dict[str, Any]:
         # republished the store's own claims about itself.
         "the_stores_eight_table_hashes_are_re_derived_before_projection_never_copied": True,
         "the_global_store_carries_no_selection_identity_at_any_depth": True,
+        # THE PROJECTION ITSELF IS SEALED. The promises above are about the GLOBAL store; these
+        # are about the ROWS THIS VIEW SHIPS, which is what a consumer actually reads.
+        **vp.guarantees(),
     }
 
 
@@ -473,5 +494,6 @@ def vocabularies() -> dict[str, Any]:
         "inferred_origins": sorted(dr.INFERRED_ORIGINS & set(dr.V2_ORIGIN_TYPES)),
         "selection": s3.vocabularies(),
         "arm_selection": asel.vocabularies(),
+        "projection": vp.vocabularies(),
         **guarantees(),
     }

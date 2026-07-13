@@ -33,11 +33,15 @@ from typing import Any, Mapping
 
 from . import artifact_class as ac
 from . import bundle_v2 as bv2
-from . import candidates_v2 as cv2
-from . import pathway_context_v2 as pc2
 from . import schemas
 from . import selection_view as sv
+from . import view_projection as vp
 from .hashing import contains_local_path
+from .view_projection import (  # noqa: F401  (one front door for the row contract)
+    ROW_COLUMNS,
+    VIEW_CANDIDATE_COLUMNS,
+    ProjectionSealError,
+)
 from .view_store import (  # noqa: F401  (the store's invariant is enforced where the store is)
     GATE_ROLE_IN_THE_STORE,
     GATE_SELECTION_IN_THE_STORE,
@@ -52,29 +56,15 @@ from .view_store import (  # noqa: F401  (the store's invariant is enforced wher
 # toward_B(low) are both `decrease`, and Stage 1 admits that selection. A scalar would report only
 # the first. It is DEFINED in `view_store`, beside the refusal that keeps it OUT of the store, so
 # the column the view adds and the column the store forbids can never drift apart.
-
-# The candidate's VIEW-SCOPED evidence, alongside (never instead of) the store's global fields.
-VIEW_CANDIDATE_COLUMNS: tuple[str, ...] = (
-    "view_arm_keys_by_origin", "view_n_edges_by_origin", "view_roles", "view_edge_ids",
-    "view_stage3_evidence_classes", "view_directional_evidence_statuses",
-    "view_observed_perturbation_support", "view_arm_ranks",
-)
-
-# EVERY column a projected row may carry. DERIVED from the producer, so the two cannot drift.
-ROW_COLUMNS: dict[str, frozenset[str]] = {
-    "arm_slots": frozenset(cv2.ARM_SLOT_COLUMNS) | {ROLE_COLUMN},
-    "target_drug_edges": frozenset(cv2.EDGE_COLUMNS) | {ROLE_COLUMN},
-    "arm_summaries": frozenset(cv2.ARM_SUMMARY_COLUMNS) | {ROLE_COLUMN},
-    "candidates": frozenset(cv2.CANDIDATE_COLUMNS) | frozenset(VIEW_CANDIDATE_COLUMNS),
-    "pathway_context": frozenset(pc2.CONTEXT_COLUMNS) | {ROLE_COLUMN},
-    "source_records": frozenset(cv2.SOURCE_RECORD_COLUMNS),
-    "dispositions": frozenset(cv2.DISPOSITION_COLUMNS) | {ROLE_COLUMN},
-}
+#
+# ROW_COLUMNS / VIEW_CANDIDATE_COLUMNS — every column a projected row may carry, DERIVED from the
+# producer's own tuples. They live in `view_projection`, beside the SEAL that binds those columns
+# to a schema id, so the columns this contract admits and the columns the seal names are one list.
 
 # The document's own top-level fields. Enumerated, because "strict" has to mean something.
 DOCUMENT_FIELDS: frozenset[str] = frozenset({
     "schema_version", "artifact_class", "view_method_id", "view_id", "view_content_sha256",
-    "selection", "selected_arms", "store", "admission",
+    "selection", "selected_arms", "store", "admission", "projection",
     "origin_type", "origin_types_present", "arm_evidence", "tables", "counts",
     "guarantees", "missingness", "inference_status",
     "combined_objective_permitted", "candidate_rank_permitted", "headline_arm_permitted",
@@ -169,9 +159,18 @@ def check_browser_safe(view: Mapping[str, Any]) -> None:
 
 
 def validate(view: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The whole contract: the schema, the rows, and the browser firewall. All three."""
+    """The whole contract: the schema, the rows, the SEAL, and the browser firewall. All four.
+
+    THE SEAL IS WHY THIS IS A CHECK AND NOT A SHAPE TEST. The schema proves the document has the
+    right FIELDS; ``check_rows`` proves the rows have the right COLUMNS. Neither says anything
+    about the VALUES in the cells — so a single cell edited after the view was sealed passed all
+    of them, and every hash in the document stayed mutually consistent because the store's digest
+    describes the GLOBAL STORE and had not moved. ``view_projection.check`` RE-HASHES the rows the
+    view actually ships and refuses the edit by name.
+    """
     schemas.validate(dict(view), sv.VIEW_SCHEMA, context="stage3_selection_view")
     check_rows(view)
+    vp.check(view)
     check_browser_safe(view)
     return view
 
@@ -193,6 +192,14 @@ def contract() -> dict[str, Any]:
         # and re-read from the store on disk, and these are the gates that had to pass first.
         "store_identity_verifier_id": STORE_IDENTITY_VERIFIER_ID,
         "store_identity_checks": store_identity_checks(),
+        # AND WHAT IT PROVED ABOUT THE ROWS IT SHIPS. The store block above is about the GLOBAL
+        # store; these are about the PROJECTED SUBSET — the rows a consumer actually reads.
+        "projection_verifier_id": vp.PROJECTION_VERIFIER_ID,
+        "projection_checks": vp.checks(),
+        "projection_disk_checks": vp.disk_checks(),
+        "projection_table_schema_ids": {name: vp.table_schema_id(name)
+                                        for name in vp.SEALED_TABLES},
+        "row_order_carries_meaning": dict(vp.ROW_ORDER_CARRIES_MEANING),
         "max_rows_per_table": MAX_ROWS_PER_TABLE,
         "max_string_length": MAX_STRING_LEN,
         "guarantees": sv.guarantees(),

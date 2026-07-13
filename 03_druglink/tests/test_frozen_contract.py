@@ -101,19 +101,37 @@ FROZEN_CONTRACT_SHA256 = \
 # which then went STALE when the v2 schema was corrected the following commit. Neither number was
 # a lie; the LABEL was. There is now ONE schema-set identity, and it is the one in the artifacts.
 #
-# WHAT THE STAGE-4 OWNER MUST BE TOLD, before any v2 bundle is admitted downstream:
-#     schema set   23559703…   (= method.schemas_sha256 in EVERY bundle — compare it there)
+# --- THE PROJECTION-SEAL ROUND (this commit). v1 STILL did not budge. ----------------------
+#
+# `spot.stage03_selection_view.v1` was CORRECTED again, and this is the defect it closes:
+#
+#     the PROJECTED tables were a BARE ROW LIST. Nothing bound them.
+#
+# `view["tables"]["arm_slots"][0]["arm_context_sha256"] = "MUTATED"`, applied AFTER the view was
+# sealed, was ADMITTED by `view_contract.validate()`. Every hash in the document stayed mutually
+# consistent — because the view's `store.table_hashes` describe the GLOBAL STORE, and the store
+# had not been touched. The rows a consumer READS had been. The store-identity round (d18264c)
+# closed the same class of hole one level up (a hash you COPY is not a hash you CHECKED); this
+# one is its mirror: the view republished NOTHING about the rows it actually shipped.
+#
+# So every projected table now carries its own identity — raw bytes of the store table it was
+# drawn from, canonical content of the ROWS IT SHIPS, row count, column contract — and the schema
+# REQUIRES it. The schema had to move: the view's top level is `additionalProperties: false`, so
+# the seal could not even be carried, let alone enforced, without it. See `druglink.view_projection`.
+#
+# WHAT THE STAGE-4 (W6) AND FRONTEND (W12) OWNERS MUST BE TOLD, before a view is consumed:
+#     schema set   23559703… -> b19f26cb…      (= method.schemas_sha256 in EVERY bundle — RE-PINNED)
 #     v1 contract  361d0833…   UNCHANGED, and it has never moved (verify this first)
 #     v2 contract  e6b537d7…   UNCHANGED this round (still NOT consumed by Stage 4)
-#     view schema  a652f4e0… -> abd65920…      (W12 / W6 consume this — RE-PINNED)
+#     view schema  abd65920… -> ad2cae5b…      (W12 / W6 consume this — RE-PINNED)
 FROZEN_SCHEMA_SET_SHA256 = \
-    "235597035ed2a11a0a59d68ad9a5d716205a24d71aaebbcd7103106c8605f83f"
+    "b19f26cb1992b1c4bf1cca74ab720e6b1cc219e8d540de1a0c422210c00810bf"
 FROZEN_V2_CONTRACT = "spot.stage03_drug_annotation.v2"
 FROZEN_V2_CONTRACT_SHA256 = \
     "e6b537d7ff23519bdef67d4078c0fd3782ade73b97e1ff6e802486b549aa8b61"
 FROZEN_VIEW_CONTRACT = "spot.stage03_selection_view.v1"
 FROZEN_VIEW_CONTRACT_SHA256 = \
-    "abd659208d648797e7474e66db3f6ccbc0980170700e9a746632b94c2f928d2e"
+    "ad2cae5b3c3d85b18e78fde9a121a6ac7debd4f3404e93e2ed77e8757d44d0f1"
 
 # The verifier's gate inventory on a clean bundle (sorted check names, newline-joined).
 # NEW at r8, closing the class of defect B6 belonged to: the freeze pinned the contract
@@ -175,6 +193,20 @@ def test_the_whole_schema_set_is_byte_frozen():
     got = _schema_set_sha256()
     assert got == FROZEN_SCHEMA_SET_SHA256, (
         f"the schemas/ set changed: {got} != pinned {FROZEN_SCHEMA_SET_SHA256}" + _UNFREEZE)
+
+
+def test_the_PRODUCTION_pin_and_the_FREEZE_pin_are_the_SAME_number():
+    """The projection seal binds `schemas_sha256` EXACTLY, against a pin in PRODUCTION code
+    (`view_projection.PINNED_SCHEMAS_SHA256`). Two pins over one fact can drift, and a drifted
+    pin protects nothing — so they are asserted equal here, once, by name.
+
+    EXACT equality, never a substring and never a pattern. The v2 schema once carried
+    `verifier_id: {pattern: "independent"}`: it refused every honest Stage-2 report and admitted
+    any forgery that renamed itself. That rule is dead and its SHAPE may not come back.
+    """
+    from druglink import view_projection as vp
+    assert vp.PINNED_SCHEMAS_SHA256 == FROZEN_SCHEMA_SET_SHA256
+    assert vp.bound_schemas_sha256() == FROZEN_SCHEMA_SET_SHA256    # re-derived from the files
 
 
 def test_the_pinned_schema_set_is_the_one_EVERY_BUNDLE_PUBLISHES():
@@ -336,9 +368,36 @@ def test_the_selection_view_contract_is_byte_frozen():
     assert sorted(store["properties"]["table_hashes"]["required"]) == sorted(av2.SCIENTIFIC_TABLES)
     assert len(av2.SCIENTIFIC_TABLES) == 8
 
+    # THE VIEW MUST NAME THE ROWS IT SHIPS, not merely the store it drew them from. The `store`
+    # block above is about the GLOBAL release; a consumer reads the PROJECTED SUBSET, and until
+    # this round nothing in the document was about it. Required in the schema, so a view whose
+    # tables are a bare row list cannot validate.
+    from druglink import view_projection as vp
+    projection = view["properties"]["projection"]
+    for field in ("tables", "projection_sha256", "schemas_sha256", "n_tables_sealed",
+                  "projection_verifier_id", "projection_checks", "arm_evidence_order_sha256",
+                  "projection_schema_set_sha256", "row_order_carries_meaning"):
+        assert field in projection["required"], f"the projection seal dropped {field!r}" + _UNFREEZE
+    assert "projection" in view["required"]
+    assert projection["properties"]["n_tables_sealed"]["const"] == 7
+    assert sorted(projection["properties"]["tables"]["required"]) == sorted(vp.SEALED_TABLES)
+    # Every sealed table names RAW bytes AND canonical content. They fail differently.
+    for field in ("raw_sha256", "content_sha256", "row_count", "schema_id"):
+        assert field in view["$defs"]["sealed_table"]["required"]
+    # An EXACT const, never a pattern — the retired substring rule may not come back in this shape.
+    assert projection["properties"]["projection_verifier_id"]["const"] == vp.PROJECTION_VERIFIER_ID
+    assert "pattern" not in projection["properties"]["projection_verifier_id"]
+    # The receipts are stamped with the projection they admit, so a stale one cannot travel.
+    for block in ("store", "admission"):
+        assert "projection_sha256" in view["properties"][block]["required"]
+
     # The guarantees are REQUIRED, so a view that quietly drops one fails its own schema.
     for promise in ("the_stores_eight_table_hashes_are_re_derived_before_projection_never_copied",
                     "the_global_store_carries_no_selection_identity_at_any_depth",
+                    "a_single_cell_edited_after_sealing_is_refused_by_name",
+                    "every_projected_table_carries_its_own_raw_and_canonical_identity",
+                    "a_row_set_is_a_set_and_a_reorder_is_not_a_finding_but_a_duplicate_is_refused",
+                    "the_arm_evidence_order_is_meaning_and_a_swap_of_the_poles_is_refused",
                     "the_view_never_re_ranks_or_re_orders_the_store",
                     "the_view_never_promotes_an_evidence_class",
                     "the_view_never_writes_back_to_the_store",
