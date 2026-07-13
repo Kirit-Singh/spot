@@ -4,10 +4,15 @@
         --stage1-view    stage01_stage2_registry_view.json \
         --stage1-release release_identity.json \
         --effect-source  effect_source.json \
-        --env-lock       _requirements/base.lock \
+        --env-lock       analysis/stage02_solver_lock.txt \
         --conditions     Rest,Stim8hr,Stim48hr \
         --out-root       <dir> \
         [ --from-condition Rest --to-condition Stim8hr | --all-pairs ]
+
+``--env-lock`` is the AUTHORITATIVE frozen/staged Stage-2 solver lock
+(``analysis/stage02_solver_lock.txt``), the SAME lock Direct, pathway and the real run bind;
+its bytes must hash to 2983d140…. The old ``_requirements/base.lock`` (b9284e63…) is NOT it
+and is refused by name.
 
 It lives in the ``arms`` subpackage — NOT beside ``run_temporal.py`` — on purpose: the
 legacy temporal method binds ``code_tree_sha256`` over a FLAT listing of the temporal

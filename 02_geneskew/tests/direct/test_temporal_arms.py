@@ -1479,37 +1479,55 @@ class TestAuditDefectsClosed:
         assert report["admitted"] is False
         assert any("env_lock" in f or "solver_lock" in f for f in report["failures"])
 
-    def test_6_production_env_lock_reads_actual_bytes_against_an_explicit_expected(
-            self, tmp_path):
-        from direct.hashing import file_sha256
+    def test_6_the_real_authoritative_lock_verifies_to_2983(self):
         from direct.temporal.arms import arm_env
-        lock = tmp_path / "stage02_solver_lock.txt"
-        lock.write_bytes(b"numpy==1.26.4\nscipy==1.13.0\n")
-        # expect_sha256 = the file's own sha exercises the READ mechanism on a non-auth lock
-        blk = arm_env.env_lock_block(str(lock), expect_sha256=file_sha256(str(lock)))
-        assert blk["env_lock_verified_from_bytes"] is True and not blk["env_lock_is_synthetic"]
-        assert blk["env_lock_sha256"] == file_sha256(str(lock))   # bytes, not a supplied hash
-        assert blk["env_lock_name"] == "stage02_solver_lock.txt"  # basename, never the path
-
-    def test_6_the_authoritative_lock_verifies_the_wrong_base_lock_is_refused_by_name(
-            self, tmp_path):
-        from direct.temporal.arms import arm_env
-        # the REAL authoritative Stage-2 solver lock, if staged, verifies to 2983…
         auth = "/home/tcelab/.spot-runs/20260712T021343Z/stage02_solver_lock.txt"
-        if os.path.exists(auth):
-            blk = arm_env.env_lock_block(auth)
-            assert blk["env_lock_sha256"] == arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
-            assert blk["env_lock_verified_from_bytes"] is True
-        # the WRONG _requirements/base.lock (b9284e63…) is refused BY NAME
+        if not os.path.exists(auth):
+            pytest.skip("authoritative Stage-2 solver lock not staged")
+        blk = arm_env.env_lock_block(auth)
+        assert blk["env_lock_sha256"] == arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
+        assert blk["env_lock_verified_from_bytes"] is True and not blk["env_lock_is_synthetic"]
+
+    def test_6_a_wrong_or_missing_production_lock_is_refused_by_name(self, tmp_path):
+        from direct.temporal.arms import arm_env
         base = tmp_path / "base.lock"
         base.write_bytes(b"this is not the authoritative solver lock\n")
         with pytest.raises(arm_env.EnvLockError, match="not the authoritative"):
             arm_env.env_lock_block(str(base))
-
-    def test_6_a_missing_production_lock_is_refused_by_name(self):
-        from direct.temporal.arms import arm_env
         with pytest.raises(arm_env.EnvLockError, match="missing"):
             arm_env.env_lock_block("/no/such/lock")
+
+    def test_6_NO_caller_override_can_accept_a_non_authoritative_lock(self, tmp_path):
+        # the API attack: there is NO expect_sha256 override, so no caller can talk the
+        # producer into binding the b928 (or any non-2983) lock as a production block.
+        import inspect
+
+        from direct.temporal.arms import arm_env
+        assert "expect_sha256" not in inspect.signature(arm_env.env_lock_block).parameters
+        base = tmp_path / "base.lock"
+        base.write_bytes(b"numpy==1.26.4\n")   # a real, self-consistent, WRONG lock
+        with pytest.raises(arm_env.EnvLockError, match="no override|not the authoritative"):
+            arm_env.env_lock_block(str(base))
+
+    def test_6_no_stale_wrong_lock_in_producer_docs_or_help(self):
+        # every executable --env-lock example in the PRODUCER source names the authoritative
+        # analysis/stage02_solver_lock.txt (or a placeholder) — never the refused b928 lock.
+        import glob
+        import re
+        armdir = os.path.join(_HERE, "..", "..", "analysis", "direct", "temporal", "arms")
+        bad = []
+        for path in glob.glob(os.path.join(armdir, "*.py")):
+            for i, line in enumerate(open(path), 1):
+                for tok in re.findall(r"--env-lock\s+(\S+)", line):
+                    if ("stage02_solver_lock.txt" not in tok
+                            and not tok.startswith(("<", "{", "PATH", "…", "\"", "'"))):
+                        bad.append(f"{os.path.basename(path)}:{i}: --env-lock {tok}")
+        # also: the argparse --help must not steer a user at base.lock/_requirements
+        from direct.temporal.arms import run_temporal_arms
+        help_text = run_temporal_arms.build_parser().format_help()
+        example = [ln for ln in help_text.splitlines() if "--env-lock" in ln
+                   and ("base.lock" in ln or "_requirements" in ln)]
+        assert not bad and not example, f"stale-lock docs: {bad + example}"
 
     def test_5_reverse_pair_arm_values_are_exact_negations_across_bundles(self):
         fwd = FX.build("FixRest", "FixStim48")
