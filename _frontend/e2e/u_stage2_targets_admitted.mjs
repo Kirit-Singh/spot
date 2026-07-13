@@ -19,15 +19,21 @@ async function checkSelection(browser, temporal) {
     assert(canvas, `${temporal ? 'temporal' : 'within'} Targets canvas did not bind`);
     const result = await page.evaluate(() => ({
       rows: document.querySelectorAll('main table tbody tr').length,
+      facets: document.querySelectorAll('main section[aria-label$="effect-rank facet"]').length,
+      hpaLinks: document.querySelectorAll('main a[href^="https://www.proteinatlas.org/ENSG"][target="_blank"][rel~="noopener"]').length,
+      axisLabels: [...document.querySelectorAll('main svg text')].map((node) => node.textContent || ''),
       text: document.querySelector('main')?.textContent || '',
     }));
     assert(result.rows > 0, `${temporal ? 'temporal' : 'within'} Targets rendered no rows`);
+    assert(result.facets === 2, `${temporal ? 'temporal' : 'within'} Targets did not render exactly two selected-program facets`);
+    assert(result.hpaLinks > 0, `${temporal ? 'temporal' : 'within'} Targets rendered no typed Ensembl HPA links`);
+    assert(result.axisLabels.includes('Rank evidence −log10(rank/N)'), `${temporal ? 'temporal' : 'within'} rank-evidence axis is missing`);
     assert(!/pending independent admission|not generated|fixture|demo|combined|balanced|p[_ -]?value|q[_ -]?value/i.test(result.text),
       `${temporal ? 'temporal' : 'within'} Targets canvas contains pending/forbidden text`);
     await openDrawer(page);
     const rows = await drawerRows(page);
     assert(rows.provenance.Verifier === 'admitted', 'Targets drawer is not bound to admitted verifier status');
-    assert(rows.methods['Last run UTC'] === '2026-07-13T20:35:11Z', 'Targets Last run UTC does not match the admitted receipt');
+    assert(rows.methods['Last run UTC'] === '2026-07-13T20:58:11Z', 'Targets Last run UTC does not match the admitted receipt');
     assert(!/^—$|unavailable/i.test(rows.methods.Reproduce || ''), 'Targets reproduce command is unavailable');
     return result.rows;
   } finally { await page.close(); }
@@ -48,7 +54,7 @@ async function main() {
         'Pathways rendered without an admitted pathway lane');
     } finally { await page.close(); }
     const current = await (await fetch(urlOf(base, 'results/current.json'))).json();
-    assert(current.chain.stage2_display_release_id === 'stage2-display-b082df2789c119aa',
+    assert(current.chain.stage2_display_release_id === 'stage2-display-e3e06d7ecafdbac9',
       'current.json does not bind the admitted display release');
     assert(current.chain.stage2_run_id === null, 'display projection was mislabeled as a production Stage-2 run');
     console.log(`GO — admitted Targets: within=${withinRows} rows, temporal=${temporalRows} rows; Pathways remains fail-closed.`);
