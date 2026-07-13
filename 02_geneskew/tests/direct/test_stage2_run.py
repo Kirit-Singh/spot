@@ -19,7 +19,8 @@ DUMMY = {
     "SEL_DIR": "/d", "V3_SCHEMA": "/d", "REGISTRY": "/d", "STAGE1_RELEASE": "/d",
     "STAGE1_RELEASE_ROOT": "/root", "DE": "/de", "GUIDE": "/g", "DONOR": "/dn", "SGRNA": "/s",
     "MANIFEST": "/m", "SRCREG": "/sr", "PB": "/pb", "ENV_LOCK": "/el", "OUT": "/o",
-    "W10_REPORT_DIR": "/w", "PYTHONPATH": ANALYSIS,
+    "W10_REPORT_DIR": "/w", "GENESETS_REACTOME": "/gr", "GENESETS_GO_BP": "/gg",
+    "PYTHONPATH": ANALYSIS,
 }
 
 
@@ -120,7 +121,9 @@ def _env_for(r):
         "SGRNA": str(r / "sgrna"), "MANIFEST": str(r / "manifest"), "SRCREG": str(r / "srcreg"),
         "PB": str(r / "pb"), "ENV_LOCK": str(r / "el"), "OUT": str(r / "out"),
         "W10_REPORT_DIR": str(r / "w"),
-        # decouple identity tests from the (concurrently-edited) real verifier worktrees
+        "GENESETS_REACTOME": str(r / "genesets_reactome.ensembl.json"),
+        "GENESETS_GO_BP": str(r / "genesets_go_bp.ensembl.json"),
+        # decouple identity tests from the (concurrently-edited) real verifier worktree
         "DIRECT_VERIFIER_DIR": str(r / "no_verifier"),
         "TEMPORAL_VERIFIER_DIR": str(r / "no_verifier"),
         "PATHWAY_VERIFIER_DIR": str(r / "no_verifier"),
@@ -236,8 +239,74 @@ def test_receipt_hardening(tmp_path, monkeypatch):
         S.verify_receipt(C, "U6")
 
 
+def test_expect_pins_binds_real_ensembl_gene_set_identity_and_correct_kinds(tmp_path, monkeypatch):
+    """_expect_pins forwards the three PATH pins as FILES (verify_run_manifest R.load_json's each) and
+    release/env as 64-hex VALUES. The gene-set pin binds the REAL identity of the two EXPLICIT Ensembl
+    artifacts (GENESETS_REACTOME/GENESETS_GO_BP) keyed by the release pathway_sources -- release/
+    licence/namespace, BOTH universes and raw+canonical artifact hashes -- NOT source names."""
+    import sys as _sys, json as _j
+    _sys.path.insert(0, ANALYSIS)
+    from direct import stage2_run as S
+    from direct import verify_manifest_rules as R
+    from direct.hashing import content_hash, file_sha256
+
+    run = tmp_path / "out"; state = run / ".state"; state.mkdir(parents=True)
+    rel = tmp_path / "rel.json"
+    rel.write_text(_j.dumps({"selector": {"pathway_sources": ["GO-BP", "Reactome"]}}))
+
+    def _artifact(source, release_id, lic, ref):
+        return {"schema_version": "spot.stage02_gene_sets.v1", "gene_id_namespace": "ensembl_gene_id",
+                "release": {"source": source, "release_id": release_id,
+                            "license": lic, "license_reference": ref},
+                "effect_universe_sha256": "e" * 64, "target_universe_sha256": "t" * 64,
+                "sets": [{"set_id": "S1", "genes_target": ["ENSG1"]}]}
+    reactome_p = tmp_path / "reactome_ensembl.genesets.json"
+    go_bp_p = tmp_path / "go_bp_ensembl.genesets.json"
+    reactome_p.write_text(_j.dumps(_artifact("reactome", "V97", "CC0-1.0",
+                                             "https://reactome.org/license")))
+    go_bp_p.write_text(_j.dumps(_artifact("go_bp", "go-basic 2026-06-15", "CC-BY-4.0",
+                                          "http://geneontology.org")))
+    idp = state / "run_identity.json"
+    idp.write_text(_j.dumps({"env_lock_sha256": "file:" + ("a" * 64)}))
+    monkeypatch.setattr(S, "identity_path", lambda cfg: str(idp))
+    monkeypatch.setattr(S, "DRY", False)
+
+    class C:
+        out = str(run); stage1_release = str(rel)
+        genesets_reactome = str(reactome_p); genesets_go_bp = str(go_bp_p)
+
+    p = S._expect_pins(C)
+
+    # release/env are 64-hex VALUES; release is the CANONICAL content hash the verifier recomputes
+    for k in ("release", "env"):
+        assert len(p[k]) == 64 and all(c in "0123456789abcdef" for c in p[k]), (k, p[k])
+    assert p["release"] == R.content_sha256(_j.loads(rel.read_text()))
+    for kind in ("gene_sets", "verifiers", "code"):
+        assert os.path.isfile(p[kind]), (kind, p[kind])           # a PATH, not a hash string
+
+    gs = _j.load(open(p["gene_sets"]))
+    assert sorted(gs.keys()) == ["GO-BP", "Reactome"]             # == release.selector.pathway_sources
+    rx = gs["Reactome"]
+    assert rx["gene_set_source"] == "Reactome"                    # release form, mapped via the artifact
+    assert rx["release_id"] == "V97"                              # NOT reduced to a source name
+    assert rx["gene_set_license"] == "CC0-1.0"
+    assert rx["gene_set_license_reference"] == "https://reactome.org/license"
+    assert rx["gene_id_namespace"] == "ensembl_gene_id"
+    assert rx["effect_universe_sha256"] == "e" * 64              # DE-readout universe
+    assert rx["target_universe_sha256"] == "t" * 64              # perturbation-target universe
+    assert rx["raw_sha256"] == file_sha256(str(reactome_p))      # artifact RAW hash
+    assert rx["canonical_sha256"] == content_hash(_j.loads(reactome_p.read_text()))  # CANONICAL
+    assert gs["GO-BP"]["release_id"] == "go-basic 2026-06-15"
+
+    vf = _j.load(open(p["verifiers"]))
+    assert vf["pathway"]["verifier_id"] == "spot.stage02.pathway.arm.independent_verifier.v1"
+    assert set(vf.keys()) == {"direct", "temporal", "pathway"}
+    code = _j.load(open(p["code"]))
+    assert "clean_tree" in code and "manifest_sha256" in code and "canonical_digest" in code
+
+
 def test_verifier_binding_reads_live_head_not_a_frozen_scalar(monkeypatch):
-    """The verifier binding reads the checkout's LIVE 40-hex HEAD + clean-tree flag + .pyc-excluded
+    """The verifier binding reads the checkout LIVE 40-hex HEAD + clean-tree flag + .pyc-excluded
     code-tree hash (never a frozen scalar). A missing dir binds <unbound> and never raises."""
     import sys as _sys, os as _os
     import pytest

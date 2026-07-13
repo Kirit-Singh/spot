@@ -58,7 +58,11 @@ DRY = bool(os.environ.get("SPOT_DRY_RUN"))
 # The scientific inputs the run identity binds. An unset input is a refusal, not a guess.
 INPUT_ENV = ("SEL_DIR", "V3_SCHEMA", "REGISTRY", "STAGE1_RELEASE", "STAGE1_RELEASE_ROOT",
              "STAGE1_VIEW", "DE", "GUIDE", "DONOR", "SGRNA", "MANIFEST", "SRCREG", "PB",
-             "ENV_LOCK", "OUT", "W10_REPORT_DIR")
+             "ENV_LOCK", "OUT", "W10_REPORT_DIR",
+             # the two EXPLICIT Ensembl-keyed gene-set artifacts. The producer, the aggregate
+             # pins and the bundle all bind these SAME real files — never the symbol-keyed cache,
+             # never an alias. (<run-root>/geneset-cache-ensembl/{reactome,go_bp}_ensembl.genesets.json)
+             "GENESETS_REACTOME", "GENESETS_GO_BP")
 # EXTERNAL pinned verifier checkouts (invoked by absolute path; never vendored into producer).
 VERIFIER_ENV = ("DIRECT_VERIFIER_DIR", "TEMPORAL_VERIFIER_DIR", "PATHWAY_VERIFIER_DIR")
 
@@ -699,7 +703,8 @@ def lane_pathway(cfg):
         for src in SOURCES:
             run(f"pathway:{cond}:{src}",
                 _py("run_pathway_arms", "--condition", cond, *bundle_args(cfg),
-                    "--gene-sets", os.path.join(cfg.sel_dir, f"genesets_{src}.ensembl.json"),
+                    "--gene-sets", {"reactome": cfg.genesets_reactome,
+                                    "go_bp": cfg.genesets_go_bp}[src],
                     "--signature-matrix-root", cfg.sigroot,
                     "--out-root", os.path.join(cfg.out, "pathway")),
                 consumes=[f"signatures:{cond}"], produces=[f"pathway:{cond}:{src}"])
@@ -785,16 +790,133 @@ def verify_lanes(cfg):
                    outputs=outs, prereqs=["D.temporal", "D.pathway"])
 
 
+# The pinned per-lane INDEPENDENT verifier identities, sourced VERBATIM from
+# verify_lane_admission.NATIVE (analysis/direct/verify_lane_admission.py lines 57-81 — the module
+# the aggregate uses to type each lane native admission). check_external_admission
+# (verify_release_envelope.py) and check_preflight (verify_bundle_rules.py) compare an
+# admission/preflight verifier_id to expect_verifiers[lane]["verifier_id"]; LA.adapt independently
+# enforces the SAME ids. (REPORT_OF is {} in verify_manifest_rules, so schema_version /
+# required_gates are never consumed — verifier_id is the only field the gates read.)
+LANE_VERIFIER_IDS = {
+    "direct": "spot.stage02.direct.release.verifier.v1",
+    "temporal": "spot.stage02.temporal.arm.independent_verifier.v1",
+    "pathway": "spot.stage02.pathway.arm.independent_verifier.v1",
+}
+
+
+def _gene_set_identity(path):
+    """The FULL gene-set identity of ONE Ensembl-keyed artifact, BY CONTENT (never a source name).
+
+    The fields mirror what the native pathway producer binds at method.gene_sets
+    (genesets.binding_block) so check_gene_sets can compare them field-by-field: the release
+    (id/licence/reference), the identifier namespace, BOTH universes — the DE-readout
+    (effect_universe_sha256) and the perturbation-target (target_universe_sha256) — and the
+    artifact's own RAW and CANONICAL hashes. Every value is read/derived from the artifact bytes;
+    none is fabricated. NOTE: content_hash(artifact) is a whole-file canonical hash and is NOT the
+    membership-recipe canonical the geneset-cache provenance pins; the RAW hash matches that pin.
+    """
+    from .hashing import content_hash, file_sha256
+    art = json.load(open(path))
+    rel = art.get("release") or {}
+    return {
+        "gene_set_source": str(rel.get("source")),
+        "release_id": rel.get("release_id"),
+        "gene_set_license": rel.get("license"),
+        "gene_set_license_reference": rel.get("license_reference"),
+        "gene_id_namespace": art.get("gene_id_namespace"),
+        "effect_universe_sha256": art.get("effect_universe_sha256"),     # DE-readout universe
+        "target_universe_sha256": art.get("target_universe_sha256"),     # perturbation-target universe
+        "raw_sha256": file_sha256(path),                                 # artifact RAW hash
+        "canonical_sha256": content_hash(art),                           # artifact CANONICAL hash
+    }
+
+
 def _expect_pins(cfg):
-    """run_release EXPECT_* pins DERIVED from the run-identity manifest, REQUIRED non-empty —
-    never empty environment defaults."""
+    """The run_release / verify_run_manifest EXPECT_* pins, materialized to cfg.out/.pins as the
+    KINDS the INDEPENDENT verifier consumes (verify_run_manifest.verify):
+
+      --expect-release-sha256   VALUE  compared to content_sha256(load_json(release)) [G_RELEASE_PIN]
+      --expect-env-lock-sha256  VALUE  the env-lock FILE sha256 (W.check_supplied_lock)
+      --expect-gene-sets        PATH   R.load_json(path) -> {source: identity}; G_SOURCES needs its
+                                       keys == release.selector.pathway_sources (R.release_sources),
+                                       and check_gene_sets compares each field to the bundle binding
+      --expect-verifiers        PATH   R.load_json(path) -> {lane: {"verifier_id": ...}}
+      --expected-code-identity  PATH   R.load_json(path) -> code-identity tuple; G_CLEAN needs
+                                       clean_tree is True, check_code_identity a shared field
+
+    THE DEFECT this fixes: the three PATH args were returned as HASH VALUES, so verify_run_manifest
+    did R.load_json(<hash string>) -> None and every dependent gate failed (rc1). They are FILES
+    now. The release VALUE was the run-identity manifest file: sha; the verifier recomputes the
+    CANONICAL content hash, so it is corrected. Every value is DERIVED from an authoritative source:
+      - release:   hashing.content_hash(load release)   (canonical; == R.content_sha256)
+      - env:       the identity-bound env-lock file sha
+      - gene_sets: the REAL identity of the two EXPLICIT Ensembl artifacts (GENESETS_REACTOME/
+                   GENESETS_GO_BP) keyed by the release own pathway_sources — release/licence/
+                   namespace, BOTH universes, and the raw+canonical artifact hashes (NOT source names)
+      - verifiers: the pinned lane verifier ids (verify_lane_admission.NATIVE)
+      - code:      code_digest.run_binding() — the same tuple run_manifest.build binds
+    DRY never reaches here (lane_aggregate uses <id> placeholders).
+    """
+    from . import code_digest
+    from .hashing import content_hash
+
     m = json.load(open(identity_path(cfg)))
+
     def raw(v):
         return str(v).split(":", 1)[-1] if v else ""
-    pins = {"env": raw(m.get("env_lock_sha256")), "release": raw(m.get("stage1", {}).get("release")),
-            "gene_sets": content_sha256(m.get("gene_sets", {})),
-            "verifiers": content_sha256(m.get("verifier_pins", {})),
-            "code": raw(m.get("code_identity"))}
+
+    # release: the CANONICAL content hash the external verifier recomputes — NOT the file sha the
+    # identity manifest records (content_sha256(release) != file_sha256(release_bytes)).
+    release = json.load(open(cfg.stage1_release))
+    release_sha = content_hash(release)
+    env_sha = raw(m.get("env_lock_sha256"))
+    sources = [str(x) for x in ((release.get("selector") or {}).get("pathway_sources") or [])]
+    if not sources:
+        raise SchedulerError(
+            "aggregate: the Stage-1 release names no selector.pathway_sources; the gene-set "
+            "source universe the pin must cover is unknown")
+
+    # the two EXPLICIT Ensembl-keyed artifacts, indexed by their OWN declared source (so which
+    # input is which is decided by the artifact, not by the env var name).
+    def _norm(x):
+        return str(x).lower().replace("-", "_")
+    identities = {}
+    for key, path in (("reactome", cfg.genesets_reactome), ("go_bp", cfg.genesets_go_bp)):
+        if not path or not os.path.isfile(path):
+            raise SchedulerError(
+                f"aggregate: the {key} Ensembl gene-set artifact is missing: {path!r} "
+                "(set GENESETS_REACTOME / GENESETS_GO_BP to the real artifacts)")
+        ident = _gene_set_identity(path)
+        identities[_norm(ident["gene_set_source"])] = ident
+
+    # G_SOURCES: the pin keys are the release OWN pathway_sources, in the release form (e.g. GO-BP);
+    # each source binds the identity of its Ensembl artifact, with gene_set_source in the release form.
+    gene_sets_doc = {}
+    for src in sources:
+        ident = identities.get(_norm(src))
+        if ident is None:
+            raise SchedulerError(
+                f"aggregate: the release names pathway source {src!r} but neither "
+                "GENESETS_REACTOME nor GENESETS_GO_BP provides that Ensembl artifact")
+        gene_sets_doc[src] = dict(ident, gene_set_source=src)
+
+    pins_dir = os.path.join(cfg.out, ".pins")
+    os.makedirs(pins_dir, exist_ok=True)
+
+    def _write_pin(name, doc):
+        path = os.path.join(pins_dir, name)
+        with open(path, "w") as fh:
+            json.dump(doc, fh, sort_keys=True, indent=2)
+        return path
+
+    gene_sets_pin = _write_pin("expected_gene_sets.json", gene_sets_doc)
+    verifiers_pin = _write_pin("expected_verifiers.json",
+                               {lane: {"verifier_id": vid}
+                                for lane, vid in LANE_VERIFIER_IDS.items()})
+    code_pin = _write_pin("expected_code_identity.json", code_digest.run_binding())
+
+    pins = {"env": env_sha, "release": release_sha, "gene_sets": gene_sets_pin,
+            "verifiers": verifiers_pin, "code": code_pin}
     missing = [k for k, v in pins.items() if not v]
     if missing:
         raise SchedulerError(f"aggregate: EXPECT_* pins not bound in the run identity: {missing}")
