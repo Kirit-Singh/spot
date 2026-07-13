@@ -254,8 +254,11 @@ def _imports_of(stem):
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             imported.add((node.module or "").split(".")[-1])
-            if node.level:                       # a relative import IS a package import
-                imported.update(a.name for a in node.names)
+            # THE NAMES, ALWAYS. This used to record them only for RELATIVE imports, so an
+            # ABSOLUTE `from direct import lane_admission` registered nothing but "direct" and
+            # walked straight through the guard — which is exactly how a verifier came to be
+            # importing the producer's admission implementation and calling it a re-derivation.
+            imported.update(a.name for a in node.names)
         elif isinstance(node, ast.Import):
             imported.update(a.name.split(".")[0] for a in node.names)
     return imported

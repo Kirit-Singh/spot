@@ -171,8 +171,7 @@ def _admission(bundles_root: str, lane: str, *, bundle_dir: str, arm_key: str = 
             return LA.bind_direct(bundles_root, condition=condition, bundle_dir=bundle_dir,
                                   arm_key=arm_key, stage1=stage1 or {})
         return LA.bind_external(bundles_root, lane, bundle_dir=bundle_dir,
-                                stage1_release_sha256=(stage1 or {}).get(
-                                    "stage1_release_sha256", ""))
+                                stage1=stage1 or {})
     except LA.AdmissionError as exc:
         if mode == MODE_PRODUCTION:
             _refuse(G_LANE_UNADMITTED, str(exc))
@@ -282,7 +281,11 @@ def _pathway_pointers(stores: dict, arm: dict, mode: str, bundles_root: str) -> 
 # --------------------------------------------------------------------------- #
 # THE PROJECTION.
 # --------------------------------------------------------------------------- #
-STAGE1_IDENTITY_FIELDS = ("stage1_scorer_view_canonical_sha256",
+# THE STAGE-1 IDENTITY, in full. `stage1_release_raw_sha256` is the field W4 ACTUALLY BINDS
+# (verify_pathway_release: binds.stage1_release_raw_sha256), and it is SUPPLIED — never
+# inferred from an optional field, because a field that is optional is a check that is optional.
+STAGE1_IDENTITY_FIELDS = ("stage1_release_raw_sha256",
+                          "stage1_scorer_view_canonical_sha256",
                           "registry_scorer_projection_sha256")
 
 
@@ -469,13 +472,17 @@ def main(argv=None) -> int:
                          "admitted stores were built on")
     ap.add_argument("--stage1-scorer-projection-sha256", default="",
                     help="REQUIRED in production")
+    ap.add_argument("--stage1-release-raw-sha256", default="",
+                    help="REQUIRED in production: the RAW sha256 of the Stage-1 v3 release. "
+                         "This is the field W4's pathway admission actually binds.")
     args = ap.parse_args(argv)
 
     try:
         art = project(selection_path=args.selection, schema_path=args.schema,
                       bundles_root=args.bundles_root, mode=args.mode,
                       producer_commit=args.producer_commit,
-                      stage1={"stage1_scorer_view_canonical_sha256":
+                      stage1={"stage1_release_raw_sha256": args.stage1_release_raw_sha256,
+                              "stage1_scorer_view_canonical_sha256":
                               args.stage1_scorer_view_sha256,
                               "registry_scorer_projection_sha256":
                               args.stage1_scorer_projection_sha256})

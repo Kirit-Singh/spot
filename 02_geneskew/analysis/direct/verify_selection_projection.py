@@ -268,7 +268,11 @@ def _check_arm(art: dict, role: str, arm: dict, bundles_root: str, mode: str) ->
 
 def _reverify_admissions(art: dict, bundles_root: str, mode: str) -> list:
     """Rebuild every admission from the ORIGINAL report + the store bytes. Index-free."""
-    from direct import lane_admission as LA          # the TYPED CONTRACT, not the index
+    # THE VERIFIER'S OWN RESTATEMENT. It must NOT import `direct.lane_admission`: calling the
+    # producer's admission implementation to "re-derive" the admission is not a second opinion,
+    # it is the same opinion twice — any bug in it would be reproduced exactly by the thing
+    # meant to catch it, and the two could never disagree.
+    import verify_admission_rules as LA
 
     bad: list[str] = []
     lane = STORE_OF_MODE[mode]
@@ -281,12 +285,11 @@ def _reverify_admissions(art: dict, bundles_root: str, mode: str) -> list:
         bundle_dir = os.path.join(bundles_root, rel)
         try:
             if lane == "direct":
-                LA.bind_direct(bundles_root, condition=str(s.get("condition")),
-                               bundle_dir=bundle_dir, arm_key=str(s.get("arm_key")),
-                               stage1=stage1)
+                LA.check_direct(bundles_root, condition=str(s.get("condition")),
+                                bundle_dir=bundle_dir, arm_key=str(s.get("arm_key")),
+                                stage1=stage1)
             else:
-                LA.bind_external(bundles_root, lane, bundle_dir=bundle_dir,
-                                 stage1_release_sha256=stage1.get("stage1_release_sha256", ""))
+                LA.check_external(bundles_root, lane, bundle_dir=bundle_dir, stage1=stage1)
         except LA.AdmissionError as exc:
             bad.append(f"{G_UNADMITTED}: {rel}: {exc}")
         except (OSError, ValueError, KeyError) as exc:

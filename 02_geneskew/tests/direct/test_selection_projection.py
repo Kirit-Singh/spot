@@ -41,7 +41,8 @@ GATES = ([f"gate {i}: an independently re-derived invariant" for i in range(104)
           "every arm's own bytes and counts RE-DERIVE from the shipped parquet rows",
           "every arm key re-derives from (program, desired_change, condition)"])
 
-STAGE1 = {"stage1_scorer_view_canonical_sha256": "5d1d8c36" + "0" * 56,
+STAGE1 = {"stage1_release_raw_sha256": "0c336546" + "0" * 56,
+          "stage1_scorer_view_canonical_sha256": "5d1d8c36" + "0" * 56,
           "registry_scorer_projection_sha256": "008c1da1" + "0" * 56}
 
 
@@ -62,7 +63,11 @@ def w10_report(root, condition, bundle_dir, *, gates=None, bound_over=None):
         "recompute_mode": "all",
         "arm_inventory": sorted(({"arm_key": a["arm_key"]} for a in doc["arms"]),
                                 key=lambda a: a["arm_key"]),
-        **STAGE1,
+        # W10's bound artifact carries the SCORER identity; it does not carry the release raw
+        # sha — that is the field W4 binds.
+        "stage1_scorer_view_canonical_sha256":
+            STAGE1["stage1_scorer_view_canonical_sha256"],
+        "registry_scorer_projection_sha256": STAGE1["registry_scorer_projection_sha256"],
     }
     bound.update(bound_over or {})
     body = {
@@ -120,22 +125,43 @@ def _temporal_store(root, frm, to, arms, n=120):
             json.dump({"arm_key": key,
                        "records": [{"target_id": f"ENSG{i:011d}", "arm_value": 1.0 - i / 500.0,
                                     "rank": i + 1, "evaluable": True} for i in range(n)]}, fh)
-    # THE INVENTORY the independent verifier cleared...
-    inv = {"schema_version": "spot.stage02_temporal_arm_release.v1", "lane": "temporal",
-           "n_bundles": 1, "bundles": [{"bundle_id": f"T-{frm}-{to}"}]}
-    ip = os.path.join(root, "temporal_arm_release.json")
+    external_admission(root, "temporal", [{"bundle_id": f"T-{frm}-{to}",
+                                           "files": {}, "rankings": {}}])
+    return d
+
+
+def external_admission(root, lane, bundles, *, gates=None, stage1=None, bundle_over=None):
+    """The REAL external envelope (W11 / W4) + the PENDING producer inventory it cleared."""
+    from direct import lane_admission as _LA
+    spec = _LA.EXTERNAL[lane]
+
+    # THE PRODUCER INVENTORY: content-addressed, and always PENDING. It never admits itself.
+    body = {"schema_version": spec["inventory_schema"], "lane": lane,
+            "n_bundles": len(bundles), "bundles": bundles,
+            "external_admission": {"status": "pending"},
+            "verdict": "pending_independent_verification",
+            "admitted": False, "self_admitted": False, "verifier_id": None}
+    body.update(bundle_over or {})
+    inv = dict(body, release_id=content_hash(body))
+    ip = os.path.join(root, spec["inventory"])
     with open(ip, "w") as fh:
         json.dump(inv, fh, indent=2, sort_keys=True)
+    raw = file_sha256(ip)
 
-    # ...and W11's external admission, BOUND to it by hash. Not a verdict stub.
-    body = {"schema_version": "spot.stage02_temporal_arm_external_admission.v1",
-            "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
-            "verdict": "ADMIT",
-            "binds": {"inventory_raw_sha256": file_sha256(ip),
-                      "stage1_release_sha256": ""}}
-    with open(os.path.join(root, "temporal_arm_external_admission.json"), "w") as fh:
-        json.dump(dict(body, report_id=content_hash(body)), fh, indent=2, sort_keys=True)
-    return d
+    s1 = stage1 or STAGE1
+    env = {"schema_version": spec["schema"], "verifier_id": spec["verifier_id"],
+           "lane": lane, "generator_is_not_verifier": True, "fail_closed": True,
+           "n_bundles": len(bundles),
+           "gate_inventory": list(spec["gates"] if gates is None else gates),
+           "binds": {"producer_release_id": inv["release_id"],
+                     "producer_release_raw_sha256": raw,
+                     "inventory_raw_sha256": raw,
+                     "stage1_release_raw_sha256": s1["stage1_release_raw_sha256"]},
+           "n_failed": 0, "verdict": "ADMIT"}
+    p = os.path.join(root, spec["file"])
+    with open(p, "w") as fh:
+        json.dump(dict(env, report_id=content_hash(env)), fh, indent=2, sort_keys=True)
+    return p
 
 
 def _release(tmp_path, sel_doc, bound):
@@ -626,3 +652,137 @@ class TestTheStage1IdentityIsREQUIREDInProduction:
             P.project(selection_path=sp, schema_path=SCHEMA_PATH, bundles_root=root,
                       mode=P.MODE_PRODUCTION, stage1={})
         assert exc.value.gate == P.G_STAGE1_UNBOUND
+
+
+class TestAnEmptyVerificationAdmitsNothing:
+    """An admission over an EMPTY set looks exactly like one that admits everything."""
+
+    def _root(self, tmp_path):
+        doc = emit()
+        bound = S1.validate(doc, S1.load_schema(SCHEMA_PATH))
+        root = str(tmp_path)
+        keys = [bound["arms"][r]["direct_arm_key"] for r in ("away_from_A", "toward_B")]
+        d = _direct_store(root, "Rest", keys)
+        sp = os.path.join(root, "selection.json")
+        with open(sp, "w") as fh:
+            json.dump(doc, fh)
+        return root, sp, d
+
+    def test_an_EMPTY_arm_inventory_RESEALED_is_REFUSED(self, tmp_path):
+        """`if keys and arm_key not in keys` — an EMPTY inventory skipped the check and
+        ADMITTED. A verification that covered no arms is not a verification of any arm."""
+        root, sp, d = self._root(tmp_path)
+        w10_report(root, "Rest", d, bound_over={"arm_inventory": []})
+        with pytest.raises(P.SelectionProjectionError) as exc:
+            P.project(selection_path=sp, schema_path=SCHEMA_PATH, bundles_root=root,
+                      stage1=STAGE1)
+        assert LA.G_EMPTY_INVENTORY in str(exc.value)
+
+    def test_a_PARTIAL_arm_inventory_is_REFUSED(self, tmp_path):
+        """A report that covered only some of the arms admits only some of them."""
+        root, sp, d = self._root(tmp_path)
+        doc = json.load(open(os.path.join(d, "arm_bundle.json")))
+        w10_report(root, "Rest", d,
+                   bound_over={"arm_inventory": [{"arm_key": doc["arms"][0]["arm_key"]}]})
+        with pytest.raises(P.SelectionProjectionError) as exc:
+            P.project(selection_path=sp, schema_path=SCHEMA_PATH, bundles_root=root,
+                      stage1=STAGE1)
+        assert LA.G_EMPTY_INVENTORY in str(exc.value)
+
+
+class TestTheEXTERNALEnvelopeIsValidatedNotJustHashed:
+    """W11/W4: a report could assert nothing about its independence, run NO gates at all, and
+    clear an EMPTY release — and only its hash was checked."""
+
+    def _temporal(self, tmp_path):
+        doc = emit(mode=S1.MODE_TEMPORAL, conditions=["Rest", "Stim48hr"])
+        art, ap, sp, root = _project(tmp_path, doc)
+        return root, sp, art
+
+    def _refused(self, root, sp, marker):
+        with pytest.raises(P.SelectionProjectionError) as exc:
+            P.project(selection_path=sp, schema_path=SCHEMA_PATH, bundles_root=root,
+                      mode=P.MODE_PRODUCTION, stage1=STAGE1)
+        assert marker in str(exc.value), str(exc.value)
+
+    def test_an_EMPTY_bundle_list_is_REFUSED(self, tmp_path):
+        root, sp, _ = self._temporal(tmp_path)
+        external_admission(root, "temporal", [])
+        self._refused(root, sp, LA.G_EMPTY_INVENTORY)
+
+    @pytest.mark.parametrize("field", ["generator_is_not_verifier", "fail_closed"])
+    def test_a_report_that_ASSERTS_NEITHER_independence_NOR_fail_closed_is_REFUSED(
+            self, tmp_path, field):
+        root, sp, _ = self._temporal(tmp_path)
+        p = os.path.join(root, "temporal_arm_external_admission.json")
+        rep = json.load(open(p))
+        rep[field] = False
+        rep["report_id"] = content_hash({k: v for k, v in rep.items() if k != "report_id"})
+        with open(p, "w") as fh:
+            json.dump(rep, fh)
+        self._refused(root, sp, LA.G_VERIFIER)
+
+    def test_a_SELF_ADMITTED_producer_inventory_is_REFUSED(self, tmp_path):
+        root, sp, _ = self._temporal(tmp_path)
+        external_admission(root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}],
+                           bundle_over={"verdict": "ADMIT", "admitted": True,
+                                        "self_admitted": True})
+        self._refused(root, sp, LA.G_PRODUCER_SELF_ADMITTED)
+
+    def test_a_report_binding_a_STALE_STAGE1_RELEASE_RAW_is_REFUSED(self, tmp_path):
+        """The field W4 ACTUALLY binds: binds.stage1_release_raw_sha256."""
+        root, sp, _ = self._temporal(tmp_path)
+        stale = dict(STAGE1, stage1_release_raw_sha256="dead" + "0" * 60)
+        external_admission(root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}], stage1=stale)
+        self._refused(root, sp, LA.G_STALE_STAGE1)
+
+    def test_the_PATHWAY_gate_inventory_must_be_W4s_EXACT_TWELVE(self, tmp_path):
+        """W4 runs a named 12-gate inventory (verify_pathway_release @ ef136a9). A report that
+        ran a different set of gates is not this verifier's admission."""
+        gates = LA.EXTERNAL["pathway"]["gates"]
+        assert len(gates) == 12
+        assert gates[0] == (
+            "the_condition_and_source_universe_comes_from_the_authoritative_stage1_release")
+        assert gates[-1] == "the_producer_inventory_binds_the_exact_bytes_that_landed_on_disk"
+
+
+class TestTheVerifierDoesNotSHARETheProducersImplementation:
+    def test_the_verifier_does_NOT_import_the_producers_admission_module(self):
+        """Calling the producer's admission code to 're-derive' the admission is not a second
+        opinion — it is the same opinion twice, and the two could never disagree."""
+        import ast
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                                "analysis", "direct",
+                                "verify_selection_projection.py")).read()
+        names = set()
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.ImportFrom):
+                names.update(a.name for a in node.names)
+                names.add((node.module or "").split(".")[-1])
+            elif isinstance(node, ast.Import):
+                names.update(a.name.split(".")[0] for a in node.names)
+        assert "lane_admission" not in names
+        assert "verify_admission_rules" in names
+
+    def test_a_DELIBERATE_PRODUCER_VERIFIER_DRIFT_is_CAUGHT(self, tmp_path, monkeypatch):
+        """Two implementations, on purpose. Move ONE of them and the pair must disagree —
+        otherwise the second implementation is decoration."""
+        import verify_admission_rules as VR
+
+        doc = emit()
+        art, ap, sp, root = _project(tmp_path, doc)
+        assert V.verify(ap, selection_path=sp, bundles_root=root)["verdict"] == "admit"
+
+        # the VERIFIER now pins a different W10 code hash than the producer does
+        monkeypatch.setattr(VR, "W10_VERIFIER_CODE", "f" * 64)
+        rep = V.verify(ap, selection_path=sp, bundles_root=root)
+        assert rep["verdict"] == "reject"
+        assert any(V.G_UNADMITTED in f for f in rep["failures"])
+
+    def test_the_two_restatements_AGREE_today(self, tmp_path):
+        """They must not have drifted by accident either."""
+        import verify_admission_rules as VR
+        assert VR.W10_VERIFIER_CODE == LA.W10_VERIFIER_CODE
+        assert VR.W10_REPORT_SCHEMA == LA.W10_REPORT_SCHEMA
+        assert VR.SOLVER_LOCK_SHA256 == LA.SOLVER_LOCK_SHA256
+        assert VR.W4_GATES == LA.EXTERNAL["pathway"]["gates"]

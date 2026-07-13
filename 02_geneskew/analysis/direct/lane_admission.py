@@ -80,6 +80,8 @@ EXTERNAL = {
         "schema": "spot.stage02_temporal_arm_external_admission.v1",
         "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
         "inventory": "temporal_arm_release.json",
+        "inventory_schema": "spot.stage02_temporal_arm_release.v1",
+        "gates": (),          # W11's exact inventory is not yet published — see LIMITS
         "owner": "W11",
     },
     "pathway": {
@@ -87,6 +89,23 @@ EXTERNAL = {
         "schema": "spot.stage02_pathway_arm_external_admission.v1",
         "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
         "inventory": "pathway_arm_release.json",
+        "inventory_schema": "spot.stage02_pathway_arm_release.v1",
+        # W4's EXACT 12-gate inventory (verify_pathway_release @ ef136a9). A report that ran a
+        # different set of gates is not this verifier's admission.
+        "gates": (
+            "the_condition_and_source_universe_comes_from_the_authoritative_stage1_release",
+            "the_bundles_are_exactly_the_authoritative_condition_x_source_grid_once_each",
+            "every_bundle_reopens_and_its_nonnull_run_id_rederives_from_its_own_binding",
+            "one_scorer_view_and_stage1_that_match_the_release_pins_and_the_pinned_solver_lock",
+            "every_cell_has_a_distinct_nonnull_run_id_and_distinct_nonnull_arm_record_bytes",
+            "each_bundle_agrees_with_itself_about_which_condition_x_source_cell_it_is",
+            "method_gene_sets_binds_two_pinned_sources_agrees_with_provenance_one_universe",
+            "the_gene_set_universes_match_the_authoritative_native_run_binding_universe_fields",
+            "no_p_q_fdr_inferential_key_at_any_depth_of_any_shipped_document",
+            "every_cell_has_one_independent_admitting_report_with_the_exact_gate_inventory",
+            "the_producer_inventory_is_present_pending_native_rederives_and_binds_this",
+            "the_producer_inventory_binds_the_exact_bytes_that_landed_on_disk",
+        ),
         "owner": "W4",
     },
 }
@@ -104,6 +123,10 @@ G_BOUND_SUBJECT = "the_report_admitted_a_different_bundle_than_the_one_being_rea
 G_STALE_STAGE1 = "the_report_verified_a_bundle_built_against_a_different_stage1_release"
 G_ARM_NOT_VERIFIED = "the_arm_being_asked_for_is_not_in_the_inventory_the_report_verified"
 G_ENV = "the_report_verified_a_bundle_built_under_another_solver_environment"
+G_EMPTY_INVENTORY = "the_report_verified_an_EMPTY_set_of_arms_or_bundles_and_admitted_it"
+G_PRODUCER_SELF_ADMITTED = "the_producer_inventory_admitted_itself"
+
+PRODUCER_PENDING = "pending_independent_verification"
 
 
 class AdmissionError(ValueError):
@@ -222,15 +245,35 @@ def bind_direct(bundles_root: str, *, condition: str, bundle_dir: str, arm_key: 
                 f"{str(bound.get('solver_lock_sha256'))[:16]}, not the authoritative "
                 f"{SOLVER_LOCK_SHA256[:16]}")
     for field, want in stage1.items():
+        # W10's bound artifact carries the SCORER identity. It does not carry the release RAW
+        # sha — that is the field W4's pathway admission binds, and demanding it of W10 would
+        # refuse every genuine Direct report.
+        if field == "stage1_release_raw_sha256":
+            continue
         if want and str(bound.get(field)) != str(want):
             _refuse(G_STALE_STAGE1,
                     f"the report verified a bundle built against {field}="
                     f"{str(bound.get(field))[:16]}; this projection is bound to "
                     f"{str(want)[:16]}. It verified a different release")
 
-    # ---- THE ARM: it is in the inventory this report actually verified ----
-    keys = {str(a.get("arm_key")) for a in (bound.get("arm_inventory") or [])}
-    if keys and arm_key not in keys:
+    # ---- THE ARM INVENTORY. EMPTY IS A REFUSAL. ----
+    #
+    # This was `if keys and arm_key not in keys` — so a report whose arm_inventory was EMPTY
+    # skipped the check entirely and ADMITTED. A verification that covered no arms is not a
+    # verification of any arm, and admitting on it admits nothing.
+    keys = [str(a.get("arm_key")) for a in (bound.get("arm_inventory") or [])]
+    if not keys:
+        _refuse(G_EMPTY_INVENTORY,
+                "the report's arm_inventory is EMPTY. A verification that covered no arms is "
+                "not a verification of any arm")
+    if len(keys) != len(set(keys)):
+        _refuse(G_EMPTY_INVENTORY, "the arm inventory repeats an arm")
+    declared = doc.get("arms") or []
+    if declared and len(keys) != len(declared):
+        _refuse(G_EMPTY_INVENTORY,
+                f"the report verified {len(keys)} arm(s); the bundle ships {len(declared)}. A "
+                "report that covered only some of the arms admits only some of them")
+    if arm_key not in keys:
         _refuse(G_ARM_NOT_VERIFIED,
                 f"the arm {arm_key!r} is not among the {len(keys)} arms this report verified")
 
@@ -249,6 +292,7 @@ def bind_direct(bundles_root: str, *, condition: str, bundle_dir: str, arm_key: 
         "bound_bundle_run_id": bound.get("arm_bundle_run_id"),
         "bound_arm_rows_sha256": bound.get("arm_rows_sha256"),
         "bound_artifact_files": sorted(files),
+        "n_arms_verified": len(keys),
         "solver_lock_sha256": SOLVER_LOCK_SHA256,
         "signature_limit": ("no signature: this proves the report is ABOUT these bytes and is "
                             "internally whole. It does not prove WHO wrote it"),
@@ -259,63 +303,108 @@ def bind_direct(bundles_root: str, *, condition: str, bundle_dir: str, arm_key: 
 # TEMPORAL (W11) / PATHWAY (W4) — the external admission, BOUND to the release it cleared.
 # --------------------------------------------------------------------------- #
 def bind_external(bundles_root: str, lane: str, *, bundle_dir: str,
-                  stage1_release_sha256: str = "") -> dict[str, Any]:
+                  stage1: dict | None = None) -> dict[str, Any]:
+    """W11 / W4: the FULL envelope AND the producer inventory — not merely their hashes.
+
+    It used to check the schema, the verifier id, the verdict, the self-hash and the inventory
+    hash, and stop. So a report could assert nothing about its own independence, run NO GATES
+    AT ALL, and clear an EMPTY release — and an admission over an empty release admits nothing
+    while looking exactly like one that admits everything.
+    """
     spec = EXTERNAL[lane]
+    stage1 = stage1 or {}
     rep = _load(os.path.join(bundles_root, spec["file"]))
 
     if rep.get("schema_version") != spec["schema"]:
-        _refuse(G_SHAPE,
-                f"[{lane}] schema {rep.get('schema_version')!r} is not {spec['schema']!r}. A "
-                "file that merely says ADMIT is a filename, not an admission")
+        _refuse(G_SHAPE, f"[{lane}] schema {rep.get('schema_version')!r} is not "
+                         f"{spec['schema']!r}")
     if rep.get("verifier_id") != spec["verifier_id"]:
         _refuse(G_VERIFIER, f"[{lane}] verifier_id {rep.get('verifier_id')!r}")
-    if rep.get("verdict") != "ADMIT":
-        _refuse(G_VERDICT, f"[{lane}] verdict {rep.get('verdict')!r}")
+    if str(rep.get("lane", lane)) != lane:
+        _refuse(G_SHAPE, f"[{lane}] the report says it is about lane {rep.get('lane')!r}")
+    if rep.get("generator_is_not_verifier") is not True:
+        _refuse(G_VERIFIER, f"[{lane}] the report does not assert generator_is_not_verifier")
+    if rep.get("fail_closed") is not True:
+        _refuse(G_VERIFIER, f"[{lane}] the report does not assert fail_closed")
+    if rep.get("verdict") != "ADMIT" or int(rep.get("n_failed") or 0) != 0:
+        _refuse(G_VERDICT, f"[{lane}] verdict {rep.get('verdict')!r} / n_failed "
+                           f"{rep.get('n_failed')!r}")
     _self_hash(rep, "report_id")
 
+    if spec["gates"]:
+        got = tuple(rep.get("gate_inventory") or ())
+        if got != spec["gates"]:
+            _refuse(G_GATES,
+                    f"[{lane}] the report ran {len(got)} gate(s); this verifier's EXACT "
+                    f"inventory is {len(spec['gates'])} named gates. A report that ran a "
+                    "different set of gates is not this verifier's admission")
+
+    # ---- THE PRODUCER INVENTORY IT CLEARED ----
+    inv_path = os.path.join(bundles_root, spec["inventory"])
+    inv = _load(inv_path)
     binds = rep.get("binds") or {}
     if not binds:
-        _refuse(G_BOUND_BYTES,
-                f"[{lane}] the report binds NOTHING. A verdict that names no artifact could "
-                "be moved onto any artifact")
+        _refuse(G_BOUND_BYTES, f"[{lane}] the report binds NOTHING")
+    if inv.get("schema_version") != spec["inventory_schema"]:
+        _refuse(G_SHAPE, f"[{lane}] the producer inventory schema is "
+                         f"{inv.get('schema_version')!r}")
+    if inv.get("verdict") != PRODUCER_PENDING or inv.get("admitted") is not False \
+            or inv.get("self_admitted") is not False:
+        _refuse(G_PRODUCER_SELF_ADMITTED,
+                f"[{lane}] the producer inventory is not PENDING/un-admitted. A release that "
+                "admitted itself was never independently admitted")
 
-    # THE INVENTORY IT CLEARED must be the one on disk.
-    inv_path = os.path.join(bundles_root, spec["inventory"])
-    if not os.path.exists(inv_path):
+    inv_raw = file_sha256(inv_path)
+    if str(binds.get("inventory_raw_sha256")) != inv_raw:
+        _refuse(G_BOUND_BYTES, f"[{lane}] the report bound another inventory's bytes")
+    if str(binds.get("producer_release_raw_sha256")) != inv_raw:
         _refuse(G_BOUND_BYTES,
-                f"[{lane}] the report admits {spec['inventory']}, which this release does not "
-                "ship")
-    if str(binds.get("inventory_raw_sha256")) != file_sha256(inv_path):
-        _refuse(G_BOUND_BYTES,
-                f"[{lane}] the report bound an inventory whose bytes are not the ones on disk")
+                f"[{lane}] producer_release_raw_sha256 is not the inventory on disk")
+    if str(binds.get("producer_release_id")) != str(inv.get("release_id")):
+        _refuse(G_BOUND_SUBJECT, f"[{lane}] the report admits another release")
+    rederived = content_hash({k: v for k, v in inv.items() if k != "release_id"})
+    if str(inv.get("release_id")) != rederived:
+        _refuse(G_SELF_HASH, f"[{lane}] the inventory's release_id does not re-derive")
 
-    if stage1_release_sha256 and \
-            str(binds.get("stage1_release_sha256")) != str(stage1_release_sha256):
+    # THE ACTUAL STAGE-1 FIELD W4 BINDS.
+    want_s1 = stage1.get("stage1_release_raw_sha256")
+    if want_s1 and str(binds.get("stage1_release_raw_sha256")) != str(want_s1):
         _refuse(G_STALE_STAGE1,
-                f"[{lane}] the report cleared a release built against another Stage-1")
+                f"[{lane}] the report cleared a release built against Stage-1 "
+                f"{str(binds.get('stage1_release_raw_sha256'))[:16]}, not {str(want_s1)[:16]}")
 
-    # ...and the bundle being read must be IN that cleared inventory.
-    with open(inv_path) as fh:
-        inv = json.load(fh)
+    # ---- THE BUNDLE LIST. EMPTY IS A REFUSAL. ----
+    bundles = inv.get("bundles") or []
+    if not bundles:
+        _refuse(G_EMPTY_INVENTORY,
+                f"[{lane}] the cleared inventory lists NO bundles. An admission over an empty "
+                "release admits nothing, and it looks exactly like one that admits everything")
+    if int(inv.get("n_bundles") or 0) != len(bundles):
+        _refuse(G_EMPTY_INVENTORY, f"[{lane}] n_bundles disagrees with the bundle list")
+
     with open(os.path.join(bundle_dir, "arm_bundle.json")) as fh:
         doc = json.load(fh)
-    ids = {str(b.get("bundle_id")) for b in (inv.get("bundles") or [])}
     mine = str(doc.get("bundle_id") or doc.get("pathway_run_id"))
-    if ids and mine not in ids:
+    entry = next((b for b in bundles if str(b.get("bundle_id")) == mine), None)
+    if entry is None:
         _refuse(G_BOUND_SUBJECT,
-                f"[{lane}] the bundle being read ({mine[:16]}) is not in the inventory this "
-                "report cleared")
+                f"[{lane}] the bundle being read ({mine[:16]}) is not in the cleared inventory")
+
+    # ---- EVERY BOUND FILE HASH, against the bytes on disk ----
+    for group in ("files", "rankings"):
+        for name, e in sorted((entry.get(group) or {}).items()):
+            p = os.path.join(bundle_dir, name)
+            want = e.get("raw_sha256") if isinstance(e, dict) else e
+            if not os.path.exists(p) or file_sha256(p) != want:
+                _refuse(G_BOUND_BYTES,
+                        f"[{lane}] {name}: the cleared inventory bound different bytes")
 
     return {
-        "admitted": True,
-        "owner": spec["owner"],
-        "report": spec["file"],
-        "report_schema": spec["schema"],
-        "verifier_id": spec["verifier_id"],
-        "report_id": rep["report_id"],
-        "bound_inventory": spec["inventory"],
-        "bound_inventory_sha256": binds.get("inventory_raw_sha256"),
-        "bound_bundle_id": mine,
+        "admitted": True, "owner": spec["owner"], "report": spec["file"],
+        "report_schema": spec["schema"], "verifier_id": spec["verifier_id"],
+        "report_id": rep["report_id"], "bound_inventory": spec["inventory"],
+        "bound_inventory_sha256": inv_raw, "bound_bundle_id": mine,
+        "n_bundles": len(bundles),
         "signature_limit": ("no signature: this proves the report is ABOUT these bytes and is "
                             "internally whole. It does not prove WHO wrote it"),
     }
