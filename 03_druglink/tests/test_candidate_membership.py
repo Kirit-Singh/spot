@@ -404,6 +404,16 @@ def test_CONFLICTING_has_no_typed_column_and_is_never_silently_skipped(view):
             s["edge_ids"] = sorted(set(s["edge_ids"]) | {twin["edge_id"]})
             s["n_edges"] = len(s["edge_ids"])
             s["arm_evidence_state"] = "conflicting"     # honest about the aggregate this time
+            # ...and fully reconciled, so the CONFLICTING gate is what fires rather than a stale
+            # count. A forgery that leaves a count behind is caught by the wrong gate, and then the
+            # test proves the wrong thing.
+            s["n_observed_perturbation"] = sum(
+                1 for e in edges if e["candidate_id"] == cid and e["arm_key"] == src["arm_key"]
+                and e["directional_evidence_status"] == "observed_perturbation")
+            s["n_opposed"] = sum(
+                1 for e in edges if e["candidate_id"] == cid and e["arm_key"] == src["arm_key"]
+                and e["directional_evidence_status"] == "opposed")
+            s["observed_perturbation_support"] = True
 
     with pytest.raises(cm.MembershipError) as exc:
         cm.check_view_membership(bad)
@@ -432,3 +442,41 @@ def test_a_summary_field_its_edges_do_not_produce_is_REFUSED(view, field, value)
     with pytest.raises(cm.MembershipError) as exc:
         cm.check_view_membership(bad)
     assert exc.value.gate == cm.GATE_SUMMARY_FIELD_NOT_THE_EDGES
+
+
+@pytest.mark.parametrize("field,value", [
+    ("target_ids", ["WRONG"]),
+    ("arm_ranks", [1, 99]),
+    ("stage3_evidence_classes", ["forged"]),
+    ("active_moiety_id", "AM:OTHER"),
+])
+def test_a_summary_AGGREGATE_its_edges_do_not_produce_is_REFUSED(view, field, value):
+    """The singular-field sweep missed the PLURAL aggregates, so `target_ids=[WRONG]` sailed
+    through. Each now has an explicit derivation."""
+    bad = copy.deepcopy(view)
+    summary = bad["tables"]["arm_summaries"][0]
+    if field not in summary:
+        pytest.skip(f"the published summary does not serve {field!r}")
+    summary[field] = value
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_SUMMARY_FIELD_NOT_THE_EDGES
+
+
+def test_EVERY_served_summary_field_is_covered_or_explicitly_not_trusted(view):
+    """THE COMPLETENESS GUARD. "Every field is re-derived" is a CLAIM unless the list is finite and
+    checked. A new served field that nobody re-derives is a field a forger owns — and it would
+    arrive silently."""
+    served = set(view["tables"]["arm_summaries"][0])
+    structural = {"candidate_id", "arm_key", "arm_evidence_state", "edge_ids", "n_edges",
+                  "observed_perturbation_support", "selection_roles"}
+    covered = (structural
+               | set(cm.SUMMARY_FIELDS_FROM_EDGES)
+               | set(cm.STATE_TO_COUNT.values())
+               | set(cm.AGGREGATE_FROM_EDGES)
+               | set(cm.SUMMARY_SELF_ID_FIELDS))
+    uncovered = sorted(served - covered)
+    assert not uncovered, (
+        f"served summary field(s) {uncovered} are re-derived by nothing. Give each an explicit "
+        "derivation from the edges, or remove it from the served summary — a field a consumer "
+        "trusts and nobody re-derives is a field a forger owns.")

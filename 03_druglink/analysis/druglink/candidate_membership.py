@@ -324,7 +324,24 @@ SUMMARY_FIELDS_FROM_EDGES: tuple[str, ...] = (
     "origin_type", "origin_is_measured", "lane", "program_id", "desired_change",
     "context", "from_condition", "to_condition", "condition",
     "arm_context_sha256", "target_id", "target_id_namespace",
+    "active_moiety_id", "pathway_source",
 )
+# PLURAL AGGREGATES a summary serves. Each has an EXPLICIT derivation from the edge group — the
+# singular-field sweep did not cover them, so `target_ids=[WRONG]` sailed through. A finite,
+# enumerated list; "every field" is a claim only if the list is checked.
+#
+#   field                     <- derivation from the candidate's edges IN THIS ARM
+AGGREGATE_FROM_EDGES: dict[str, str] = {
+    "target_ids": "sorted unique edge.target_id",
+    "arm_ranks": "sorted unique edge.arm_rank (nulls dropped; a null rank is a STATE, never a 0)",
+    "stage3_evidence_classes": "sorted unique edge.stage3_evidence_class",
+    "active_moiety_id": "the single edge.active_moiety_id (they are one candidate)",
+    "pathway_source": "the single edge.pathway_source",
+}
+# NON-AUTHORITATIVE: a content-addressed id of the summary itself. It is not derivable from the
+# edges and it is NOT trusted — it is simply never read as evidence.
+SUMMARY_SELF_ID_FIELDS: frozenset[str] = frozenset({"arm_summary_id"})
+
 STATE_TO_COUNT: dict[str, str] = {
     wf.OBSERVED_PERTURBATION: "n_observed_perturbation",
     wf.INVERSE_DIRECTION_HYPOTHESIS: "n_inverse_direction_hypothesis",
@@ -467,6 +484,29 @@ def _reconcile(view: Mapping[str, Any], cid: str, selected_arms: Mapping[str, An
                     _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
                             f"candidate {cid!r} arm {arm!r}: the summary serves {field}="
                             f"{summary.get(field)!r}, but its edges carry {want!r}.")
+
+        # PLURAL AGGREGATES — the ones the singular sweep missed.
+        if "target_ids" in summary:
+            want = sorted({str(e["target_id"]) for e in group if e.get("target_id") is not None})
+            if sorted(str(x) for x in (summary.get("target_ids") or [])) != want:
+                _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
+                        f"candidate {cid!r} arm {arm!r}: the summary serves target_ids="
+                        f"{summary.get('target_ids')!r}; its edges name {want!r}.")
+        if "arm_ranks" in summary:
+            want_r = sorted({e["arm_rank"] for e in group if e.get("arm_rank") is not None})
+            if sorted(x for x in (summary.get("arm_ranks") or []) if x is not None) != want_r:
+                _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
+                        f"candidate {cid!r} arm {arm!r}: the summary serves arm_ranks="
+                        f"{summary.get('arm_ranks')!r}; its edges give {want_r!r}. (A null rank is "
+                        "a STATE and is dropped, never coerced to 0.)")
+        if "stage3_evidence_classes" in summary:
+            want_c = sorted({str(e["stage3_evidence_class"]) for e in group
+                             if e.get("stage3_evidence_class") is not None})
+            if sorted(str(x) for x in (summary.get("stage3_evidence_classes") or [])) != want_c:
+                _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
+                        f"candidate {cid!r} arm {arm!r}: the summary serves "
+                        f"stage3_evidence_classes={summary.get('stage3_evidence_classes')!r}; its "
+                        f"edges give {want_c!r}.")
 
         # The per-state COUNTS are the edges', not the summary's word for them.
         for st, field in sorted(STATE_TO_COUNT.items()):
