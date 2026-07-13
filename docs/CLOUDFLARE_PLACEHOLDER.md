@@ -77,6 +77,34 @@ redirected:
 form (canonical, or the stable alias while provisioning). The access-code comparison,
 constant-time check, and host-only `__Host-spot-review` cookie are unchanged.
 
+## Web Analytics / RUM must stay OFF
+
+Cloudflare Web Analytics "automatic setup" injects `static.cloudflareinsights.com/beacon.min.js`
+into HTML responses **at the edge, after the Function runs**. It is conditional on a
+browser-shaped request, so `curl` sees clean bytes and only a real browser sees the rewrite:
+
+```
+staged  index.html  6359 bytes  fbd8b7d5…   (pinned by site_release_manifest.json)
+served  to browser  6863 bytes  296f1d88…   (+504 bytes, 1 beacon reference)
+```
+
+This is unacceptable here for two reasons, independent of the beacon being blocked:
+
+1. It **breaks the served==staged invariant** — the bytes a reviewer's browser receives no
+   longer hash to the release manifest.
+2. It injects a **third-party beacon into a gated, `noindex` reviewer page**, which the
+   landing contract forbids ("the landing is self-contained and makes no third-party requests").
+
+The Function's CSP (`script-src 'self' 'unsafe-inline'`) blocks the beacon from executing, so
+the console shows a CSP violation. **Do not "fix" that by allowlisting
+`static.cloudflareinsights.com`** — that would permit the beacon, still leave the bytes
+rewritten, and violate the contract. Disable the injection instead:
+
+> Workers & Pages → `spotpathways` → **Settings → Web Analytics → Disable**
+> (or Account Home → **Web Analytics** → the site → turn off *Automatic setup*).
+
+Then re-check that the browser-shaped response hashes to the manifest entry.
+
 ## Placeholder -> production switch (DONE)
 
 Pages environment variables come from the committed `wrangler.jsonc` `env.production.vars`.
