@@ -305,3 +305,34 @@ def test_w10_admitted_no_fallback_and_rejects_forgeries(tmp_path, monkeypatch):
     rf = sealed({**valid(), "native_verdict": "REFUSE", "disposition": "refused"})
     store(rf); monkeypatch.setattr(S, "_rerun_adapter", lambda cfg, cond: dict(rf))
     assert S.w10_admitted(C, "Rest") is False
+
+
+def _producer_opts(modfile):
+    import re
+    src = open(os.path.join(ANALYSIS, "direct", modfile)).read()
+    return set(re.findall(r"""add_argument\(\s*['"](--[a-z0-9-]+)""", src))
+
+
+_PARSER_VALID = {"direct:": "run_arms.py", "step0:": "signature_matrix.py",
+                 "pathway:": "run_pathway_arms.py", "aggregate:": "run_release.py"}
+
+
+def test_confirmed_lane_blocks_parse_against_producer_argparse():
+    """Every --flag a confirmed in-repo lane emits must be an accepted option of that producer's
+    argparse. Guards the Step0 seam (signature_matrix takes no --stage1-release*/--direct-w10-report)
+    and any future flag drift. External checkouts (w10-verify/adapter, temporal) are out of scope."""
+    import re
+    out = _dry()
+    checked = 0
+    for seg in out.split("=== BEGIN ")[1:]:
+        label = seg.split("\n", 1)[0].strip()
+        prefix = next((p for p in _PARSER_VALID if label.startswith(p)), None)
+        if not prefix:
+            continue
+        body = seg.split("=== END", 1)[0]
+        flags = set(re.findall(r"(--[a-z0-9-]+)", body))
+        valid = _producer_opts(_PARSER_VALID[prefix])
+        unknown = flags - valid
+        assert not unknown, f"{label}: flags not in {_PARSER_VALID[prefix]} argparse: {sorted(unknown)}"
+        checked += 1
+    assert checked >= 4, f"expected >=4 confirmed in-repo lane blocks, saw {checked}"

@@ -536,14 +536,14 @@ def lane_step0(cfg):
     _phase("D step0")
     require_admitted_direct(cfg)
     for cond in CONDITIONS:
-        # Step0 uses its ACCEPTED producer CLI; it reads the W10 native report + bundle and
-        # internally calls the adapter (load_and_normalize) for the mask hash — no invented flag.
+        # Step0 reads the native W10 MASK report (--direct-mask-report) + the Direct bundle and
+        # internally binds the mask via signature_matrix.w10_anchor. signature_matrix takes NO
+        # --stage1-release* flags (not in its CLI); its accepted flags are exactly these.
         run(f"step0:{cond}",
             _py("signature_matrix", "--condition", cond, "--de-main", cfg.de, "--sgrna", cfg.sgrna,
                 "--guide-manifest", cfg.manifest, "--source-registry", cfg.srcreg,
-                "--stage1-release", cfg.stage1_release, "--stage1-release-root", cfg.stage1_release_root,
                 "--direct-bundle", direct_bundle_for(cfg, cond),
-                "--direct-w10-report", native_report_path(cfg, cond),
+                "--direct-mask-report", native_report_path(cfg, cond),
                 "--env-lock", cfg.env_lock, "--out-root", cfg.sigroot),
             consumes=[f"direct:{cond}", f"w10_admission:{cond}"], produces=[f"signatures:{cond}"])
     _write_receipt(cfg, "D.step0", argv=["signature_matrix"], inputs=[cfg.de],
