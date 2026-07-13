@@ -671,7 +671,9 @@ def test_json_parquet_disagreement_fails_verification(tmp_path):
     import pyarrow.parquet as pq
 
     from analysis.emit import emit
-    from analysis.tables import TABLE_SCHEMAS
+    from analysis.contract_version import ContractVersion
+    from analysis.tables import table_schemas
+    TABLE_SCHEMAS = table_schemas(ContractVersion.V1)
     from analysis.verify import verify_output_dir
 
     inputs = stage4_inputs()

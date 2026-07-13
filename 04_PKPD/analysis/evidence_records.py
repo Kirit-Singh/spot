@@ -12,29 +12,16 @@ from typing import Literal, Optional
 
 from pydantic import Field, model_validator
 
-from .contracts import ID_PATTERN, SHA256_PATTERN, Strict
+from .assay_records import POINT_ESTIMATE_RELATIONS, AssayBinding, Relation
+from .contracts import ID_PATTERN, Provenance, Strict
+from .evidence_types import EvidenceType
+from .pk_records import PkDetail, RatioReport, SamplingDetail, UnboundDerivation
 from .quantity import CNS_MPO_DIMENSIONS, Quantity, validate_domain
 
-
-# --------------------------------------------------------------------------- shared
-
-class Provenance(Strict):
-    """The binding from a number to the response it came from."""
-
-    source_record_id: str = Field(pattern=ID_PATTERN)
-    source_url: Optional[str] = None
-    access_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    release_version: Optional[str] = None
-    raw_response_sha256: str = Field(pattern=SHA256_PATTERN)
-    extraction_transform: str  # exact, deterministic: how the value was taken out
-
-
-class EvidenceType(str, Enum):
-    IN_VITRO = "in_vitro"
-    IN_VIVO_ANIMAL = "in_vivo_animal"
-    HUMAN_CLINICAL = "human_clinical"
-    IN_SILICO = "in_silico"
-    LABEL = "label"
+# `Provenance` now lives in `contracts` (the PK records need it too, and a contract module
+# that imports the records it constrains is a cycle). Re-exported here so every existing
+# `from .evidence_records import Provenance` keeps working.
+__all__ = ["Provenance"]
 
 
 # ------------------------------------------------------------------ CNS-MPO inputs
@@ -87,18 +74,34 @@ class PropertyRecord(Strict):
 
 
 class PotencyRecord(Strict):
-    """MEC / potency, with the biological context that makes it comparable."""
+    """MEC / potency, with the biological context that makes it comparable.
+
+    `metric` keeps MEC, IC50, IC90, EC50 and Ki DISTINCT, and no transform between them is
+    supplied: deriving an MEC from an IC50 needs an unbound fraction and a declared PD model,
+    and Stage 4 supplies neither silently. A richer assay binding makes an IC50 better
+    documented; it does not make it a minimum effective concentration.
+
+    `relation` is the v2 addition that changes conclusions. A source that says `IC50 > 10000
+    nM` is saying the assay ran OUT OF RANGE, not that the effect occurs at 10 uM. Only `=` is
+    a point estimate, and only a point estimate may be the denominator of an exposure margin.
+    It defaults to `=` because that is exactly how a v1 row's bare magnitude was already read —
+    so v1 rows keep their meaning rather than silently acquiring a new one.
+    """
 
     potency_id: str = Field(pattern=ID_PATTERN)
     candidate_id: str = Field(pattern=ID_PATTERN)
     active_moiety_id: str = Field(pattern=ID_PATTERN)
     metric: Literal["MEC", "IC50", "IC90", "EC50", "Ki", "target_concentration"]
+    relation: Relation = Relation.EQ
     value_source_string: str
     units: str
     binding_state: Literal["free", "total", "unspecified"]
     assay: str
     biological_context: str  # the tumour/model the potency was actually measured against
     evidence_type: EvidenceType
+    # v2: the structured activity/assay/target/document identity. Optional on the model so a
+    # v1 bundle stays valid; REQUIRED by the v2 acquisition profile (`contract_profile.py`).
+    assay_binding: Optional[AssayBinding] = None
     provenance: Provenance
 
     @model_validator(mode="after")
@@ -111,6 +114,16 @@ class PotencyRecord(Strict):
     @property
     def quantity(self) -> Quantity:
         return Quantity.parse(self.value_source_string, self.units)
+
+    @property
+    def is_point_estimate(self) -> bool:
+        """`>`/`<`/`~` are bounds and approximations, not magnitudes to divide by."""
+        return self.relation in POINT_ESTIMATE_RELATIONS
+
+    @property
+    def is_target_concentration(self) -> bool:
+        """Whether this is an admissible denominator for an exposure margin at all."""
+        return self.metric in ("MEC", "target_concentration")
 
 
 # --------------------------------------------------------------------- transporters
@@ -195,6 +208,29 @@ class ExposureMeasurement(Strict):
     kp_reported_source_string: Optional[str] = None
     kp_uu_brain_reported_source_string: Optional[str] = None
     evidence_type: EvidenceType
+    # --- v2: the context a clinical PK number needs before it means anything. Optional on the
+    # model so a v1 bundle stays valid; REQUIRED by the v2 profile (`contract_profile.py`).
+    # WHICH exposure (Cmax vs Ctrough), over how many subjects, with what spread.
+    pk_detail: Optional[PkDetail] = None
+    # How/where/when the sample was taken; residual-blood correction; probe recovery.
+    sampling: Optional[SamplingDetail] = None
+    # A brain concentration under dexamethasone + an enzyme-inducing antiseizure drug is not
+    # the same exposure as one without them. GBM patients are rarely on neither.
+    co_medications: list[str] = Field(default_factory=list)
+    assay_method: Optional[str] = None
+    # The plasma measurement this brain/CSF sample is paired with. Every ratio needs one, and
+    # integrity checks that it resolves to a real PLASMA row of the same moiety and context.
+    paired_plasma_measurement_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
+    # Was this free concentration MEASURED, or obtained by multiplying a total by an fu? The
+    # two are not the same evidence: the second inherits every assumption in the fu. `measured`
+    # is the default because that is what a v1 `binding_state="free"` row already meant.
+    binding_state_basis: Literal["measured", "derived_from_fraction_unbound"] = "measured"
+    unbound_derivation: Optional[UnboundDerivation] = None
+    # Kp / Kp,uu as structured reported-or-derived ratios. The v1 `*_reported_source_string`
+    # fields remain the REPORTED lane (their names say so); these supersede them and can also
+    # express a derivation.
+    kp: Optional[RatioReport] = None
+    kp_uu_brain: Optional[RatioReport] = None
     provenance: Provenance
 
     @model_validator(mode="after")
@@ -210,7 +246,50 @@ class ExposureMeasurement(Strict):
             # Kp,uu,brain is not an observation, it is an inference we refuse.
             raise ValueError("kp_uu_brain_reported must not be set on a CSF measurement")
         self._check_quantitation_limit()
+        self._check_unbound_derivation()
+        self._check_ratios()
         return self
+
+    def _check_unbound_derivation(self) -> None:
+        derived = self.binding_state_basis == "derived_from_fraction_unbound"
+        if derived and self.unbound_derivation is None:
+            raise ValueError(
+                "binding_state_basis='derived_from_fraction_unbound' requires unbound_derivation: "
+                "C_free = C_total * fu is an INFERENCE, and the audit requires both the "
+                "source-bound inputs and the exact declared transform. Without them a calculated "
+                "free concentration is indistinguishable from a measured one."
+            )
+        if derived and self.binding_state != "free":
+            raise ValueError(
+                f"binding_state is {self.binding_state!r} but the row claims to have DERIVED an "
+                "unbound concentration. You do not derive a free concentration and then call it "
+                "total."
+            )
+        if not derived and self.unbound_derivation is not None:
+            raise ValueError(
+                "unbound_derivation is set but binding_state_basis says the value was measured. "
+                "A row cannot be both a measurement and a calculation."
+            )
+
+    def _check_ratios(self) -> None:
+        # The v1 firewall blocked a CSF row from reporting a brain Kp,uu. The v2 structured
+        # field must not become a way around it: the blood-CSF barrier is still not the BBB,
+        # however richly the row is annotated, and a DERIVED ratio is if anything worse.
+        if self.matrix == "csf" and self.kp_uu_brain is not None:
+            raise ValueError(
+                "a CSF measurement must not carry a brain Kp,uu, reported or derived. Grossman "
+                "2026 is explicit that the blood-CSF barrier is not the BBB, so a CSF-derived "
+                "Kp,uu,brain is not an observation — it is an inference, and Stage 4 refuses it."
+            )
+        # One number, one value. Two representations are two chances to state it differently.
+        for v1, v2, name in ((self.kp_reported_source_string, self.kp, "kp"),
+                             (self.kp_uu_brain_reported_source_string, self.kp_uu_brain,
+                              "kp_uu_brain")):
+            if v1 is not None and v2 is not None and v2.value_source_string != v1:
+                raise ValueError(
+                    f"{name}: the v1 reported string ({v1!r}) and the v2 ratio "
+                    f"({v2.value_source_string!r}) disagree. One measurement has one value."
+                )
 
     def _check_quantitation_limit(self) -> None:
         parts = (self.quantitation_limit_kind, self.quantitation_limit_source_string,
@@ -305,149 +384,17 @@ class DeliveryAssignment(Strict):
     evidence: Optional[Provenance] = None
 
 
-# --------------------------------------------------------------------------- NEBPI
-
-
-class NebpiCriterionId(str, Enum):
-    PHYSICAL_CHARACTERISTICS = "physical_characteristics"
-    PERMEABILITY_NORMAL_ANIMAL_BRAIN = "permeability_normal_animal_brain"
-    KNOWN_MEC_POTENCY = "known_mec_potency"
-    PK_IN_NEB = "pk_in_neb"
-    PD_IN_NEB = "pd_in_neb"
-    CSF_DRUG_LEVELS = "csf_drug_levels"
-    RESPONSE_IN_ENHANCING_LESIONS = "response_in_enhancing_lesions"
-    IN_VITRO_BBB_PERMEABILITY = "in_vitro_bbb_permeability"
-    RADIOGRAPHIC_RESPONSE_IN_NEB = "radiographic_response_in_neb"
-
-
-class ObservationState(str, Enum):
-    OBSERVED_PRESENT = "observed_present"
-    OBSERVED_ABSENT = "observed_absent"
-    NOT_EVALUATED = "not_evaluated"
-
-
-class PkNebLevel(str, Enum):
-    """Graded relative to the MEC — 'accounting for potency' (Table 2 footnote a)."""
-
-    THERAPEUTIC = "pk_therapeutic_in_neb"
-    LOW = "pk_low_in_neb"
-    LITTLE_TO_NONE = "pk_little_to_none_in_neb"
-    NOT_EVALUATED = "pk_not_evaluated"
-
-
-class NebpiObservation(Strict):
-    """One NEBPI criterion observation in one evidence context.
-
-    A PK-in-NEB observation is NOT a free categorical assertion. The audit produced
-    `sufficiently_permeable` from `state=not_evaluated` + `pk_level=therapeutic` + a
-    measurement id that did not exist + an IC50 for the wrong moiety in the wrong tumour.
-    So `pk_level` is gone as an input: a PK observation must NAME the measurement and the
-    potency record it rests on, and `nebpi.py` DERIVES the Grossman PK level from that
-    bound concentration-versus-MEC comparison. An observation cannot assert its own
-    conclusion.
-    """
-
-    observation_id: str = Field(pattern=ID_PATTERN)
-    candidate_id: str = Field(pattern=ID_PATTERN)
-    context_id: str = Field(pattern=ID_PATTERN)
-    criterion_id: NebpiCriterionId
-    state: ObservationState
-    # An "observed_absent" claim is only usable if an adequate assessment was made.
-    assessment_adequate: Optional[bool] = None
-    adequacy_rationale: Optional[str] = None
-    # Required for pk_in_neb: the measurement, and the MEC it is compared against
-    # (Table 2 footnote a, "Accounting for potency").
-    potency_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
-    measurement_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
-    evidence_type: EvidenceType
-    provenance: Provenance
-
-    @model_validator(mode="after")
-    def _rules(self) -> "NebpiObservation":
-        if self.criterion_id == NebpiCriterionId.PK_IN_NEB:
-            if self.state != ObservationState.OBSERVED_PRESENT:
-                raise ValueError(
-                    "a pk_in_neb observation records a measurement that was actually made, so "
-                    "its state must be observed_present. 'No PK was measured in NEB' is the "
-                    "absence of this row; 'drug was looked for and not found' is a measurement "
-                    "with detection_status=not_detected."
-                )
-            if not self.measurement_id or not self.potency_id:
-                raise ValueError(
-                    "pk_in_neb requires BOTH measurement_id and potency_id: the Grossman PK "
-                    "level is derived from the measured NEB concentration against the MEC, "
-                    "never asserted"
-                )
-        elif self.measurement_id or self.potency_id:
-            raise ValueError(
-                f"{self.criterion_id.value} must not carry a measurement/potency link; only "
-                "pk_in_neb is a concentration-vs-MEC comparison"
-            )
-        if self.state == ObservationState.OBSERVED_ABSENT and self.assessment_adequate is None:
-            raise ValueError(
-                "observed_absent requires assessment_adequate: absence of evidence is not "
-                "evidence of absence unless an adequate assessment looked for it"
-            )
-        return self
-
-
-class PotencyContextLink(Strict):
-    """The ONLY way a potency measured in one biological context may be used in another.
-
-    Previously an untyped dict that never entered the id: the audit turned a margin from
-    not_computable into computed without changing the scorecard id. It is now a first
-    class, source-bound evidence row like any other.
-    """
-
-    link_id: str = Field(pattern=ID_PATTERN)
-    potency_id: str = Field(pattern=ID_PATTERN)
-    tumor_context: str
-    rationale: str
-    provenance: Provenance
-
-
-class SearchManifest(Strict):
-    """A reproducible negative search. Without one, absence stays `not_evaluated`.
-
-    `no_evidence_found` is a claim about a search that was actually run, so it has to
-    carry the query that was run, against which endpoint, at which release, and the hash
-    of the response that came back empty. A list of source *names* is not a search.
-
-    The audit appended a SECOND manifest with the same `search_id`, an invented endpoint
-    and an invented response hash, and the pipeline kept both and kept the safety row. The
-    manifest is now source-bound like every other evidence row: `provenance` names the
-    registered source record whose acquired bytes ARE the empty response, and
-    `response_sha256` is that binding's hash rather than a number the caller may assert.
-    A caller-authored negative-search claim cannot pass as sourced evidence.
-    """
-
-    search_id: str = Field(pattern=ID_PATTERN)
-    source: str
-    endpoint: str
-    query_canonical: str
-    search_scope: str
-    executed_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    source_release: Optional[str] = None
-    n_results: int = Field(ge=0)
-    provenance: Provenance
-
-    @property
-    def response_sha256(self) -> str:
-        """The hash of the response that came back empty — the source binding's hash."""
-        return self.provenance.raw_response_sha256
-
-    @model_validator(mode="after")
-    def _empty_means_empty(self) -> "SearchManifest":
-        if self.n_results != 0:
-            raise ValueError(
-                "a search manifest backing 'no_evidence_found' must have returned 0 results; "
-                f"this one returned {self.n_results}"
-            )
-        return self
-
-
-# The label/safety records live in `safety_records.py` (500-line rule). They are part of the
-# same contract, so they are re-exported here and every existing import keeps working.
+# The NEBPI and label/safety records live in `nebpi_records.py` and `safety_records.py` (the
+# 500-line rule). They are part of the same contract, so they are re-exported here and every
+# existing import keeps working.
+from .nebpi_records import (  # noqa: E402,F401
+    NebpiCriterionId,
+    NebpiObservation,
+    ObservationState,
+    PkNebLevel,
+    PotencyContextLink,
+    SearchManifest,
+)
 from .safety_records import (  # noqa: E402,F401
     EvidenceState,
     FindingType,

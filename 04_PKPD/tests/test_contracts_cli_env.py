@@ -5,6 +5,7 @@ the environment lock.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 
 import pytest
@@ -42,8 +43,30 @@ def test_exported_schema_matches_the_code(filename):
     assert on_disk == regenerated, f"{filename} is stale — regenerate it"
 
 
+@pytest.mark.parametrize("filename,pinned", sorted(schemas_export.FROZEN.items()))
+def test_the_frozen_v1_schema_is_byte_for_byte_what_it_always_was(filename, pinned):
+    """v1 is superseded, not rewritten.
+
+    "The v2 extension is backwards compatible" is a claim ABOUT THE OLD CONTRACT, and a claim
+    you can silently edit is not a guarantee. So the v1 schema files are pinned by hash: a v1
+    document validates against the v2 models unchanged (every v2 field is additive and
+    optional) and means exactly what it always meant. Changing v1 now requires changing this
+    pin, in a diff a reviewer will see.
+    """
+    path = os.path.join(schemas_export.SCHEMA_DIR, filename)
+    with open(path, "rb") as fh:
+        actual = hashlib.sha256(fh.read()).hexdigest()
+    assert actual == pinned, (
+        f"{filename} is FROZEN v1 and its bytes changed. v1 semantics are not editable — "
+        "supersede them in v2 instead."
+    )
+
+
 def test_table_schema_export_matches_the_parquet_writer():
-    from analysis.tables import SORT_KEYS, TABLE_SCHEMAS
+    from analysis.contract_version import ContractVersion
+    from analysis.tables import sort_keys, table_schemas
+    TABLE_SCHEMAS = table_schemas(ContractVersion.V2)
+    SORT_KEYS = sort_keys(ContractVersion.V2)
 
     exported = schemas_export.tables_schema()["tables"]
     assert set(exported) == set(TABLE_SCHEMAS)
@@ -181,7 +204,9 @@ def test_cli_fixture_smoke_run(tmp_path, capsys):
     written = os.listdir(tmp_path)
     assert len(written) == 1  # exactly one scorecard set directory
     assert PRODUCTION_POINTER not in written
-    from analysis.emit import ARTIFACTS
+    from analysis.contract_version import ContractVersion
+    from analysis.emit import artifact_allowlist
+    ARTIFACTS = artifact_allowlist(ContractVersion.V1)
 
     assert sorted(os.listdir(tmp_path / written[0])) == sorted(ARTIFACTS)
 

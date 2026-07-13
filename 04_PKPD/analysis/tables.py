@@ -15,6 +15,8 @@ import os
 from typing import Any
 
 import pyarrow as pa
+
+from .contract_version import ContractVersion
 import pyarrow.parquet as pq
 
 from .canonical import content_sha256, sha256_file
@@ -315,7 +317,7 @@ SOURCE_CATALOG_SCHEMA = pa.schema([
     ("raw_media_type", _STR),
 ])
 
-TABLE_SCHEMAS: dict[str, pa.Schema] = {
+TABLE_SCHEMAS_V1: dict[str, pa.Schema] = {
     # derived lanes
     "delivery_evidence": DELIVERY_SCHEMA,
     "transporter_evidence": TRANSPORTER_SCHEMA,
@@ -339,7 +341,7 @@ TABLE_SCHEMAS: dict[str, pa.Schema] = {
 # TOTAL: it identifies at most one row. A partial key (property_evidence used to sort on
 # candidate/property/calculator, which two agreeing rows share) leaves the byte order of the
 # parquet up to the input order, and the content hash with it.
-SORT_KEYS: dict[str, tuple[str, ...]] = {
+SORT_KEYS_V1: dict[str, tuple[str, ...]] = {
     "delivery_evidence": ("candidate_id", "context_id"),
     "transporter_evidence": ("observation_id",),
     "exposure_evidence": ("measurement_id", "potency_id"),
@@ -358,14 +360,15 @@ SORT_KEYS: dict[str, tuple[str, ...]] = {
 }
 
 
-def normalize_rows(table_name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def normalize_rows(table_name: str, rows: list[dict[str, Any]],
+                   version: ContractVersion = ContractVersion.V1) -> list[dict[str, Any]]:
     """Project every row onto the declared columns, in declared order, sorted.
 
     The sort key must actually be a key: two rows sharing it would make the emitted byte
     order depend on the order they were handed in, which is exactly how one
     `scorecard_set_id` came to have two sets of artifact hashes.
     """
-    schema = TABLE_SCHEMAS[table_name]
+    schema = table_schemas(version)[table_name]
     names = schema.names
     out: list[dict[str, Any]] = []
     for r in rows:
@@ -373,7 +376,7 @@ def normalize_rows(table_name: str, rows: list[dict[str, Any]]) -> list[dict[str
         if unknown:
             raise ValueError(f"{table_name}: unknown columns {sorted(unknown)}")
         out.append({n: r.get(n) for n in names})
-    keys = SORT_KEYS[table_name]
+    keys = sort_keys(version)[table_name]
 
     def sort_key(d: dict[str, Any]) -> tuple[str, ...]:
         return tuple(("" if d.get(k) is None else str(d[k])) for k in keys)
@@ -393,10 +396,11 @@ def normalize_rows(table_name: str, rows: list[dict[str, Any]]) -> list[dict[str
     return out
 
 
-def write_table(table_name: str, rows: list[dict[str, Any]], out_path: str) -> dict[str, Any]:
+def write_table(table_name: str, rows: list[dict[str, Any]], out_path: str,
+                version: ContractVersion = ContractVersion.V1) -> dict[str, Any]:
     """Write one parquet table and describe it for the manifest."""
-    schema = TABLE_SCHEMAS[table_name]
-    norm = normalize_rows(table_name, rows)
+    schema = table_schemas(version)[table_name]
+    norm = normalize_rows(table_name, rows, version)
     arrays = [
         pa.array([r[name] for r in norm], type=field.type)
         for name, field in zip(schema.names, schema)
@@ -409,7 +413,20 @@ def write_table(table_name: str, rows: list[dict[str, Any]], out_path: str) -> d
         "rows": len(norm),
         "columns": list(schema.names),
         "dtypes": [str(f.type) for f in schema],
-        "sort_key": list(SORT_KEYS[table_name]),
+        "sort_key": list(sort_keys(version)[table_name]),
         "content_sha256": content_sha256(norm),
         "file_sha256": sha256_file(out_path),
     }
+
+# The v2 table schemas are built in `tables_v2.py` (the 500-line rule) by APPENDING to the frozen
+# v1 schemas above, and are re-exported here so every existing import keeps working.
+from .tables_v2 import (  # noqa: E402,F401
+    FRACTION_UNBOUND_SCHEMA,
+    SORT_KEYS,
+    SORT_KEYS_V2,
+    SOURCE_ACQUISITION_SCHEMA,
+    TABLE_SCHEMAS,
+    TABLE_SCHEMAS_V2,
+    sort_keys,
+    table_schemas,
+)

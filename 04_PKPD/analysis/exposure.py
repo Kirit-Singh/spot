@@ -183,6 +183,15 @@ def _shared_gates(
                     "target concentration; deriving one from an IC50/IC90 requires an unbound "
                     "fraction and a declared transform, and Stage 4 supplies neither silently.")
 
+    # 2b. ...and is its magnitude a magnitude at all?
+    if not potency.is_point_estimate:
+        return fail("potency_relation_not_a_point_estimate",
+                    f"the source reports this potency as {potency.relation.value!r} "
+                    f"{potency.value_source_string} {potency.units}. A censored or approximate "
+                    "potency is not a concentration to divide by: 'MEC > 500 nM' says the assay "
+                    "never reached the effect, and reporting a point margin against 500 nM would "
+                    "state the opposite of what the source found.")
+
     # 3. Free vs total.
     if m.binding_state == "unspecified" or potency.binding_state == "unspecified":
         return fail("binding_state_unspecified",

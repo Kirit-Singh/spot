@@ -19,7 +19,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from .acquisition import SourceAcquisitionRecord
+from .contract_version import SCHEMA_TO_VERSION, ContractVersion
 from .contracts import EvidenceContext, SourceRecord
+from .pk_records import FractionUnboundRecord
 from .evidence_records import (
     DeliveryAssignment,
     ExposureMeasurement,
@@ -33,10 +36,14 @@ from .evidence_records import (
 )
 from .firewall import Rejection
 
-EVIDENCE_BUNDLE_SCHEMA = "spot.stage04_evidence_bundle.v1"
+EVIDENCE_BUNDLE_SCHEMA_V1 = "spot.stage04_evidence_bundle.v1"
+EVIDENCE_BUNDLE_SCHEMA_V2 = "spot.stage04_evidence_bundle.v2"
 
-# lane -> the model every row in it must validate against.
-LANE_MODELS: dict[str, Any] = {
+# Back-compat: the v1 name other modules already import.
+EVIDENCE_BUNDLE_SCHEMA = EVIDENCE_BUNDLE_SCHEMA_V1
+
+# lane -> the model every row in it must validate against. v1 has ten lanes; v2 adds two.
+LANE_MODELS_V1: dict[str, Any] = {
     "contexts": EvidenceContext,
     "properties": PropertyRecord,
     "potencies": PotencyRecord,
@@ -49,6 +56,20 @@ LANE_MODELS: dict[str, Any] = {
     "search_manifests": SearchManifest,
 }
 
+# The two lanes that exist only under v2. A v1 bundle carrying one is REFUSED rather than
+# quietly ignored: the v1 digest does not cover these rows, so accepting them would let a
+# bundle claim an acquisition manifest that never entered the release's identity.
+LANE_MODELS_V2: dict[str, Any] = {
+    **LANE_MODELS_V1,
+    "fraction_unbound": FractionUnboundRecord,
+    "source_acquisition": SourceAcquisitionRecord,
+}
+
+LANE_MODELS = {
+    ContractVersion.V1: LANE_MODELS_V1,
+    ContractVersion.V2: LANE_MODELS_V2,
+}
+
 
 def load_evidence_bundle(path: str) -> dict[str, Any]:
     """-> {lane: [validated rows], "sources": {...}, "config": {...}}. Refuses, never guesses."""
@@ -58,14 +79,16 @@ def load_evidence_bundle(path: str) -> dict[str, Any]:
         doc = json.load(fh)
 
     schema = doc.get("schema_id")
-    if schema != EVIDENCE_BUNDLE_SCHEMA:
+    if schema not in SCHEMA_TO_VERSION:
         raise Rejection(
             "evidence_bundle_schema_unknown",
-            f"evidence bundle schema_id is {schema!r}; Stage 4 reads only "
-            f"{EVIDENCE_BUNDLE_SCHEMA!r}",
+            f"evidence bundle schema_id is {schema!r}; Stage 4 reads "
+            f"{EVIDENCE_BUNDLE_SCHEMA_V1!r} and {EVIDENCE_BUNDLE_SCHEMA_V2!r}",
         )
+    version = SCHEMA_TO_VERSION[schema]
+    lanes = LANE_MODELS[version]
 
-    unknown = sorted(set(doc) - set(LANE_MODELS) - {"schema_id", "sources", "config"})
+    unknown = sorted(set(doc) - set(lanes) - {"schema_id", "sources", "config"})
     if unknown:
         raise Rejection(
             "evidence_bundle_unknown_lane",
@@ -74,7 +97,7 @@ def load_evidence_bundle(path: str) -> dict[str, Any]:
         )
 
     out: dict[str, Any] = {}
-    for lane, model in LANE_MODELS.items():
+    for lane, model in lanes.items():
         rows = doc.get(lane, []) or []
         if not isinstance(rows, list):
             raise Rejection("evidence_bundle_lane_invalid", f"lane {lane!r} is not a list")
@@ -100,9 +123,11 @@ def load_evidence_bundle(path: str) -> dict[str, Any]:
 
     out["sources"] = sources
     out["config"] = dict(doc.get("config") or {})
+    out["contract_version"] = version
     return out
 
 
 def is_empty(bundle: dict[str, Any]) -> bool:
     """No observation in any lane. Running the engine over this would fabricate a result."""
-    return not any(bundle.get(lane) for lane in LANE_MODELS)
+    version = bundle.get("contract_version", ContractVersion.V1)
+    return not any(bundle.get(lane) for lane in LANE_MODELS[version])

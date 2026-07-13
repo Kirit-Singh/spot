@@ -196,7 +196,14 @@ def stage3_inputs(admission: Any, evidence_path: Optional[str]) -> Stage4Inputs:
         safety_records=bundle["safety_records"],
         potency_context_links=bundle["potency_context_links"],
         search_manifests=bundle["search_manifests"],
+        # v2 lanes. A v1 bundle has neither, and the profile refuses a v1 bundle that carries
+        # one -- the v1 digest would not cover it.
+        fraction_unbound=bundle.get("fraction_unbound", []),
+        acquisitions=bundle.get("source_acquisition", []),
         config=bundle["config"],
+        # The bundle declares its contract; the run speaks that contract. `run_pipeline` then
+        # refuses a v2 bundle that does not actually carry it.
+        contract_version=bundle["contract_version"],
     )
 
 

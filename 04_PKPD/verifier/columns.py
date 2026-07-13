@@ -10,7 +10,7 @@ from __future__ import annotations
 
 # The columns reconstruction actually reads. Declared here so a release from a different
 # Stage-4 version is reported as unverifiable rather than crashing the verifier.
-REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
+REQUIRED_COLUMNS_V1: dict[str, tuple[str, ...]] = {
     "contexts": ("context_id", "candidate_id", "active_moiety_id", "route", "formulation",
                  "dose", "schedule", "tumor_context"),
     "drug_forms": ("candidate_id", "namespace", "direction_compatibility"),
@@ -73,3 +73,24 @@ DELIVERY_REBUILT_FIELDS = (
     "delivery_requirement", "nebpi_primary_gate", "reason_code", "downgraded_from",
     "assignment_id", "evidence_source_record_id", "evidence_sha256",
 )
+
+
+# v2 reconstruction reads more, because v2 rows SAY more. A v1 release is not asked for any of
+# it: demanding a `relation` column of a release written before that column existed is how a
+# historical artifact becomes "unverifiable" -- which is not the same answer as "wrong", and
+# only one of the two is safe to act on.
+REQUIRED_COLUMNS_V2: dict[str, tuple[str, ...]] = {
+    **REQUIRED_COLUMNS_V1,
+    "potency_evidence": REQUIRED_COLUMNS_V1["potency_evidence"] + ("relation",),
+    "fraction_unbound": ("fraction_unbound_id", "candidate_id", "active_moiety_id", "matrix",
+                         "value_source_string", "source_record_id", "raw_response_sha256"),
+    "source_acquisition": ("acquisition_id", "source_record_id", "canonical_query",
+                           "accessed_at_utc", "observation_state", "adapter_code_sha256",
+                           "review_status", "selection_uniqueness"),
+}
+
+REQUIRED_COLUMNS = {"v1": REQUIRED_COLUMNS_V1, "v2": REQUIRED_COLUMNS_V2}
+
+
+def required_columns(version: str = "v1") -> dict[str, tuple[str, ...]]:
+    return REQUIRED_COLUMNS[version]

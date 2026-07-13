@@ -37,7 +37,7 @@ from typing import Any
 
 import pyarrow.parquet as pq
 
-from .inputs import INPUT_COLUMNS
+from .inputs import input_columns
 
 # The documents whose every string must be bound.
 CHECKED_DOCS = ("scorecards.json", "selection.json")
@@ -127,10 +127,10 @@ def _keys(node: Any, out: set[str]) -> None:
             _keys(v, out)
 
 
-def input_cell_strings(out_dir: str) -> set[str]:
+def input_cell_strings(out_dir: str, version: str = "v1") -> set[str]:
     """(B) every string in a BOUND evidence-input cell. These feed evidence_inputs_sha256."""
     out: set[str] = set()
-    for table, cols in INPUT_COLUMNS.items():
+    for table, cols in input_columns(version).items():
         path = os.path.join(out_dir, f"{table}.parquet")
         if not os.path.exists(path):
             continue
@@ -249,18 +249,18 @@ def _reconstructed_transforms(out_dir: str, method_dir: str) -> set[str]:
     return out
 
 
-def bound_strings(out_dir: str, method_dir: str) -> set[str]:
+def bound_strings(out_dir: str, method_dir: str, version: str = "v1") -> set[str]:
     return (method_strings(method_dir)
-            | input_cell_strings(out_dir)
+            | input_cell_strings(out_dir, version)
             | identity_strings(out_dir)
             | derived_cell_strings(out_dir)
             | _reconstructed_field_paths(out_dir)
             | _reconstructed_transforms(out_dir, method_dir))
 
 
-def unbound_prose(out_dir: str, method_dir: str) -> dict[str, list[str]]:
+def unbound_prose(out_dir: str, method_dir: str, version: str = "v1") -> dict[str, list[str]]:
     """-> {json path: [unbound strings]}. Empty means every sentence is bound."""
-    bound = bound_strings(out_dir, method_dir)
+    bound = bound_strings(out_dir, method_dir, version)
     problems: dict[str, list[str]] = {}
 
     for name in CHECKED_DOCS:

@@ -13,13 +13,17 @@ import shutil
 import pyarrow.parquet as pq
 import pytest
 
-from analysis.emit import ARTIFACTS, emit, environment_lock
+from analysis.contract_version import ContractVersion
+from analysis.emit import artifact_allowlist, emit, environment_lock
+
 from analysis.ids import derive_scorecard_set_id
 from analysis.method_config import load_method_bundle
 from analysis.pipeline import run_pipeline
 from analysis.safety import assert_no_forbidden_fields
 from analysis.verify import verify_output_dir
 from fixtures import stage4_inputs
+
+ARTIFACTS = artifact_allowlist(ContractVersion.V1)
 
 METHOD = load_method_bundle()
 
@@ -144,6 +148,7 @@ def test_relabelling_a_fixture_source_as_public_changes_the_id():
             "license": "CC0",
         }
     )
+
     assert _id_for(a) != _id_for(b)
 
 
@@ -203,6 +208,9 @@ def test_manifest_records_row_order_dtypes_float_rules_and_environment(emitted):
         # it in the release the verifier could only re-read the generator's reduced answer.
         "potency_context_links", "delivery_assignments", "nebpi_observations",
         "search_manifests", "source_catalog",
+        # NOT fraction_unbound / source_acquisition: this is a v1 release, and a v1 release does
+        # not carry two empty v2 tables. An empty `source_acquisition.parquet` would be a claim
+        # that the release HAS an acquisition manifest and that it is empty, which is false.
     }
     for a in tables.values():
         assert a["columns"] and a["dtypes"] and a["sort_key"]
@@ -261,8 +269,8 @@ def test_mutating_a_parquet_evidence_row_fails_verification(emitted):
     table[0]["concentration_source_string"] = "999"
     import pyarrow as pa
 
-    from analysis.tables import TABLE_SCHEMAS
-    pq.write_table(pa.Table.from_pylist(table, schema=TABLE_SCHEMAS["exposure_evidence"]), path)
+    from analysis.tables import table_schemas
+    pq.write_table(pa.Table.from_pylist(table, schema=table_schemas(ContractVersion.V1)["exposure_evidence"]), path)
 
     v = verify_output_dir(out, inputs, METHOD)
     assert v["status"] == "fail"

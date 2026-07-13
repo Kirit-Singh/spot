@@ -1,0 +1,63 @@
+{
+  "schema_id": "spot.stage04_method_safety_taxonomy.v2",
+  "method_id": "safety_taxonomy_v2",
+  "method_version": "2.0.0",
+  "description": "The v2 additions to the safety taxonomy: a controlled organ-system vocabulary, and the rule that it is READ from a source rather than inferred. A NEW file, not an edit of safety_taxonomy_v1.json, which is bound by hash into every release ever emitted.",
+
+  "organ_system_taxonomy": {
+    "id": "organ_system_v2",
+    "vocabulary": [
+      "immune_infectious",
+      "hematologic",
+      "cardiovascular",
+      "hepatic",
+      "renal",
+      "neurologic",
+      "pulmonary",
+      "gastrointestinal",
+      "endocrine_metabolic",
+      "reproductive",
+      "dermatologic",
+      "ocular",
+      "musculoskeletal",
+      "other",
+      "unspecified"
+    ],
+    "unknown_value": "unspecified",
+    "extraction_status_vocabulary": [
+      "extracted_from_labeled_section",
+      "stated_by_source",
+      "not_stated_in_source"
+    ],
+    "required_binding": [
+      "source_record_id",
+      "locator",
+      "extraction_status"
+    ],
+    "hard_rules": [
+      "An organ system is READ from a source and bound to the exact place in it that says so. A classification with no locator is not a classification.",
+      "An organ system is NEVER inferred from target biology, gene expression, drug class, mechanism, or any Stage-1/2/3 signal. 'The target is an immune gene, therefore the toxicity is immune/infectious' is a guess about biology wearing the costume of a label finding.",
+      "There is deliberately no 'inferred_*' member of extraction_status. The vocabulary IS the enforcement: an inference cannot be written down, so it cannot be emitted, so nothing downstream can read one.",
+      "extraction_status='not_stated_in_source' requires organ_system='unspecified'. When the source is silent the answer is unspecified, not the organ system the biology would suggest.",
+      "A safety row with evidence_state 'not_evaluated' or 'no_evidence_found' has no finding to classify and may not carry an organ system.",
+      "An organ-system classification is DESCRIPTIVE. It is never counted, scored, ranked, weighted, or aggregated into any number, and it never gates or reorders any PK, exposure, transporter, NEBPI or CNS-MPO lane.",
+      "An incomplete or unspecified organ-system classification never blocks or downgrades any other lane. A missing category is a missing category, not a penalty."
+    ]
+  },
+
+  "prohibited_outputs_v2": {
+    "statement": "In addition to the v1 forbidden field names, which remain in force. Stage 4 emits no combined verdict of any kind.",
+    "additional_forbidden_field_names": [
+      "p_value",
+      "q_value",
+      "fdr",
+      "adjusted_p",
+      "organ_system_score",
+      "organ_system_burden",
+      "toxicity_score",
+      "safety_grade",
+      "organ_risk"
+    ],
+    "reason": "A p/q value here would imply a hypothesis test this stage does not run, and an organ-system score would recreate the single combined clinical verdict the whole taxonomy exists to prevent. The organ system is a label on a finding, not a quantity."
+  }
+}

@@ -12,8 +12,8 @@ from typing import Literal, Optional
 
 from pydantic import Field, model_validator
 
-from .contracts import ID_PATTERN, Strict
-from .evidence_records import Provenance
+from .contracts import ID_PATTERN, Provenance, Strict
+from .organ_system import UNSPECIFIED, OrganSystemEvidence
 
 # ---------------------------------------------------------------------- label/safety
 
@@ -88,10 +88,26 @@ class SafetyEvidenceRecord(Strict):
     searched_sources: list[str] = Field(default_factory=list)
     # Required for no_evidence_found: the reproducible search behind the claim.
     search_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
+    # v2. WHICH organ system, in ACQUISITION's own evidence shape (`organ_system.py`): the
+    # value verbatim, its `value_kind` (a controlled term or the source's own), its
+    # `evidence_state`, and the exact record + locator it was read from. Never inferred from
+    # target biology, gene expression, mechanism or drug class -- `refuse_inferred_organ_system`
+    # makes that path raise rather than exist.
+    #
+    # Optional on the model so a v1 row is untouched; the v2 profile is what requires it.
+    organ_system_evidence: Optional[OrganSystemEvidence] = None
     provenance: Optional[Provenance] = None
+
+    @property
+    def organ_system(self) -> str:
+        """Unknown stays `unspecified`. There is no third answer."""
+        if self.organ_system_evidence is None:
+            return UNSPECIFIED
+        return self.organ_system_evidence.organ_system
 
     @model_validator(mode="after")
     def _rules(self) -> "SafetyEvidenceRecord":
+        self._check_organ_system()
         if self.evidence_state == EvidenceState.LABEL_SUPPORTED:
             if self.label_identity is None or self.provenance is None:
                 raise ValueError("label_supported requires label_identity and provenance")
@@ -114,3 +130,32 @@ class SafetyEvidenceRecord(Strict):
         if self.evidence_state != EvidenceState.NO_EVIDENCE_FOUND and self.search_id:
             raise ValueError("search_id is only meaningful for no_evidence_found")
         return self
+
+    def _check_organ_system(self) -> None:
+        e = self.organ_system_evidence
+        if e is None or e.organ_system == UNSPECIFIED:
+            return
+
+        # The forbidden inference, in the shape it would actually take: a value with no source
+        # behind it. Acquisition never produces one (an absent field yields `unspecified` /
+        # `not_evaluated`), so a row that has one did not get it from a source.
+        if e.evidence_state != "observed":
+            raise ValueError(
+                f"organ_system={e.organ_system!r} with evidence_state={e.evidence_state!r}. A "
+                "value that was not observed in a source can only have been inferred from the "
+                "target, the mechanism or the drug class -- which is not an observation of "
+                "tissue specificity. When the source is silent the answer is 'unspecified'."
+            )
+        if not (e.source_record_id and e.locator):
+            raise ValueError(
+                f"organ_system={e.organ_system!r} must name the record it was read from and the "
+                "exact place in it. 'It's in the label somewhere' is not a locator: a reviewer "
+                "has to be able to go and read the sentence."
+            )
+        # An organ system is a property of a FINDING. Where nobody looked, or the search came
+        # back empty, there is no finding to classify.
+        if self.evidence_state in (EvidenceState.NOT_EVALUATED, EvidenceState.NO_EVIDENCE_FOUND):
+            raise ValueError(
+                f"evidence_state={self.evidence_state.value!r} carries "
+                f"organ_system={e.organ_system!r}. There is no finding here to classify."
+            )

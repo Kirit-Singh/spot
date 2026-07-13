@@ -26,7 +26,7 @@ from .bindings import (
 )
 from . import inputs as vinputs
 from . import derived
-from .columns import DELIVERY_REBUILT_FIELDS, REQUIRED_COLUMNS
+from .columns import DELIVERY_REBUILT_FIELDS, required_columns
 from .criteria import check_criteria
 from .prose import required_prose_failures, unbound_prose
 from .delivery import rebuild_delivery
@@ -50,9 +50,10 @@ def _c(checks: list[dict], cid: str, ok: bool, detail: str) -> None:
     checks.append({"check_id": cid, "status": "pass" if ok else "fail", "detail": detail})
 
 
-def _missing_required_columns(tables: dict[str, list[dict]]) -> dict[str, list[str]]:
+def _missing_required_columns(tables: dict[str, list[dict]],
+                              version: str = "v1") -> dict[str, list[str]]:
     missing: dict[str, list[str]] = {}
-    for table, cols in REQUIRED_COLUMNS.items():
+    for table, cols in required_columns(version).items():
         if table not in tables:
             missing[table] = ["<table absent>"]
             continue
@@ -75,13 +76,17 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
     with open(os.path.join(out_dir, "scorecards.json"), encoding="utf-8") as fh:
         scorecards = json.load(fh)
 
+    # The release declares which contract it speaks. Absent means v1: it was written before
+    # the field existed, and it is still a release.
+    version = vinputs.contract_version(manifest)
+
     method = load_method(method_dir)
     tables = load_tables(out_dir)
 
     # --- -1. the release must actually be the shape this verifier reconstructs ---------
     # A release written by a different (older) Stage-4 is not "verified" — it is
     # unverifiable. Say so cleanly instead of crashing on a missing column.
-    missing_cols = _missing_required_columns(tables)
+    missing_cols = _missing_required_columns(tables, version)
     if missing_cols:
         _c(checks, "release_reconstructable", False,
            "this release does not carry the columns reconstruction needs (is it from an "
@@ -167,9 +172,9 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
         # It does now: a tampered bound column fails this digest, or, if the tamperer also
         # rewrites the digest and the id key, the identity moves. There is no third outcome.
         id_key = manifest.get("scorecard_set_id_inputs", {})
-        input_tables = vinputs.load_input_tables(out_dir)
+        input_tables = vinputs.load_input_tables(out_dir, version)
 
-        recomputed_inputs = vinputs.evidence_inputs_digest(input_tables)
+        recomputed_inputs = vinputs.evidence_inputs_digest(input_tables, version)
         declared_inputs = id_key.get("evidence_inputs_sha256")
         _c(checks, "evidence_inputs_sha256_recomputed_from_the_release",
            recomputed_inputs == declared_inputs,
@@ -183,7 +188,7 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
            recomputed_sources == id_key.get("source_registry_sha256"),
            f"recomputed={recomputed_sources} declared={id_key.get('source_registry_sha256')}")
 
-        recomputed_method = vinputs.method_file_sha256(method_dir)
+        recomputed_method = vinputs.method_file_sha256(method_dir, version)
         _c(checks, "method_file_sha256_recomputed_from_the_method_files",
            recomputed_method == dict(sorted((id_key.get("method_file_sha256") or {}).items())),
            "the method files on disk are the ones bound into the id")
@@ -229,7 +234,7 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
         # none of those could be rewritten in a resealed release — "CNS-MPO is not measured brain
         # permeability" inverted, "no evidence found is NOT a finding of safety" deleted — while
         # every hash still agreed. There are no exemptions.
-        prose_problems = unbound_prose(out_dir, method_dir)
+        prose_problems = unbound_prose(out_dir, method_dir, version)
         _c(checks, "no_unbound_prose", not prose_problems,
            "every sentence in the release is bound into identity or reconstructed: "
            f"{prose_problems}")

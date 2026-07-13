@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .evidence_inputs import DERIVED_COLUMNS, evidence_input_rows
+from .contract_version import ContractVersion
+from .evidence_inputs import derived_columns, evidence_input_rows
 from .method_config import MethodBundle
 from .pipeline import Stage4Inputs, Stage4Result
 from .safety import render_evidence_state
@@ -51,13 +52,13 @@ def _delivery_rows(result: Stage4Result, inputs: Stage4Inputs) -> list[dict[str,
 
 def _pure_input_rows(rows: dict[str, list[dict[str, Any]]], table: str) -> list[dict[str, Any]]:
     """A table whose every column is an input column IS the canonical input row."""
-    assert not DERIVED_COLUMNS[table], f"{table} has derived columns"
+    assert not derived_columns(ContractVersion.V2)[table], f"{table} has derived columns"
     return rows[table]
 
 
 def _exposure_rows(inputs: Stage4Inputs, result: Stage4Result) -> list[dict[str, Any]]:
     """The canonical input row + the margin the engine derived from it."""
-    base = {r["measurement_id"]: r for r in evidence_input_rows(inputs)["exposure_evidence"]}
+    base = {r["measurement_id"]: r for r in evidence_input_rows(inputs, inputs.contract_version)["exposure_evidence"]}
     rows = []
     for cr in result.candidates:
         for m, margin in cr.exposure:
@@ -133,7 +134,7 @@ def _property_rows(inputs: Stage4Inputs, result: Stage4Result) -> list[dict[str,
             rejected[(cid, miss.property_id)] = miss.reason_code
 
     base = {r["property_record_id"]: r
-            for r in evidence_input_rows(inputs)["property_evidence"]}
+            for r in evidence_input_rows(inputs, inputs.contract_version)["property_evidence"]}
     rows = []
     for r in inputs.properties:
         q = r.quantity
@@ -156,7 +157,7 @@ def _property_rows(inputs: Stage4Inputs, result: Stage4Result) -> list[dict[str,
 
 def _potency_rows(inputs: Stage4Inputs) -> list[dict[str, Any]]:
     """Canonical input row + the exact decimal the engine parsed the magnitude to."""
-    rows = evidence_input_rows(inputs)["potency_evidence"]
+    rows = evidence_input_rows(inputs, inputs.contract_version)["potency_evidence"]
     canonical = {p.potency_id: p.quantity.canonical_decimal for p in inputs.potencies}
     return [{**r, "value_canonical_decimal": canonical[r["potency_id"]]} for r in rows]
 
@@ -267,7 +268,7 @@ def _source_catalog_rows(inputs: Stage4Inputs) -> list[dict[str, Any]]:
 
 def _safety_rows(inputs: Stage4Inputs, result: Stage4Result) -> list[dict[str, Any]]:
     """Canonical input row + how the state renders. NOT ONE of the five states renders safe."""
-    base = {r["evidence_id"]: r for r in evidence_input_rows(inputs)["safety_evidence"]}
+    base = {r["evidence_id"]: r for r in evidence_input_rows(inputs, inputs.contract_version)["safety_evidence"]}
     rows = []
     for cr in result.candidates:
         for s_row in cr.safety_rows:

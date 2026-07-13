@@ -38,7 +38,7 @@ from . import canon
 
 # The BOUND columns of every evidence-input table: the full consumed row, including the
 # complete provenance binding. Restated from the Stage-4 contract, not imported from it.
-INPUT_COLUMNS: dict[str, tuple[str, ...]] = {
+INPUT_COLUMNS_V1: dict[str, tuple[str, ...]] = {
     "contexts": (
         "context_id", "candidate_id", "active_moiety_id", "route", "formulation", "dose",
         "schedule", "tumor_context", "population", "is_fixture",
@@ -125,7 +125,7 @@ SOURCE_REGISTRY_FIELDS = (
 
 # logical method key -> the file on disk. Keyed as the engine keys it, so the recomputed
 # map is comparable cell for cell with the one bound into the id.
-METHOD_FILES = {
+METHOD_FILES_V1 = {
     "cns_mpo": "cns_mpo_wager2010_v1.json",
     "nebpi": "nebpi_grossman2026_v1.json",
     "calculator_policy": "calculator_policy_v1.json",
@@ -134,6 +134,92 @@ METHOD_FILES = {
     "sources": "sources.json",
     "prose": "stage4_prose_v1.json",
 }
+
+
+# ---------------------------------------------------------------- contract v2 (restated)
+# v1 above is FROZEN. v2 APPENDS to it. This is a deliberate independent restatement of
+# `analysis/evidence_inputs.py` -- a verifier that imported the generator's column set would be
+# checking the generator against itself -- and a drift between the two fails a test.
+#
+# The version comes from the RELEASE, not from this code: a release that does not declare one
+# is a v1 release (it was written before the field existed), and demanding v2 columns of it is
+# how a historical artifact becomes unverifiable.
+
+V2_ADDED_COLUMNS: dict[str, tuple[str, ...]] = {
+    "potency_evidence": (
+        "relation", "assay_activity_id", "assay_assay_id", "assay_target_id",
+        "assay_document_id", "assay_type", "assay_description",
+        "assay_experimental_system", "assay_target_organism",
+        "assay_target_uniprot_accession", "assay_confidence_score",
+        "assay_validity_comment",
+    ),
+    "exposure_evidence": (
+        "pk_metric", "pk_statistic", "pk_sample_size", "pk_variability_kind",
+        "pk_variability_source_string", "pk_variability_units",
+        "sampling_method", "sample_location", "time_relative_to_dose", "analytical_method",
+        "steady_state", "residual_blood_correction", "microdialysis_recovery_state",
+        "microdialysis_recovery_source_string", "microdialysis_recovery_method",
+        "co_medications", "assay_method", "paired_plasma_measurement_id",
+        "binding_state_basis", "unbound_from_measurement_id", "unbound_fraction_unbound_id",
+        "unbound_transform",
+        "kp_basis", "kp_value_source_string", "kp_derivation_transform",
+        "kp_input_measurement_ids", "kp_fraction_unbound_ids",
+        "kp_uu_basis", "kp_uu_value_source_string", "kp_uu_derivation_transform",
+        "kp_uu_input_measurement_ids", "kp_uu_fraction_unbound_ids",
+    ),
+    "safety_evidence": (
+        "organ_system", "organ_system_value_kind", "organ_system_evidence_state",
+        "organ_system_source_key", "organ_system_source_record_id", "organ_system_setid",
+        "organ_system_label_version", "organ_system_raw_response_sha256",
+        "organ_system_section_code", "organ_system_subsection_code",
+        "organ_system_code_system", "organ_system_locator",
+        "organ_system_extraction_transform", "organ_system_reason",
+    ),
+}
+
+V2_ONLY_COLUMNS: dict[str, tuple[str, ...]] = {
+    "fraction_unbound": (
+        "fraction_unbound_id", "candidate_id", "active_moiety_id", "matrix",
+        "value_source_string", "method", "species", "concentration_dependence",
+        "source_record_id", "source_url", "access_date", "release_version",
+        "raw_response_sha256", "extraction_transform",
+    ),
+    "source_acquisition": (
+        "acquisition_id", "source_record_id", "request_url", "canonical_query",
+        "accessed_at_utc", "http_status", "raw_media_type", "response_headers_json",
+        "release_or_last_updated", "license_or_terms_url", "license_exception_note",
+        "raw_bytes", "raw_sha256", "content_sha256", "content_hash_rule",
+        "extraction_transform", "adapter_id", "adapter_code_sha256", "review_status",
+        "observation_state", "search_id", "conflict_note", "not_applicable_reason",
+        "selection_disposition", "selection_pin", "match_total_reported",
+        "records_returned", "result_set_complete",
+    ),
+}
+
+INPUT_COLUMNS_V2: dict[str, tuple[str, ...]] = {
+    **{t: cols + V2_ADDED_COLUMNS.get(t, ()) for t, cols in INPUT_COLUMNS_V1.items()},
+    **V2_ONLY_COLUMNS,
+}
+
+# v2 method content lives in NEW files. Editing a v1 method file, or adding one to METHOD_FILES_V1,
+# would change the hashes every release ever emitted bound into its id.
+METHOD_FILES_V2 = {
+    **METHOD_FILES_V1,
+    "nebpi_source_framing": "nebpi_source_framing_v2.json",
+    "safety_taxonomy_v2": "safety_taxonomy_v2.json",
+}
+
+INPUT_COLUMNS = {"v1": INPUT_COLUMNS_V1, "v2": INPUT_COLUMNS_V2}
+METHOD_FILES = {"v1": METHOD_FILES_V1, "v2": METHOD_FILES_V2}
+
+
+def contract_version(manifest: dict) -> str:
+    """Absent means v1 -- a release written before the field existed IS a v1 release."""
+    return manifest.get("evidence_contract_version") or "v1"
+
+
+def input_columns(version: str = "v1") -> dict[str, tuple[str, ...]]:
+    return INPUT_COLUMNS[version]
 
 
 def _no_floats(node: Any) -> Any:
@@ -147,15 +233,16 @@ def _no_floats(node: Any) -> Any:
     return node
 
 
-def evidence_inputs_digest(tables: dict[str, list[dict]]) -> str:
+def evidence_inputs_digest(tables: dict[str, list[dict]], version: str = "v1") -> str:
     """The canonical digest over every bound evidence-input row in the release.
 
     Row order is irrelevant (rows are sorted by their own content hash), so a permuted
     release hashes identically — and a single changed bound cell does not.
     """
     payload: dict[str, list[Any]] = {}
-    for table in sorted(INPUT_COLUMNS):
-        cols = INPUT_COLUMNS[table]
+    columns = input_columns(version)
+    for table in sorted(columns):
+        cols = columns[table]
         rows = [_no_floats({c: r.get(c) for c in cols}) for r in tables.get(table, [])]
         rows.sort(key=canon.chash_strict)
         payload[table] = rows
@@ -171,9 +258,9 @@ def source_registry_digest(tables: dict[str, list[dict]]) -> str:
     return canon.chash_strict(dict(sorted(payload.items())))
 
 
-def method_file_sha256(method_dir: str) -> dict[str, str]:
+def method_file_sha256(method_dir: str, version: str = "v1") -> dict[str, str]:
     out = {}
-    for key, name in METHOD_FILES.items():
+    for key, name in METHOD_FILES[version].items():
         path = os.path.join(method_dir, name)
         if os.path.exists(path):
             with open(path, "rb") as fh:
@@ -221,9 +308,9 @@ def rederive_scorecard_set_id(id_key: dict[str, Any]) -> str:
     return canon.chash_strict(id_key)[:16]
 
 
-def load_input_tables(out_dir: str) -> dict[str, list[dict]]:
+def load_input_tables(out_dir: str, version: str = "v1") -> dict[str, list[dict]]:
     tables: dict[str, list[dict]] = {}
-    for table in list(INPUT_COLUMNS) + ["source_catalog", "drug_forms"]:
+    for table in list(input_columns(version)) + ["source_catalog", "drug_forms"]:
         path = os.path.join(out_dir, f"{table}.parquet")
         if os.path.exists(path):
             tables[table] = pq.read_table(path).to_pylist()

@@ -30,18 +30,26 @@ import pyarrow.parquet as pq
 import pytest
 
 from analysis.canonical import content_sha256, sha256_file
+from analysis.contract_version import ContractVersion
 from analysis.evidence_inputs import (
-    DERIVED_COLUMNS,
     EXPLANATORY_COLUMNS,
-    INPUT_COLUMNS,
+    derived_columns,
     evidence_input_rows,
+    input_columns,
 )
 from analysis.ids import evidence_inputs_digest
-from analysis.tables import TABLE_SCHEMAS, write_table
+from analysis.tables import table_schemas, write_table
+
 from provenance_helpers import both_verifiers, emit_run, failed
 from verifier import inputs as vinputs
 
 import fixtures as fx
+
+# The sweep runs over BOTH contracts. v1 cells are swept against the frozen v1 fixture and v2
+# cells against the v2 one, because a cell that no fixture carries is a cell nothing proves.
+INPUT_COLUMNS = input_columns(ContractVersion.V2)
+DERIVED_COLUMNS = derived_columns(ContractVersion.V2)
+TABLE_SCHEMAS = table_schemas(ContractVersion.V2)
 
 
 def _reseal(out_dir, table, rows):
@@ -83,13 +91,14 @@ def _mutate(value, col):
 
 
 ALL_CELLS = [
-    (table, col)
-    for table in sorted(INPUT_COLUMNS)
-    for col in list(INPUT_COLUMNS[table]) + list(DERIVED_COLUMNS[table])
+    (version, table, col)
+    for version in (ContractVersion.V1, ContractVersion.V2)
+    for table in sorted(input_columns(version))
+    for col in list(input_columns(version)[table]) + list(derived_columns(version)[table])
 ]
 
 
-def _inputs_for(table):
+def _inputs_for(table, version=ContractVersion.V2):
     """The fixture set, plus whatever that table needs in order to have a row at all.
 
     `potency_context_links` is EMPTY in the base fixtures — every potency already sits in its
@@ -97,7 +106,8 @@ def _inputs_for(table):
     columns, and it is the exact table the re-audit rewrote. A table with no rows is not a
     table that passed.
     """
-    inputs = fx.stage4_inputs()
+    inputs = (fx.stage4_inputs() if version == ContractVersion.V1
+              else fx.stage4_inputs_v2())
     if table == "potency_context_links":
         from analysis.evidence_records import PotencyContextLink, PotencyRecord
         inputs.potencies = [
@@ -124,8 +134,15 @@ def test_every_emitted_column_is_classified_input_or_derived():
 
 
 def test_the_verifier_restates_the_bound_columns_without_importing_them():
-    """Two independent declarations. A drift between them is the correct failure."""
-    assert dict(vinputs.INPUT_COLUMNS) == dict(INPUT_COLUMNS)
+    """Two independent declarations. A drift between them is the correct failure.
+
+    Checked for BOTH contracts. The verifier restates v1 (frozen) and v2 (its additions)
+    separately, and a verifier that imported the generator's declaration would be checking the
+    generator against itself.
+    """
+    for version in (ContractVersion.V1, ContractVersion.V2):
+        assert dict(vinputs.input_columns(version.value)) == dict(input_columns(version)), (
+            f"the generator and the verifier disagree about the {version.value} bound columns")
 
 
 def test_there_are_no_explanatory_exemptions_left():
@@ -249,10 +266,16 @@ def test_the_reaudit_potency_link_metadata_tamper_is_refused(tmp_path):
 
 # --------------------------------------- the systematic sweep: EVERY cell, resealed
 
-@pytest.mark.parametrize("table,col", ALL_CELLS, ids=[f"{t}.{c}" for t, c in ALL_CELLS])
-def test_every_resealed_cell_mutation_is_caught(table, col, tmp_path):
-    """The general property the re-audit's four columns were only an instance of."""
-    inputs = _inputs_for(table)
+@pytest.mark.parametrize("version,table,col", ALL_CELLS,
+                         ids=[f"{v.value}.{t}.{c}" for v, t, c in ALL_CELLS])
+def test_every_resealed_cell_mutation_is_caught(version, table, col, tmp_path):
+    """The general property the re-audit's four columns were only an instance of.
+
+    Swept over BOTH contracts: every bound v1 cell against the frozen v1 fixture, and every
+    bound v2 cell against the v2 one. A cell that no fixture carries is a cell nothing proves,
+    which is why this refuses to skip an empty table rather than passing vacuously.
+    """
+    inputs = _inputs_for(table, version)
     out_dir, _m, _r = emit_run(inputs, tmp_path)
 
     path = os.path.join(out_dir, f"{table}.parquet")
