@@ -56,7 +56,9 @@ def _verify(run, manifest_path, expect_release_sha256=None):
                                            or run["expect_release_sha256"]),
                     expect_gene_sets_path=run["pinned_gene_sets"],
                     expect_verifiers_path=run["pinned_verifiers"],
-                    expected_code_identity_path=run["expected_code_identity"])
+                    expected_code_identity_path=run["expected_code_identity"],
+                    env_lock_path=run["env_lock"],
+                    expect_env_lock_sha256=F.env_lock_sha256(run))
 
 
 def _clone(src, dst_name):
@@ -1266,6 +1268,213 @@ class TestTheThreePostE122Blockers:
         assert doc["conditions"] == ["Rest", "Stim8hr", "Stim48hr"]
         assert doc["conditions"] != sorted(doc["conditions"])
         assert doc["verdict"] == V.R.ADMIT, doc["failed_gates"]
+
+
+class TestTheEnvironmentLock:
+    """Two runs under different solved environments are two different runs."""
+
+    def test_a_bundle_binding_NO_env_lock_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"].pop("environment_lock"))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_a_SWAPPED_lock_that_is_not_the_one_supplied_is_REFUSED(self, tmp_path):
+        # the bundle names a perfectly valid lock — just not the one the verifier holds
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["environment_lock"].update(
+                   {"sha256": "a" * 64}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_an_UNLOCKED_environment_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][2], "temporal_provenance.json",
+               lambda d: d["run_binding"]["environment_lock"].update(
+                   {"status": "environment_lock_not_supplied"}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_the_two_CARRIERS_may_not_DISAGREE(self, tmp_path):
+        # a value with two homes is a value that can disagree with itself
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][3], "temporal_provenance.json",
+               lambda d: d["run_binding"].update({"env_lock_sha256": "b" * 64}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_NO_lock_supplied_to_the_VERIFIER_is_REFUSED(self, tmp_path):
+        # the lock a bundle NAMES cannot be checked against bytes nobody handed us
+        run = F.complete_run(tmp_path)
+        doc = V.verify(
+            manifest_path=_manifest(tmp_path, run)["path"],
+            bundles_root=run["root"], release_path=run["release_path"],
+            release_root=run["release_root"],
+            expect_release_sha256=run["expect_release_sha256"],
+            expect_gene_sets_path=run["pinned_gene_sets"],
+            expect_verifiers_path=run["pinned_verifiers"],
+            expected_code_identity_path=run["expected_code_identity"],
+            env_lock_path=None)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+
+class TestTheW7InvocationContract:
+    """The production wrapper omitted --release/--release-root and guessed the rest."""
+
+    def test_every_required_input_is_EXPLICIT_and_no_path_is_guessed(self):
+        from direct import verify_invocation as INV
+
+        c = INV.invocation_contract()
+        assert c["implicit_paths_permitted"] is False
+        assert c["one_generic_report_across_lanes_permitted"] is False
+        assert c["external_admission_is_per_lane_release"] is True
+        for flag in ("--release", "--release-root", "--release-inventory-root",
+                     "--env-lock", "--expect-verifiers", "--expected-code-identity"):
+            assert flag in c["required_arguments"], flag
+
+    def test_the_CLI_REFUSES_to_run_without_release_and_release_root(self):
+        import contextlib
+        import io
+
+        from direct import verify_run_manifest as VRM
+
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf), pytest.raises(SystemExit):
+            VRM.main(["--manifest", "m.json", "--bundles-root", "r"])
+        err = buf.getvalue()
+        assert "--release" in err and "--env-lock" in err
+
+    def test_the_DRY_RUN_reads_no_bundle_and_reports_readiness(self, tmp_path):
+        from direct import verify_invocation as INV
+
+        run = F.complete_run(tmp_path)
+
+        class Args:
+            manifest = _manifest(tmp_path, run)["path"]
+            bundles_root = run["root"]
+            release = run["release_path"]
+            release_root = run["release_root"]
+            expect_release_sha256 = run["expect_release_sha256"]
+            expect_gene_sets = run["pinned_gene_sets"]
+            expect_verifiers = run["pinned_verifiers"]
+            expected_code_identity = run["expected_code_identity"]
+            release_inventory_root = run["root"]
+            env_lock = run["env_lock"]
+            expect_env_lock_sha256 = F.env_lock_sha256(run)
+
+        doc = INV.dry_run(Args())
+        assert doc["ready"] is True
+        assert doc["reads_bundles"] is False
+        assert doc["missing_arguments"] == [] and doc["unreadable_paths"] == []
+
+    def test_the_DRY_RUN_names_exactly_what_is_MISSING(self, tmp_path):
+        from direct import verify_invocation as INV
+
+        class Args:                      # the production wrapper's actual mistake
+            manifest = None
+            bundles_root = None
+            release = None
+            release_root = None
+            expect_release_sha256 = None
+            expect_gene_sets = None
+            expect_verifiers = None
+            expected_code_identity = None
+            release_inventory_root = None
+            env_lock = None
+            expect_env_lock_sha256 = None
+
+        doc = INV.dry_run(Args())
+        assert doc["ready"] is False
+        assert "--release" in doc["missing_arguments"]
+        assert "--release-root" in doc["missing_arguments"]
+        assert "--env-lock" in doc["missing_arguments"]
+
+
+class TestTheAUTHORITATIVELockIsTheSameAcrossEveryLane:
+    """W5 4435366 binds b9284e63…; the frozen Stage-2 solver lock is 2983d140….
+
+    Every lane — Direct, temporal, pathway — binds the SAME lock. A lane solved in a
+    different environment is a different run, whatever its code says.
+    """
+
+    W5_WRONG = "b9284e63" + "0" * 56          # the lock W5 actually bound
+    AUTHORITATIVE = ("2983d140941f13d223dad93bae71434663882f23"
+                     "f25f6717c3debe59d2711abe")
+
+    def test_the_b928_lock_W5_BOUND_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["environment_lock"].update(
+                   {"sha256": self.W5_WRONG}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_a_lock_the_OPERATOR_supplied_is_not_an_AUTHORITY(self, tmp_path):
+        # the run is internally perfect: every lane binds the SAME lock, and the verifier
+        # was handed that same lock. It is simply not the authoritative one, and without an
+        # external pin everything would be compared to the wrong thing.
+        run = F.complete_run(tmp_path)
+        doc = V.verify(
+            manifest_path=_manifest(tmp_path, run)["path"],
+            bundles_root=run["root"], release_path=run["release_path"],
+            release_root=run["release_root"],
+            expect_release_sha256=run["expect_release_sha256"],
+            expect_gene_sets_path=run["pinned_gene_sets"],
+            expect_verifiers_path=run["pinned_verifiers"],
+            expected_code_identity_path=run["expected_code_identity"],
+            env_lock_path=run["env_lock"],
+            expect_env_lock_sha256=self.AUTHORITATIVE)     # the REAL one
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_NO_authoritative_pin_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = V.verify(
+            manifest_path=_manifest(tmp_path, run)["path"],
+            bundles_root=run["root"], release_path=run["release_path"],
+            release_root=run["release_root"],
+            expect_release_sha256=run["expect_release_sha256"],
+            expect_gene_sets_path=run["pinned_gene_sets"],
+            expect_verifiers_path=run["pinned_verifiers"],
+            expected_code_identity_path=run["expected_code_identity"],
+            env_lock_path=run["env_lock"], expect_env_lock_sha256=None)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
+
+    def test_ONE_LANE_binding_a_DIFFERENT_lock_is_REFUSED(self, tmp_path):
+        # direct + pathway on the authoritative lock, temporal on another
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][2], "temporal_provenance.json",
+               lambda d: d["run_binding"]["environment_lock"].update(
+                   {"sha256": "c" * 64}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_ENV_LOCK in doc["failed_gates"]
 
 
 class TestOneNativeFilenameSet:

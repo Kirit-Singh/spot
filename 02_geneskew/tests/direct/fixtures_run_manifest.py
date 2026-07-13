@@ -72,12 +72,17 @@ def stage_release(tmp_path) -> dict[str, Any]:
     with open(release_path, "wb") as fh:
         fh.write(raw)
 
+    lock_path = os.path.join(root, "stage2_env.lock")
+    with open(lock_path, "w") as fh:
+        fh.write("# FIXTURE solved environment\nnumpy==1.26.4\npandas==2.2.2\n")
+
     release = json.loads(raw)
     view = json.loads(open(view_path).read())
     admitted = sorted(p["program_id"] for p in view["programs"] if p[PORTABLE_KEY])
     return {
         "release_path": release_path,
         "release_root": root,
+        "env_lock": lock_path,
         "release": release,
         "view": view,
         "release_canonical_sha256": _canon(release),
@@ -166,6 +171,19 @@ LANE_VERIFIERS = {
 def pinned_verifiers(tmp_path) -> str:
     path = os.path.join(str(tmp_path), "FIXTURE_pinned_verifiers.json")
     _write(path, LANE_VERIFIERS)
+    return path
+
+
+def env_lock_sha256(run: dict) -> str:
+    """The sha256 of the lock this fixture run was solved under."""
+    return _raw(run["env_lock"])
+
+
+def env_lock(tmp_path) -> str:
+    """The COMMITTED Stage-2 environment lock. Its BYTES are what the verifier compares."""
+    path = os.path.join(str(tmp_path), "FIXTURE_stage2_env.lock")
+    with open(path, "w") as fh:
+        fh.write("# FIXTURE solved environment\nnumpy==1.26.4\npandas==2.2.2\n")
     return path
 
 
@@ -375,6 +393,11 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         "run_binding": {
             # WHICH BUILD produced these bytes (recorded, never self-admitted)...
             "code_identity": _code_identity(),
+            # ...and WHICH SOLVED ENVIRONMENT it ran under. Two runs under different
+            # environments are two different runs, however identical the code.
+            "environment_lock": {"name": os.path.basename(staged["env_lock"]),
+                                 "sha256": _raw(staged["env_lock"]),
+                                 "status": "locked"},
             # ...and WHAT THE CODE DID, kept as a separate explicit role
             "temporal_method_sha256": _canon("FIXTURE-method"),
             "estimator_id": "FIXTURE.spot.stage02.arm.estimator.v1",
@@ -433,6 +456,7 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
             "pinned_gene_sets": pinned_gene_sets(tmp_path, sources),
             "pinned_verifiers": pinned_verifiers(tmp_path),
             "expected_code_identity": expected_code_identity(tmp_path),
+            "env_lock": staged["env_lock"],
             "direct": direct, "temporal": temporal, "pathway": pathway,
             "conditions": list(conds), "sources": list(sources),
             "programs": list(staged["programs"])}

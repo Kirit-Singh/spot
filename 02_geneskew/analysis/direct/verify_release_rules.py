@@ -220,3 +220,79 @@ def inventory_matches_arms(inventory: Any, bound_rankings: dict) -> list[str]:
             bad.append(f"{rel_dir}: the arms bind {absent[:3]}, which the inventory does "
                        "not name")
     return bad
+
+
+# --------------------------------------------------------------------------- #
+# THE ENVIRONMENT LOCK. Bound in every bundle, and CHECKED against the real bytes.
+#
+# CANONICAL CARRIER (the repo convention, emitted by run_screen / run_pathway / run_temporal
+# via ``runid.env_lock_block``):
+#
+#     run_binding.environment_lock = {name, sha256, status}
+#
+# ``env_lock_sha256`` is accepted as a scalar ALIAS pending W5's confirmation, and if both
+# are present they must AGREE — a value with two homes is a value that can disagree with
+# itself.
+#
+# A lock that is merely NAMED proves nothing: the verifier is handed the actual lock file
+# and compares its bytes. Two runs under different solved environments are two different
+# runs, however identical their code.
+# --------------------------------------------------------------------------- #
+ENV_LOCK_BLOCK = "environment_lock"
+ENV_LOCK_SCALAR = "env_lock_sha256"
+ENV_LOCK_LOCKED = "locked"
+
+
+def env_lock_sha256(prov: Any) -> tuple:
+    """The lock hash a bundle binds, from either carrier. ``(value, problems)``."""
+    rb = (prov or {}).get("run_binding") or {}
+    block = rb.get(ENV_LOCK_BLOCK) or {}
+    from_block = block.get("sha256") if isinstance(block, dict) else None
+    from_scalar = rb.get(ENV_LOCK_SCALAR)
+    if from_block and from_scalar and from_block != from_scalar:
+        return None, [f"{ENV_LOCK_BLOCK}.sha256 and {ENV_LOCK_SCALAR} disagree "
+                      f"({str(from_block)[:16]} vs {str(from_scalar)[:16]})"]
+    return (from_block or from_scalar), []
+
+
+def check_env_lock(prov: Any, expected_sha256: Any, bundle_id: str) -> list[str]:
+    """The bundle's lock must be PRESENT, LOCKED, and the lock the verifier was handed."""
+    bad: list[str] = []
+    got, problems = env_lock_sha256(prov)
+    bad += [f"{bundle_id}: {p}" for p in problems]
+
+    block = ((prov or {}).get("run_binding") or {}).get(ENV_LOCK_BLOCK) or {}
+    if isinstance(block, dict) and block.get("status") and \
+            block["status"] != ENV_LOCK_LOCKED:
+        bad.append(f"{bundle_id}: environment_lock.status is {block['status']!r} — a run "
+                   "taken under no solved environment is not reproducible, and saying so "
+                   "in the artifact does not make it so")
+    if not got:
+        bad.append(f"{bundle_id}: binds no environment lock. Two runs under different "
+                   "solved environments are two different runs, however identical the code")
+    elif expected_sha256 and got != expected_sha256:
+        bad.append(f"{bundle_id}: binds env lock {str(got)[:16]}; the lock supplied to the "
+                   f"verifier hashes to {str(expected_sha256)[:16]}")
+    return bad
+
+
+def check_supplied_lock(supplied: Any, pinned: Any) -> list[str]:
+    """The lock handed to the verifier must BE the authoritative one.
+
+    A lock the OPERATOR chose is not an authority for the lock the run must have used:
+    without an external pin, a wrong-but-consistently-bound lock passes every comparison,
+    because everything is being compared to the wrong thing.
+    """
+    if not supplied:
+        return ["no environment lock was supplied to the verifier (--env-lock); the lock a "
+                "bundle NAMES cannot be checked against bytes nobody handed us"]
+    if not pinned:
+        return ["no authoritative lock hash was pinned (--expect-env-lock-sha256); a lock "
+                "the operator supplied is not an authority for the lock the run must have "
+                "used"]
+    if supplied != pinned:
+        return [f"the lock supplied to the verifier hashes to {supplied[:16]}; the pinned "
+                f"AUTHORITATIVE Stage-2 solver lock is {str(pinned)[:16]}. Every lane binds "
+                "the SAME lock, and which environment the run used is not the operator's "
+                "to choose"]
+    return []

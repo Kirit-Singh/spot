@@ -19,11 +19,11 @@ import verify_release_rules as W  # noqa: E402  (the W5-audit rules)
 
 def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
          pinned: dict, expect_verifiers: dict, expected_code: dict,
-         release: dict = None) -> dict[str, Any]:
+         release: dict = None, env_lock_sha256: str = None) -> dict[str, Any]:
     """Every finding the bundles yield, collected. No verdicts."""
     filled: dict[str, list] = {lane: [] for lane in R.LANES}
     arm_values: dict = {}          # (from, to, program, dc) -> {target: value}
-    stale, null_stage1, bad_preflight = [], [], []
+    stale, null_stage1, bad_preflight, bad_env = [], [], [], []
     bound_rankings: dict = {}      # relative_dir -> {ranking paths the arms bind}
     ids, codes, selections, inputs, methods = [], [], [], [], []
     geneset_by_source: dict[str, list] = {}
@@ -147,6 +147,7 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         # THE STAGE-1 IDENTITIES: present, non-null, and EXACTLY the release's own.
         null_stage1 += W.stage1_bindings(prov, release, programs, bid, projection)
         null_stage1 += W.method_field(prov, lane, bid)
+        bad_env += W.check_env_lock(prov, env_lock_sha256, bid)
 
         binding = prov.get("run_binding") or {}
         codes.append((bid, R.content_sha256(B.code_binding(prov))))
@@ -198,4 +199,5 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         "bad_keyed": bad_keyed, "bad_ranks": bad_ranks,
         "arm_values": arm_values, "stale": stale, "null_stage1": null_stage1,
         "bad_preflight": bad_preflight, "bound_rankings": bound_rankings,
+        "bad_env": bad_env,
     }

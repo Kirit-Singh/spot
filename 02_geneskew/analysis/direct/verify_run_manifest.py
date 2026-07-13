@@ -10,28 +10,22 @@ FROZEN AGAINST ``ROUND4_ADDENDUM.md`` sha256
 WHAT IT REFUSES TO TAKE FROM THE MANIFEST UNDER TEST
 ----------------------------------------------------
 Everything that decides what COMPLETE means, WHO may admit an arm, and WHAT the run was
-built from. If any of that came from the document being audited, a forger would simply
-declare it and pass. So each is loaded from a SEPARATE pinned artifact:
+built from — each loaded from a SEPARATE pinned artifact:
 
-    admitted programs   <- release.selector + program.base_portable   (--release)
-    condition universe  <- release.selector.conditions               (--release)
-    gene-set sources    <- release.selector.pathway_sources          (--release)
-    the release itself  <- an independently pinned canonical hash    (--expect-release-sha256)
-    gene-set identities <- the pinned source identities              (--expect-gene-sets)
-    lane verifiers      <- the pinned verifier + gate inventory      (--expect-verifiers)
-    code identity       <- the pinned checkout                       (--expected-code-identity)
+    admitted programs / conditions / sources <- the release        (--release)
+    the release itself   <- an independently pinned canonical hash (--expect-release-sha256)
+    gene-set identities  <- the pinned source identities           (--expect-gene-sets)
+    lane verifiers       <- the pinned verifier + gate inventory   (--expect-verifiers)
+    code identity        <- the pinned checkout                    (--expected-code-identity)
+    the environment      <- the committed lock, by its BYTES       (--env-lock)
 
-The temporal BATCH POLICY is NOT an authority here and is no longer read: batch is out of
-the reusable temporal chain, and a confound diagnostic was never the right place to learn
-which conditions exist. The DiD estimand stays population-level.
+The temporal BATCH POLICY is NOT an authority here: batch is out of the reusable chain. The
+manifest's own conditions, sources, counts, ``topology_complete`` and ``manifest_sha256``
+are CHECKED against the pins above. None is believed.
 
-The manifest's own ``conditions``, ``gene_set_sources``, counts, ``topology_complete`` flag
-and ``manifest_sha256`` are CHECKED against those. None is believed.
-
-Seams closed by earlier reviews (see the git log for the reasoning): a gene-set source NAME
-is not an identity; ``verdict == "admit"`` is a string, not an admission; ``clean_tree`` is
-attested by an external pin, never by the artifact itself. A reusable arm is PAIR-AGNOSTIC —
-no role, no pole, no pair-derived program id is required of it.
+Seams closed by earlier reviews (see the git log): a gene-set source NAME is not an
+identity; ``verdict == "admit"`` is a string, not an admission; ``clean_tree`` is attested
+by an external pin, never by the artifact itself.
 
 Counts are RECONSTRUCTED, never read: ``n_hits_in_ranking`` is recomputed from the bytes
 the bundle bound (its gene-set membership INTERSECT its arm's ranked target ids).
@@ -53,6 +47,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import verify_bundle_scan as S  # noqa: E402  (the per-bundle scan)
+import verify_invocation as I  # noqa: E402  (the W7 contract + dry run)
 import verify_manifest_rules as R  # noqa: E402
 import verify_release_envelope as E  # noqa: E402  (the inventory + the external envelope)
 import verify_release_rules as W  # noqa: E402  (the W5-audit rules)  (independent reimplementation)
@@ -103,6 +98,7 @@ G_NO_STALE = "no_STALE_unbound_ranking_file_sits_in_a_bundle_looking_like_eviden
 G_STAGE1_NONNULL = "no_Stage1_release_projection_or_selector_field_is_NULL"
 G_PREFLIGHT = "the_PREFLIGHT_proves_the_FINAL_bytes_and_admits_NOTHING"
 G_INVENTORY_ARMS = "the_INVENTORY_binds_EXACTLY_the_rankings_the_ARMS_bind"
+G_ENV_LOCK = "every_bundle_binds_the_COMMITTED_env_lock_and_it_is_the_lock_supplied"
 
 
 def _one(rep, pairs, gate, what):
@@ -116,9 +112,13 @@ def _one(rep, pairs, gate, what):
 def verify(*, manifest_path: str, bundles_root: str, release_path: str,
            release_root: str, expect_release_sha256: str, expect_gene_sets_path: str,
            expect_verifiers_path: str, expected_code_identity_path: str,
+           env_lock_path: str = None, expect_env_lock_sha256: str = None,
            release_root_dir: str = None) -> dict[str, Any]:
     rep = R.Report()
     root = release_root_dir or bundles_root
+    # THE ENVIRONMENT LOCK, by its BYTES (see ``verify_release_rules.check_supplied_lock``).
+    env_lock = (R.file_sha256(env_lock_path)
+                if env_lock_path and os.path.exists(env_lock_path) else None)
     expect_verifiers = R.load_json(expect_verifiers_path) or {}
     expected_code = R.load_json(expected_code_identity_path) or {}
     manifest = R.load_json(manifest_path)
@@ -197,7 +197,7 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     found = S.scan(bundles=bundles, bundles_root=bundles_root, programs=programs,
                    projection=projection, pinned=pinned,
                    expect_verifiers=expect_verifiers, expected_code=expected_code,
-                   release=release)
+                   release=release, env_lock_sha256=env_lock)
     filled, ids = found["filled"], found["ids"]
     codes, selections = found["codes"], found["selections"]
     inputs, methods = found["inputs"], found["methods"]
@@ -213,6 +213,8 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     bad_keyed, bad_ranks = found["bad_keyed"], found["bad_ranks"]
     stale, null_stage1 = found["stale"], found["null_stage1"]
     bad_preflight = found["bad_preflight"]
+    bad_env = (W.check_supplied_lock(env_lock, expect_env_lock_sha256)
+               + list(found["bad_env"]))
     bad_cross = W.check_cross_bundle(found["arm_values"])
 
     rep.gate(G_FILES, not missing and not unloadable,
@@ -243,6 +245,7 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_NO_STALE, not stale, "; ".join(stale[:3]))
     rep.gate(G_STAGE1_NONNULL, not null_stage1, "; ".join(null_stage1[:3]))
     rep.gate(G_PREFLIGHT, not bad_preflight, "; ".join(bad_preflight[:3]))
+    rep.gate(G_ENV_LOCK, not bad_env, "; ".join(bad_env[:3]))
     rep.gate(G_PAIR_VIEW, not pair_stored,
              f"a reusable arm bundle stores pair-derived ordering(s) {pair_stored[:5]}; "
              "Pareto tiers and concordance labels are join-time display only")
@@ -342,13 +345,8 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_CONVERGENCE, not bad_conv, "; ".join(bad_conv[:4]))
 
     # ---- 5b. THE PRODUCER INVENTORY + THE INDEPENDENT ADMISSION ENVELOPE ---- #
-    #
-    # An adversarial probe walked a clean 15-bundle run past this verifier with ZERO
-    # inventories and ZERO external admissions and was ADMITTED. The per-bundle
-    # temporal_verification.json looked independent — but the PRODUCER writes it, in its own
-    # directory, signed with whatever id it chooses. A file cannot testify that some other
-    # process made it. So a release is admitted only on TWO artifacts the producer's
-    # preflight cannot supply, and BOTH are required.
+    # A file cannot testify that some other process made it. A release is admitted only on
+    # two artifacts the producer's preflight cannot supply (``verify_release_envelope``).
     n_temporal_bundles = len(want[R.LANE_TEMPORAL]) // (2 * len(programs)) \
         if programs else 0
     inventory, bad_inv = E.check_inventory(
@@ -385,14 +383,9 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
              f"{manifest.get('topology_complete')}; {n_filled}/{n_want} slots are filled "
              f"exactly once, so topology_complete={truly}")
 
-    # THE PRODUCER MAY NOT ADMIT ITS OWN RUN.
-    #
-    # It used to set release_admissible from the topology alone, so a run whose lane
-    # reports were bare verdict strings, or which bound inconsistent selections, was
-    # stamped admissible by the thing that produced it and only refused later, here. A
-    # correctly-shaped run is not a verified one, and the shape is all the producer can
-    # see. So a manifest arriving with an admission already granted is refused outright —
-    # whatever else is true of it.
+    # THE PRODUCER MAY NOT ADMIT ITS OWN RUN. A correctly-shaped run is not a verified
+    # one, and the shape is all the producer can see, so a manifest arriving with an
+    # admission already granted is refused outright — whatever else is true of it.
     admission = manifest.get("admission") or {}
     rep.gate(G_NO_SELF_ADMISSION,
              manifest.get("release_admissible") is not True
@@ -451,12 +444,28 @@ def main(argv=None) -> int:
                     help="the independently pinned checkout (commit + digest) every bundle "
                          "must have been built from; a run's code identity may not be "
                          "taken from the run")
-    ap.add_argument("--release-inventory-root", default=None,
-                    help="the run ROOT holding the producer inventory "
-                         "(temporal_arm_release.json) and the INDEPENDENT external "
-                         "admission envelope. Defaults to --bundles-root.")
+    ap.add_argument("--release-inventory-root", required=True,
+                    help="the CONTENT-ADDRESSED release root holding the producer inventory "
+                         "and the INDEPENDENT external admission envelope. REQUIRED and "
+                         "explicit: a guessed path is a path nobody agreed to.")
+    ap.add_argument("--env-lock", required=True,
+                    help="the COMMITTED Stage-2 environment lock. Its BYTES are hashed and "
+                         "compared to what every bundle binds — a named lock proves nothing")
+    ap.add_argument("--expect-env-lock-sha256", required=True,
+                    help="the INDEPENDENTLY pinned sha256 of the authoritative Stage-2 "
+                         "solver lock. The supplied --env-lock must BE that lock: which "
+                         "environment the run used is not the operator's to choose")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="resolve and report the invocation contract WITHOUT reading a "
+                         "single bundle. Zero compute; exits 0 iff every required input is "
+                         "present and readable.")
     ap.add_argument("--report", default=None, help="write the verdict here (JSON)")
     args = ap.parse_args(argv)
+
+    if args.dry_run:
+        doc = I.dry_run(args)
+        print(json.dumps(doc, indent=2, sort_keys=True))
+        return 0 if doc["ready"] else 1
 
     try:
         doc = verify(manifest_path=args.manifest, bundles_root=args.bundles_root,
@@ -465,6 +474,8 @@ def main(argv=None) -> int:
                      expect_gene_sets_path=args.expect_gene_sets,
                      expect_verifiers_path=args.expect_verifiers,
                      expected_code_identity_path=args.expected_code_identity,
+                     env_lock_path=args.env_lock,
+                     expect_env_lock_sha256=args.expect_env_lock_sha256,
                      release_root_dir=args.release_inventory_root)
     except Exception as exc:                    # a crash IS a verification failure
         rep = R.Report()
