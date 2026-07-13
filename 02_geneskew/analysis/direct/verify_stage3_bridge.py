@@ -38,6 +38,21 @@ import verify_stage3_rows as VR  # noqa: I001  (flat, as the verifier loads its 
 
 BRIDGE_FILE = "stage3_bridge.json"
 
+# THE PRODUCER'S IDENTITY ARTIFACT, RESTATED — not imported.
+#
+# `target_identity` owns these, and the producer side imports them from it. This module may
+# not: the audit probe forbids a verifier importing ANY producer module, because a verifier
+# that reads the producer's constant agrees with it by construction and cannot catch it moving.
+#
+# The risk that creates is precisely the one 9bd5895 exists to kill — a second literal drifting
+# to `.parquet` — so it is closed the other way: `test_stage3_bridge` PIN-TESTS these three
+# against `target_identity`'s own, and a disagreement is a failing test rather than a verifier
+# quietly checking a file nobody wrote.
+IDENTITY_FILE = "target_identity.json"
+IDENTITY_SCHEMA = "spot.stage02_target_identity.v1"
+IDENTITY_RECORDS_KEY = "records"          # NOT "targets" — that was my guess, and it was wrong
+IDENTITY_MODALITY_FIELD = "observed_perturbation_modality"
+
 G_SELF_HASH = "the_bridge_hashes_to_what_it_says_it_does"
 G_BINDINGS = "the_bridge_binds_the_admitted_native_bytes_it_was_built_from"
 G_SOURCE_BYTES = "the_bound_native_bytes_are_on_disk_and_unchanged"
@@ -324,15 +339,29 @@ def _identity_index(bundle_dir: str, bound: dict) -> Any:
             "modality": b.get("perturbation_modality"),
         } for b in (doc.get("base_records") or [])}
     if kind == "identity_artifact":
-        # the PRODUCER'S file, by its ONE shared name — `target_identity.json`
-        # (spot.stage02_target_identity.v1), emitted at 5e9902a. Never a .parquet, and never
-        # a reference copy this verifier wrote for itself.
-        with open(os.path.join(bundle_dir,
-                               src.get("file") or "target_identity.json")) as fh:
-            rows = json.load(fh).get("targets") or []
+        # THE PRODUCER'S OWN BYTES, in place. Never a reference copy this verifier wrote for
+        # itself: a verifier that creates the file it is checking has checked its own work.
+        name = src.get("file") or IDENTITY_FILE
+        if name != IDENTITY_FILE:
+            return None                   # a file by another name is not this artifact
+        path = os.path.join(bundle_dir, name)
+        if not os.path.exists(path):
+            return None
+        with open(path) as fh:
+            doc = json.load(fh)
+        if doc.get("schema_version") != IDENTITY_SCHEMA:
+            return None
+        rows = doc.get(IDENTITY_RECORDS_KEY) or []
+
+        # UNIQUE, or it is not a join key: a duplicated target silently multiplies every row
+        # it is joined to.
+        ids = [str(r.get("target_id")) for r in rows]
+        if len(ids) != len(set(ids)):
+            return None
         return {str(r.get("target_id")): {
+            "target_id": r.get("target_id"),
             "target_id_namespace": r.get("target_id_namespace"),
-            "modality": r.get("observed_perturbation_modality"),
+            "modality": r.get(IDENTITY_MODALITY_FIELD),
         } for r in rows}
     return None
 

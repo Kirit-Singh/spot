@@ -67,6 +67,8 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from .arm_topology import ARM_RANKING_ROWS, LANE_DIRECT, LANE_PATHWAY, LANE_TEMPORAL
+from .target_identity import SCHEMA_VERSION as TARGET_IDENTITY_SCHEMA
+from .target_identity import TARGET_IDENTITY_FILE
 
 # --------------------------------------------------------------------------- #
 # SEAM B — THE ADMITTED, NORMALIZED ROW. The one Stage 3 reads.
@@ -188,6 +190,15 @@ UNRESOLVED_IDENTITY = "unresolved_target_identity"
 # UNAVAILABLE, by name, with the exact producer requirement attached — and a Direct target row
 # REFUSES until the producer emits and binds it.
 IDENTITY_JOIN = {
+    LANE_DIRECT: {
+        # the PRODUCER-EMITTED artifact, read through the shared loader. One row per target,
+        # unique, and exactly the targets the bundle scored — the loader refuses otherwise.
+        "record": TARGET_IDENTITY_FILE,
+        "join_on": "target_id",
+        "unique_by": ("target_id",),
+        "modality_field": "observed_perturbation_modality",
+        "bound_as": f"bindings.{TARGET_IDENTITY_FILE}",
+    },
     LANE_TEMPORAL: {
         # temporal says this in its own bytes: identity is carried on base_records, "never on
         # the arm records that join to it", and Stage 3 reads it from the record it joins to
@@ -199,33 +210,38 @@ IDENTITY_JOIN = {
     },
 }
 
-# THE SHARED CONSTANT. One file, one schema, named in ONE place — producer, W10, P2S and this
-# bridge all bind THIS. A verifier that expected `target_identity.parquet` while the producer
-# emitted `target_identity.json` would be checking a file nobody wrote.
-TARGET_IDENTITY_FILE = "target_identity.json"
-TARGET_IDENTITY_SCHEMA = "spot.stage02_target_identity.v1"
-
-# The producer requirement, stated as a contract rather than as a comment in a ticket.
-# LANDED at 5e9902a: Direct now emits `target_identity.json`. It must be added to
-# arm_artifacts.VERIFIED_PATHS and to every bundle/release file allowlist and hash set, and
-# W10 must verify the PRODUCER'S bytes in place — never substitute a verifier reference copy.
-DIRECT_IDENTITY_REQUIREMENT = {
+# THE SHARED CONSTANTS, IMPORTED — never re-typed. `target_identity` owns the file's name and
+# its schema; a second literal here is exactly how `.json` quietly becomes `.parquet` in
+# somebody's test, and then a verifier checks a file nobody wrote.
+#
+# LANDED at 9bd5895: Direct emits `target_identity.json`, it is in arm_artifacts.VERIFIED_PATHS
+# and in the producer file-set contract, and `target_identity.load()` is the ONE consumer entry
+# point — it reopens the PRODUCER'S bytes in place, verifies them, and returns them with both
+# hashes. Nobody re-derives identity from a mask, and nobody reads a target_id to guess what it
+# is: four of this release's targets are bare SYMBOLS whose keys look nothing like the other
+# 11,522, so a string heuristic is wrong for exactly the rows nobody thinks about.
+DIRECT_IDENTITY = {
     "lane": LANE_DIRECT,
-    "status": "EMITTED_AT_5e9902a_PENDING_W10_INDEPENDENT_GATE",
+    "status": "EMITTED_AT_9bd5895_PENDING_W10_INDEPENDENT_GATE",
     "file": TARGET_IDENTITY_FILE,
     "schema_version": TARGET_IDENTITY_SCHEMA,
+    "loader": "direct.target_identity.load",
+    "records_key": "records",
     "producer_must_emit_and_bind": "a per-target identity + assay artifact",
     "required_columns": ("target_id", "target_id_namespace", "target_symbol",
                          "target_ensembl", "observed_perturbation_modality"),
     "must_be": ("unique per target_id", "listed in the bundle files map",
                 "hash-bound", "covered by the lane's independent admission"),
+    # SCOPE: a bundle covers ITS OWN CONDITION's targets, exactly — not the release. The three
+    # conditions do not ship the same targets, so the 11,526-target universe is a RELEASE-level
+    # fact and must never be used as a per-bundle expectation.
+    "scope": "exactly the targets THIS condition scored — never the release universe",
     "why": ("`arms.parquet` has target_id only; masks/contributing_guides omit the namespace "
-            "and symbol; provenance.target_identity_map is optional metadata + a hash; and "
-            "the CRISPRi modality exists only in config and is never emitted. Without this "
-            "artifact, a Direct target row could only get its namespace by sniffing the id — "
-            "and three of the four symbol targets carry an ENSG-looking release key belonging "
-            "to a DIFFERENT gene"),
+            "and symbol. Without this artifact a Direct target row could only get its "
+            "namespace by sniffing the id — and three of the four symbol targets carry an "
+            "ENSG-looking release key belonging to a DIFFERENT gene"),
 }
+DIRECT_IDENTITY_REQUIREMENT = DIRECT_IDENTITY      # the name the bridge already binds
 
 IDENTITY_FIELDS = ("target_id_namespace", "target_symbol", "target_ensembl")
 

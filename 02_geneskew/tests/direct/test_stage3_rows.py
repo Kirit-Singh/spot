@@ -283,21 +283,34 @@ class TestIdentityIsJOINEDNeverSniffed:
         assert S.IDENTITY_JOIN["temporal"]["modality_field"] == "perturbation_modality"
         assert S.IDENTITY_JOIN["temporal"]["record"] == "base_records"
 
-    def test_DIRECT_binds_NO_identity_source_and_therefore_BUILDS_NO_ROWS(self):
-        """The native all-arm bundle has NO screen.parquet and no identity table.
+    def test_DIRECT_now_binds_the_SHARED_identity_artifact(self):
+        """LANDED at 9bd5895. Direct emits `target_identity.json`, it is in VERIFIED_PATHS and
+        in the producer file-set contract, and `target_identity.load()` is the ONE consumer
+        entry point — it reopens the PRODUCER'S bytes in place and verifies them.
 
-        arm_artifacts.VERIFIED_PATHS is arm_bundle/provenance/arms/masks/contributing_guides/
-        guide_support/donor_support/input_manifest/gene_universe. `arms` carries target_id and
-        nothing else; masks and contributing_guides omit the namespace and the symbol;
-        provenance.target_identity_map is optional metadata plus a hash; and the CRISPRi
-        modality exists only in config and is never emitted. So Direct cannot say, in bound
-        bytes, who a target is or what was done to it — and a contract that named a file which
-        does not exist would pass fixtures and fail on the release.
+        Before it, Direct could only have got a namespace by SNIFFING the target_id — and
+        three of the four symbol targets carry an ENSG-looking release key belonging to a
+        DIFFERENT gene. So a Direct row REFUSED rather than guess. It no longer has to.
         """
-        assert "direct" not in S.IDENTITY_JOIN
+        j = S.IDENTITY_JOIN["direct"]
+        assert j["record"] == S.TARGET_IDENTITY_FILE == "target_identity.json"
+        assert j["join_on"] == "target_id"
+        assert j["unique_by"] == ("target_id",)
+        assert j["modality_field"] == "observed_perturbation_modality"
+
+    def test_a_TARGET_EVIDENCE_lane_with_NO_bound_identity_source_BUILDS_NO_ROWS(self,
+                                                                                  monkeypatch):
+        """Defence in depth, kept: it is what stops a namespace being invented the moment a
+        target-evidence lane appears without a bound identity artifact — which is exactly the
+        state Direct was in until 9bd5895.
+
+        (Pathway never reaches this gate: it is refused earlier, for not carrying target
+        evidence at all.)
+        """
+        monkeypatch.delitem(S.IDENTITY_JOIN, "temporal")
         with pytest.raises(S.RowContractError, match=S.G_NO_IDENTITY_SOURCE):
-            S.build_row(lane="direct", record=_record(), identity={"target_id": "X"},
-                        arm_key="direct|PRG-1|increase|condition=Stim48hr",
+            S.build_row(lane="temporal", record=_record(), identity={"target_id": "X"},
+                        arm_key="temporal|PRG-1|increase|condition=Stim48hr",
                         program_id="PRG-1", program_effect_direction="increase", context=CTX)
 
     def test_the_DIRECT_producer_requirement_is_stated_as_a_contract(self):
