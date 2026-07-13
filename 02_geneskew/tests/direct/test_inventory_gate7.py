@@ -70,8 +70,12 @@ class TestItFAILS_CLOSED:
 
     def test_the_gate_is_an_ALLOWLIST_not_a_blocklist(self):
         # a blocklist names what we already know about and says nothing about the next one
-        assert set(inventory.ALLOWED_ENTRIES) == {
+        assert set(inventory.PRIMARY_ENTRIES) == {
             "direct", "run_stage2.sh", "stage02_solver_lock.txt"}
+        # the secondary production lane is bound EXPLICITLY, and nothing else
+        assert set(inventory.SECONDARY_PRODUCTION) == {"p2s_arms"}
+        assert set(inventory.ALLOWED_ENTRIES) == (
+            set(inventory.PRIMARY_ENTRIES) | set(inventory.SECONDARY_PRODUCTION))
 
     def test_the_legacy_modules_are_NOT_IMPORTABLE(self):
         # archiving a directory that is still on the import path moves the file, not the problem
@@ -87,3 +91,30 @@ class TestTheProducerCODE_IDENTITY_IsUnaffected:
         files = code_digest._iter_files(root)
         assert not [f for f in files
                     if "perturb2state" in f or "temporal_exploration" in f]
+
+
+class TestTheSECONDARYlaneIsBOUND_explicitly:
+    # p2s_arms is the W10-admitted secondary production lane. It is bound EXPLICITLY as
+    # SECONDARY_PRODUCTION, not smuggled into a broad allowlist, and the gate stays fail-closed.
+    def test_p2s_arms_is_classified_secondary_not_primary(self):
+        assert "p2s_arms" in inventory.SECONDARY_PRODUCTION
+        assert "p2s_arms" in inventory.ALLOWED_ENTRIES
+        assert "p2s_arms" not in inventory.PRIMARY_ENTRIES
+
+    def test_the_real_package_carrying_p2s_arms_is_CLEAN_and_reports_it(self):
+        result = inventory.verify(PACKAGE)
+        assert result["clean"] is True
+        assert result["unexpected"] == []
+        assert "p2s_arms" in result["secondary_production"]
+
+    def test_binding_the_secondary_lane_did_NOT_open_the_gate(self, tmp_path):
+        # fail-closed still holds: an undeclared look-alike beside p2s_arms is still REFUSED
+        pkg = tmp_path / "analysis"
+        pkg.mkdir()
+        for e in inventory.ALLOWED_ENTRIES:
+            (pkg / e).mkdir() if "." not in e else (pkg / e).write_text("x")
+        (pkg / "p2s_arms_v2_shadow").mkdir()
+        with pytest.raises(inventory.InventoryError) as exc:
+            inventory.verify(str(pkg))
+        assert exc.value.gate == inventory.REFUSE_UNEXPECTED_ENTRY
+        assert "p2s_arms_v2_shadow" in str(exc.value)
