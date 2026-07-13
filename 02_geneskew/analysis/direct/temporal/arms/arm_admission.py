@@ -130,8 +130,8 @@ BUNDLE_KEYS = frozenset({
     "bundle_id", "from_condition", "to_condition",
     "n_programs", "n_desired_changes", "n_arms", "n_targets", "n_base_records",
     "arm_keys", "base_records", "arms", "program_admission", "estimand", "perturbation",
-    "method", "code_identity", "verification_ref", "bundle_is_pair_agnostic",
-    "bundle_carries_role_or_pole",
+    "method", "code_identity", "preflight_ref", "external_admission_requirement",
+    "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
 })
 
 # The two roles the run binding must keep DISTINCT. ``code_identity`` = WHICH BUILD (the

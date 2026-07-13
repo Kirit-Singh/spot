@@ -49,6 +49,15 @@ SCHEMA_VERIFICATION = "spot.stage02_temporal_arm_verification.v1"
 # producer-private self-verifier id. The producer references this; it does not self-certify.
 VERIFIER_ID = "spot.stage02.temporal.arm.independent_verifier.v1"
 
+# The ROOT external-admission envelope W11 alone writes, over the whole six-bundle release
+# (sealed cross-check a12f7eee, §C). The producer only DECLARES this as required; it never
+# emits it. NOTE for W11/W3: the sealed report's §A/§C prose also names
+# ``spot.stage02_temporal_arm_verifier_report.v1`` for the required report schema — a
+# discrepancy in the report itself; this producer declares the §C/root envelope schema and
+# flags it for reconciliation.
+EXTERNAL_ADMISSION_SCHEMA = "spot.stage02_temporal_arm_external_admission.v1"
+VERIFIER_REPORT_SCHEMA = "spot.stage02_temporal_arm_verifier_report.v1"
+
 ADMIT = "admit"
 REJECT = "reject"
 

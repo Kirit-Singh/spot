@@ -907,13 +907,19 @@ class TestSeparateTypedArtifacts:
         assert arm_report.VERIFIER_ID == "spot.stage02.temporal.arm.independent_verifier.v1"
         assert "self" not in arm_report.VERIFIER_ID
 
-    def test_the_bundle_verification_ref_points_at_the_independent_contract(self):
-        ref = FX.build()["verification_ref"]
-        assert ref["verifier_id"] == arm_report.VERIFIER_ID
-        assert ref["verification_file"] == arm_emit.VERIFICATION_FILENAME
-        assert ref["provenance_file"] == arm_emit.PROVENANCE_FILENAME
-        # a pointer, not a verdict
-        assert "verdict" not in ref and "admitted" not in ref
+    def test_the_bundle_carries_a_preflight_ref_and_external_admission_requirement(self):
+        b = FX.build()
+        # NO verification_ref — the producer does not claim a per-bundle verification exists
+        assert "verification_ref" not in b
+        pr = b["preflight_ref"]
+        assert pr["preflight_file"] == arm_emit.PREFLIGHT_FILENAME
+        assert pr["preflight_verifier_id"] == "spot.stage02.temporal.arm.producer_preflight.v1"
+        ear = b["external_admission_requirement"]
+        assert ear["required_verifier_id"] == arm_report.VERIFIER_ID
+        assert ear["required_report_schema_version"] == arm_report.EXTERNAL_ADMISSION_SCHEMA
+        # a requirement, not a claim it has run
+        for k in ("verdict", "admitted", "status"):
+            assert k not in pr and k not in ear
 
 
 # =========================================================================== #
@@ -938,9 +944,10 @@ class TestProducerCannotSelfAdmit:
     def test_the_producer_address_defers_to_the_independent_verifier(self, tmp_path):
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
         assert "verdict" not in addr           # the producer does not admit its own bytes
-        assert addr["verification"]["status"] == "pending_external_verification"
-        assert addr["verification"]["written_by"] == "independent_verifier"
-        assert addr["verification"]["verifier_id"] == arm_report.VERIFIER_ID
+        assert addr["external_admission"]["status"] == "pending"
+        assert addr["external_admission"]["required_verifier_id"] == arm_report.VERIFIER_ID
+        assert addr["external_admission"]["required_report_schema_version"] == \
+            arm_report.EXTERNAL_ADMISSION_SCHEMA
 
     def test_the_producer_self_check_still_fails_closed_on_bad_bytes(self, tmp_path):
         # internal gate: a bundle the producer cannot itself reconstruct is not left behind
@@ -1311,52 +1318,74 @@ class TestReadsGreenAgainstTheRealAggregate:
 # =========================================================================== #
 class TestPreflightAndReleaseManifest:
 
-    def test_the_preflight_is_a_status_never_an_admission(self, tmp_path):
+    def test_the_preflight_is_a_pass_status_never_an_admission(self, tmp_path):
         addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
         paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
         pf = json.loads(open(paths[arm_emit.PREFLIGHT_FILENAME], "rb").read())
-        assert pf["schema_version"] == arm_emit.SCHEMA_PREFLIGHT
-        assert pf["role"] == "producer_preflight"
-        assert pf["status"] == "pending_external_verification"
+        assert pf["schema_version"] == "spot.stage02_temporal_arm_preflight.v1"
+        assert pf["verifier_id"] == "spot.stage02.temporal.arm.producer_preflight.v1"
+        assert pf["status"] == "pass"                       # pass|fail, never admit/pending
         assert pf["is_admission"] is False
-        assert pf["generator_is_not_verifier"] is False   # the producer ran it
-        assert "verdict" not in pf                          # never an admit
-        assert pf["self_check_passed"] is True
-        assert pf["authoritative_verification"]["verifier_id"] == arm_report.VERIFIER_ID
+        assert pf["generator_is_not_verifier"] is False     # the producer ran it
+        assert "verdict" not in pf and "role" not in pf     # no admit, no generic role key
+        # it binds the bytes it self-checked, including every ranking hash
+        assert pf["binds"]["arm_bundle_sha256"] == \
+            addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"]
+        assert pf["binds"]["provenance_sha256"] == \
+            addr["files"][arm_emit.PROVENANCE_FILENAME]["raw_sha256"]
+        assert len(pf["binds"]["rankings"]) == 20
+        # it does NOT sign W11's id; it declares the required external admission
+        assert pf["verifier_id"] != arm_report.VERIFIER_ID
+        assert pf["external_admission_requirement"]["required_verifier_id"] == \
+            arm_report.VERIFIER_ID
 
-    def test_the_root_release_manifest_is_content_addressed(self, tmp_path):
+    def test_the_release_id_is_a_full_64_hex_self_hash_with_an_explicit_rule(self, tmp_path):
         from direct.hashing import content_hash
         rel = arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
         manifest = json.loads(
             open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
         assert manifest["schema_version"] == "spot.stage02_temporal_arm_release.v1"
-        assert manifest["n_bundles"] == 6 and manifest["n_logical_arms"] == 120
-        assert manifest["external_verification"]["status"] == "pending"
-        # release_id re-derives over everything but itself — a self-addressed inventory
+        assert manifest["release_id_rule"] == "sha256(canonical JSON excluding release_id)"
+        # FULL 64-hex, not truncated to 16
+        assert len(manifest["release_id"]) == 64
         payload = {k: v for k, v in manifest.items() if k != "release_id"}
-        assert manifest["release_id"] == content_hash(payload)[:16]
+        assert manifest["release_id"] == content_hash(payload)
         assert rel["release_id"] == manifest["release_id"]
+        assert manifest["external_admission"]["status"] == "pending"
+        assert manifest["external_admission"]["required_verifier_id"] == arm_report.VERIFIER_ID
+
+    def test_the_root_inventory_carries_a_hash_bound_stage1_binding(self, tmp_path):
+        arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        manifest = json.loads(
+            open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
+        s1 = manifest["stage1_binding"]
+        assert s1["registry_scorer_view_sha256"] is not None
+        assert sorted(s1["admitted_programs"]) == sorted(FX.PORTABLE_IDS)
+        assert s1["n_programs"] == 10
+        assert sorted(s1["conditions"]) == sorted(FX.CONDITIONS) and s1["n_conditions"] == 3
+        assert s1["effect_source_sha256"] is not None
 
     def test_the_release_binds_every_native_file_and_ranking_hash(self, tmp_path):
-        from direct.hashing import sha256_hex
+        from direct.hashing import content_hash, sha256_hex
         arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
         manifest = json.loads(
             open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
         assert len(manifest["bundles"]) == 6
         for b in manifest["bundles"]:
-            d = os.path.join(str(tmp_path), b["dir"])
-            # arm_bundle + provenance + preflight + 20 ranking files = 23 files
-            assert len(b["files"]) == 23
-            assert any(f.startswith("rankings/") for f in b["files"])
-            # each recorded hash matches the byte on disk
-            for rel_path, h in b["files"].items():
+            d = os.path.join(str(tmp_path), b["relative_dir"])
+            # files = arm_bundle + provenance + preflight; rankings = 20 files
+            assert set(b["files"]) == {"arm_bundle.json", "temporal_provenance.json",
+                                       "temporal_preflight.json"}
+            assert len(b["rankings"]) == 20
+            for rel_path, h in {**b["files"], **b["rankings"]}.items():
                 raw = open(os.path.join(d, rel_path), "rb").read()
                 assert sha256_hex(raw) == h["raw_sha256"]
+                assert content_hash(json.loads(raw)) == h["canonical_sha256"]
 
     def test_reemitting_the_release_is_byte_stable(self, tmp_path):
         a = arm_emit.emit_release(FX.build_all(), str(tmp_path / "a"), expect_n_bundles=6)
         b = arm_emit.emit_release(FX.build_all(), str(tmp_path / "b"), expect_n_bundles=6)
-        assert a["release_id"] == b["release_id"]
+        assert a["release_id"] == b["release_id"] and len(a["release_id"]) == 64
 
 
 # =========================================================================== #

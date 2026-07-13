@@ -45,7 +45,7 @@ from ...arm_keys import DESIRED_CHANGES
 from ...hashing import canonical_json, content_hash, sha256_hex
 from .. import config, estimand
 from . import arm_estimand as est
-from . import arm_programs, arm_report
+from . import arm_preflight, arm_programs, arm_report
 
 SCHEMA_BUNDLE = "spot.stage02_temporal_arm_bundle.v1"
 BUNDLE_KIND = "temporal"
@@ -61,6 +61,7 @@ BUNDLE_ID_LEN = 16
 # bytes at exactly these paths, and W16's loader keys on them.
 BUNDLE_FILENAME = "arm_bundle.json"
 PROVENANCE_FILENAME = "temporal_provenance.json"
+PREFLIGHT_FILENAME = "temporal_preflight.json"
 VERIFICATION_FILENAME = "temporal_verification.json"
 
 # EACH arm binds the BYTES its rank/counts are derived from — a bundle-relative ranking
@@ -391,15 +392,20 @@ def build_bundle(*, from_condition: str, to_condition: str,
         # so an arm inventory cannot be lifted onto a build that did not produce it.
         "method": dict(method),
         "code_identity": dict(code if code is not None else code_identity()),
-        # WHERE the independent verification lives and WHO signs it — a POINTER, never a
-        # verdict. The verdict is the separate ``temporal_verification.json``, which binds
-        # this bundle's hash; embedding one here would be the self-verdict the aggregate
-        # refuses to admit on.
-        "verification_ref": {
-            "verifier_id": arm_report.VERIFIER_ID,
-            "verification_schema_version": arm_report.SCHEMA_VERIFICATION,
-            "verification_file": VERIFICATION_FILENAME,
+        # A POINTER to the producer's own PREFLIGHT (a self-check, never an admission), and
+        # a DECLARATION of the required external contract — NOT a claim that an independent
+        # verification already exists. The producer does not assert an admission it has not
+        # earned; W11 emits the authoritative external admission separately.
+        "preflight_ref": {
+            "preflight_file": PREFLIGHT_FILENAME,
+            "preflight_schema_version": arm_preflight.SCHEMA_PREFLIGHT,
+            "preflight_verifier_id": arm_preflight.PREFLIGHT_VERIFIER_ID,
             "provenance_file": PROVENANCE_FILENAME,
+        },
+        "external_admission_requirement": {
+            "required_verifier_id": arm_report.VERIFIER_ID,
+            "required_report_schema_version": arm_report.EXTERNAL_ADMISSION_SCHEMA,
+            "scope": "root_release",
         },
         "bundle_is_pair_agnostic": True,
         "bundle_carries_role_or_pole": False,

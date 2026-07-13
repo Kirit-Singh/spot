@@ -151,12 +151,13 @@ def _emit_into(bundle: dict[str, Any], out_dir: str) -> None:
     prov = arm_provenance.build_provenance(bundle, bundle_file=BUNDLE_FILENAME,
                                            bundle_raw_sha256=arm_raw)
     _refuse_machine_local(prov, "provenance")
-    _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
+    _, prov_raw = _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
 
-    # 5. the PRODUCER PREFLIGHT — the self-check recorded as a status, never an admission.
-    # The authoritative temporal_verification.json is W11's, written after it reopens these.
-    preflight = arm_preflight.build_preflight(result, bundle_id=bundle["bundle_id"],
-                                              arm_bundle_sha256=arm_raw)
+    # 5. the PRODUCER PREFLIGHT — the self-check recorded as pass|fail, never an admission.
+    # The authoritative external admission is the INDEPENDENT verifier's (W11's) root
+    # envelope, written after it reopens these bytes.
+    preflight = arm_preflight.build_preflight(
+        result, bundle=bundle, arm_bundle_sha256=arm_raw, provenance_sha256=prov_raw)
     _refuse_machine_local(preflight, "producer preflight")
     _write(os.path.join(out_dir, PREFLIGHT_FILENAME), preflight)
 
@@ -191,12 +192,12 @@ def _address(bundle: dict[str, Any], out_dir: str) -> dict[str, Any]:
         "n_targets": bundle["n_targets"],
         "n_base_records": bundle["n_base_records"],
         "arm_keys": list(bundle["arm_keys"]),
-        # the producer does NOT admit its own bytes; it points at the independent verifier
-        "verification": {
-            "file": VERIFICATION_FILENAME,
-            "verifier_id": arm_report.VERIFIER_ID,
-            "status": "pending_external_verification",
-            "written_by": "independent_verifier",
+        # the producer does NOT admit its own bytes; it declares the REQUIRED external
+        # admission (the independent verifier's root envelope), pending until W11 emits it
+        "external_admission": {
+            "status": "pending",
+            "required_verifier_id": arm_report.VERIFIER_ID,
+            "required_report_schema_version": arm_report.EXTERNAL_ADMISSION_SCHEMA,
         },
     }
     _refuse_machine_local(address, "release address")
@@ -246,7 +247,12 @@ def emit_release(bundles: list[dict[str, Any]], out_root: str,
             "A partial release cannot satisfy completeness, and a short bundle set that "
             "reported success would be indistinguishable from a whole one")
 
-    manifest = arm_release.build_release(addresses, out_root)
+    # the Stage-1 binding is read from one bundle's provenance (all six share the release);
+    # read it off disk so the root inventory binds what actually shipped.
+    first = sorted(addresses, key=lambda a: a["bundle_key"])[0]
+    with open(os.path.join(out_root, first["dir"], PROVENANCE_FILENAME), "rb") as fh:
+        first_prov = json.loads(fh.read())
+    manifest = arm_release.build_release(addresses, out_root, provenance=first_prov)
     _refuse_machine_local(manifest, "release inventory")
     _write(os.path.join(out_root, RELEASE_FILENAME), manifest)
 
