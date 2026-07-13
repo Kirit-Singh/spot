@@ -148,6 +148,124 @@ def arm_manifest(rows: list[dict[str, Any]], *, condition: str,
     return out
 
 
+# The EXACT column set an arm row may carry, plus the id stamped on after the identity is
+# known. Not a minimum — an allowlist. A column outside it is refused rather than ignored.
+STAMPED_COLUMN = "arm_bundle_run_id"
+
+# Substrings that name a PAIR-DERIVED quantity. A quantity that exists only when two arms are
+# put side by side cannot be a property of one reusable arm, and must never reach the file:
+# `joint_status` as a 16th column was the audit's exact attack, and it survived every
+# advertised hash because the canonical projection simply ignored what it did not recognise.
+FORBIDDEN_COLUMN_SUBSTRINGS = (
+    "pair", "pareto", "concordance", "joint", "combined", "balanced", "weighted",
+    "away_from", "toward_", "p_value", "pval", "q_value", "qval", "fdr", "padj",
+)
+
+
+class ArmSchemaError(ValueError):
+    """An arm row carries a column the bundle's schema does not define. Refuse."""
+
+
+class ArmInventoryError(ValueError):
+    """The arm inventory is not the one the bound release implies. Refuse."""
+
+
+def assert_complete_inventory(doc: dict[str, Any]) -> None:
+    """The bundle ships EVERY expected arm slot, ONCE, under ONE scorer view.
+
+    Three defects the audit forged into a bundle whose advertised hashes all still verified,
+    because nothing re-derived the inventory from the bound release:
+
+      * a COPIED COUNT — it declared 999 slots while 20 arms remained. So the expected count
+        is recomputed here from the admitted set in the bundle's own scorer view, and a
+        declared count that disagrees with it is refused. A count nobody can recount is not
+        evidence, it is a claim;
+      * a MISSING ARM (19 of 20) and a DUPLICATE ARM (21 entries, 20 unique keys). An arm
+        absent from the manifest is indistinguishable from an arm that was computed and found
+        empty, and a duplicated arm double-counts a measurement — so the inventory must be
+        exactly the admitted programs' two changes, each exactly once;
+      * a SCORER MISMATCH — the bundle's scorer hash was zeroed while provenance kept the
+        real one. One view decides which programs are admitted, and every part of the bundle
+        must cite that same one.
+    """
+    view = doc.get("scorer_view") or {}
+    admitted = list(view.get("admitted_program_ids") or [])
+    if not admitted:
+        raise ArmInventoryError(
+            "the bundle's scorer view admits no program, so there is no inventory to check")
+
+    # DERIVED, never read: the count the release implies, recomputed from the admitted set.
+    expected = expected_slots(admitted)
+    declared = doc.get("n_expected_arm_slots")
+    if declared != expected:
+        raise ArmInventoryError(
+            f"the bundle declares {declared} expected arm slots, but the bound scorer view's "
+            f"{len(admitted)} admitted programs imply {expected}. A copied count decays the "
+            "moment the release changes")
+
+    arms = doc.get("arms") or []
+    keys = [a["arm_key"] for a in arms]
+    if len(keys) != len(set(keys)):
+        dupes = sorted({k for k in keys if keys.count(k) > 1})
+        raise ArmInventoryError(
+            f"the arm inventory is not unique: {dupes} appear more than once. A duplicated "
+            "arm double-counts one measurement")
+
+    wanted = {arm_keys.direct_arm_key(p, c, doc["condition"])
+              for p in admitted for c in arm_keys.DESIRED_CHANGES}
+    got = set(keys)
+    if got != wanted:
+        raise ArmInventoryError(
+            f"the arm inventory is not the one the bound release implies: "
+            f"missing {sorted(wanted - got)}, unexpected {sorted(got - wanted)}. An arm "
+            "absent from the manifest is indistinguishable from one computed and found empty")
+    if len(arms) != expected:
+        raise ArmInventoryError(
+            f"the bundle ships {len(arms)} arm slots where the release implies {expected}")
+
+    # ONE scorer view. The method block and the view it was built from must be the same view.
+    method_hash = (doc.get("method") or {}).get("scorer_view_sha256")
+    view_hash = view.get("scorer_view_sha256")
+    if method_hash != view_hash:
+        raise ArmInventoryError(
+            f"the bundle's method cites scorer view {method_hash} but ships view "
+            f"{view_hash}: a bundle whose parts cite two different views could be "
+            "re-attributed to a program set it never scored")
+
+
+def assert_exact_columns(rows: list[dict[str, Any]]) -> None:
+    """The Parquet contract, enforced where the bytes are WRITTEN.
+
+    The canonical row hash projects onto ARM_ROW_COLUMNS, so an extra column is invisible to
+    it — which is how a pair field could be inserted into the shipped Parquet while every
+    advertised hash still verified. The producer therefore refuses to write one at all.
+
+    This is a PRECONDITION on the producer, not an admission rule: an independent verifier
+    re-derives the same contract from the shipped file, and must not take this as evidence.
+    """
+    allowed = set(ARM_ROW_COLUMNS) | {STAMPED_COLUMN}
+    for r in rows:
+        got = set(r)
+        extra = got - allowed
+        if extra:
+            raise ArmSchemaError(
+                f"arm rows carry columns the bundle schema does not define: "
+                f"{sorted(extra)}. The canonical row hash projects onto "
+                f"{len(ARM_ROW_COLUMNS)} columns and would not see these, so a pair-derived "
+                "field could ride along inside a bundle whose hashes all verified")
+        missing = set(ARM_ROW_COLUMNS) - got
+        if missing:
+            raise ArmSchemaError(
+                f"arm rows are missing required columns: {sorted(missing)}")
+        forbidden = sorted(c for c in got
+                           if any(f in c.lower() for f in FORBIDDEN_COLUMN_SUBSTRINGS))
+        if forbidden:
+            raise ArmSchemaError(
+                f"arm rows carry pair-derived columns {forbidden}: a quantity that exists "
+                "only when two arms are put side by side cannot be a property of one "
+                "reusable arm")
+
+
 def canonical_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The arm rows, in the ONE shape their hash is taken over.
 
