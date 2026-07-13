@@ -1,18 +1,32 @@
-# 04_PKPD — brain penetrance, exposure, safety, synergy
+# 04_PKPD — brain penetrance, exposure, safety
 
-Score each drug for CNS delivery + tolerability. **Locks:** the brain-penetrance /
-exposure score.
+Score each drug for CNS delivery and tolerability, and present the evidence as **separate
+lanes**. There is **no composite score, no ranking, no traffic light, and no
+recommendation** — each lane stands on its own and cites its source.
 
-Runs as a Claude Science **specialist** (project `spot · 04 PKPD`): neuro-oncology PK/PD —
-**CNS-MPO / NEBPI** (Grossman et al., Neuro-Oncology 2026): ClogP, ClogD, TPSA, MW, HBD,
-pKa + P-gp/BCRP efflux, potency-adjusted → sufficiently / insufficiently / impermeable.
-Exposure + half-life (ChEMBL/DrugBank).
+## Method
+- **Brain penetrance** — CNS-MPO / NEBPI descriptors (Grossman et al., *Neuro-Oncology*
+  2026): ClogP, ClogD, TPSA, MW, HBD, pKa, plus P-gp / BCRP efflux. Reported as a screen
+  (sufficiently / insufficiently / impermeable), **not** proof of CNS exposure.
+- **Exposure** — half-life and exposure descriptors.
+- **Safety** — co-medication and peri-operative signals against GBM standard-of-care
+  concomitants (e.g. TMZ, radiotherapy, dexamethasone, levetiracetam), each reported as a
+  typed, sourced evidence item rather than a combined verdict.
 
-**Safety / synergy sub-panel (traffic light):** score vs GBM standard-of-care concomitants
-— TMZ, XRT, dexamethasone, levetiracetam (Keppra) — plus peri-operative bleeding risk
-(FAERS/SIDER/DrugBank/DrugComb). Output: 🟢 green = okay · 🟡 amber = caution · 🔴 red =
-hard contraindication.
+Descriptor calculation uses RDKit (BSD-3-Clause).
 
-- `inputs/`  — the locked drug(s) from 03
-- `analysis/` — CS workbook: descriptor calc + DB queries
-- `outputs/` — per-drug score card (NEBPI + exposure + half-life + safety traffic light)
+## Inputs
+- The locked drug(s) from Stage 03.
+
+## Outputs
+- A per-drug evidence card: brain-penetrance screen + exposure + safety lanes, each with its
+  own provenance. No lane is collapsed into an overall call.
+
+## Reproduce
+Runs as a Claude Science specialist (neuro-oncology PK/PD). **Not yet implemented in this
+repo** — `analysis/` and `inputs/` are placeholders; the entry point and its verifier land
+with the stage.
+
+## Provenance & licenses
+Brain-penetrance scoring is a *screen*, not a clinical determination. Queried sources and
+their licenses are recorded in `DATA_LICENSES.md`.

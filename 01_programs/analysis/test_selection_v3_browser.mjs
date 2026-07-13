@@ -4,10 +4,14 @@
 // byte-matches stage2_bridge/emit_selection_contract.build_contract (same selection_id + full-contract
 // hash + execution routing). Proves the live page emits the reviewed v3 contract, not the legacy v1.
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { webcrypto } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const REPO = '/Users/kiritsingh/spot';
+// Repo root: env override, else two levels up from this file (01_programs/analysis/ -> repo root).
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = process.env.SPOT_REPO || path.resolve(HERE, '..', '..');
 const PAGE = REPO + '/01_programs/app/01_page.html';
 const DATA = REPO + '/01_programs/app/data';
 const BRIDGE = REPO + '/01_programs/analysis/stage2_bridge';

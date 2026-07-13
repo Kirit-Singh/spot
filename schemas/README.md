@@ -10,8 +10,10 @@ Served at `01_programs/app/data/stage01_program_registry_v3.json`; emitted by
 `01_programs/analysis/gen_stage1_provenance.py` (marker provenance) over the frozen scoring registry.
 Per-program: `program_id`, `score_field`, `role`, `base_portable`, panel + frozen `control` symbols/Ensembl
 (honest `null` for genes absent from the effect universe), coefficients, `scoring_method`, effect-universe
-coverage, and structured per-marker `marker_provenance`/`panel_provenance` (bounded primary-source locators;
-citations are provisional until an independent citation-verifier lane marks them `verified`).
+coverage, and structured per-marker `marker_provenance`/`panel_provenance` — **bounded locators that record
+where each marker was reported for its program, not a validation of cell/program identity**. A locator's
+citation is provisional until an independent citation-verifier lane marks it `verified`; a `verified` locator
+confirms the *reference*, never that the score is a cell type or that the marker proves lineage/function.
 
 Frozen, citation-invariant scientific identities: scores canonical `43c4296d…`, frozen validation raw
 `1c14cd28…`, **scorer projection** `008c1da1…` (the scoring-core invariant that must never move). The

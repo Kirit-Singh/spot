@@ -1,0 +1,56 @@
+{
+  "schema_id": "spot.paper_concordance_run_receipt.v1",
+  "status": "TEMPLATE_NO_RUN_EXECUTED",
+  "description": "Run-receipt contract for a paper-concordance check (Stage-2 directional concordance vs the primary publication). This file is a schema + a template instance; no run has been executed, so every run-returned field is null. Fill them ONLY from a real run; never fabricate a hash, timestamp, or result.",
+  "paper": {
+    "title": "Genome-scale perturb-seq in primary human CD4+ T cells (Marson)",
+    "authors": "Zhu, Dann, ... Marson 2025",
+    "doi": "10.64898/2025.12.23.696273",
+    "official_url": "https://doi.org/10.64898/2025.12.23.696273",
+    "preprint_id": "bioRxiv 2025.12.23.696273v1"
+  },
+  "expected_pins": {
+    "primary_pdf_sha256_prefix": "7539856ecfea",
+    "note": "The full SHA-256 of the primary PDF, recomputed independently at run time, MUST begin with this pinned prefix. Record the FULL observed value; do not invent the remaining digits. A mismatch fails the receipt."
+  },
+  "required_fields": [
+    "schema",
+    "run_executed",
+    "paper_doi",
+    "official_url",
+    "pdf_access_date_utc",
+    "primary_pdf_sha256",
+    "code_repo_path",
+    "code_git_commit",
+    "env_lockfile",
+    "env_interpreter",
+    "command",
+    "run_utc",
+    "generator",
+    "verifier",
+    "concordance_result"
+  ],
+  "field_spec": {
+    "primary_pdf_sha256": {"type": "string|null", "independently_checked": true, "must_match": "expected_pins.primary_pdf_sha256_prefix", "note": "full SHA-256 of the downloaded primary PDF, recomputed at run time"},
+    "verifier": {"type": "object|null", "independently_checked": true, "note": "independent verifier identity + result; generator != verifier"},
+    "run_utc": {"type": "string|null", "note": "ISO-8601 UTC of the run; null until executed"},
+    "concordance_result": {"type": "object|null", "note": "directional concordance summary; null until executed"}
+  },
+  "template_instance": {
+    "schema": "spot.paper_concordance_run_receipt.v1",
+    "run_executed": false,
+    "paper_doi": "10.64898/2025.12.23.696273",
+    "official_url": "https://doi.org/10.64898/2025.12.23.696273",
+    "pdf_access_date_utc": null,
+    "primary_pdf_sha256": null,
+    "code_repo_path": "02_geneskew/paper_concordance/",
+    "code_git_commit": null,
+    "env_lockfile": null,
+    "env_interpreter": null,
+    "command": null,
+    "run_utc": null,
+    "generator": null,
+    "verifier": null,
+    "concordance_result": null
+  }
+}
