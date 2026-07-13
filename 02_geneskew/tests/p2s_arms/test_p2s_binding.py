@@ -41,8 +41,8 @@ def test_a_clean_admission_binds(bundle_dir, w10_report, view):
     assert a["w10_report_sha256_rederived"] is True
     assert a["bundle_is_real_and_admitted"] is True
     assert bound["solver_lock"]["sha256"] == config.PINNED_SOLVER_LOCK_SHA256
-    # every one of the ten shipped files was re-hashed
-    assert len(a["direct_bundle_artifact_sha256"]) == len(config.DIRECT_BUNDLE_FILES)
+    # every one of the admitted files was re-hashed (10 producer artifacts + verification.json)
+    assert len(a["direct_bundle_artifact_sha256"]) == len(config.ADMITTED_BUNDLE_FILES)
 
 
 # --------------------------------------------------------------------------- #

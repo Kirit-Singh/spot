@@ -457,9 +457,9 @@ def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDI
                      tamper_hash: bool = False) -> str:
     """A W10 ADMIT report, content-addressed exactly as W10 writes one."""
     doc = json.load(open(os.path.join(bundle_dir, "arm_bundle.json")))
-    # cover EXACTLY the authoritative inventory (VERIFIED_PATHS) — the exact-key check
-    # refuses a subset or an extra.
-    files = {n: _fsha(os.path.join(bundle_dir, n)) for n in _cfg.DIRECT_BUNDLE_FILES}
+    # cover EXACTLY the admitted inventory (the 10 producer artifacts + verification.json), as
+    # the real producer-code-root W10 does — the exact-key check refuses a subset or an extra.
+    files = {n: _fsha(os.path.join(bundle_dir, n)) for n in _cfg.ADMITTED_BUNDLE_FILES}
 
     body = {
         "schema_version": _cfg.W10_REPORT_SCHEMA,

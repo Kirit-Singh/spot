@@ -311,26 +311,28 @@ def check_bundle_files(report: dict[str, Any], bundle_dir: str) -> dict[str, str
             "the report carries no artifact_sha256 map, so there is nothing tying it to the "
             "bytes of any particular bundle")
 
-    # THE KEY SET MUST BE EXACTLY THE AUTHORITATIVE INVENTORY. Not a subset that happens to be
+    # THE KEY SET MUST BE EXACTLY WHAT W10 ADMITS. The producer-code-root W10 re-hashes every
+    # shipped file — the 10 producer artifacts PLUS the verification.json slot it verifies — so
+    # the authoritative admitted inventory is 11 keys. Not a subset that happens to be
     # non-empty: a resealed report that dropped target_identity.json (or added a decoy) would
     # otherwise pass by covering only the files it kept. Missing AND extra are both refused.
-    required = set(config.DIRECT_BUNDLE_FILES)
+    required = set(config.ADMITTED_BUNDLE_FILES)
     keys = set(admitted)
     if keys != required:
         raise D.RefusalError(
             D.REFUSE_BUNDLE_SWAPPED_FILE,
-            f"the report's artifact_sha256 key set is not the authoritative bundle inventory: "
+            f"the report's artifact_sha256 key set is not the authoritative admitted inventory: "
             f"missing {sorted(required - keys)}, extra {sorted(keys - required)}. Every "
-            f"required file — including {config.TARGET_IDENTITY_FILE} — must be admitted, and "
-            "nothing else may be")
+            f"admitted file — including {config.TARGET_IDENTITY_FILE} and "
+            f"{config.VERIFICATION_FILE} — must be present, and nothing else may be")
 
-    missing = [f for f in config.DIRECT_BUNDLE_FILES
+    missing = [f for f in config.ADMITTED_BUNDLE_FILES
                if not os.path.exists(os.path.join(bundle_dir, f))]
     if missing:
         raise D.RefusalError(
             D.REFUSE_BUNDLE_INCOMPLETE,
             f"the Direct bundle is missing {missing}. An admitted bundle ships all "
-            f"{len(config.DIRECT_BUNDLE_FILES)} files")
+            f"{len(config.ADMITTED_BUNDLE_FILES)} files")
 
     observed: dict[str, str] = {}
     swapped: list[str] = []

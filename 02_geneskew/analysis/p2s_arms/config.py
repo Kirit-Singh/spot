@@ -322,15 +322,22 @@ PINNED_SOLVER_LOCK_SHA256 = \
     "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe"
 SOLVER_LOCK_FILENAME = "stage02_solver_lock.txt"
 
-# The files an ADMITTED Direct bundle ships — THE AUTHORITATIVE INVENTORY, imported from
-# Direct's own `arm_artifacts.VERIFIED_PATHS` (one shared constant, incl. target_identity.json).
-# Every one is re-hashed and matched EXACTLY against the report's `artifact_sha256` map.
-# `verification.json` is NOT in this set: it is the producer's empty slot that W10 fills, and
-# it is checked separately (self-admission), not as a producer artifact.
+# The PRODUCER ARTIFACTS an admitted Direct bundle ships — THE AUTHORITATIVE INVENTORY,
+# imported from Direct's own `arm_artifacts.VERIFIED_PATHS` (one shared constant, incl.
+# target_identity.json). These are the 10 files the producer writes and W10 recomputes.
 from direct import arm_artifacts as _arm_artifacts  # noqa: E402
 
 DIRECT_BUNDLE_FILES = tuple(_arm_artifacts.VERIFIED_PATHS)
 TARGET_IDENTITY_FILE = _arm_artifacts.TARGET_IDENTITY_FILE
+VERIFICATION_FILE = "verification.json"
+
+# THE ADMITTED-ARTIFACT INVENTORY the W10 report's `artifact_sha256` map actually covers. The
+# producer-code-root W10 re-hashes EVERY shipped file, which is the 10 producer artifacts PLUS
+# the `verification.json` slot it verifies (the real Stim48hr report ships 11 keys). P2S's
+# exact-key admission check compares against THIS set — matching what W10 admits, byte for byte
+# — so a report that dropped target_identity.json (missing) or added a decoy (extra beyond the
+# 11) is still refused. verification.json's self-admission state is checked SEPARATELY.
+ADMITTED_BUNDLE_FILES = DIRECT_BUNDLE_FILES + (VERIFICATION_FILE,)
 
 # A RELEASE lane. `synthetic` is not one: synthetic arms may never carry production support.
 RELEASE_LANES = ("production", "research_only")
