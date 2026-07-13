@@ -316,6 +316,7 @@ def build_bundle(*, from_condition: str, to_condition: str,
                  scorer_view_sha256: Optional[str] = None,
                  stage1: Optional[dict[str, Any]] = None,
                  env_lock: Optional[dict[str, Any]] = None,
+                 endpoint_source: Optional[dict[str, Any]] = None,
                  code: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The complete, deterministic bundle for ONE frozen ordered condition pair.
 
@@ -408,6 +409,10 @@ def build_bundle(*, from_condition: str, to_condition: str,
         # the committed Stage-2 solver-lock identity — bytes verified upstream, bound into
         # the bundle id so an arm inventory cannot be lifted onto a different environment.
         "env_lock": dict(env_lock),
+        # WHICH two admitted Direct all-arm bundles this ordered pair differenced (their ids,
+        # byte hashes and W10 admissions). PER-PAIR, so NOT part of the cross-bundle identity.
+        "endpoint_source": dict(endpoint_source) if endpoint_source else {
+            "endpoint_source": "not_bound"},
         # A POINTER to the producer's own PREFLIGHT (a self-check, never an admission), and
         # a DECLARATION of the required external contract — NOT a claim that an independent
         # verification already exists. The producer does not assert an admission it has not

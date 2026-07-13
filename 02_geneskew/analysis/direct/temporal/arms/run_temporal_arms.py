@@ -3,7 +3,10 @@
     python -m direct.temporal.arms.run_temporal_arms \
         --stage1-view    stage01_stage2_registry_view.json \
         --stage1-release release_identity.json \
-        --effect-source  effect_source.json \
+        --direct-bundle  Rest:<direct_rest_bundle_dir> \
+        --direct-bundle  Stim8hr:<direct_stim8_bundle_dir> \
+        --w10-report     Rest:<rest_admission.json> \
+        --w10-report     Stim8hr:<stim8_admission.json> \
         --env-lock       analysis/stage02_solver_lock.txt \
         --conditions     Rest,Stim8hr,Stim48hr \
         --out-root       <dir> \
@@ -22,27 +25,26 @@ The arms subpackage is invisible to that hash, so this producer is strictly addi
 WHAT IT DOES
 ------------
 Derives the base-portable program axis and the per-program projection map from the bound
-Stage-1 scorer view, projects EVERY admitted program for every target at each named
-condition (the masked program projection the direct lane uses), differences the two
-condition populations by the frozen temporal estimand, and emits, per ordered pair, a
-content-addressed arm bundle (``arm_bundle.json`` + ``temporal_provenance.json`` +
-``temporal_preflight.json`` + ``rankings/*.json``) plus, over the whole run, the root
-content-addressed inventory ``temporal_arm_release.json``.
+Stage-1 scorer view; reads EVERY temporal endpoint as an ADMITTED Direct all-arm bundle
+(whose ``base_delta`` per (condition, program, target) IS the masked program projection);
+differences two Direct bundles by the frozen temporal estimand (``base_delta(to) −
+base_delta(from)``); and emits, per ordered pair, a content-addressed arm bundle
+(``arm_bundle.json`` + ``temporal_provenance.json`` + ``temporal_preflight.json`` +
+``rankings/*.json``) plus the root inventory ``temporal_arm_release.json``.
 
 WHAT IT REFUSES
 ---------------
-A missing or swapped solver lock; a Stage-1 view with no base-portable program; a condition
-the effect source does not ship; and — via the producer self-check — any bundle it cannot
-itself reconstruct. It binds the committed Stage-2 solver-lock, the shared code identity and
-the Stage-1 release identity, so a run is attributable to its build, its environment and its
-Stage-1 release.
+A missing/wrong solver lock; a Stage-1 view with no base-portable program; and — at the
+named gates in ``arm_direct_source`` — a missing/ambiguous/stale/wrong-condition Direct
+bundle, an increase/decrease pair that disagrees, a Direct bundle with no admitting W10
+report, and the temporal fixture effect source standing in for a real Direct bundle. It
+binds the two Direct bundle ids + their admissions, the committed solver-lock, the shared
+code identity and the Stage-1 release, so a run is attributable to exactly what it stood on.
 
 WHAT IT IS NOT
 --------------
-Not a fate/lineage claim; not a heavy-data loader. The ``effect source`` is the
-projection-ready effect matrix (per condition, per target: an effect vector aligned to a
-gene index, the contributor mask, and the upstream QC / denominators). Deriving that matrix
-from the raw perturbation data is the upstream step; this entrypoint consumes it.
+Not a fate/lineage claim; not a heavy-data loader; NOT a consumer of a giant serialized
+``effect_source.json`` (there is none in the real run — the endpoints are Direct bundles).
 """
 from __future__ import annotations
 
@@ -50,25 +52,13 @@ import argparse
 import json
 import os
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from ...hashing import content_hash, file_sha256
 from .. import config as tconfig
 from . import arm_bundle as ab
+from . import arm_direct_source as src
 from . import arm_emit, arm_env, arm_programs
-from . import arm_estimand as est
-
-EFFECT_SOURCE_SCHEMA = "spot.stage02_temporal_arm_effect_source.v1"
-
-# The per-endpoint fields the effect source supplies straight onto the endpoint.
-_ENDPOINT_PASSTHROUGH = (
-    "released_estimate_id", "target_symbol", "target_ensembl", "target_id_namespace",
-    "base_qc_passed", "base_qc_state", "base_qc_reasons",
-    "qc_ontarget_significant", "qc_ontarget_effect_size", "qc_target_baseMean",
-    "qc_low_target_expression", "mask_resolved", "estimate_mask_sha256",
-    "mask_gene_count", "mask_unresolved_reason", "n_guide_slots_released",
-    "n_guides_mapped", "n_guides_evaluated", "n_splits_total", "n_splits_evaluable",
-    "donor_split_denominator", "effective_donor_n", "n_cells_target")
 
 
 class _Release:
@@ -87,29 +77,16 @@ def _load_json(path: str, what: str) -> dict[str, Any]:
         return json.load(fh)
 
 
-def build_endpoints(admitted: dict[str, dict[str, Any]], effect_source: dict[str, Any],
-                    condition: str) -> list[ab.TargetEndpoint]:
-    """Project EVERY admitted program for every target at ``condition``.
-
-    ``project_programs`` runs the masked program projection (panel mean − control mean,
-    after the target's own contributor mask) for all admitted programs at once, so the arm
-    bundle later differences a COMPLETE program axis rather than two poles.
-    """
-    import numpy as np
-
-    gene_index = effect_source["gene_index"]
-    conds = effect_source.get("conditions") or {}
-    if condition not in conds:
-        raise SystemExit(
-            f"[run_temporal_arms] effect source ships no condition {condition!r}; "
-            f"it has {sorted(conds)}")
-    out: list[ab.TargetEndpoint] = []
-    for tid, t in sorted((conds[condition].get("targets") or {}).items()):
-        effect_row = np.asarray(t["effect"], dtype=float)
-        mask = set(t.get("mask") or [])
-        deltas = est.project_programs(effect_row, admitted, gene_index, mask)
-        fields = {k: t.get(k) for k in _ENDPOINT_PASSTHROUGH if k in t}
-        out.append(ab.TargetEndpoint(target_id=str(tid), program_delta=deltas, **fields))
+def _pairs(items: Optional[list[str]], what: str) -> dict[str, str]:
+    """``COND:PATH`` entries into a ``{condition: path}`` map. Refuses ambiguity."""
+    out: dict[str, str] = {}
+    for entry in (items or []):
+        if ":" not in entry:
+            raise SystemExit(f"[run_temporal_arms] --{what} must be COND:PATH, got {entry!r}")
+        cond, path = entry.split(":", 1)
+        if cond in out:
+            raise SystemExit(f"[run_temporal_arms] two --{what} for condition {cond!r}")
+        out[cond] = path
     return out
 
 
@@ -128,26 +105,30 @@ def _stage1(view: dict[str, Any], view_path: str, release: dict[str, Any],
     }
 
 
-def _method(view: dict[str, Any], effect_source_path: str,
-            release: dict[str, Any]) -> dict[str, Any]:
+def _method(view: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
     return ab.method_block(
         temporal_method_sha256=release.get("temporal_method_sha256"),
         direct_method_version=tconfig.ESTIMATOR_VERSION,
         direct_config_sha256=release.get("direct_config_sha256"),
-        effect_source_sha256=file_sha256(effect_source_path),
+        # the raw perturbation source hash the Direct bundles were built from (a
+        # release-level constant); the PER-PAIR Direct bundle ids live in endpoint_source
+        effect_source_sha256=release.get("effect_source_sha256"),
         effect_universe_sha256=view.get("effect_universe_symbols_sha256"))
 
 
 def run(args) -> dict[str, Any]:
-    """Build and emit the release. Returns the emitted release inventory (relative-only)."""
+    """Build and emit the release from two admitted Direct all-arm bundles per pair.
+
+    Every temporal endpoint is a Direct all-arm bundle at that condition; the frozen DiD is
+    the difference of two Direct bundles' base deltas. There is no fixture effect source in
+    the real run — a missing/ambiguous/stale/swapped/mismatched Direct bundle or a missing
+    W10 report is refused at a named gate (see ``arm_direct_source``).
+    """
     view = _load_json(args.stage1_view, "stage1 view")
-    effect_source = _load_json(args.effect_source, "effect source")
-    if effect_source.get("schema_version") != EFFECT_SOURCE_SCHEMA:
-        raise SystemExit(
-            f"[run_temporal_arms] effect source schema "
-            f"{effect_source.get('schema_version')!r} is not {EFFECT_SOURCE_SCHEMA!r}")
     release = (_load_json(args.stage1_release, "stage1 release")
                if args.stage1_release else {})
+    direct = _pairs(args.direct_bundle, "direct-bundle")
+    w10 = _pairs(args.w10_report, "w10-report")
 
     admitted = arm_programs.admitted_programs(_Release(view))
     conditions = [c.strip() for c in args.conditions.split(",") if c.strip()]
@@ -158,7 +139,7 @@ def run(args) -> dict[str, Any]:
 
     env_lock = arm_env.env_lock_block(args.env_lock)
     stage1 = _stage1(view, args.stage1_view, release, conditions)
-    method = _method(view, args.effect_source, release)
+    method = _method(view, release)
     code = ab.code_identity()
 
     if args.from_condition and args.to_condition:
@@ -170,19 +151,38 @@ def run(args) -> dict[str, Any]:
             "[run_temporal_arms] name a pair (--from-condition/--to-condition) or "
             "--all-pairs")
 
-    endpoints = {c: build_endpoints(admitted, effect_source, c)
-                 for c in sorted({c for pair in pairs for c in pair})}
+    # load + verify each condition's admitted Direct bundle ONCE (fail-closed on the gates)
+    loaded: dict[str, dict[str, Any]] = {}
+    for cond in sorted({c for pair in pairs for c in pair}):
+        if cond not in direct:
+            raise SystemExit(f"[run_temporal_arms] no --direct-bundle for condition {cond!r}")
+        loaded[cond] = src.load_direct_bundle(
+            direct[cond], expect_condition=cond, w10_report=w10.get(cond))
+
     bundles = [
         ab.build_bundle(
             from_condition=frm, to_condition=to, admitted=admitted,
-            from_endpoints=endpoints[frm], to_endpoints=endpoints[to],
+            from_endpoints=src.endpoints(loaded[frm], admitted),
+            to_endpoints=src.endpoints(loaded[to], admitted),
             method=method, conditions=conditions,
             scorer_view_sha256=stage1["scorer_view_canonical_sha256"],
-            stage1=stage1, env_lock=env_lock, code=code)
+            stage1=stage1, env_lock=env_lock,
+            endpoint_source=src.source_binding(loaded[frm], loaded[to]), code=code)
         for frm, to in pairs]
 
-    expect = len(arm_programs.ordered_pairs(conditions)) if args.all_pairs else None
-    return arm_emit.emit_release(bundles, args.out_root, expect_n_bundles=expect)
+    if args.all_pairs:
+        # the COMPLETE release: every ordered pair + the content-addressed root inventory
+        rel = arm_emit.emit_release(
+            bundles, args.out_root,
+            expect_n_bundles=len(arm_programs.ordered_pairs(conditions)))
+        return {"mode": "release", "release_id": rel["release_id"],
+                "n_bundles": rel["n_bundles"], "n_logical_arms": rel["n_logical_arms"],
+                "release_file": rel["release_file"]}
+    # ONE ordered pair (the scheduler's per-pair invocation): one content-addressed bundle,
+    # no root inventory — the release manifest is written once the whole run has landed.
+    addr = arm_emit.emit_bundle(bundles[0], args.out_root)
+    return {"mode": "bundle", "bundle_id": addr["bundle_id"],
+            "bundle_key": addr["bundle_key"], "n_arms": addr["n_arms"], "dir": addr["dir"]}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -197,9 +197,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--stage1-release", default=None,
                     help="Stage-1 release identity (JSON): release_self_sha256 and the SCALAR "
                          "registry_scorer_projection_sha256 the release publishes")
-    ap.add_argument("--effect-source", required=True,
-                    help="projection-ready effect matrix (per condition/target: effect "
-                         "vector, contributor mask, upstream QC and denominators)")
+    ap.add_argument("--direct-bundle", action="append", metavar="COND:PATH",
+                    help="an ADMITTED Direct all-arm bundle for a condition, as COND:PATH "
+                         "(repeat once per condition). Its base_delta rows ARE the temporal "
+                         "endpoints; there is no fixture effect source in the real run")
+    ap.add_argument("--w10-report", action="append", metavar="COND:PATH", default=None,
+                    help="the independent report admitting each Direct bundle, COND:PATH. A "
+                         "Direct endpoint with no admitting report is refused")
     ap.add_argument("--env-lock", required=True,
                     help="the committed Stage-2 solver-lock; its BYTES are read and bound as "
                          "env_lock_sha256. A missing or swapped lock is refused")
@@ -220,10 +224,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    rel = run(args)
-    print(json.dumps({"release_id": rel["release_id"], "n_bundles": rel["n_bundles"],
-                      "n_logical_arms": rel["n_logical_arms"],
-                      "release_file": rel["release_file"], "out_root": args.out_root}))
+    result = run(args)
+    print(json.dumps({**result, "out_root": args.out_root}))
     return 0
 
 

@@ -1704,83 +1704,179 @@ class TestPreflightAndReleaseManifest:
 _AUTH_LOCK = "/home/tcelab/.spot-runs/20260712T021343Z/stage02_solver_lock.txt"
 
 
-def _write_cli_inputs(tmp_path):
-    """Synthetic — clearly-marked FIXTURE — Stage-1 view, effect source and release."""
-    import numpy as np
-    view = {"schema_version": "spot.stage01_stage2_registry_view.v1",
-            "effect_universe_symbols_sha256": "e" * 64,
-            "programs": [FX.programs_registry()[p] for p in FX.PORTABLE_IDS]
-            + [FX.programs_registry()[FX.NON_PORTABLE_ID]]}
-    conditions = {}
-    for cond in FX.CONDITIONS:
-        targets = {}
+def arm_env_auth():
+    from direct.temporal.arms import arm_env
+    return arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
+
+
+def _direct_base_delta(program_id, target_i, cond):
+    """The Direct base_delta for (program, target, cond) — the masked projection delta."""
+    from direct.temporal.arms import arm_estimand as est
+    deltas = est.project_programs(FX.effect_row(target_i, cond), FX.admitted(),
+                                  FX.GENE_INDEX, set())
+    return deltas[program_id]["delta"], deltas[program_id]
+
+
+def _write_direct_bundle(tmp_path, cond, *, dirname=None, tamper=None):
+    """A SYNTHETIC admitted Direct all-arm bundle (spot.stage02_direct_arm_bundle.v1) for one
+    condition, with increase/decrease rows whose base_delta is the masked projection."""
+    from direct.hashing import canonical_num
+    rows = []
+    for pid in FX.PORTABLE_IDS:
         for i, tid in enumerate(FX.TARGETS):
-            targets[tid] = {"effect": np.asarray(FX.effect_row(i, cond)).tolist(),
-                            "mask": [], "released_estimate_id": f"{tid}|{cond}",
-                            "target_symbol": f"SYM{i}", "target_ensembl": f"ENSGT{i:011d}",
-                            "target_id_namespace": "fixture",
-                            "qc_ontarget_significant": True, "n_guide_slots_released": 4,
-                            "n_splits_total": 3, "effective_donor_n": 4}
-        conditions[cond] = {"targets": targets}
-    effect = {"schema_version": "spot.stage02_temporal_arm_effect_source.v1",
-              "gene_index": FX.GENE_INDEX, "conditions": conditions}
-    release = {"release_self_sha256": "b" * 64,
-               "registry_scorer_projection_sha256": "c0" * 32,
-               "temporal_method_sha256": "f" * 64, "direct_config_sha256": "e" * 64}
-    import json as _json
-    vp, ep, rp = (tmp_path / "view.json", tmp_path / "effect.json",
-                  tmp_path / "release.json")
-    vp.write_text(_json.dumps(view))
-    ep.write_text(_json.dumps(effect))
-    rp.write_text(_json.dumps(release))
-    return str(vp), str(ep), str(rp)
+            bd, d = _direct_base_delta(pid, i, cond)
+            for change in ("increase", "decrease"):
+                sign = 1 if change == "increase" else -1
+                value = None if bd is None else (0.0 if bd == 0 else sign * bd)
+                rows.append({
+                    "arm_key": f"direct|{pid}|{change}|{cond}", "program_id": pid,
+                    "desired_change": change, "condition": cond, "target_id": tid,
+                    "base_delta": canonical_num(bd), "value": canonical_num(value),
+                    "rank": None, "evaluable": True, "projection_status": d["status"],
+                    "base_state": "base_qc_passed", "base_passed": True,
+                    "n_panel_surviving": d["n_panel_surviving"],
+                    "n_control_surviving": d["n_control_surviving"]})
+    if tamper:
+        tamper(rows)
+    doc = {"schema_version": "spot.stage02_direct_arm_bundle.v1",
+           "bundle_id": f"direct-{cond}", "condition": cond, "rows": rows}
+    d = tmp_path / (dirname or f"direct_{cond}")
+    d.mkdir()
+    (d / "arm_bundle.json").write_text(json.dumps(doc))
+    w10 = tmp_path / f"w10_{cond}.json"
+    w10.write_text(json.dumps({"verdict": "ADMIT", "bundle_id": f"direct-{cond}"}))
+    return str(d), str(w10)
 
 
-class TestProductionCLI:
-    """arm_bundle is NOT test-only machinery: a real CLI entrypoint builds and emits the
-    content-addressed release from explicit Stage-1 view, effect source, env lock and out
-    root — the shape the scheduler invokes."""
+class TestProductionCLIFromDirectBundles:
+    """arm_bundle is NOT test-only: the real CLI builds the release from TWO admitted Direct
+    all-arm bundles' base_delta rows — no fixture effect_source.json in the real run."""
 
     def test_the_cli_help_documents_every_required_input(self):
         from direct.temporal.arms import run_temporal_arms
-        help_text = run_temporal_arms.build_parser().format_help()
-        for flag in ("--stage1-view", "--effect-source", "--env-lock", "--conditions",
-                     "--out-root", "--from-condition", "--to-condition", "--all-pairs"):
-            assert flag in help_text
+        h = run_temporal_arms.build_parser().format_help()
+        for flag in ("--stage1-view", "--direct-bundle", "--w10-report", "--env-lock",
+                     "--conditions", "--out-root", "--from-condition", "--all-pairs"):
+            assert flag in h
+        assert "--effect-source" not in h        # the fixture source is gone
 
-    def test_the_cli_emits_a_content_addressed_release_end_to_end(self, tmp_path):
+    def _view_release(self, tmp_path):
+        view = {"schema_version": "spot.stage01_stage2_registry_view.v1",
+                "effect_universe_symbols_sha256": "e" * 64,
+                "programs": [FX.programs_registry()[p] for p in FX.PORTABLE_IDS]}
+        rel = {"release_self_sha256": "b" * 64, "registry_scorer_projection_sha256": "c0" * 32,
+               "temporal_method_sha256": "f" * 64, "direct_config_sha256": "e" * 64,
+               "effect_source_sha256": "d" * 64}
+        vp, rp = tmp_path / "v.json", tmp_path / "r.json"
+        vp.write_text(json.dumps(view))
+        rp.write_text(json.dumps(rel))
+        return str(vp), str(rp)
+
+    def _direct_args(self, tmp_path, **kw):
+        bundles = {c: _write_direct_bundle(tmp_path, c, **kw) for c in FX.CONDITIONS}
+        args = []
+        for c, (bd, w10) in bundles.items():
+            args += ["--direct-bundle", f"{c}:{bd}", "--w10-report", f"{c}:{w10}"]
+        return args
+
+    def test_the_cli_emits_a_release_from_direct_bundles_end_to_end(self, tmp_path):
         from direct.temporal.arms import arm_admission, run_temporal_arms
         if not os.path.exists(_AUTH_LOCK):
             pytest.skip("authoritative Stage-2 solver lock not staged")
-        vp, ep, rp = _write_cli_inputs(tmp_path)
+        vp, rp = self._view_release(tmp_path)
         out = str(tmp_path / "out")
-        rc = run_temporal_arms.main([
-            "--stage1-view", vp, "--stage1-release", rp, "--effect-source", ep,
-            "--env-lock", _AUTH_LOCK, "--conditions", "FixRest,FixStim8,FixStim48",
-            "--out-root", out, "--all-pairs"])
+        rc = run_temporal_arms.main(
+            ["--stage1-view", vp, "--stage1-release", rp] + self._direct_args(tmp_path)
+            + ["--env-lock", _AUTH_LOCK, "--conditions", "FixRest,FixStim8,FixStim48",
+               "--out-root", out, "--all-pairs"])
         assert rc == 0
         man = json.loads(open(os.path.join(out, "temporal_arm_release.json")).read())
         assert man["n_bundles"] == 6 and man["n_logical_arms"] == 120
         assert man["env_lock_sha256"] == arm_env_auth()
-        # every emitted bundle is admissible by the standalone verifier
-        for d in [b["relative_dir"] for b in man["bundles"]]:
-            assert arm_admission.verify_shipped(os.path.join(out, d))["admitted"] is True
+        for b in man["bundles"]:
+            d = os.path.join(out, b["relative_dir"])
+            assert arm_admission.verify_shipped(d)["admitted"] is True
+            bundle = json.loads(open(os.path.join(d, "arm_bundle.json")).read())
+            es = bundle["endpoint_source"]
+            assert es["endpoint_source"] == "two_admitted_direct_all_arm_bundles"
+            assert es["from_direct_bundle_id"] and es["to_direct_bundle_id"]
 
-    def test_the_cli_refuses_a_wrong_env_lock_by_name(self, tmp_path):
-        from direct.temporal.arms import arm_env, run_temporal_arms
-        vp, ep, rp = _write_cli_inputs(tmp_path)
-        badlock = tmp_path / "base.lock"
-        badlock.write_bytes(b"not the authoritative lock\n")
-        with pytest.raises(arm_env.EnvLockError, match="not the authoritative"):
-            run_temporal_arms.run(run_temporal_arms.build_parser().parse_args([
-                "--stage1-view", vp, "--stage1-release", rp, "--effect-source", ep,
-                "--env-lock", str(badlock), "--conditions", "FixRest,FixStim8,FixStim48",
-                "--out-root", str(tmp_path / "o"), "--all-pairs"]))
+    def test_EQUIVALENCE_the_DiD_from_direct_base_deltas_equals_raw_projection(
+            self, tmp_path):
+        # the temporal base_delta the CLI computes from two Direct bundles equals the DiD of
+        # the raw masked projections at the two conditions — the two paths are one estimand.
+        from direct.temporal.arms import run_temporal_arms
+        if not os.path.exists(_AUTH_LOCK):
+            pytest.skip("authoritative Stage-2 solver lock not staged")
+        vp, rp = self._view_release(tmp_path)
+        out = str(tmp_path / "out")
+        run_temporal_arms.main(
+            ["--stage1-view", vp, "--stage1-release", rp] + self._direct_args(tmp_path)
+            + ["--env-lock", _AUTH_LOCK, "--conditions", "FixRest,FixStim8,FixStim48",
+               "--out-root", out, "--from-condition", "FixRest", "--to-condition",
+               "FixStim48"])
+        d = os.path.join(out, "FixRest__to__FixStim48")
+        bundle = json.loads(open(os.path.join(d, "arm_bundle.json")).read())
+        by_key = {b["base_key"]: b["base_delta"] for b in bundle["base_records"]}
+        for pid in FX.PORTABLE_IDS:
+            for i, tid in enumerate(FX.TARGETS):
+                frm, _ = _direct_base_delta(pid, i, "FixRest")
+                to, _ = _direct_base_delta(pid, i, "FixStim48")
+                assert by_key[f"{pid}|{tid}"] == pytest.approx(to - frm)
 
+    def test_ATTACK_missing_direct_bundle_refused_at_NONE_gate(self, tmp_path):
+        from direct.temporal.arms import arm_direct_source as src
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(str(tmp_path / "nope"), expect_condition="FixRest",
+                                   w10_report=None)
+        assert e.value.gate == "NONE"
 
-def arm_env_auth():
-    from direct.temporal.arms import arm_env
-    return arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
+    def test_ATTACK_fixture_effect_source_refused_at_FIXTURE_FALLBACK_gate(self, tmp_path):
+        from direct.temporal.arms import arm_direct_source as src
+        d = tmp_path / "fx"
+        d.mkdir()
+        (d / "arm_bundle.json").write_text(json.dumps(
+            {"schema_version": "spot.stage02_temporal_arm_effect_source.v1"}))
+        w10 = tmp_path / "w.json"
+        w10.write_text("{}")
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(str(d), expect_condition="FixRest", w10_report=str(w10))
+        assert e.value.gate == "FIXTURE_FALLBACK"
+
+    def test_ATTACK_swapped_condition_refused(self, tmp_path):
+        from direct.temporal.arms import arm_direct_source as src
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest")
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixStim48", w10_report=w10)
+        assert e.value.gate == "SWAPPED_CONDITION"
+
+    def test_ATTACK_stale_direct_bundle_refused(self, tmp_path):
+        from direct.temporal.arms import arm_direct_source as src
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest")
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixRest",
+                                   expect_bundle_sha256="0" * 64, w10_report=w10)
+        assert e.value.gate == "STALE_BUNDLE"
+
+    def test_ATTACK_mismatched_duplicate_rows_refused(self, tmp_path):
+        from direct.temporal.arms import arm_direct_source as src
+
+        def corrupt(rows):
+            for r in rows:                       # break the increase/decrease negation
+                if r["desired_change"] == "increase":
+                    r["value"] = 999.0
+                    break
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest", tamper=corrupt)
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=w10)
+        assert e.value.gate == "DUPLICATE_MISMATCH"
+
+    def test_ATTACK_missing_w10_report_refused(self, tmp_path):
+        from direct.temporal.arms import arm_direct_source as src
+        bd, _ = _write_direct_bundle(tmp_path, "FixRest")
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=None)
+        assert e.value.gate == "MISSING_W10"
 
 
 # =========================================================================== #

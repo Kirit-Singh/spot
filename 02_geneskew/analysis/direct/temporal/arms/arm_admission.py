@@ -128,8 +128,8 @@ BUNDLE_KEYS = frozenset({
     "bundle_id", "from_condition", "to_condition",
     "n_programs", "n_desired_changes", "n_arms", "n_targets", "n_base_records",
     "arm_keys", "base_records", "arms", "program_admission", "stage1_binding", "estimand",
-    "perturbation", "method", "code_identity", "env_lock", "preflight_ref",
-    "external_admission_requirement", "bundle_is_pair_agnostic",
+    "perturbation", "method", "code_identity", "env_lock", "endpoint_source",
+    "preflight_ref", "external_admission_requirement", "bundle_is_pair_agnostic",
     "bundle_carries_role_or_pole",
 })
 
