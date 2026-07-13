@@ -263,29 +263,75 @@ def verify_run_identity(cfg: Cfg):
 
 
 # ---- hash-bound receipts ----------------------------------------------------------------
+def _receipt_path(cfg, name):
+    return os.path.join(cfg.state_dir, f"{name}.receipt.json")
+
+
+def _hash_path(p):
+    return ("tree:" + tree_sha256(p)) if os.path.isdir(p) else ("file:" + file_sha256(p))
+
+
 def _write_receipt(cfg, name, *, argv, inputs, outputs, prereqs, extra=None):
+    """Immutable unit receipt binding the FULL executed argv, complete input/output hashes, and the
+    EXACT prerequisite set — every declared prerequisite receipt MUST already exist (none is
+    silently omitted). Write-once: an identical rewrite is a no-op; a divergent one refuses."""
     if DRY:
         return
+    rp = _receipt_path(cfg, name)
+    for q in prereqs:
+        if not os.path.isfile(_receipt_path(cfg, q)):
+            raise SchedulerError(f"receipt {name}: required prerequisite receipt {q!r} is missing")
     rec = {
         "unit": name,
         "run_identity_sha256": json.load(open(identity_path(cfg)))["run_identity_sha256"],
-        "argv_sha256": content_sha256(argv),
-        "input_sha256": {p: ("tree:" + tree_sha256(p) if os.path.isdir(p) else "file:" + file_sha256(p))
-                         for p in inputs if os.path.exists(p)},
-        "output_sha256": {p: ("tree:" + tree_sha256(p) if os.path.isdir(p) else "file:" + file_sha256(p))
-                          for p in outputs if os.path.exists(p)},
-        "prerequisite_receipt_sha256": {q: file_sha256(_receipt_path(cfg, q))
-                                        for q in prereqs if os.path.isfile(_receipt_path(cfg, q))},
+        "argv": list(argv),                                  # the FULL executed argv, verbatim
+        "argv_sha256": content_sha256(list(argv)),
+        "input_sha256": {p: _hash_path(p) for p in inputs if os.path.exists(p)},
+        "output_sha256": {p: _hash_path(p) for p in outputs if os.path.exists(p)},
+        "prerequisite_receipt_sha256": {q: file_sha256(_receipt_path(cfg, q)) for q in prereqs},
     }
     if extra:
         rec.update(extra)
     rec["receipt_sha256"] = content_sha256(rec)
-    with open(_receipt_path(cfg, name), "w") as fh:
+    if os.path.isfile(rp):
+        if json.load(open(rp)).get("receipt_sha256") != rec["receipt_sha256"]:
+            raise SchedulerError(f"receipt {name} already exists and DIFFERS — receipts are immutable")
+        return
+    with open(rp, "w") as fh:
         json.dump(rec, fh, sort_keys=True, indent=2)
 
 
-def _receipt_path(cfg, name):
-    return os.path.join(cfg.state_dir, f"{name}.receipt.json")
+def verify_receipt(cfg, name):
+    """Before a dependent/resumed phase trusts a unit: self-hash integrity, run-identity binding,
+    its bound OUTPUTS still match on disk (post-receipt mutation), and its prerequisite receipts
+    exist + hash-match."""
+    if DRY:
+        return True
+    rp = _receipt_path(cfg, name)
+    if not os.path.isfile(rp):
+        raise SchedulerError(f"verify_receipt: unit receipt {name!r} is missing")
+    rec = json.load(open(rp))
+    if content_sha256({k: v for k, v in rec.items() if k != "receipt_sha256"}) != rec.get("receipt_sha256"):
+        raise SchedulerError(f"verify_receipt: receipt {name!r} is tampered (self-hash mismatch)")
+    if rec.get("run_identity_sha256") != json.load(open(identity_path(cfg)))["run_identity_sha256"]:
+        raise SchedulerError(f"verify_receipt: receipt {name!r} was written under a different run identity")
+    for p, h in rec.get("output_sha256", {}).items():
+        if not os.path.exists(p) or _hash_path(p) != h:
+            raise SchedulerError(f"verify_receipt: output {p!r} of unit {name!r} was mutated/removed after its receipt")
+    for q, h in rec.get("prerequisite_receipt_sha256", {}).items():
+        qp = _receipt_path(cfg, q)
+        if not os.path.isfile(qp) or file_sha256(qp) != h:
+            raise SchedulerError(f"verify_receipt: prerequisite receipt {q!r} of unit {name!r} missing/mutated")
+    return True
+
+
+def verify_all_receipts(cfg):
+    """Resume gate: verify EVERY prior unit receipt before any dependent phase reads it."""
+    if DRY or not os.path.isdir(cfg.state_dir):
+        return
+    for fn in sorted(os.listdir(cfg.state_dir)):
+        if fn.endswith(".receipt.json"):
+            verify_receipt(cfg, fn[:-len(".receipt.json")])
 
 
 # ---- unit runner ------------------------------------------------------------------------
@@ -604,6 +650,7 @@ def main(argv=None):
     cfg = Cfg()
     if args.phase != "preflight" and not DRY and os.path.isfile(identity_path(cfg)):
         verify_run_identity(cfg)     # every resume rehashes identity first
+        verify_all_receipts(cfg)     # then verify every prior receipt (outputs unmutated, prereqs intact)
     if args.phase == "preflight":
         phaseA_preflight(cfg)
     elif args.phase == "direct":

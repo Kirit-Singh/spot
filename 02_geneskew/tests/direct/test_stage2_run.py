@@ -165,6 +165,37 @@ def test_preflight_refuses_rebaseline_in_same_run_root(tmp_path):
     assert "no rebaseline" in res.stderr.lower() or "different run identity" in res.stderr.lower()
 
 
+def test_receipt_hardening(tmp_path, monkeypatch):
+    """Receipts bind the FULL argv, refuse a missing prerequisite, and verify_receipt refuses a
+    post-receipt output mutation."""
+    import sys as _sys, json as _j
+    import pytest
+    _sys.path.insert(0, ANALYSIS)
+    from direct import stage2_run as S
+    sd = tmp_path / "state"; sd.mkdir()
+    idp = sd / "run_identity.json"
+    idp.write_text(_j.dumps({"run_identity_sha256": "RID"}))
+    monkeypatch.setattr(S, "identity_path", lambda cfg: str(idp))
+    monkeypatch.setattr(S, "DRY", False)
+
+    class C:
+        state_dir = str(sd)
+
+    out = tmp_path / "out.txt"; out.write_text("original")
+    S._write_receipt(C, "U1", argv=["python", "-m", "direct.run_arms", "--condition", "Rest"],
+                     inputs=[], outputs=[str(out)], prereqs=[])
+    rec = _j.loads((sd / "U1.receipt.json").read_text())
+    assert rec["argv"] == ["python", "-m", "direct.run_arms", "--condition", "Rest"]   # FULL argv
+    assert S.verify_receipt(C, "U1") is True
+
+    out.write_text("MUTATED")                      # post-receipt output mutation
+    with pytest.raises(S.SchedulerError):
+        S.verify_receipt(C, "U1")
+
+    with pytest.raises(S.SchedulerError):          # missing prerequisite is never silently omitted
+        S._write_receipt(C, "U2", argv=["x"], inputs=[], outputs=[], prereqs=["NOPE"])
+
+
 def test_preflight_refuses_over_a_tampered_stored_body(tmp_path):
     """Explicit re-preflight over a body-tampered stored manifest (declared scalar kept) must
     REFUSE — phaseA re-derives the stored self-hash, not just a scalar compare."""
