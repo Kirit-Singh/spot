@@ -450,7 +450,11 @@ def to_source_record(record: AcquisitionRecord) -> SourceRecord:
     else:
         status = AcquisitionStatus.NOT_ACQUIRED
 
-    access_date = (record.accessed_at_utc or "")[:10] or record.access_date or "1970-01-01"
+    # NOT `1970-01-01`. An epoch placeholder is not a missing value: it is a FABRICATED provenance
+    # claim that reads as a real access date, and it reached the release's source registry — which
+    # is exactly what the Methods & provenance drawer displays to a reader. `SourceRecord.access_date`
+    # is Optional precisely so an unknown time can be ABSENT rather than invented.
+    access_date = (record.accessed_at_utc or "")[:10] or record.access_date or None
     return SourceRecord(
         source_record_id=record.acquisition_record_id,
         source_type=record.source_type,

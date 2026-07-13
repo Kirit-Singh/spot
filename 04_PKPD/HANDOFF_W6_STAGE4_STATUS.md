@@ -41,7 +41,7 @@ branch** and is not applied.
 
 ### ⚠ Worth knowing for future merges
 
-Git **auto-merged `row_flatten.py` to W9's version with no conflict.** 318 tests failed instantly,
+Git **auto-merged `row_flatten.py` to W9's version with no conflict.** the suite failed instantly and en masse,
 which is the only reason it was visible. Conflict markers appeared in 14 files — and the one that
 mattered most was not among them. A silent auto-merge of the file that flattens records into parquet
 rows is exactly how a provenance field vanishes with nobody resolving anything.

@@ -229,6 +229,20 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
                         "warnings": mpo.warnings,
                     },
                     "transporters": cr.transporters,
+                    # POTENCY CONTEXT. The exposure lane cites `potency_id`, so a reader could see
+                    # WHICH potency underwrote a margin but not WHAT it was — the value, the metric,
+                    # the target it was measured against, or the biological context it came from.
+                    # A margin whose denominator cannot be inspected is an unbound ratio.
+                    #
+                    # Direction-aware, and the direction is NOT collapsed: `relation` distinguishes a
+                    # point estimate (`=`) from an assay that ran out of range (`>`/`<`), and only an
+                    # equality is a magnitude anything may be divided by.
+                    "potency": _potency_facet(inputs, c.candidate_id),
+                    # EVIDENCE AVAILABILITY. What was actually looked at, per facet. `not_evaluated`
+                    # is a first-class answer and it is stated, never left as an empty list a reader
+                    # might mistake for a negative result. Absence of an exposure measurement is not
+                    # evidence of impermeability, and this is where the artifact says so.
+                    "evidence_availability": _availability_facet(inputs, cr, c.candidate_id),
                     "exposure": [
                         {
                             "measurement_id": m.measurement_id,
@@ -318,6 +332,80 @@ def build_scorecards(scorecard_set_id: str, inputs: Stage4Inputs, result: Stage4
     }
     assert_no_forbidden_fields(doc, method.forbidden_fields, "scorecards.json")
     return doc
+
+
+# The seven facets a Stage-4 candidate must carry, so a reader (and a UI) can see WHAT was
+# established and WHAT was never looked at. Enumerated, because a facet nobody named is a facet
+# nobody notices is missing.
+CANDIDATE_FACETS = (
+    "compound_identity",       # active_moiety + compound_ids
+    "target_action",           # target + mechanism + direction_compatibility
+    "potency_context",         # potency: metric, value, relation, binding state, biological context
+    "brain_exposure",          # cns_mpo + exposure + nebpi
+    "transporter_liability",   # transporters
+    "clinical_label_safety",   # safety
+    "evidence_availability",   # what was looked at, and what was not
+)
+
+
+def _potency_facet(inputs: Stage4Inputs, candidate_id: str) -> dict[str, Any]:
+    """The potency rows this candidate's margins rest on, inspectable rather than merely cited."""
+    rows = [p for p in inputs.potencies if p.candidate_id == candidate_id]
+    links = {link.potency_id: link for link in inputs.potency_context_links}
+    # `relation` is a v2 COLUMN. At v1 it is not in the emitted table, so putting it in the document
+    # would be a value bound by nothing — exactly what `no_unbound_prose` exists to catch.
+    v2 = inputs.contract_version is ContractVersion.V2
+
+    return {
+        "state": "observed" if rows else "not_evaluated",
+        "rows": [
+            {
+                "potency_id": p.potency_id,
+                "metric": p.metric,
+                "value_source_string": p.value_source_string,
+                "units": p.units,
+                # `=` is a magnitude. `>` / `<` / `~` are the source saying the assay ran out of
+                # range, and only an equality may be divided by.
+                **({"relation": getattr(p, "relation", None)} if v2 else {}),
+                "binding_state": p.binding_state,
+                "biological_context": p.biological_context,
+                "target_context": getattr(p, "target_context", None),
+                # A link is the ONLY way a potency measured in one tumour context may be used in
+                # another, and it rests on acquired bytes like any other evidence row.
+                "context_link_id": getattr(links.get(p.potency_id), "link_id", None),
+                "source_record_id": p.provenance.source_record_id,
+                "raw_response_sha256": p.provenance.raw_response_sha256,
+            }
+            for p in sorted(rows, key=lambda r: r.potency_id)
+        ],
+        # reason_CODE only. A free sentence in the document is bound by nothing — the codebase's
+        # existing convention (see `production_eligible`), and `no_unbound_prose` enforces it. The
+        # sentence lives in METHODS.md: no potency was acquired, so a margin has no denominator, and
+        # one is not invented.
+        "not_evaluated_reason_code": None if rows else "no_potency_acquired",
+    }
+
+
+def _availability_facet(inputs: Stage4Inputs, cr: Any, candidate_id: str) -> dict[str, Any]:
+    """What was looked at, per facet. An empty lane STATES its emptiness."""
+    def _state(rows: Any) -> str:
+        return "observed" if rows else "not_evaluated"
+
+    return {
+        "compound_identity": "observed",
+        "target_action": "observed",
+        "potency_context": _state([p for p in inputs.potencies if p.candidate_id == candidate_id]),
+        "brain_exposure": _state(cr.exposure),
+        "transporter_liability": _state(
+            [t for t in inputs.transporters if t.candidate_id == candidate_id]),
+        "clinical_label_safety": _state(cr.safety_rows),
+        "nebpi_classification": _state([n for n in cr.nebpi if n.nebpi_class]),
+        # The guard is a METHOD sentence, not a document one: `not_evaluated` means nobody looked,
+        # and it is NOT a negative result. Absence of an exposure measurement is not evidence of
+        # impermeability; absence of a labelled finding is not evidence of safety. It lives in
+        # METHODS.md and in the method's interpretation guards, both of which ARE bound.
+        "guard_code": "not_evaluated_is_not_a_negative_result",
+    }
 
 
 def _stage3_upstream(inputs: Stage4Inputs, method: MethodBundle) -> dict[str, Any]:
@@ -478,6 +566,32 @@ def emit(inputs: Stage4Inputs, result: Stage4Result, method: MethodBundle,
             },
             "evidence_inputs_sha256": evidence_inputs_digest(inputs.evidence_lanes()),
             "environment": env,
+            # THE METHODS & PROVENANCE DRAWER. Everything a reader needs to re-run this release and
+            # to see what every displayed number rests on — assembled here rather than left for a UI
+            # to reconstruct, because a drawer that has to guess is a drawer that guesses wrong.
+            #
+            # `created_at` is the emission time and is already excluded from the identity: a release
+            # re-emitted from the same inputs has the same scorecard_set_id and a different clock.
+            "reproduce": {
+                "command": [
+                    "python -m analysis.run_acquire     --stage3-annotation-bundle <S3> "
+                    "--run-root <R>",
+                    "python -m analysis.run_materialize --stage3-annotation-bundle <S3> "
+                    "--run-root <R> --out <B>",
+                    "python -m verifier.verify_bundle   <B> --run-root <R>",
+                    "python -m analysis.run_stage4      --stage3-annotation-bundle <S3> "
+                    "--evidence-bundle <B> --outputs-root outputs --require-external-verifier",
+                    f"python -m verifier.verify_stage4   --release outputs/{scorecard_set_id} "
+                    "--method method",
+                ],
+                "verify_sources": "python -m analysis.source_verify --cache-root $SPOT_SOURCE_CACHE",
+                "raw_bytes_are_not_bundled": (
+                    "Raw public responses are cached OUTSIDE the tree under the run root, addressed "
+                    "by SHA-256. Every source below carries its locator, its release and its hash: "
+                    "re-fetch and re-hash, do not trust this file."
+                ),
+                "scorecard_set_id_excludes_the_clock": True,
+            },
             "float_rules": {
                 "identity": "exact decimal strings (quantity.py); floats are rejected in identity content",
                 "publication_rounding": "ROUND_HALF_UP (a frozen implementation rule, not a published one)",

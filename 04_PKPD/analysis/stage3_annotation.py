@@ -166,7 +166,7 @@ def _science_refs(tables: dict[str, list[dict]]) -> list[dict[str, Any]]:
     return refs
 
 
-def _source_records(rows: list[dict[str, Any]], access_date: str) -> dict[str, SourceRecord]:
+def _source_records(rows: list[dict[str, Any]], access_date: Optional[str]) -> dict[str, SourceRecord]:
     """Stage-3's classes, carried across VERBATIM. `not_acquired` stays `not_acquired`."""
     out: dict[str, SourceRecord] = {}
     for r in rows:
@@ -194,13 +194,17 @@ def _source_records(rows: list[dict[str, Any]], access_date: str) -> dict[str, S
     return out
 
 
-def _access_date(doc: dict[str, Any]) -> str:
+def _access_date(doc: dict[str, Any]) -> Optional[str]:
     acq = doc.get("acquisition") or {}
     for key in ("acquired_at", "access_date", "acquisition_date"):
         v = acq.get(key)
         if isinstance(v, str) and len(v) >= 10:
             return v[:10]
-    return "1970-01-01"
+    # NOT `1970-01-01`. An epoch placeholder is not a missing value: it is a FABRICATED provenance
+    # claim that reads as a real access date, and it reached the release's source registry — which
+    # is exactly what the Methods & provenance drawer displays to a reader. `SourceRecord.access_date`
+    # is Optional precisely so an unknown time can be ABSENT rather than invented.
+    return None
 
 
 def adapt_annotation_bundle(bundle_dir: str, *,

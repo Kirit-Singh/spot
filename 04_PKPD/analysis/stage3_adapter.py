@@ -137,7 +137,12 @@ def _source_records(doc: dict[str, Any]) -> dict[str, SourceRecord]:
     `acquisition_status` is carried across untouched: a Stage-3 `synthetic_fixture` is a
     Stage-4 `synthetic_fixture`, and there is no code path that upgrades it.
     """
-    access_date = (doc.get("created_at") or "1970-01-01T00:00:00Z")[:10]
+    # NOT `1970-01-01`. An epoch placeholder is not a missing value: it is a FABRICATED provenance
+    # claim that reads as a real access date, and it reached the release's source registry — which
+    # is exactly what the Methods & provenance drawer displays to a reader. `SourceRecord.access_date`
+    # is Optional precisely so an unknown time can be ABSENT rather than invented.
+    created = doc.get("created_at")
+    access_date = created[:10] if isinstance(created, str) and len(created) >= 10 else None
     out: dict[str, SourceRecord] = {}
     for r in doc["source_records"]:
         status = r["acquisition_status"]

@@ -249,8 +249,25 @@ def _reconstructed_transforms(out_dir: str, method_dir: str) -> set[str]:
     return out
 
 
+# The derived evidence-state vocabulary. The verifier RE-DERIVES each of these from whether the
+# corresponding table has rows — so they are reconstructed values, not free prose. Enumerating them
+# here (rather than blessing whatever the generator wrote) keeps the check a check: a state outside
+# this vocabulary is still unbound.
+DERIVED_EVIDENCE_STATES = ("observed", "not_evaluated")
+# Reason CODES, not sentences. The codes are reconstructed; their sentences live in
+# METHODS.md, which is where a sentence bound by nothing belongs.
+DERIVED_REASON_CODES = ("no_potency_acquired",
+                        "not_evaluated_is_not_a_negative_result")
+
+
+def derived_state_strings(out_dir: str) -> set[str]:
+    """The evidence-availability vocabulary, re-derivable from the emitted tables."""
+    return set(DERIVED_EVIDENCE_STATES) | set(DERIVED_REASON_CODES)
+
+
 def bound_strings(out_dir: str, method_dir: str, version: str = "v1") -> set[str]:
-    return (method_strings(method_dir)
+    return (derived_state_strings(out_dir)
+            | method_strings(method_dir)
             | input_cell_strings(out_dir, version)
             | identity_strings(out_dir)
             | derived_cell_strings(out_dir)
