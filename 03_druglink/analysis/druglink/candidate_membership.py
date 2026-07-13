@@ -1,57 +1,63 @@
-"""A candidate may be DISPLAYED for a question only if it has evidence IN THAT QUESTION'S ARMS.
+"""A candidate may be SHOWN for a question only if its evidence lives in that question's arms.
 
-THE DEFECT THIS CLOSES
-----------------------
-The Stage-3 store is global and selection-independent, and it must stay that way. But a consumer
-could load ANY candidate out of it and render it under ANY selection, because nothing made the
-consumer PROVE the candidate has evidence in the arms that selection actually names.
+THE DEFECT. The Stage-3 store is global and selection-independent, and must stay so. But nothing
+forced a consumer to PROVE that a candidate it loaded has evidence in the arms the active selection
+actually names. A real drug — real edges, real provenance, every hash checking out — could be
+rendered as the answer to a question it has no evidence in. Nothing crashes, nothing fails a schema:
+a TRUE FACT UNDER A FALSE HEADING, where every check it passes makes it more convincing.
 
-Nothing crashes. Nothing fails a schema. The drug is real, its edges are real, its provenance is
-real — and it is being shown as an answer to a question it has no evidence in. That is the worst
-kind of wrong this pipeline can produce: not a broken number, but a true fact placed under a false
-heading, where every check it passes makes it more convincing.
+THE REAL FIELDS. This module was first written against fields I assumed and it was dangerously
+wrong — the audit caught it. The shapes below are the ones the v2 view actually publishes, read off
+a real artifact, not inferred:
 
-WHAT IS RE-DERIVED, AND WHAT IS NEVER TRUSTED
----------------------------------------------
-A candidate row already PUBLISHES its typed memberships (``arm_keys``,
-``observed_perturbation_arm_keys``, ``inverse_direction_hypothesis_arm_keys``,
-``pathway_hypothesis_arm_keys``, ``opposed_arm_keys``, ``unresolved_arm_keys``). This module does
-NOT read them as evidence. It RE-DERIVES all of them from the rows that actually carry the
-evidence — ``target_drug_edges`` and ``arm_summaries``, and for pathway context the matched
-``pathway_context`` rows — and then REQUIRES the published lists to equal what it re-derived.
+  selected_arms.gene_arm_keys              list[str]                 the gene arms the question names
+  selected_arms.pathway_context_arm_keys   {role: list[str]}         pathway CONTEXT arms, per role
+  candidate.arm_keys                       list[str]  GLOBAL         every arm the candidate has an
+                                                                     edge in, across the whole store
+  candidate.view_arm_keys_by_origin        {origin: list[str]}       the arms THIS VIEW shows it in
 
-A published list a consumer trusts is a claim. A list re-derived from the evidence is a fact. The
-difference is the whole point: a candidate whose published `arm_keys` were widened by one entry
-would otherwise be displayable under a question it never touched.
+`arm_keys` is GLOBAL — in the published fixture it holds 180 arms while the view shows 2. Reading it
+as the view's arms (as my first version did, by falling back to it) makes every candidate look like
+it carries 178 foreign arms, and REJECTS EXACTLY THE CANDIDATES THE STORE EXISTS TO REUSE. A check
+that fires on every honest input is not a check; it is an outage.
 
-EXACT STRING EQUALITY. NOTHING ELSE.
-------------------------------------
-An arm key is ``lane|program_id|desired_change|context``. Membership is decided by EXACT equality
-on the WHOLE key.
+THE INVARIANT, verified against the published view:
 
-  * NEVER a prefix match — the same program and the same direction at two different times differ
-    ONLY in the context tail. A prefix match silently equates them, and the user is shown a drug
-    from Rest under a question about Stim48hr.
-  * NEVER a display name — two arms can share a label and be different arms. The full key is the
-    identity; a name is not a binding.
-  * NEVER an inferred/normalised key — if the two strings differ, they are two arms.
+    flatten(view_arm_keys_by_origin)  ==  arm_keys  ∩  selected gene arms
 
-PATHWAY. Pathway context arms are matched EXACTLY like gene arms, and pathway membership never
-promotes a candidate into a question: it is context on a MEASURED edge. Zero pathway output is a
-FAIL-CLOSED STATE pending W18, not a result — no count in this module encodes an expectation of it.
+It is decidable from the VIEW ALONE, which is what a static browser has. The producer/verifier side
+additionally RE-DERIVES the membership from the rows that carry the evidence (`target_drug_edges`,
+`arm_summaries`, and exactly-matched `pathway_context`) and requires the published lists to equal it:
+a published list a consumer trusts is a CLAIM; a list re-derived from the evidence is a FACT.
+
+EXACT STRING EQUALITY on the WHOLE arm key. Never a prefix — `direct|X|decrease|Rest` and
+`…|Stim48hr` differ ONLY in the context tail, and a prefix match shows a drug from one condition
+under a question about another. Never a display name — two arms can share a label; the full key is
+the identity, and a name is not a binding.
+
+PATHWAY CONTEXTUALISES, IT NEVER PROMOTES. A pathway context arm never grants a candidate membership
+of a question. Zero pathway output is a FAIL-CLOSED STATE pending W18 — not a result — and no count
+here encodes an expectation of it.
 """
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
 
+from . import direction as dr
 from . import workflow as wf
-from .hashing import canonical_json, content_hash
 
 MEMBERSHIP_SCHEMA = "spot.stage03_candidate_membership.v1"
 MEMBERSHIP_RULE_ID = "spot.stage03.candidate_membership.exact_arm_key.v1"
+MEMBERSHIP_VERIFIER_ID = "spot.stage03.candidate_membership.verifier.v1"
 
-# The typed membership lists a candidate row publishes, and the evidence state each is derived
-# from. Names are the EXISTING v2 ones — the stale v1 `*_arms` names are NOT revived.
+# TWO DOMAINS, NEVER MIXED. Membership is decided by the GENE origins; the pathway origin is
+# CONTEXT and is checked against the selection's context arms alone.
+GENE_ORIGINS: frozenset[str] = frozenset({dr.ORIGIN_DIRECT_TARGET,
+                                          dr.ORIGIN_TEMPORAL_CROSS_TIME})
+PATHWAY_ORIGIN: str = dr.ORIGIN_ENDPOINT_PATHWAY
+
+# The typed membership lists a candidate publishes, and the arm_summaries state each is derived
+# from. EXISTING v2 names — the stale v1 `*_arms` names are NOT revived.
 MEMBERSHIP_FOR_STATE: dict[str, str] = {
     "observed_perturbation_arm_keys": wf.OBSERVED_PERTURBATION,
     "inverse_direction_hypothesis_arm_keys": wf.INVERSE_DIRECTION_HYPOTHESIS,
@@ -65,12 +71,18 @@ ALL_MEMBERSHIP_FIELDS: tuple[str, ...] = ("arm_keys",) + TYPED_MEMBERSHIP_FIELDS
 GATE_MEMBERSHIP_NOT_REDERIVED = \
     "a_candidates_published_arm_membership_is_not_what_the_evidence_produces"
 GATE_CANDIDATE_NOT_IN_SELECTION = \
-    "a_candidate_is_displayed_for_a_selection_it_has_no_evidence_in"
-GATE_FOREIGN_ARM = "a_displayed_candidate_carries_an_arm_the_selection_does_not_name"
-GATE_ARM_DROPPED = "a_displayed_candidate_lost_an_arm_the_evidence_gives_it"
-GATE_SELECTION_IDENTITY = "the_view_does_not_carry_the_selection_identity_it_claims"
-GATE_NOT_EXACT_KEY = "an_arm_key_was_matched_by_something_other_than_exact_string_equality"
-GATE_MEMBERSHIP_HASH = "the_candidate_membership_projection_is_not_the_one_the_view_binds"
+    "a_candidate_is_shown_for_a_selection_it_has_no_evidence_in"
+GATE_FOREIGN_ARM = "a_shown_candidate_carries_an_arm_the_selection_does_not_name"
+GATE_ARM_DROPPED = "a_shown_candidate_lost_an_arm_the_selection_gives_it"
+GATE_NO_SELECTED_ARMS = "the_view_names_no_selected_arm_keys_so_nothing_can_belong_to_it"
+GATE_SUMMARY_WITHOUT_AN_EDGE = \
+    "an_arm_summary_claims_an_arm_no_target_drug_edge_supports"
+GATE_FOREIGN_PATHWAY_CONTEXT = \
+    "a_shown_candidate_carries_pathway_context_the_selection_does_not_name"
+GATE_ROLE_NOT_THE_SELECTIONS = \
+    "a_shown_candidates_roles_are_not_the_roles_this_selection_assigns_its_arms"
+GATE_ENDPOINTS_NOT_THE_SELECTIONS = \
+    "the_selections_ordered_endpoints_are_not_the_ordered_contexts_of_its_arms"
 
 
 class MembershipError(ValueError):
@@ -85,33 +97,243 @@ def _refuse(gate: str, message: str) -> None:
     raise MembershipError(gate, message)
 
 
+def _keys(values: Iterable[Any]) -> frozenset[str]:
+    return frozenset(str(v) for v in values)
+
+
 # --------------------------------------------------------------------------- #
-# 1. RE-DERIVE. The evidence rows decide; the candidate's own claim is checked against them.
+# The REAL shapes. Read from the artifact; never guessed, never defaulted.
+# --------------------------------------------------------------------------- #
+def selected_gene_arm_keys(selected_arms: Mapping[str, Any]) -> frozenset[str]:
+    """The GENE arms the question names. These, and only these, decide membership."""
+    return _keys(selected_arms.get("gene_arm_keys") or [])
+
+
+def selected_pathway_arm_keys(selected_arms: Mapping[str, Any]) -> frozenset[str]:
+    """The pathway CONTEXT arms, flattened across roles. Context — never membership."""
+    per_role = selected_arms.get("pathway_context_arm_keys") or {}
+    return _keys(k for keys in per_role.values() for k in (keys or []))
+
+
+def shown_arm_keys(candidate: Mapping[str, Any]) -> frozenset[str]:
+    """The arms THIS VIEW shows the candidate in — `view_arm_keys_by_origin`, flattened.
+
+    NOT `arm_keys`: that is the candidate's GLOBAL membership across the whole store, and reading
+    it here is what made the first version reject every reusable candidate.
+    """
+    by_origin = candidate.get("view_arm_keys_by_origin") or {}
+    return _keys(k for keys in by_origin.values() for k in (keys or []))
+
+
+def global_arm_keys(candidate: Mapping[str, Any]) -> frozenset[str]:
+    return _keys(candidate.get("arm_keys") or [])
+
+
+# --------------------------------------------------------------------------- #
+# 1. RE-DERIVE FROM THE VIEW'S OWN EVIDENCE ROWS. The candidate's claims are what is CHECKED.
+#
+# The view SHIPS its evidence: target_drug_edges and arm_summaries, each keyed by candidate_id +
+# arm_key + origin_type. So a browser can re-derive membership with no store at all — and MUST.
+#
+# The first integrated version READ `arm_keys` and `view_arm_keys_by_origin` and compared them to
+# each other. Both are the candidate's OWN CLAIMS. A probe deleted every edge and summary for a
+# shown candidate and the gate still admitted its two claimed arms — while the published vocabulary
+# said membership was "rederived from evidence, never read from the candidate". That field was a
+# lie, and a lie in a published field is worse than no field.
+# --------------------------------------------------------------------------- #
+def _rows_for(rows: Iterable[Mapping[str, Any]], cid: str) -> list[Mapping[str, Any]]:
+    return [r for r in rows if str(r.get("candidate_id")) == cid]
+
+
+def derive_from_view(view: Mapping[str, Any], cid: str) -> dict[str, frozenset[str]]:
+    """What the VIEW'S OWN ROWS say this candidate's arms are. Nothing is read from the candidate."""
+    tables = view.get("tables") or {}
+    edges = _rows_for(tables.get("target_drug_edges") or [], cid)
+    summaries = _rows_for(tables.get("arm_summaries") or [], cid)
+    contexts = _rows_for(tables.get("pathway_context") or [], cid)
+
+    # MEMBERSHIP COMES FROM THE EDGES. ONLY THE EDGES.
+    #
+    # This unioned edges with arm_summaries, so deleting every real target_drug_edge while leaving
+    # ONE STALE SUMMARY still granted membership. A summary SUMMARISES an edge; it is not evidence
+    # in its own right, and it must never be able to conjure a membership the edges do not support.
+    gene = _keys(r["arm_key"] for r in edges
+                 if str(r.get("origin_type")) in GENE_ORIGINS)
+
+    # Summaries are REDUNDANT CONSISTENCY EVIDENCE: they must reconcile exactly with the edges, and
+    # a summary for an arm no edge supports is a refusal — never a promotion.
+    summary_arms = _keys(r["arm_key"] for r in summaries
+                         if str(r.get("origin_type")) in GENE_ORIGINS)
+    orphan = summary_arms - gene
+    if orphan:
+        _refuse(GATE_SUMMARY_WITHOUT_AN_EDGE,
+                f"candidate {cid!r} has arm_summaries for {sorted(orphan)!r} that NO "
+                "target_drug_edge supports. A summary summarises an edge; it can never be the "
+                "evidence that an edge does not exist.")
+
+    # PATHWAY CONTEXT IS KEYED BY TARGET, NOT BY CANDIDATE.
+    #
+    # `_rows_for(pathway_context, cid)` therefore matched NOTHING, `truth["pathway"]` was always
+    # empty, and the old `shown_pathway <= truth | selected` allowance let ANY SELECTED context arm
+    # be claimed with no supporting evidence whatever. The join is on the exact typed target:
+    #
+    #     candidate's targets := {(target_id, target_id_namespace)} from ITS OWN drug edges
+    #     pathway context     := context rows on THOSE targets, by exact pair
+    #
+    # A context row for a target this candidate has no edge in is somebody else's context.
+    targets = {(str(e.get("target_id")), str(e.get("target_id_namespace"))) for e in edges}
+    pathway = _keys(
+        c["arm_key"] for c in (view.get("tables") or {}).get("pathway_context") or []
+        if (str(c.get("target_id")), str(c.get("target_id_namespace"))) in targets)
+    return {"gene": gene, "pathway": pathway}
+
+
+def roles_of(selected_arms: Mapping[str, Any], arm_key: str) -> frozenset[str]:
+    """The role(s) the SELECTION assigns this arm. One arm may carry BOTH — that is the reusable
+    design working, not a degenerate question."""
+    arms = selected_arms.get("arms") or {}
+    return frozenset(str(a.get("role")) for a in arms.values()
+                     if str(a.get("arm_key")) == str(arm_key) and a.get("role"))
+
+
+def check_view_membership(view: Mapping[str, Any]) -> None:
+    """Every shown candidate has evidence — IN THIS VIEW'S OWN ROWS — in this question's arms.
+
+    THIS HELPER IS NEVER SUFFICIENT ADMISSION ON ITS OWN. It proves membership and coherence; it
+    does not prove the bytes. A consumer must admit the FULL hash-bound view (schema + rows + the
+    projection seal, i.e. `view_contract.validate`) and the verifier receipt that names this gate.
+    """
+    selected_arms = view.get("selected_arms") or {}
+    selected_gene = selected_gene_arm_keys(selected_arms)
+    selected_pathway = selected_pathway_arm_keys(selected_arms)
+    if not selected_gene:
+        _refuse(GATE_NO_SELECTED_ARMS,
+                "the view names no gene arm keys, so nothing it shows can be proved to belong to "
+                "it. Displaying anything here would be displaying it under no question at all")
+
+    _check_selection_coherence(view, selected_arms)
+
+    for cand in ((view.get("tables") or {}).get("candidates") or []):
+        cid = str(cand.get("candidate_id"))
+        truth = derive_from_view(view, cid)
+
+        # MEMBERSHIP is decided by GENE arms only. Pathway CONTEXTUALISES; it never promotes.
+        belongs = truth["gene"] & selected_gene
+        if not belongs:
+            _refuse(GATE_CANDIDATE_NOT_IN_SELECTION,
+                    f"candidate {cid!r} is shown for a selection naming {sorted(selected_gene)!r}, "
+                    f"but the view's OWN evidence rows give it gene arms {sorted(truth['gene'])!r}. "
+                    "The drug may be real — it is being shown as an answer to a question it has no "
+                    "evidence in.")
+
+        by_origin = cand.get("view_arm_keys_by_origin") or {}
+        shown_gene = _keys(k for o, ks in by_origin.items() if str(o) in GENE_ORIGINS
+                           for k in (ks or []))
+        shown_pathway = _keys(k for o, ks in by_origin.items() if str(o) == PATHWAY_ORIGIN
+                              for k in (ks or []))
+
+        # The candidate's CLAIMS must equal what the rows produce, in this selection.
+        if shown_gene != belongs:
+            extra, missing = sorted(shown_gene - belongs), sorted(belongs - shown_gene)
+            _refuse(GATE_FOREIGN_ARM if extra else GATE_ARM_DROPPED,
+                    f"candidate {cid!r} claims gene arms {sorted(shown_gene)!r} in this view, but "
+                    f"its evidence rows give it {sorted(belongs)!r} (extra={extra!r}, "
+                    f"missing={missing!r}). A claim a consumer trusts is not a fact.")
+
+        published = global_arm_keys(cand)
+        if not (belongs <= published):
+            _refuse(GATE_MEMBERSHIP_NOT_REDERIVED,
+                    f"candidate {cid!r} has evidence in {sorted(belongs - published)!r}, which its "
+                    "own published arm_keys do not contain")
+
+        # PATHWAY CONTEXT: a SEPARATE domain, checked against the selection's CONTEXT arms — never
+        # against the gene arms. A candidate legitimately carrying a selected Reactome/GO context
+        # arm alongside its gene arm must NOT be refused for it.
+        foreign_ctx = shown_pathway - selected_pathway
+        if foreign_ctx:
+            _refuse(GATE_FOREIGN_PATHWAY_CONTEXT,
+                    f"candidate {cid!r} is shown with pathway context arm(s) "
+                    f"{sorted(foreign_ctx)!r} that this selection does not name. Context is matched "
+                    "against pathway_context_arm_keys, exactly — never against the gene arms.")
+        # EXACT EQUALITY, not containment: the shown context must be precisely the context this
+        # candidate's own targets support, intersected with what the selection names. Containment
+        # (`<=`) let a selected-but-unsupported context arm be claimed for free.
+        derived_ctx = truth["pathway"] & selected_pathway
+        if shown_pathway != derived_ctx:
+            _refuse(GATE_FOREIGN_PATHWAY_CONTEXT,
+                    f"candidate {cid!r} shows pathway context {sorted(shown_pathway)!r}, but its "
+                    f"own targets support {sorted(derived_ctx)!r} of the context arms this "
+                    "selection names. Context is joined on the EXACT typed target, never claimed.")
+
+        # ROLES are ASSIGNED BY THE SELECTION, at join time, to the arms actually shown.
+        expected = frozenset(r for k in shown_gene for r in roles_of(selected_arms, k))
+        claimed = _keys(cand.get("view_roles") or [])
+        if claimed != expected:
+            _refuse(GATE_ROLE_NOT_THE_SELECTIONS,
+                    f"candidate {cid!r} claims roles {sorted(claimed)!r}, but the arms it is shown "
+                    f"in are assigned {sorted(expected)!r} by this selection. A role is a property "
+                    "of the QUESTION, assigned at join time — never a property the candidate "
+                    "carries with it.")
+
+
+def _check_selection_coherence(view: Mapping[str, Any],
+                               selected_arms: Mapping[str, Any]) -> None:
+    """The ORDERED endpoints of the question must be the ordered contexts of its arms.
+
+    Reversing `conditions` turns "away from A at Rest, toward B at Stim48hr" into its opposite. The
+    rows do not move, every hash still checks out — and the answer now points the other way.
+    """
+    selection = view.get("selection") or {}
+    arms = selected_arms.get("arms") or {}
+    conditions = [str(c) for c in (selection.get("conditions") or [])]
+    if not conditions or not arms:
+        return
+
+    a_ctx = (arms.get("A") or {}).get("context") or {}
+    b_ctx = (arms.get("B") or {}).get("context") or {}
+    a_end = str(a_ctx.get("from_condition") or a_ctx.get("condition") or "")
+    b_end = str(b_ctx.get("to_condition") or b_ctx.get("condition") or "")
+
+    if a_end and a_end != conditions[0]:
+        _refuse(GATE_ENDPOINTS_NOT_THE_SELECTIONS,
+                f"the selection's first condition is {conditions[0]!r}, but pole A's arm is at "
+                f"{a_end!r}. Reversing the endpoints reverses the question while every row and "
+                "every hash stays exactly as it was.")
+    if b_end and b_end != conditions[-1]:
+        _refuse(GATE_ENDPOINTS_NOT_THE_SELECTIONS,
+                f"the selection's last condition is {conditions[-1]!r}, but pole B's arm is at "
+                f"{b_end!r}.")
+
+
+def displayable(candidate: Mapping[str, Any], *, selected_arms: Mapping[str, Any]) -> bool:
+    """May this candidate be shown? Exact intersection on the GENE arms. (A convenience for a
+    consumer that has already ADMITTED the full view; it is not admission.)"""
+    return bool(global_arm_keys(candidate) & selected_gene_arm_keys(selected_arms))
+
+
+# 2. PRODUCER / VERIFIER: re-derive the membership from the rows that carry the evidence.
 # --------------------------------------------------------------------------- #
 def derive(candidate_id: str, *, edges: Sequence[Mapping[str, Any]],
            arm_summaries: Sequence[Mapping[str, Any]],
            pathway_context: Sequence[Mapping[str, Any]] = ()) -> dict[str, list[str]]:
-    """Every typed arm membership this candidate's EVIDENCE gives it. Nothing is read from the
+    """Every typed membership this candidate's EVIDENCE gives it. Nothing is read from the
     candidate row — that row is the thing being checked."""
     cid = str(candidate_id)
     mine_edges = [e for e in edges if str(e.get("candidate_id")) == cid]
     mine_summaries = [s for s in arm_summaries if str(s.get("candidate_id")) == cid]
 
     out: dict[str, list[str]] = {
-        # every arm any edge of this candidate came from
         "arm_keys": sorted({str(e["arm_key"]) for e in mine_edges}),
     }
     for field, state in sorted(MEMBERSHIP_FOR_STATE.items()):
         out[field] = sorted({str(s["arm_key"]) for s in mine_summaries
                              if str(s.get("arm_evidence_state")) == state})
 
-    # PATHWAY CONTEXT: matched by EXACT arm key, and it contextualises — it never grants a
-    # candidate membership of a question. A pathway context row whose arm the candidate has no
-    # measured edge in adds nothing here, deliberately.
+    # Pathway context is matched by EXACT arm key against arms the candidate actually has an edge
+    # in. It contextualises a MEASURED edge and never grants membership of a question.
     measured = set(out["arm_keys"])
     out["pathway_context_arm_keys"] = sorted(
-        {str(p["arm_key"]) for p in pathway_context
-         if str(p.get("arm_key")) in measured})
+        {str(p["arm_key"]) for p in pathway_context if str(p.get("arm_key")) in measured})
     return out
 
 
@@ -121,7 +343,7 @@ def check_published_membership(candidate: Mapping[str, Any], *,
                                pathway_context: Sequence[Mapping[str, Any]] = ()) -> None:
     """The candidate's PUBLISHED lists must equal what the evidence produces.
 
-    A widened list is how a candidate becomes displayable under a question it never touched; a
+    A widened list is how a candidate becomes displayable under a question it never touched. A
     narrowed one is how real evidence disappears from a question it belongs to. Both are silent.
     """
     cid = str(candidate.get("candidate_id"))
@@ -133,167 +355,39 @@ def check_published_membership(candidate: Mapping[str, Any], *,
             extra = sorted(set(published) - set(truth[field]))
             missing = sorted(set(truth[field]) - set(published))
             _refuse(GATE_MEMBERSHIP_NOT_REDERIVED,
-                    f"candidate {cid!r}: {field} publishes {published!r}, but its evidence "
-                    f"produces {truth[field]!r} (extra={extra!r}, missing={missing!r}). A "
-                    "published list a consumer trusts is a CLAIM; a list re-derived from the "
-                    "rows that carry the evidence is a FACT.")
-
-
-# --------------------------------------------------------------------------- #
-# 2. THE PROJECTION. Canonical, hashable, and bound to the view.
-# --------------------------------------------------------------------------- #
-def projection(candidates: Sequence[Mapping[str, Any]], *,
-               edges: Sequence[Mapping[str, Any]],
-               arm_summaries: Sequence[Mapping[str, Any]],
-               pathway_context: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The canonical candidate->arm membership map, re-derived. Deterministic and order-free."""
-    by_candidate = {
-        str(c["candidate_id"]): derive(str(c["candidate_id"]), edges=edges,
-                                       arm_summaries=arm_summaries,
-                                       pathway_context=pathway_context)
-        for c in candidates}
-    doc = {
-        "schema_version": MEMBERSHIP_SCHEMA,
-        "rule_id": MEMBERSHIP_RULE_ID,
-        "match_rule": "exact_string_equality_on_the_whole_arm_key",
-        "membership_is_evidence_not_a_claim": True,
-        "by_candidate": {k: by_candidate[k] for k in sorted(by_candidate)},
-    }
-    doc["membership_sha256"] = content_hash(doc)
-    return doc
-
-
-def membership_sha256(candidates: Sequence[Mapping[str, Any]], *,
-                      edges: Sequence[Mapping[str, Any]],
-                      arm_summaries: Sequence[Mapping[str, Any]],
-                      pathway_context: Sequence[Mapping[str, Any]] = ()) -> str:
-    return projection(candidates, edges=edges, arm_summaries=arm_summaries,
-                      pathway_context=pathway_context)["membership_sha256"]
-
-
-# --------------------------------------------------------------------------- #
-# 3. THE FILTER RULE. What a consumer may display, and what it may not.
-# --------------------------------------------------------------------------- #
-def _exact(keys: Iterable[str]) -> frozenset[str]:
-    return frozenset(str(k) for k in keys)
-
-
-def displayable(candidate: Mapping[str, Any], *, selected_arm_keys: Iterable[str],
-                edges: Sequence[Mapping[str, Any]],
-                arm_summaries: Sequence[Mapping[str, Any]],
-                pathway_context: Sequence[Mapping[str, Any]] = ()) -> bool:
-    """May this candidate be shown for a selection naming EXACTLY these arm keys?
-
-    Only if its RE-DERIVED arms intersect them, by exact string equality on the whole key.
-    """
-    truth = derive(str(candidate.get("candidate_id")), edges=edges,
-                   arm_summaries=arm_summaries, pathway_context=pathway_context)
-    return bool(_exact(truth["arm_keys"]) & _exact(selected_arm_keys))
-
-
-def check_displayed(candidates: Sequence[Mapping[str, Any]], *,
-                    selected_arm_keys: Iterable[str],
-                    edges: Sequence[Mapping[str, Any]],
-                    arm_summaries: Sequence[Mapping[str, Any]],
-                    pathway_context: Sequence[Mapping[str, Any]] = ()) -> None:
-    """Every displayed candidate has evidence in the selection's OWN arms — and only those."""
-    selected = _exact(selected_arm_keys)
-    if not selected:
-        _refuse(GATE_CANDIDATE_NOT_IN_SELECTION,
-                "the selection names no arm keys, so no candidate can be shown to have evidence "
-                "in it. Displaying anything here would be displaying it under no question at all")
-
-    for cand in candidates:
-        cid = str(cand.get("candidate_id"))
-        truth = derive(cid, edges=edges, arm_summaries=arm_summaries,
-                       pathway_context=pathway_context)
-        mine = _exact(truth["arm_keys"])
-
-        if not (mine & selected):
-            _refuse(GATE_CANDIDATE_NOT_IN_SELECTION,
-                    f"candidate {cid!r} is displayed for a selection naming "
-                    f"{sorted(selected)!r}, but its evidence lives in {sorted(mine)!r}. The drug "
-                    "is real and its edges are real — and it is being shown as an answer to a "
-                    "question it has no evidence in.")
-
-        shown = _exact(cand.get("view_arm_keys") or truth["arm_keys"])
-        foreign = shown - selected
-        if foreign:
-            _refuse(GATE_FOREIGN_ARM,
-                    f"candidate {cid!r} is shown carrying arm(s) {sorted(foreign)!r} that this "
-                    f"selection does not name. Exact keys only: a prefix or a display name would "
-                    "equate two arms that differ only in their context tail.")
-
-        dropped = (mine & selected) - shown
-        if dropped:
-            _refuse(GATE_ARM_DROPPED,
-                    f"candidate {cid!r} is shown without arm(s) {sorted(dropped)!r} that its own "
-                    "evidence gives it in this selection. A dropped arm is indistinguishable "
-                    "from evidence nobody found.")
-
-
-# --------------------------------------------------------------------------- #
-# 4. THE VIEW BINDS ITS QUESTION, AND THE MEMBERSHIP OF WHAT IT SHOWS.
-# --------------------------------------------------------------------------- #
-REQUIRED_VIEW_IDENTITY: tuple[str, ...] = (
-    "selection_id", "question_id", "analysis_mode",
-)
-
-
-def check_view_binding(view: Mapping[str, Any], *,
-                       edges: Sequence[Mapping[str, Any]],
-                       arm_summaries: Sequence[Mapping[str, Any]],
-                       pathway_context: Sequence[Mapping[str, Any]] = ()) -> None:
-    """The view names its question, names the arms, and binds the membership of what it shows.
-
-    A view that swapped its condition or its view hash while keeping the same candidate rows would
-    otherwise render one question's drugs under another question's heading, and every hash it
-    published would still check out — because none of them was ABOUT the membership.
-    """
-    selection = view.get("selection") or {}
-    for field in REQUIRED_VIEW_IDENTITY:
-        if not selection.get(field):
-            _refuse(GATE_SELECTION_IDENTITY,
-                    f"the view carries no {field}. A view that cannot name its own question "
-                    "cannot be checked against one")
-
-    arms = view.get("selected_arms") or {}
-    keys = arms.get("all_arm_keys") or arms.get("arm_keys") or []
-    if not keys:
-        _refuse(GATE_SELECTION_IDENTITY,
-                "the view names no selected arm keys, so nothing it shows can be proved to "
-                "belong to it")
-
-    tables = view.get("tables") or {}
-    shown = tables.get("candidates") or []
-    check_displayed(shown, selected_arm_keys=keys, edges=edges,
-                    arm_summaries=arm_summaries, pathway_context=pathway_context)
-
-    claimed = view.get("candidate_membership_sha256")
-    if claimed is not None:
-        actual = membership_sha256(shown, edges=edges, arm_summaries=arm_summaries,
-                                   pathway_context=pathway_context)
-        if claimed != actual:
-            _refuse(GATE_MEMBERSHIP_HASH,
-                    f"the view binds candidate_membership_sha256={str(claimed)[:16]}…, but the "
-                    f"membership its own rows produce hashes to {actual[:16]}…. A hash you copy "
-                    "is not a hash you checked.")
+                    f"candidate {cid!r}: {field} publishes {len(published)} arm(s), but its "
+                    f"evidence produces {len(truth[field])} (extra={extra[:2]!r}, "
+                    f"missing={missing[:2]!r}). A published list a consumer trusts is a CLAIM; a "
+                    "list re-derived from the rows that carry the evidence is a FACT.")
 
 
 def vocabularies() -> dict[str, Any]:
     """Published, because Stage 4 and the UI read FIELDS, not source."""
     return {
-        "membership_schema": MEMBERSHIP_SCHEMA,
         "membership_rule_id": MEMBERSHIP_RULE_ID,
         "typed_membership_fields": list(TYPED_MEMBERSHIP_FIELDS),
+        "selected_arms_field": "gene_arm_keys",
+        "pathway_context_field": "pathway_context_arm_keys",
+        "shown_arms_field": "view_arm_keys_by_origin",
+        "global_arms_field": "arm_keys",
         "match_rule": "exact_string_equality_on_the_whole_arm_key",
         "prefix_match_permitted": False,
         "display_name_match_permitted": False,
-        "membership_is_rederived_from_evidence_never_read_from_the_candidate": True,
-        "pathway_membership_never_promotes_a_candidate_into_a_question": True,
+        "shown_equals_global_intersect_selected": True,
+        # TRUE, and now actually true on the PRODUCTION path: check_view_membership re-derives
+        # from the view's own target_drug_edges + arm_summaries. It was published as True while the
+        # gate read only the candidate's claims — a lie in a published field, and worse than no
+        # field, because a consumer reads fields.
+        "membership_is_rederived_from_target_drug_edges_only": True,
+        "arm_summaries_reconcile_but_never_promote_membership": True,
+        "roles_are_assigned_by_the_selection_at_join_time": True,
+        "ordered_endpoints_must_match_the_arms_contexts": True,
+        "pathway_context_never_promotes_a_candidate_into_a_question": True,
+        "pathway_context_is_checked_against_pathway_context_arm_keys_not_gene_arms": True,
         "global_store_stays_global_display_is_a_projection": True,
+        # THIS HELPER IS NEVER SUFFICIENT ADMISSION. It proves membership and coherence, not bytes.
+        "this_gate_alone_is_not_admission": True,
+        "admission_requires_the_full_hash_bound_view_and_a_receipt_naming_this_gate": True,
+        "membership_schema": MEMBERSHIP_SCHEMA,
+        "membership_verifier_id": MEMBERSHIP_VERIFIER_ID,
     }
-
-
-def canonical(doc: Mapping[str, Any]) -> str:
-    return canonical_json(doc)

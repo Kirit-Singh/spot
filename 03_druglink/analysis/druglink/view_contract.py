@@ -35,6 +35,7 @@ from . import artifact_class as ac
 from . import bundle_v2 as bv2
 from . import schemas
 from . import selection_view as sv
+from . import candidate_membership as cm
 from . import view_projection as vp
 from .hashing import contains_local_path
 from .view_projection import (  # noqa: F401  (one front door for the row contract)
@@ -171,6 +172,12 @@ def validate(view: Mapping[str, Any]) -> Mapping[str, Any]:
     schemas.validate(dict(view), sv.VIEW_SCHEMA, context="stage3_selection_view")
     check_rows(view)
     vp.check(view)
+    # WHO MAY BE SHOWN HERE. The seal proves the rows are the bytes the view addressed; it says
+    # NOTHING about whether those rows BELONG to this question. A candidate loaded out of the
+    # global store and rendered under any selection passes the schema, the columns and the seal —
+    # a true fact under a false heading, and every check it passes makes it more convincing.
+    # Decidable from the view alone, which is what a static browser has.
+    cm.check_view_membership(view)
     check_browser_safe(view)
     return view
 
@@ -180,6 +187,10 @@ def contract() -> dict[str, Any]:
     return {
         "schema_version": sv.VIEW_SCHEMA,
         "view_method_id": sv.VIEW_METHOD_ID,
+        # PUBLISHED to W12/W6: the membership rule, its gates, and — stated plainly — that this
+        # gate ALONE is not admission. A consumer admits the FULL hash-bound view plus a receipt
+        # that names this gate; membership proves belonging, never bytes.
+        "candidate_membership": cm.vocabularies(),
         "document_fields": sorted(DOCUMENT_FIELDS),
         "tables": {name: sorted(cols) for name, cols in sorted(ROW_COLUMNS.items())},
         "join_time_annotation": ROLE_COLUMN,

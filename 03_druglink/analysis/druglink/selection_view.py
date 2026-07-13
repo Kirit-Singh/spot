@@ -51,6 +51,7 @@ import os
 from typing import Any, Mapping, Optional, Sequence
 
 from . import arm_selection as asel
+from . import candidate_membership as cm
 from . import direction as dr
 from . import pathway_context_v2 as pc2
 from . import selection_v3 as s3
@@ -492,6 +493,13 @@ def vocabularies() -> dict[str, Any]:
         "view_schema": VIEW_SCHEMA,
         "view_method_id": VIEW_METHOD_ID,
         "projected_tables": list(PROJECTED_TABLES),
+        # THE MEMBERSHIP RULE, BOUND INTO THE VIEW'S IDENTITY.
+        #
+        # A gate nobody can prove RAN is a gate a consumer must take on trust. This vocabulary is
+        # hashed into every view id, so removing or changing the membership rule MOVES the view's
+        # identity and the frozen-contract pin catches it. Without this the rule could be deleted
+        # tomorrow and every existing receipt would still look valid.
+        "candidate_membership": cm.vocabularies(),
         "origin_types": list(dr.V2_ORIGIN_TYPES),
         "measured_origins": sorted(dr.MEASURED_ORIGINS & set(dr.V2_ORIGIN_TYPES)),
         "inferred_origins": sorted(dr.INFERRED_ORIGINS & set(dr.V2_ORIGIN_TYPES)),
