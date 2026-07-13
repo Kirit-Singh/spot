@@ -35,6 +35,7 @@ from typing import Any, Optional
 import pandas as pd
 from direct import arm_bundle as direct_arm_bundle
 from direct import envlock, scorer_view, trust
+from direct import stage1_release_v3 as rel_v3
 
 from . import armref, config, w10
 from . import disposition as D
@@ -195,8 +196,22 @@ def check_panel(program_id: str, view: dict[str, Any]) -> None:
 
 def load_release(*, release_path: str, kind: str = "production",
                  validation_path: Optional[str] = None,
-                 gate_spec_path: Optional[str] = None) -> tuple[Any, dict[str, Any]]:
-    """``(release, scorer_view)``. The admitted set is DERIVED from ``base_portable``."""
+                 gate_spec_path: Optional[str] = None,
+                 release_root: Optional[str] = None) -> tuple[Any, dict[str, Any]]:
+    """``(release, scorer_view)``. The admitted set is DERIVED from ``base_portable``.
+
+    THE AUTHORITATIVE V3 RELEASE. Stage-1 v3.0.1 (539431d) ships a
+    ``spot.stage01_v3_release.v1`` doc whose components are served under a STAGED ROOT; the
+    legacy v1 manifest loader cannot read it. It is detected and loaded through Direct's OWN v3
+    loader — the same one ``run_screen`` uses — so P2S binds the exact release object Direct
+    did. The root is the staged tree the release doc sits at the top of: passed explicitly when
+    supplied, otherwise the release file's own directory, and NEVER guessed into another tree.
+    """
+    if kind in config.RELEASE_LANES and os.path.isfile(release_path) \
+            and rel_v3.is_v3_release(release_path):
+        root = release_root or os.path.dirname(os.path.abspath(release_path))
+        release = rel_v3.load(release_path, root=root, lane=kind)
+        return release, scorer_view.view(release)
     if kind == "production":
         release = trust.load_production_release(release_path)
     elif kind == "research_only":

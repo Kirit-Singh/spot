@@ -317,7 +317,8 @@ def build(args, *, fit=None) -> dict[str, Any]:
     try:
         release, view = binding.load_release(
             release_path=args.stage1_release, kind=args.release_kind,
-            validation_path=args.stage1_validation, gate_spec_path=args.stage1_gate_spec)
+            validation_path=args.stage1_validation, gate_spec_path=args.stage1_gate_spec,
+            release_root=getattr(args, "stage1_release_root", None))
     except Exception as e:                      # the loader's own error type is not ours
         raise D.RefusalError(
             D.REFUSE_RELEASE_UNREADABLE,
@@ -402,6 +403,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the directory `prepare_inputs` produced; its p2s_inputs.json is "
                          "verified against code literals and every matrix re-hashed")
     ap.add_argument("--stage1-release", required=True)
+    ap.add_argument("--stage1-release-root", default=None,
+                    help="the staged v3 release ROOT (components resolve under it); defaults "
+                         "to the release file's own directory")
 
     ap.add_argument("--arm-key", required=True,
                     help="direct|program_id|desired_change|condition")

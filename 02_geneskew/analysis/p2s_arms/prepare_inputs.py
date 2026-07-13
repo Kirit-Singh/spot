@@ -304,7 +304,8 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
     if release is None or view is None:
         release, view = binding.load_release(
             release_path=args.stage1_release, kind=args.release_kind,
-            validation_path=args.stage1_validation, gate_spec_path=args.stage1_gate_spec)
+            validation_path=args.stage1_validation, gate_spec_path=args.stage1_gate_spec,
+            release_root=getattr(args, "stage1_release_root", None))
     binding.refuse_fixture_release(release, args.lane)
 
     if view["scorer_view_sha256"] != admission.get("scorer_view_sha256"):
@@ -473,6 +474,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the P2S RUNTIME lock (sklearn + pert2state_model) — a SEPARATE "
                          "environment; the Direct lock cannot execute this lane")
     ap.add_argument("--stage1-release", required=True)
+    ap.add_argument("--stage1-release-root", default=None,
+                    help="the staged v3 release ROOT (components resolve under it); defaults "
+                         "to the release file's own directory")
     ap.add_argument("--condition", required=True, choices=list(config.CONDITIONS))
     ap.add_argument("--out-root", required=True)
     ap.add_argument("--release-kind", default="production",
