@@ -85,9 +85,25 @@ DIRECTIONAL_REASONS = (
 # Only a MEASURED perturbation is observed support. The inverse-direction hypothesis and
 # the pathway hypothesis are INFERENCES, and neither is ever observed support.
 MEASURED_EVIDENCE = frozenset({OBSERVED_PERTURBATION})
-# Direction-compatible enough to be worth a Stage-4 ASSESSMENT (never an endorsement).
-DIRECTION_COMPATIBLE = frozenset({OBSERVED_PERTURBATION, INVERSE_DIRECTION_HYPOTHESIS,
-                                  PATHWAY_HYPOTHESIS})
+
+# TWO QUESTIONS, TWO SETS. One frozenset used to answer both, and that was the defect: it was
+# NAMED for the evidence question and USED for the queuing question, so an untested inverse had
+# to be called "direction-compatible" in order to be assessed at all. The docstring below then
+# described the name while the code did the other thing — and the code is what ships.
+#
+# Is this DIRECTION-COMPATIBLE EVIDENCE? Only a measured perturbation whose observed sign
+# supports the arm's desired change. An inverse-direction hypothesis is the inverse of a result
+# nobody ran: CRISPRi never tested activation, so there is no observation to be compatible WITH.
+DIRECTION_COMPATIBLE = frozenset({OBSERVED_PERTURBATION})
+
+# Is this worth a Stage-4 ASSESSMENT? A wider question, and queuing is not endorsement. An
+# inverse hypothesis IS a lead worth a human's attention — but dropping it silently would be
+# worse than either queuing or refusing it, because a dropped candidate is indistinguishable
+# from a candidate nobody found. So it is queued, TYPED, and never promotable.
+QUEUE_ELIGIBLE = frozenset({OBSERVED_PERTURBATION, INVERSE_DIRECTION_HYPOTHESIS,
+                            PATHWAY_HYPOTHESIS})
+# The classes Stage 4 must carry VERBATIM and may never promote into observed support.
+HYPOTHESIS_ONLY = frozenset({INVERSE_DIRECTION_HYPOTHESIS, PATHWAY_HYPOTHESIS})
 
 # --------------------------------------------------------------------------- #
 # Stage-3 evidence CLASS. A LABEL, not a tier, and deliberately NOT ordered.
@@ -177,10 +193,25 @@ def stage4_assessment(*, artifact_class: str, identity_status: str,
                       directional_statuses: Iterable[str]) -> tuple[str, str]:
     """Should Stage 4 be asked to ASSESS this candidate? Returns (status, reason).
 
-    Queuing is not endorsement. A candidate is queued when its identity resolves and at
-    least one of its edges is direction-compatible. An UNTESTED inverse direction is
-    ``unresolved``, not direction-compatible, so it is deliberately NOT queued: it rests
-    on the inverse of a deleterious result that nobody ran.
+    Queuing is not endorsement, and queuing is not evidence. A candidate is queued when its
+    identity resolves and at least one edge is QUEUE_ELIGIBLE.
+
+    FROZEN POLICY on the untested inverse. An ``inverse_direction_hypothesis`` rests on the
+    inverse of a deleterious result that nobody ran: the knockdown moved the program the WRONG
+    way, and CRISPRi never tested activation. It is therefore:
+
+      * QUEUED — because silently dropping it is the worse failure. A dropped candidate is
+        indistinguishable from a candidate nobody found, and this one is a real lead a human
+        should see;
+      * HYPOTHESIS-ONLY, always — never observed-compatible, never a phenocopy, never supported
+        evidence, never sharing a tier with a measurement;
+      * NOT PROMOTABLE — Stage 4 carries the weaker class VERBATIM and may not raise it.
+
+    This docstring previously claimed the inverse hypothesis was withheld from the queue, while
+    ``DIRECTION_COMPATIBLE`` contained it and the code queued it anyway. The prose described the
+    intent; the code shipped the opposite, and the code is what Stage 4 received. The sets are
+    now split (DIRECTION_COMPATIBLE = evidence, QUEUE_ELIGIBLE = assessment) so the two
+    questions cannot be conflated again, and a test asserts the prose and the code agree.
     """
     if not ac.stage4_queue_permitted(artifact_class):
         return NOT_QUEUED, REASON_NOT_QUEUED_FIXTURE
@@ -245,6 +276,13 @@ def vocabularies() -> dict[str, Any]:
         "evidence_classes_are_unordered": EVIDENCE_CLASSES_ARE_UNORDERED,
         "measured_evidence_statuses": sorted(MEASURED_EVIDENCE),
         "direction_compatible_statuses": sorted(DIRECTION_COMPATIBLE),
+        # Published SEPARATELY, because they answer different questions. A candidate may be
+        # QUEUE_ELIGIBLE (worth a look) without being DIRECTION_COMPATIBLE (evidence). Stage 4
+        # reads both: it may assess anything queued, and may promote nothing in HYPOTHESIS_ONLY.
+        "queue_eligible_statuses": sorted(QUEUE_ELIGIBLE),
+        "hypothesis_only_statuses": sorted(HYPOTHESIS_ONLY),
+        "queued_is_not_evidence": True,
+        "stage4_must_preserve_the_hypothesis_only_class_without_promoting_it": True,
         "stage4_assessment_is_not_promotion_or_recommendation": True,
         "pathway_hypothesis_is_never_a_measurement": True,
         "inverse_direction_hypothesis_is_never_observed_gain_of_function": True,

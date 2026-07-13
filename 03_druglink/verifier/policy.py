@@ -134,9 +134,19 @@ MOD_DECREASE = "decrease"
 MOD_INCREASE = "increase"
 MOD_NO_DIRECTION = "no_direction_evidence"
 
-DIRECTION_COMPATIBLE = frozenset({OBSERVED_PERTURBATION,
-                                 INVERSE_DIRECTION_HYPOTHESIS,
-                                 PATHWAY_HYPOTHESIS})
+# Restated independently of the producer. TWO QUESTIONS, TWO SETS — the producer used one
+# frozenset for both, which forced an untested inverse to be called "direction-compatible" in
+# order to be assessed at all.
+#
+# DIRECTION-COMPATIBLE EVIDENCE: only a measured perturbation whose observed sign supports the
+# arm's desired change. An inverse-direction hypothesis is the inverse of a result nobody ran —
+# CRISPRi never tested activation, so there is no observation for it to be compatible with.
+DIRECTION_COMPATIBLE = frozenset({OBSERVED_PERTURBATION})
+# WORTH A STAGE-4 ASSESSMENT: wider, and not an evidence claim. Queuing is not endorsement.
+QUEUE_ELIGIBLE = frozenset({OBSERVED_PERTURBATION, INVERSE_DIRECTION_HYPOTHESIS,
+                            PATHWAY_HYPOTHESIS})
+# Carried VERBATIM by Stage 4 and never promoted into observed support.
+HYPOTHESIS_ONLY = frozenset({INVERSE_DIRECTION_HYPOTHESIS, PATHWAY_HYPOTHESIS})
 MEASURED_EVIDENCE = frozenset({OBSERVED_PERTURBATION})
 REASON_QUEUED_INVERSE = "mapped_inverse_direction_hypothesis"
 # The disease-context review, restated. A review is a RESULT, not a one-way flag: a

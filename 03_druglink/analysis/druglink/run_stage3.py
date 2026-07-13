@@ -32,6 +32,9 @@ from . import (acquisition, adapters, armlever, artifact_class as ac, artifacts,
                bundle, candidates, direct_run, drug_mapping, identity,
                joint_context, mechanisms, pathways, potency,
                science_registry as sr, science_review, targets, workflow as wf)
+from . import artifacts_v2
+from . import stage2_aggregate as sa
+from . import universe_rows
 from . import admitted_universe, arm_query as aq, v2_input_loader as v2
 from .direction import V1_ORIGIN_TYPES, V2_ORIGIN_TYPES
 from .hashing import short_id
@@ -57,7 +60,8 @@ def load_v2_inputs(*, universe_store: str,
                    temporal_arm_bundles: tuple = (),
                    pathway_arm_bundle: Optional[dict[str, Any]] = None,
                    pathway_nodes: tuple = (),
-                   require_production: bool = False) -> dict[str, Any]:
+                   require_production: bool = False,
+                   admitted_aggregate: Optional[Any] = None) -> dict[str, Any]:
     """THE v2 input stage: bind the admitted universe store, then load the three typed origins.
 
     Two bindings, in this order, and neither is optional:
@@ -80,7 +84,8 @@ def load_v2_inputs(*, universe_store: str,
         direct_arm_bundle=direct_arm_bundle, direct_admission=direct_admission,
         temporal_arm_bundles=temporal_arm_bundles,
         pathway_arm_bundle=pathway_arm_bundle, pathway_nodes=pathway_nodes,
-        measured_target_ids=None, require_production=require_production)
+        measured_target_ids=None, require_production=require_production,
+        admitted_aggregate=admitted_aggregate)
     return {"universe_store_binding": store_binding, "v2_inputs": inputs}
 
 
@@ -307,37 +312,72 @@ def run(*, artifact_class: str, direct_run_dir: str, direct_inputs_root: str,
     return {**result, "bundle_dir": bundle_path}
 
 
-def _v2_main(args) -> int:
-    """The v2 input path: bind the admitted store, load the three typed origins, REFUSE to
-    fabricate a bundle while the detached-clone matrix is red.
+V2_REQUIRED = ("--stage2-manifest", "--stage2-report", "--bundles-root", "--stage1-release",
+               "--universe-store")
 
-    It writes NOTHING. That is not an omission — it is the gate. `DETACHED_CLONE_MATRIX_GREEN`
-    is False, so there is no admitted Stage-2 arm bundle to stand on, and a Stage-3 bundle
-    built without one would carry synthetic numbers into Stage 4 under a real bundle's name.
+
+def _v2_main(args) -> int:
+    """The v2 path: admit Stage-2 from disk, open the admitted universe store, EMIT a bundle.
+
+    This used to pass ``universe_targets=[]`` and write nothing, justified by a module constant
+    (``DETACHED_CLONE_MATRIX_GREEN``) that no artifact could ever flip. Both are gone. The empty
+    list was the worse of the two: an EMPTY typed universe hashes to a real, stable digest
+    (4f53cda1…) and verifies perfectly — against nothing. A run that answers "no drug evidence"
+    because it was handed no targets is indistinguishable, in the artifact, from one that
+    genuinely looked and found none.
+
+    Now the universe is DERIVED from the admitted store's own rows, and the gate is the Stage-2
+    admission itself: its manifest recomputes its own identity, and a SEPARATE verifier's report
+    admits those exact bytes. No admitted aggregate, no run.
     """
+    missing = [f for f in V2_REQUIRED if not getattr(args, f[2:].replace("-", "_"), None)]
+    if missing:
+        print(f"REFUSED [{args.artifact_class}]: --v2 requires {', '.join(missing)}. There is "
+              "no fixture fallback and no default: Stage 3 stands on Stage-2's admitted "
+              "aggregate and the admitted universe store, or it does not run.")
+        return 2
+
     try:
+        aggregate = sa.admit_aggregate(
+            manifest_path=args.stage2_manifest, report_path=args.stage2_report,
+            bundles_root=args.bundles_root, stage1_release_path=args.stage1_release,
+            artifact_class=args.artifact_class)
+        store = universe_rows.load_store(args.universe_store)
         loaded = load_v2_inputs(
             universe_store=args.universe_store,
-            universe_targets=[],            # the run's typed universe; empty until a real run
-            require_production=True)
+            # the REAL typed universe, derived from the store's own rows — never []
+            universe_targets=store.typed_universe,
+            require_production=True,
+            admitted_aggregate=aggregate)
+        emitted = artifacts_v2.emit(
+            output_root=args.output_root, artifact_class=args.artifact_class,
+            aggregate=aggregate, store=store, report_path=args.stage2_report)
     except (admitted_universe.AdmittedUniverseError, v2.V2InputLoaderError,
+            sa.Stage2AggregateError, universe_rows.UniverseRowsError,
             aq.ArmQueryError) as exc:
         print(f"REFUSED [{args.artifact_class}]: {exc}")
-        print("no bundle was written. Stage 3 does not fabricate candidates: while the "
-              "independent detached-clone matrix is red there is no admitted Stage-2 arm "
-              "bundle to stand on, and a synthetic number in a bundle is a synthetic number "
-              "on its way to Stage 4.")
+        print("no bundle was written. Stage 3 does not fabricate candidates: a synthetic "
+              "number in a bundle is a synthetic number on its way to Stage 4.")
         return 3
 
-    inputs = loaded["v2_inputs"]
-    print(f"universe_store   {loaded['universe_store_binding']['store_id'][:16]}… "
-          f"(admitted_by={loaded['universe_store_binding']['admitted_by']}, "
-          f"producer_admits={loaded['universe_store_binding']['producer_admits_store']})")
-    counts = inputs["counts"]
-    print(f"measured_levers  {counts['n_measured_levers']}")
-    print(f"pathway_nodes    {counts['n_pathway_nodes']}  (inferred; never perturbed)")
-    print("origins counted SEPARATELY; no combined objective "
-          f"({inputs['combined_objective_permitted']})")
+    # `emit` returns {bundle_dir, bundle_id, document, tables}. This block used to read
+    # emitted["path"] and emitted["counts"] — neither key exists — so a SUCCESSFUL emit wrote the
+    # bundle and then died with KeyError, reporting a good run as a failed CLI. The success path
+    # had never been executed. Counts are derived from the tables actually written, not from a
+    # summary that could drift from them.
+    binding = loaded["universe_store_binding"]
+    tables = emitted["tables"]
+    print(f"stage2_aggregate {aggregate.manifest_self_hash[:16]}… "
+          f"admitted_by={aggregate.verifier_id} verdict={aggregate.verdict}")
+    print(f"                 {len(aggregate.bundles)} bundles / {len(aggregate.arms)} arm slots")
+    print(f"universe_store   {binding['store_id'][:16]}… "
+          f"({len(store.typed_universe)} typed targets)")
+    print(f"bundle           {emitted['bundle_id']}")
+    print(f"                 {emitted['bundle_dir']}")
+    for name in sorted(tables):
+        print(f"  {name:<28} {len(tables[name])}")
+    print("origins counted SEPARATELY; no combined objective; pathway is CONTEXT and never "
+          "sources a drug edge.")
     return 0
 
 
@@ -353,8 +393,35 @@ def main(argv: Optional[list[str]] = None) -> int:
                          "detached-clone matrix is green.")
     ap.add_argument("--universe-store", default=None,
                     help="the universe store an INDEPENDENT verifier admitted, bound by its "
-                         "exact store_id (bdf41b69…). A missing store REFUSES; there is no "
-                         "fixture fallback.")
+                         "exact store_id. A missing store REFUSES; there is no fixture "
+                         "fallback.")
+    # ---- the ADMITTED Stage-2 aggregate: the four paths W3's native contract publishes ----
+    # These are not optional and there is no default. Stage 3 stands on Stage-2's admission or
+    # it does not run: the manifest proves its own identity, and the SEPARATE verifier's report
+    # is what admits it (a manifest never admits itself).
+    ap.add_argument("--stage2-manifest", default=None,
+                    help="v2: Stage-2's native aggregate run manifest "
+                         "(spot.stage02_run_manifest.v3_topology_only)")
+    ap.add_argument("--stage2-report", default=None,
+                    help="v2: the SEPARATE aggregate verifier's report "
+                         "(spot.stage02_run_manifest_verification.v1). Stage 3 reads "
+                         "verdict=='admit' from THIS file, never from the manifest.")
+    ap.add_argument("--bundles-root", default=None,
+                    help="v2: the root the manifest's bundles[] resolve against")
+    ap.add_argument("--stage1-release", default=None,
+                    help="v2: the authoritative Stage-1 v3 release the manifest pins")
+    # ---- the Stage-3 BRIDGE: typed identity + modality, which the native arms do NOT carry ----
+    # Native ranking records are {target_id, arm_value, evaluable, rank} — no namespace, no
+    # modality. Those two facts live ONLY in W3's bridge (spot.stage02_stage3_bridge.v1), which
+    # its own independent verifier admits and which REBUILDS every row from the admitted native
+    # bytes. Stage 3 binds the bridge; it never infers identity and never defaults a modality
+    # from a config constant.
+    ap.add_argument("--stage2-bridge", default=None,
+                    help="v2: W3's stage3_bridge.json (spot.stage02_stage3_bridge.v1) — the "
+                         "typed identity + modality the native arms do not carry")
+    ap.add_argument("--stage2-bridge-report", default=None,
+                    help="v2: stage3_bridge_verification.json — the SEPARATE bridge verifier's "
+                         "report. Stage 3 admits the bridge from THIS, never from the bridge.")
     ap.add_argument("--artifact-class", required=True,
                     choices=list(ac.ARTIFACT_CLASSES),
                     help="analysis (a real computation) or fixture (synthetic; never "

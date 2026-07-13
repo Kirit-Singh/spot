@@ -108,7 +108,13 @@ def test_inverse_direction_hypothesis_is_a_distinct_state():
     assert wf.EVIDENCE_CLASSES_ARE_UNORDERED is True
 
     # It IS queued — with its own reason code. Queuing is a look, not an endorsement.
-    assert wf.INVERSE_DIRECTION_HYPOTHESIS in wf.DIRECTION_COMPATIBLE
+    #
+    # This line used to assert membership in DIRECTION_COMPATIBLE, which is how the conflation
+    # was locked in: the comment says "queued", the assertion said "direction-compatible", and
+    # one frozenset was answering both questions. Queue-eligibility is what "it IS queued"
+    # actually means; direction-compatible EVIDENCE is a claim the untested inverse cannot make.
+    assert wf.INVERSE_DIRECTION_HYPOTHESIS in wf.QUEUE_ELIGIBLE
+    assert wf.INVERSE_DIRECTION_HYPOTHESIS not in wf.DIRECTION_COMPATIBLE
     status, reason = wf.stage4_assessment(
         artifact_class="analysis", identity_status="resolved",
         active_moiety_id="AM:CHEMBL:CHEMBL1",
