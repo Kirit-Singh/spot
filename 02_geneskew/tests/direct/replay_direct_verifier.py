@@ -34,7 +34,7 @@ import verify_arm_bundle as VB  # noqa: E402
 import verify_arm_rules as AR  # noqa: E402
 import verify_arm_science as S  # noqa: E402
 import verify_direct_release as VR  # noqa: E402
-from direct import arm_release, emit, run_arms  # noqa: E402  (harness drives the PRODUCER)
+from direct import arm_release, run_arms  # noqa: E402  (harness drives the PRODUCER)
 from verify_arm_report import verifier_code_sha256  # noqa: E402
 
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
@@ -45,40 +45,46 @@ def _key(row):
 
 
 def _hash(rows):
-    return AR.content_sha256(
-        [{k: S._native(v) for k, v in sorted(r.items())
-          if k not in S.MASK_ROW_IDS} for r in rows])
+    """The verifier's OWN canonical mask hash — reimplemented, never imported."""
+    return AR.content_sha256(S._canonical_mask_rows(rows))
+
+
+def _read_masks(bundle_dir):
+    df = pd.read_parquet(os.path.join(bundle_dir, "masks.parquet"))
+    return [{c: (None if pd.isna(r[c]) else r[c]) for c in df.columns}
+            for _, r in df.iterrows()]
 
 
 def mask_counterexample(tmp) -> dict:
-    """THE defect, re-run: is `mask_sha256` a function of the bytes the bundle ships?"""
+    """THE counterexample, re-run: is `mask_sha256` a function of the bytes the bundle SHIPS?
+
+    Also the SHUFFLED BYTE-IDENTITY property the fix turns on: the mask is a SET of facts, so
+    the same rows in any input order must give the same canonical table and the same hash. If
+    a reshuffle moved the number, the bundle's identity would move without one value changing.
+    """
     args = conftest.synthetic_run.__wrapped__(tmp)()
     args.condition, args.out_root = F.CONDITION, os.path.join(tmp, "ce")
-
-    original, captured = emit.mask_content_sha256, {}
-
-    def spy(rows):
-        captured["rows"] = [dict(r) for r in rows]
-        return original(rows)
-
-    emit.mask_content_sha256 = spy
     res = run_arms.build_bundle(args)
-    emit.mask_content_sha256 = original
 
     bound = res["provenance"]["run_binding"]["mask_sha256"]
-    in_memory = captured["rows"]
-    df = pd.read_parquet(os.path.join(res["out_dir"], "masks.parquet"))
-    shipped = [{c: (None if pd.isna(r[c]) else r[c]) for c in df.columns}
-               for _, r in df.iterrows()]
+    shipped = _read_masks(res["out_dir"])
+
+    # a deterministic, seedless reshuffle: reverse, then interleave from both ends
+    reversed_rows = list(reversed(shipped))
+    interleaved = [r for pair in zip(shipped, reversed_rows) for r in pair][:len(shipped)]
 
     return {
         "n_rows": len(shipped),
         "bound_mask_sha256": bound,
-        "hash_in_memory_order": _hash(in_memory),
         "hash_shipped_order": _hash(shipped),
-        "hash_canonical_sorted": _hash(sorted(shipped, key=_key)),
-        "same_multiset": sorted(map(_key, in_memory)) == sorted(map(_key, shipped)),
-        "REDERIVES_FROM_SHIPPED_BYTES": _hash(sorted(shipped, key=_key)) == bound,
+        "hash_reversed": _hash(reversed_rows),
+        "hash_interleaved": _hash(interleaved),
+        "REDERIVES_FROM_SHIPPED_BYTES": _hash(shipped) == bound,
+        "SHUFFLE_INVARIANT": _hash(shipped) == _hash(reversed_rows) == _hash(interleaved),
+        "shipped_parquet_is_already_canonical":
+            [S._mask_order_key(r) for r in S._canonical_mask_rows(shipped)]
+            == [S._mask_order_key(r) for r in
+                [{c: S._native(x.get(c)) for c in S.MASK_ROW_COLUMNS} for x in shipped]],
     }
 
 
@@ -156,8 +162,9 @@ def main() -> int:
 
     print(json.dumps(out, indent=2))
     ce = out["mask_counterexample"]
-    ok = (ce["REDERIVES_FROM_SHIPPED_BYTES"] and bundle["verdict"] == "ADMIT"
-          and release["verdict"] == "ADMIT" and out["audit_mutations"]["exit"] == 0)
+    ok = (ce["REDERIVES_FROM_SHIPPED_BYTES"] and ce["SHUFFLE_INVARIANT"]
+          and bundle["verdict"] == "ADMIT" and release["verdict"] == "ADMIT"
+          and out["audit_mutations"]["exit"] == 0)
     print("\nREPLAY:", "ALL GREEN — ADMIT" if ok else "NOT CLEAN")
     return 0 if ok else 1
 

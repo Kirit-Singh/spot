@@ -21,18 +21,37 @@ import verify_arm_rules as AR  # noqa: E402
 import verify_arm_view as AV  # noqa: E402
 from verify_arm_report import RELEASE_LANES, Report  # noqa: E402
 
-MASK_ROW_SORT = ("estimate_type", "estimate_id", "target_id", "masked_gene_ensembl",
-                 "mask_reason", "guide_id")
-# The ids stamped ONTO the mask rows, never hashed INTO them.
+# EVERY column that identifies a mask row. Restated here, not imported: a column list the
+# checker borrowed from the producer is a column list nobody checked.
+#
+# The order is over the FULL identity tuple, nulls last — a TOTAL order, so no tie is left to
+# whatever order the producer happened to iterate in. The shipped parquet is serialized from
+# this exact table and `mask_sha256` is the content hash OF it, so a reader of the file can
+# apply this projection and get the bound number. That is the whole point of binding it: a
+# hash re-derivable only by the process that held the list in memory is not an identity, and
+# a six-column sort that was not even a total order left the shipped BYTES input-order
+# dependent as well.
+MASK_ROW_COLUMNS = (
+    "estimate_type", "estimate_id", "released_estimate_id", "target_id",
+    "target_ensembl", "condition", "donor_pair", "guide_id",
+    "masked_gene_ensembl", "mask_reason", "distance", "in_gene_universe",
+    "source_row_hash", "mask_unresolved_reason",
+)
+# The ids stamped ONTO the mask rows, never hashed INTO them: a run id is assigned after the
+# mask is known, and a mask that changed when it was named would not be a mask.
 MASK_ROW_IDS = ("run_id", "arm_bundle_run_id")
 
 
+def _mask_order_key(row: dict) -> tuple:
+    """A TOTAL order over the identity columns. Nulls last; never a tie left to chance."""
+    return tuple((row.get(c) is None, "" if row.get(c) is None else str(row.get(c)))
+                 for c in MASK_ROW_COLUMNS)
+
+
 def _canonical_mask_rows(rows: list[dict]) -> list[dict]:
-    """The mask rows in the ONE shape and ORDER their hash can be taken over by a reader."""
-    out = [{k: _native(v) for k, v in sorted(r.items()) if k not in MASK_ROW_IDS}
-           for r in rows]
-    out.sort(key=lambda r: tuple("" if r.get(k) is None else str(r.get(k))
-                                 for k in MASK_ROW_SORT))
+    """THE mask table: projected onto the identity columns, normalised, totally ordered."""
+    out = [{c: _native(r.get(c)) for c in MASK_ROW_COLUMNS} for r in rows]
+    out.sort(key=_mask_order_key)
     return out
 
 

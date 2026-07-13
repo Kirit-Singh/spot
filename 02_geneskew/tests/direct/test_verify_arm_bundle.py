@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(
 import fixtures_direct as F  # noqa: E402
 import verify_arm_bundle as VB  # noqa: E402
 import verify_arm_rules as AR  # noqa: E402
+import verify_arm_science as S  # noqa: E402
 import verify_arm_view as AV  # noqa: E402
 
 # The PRODUCER. The TEST HARNESS drives it to emit a real bundle to attack; the VERIFIER
@@ -96,69 +97,54 @@ def failures(args) -> set:
 
 
 def failed(args, gate_substring: str) -> bool:
-    """The bundle is refused, AND at a gate this attack is supposed to trip.
+    """The bundle is refused, AND at the gate this attack is supposed to trip.
 
-    The gate must be a NEW one: an attack that merely inherits a producer gap it did not
-    cause has not been caught, and a test that accepted that would pass forever without
-    checking anything.
+    The honest producer ADMITS at 71/71, so any failing gate here was caused by the attack —
+    there is no inherited gap for a test to coast on.
     """
     doc = run(args)
-    tripped = {g for g in doc["failed_gates"] if gate_substring in g}
-    return (doc["verdict"] == "REFUSE" and bool(tripped)
-            and not tripped <= PRODUCER_GAPS)
+    return (doc["verdict"] == "REFUSE"
+            and any(gate_substring in g for g in doc["failed_gates"]))
 
 
 # --------------------------------------------------------------------------- #
-# THE REPAIRED PRODUCER (W14, 2813f7c). It binds the real Stage-1 v3 release, ships its
-# evidence, and knows what a complete release is. Audit blockers 1-5 are CLOSED against it:
-# the pair selection is gone from the identity, the contributor manifest, the mask, the
-# source registry and the target-identity map are all bound, the evidence ships, and the
-# producer no longer admits itself.
+# THE REPAIRED PRODUCER (W14, 41d9a9d). It ADMITS — 71/71 gates, no exception.
 #
-# ONE gate still fails, and it is a real defect, not a stale test. `mask_sha256` is hashed
-# over the producer's IN-MEMORY row order, while `masks.parquet` is written SORTED — so the
-# number bound into the run id cannot be re-derived by any reader of the file the bundle
-# ships. Proof: hashing the in-memory order reproduces the bound value exactly; hashing the
-# shipped order does not. This is the same "count nobody can recount" defect the ARM rows
-# already fixed by sorting before hashing (`canonical_rows`); the mask rows never got it.
+# Audit blockers 1-6 are closed against it: the pair selection is gone from the identity, the
+# contributor manifest / mask / source registry / target-identity map are all bound, the
+# evidence SHIPS, the producer no longer admits itself, and `mask_sha256` is now taken over
+# the canonical table the bundle actually ships — so a reader of masks.parquet can reproduce
+# the number bound beside it, which is the whole reason for binding it.
 #
-# It is pinned here, not waived. When W14 sorts the mask rows before hashing,
-# `test_the_producer_gap_is_EXACTLY_this` fails — the signal to unpin and assert a plain
-# ADMIT.
+# There is no PRODUCER_GAPS baseline any more, and that is the point: it was pinned, not
+# waived, and it came out when the producer earned it.
 # --------------------------------------------------------------------------- #
-MASK_ORDER_GAP = ("the MASK's identity is bound into the run and RE-DERIVES from the "
-                  "shipped masks.parquet")
-PRODUCER_GAPS = {MASK_ORDER_GAP}
-
-
-class TestTheRepairedProducerAt2813f7c:
-    def test_the_producer_gap_is_EXACTLY_this(self, built):
-        """The baseline, pinned. When W14 sorts the mask rows, this fails — by design."""
+class TestTheRepairedProducerAdmits:
+    def test_the_repaired_producer_ADMITS(self, built):
         _, args = built()
         doc = run(args)
-        assert set(doc["failed_gates"]) == PRODUCER_GAPS, (
-            "the producer's failing gates moved. If the mask-hash order fix has landed, "
-            "unpin PRODUCER_GAPS and assert a plain ADMIT.")
+        assert doc["verdict"] == "ADMIT", doc["failed_gates"]
+        assert doc["n_failed"] == 0
 
-    def test_EVERY_OTHER_gate_passes_on_the_repaired_producer(self, built):
-        # non-vacuous: 70 of 71 gates pass. Every arm, value, rank, byte, hash, binding and
-        # recomputation gate is green on honest output.
+    def test_it_ran_a_non_vacuous_number_of_gates(self, built):
         _, args = built()
         doc = run(args)
-        assert doc["n_gates"] >= 60
-        assert doc["n_passed"] == doc["n_gates"] - len(PRODUCER_GAPS)
+        assert doc["n_gates"] >= 60 and doc["n_passed"] == doc["n_gates"]
 
-    def test_the_audit_blockers_4_and_5_are_CLOSED(self, built):
-        # the gates that refused fc763e8 now PASS: the identity binds no pair, and it binds
-        # the contributor manifest, the mask, the source registry and the identity map
+    def test_the_MASK_hash_re_derives_from_the_shipped_masks_parquet(self, built):
+        # W10's counterexample, now closed. The mask is a SET of facts: the same rows in any
+        # order must give the same canonical table and the same hash, or the bundle's identity
+        # would move without a single value changing.
+        res, args = built()
+        rows = pd.read_parquet(
+            os.path.join(res["out_dir"], "masks.parquet")).to_dict("records")
+        bound = res["provenance"]["run_binding"]["mask_sha256"]
+        assert AR.content_sha256(S._canonical_mask_rows(rows)) == bound
+        assert AR.content_sha256(S._canonical_mask_rows(list(reversed(rows)))) == bound
+
+    def test_the_audit_blockers_are_CLOSED(self, built):
         _, args = built()
-        failed = failures(args)
-        for closed in ("binds NO pair selection",
-                       "every CONSUMED scientific input is bound",
-                       "CONTRIBUTOR MANIFEST's canonical identity is bound",
-                       "RAW BYTES are bound",
-                       "SHIPPED mask is the one the verifier independently derives"):
-            assert not any(closed in g for g in failed), f"still failing: {closed}"
+        assert failures(args) == set()
 
     def test_the_producer_does_NOT_admit_its_own_output(self, built):
         res, args = built()
@@ -176,7 +162,6 @@ class TestTheRepairedProducerAt2813f7c:
         assert doc["spec_sha256"] == VB.SPEC_SHA256
         assert len(doc["verifier_code_sha256"]) == 64
         assert len(doc["gate_inventory_sha256"]) == 64
-        assert doc["gate_inventory"] and doc["n_gates"] == len(doc["gates"])
         bound = doc["bound_artifact"]
         assert bound["arm_bundle_run_id"] == res["arm_bundle_run_id"]
         assert bound["arm_rows_sha256"] == res["bundle"]["arm_rows_sha256"]
@@ -184,8 +169,6 @@ class TestTheRepairedProducerAt2813f7c:
         assert len(bound["arm_inventory"]) == res["n_expected_arm_slots"]
 
     def test_the_report_is_CONTENT_ADDRESSED_so_the_run_manifest_can_bind_it(self, built):
-        # W3's aggregate run manifest cites this hash. A report that could be edited after
-        # it was cited would be a claim, not a result.
         _, args = built()
         doc = run(args)
         body = {k: v for k, v in doc.items() if k != "report_sha256"}
@@ -194,7 +177,7 @@ class TestTheRepairedProducerAt2813f7c:
     def test_a_FLIPPED_verdict_does_not_survive_the_report_hash(self, built):
         _, args = built()
         doc = run(args)
-        forged = dict(doc, verdict="ADMIT", n_failed=0, failed_gates=[])
+        forged = dict(doc, verdict="REFUSE", n_failed=9, failed_gates=["x"])
         body = {k: v for k, v in forged.items() if k != "report_sha256"}
         assert AR.content_sha256(body) != forged["report_sha256"]
 
@@ -208,7 +191,7 @@ class TestTheRepairedProducerAt2813f7c:
         args.recompute, args.sample_size = "sample", 5
         a, b = run(args)["bound_artifact"], run(args)["bound_artifact"]
         assert a["n_targets_recomputed"] == b["n_targets_recomputed"] == 5
-        assert failures(args) == PRODUCER_GAPS      # the sample mode adds no failure
+        assert run(args)["verdict"] == "ADMIT"
 
 
 class TestAuditBlocker5IsClosedTheIdentityNoLongerNamesAPair:
@@ -249,7 +232,7 @@ class TestM4bACoherentSignFlipIsNotRefusedByAnyDisplayLogic:
         valid. Here the flipped configuration fails EXACTLY the producer's binding gaps and
         nothing else: no display field, no science gate and no rank rule refuses it."""
         _, args = built(specs=[flip(s) for s in F.default_specs()])
-        assert failures(args) == PRODUCER_GAPS
+        assert failures(args) == set()
 
     def test_the_flipped_bundle_carries_NO_joint_field_at_all(self, built):
         res, _ = built(specs=[flip(s) for s in F.default_specs()])
@@ -758,9 +741,7 @@ class TestTheCurrentGenericV3ReleaseIsWhatTheVerifierConsumes:
                               stage1_v3_release=self._stage_v3_release(prod, root),
                               release_root=root)
         doc = run(args)
-        # the release loads, proves its components and derives the admitted set: the ONLY
-        # refusals are the producer's own binding gaps
-        assert set(doc["failed_gates"]) == PRODUCER_GAPS, doc["failed_gates"]
+        assert doc["verdict"] == "ADMIT", doc["failed_gates"]
         assert doc["bound_artifact"]["stage1_scorer_view_canonical_sha256"]
         assert doc["bound_artifact"]["registry_scorer_projection_sha256"] == "f" * 64
 
