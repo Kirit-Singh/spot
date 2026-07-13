@@ -29,22 +29,7 @@ import json
 import os
 from typing import Any, Optional
 
-try:                                    # as a package module — the PRODUCER side
-    from .arm_topology import LANE_DIRECT, LANE_PATHWAY, LANE_TEMPORAL, RunManifestError
-except ImportError:                     # ...and FLAT, the way the verifier loads its modules
-    # The verifier does not import the producer's package (arm_topology reaches for
-    # `config`, which only resolves under `direct.`), and it should not: it reimplements the
-    # contract independently in `verify_manifest_rules`. So take the lane names from THERE —
-    # if the two ever disagree about what a lane is called, that is a finding, not a detail
-    # to paper over with a second copy of the literals.
-    from verify_manifest_rules import (  # type: ignore  # noqa: I001
-        LANE_DIRECT,
-        LANE_PATHWAY,
-        LANE_TEMPORAL,
-    )
-
-    class RunManifestError(Exception):   # type: ignore[no-redef]
-        """The flat-mode refusal. Same meaning; the verifier owns its own type."""
+from .arm_topology import LANE_DIRECT, LANE_PATHWAY, LANE_TEMPORAL, RunManifestError
 
 # --------------------------------------------------------------------------- #
 # THE NATIVE CONTRACTS, read from the producers' own bytes:

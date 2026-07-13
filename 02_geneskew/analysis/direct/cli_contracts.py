@@ -1,29 +1,54 @@
 """THE EXACT PER-LANE CLI INVOCATION CONTRACT. W7's scheduler reads this.
 
-Split out of ``arm_topology`` for size. No number is written here: a count in this file
-would be a count nobody measured. The SOURCE of each count is named instead, so a reader
-can go and check it.
+EVERY FLAG HERE WAS READ OFF THE PRODUCER'S OWN ``argparse``, at the pinned commit below,
+and ``test_cli_contracts.py`` RE-EXTRACTS them from those same bytes and refuses if this file
+has drifted. That check exists because this file had drifted, comprehensively:
+
+    it named `python -m direct.cli`          the producer is `direct.run_arms`
+    it named `python -m direct.run_pathway`  the producer is `direct.run_pathway_arms`
+    it required `--stage1-v3-selection`      NO producer has ever had such a flag
+    it required `--stage1-v3-schema`         nor such a flag
+
+A scheduler that ran this contract would have died on argv, on every lane. An invocation
+contract nobody parses is a comment with a colon in it.
+
+No COUNT is written here: a number in this file would be a number nobody measured. The
+SOURCE of each count is named instead, so a reader can go and check it.
 """
 from __future__ import annotations
 
 from .arm_topology import BUNDLE_FILES, LANE_DIRECT, LANE_PATHWAY, LANE_TEMPORAL
 
-# --------------------------------------------------------------------------- #
-# THE EXACT PER-LANE CLI INVOCATION CONTRACT.
-#
-# WHAT produces each bundle, WHAT it writes, and WHERE its row count is supposed to come
-# from. No count is written here: a number in this file would be a number nobody measured.
-# The SOURCE of the count is named, so a reader can go and check it.
-# --------------------------------------------------------------------------- #
+# THE BYTES THIS CONTRACT WAS READ FROM. The parser test re-extracts from exactly these, so
+# a producer that changes its argv without changing this file fails a test rather than a run.
+PRODUCER_SOURCE = {
+    LANE_DIRECT: ("fc9bdcd", "02_geneskew/analysis/direct/run_arms.py"),
+    LANE_TEMPORAL: ("2021d90",
+                    "02_geneskew/analysis/direct/temporal/arms/run_temporal_arms.py"),
+    LANE_PATHWAY: ("2435b92", "02_geneskew/analysis/direct/run_pathway_arms.py"),
+}
+
+# The retired entry points. Each still runs, and each produces a release the aggregate must
+# then refuse — which is the worst possible failure mode: a scheduler that "worked".
+RETIRED_COMMANDS = {
+    "python -m direct.cli": "the per-condition SCREEN, not an all-arm bundle",
+    "python -m direct.temporal.cli": (
+        "the RETIRED flat temporal lane: it emits ONE pair's two arms, not the six all-arm "
+        "bundles"),
+    "python -m direct.run_pathway": "the pathway SCREEN, not the pathway ARM bundles",
+}
+
 CLI_CONTRACTS = {
     LANE_DIRECT: {
-        "command": "python -m direct.cli",
-        "required_arguments": [
-            "--stage1-v3-selection", "--stage1-v3-schema", "--registry", "--de-main",
-            "--by-guide", "--by-donors", "--sgrna", "--guide-manifest",
-            "--source-registry", "--stage1-release", "--env-lock", "--lane",
-            "--out-root"],
-        "one_invocation_per": "condition",
+        "command": "python -m direct.run_arms",
+        # argparse `required=True`, from the producer's own bytes.
+        "required_arguments": ["--de-main", "--out-root"],
+        # ONE invocation emits ALL THREE condition bundles. Not three invocations: the lane's
+        # own flag says so, and a scheduler that looped conditions would write three
+        # single-condition runs whose run-ids do not agree.
+        "invocation_flags": ["--all-conditions"],
+        "one_invocation_per": "the whole lane (--all-conditions emits every condition bundle)",
+        "n_invocations": 1,
         "output_filenames": sorted(set(BUNDLE_FILES[LANE_DIRECT].values()) | {
             "screen.parquet", "masks.parquet", "contributing_guides.parquet",
             "guide_support.parquet", "donor_support.parquet", "axis.json",
@@ -38,15 +63,12 @@ CLI_CONTRACTS = {
         "expected_exit_code": 0,
     },
     LANE_TEMPORAL: {
-        # the PRODUCTION scheduler path. `direct.temporal.cli` is the RETIRED flat lane: it
-        # emits one pair's two arms, not the six all-arm bundles, and a scheduler that ran
-        # it would produce a release the aggregate must then refuse.
         "command": "python -m direct.temporal.arms.run_temporal_arms",
-        "required_arguments": [
-            "--stage1-v3-selection", "--stage1-v3-schema", "--registry", "--de-main",
-            "--by-guide", "--by-donors", "--sgrna", "--guide-manifest",
-            "--source-registry", "--stage1-release", "--batch-policy", "--out-root"],
-        "one_invocation_per": "ordered condition pair",
+        "required_arguments": ["--conditions", "--env-lock", "--out-root", "--stage1-view"],
+        # ONE invocation emits all six ordered pairs.
+        "invocation_flags": ["--all-pairs"],
+        "one_invocation_per": "the whole lane (--all-pairs emits every ordered pair bundle)",
+        "n_invocations": 1,
         "output_filenames": sorted(set(BUNDLE_FILES[LANE_TEMPORAL].values()) | {
             "temporal.parquet", "endpoints.parquet"}),
         "expected_row_count_source":
@@ -58,12 +80,13 @@ CLI_CONTRACTS = {
         "expected_exit_code": 0,
     },
     LANE_PATHWAY: {
-        "command": "python -m direct.run_pathway",
-        "required_arguments": [
-            "--stage1-v3-selection", "--stage1-v3-schema", "--registry", "--de-main",
-            "--by-guide", "--by-donors", "--sgrna", "--gene-sets", "--guide-manifest",
-            "--source-registry", "--stage1-release", "--out-root"],
+        "command": "python -m direct.run_pathway_arms",
+        "required_arguments": ["--condition", "--de-main", "--gene-sets", "--out-root",
+                               "--signature-matrix-root"],
+        # ...and this lane has NO all-in-one flag: it is invoked once per bundle.
+        "invocation_flags": [],
         "one_invocation_per": "condition x gene-set source",
+        "n_invocations": 6,
         "output_filenames": sorted(set(BUNDLE_FILES[LANE_PATHWAY].values()) | {
             "pathway.json"}),
         "expected_row_count_source":

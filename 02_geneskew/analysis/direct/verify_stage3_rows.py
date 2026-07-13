@@ -57,8 +57,15 @@ ENSG_RE = re.compile(r"^ENSG[0-9]+$")
 
 PROGRAM_DIRECTIONS = ("increase", "decrease")
 
+# Stage 3 consumes the ADMITTED NORMALIZED ranking records — {target_id, arm_value,
+# evaluable, rank} — never a raw producer shape. The pathway lane carries NO target rows: its
+# records are (arm x gene set) with an enrichment value, and an enrichment value read as a
+# target's arm value would prescribe a drug for a gene set.
+NORMALIZED_RECORD_FIELDS = ("target_id", "arm_value", "evaluable", "rank")
+TARGET_EVIDENCE_LANES = ("direct", "temporal")
+
 REQUIRED = (
-    "schema_version", "arm_key", "program_id", "target_id", "target_id_namespace",
+    "schema_version", "lane", "arm_key", "program_id", "target_id", "target_id_namespace",
     "observed_perturbation_modality", "perturbation_target_effect",
     "program_effect_direction", "desired_target_modulation", "phenocopy_class",
     "arm_value", "evaluable", "rank",
@@ -72,6 +79,7 @@ G_DIRECTION = "desired_target_modulation_rederives_from_the_oriented_arm_value"
 G_PHENOCOPY = "phenocopy_class_follows_the_modulation_and_is_never_equivalence"
 G_NO_AGONIST = "a_negative_arm_value_is_never_promoted_to_supported"
 G_NAMESPACE = "target_id_namespace_is_declared_in_enum_and_in_the_release_universe"
+G_LANE = "only_direct_and_temporal_carry_crispri_target_rows"
 
 
 def _rederive(arm_value: Any, evaluable: Any) -> str:
@@ -104,6 +112,15 @@ def verify_row(row: dict[str, Any], *, universe: dict[str, str]) -> list[str]:
     if missing:
         bad.append(f"{G_FIELDS}: {tid}: missing {missing}")
         return bad                        # the rest would be checking fields that aren't there
+
+    # (0) THE LANE. Pathway records are one per (arm x GENE SET), carrying an enrichment value
+    # and a leading edge — not a per-target CRISPRi measurement. A pathway record that reached
+    # Stage 3 as a target row would let an ENRICHMENT SCORE be read as a target's arm value,
+    # and a gene set be prescribed a drug.
+    if row["lane"] not in TARGET_EVIDENCE_LANES:
+        bad.append(f"{G_LANE}: {tid}: lane {row['lane']!r} does not carry CRISPRi target "
+                   f"rows; {list(TARGET_EVIDENCE_LANES)} do. An enrichment value is a "
+                   "statement about a gene set, not a measurement of a target under knockdown")
 
     # (1) WHAT WAS DONE is a property of the assay. It is a constant, and a row whose
     # modality varies with anything at all has derived it from something it should not have.
@@ -206,3 +223,53 @@ def verify_rows(rows: list[dict[str, Any]], *, universe: dict[str, str]) -> dict
         "n_inhibitor_opposed": by_class.get(INHIBITOR_OPPOSED, 0),
         "verdict": "admit" if not failures else "reject",
     }
+
+
+# --------------------------------------------------------------------------- #
+# THE ARTIFACT GATE. Re-derive every direction from the BYTES ON DISK.
+# --------------------------------------------------------------------------- #
+STAGE3_ARTIFACT = "stage3_rows.json"
+G_SELF_HASH = "the_stage3_artifact_hashes_to_what_it_says_it_does"
+G_PATHWAY_ROWS = "a_pathway_bundle_ships_no_crispri_target_rows"
+
+
+def verify_artifact(bundle_dir: str, *, universe: dict) -> dict:
+    """Open the bundle's own ``stage3_rows.json`` and re-derive all of it. Never trusts it."""
+    import hashlib
+    import json
+    import os
+
+    path = os.path.join(bundle_dir, STAGE3_ARTIFACT)
+    if not os.path.exists(path):
+        return {"verdict": "reject", "n_failed": 1,
+                "failures": [f"{bundle_dir}: no {STAGE3_ARTIFACT}"]}
+    with open(path) as fh:
+        doc = json.load(fh)
+
+    failures: list[str] = []
+
+    # THE BYTES. Recomputed over the body EXCLUDING the field that carries the hash — so a
+    # byte edited after admission cannot agree with the hash that was admitted.
+    claimed = doc.get("rows_sha256")
+    derived = hashlib.sha256(
+        json.dumps({k: v for k, v in doc.items() if k != "rows_sha256"}, sort_keys=True,
+                   separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+    if claimed != derived:
+        failures.append(
+            f"{G_SELF_HASH}: {bundle_dir}: rows_sha256 says {str(claimed)[:16]}; the bytes on "
+            f"disk hash to {derived[:16]}. Something was edited after it was written")
+
+    # A pathway bundle may ship CONTEXT. It may never ship a CRISPRi target row.
+    if doc.get("lane") not in TARGET_EVIDENCE_LANES and doc.get("target_rows"):
+        failures.append(
+            f"{G_PATHWAY_ROWS}: {bundle_dir}: a {doc.get('lane')!r} bundle ships "
+            f"{len(doc['target_rows'])} target row(s). An enrichment value is a statement "
+            "about a gene set, not a measurement of a target under knockdown")
+
+    report = verify_rows(doc.get("target_rows") or [], universe=universe)
+    failures += report["failures"]
+    report["failures"] = failures[:50]
+    report["n_failed"] = len(failures)
+    report["verdict"] = "admit" if not failures else "reject"
+    report["bound_artifact"] = {"file": STAGE3_ARTIFACT, "rows_sha256": claimed}
+    return report

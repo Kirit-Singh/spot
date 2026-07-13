@@ -12,7 +12,6 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import bundle_shapes as BS  # noqa: E402  (the three NATIVE bundle shapes)
 import verify_bundle_rules as B  # noqa: E402
 import verify_manifest_rules as R  # noqa: E402
 import verify_release_rules as W  # noqa: E402  (the W5-audit rules)
@@ -87,10 +86,13 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         # producer side uses — `inv.get("context")` is a temporal-ism, and reading it here
         # gave Direct and pathway an EMPTY context, so `want_keys` was built over the wrong
         # slots and the all-arm check compared two sets of keys that could never match.
-        try:
-            norm = BS.normalize(inv, where=bid)
-        except BS.RunManifestError as exc:
-            missing.append(str(exc))
+        norm = R.native_view(inv)          # the VERIFIER's own restatement of the shapes
+        if norm is None:
+            missing.append(
+                f"{bid}: schema {str(inv.get('schema_version'))!r} names no known lane, or "
+                "the bundle does not carry its lane's own id and context fields. Three "
+                "producers, three contracts; an unrecognised fourth is a bundle nobody "
+                "can read")
             continue
         if norm["lane"] != lane:
             missing.append(f"{bid}: the manifest calls this a {lane} bundle; its own schema "
