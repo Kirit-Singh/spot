@@ -5,7 +5,7 @@
 // shows the neutral pending state (no stale/fixture rows). A genuinely verified v3 → real contrast.
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StageIsland } from '../StageIsland';
 import { SELECTION_V3_KEY } from '../../repository/source';
@@ -14,8 +14,12 @@ import { deriveExecutionStatus } from '../../stage1/selectionV3';
 import { deriveQuestionId } from '../../stage1/questionId';
 
 /** Build a spot.stage01_selection.v3 contract with REAL recomputed hashes (treg_like → th1_like @ Stim48hr). */
-async function buildV3(opts: { tamperFullContract?: string } = {}): Promise<Record<string, unknown>> {
-  const aId = 'treg_like', aDir = 'low', bId = 'th1_like', bDir = 'high';
+async function buildV3(opts: {
+  tamperFullContract?: string;
+  aId?: string;
+  bId?: string;
+} = {}): Promise<Record<string, unknown>> {
+  const aId = opts.aId ?? 'treg_like', aDir = 'low', bId = opts.bId ?? 'th1_like', bDir = 'high';
   const cc: Record<string, unknown> = {
     A: { program_id: aId, score_field: `${aId}_score`, direction: aDir },
     B: { program_id: bId, score_field: `${bId}_score`, direction: bDir },
@@ -70,12 +74,25 @@ describe('StageIsland header — verified v3 only (no fail-open)', () => {
     window.history.pushState({}, '', '/targets.html'); // production, no demo
     window.localStorage.clear();
     window.sessionStorage.clear();
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === 'data/stage01_program_registry.json') {
+        return {
+          ok: true,
+          text: async () => JSON.stringify({ programs: [
+            { program_id: 'treg_like', display_label: 'Treg-like' },
+            { program_id: 'th1_like', display_label: 'Th1-like' },
+          ] }),
+        };
+      }
+      return { ok: false, text: async () => '' };
+    }));
   });
   afterEach(() => {
     cleanup();
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.pushState({}, '', '/02_page.html');
+    vi.unstubAllGlobals();
   });
 
   it('ATTACK: a forged valid-shaped v3 (bad full_contract_content_sha256) renders NO contrast', async () => {
@@ -102,11 +119,22 @@ describe('StageIsland header — verified v3 only (no fail-open)', () => {
 
     const header = screen.getByRole('banner');
     await waitFor(() =>
-      expect(within(header).getByText('treg_like lo (at 48 hr) → th1_like hi (at 48 hr)')).toBeInTheDocument(),
+      expect(within(header).getByText('Treg-like lo (at 48 hr) → Th1-like hi (at 48 hr)')).toBeInTheDocument(),
     );
     expect(
       within(header).getByRole('button', { name: 'Clear selection and return to Programs' }),
     ).toBeInTheDocument();
     expect(within(header).queryByText(/Select populations in/)).toBeNull();
+  });
+
+  it('REFUSES display of a coherently re-hashed selection whose axes are absent from the registry', async () => {
+    const unknown = await buildV3({ aId: 'GHOST_A', bId: 'GHOST_B' });
+    window.localStorage.setItem(SELECTION_V3_KEY, JSON.stringify(unknown));
+    renderIsland();
+
+    const header = screen.getByRole('banner');
+    await waitFor(() => expect(within(header).getByText(/Select populations in/)).toBeInTheDocument());
+    expect(within(header).queryByText(/GHOST_A|GHOST_B/)).toBeNull();
+    expect(within(header).queryByRole('button', { name: /Clear selection and return to Programs/ })).toBeNull();
   });
 });

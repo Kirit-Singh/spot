@@ -113,6 +113,15 @@ export function selectionDisplayFromV3(
   };
 }
 
+/** A content-consistent selection still must name axes offered by the served Stage-1 registry.
+ *  Hash recomputation proves internal consistency; registry membership proves display provenance. */
+export function selectionProgramsAreKnown(
+  sel: SelectionV3,
+  labels: Map<string, string>,
+): boolean {
+  return labels.has(sel.A.program_id) && labels.has(sel.B.program_id);
+}
+
 interface ProdState {
   loading: boolean;
   selection: SelectionV3 | null; // verified v3 (null → prompt); NEVER an unverified/forged contract
@@ -152,9 +161,12 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
 
   // Header contrast: production → the VERIFIED v3 ONLY (never a forged or synthetic contrast), with
   // Tier-2 display labels resolved from the registry (never a raw program_id when the registry names it).
-  const contrast = prod.selection ? contrastTitle(contrastFromV3(prod.selection, prod.labels)) : null;
-  const selectionDisplay = prod.selection
-    ? selectionDisplayFromV3(prod.selection, prod.labels)
+  const displaySelection = prod.selection && selectionProgramsAreKnown(prod.selection, prod.labels)
+    ? prod.selection
+    : null;
+  const contrast = displaySelection ? contrastTitle(contrastFromV3(displaySelection, prod.labels)) : null;
+  const selectionDisplay = displaySelection
+    ? selectionDisplayFromV3(displaySelection, prod.labels)
     : null;
   const headerTitle = contrast ?? NO_SELECTION_TITLE;
   const headerNode = contrast ? undefined : (

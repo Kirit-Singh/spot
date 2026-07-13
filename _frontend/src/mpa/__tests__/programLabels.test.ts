@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { loadProgramLabels, programLabel } from '../programLabels';
-import { contrastFromV3, selectionDisplayFromV3 } from '../StageIsland';
+import { contrastFromV3, selectionDisplayFromV3, selectionProgramsAreKnown } from '../StageIsland';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
 
 const REGISTRY = JSON.stringify({
@@ -81,5 +81,19 @@ describe('Tier-2 program label resolution', () => {
     expect(display.A.condition).toBe('Stim8hr');
     expect(display.B.condition).toBe('Stim48hr');
     expect(display.analysis_mode).toBe('temporal_cross_condition');
+  });
+
+  it('requires both selection axes to be named by the served registry before display', async () => {
+    const labels = await loadProgramLabels(fetchRegistry);
+    const known = {
+      A: { program_id: 'treg_like', direction: 'high' },
+      B: { program_id: 'th17_like', direction: 'low' },
+    } as unknown as SelectionV3;
+    const unknown = {
+      A: { program_id: 'GHOST_A', direction: 'high' },
+      B: { program_id: 'th17_like', direction: 'low' },
+    } as unknown as SelectionV3;
+    expect(selectionProgramsAreKnown(known, labels)).toBe(true);
+    expect(selectionProgramsAreKnown(unknown, labels)).toBe(false);
   });
 });
