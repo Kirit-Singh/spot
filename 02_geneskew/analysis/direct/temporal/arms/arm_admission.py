@@ -41,8 +41,8 @@ from ...arm_keys import DESIRED_CHANGES, SIGN
 from ...hashing import content_hash
 from .. import admission as comparison_admission
 from . import arm_bundle as ab
+from . import arm_env, arm_programs
 from . import arm_estimand as est
-from . import arm_programs
 
 # --------------------------------------------------------------------------- #
 # Gate 3: the arm firewall. A reusable arm carries NONE of these.
@@ -58,20 +58,12 @@ ARM_FORBIDDEN_RE = re.compile(ARM_FORBIDDEN_PATTERN, re.IGNORECASE)
 # not get to keep the exemption after flipping the prohibition off.
 ARM_NEGATIVE_DECLARATIONS = {"bundle_carries_role_or_pole": False}
 
-# THE ONE EXACT-NAME EXEMPTION from the INHERITED firewall (gate 2).
-#
-# ``registry_scorer_view_sha256`` matches ``/score/`` — because "scorer" contains "score".
-# It is nonetheless legitimate: it is the Stage-1 v3 contract's OWN field name for the
-# content hash of the program REGISTRY SCORER VIEW, and it is carried under the contract's
-# spelling so a reader can trace the program axis back to the release it was derived from.
-# It is the hash of a registry. It is not a score, not an objective and not a ranking
-# quantity — nothing ranks, gates or sorts on it.
-#
-# The exemption is the EXACT SPELLING, not the shape. There is no pattern-shaped hole here
-# for a ``combined_scorer`` or a ``scorer_value`` to walk through.
-# The scorer-view hashes match ``/score/`` only because "scorer" contains "score". They are
-# the Stage-1 v3 scorer VIEW content hashes (registry + raw + canonical), carried under the
-# contract's own spelling; nothing ranks, gates or sorts on them. Exempt by EXACT spelling.
+# EXACT-NAME EXEMPTIONS from the INHERITED firewall (gate 2). These match ``/score/`` only
+# because "scorer" contains "score". They are the Stage-1 v3 scorer VIEW / projection content
+# hashes (registry view + raw + canonical, and the overall projection identity), carried
+# under the contract's own spelling; nothing ranks, gates or sorts on them. The exemption is
+# the EXACT SPELLING, not the shape — no pattern-shaped hole for a ``combined_scorer`` or a
+# ``scorer_value`` to walk through.
 INHERITED_FIREWALL_EXCEPTIONS = frozenset({
     "registry_scorer_view_sha256", "scorer_view_raw_sha256",
     "scorer_view_canonical_sha256", "registry_scorer_projection_sha256"})
@@ -136,8 +128,9 @@ BUNDLE_KEYS = frozenset({
     "bundle_id", "from_condition", "to_condition",
     "n_programs", "n_desired_changes", "n_arms", "n_targets", "n_base_records",
     "arm_keys", "base_records", "arms", "program_admission", "stage1_binding", "estimand",
-    "perturbation", "method", "code_identity", "preflight_ref",
-    "external_admission_requirement", "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
+    "perturbation", "method", "code_identity", "env_lock", "preflight_ref",
+    "external_admission_requirement", "bundle_is_pair_agnostic",
+    "bundle_carries_role_or_pole",
 })
 
 # The two roles the run binding must keep DISTINCT. ``code_identity`` = WHICH BUILD (the
@@ -317,6 +310,12 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
           bool((bundle.get("method") or {}).get("temporal_method_sha256"))
           and bool(code),
           "a method digest is not a build and a build is not a method; both must be bound")
+
+    # the committed Stage-2 solver-lock identity — required in every mode; a production
+    # (non-synthetic) lock must have been verified from the actual bytes.
+    env_bad = arm_env.env_lock_nulls(bundle.get("env_lock") or {})
+    check("bundle_binds_the_stage2_solver_lock_identity", not env_bad,
+          f"env_lock is missing/unverified: {env_bad}")
 
     # ---- gate 8: the reusable arm stays PAIR-AGNOSTIC — no pole-derived projection ----
     projection_hits = [h for h in _pair_projection_keys(bundle)]

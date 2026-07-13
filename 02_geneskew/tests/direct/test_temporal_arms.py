@@ -270,7 +270,8 @@ class TestSignTransformAndRanks:
             from_endpoints=list(reversed(FX.endpoints("FixRest"))),
             to_endpoints=list(reversed(FX.endpoints("FixStim48"))),
             method=FX.method(), conditions=list(FX.CONDITIONS),
-            scorer_view_sha256="a" * 64, stage1=FX.stage1(), code=FX.code_identity())
+            scorer_view_sha256="a" * 64, stage1=FX.stage1(), env_lock=FX.env_lock(),
+            code=FX.code_identity())
         assert a == b, "ranking and emission must not depend on input row order"
 
     def test_a_tie_breaks_on_target_id_ascending_in_BOTH_arms(self):
@@ -1440,11 +1441,59 @@ class TestAuditDefectsClosed:
             from_endpoints=FX.endpoints(bundles[3]["from_condition"]),
             to_endpoints=FX.endpoints(bundles[3]["to_condition"]),
             method=FX.method(), conditions=list(FX.CONDITIONS), scorer_view_sha256="a" * 64,
-            stage1=FX.stage1(), code=fake)
+            stage1=FX.stage1(), env_lock=FX.env_lock(), code=fake)
         mixed = bundles[:3] + [b] + bundles[4:]
         addrs = [arm_emit.emit_bundle(x, root) for x in mixed]
         with pytest.raises(arm_release.ReleaseError, match="code_identity|one build"):
             arm_release.build_release(addrs, root)
+
+    def test_6_the_bundle_binds_the_stage2_solver_lock_identity(self, tmp_path):
+        b = FX.build()
+        el = b["env_lock"]
+        assert el["env_lock_sha256"] == "d0" * 32
+        assert el["env_lock_is_synthetic"] is True   # fixture: synthetic but NOT omitted
+        assert el["env_lock_rule_id"].endswith("stage2_solver_lock_sha256.v1")
+        # carried into the root inventory identity too
+        arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        man = json.loads(
+            open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
+        assert man["env_lock_sha256"] == "d0" * 32
+
+    def test_6_a_bundle_with_no_env_lock_is_refused(self):
+        from direct.temporal.arms import arm_bundle
+        with pytest.raises(arm_bundle.BundleError, match="solver-lock|env_lock"):
+            FX.build(env_lock=None)
+
+    def test_6_a_production_env_lock_must_be_verified_from_bytes(self):
+        # a non-synthetic lock that was NOT verified from bytes is refused by the gate
+        b = FX.build()
+        b["env_lock"] = {"env_lock_sha256": "e" * 64, "env_lock_is_synthetic": False,
+                         "env_lock_verified_from_bytes": False,
+                         "env_lock_name": "x", "env_lock_rule_id": "r"}
+        arm_bundle_reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("env_lock" in f or "solver_lock" in f for f in report["failures"])
+
+    def test_6_production_env_lock_block_reads_and_verifies_actual_bytes(self, tmp_path):
+        from direct.temporal.arms import arm_env
+        lock = tmp_path / "base.lock"
+        lock.write_bytes(b"numpy==1.26.4\nscipy==1.13.0\n")
+        from direct.hashing import file_sha256
+        blk = arm_env.env_lock_block(str(lock))
+        assert blk["env_lock_verified_from_bytes"] is True
+        assert blk["env_lock_is_synthetic"] is False
+        assert blk["env_lock_sha256"] == file_sha256(str(lock))   # bytes, not a supplied hash
+        assert blk["env_lock_name"] == "base.lock"                # basename, never the path
+
+    def test_6_a_missing_or_swapped_production_lock_is_refused(self, tmp_path):
+        from direct.temporal.arms import arm_env
+        with pytest.raises(arm_env.EnvLockError, match="missing"):
+            arm_env.env_lock_block("/no/such/lock")
+        lock = tmp_path / "base.lock"
+        lock.write_bytes(b"real")
+        with pytest.raises(arm_env.EnvLockError, match="swapped"):
+            arm_env.env_lock_block(str(lock), expect_sha256="0" * 64)
 
     def test_5_reverse_pair_arm_values_are_exact_negations_across_bundles(self):
         fwd = FX.build("FixRest", "FixStim48")

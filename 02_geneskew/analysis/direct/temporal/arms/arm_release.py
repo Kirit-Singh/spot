@@ -121,7 +121,8 @@ class ReleaseError(ValueError):
 # by ONE code from ONE Stage-1 binding. A non-first bundle with a self-consistent fake
 # commit or a divergent method would otherwise hide in the middle of a release an
 # aggregate that only pins the first bundle would admit.
-_CROSS_BUNDLE_IDENTICAL = ("code_identity", "stage1_binding", "method", "program_admission")
+_CROSS_BUNDLE_IDENTICAL = ("code_identity", "stage1_binding", "method",
+                           "program_admission", "env_lock")
 
 
 def _check_cross_bundle_identity(bundle_docs: list[dict[str, Any]]) -> list[str]:
@@ -172,6 +173,7 @@ def build_release(addresses: list[dict[str, Any]], out_root: str,
                 "and indistinguishable from evidence")
 
     s1 = dict(bundle_docs[0]["stage1_binding"])
+    env_lock = dict(bundle_docs[0].get("env_lock") or {})
     topology = expected_topology(s1.get("admitted_programs") or [],
                                  s1.get("selector_condition_sequence") or [])
 
@@ -208,6 +210,9 @@ def build_release(addresses: list[dict[str, Any]], out_root: str,
         "lane": arm_bundle.BUNDLE_LANE,
         "analysis_mode": arm_bundle.ANALYSIS_MODE,
         "stage1_binding": s1,
+        # the committed Stage-2 solver-lock identity, shared by all six bundles
+        "env_lock": env_lock,
+        "env_lock_sha256": env_lock.get("env_lock_sha256"),
         "topology": topology,
         "n_bundles": len(bundles),
         "n_logical_arms": len(got_keys),

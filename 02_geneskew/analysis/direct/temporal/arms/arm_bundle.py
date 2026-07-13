@@ -315,6 +315,7 @@ def build_bundle(*, from_condition: str, to_condition: str,
                  conditions: Optional[list[str]] = None,
                  scorer_view_sha256: Optional[str] = None,
                  stage1: Optional[dict[str, Any]] = None,
+                 env_lock: Optional[dict[str, Any]] = None,
                  code: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The complete, deterministic bundle for ONE frozen ordered condition pair.
 
@@ -339,6 +340,12 @@ def build_bundle(*, from_condition: str, to_condition: str,
         arm_programs.require_ordered_pair(conditions, from_condition, to_condition)
     if not admitted:
         raise BundleError("no admitted programs; there is no program axis to build arms on")
+    if not env_lock or not env_lock.get("env_lock_sha256"):
+        raise BundleError(
+            "a temporal bundle must bind the committed Stage-2 solver-lock "
+            "(env_lock_sha256) — a bundle with no environment identity cannot be "
+            "reproduced. Use arm_env.env_lock_block(path=…) or, in fixture mode, "
+            "arm_env.env_lock_block(synthetic_sha256=…); identity may not be omitted")
 
     from_by_target = _endpoints_by_target(from_endpoints, from_condition)
     to_by_target = _endpoints_by_target(to_endpoints, to_condition)
@@ -398,6 +405,9 @@ def build_bundle(*, from_condition: str, to_condition: str,
         # so an arm inventory cannot be lifted onto a build that did not produce it.
         "method": dict(method),
         "code_identity": dict(code if code is not None else code_identity()),
+        # the committed Stage-2 solver-lock identity — bytes verified upstream, bound into
+        # the bundle id so an arm inventory cannot be lifted onto a different environment.
+        "env_lock": dict(env_lock),
         # A POINTER to the producer's own PREFLIGHT (a self-check, never an admission), and
         # a DECLARATION of the required external contract — NOT a claim that an independent
         # verification already exists. The producer does not assert an admission it has not

@@ -90,6 +90,12 @@ def condition_universe(release=None):
     return arm_programs.admitted_conditions(FixtureRelease() if release is None else release)
 
 
+def env_lock():
+    """A FIXTURE env-lock — explicitly SYNTHETIC, but never identity-less (marked)."""
+    from direct.temporal.arms import arm_env
+    return arm_env.env_lock_block(synthetic_sha256="d0" * 32)
+
+
 def stage1(release=None):
     """The FIXTURE Stage-1 v3 release metadata. Every hash is INVENTED, clearly-marked
     fixture data — never a measurement — but complete (non-null) so the release is GO.
@@ -209,6 +215,7 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
     conds = kw.pop("conditions", _UNSET)
     code = kw.pop("code", _UNSET)
     s1 = kw.pop("stage1", _UNSET)
+    lock = kw.pop("env_lock", _UNSET)
     return arm_bundle.build_bundle(
         from_condition=from_condition, to_condition=to_condition,
         admitted=admitted() if progs is _UNSET else progs,
@@ -218,6 +225,7 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
         conditions=list(CONDITIONS) if conds is _UNSET else conds,
         scorer_view_sha256=kw.pop("scorer_view_sha256", "a" * 64),
         stage1=stage1() if s1 is _UNSET else s1,
+        env_lock=env_lock() if lock is _UNSET else lock,
         code=code_identity() if code is _UNSET else code,
         **kw)
 

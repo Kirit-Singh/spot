@@ -73,6 +73,7 @@ REQUIRED_GATES = (
     "bundle_declares_the_crispri_knockdown_modality",
     "bundle_binds_a_structural_code_identity_without_self_admitting_clean",
     "method_digest_and_code_identity_are_both_bound_as_distinct_roles",
+    "bundle_binds_the_stage2_solver_lock_identity",
     "no_pole_derived_or_pair_based_program_projection_field",
     "stage1_binding_is_complete_and_non_null",
     "stage1_binding_programs_match_the_admitted_program_set",
