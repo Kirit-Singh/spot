@@ -237,6 +237,49 @@ def test_the_assessment_emits_scorecards_and_the_verifier_reconstructs_them(tmp_
     assert verify_release(release, METHOD_DIR)["status"] == "pass"
 
 
+def test_require_external_verifier_refuses_when_gate2_did_not_run(tmp_path, monkeypatch):
+    """A REAL run must honour the two-gate frozen-Stage-3 admission. With
+    --require-external-verifier and no Stage-3 verifier context configured, gate 2 cannot run,
+    so the CLI REFUSES (exit 2) rather than admitting on gate 1 alone. This is the flag the
+    pinned real-run command sets so a bundle Stage-3's own verifier never saw cannot slip in.
+    """
+    for name in ("SPOT_STAGE3_VERIFIER_ROOT", "SPOT_STAGE3_CACHE_ROOT",
+                 "SPOT_STAGE3_DIRECT_RUN", "SPOT_STAGE3_DIRECT_INPUTS_ROOT"):
+        monkeypatch.delenv(name, raising=False)
+    a = adapt_annotation_bundle(BUNDLE)
+    ev = _evidence(tmp_path, a)
+    out = str(tmp_path / "out")
+    rc = cli(["--stage3-annotation-bundle", BUNDLE, "--evidence-bundle", ev,
+              "--outputs-root", out, "--require-external-verifier"])
+    assert rc == 2
+    # nothing was written: a refused admission emits no scorecard set
+    assert not os.path.exists(out) or not os.listdir(out)
+
+
+def test_require_external_verifier_admits_and_emits_when_gate2_passes(tmp_path, monkeypatch):
+    """The flag is not a blanket refuse: with a Stage-3 verifier context whose gate 2 PASSES,
+    the CLI admits and emits the scorecard set. This is the pinned real-run command's success
+    path — proved here against a stub verifier (the real verifier's checks are Stage 3's)."""
+    root = str(tmp_path / "verifier_root")
+    pkg = os.path.join(root, "verifier")
+    os.makedirs(pkg)
+    open(os.path.join(pkg, "__init__.py"), "w").close()
+    with open(os.path.join(pkg, "verify_stage3.py"), "w", encoding="utf-8") as fh:
+        fh.write("import sys\nsys.exit(0)\n")
+    monkeypatch.setenv("SPOT_STAGE3_VERIFIER_ROOT", root)
+    for name in ("SPOT_STAGE3_CACHE_ROOT", "SPOT_STAGE3_DIRECT_RUN",
+                 "SPOT_STAGE3_DIRECT_INPUTS_ROOT"):
+        monkeypatch.setenv(name, str(tmp_path))
+
+    a = adapt_annotation_bundle(BUNDLE)
+    ev = _evidence(tmp_path, a)
+    out = str(tmp_path / "out")
+    assert cli(["--stage3-annotation-bundle", BUNDLE, "--evidence-bundle", ev,
+                "--outputs-root", out, "--require-external-verifier"]) == 0
+    release = os.path.join(out, os.listdir(out)[0])
+    assert os.path.exists(os.path.join(release, "scorecards.json"))
+
+
 def test_a_production_pointer_is_refused_nonzero(tmp_path):
     a = adapt_annotation_bundle(BUNDLE)
     ev = _evidence(tmp_path, a)

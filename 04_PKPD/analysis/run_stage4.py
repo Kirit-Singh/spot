@@ -1,9 +1,24 @@
 """Stage-4 CLI.
 
     python -m analysis.run_stage4 --fixtures --outputs-root 04_PKPD/outputs
+    python -m analysis.run_stage4 --stage3-annotation-bundle <dir> --evidence-bundle <json> \
+        --require-external-verifier --outputs-root 04_PKPD/outputs
     python -m analysis.run_stage4 --stage3-bundle <dir-or-document> [--evidence-bundle <json>]
 
-Two doors, and no third:
+The CURRENT frozen-Stage-3 door is --stage3-annotation-bundle
+(`spot.stage03_drug_annotation.v1`, r8 e5aa666). For a REAL run add --require-external-verifier
+so admission runs BOTH gates — Stage-4's own byte restatement AND Stage-3's
+`verifier.verify_stage3` (gate 2, out-of-process) — with the Stage-3 build context in
+SPOT_STAGE3_VERIFIER_ROOT / SPOT_STAGE3_CACHE_ROOT / SPOT_STAGE3_DIRECT_RUN /
+SPOT_STAGE3_DIRECT_INPUTS_ROOT (+ optional SPOT_STAGE3_DIRECT_ANALYSIS). Without the flag the
+bundle is admitted on gate 1 alone and the run is NOT a data-bound integration.
+
+The doors, and no others:
+
+  --stage3-annotation-bundle  the current frozen-Stage-3 contract. Admits only rows with
+                    stage4_assessment_status=queued; an assessment is not promotion. With
+                    --require-external-verifier a bundle Stage-3's own verifier never passed is
+                    REFUSED (exit 2). A real evidence bundle is still required to emit scorecards.
 
   --stage3-bundle   a REAL Stage-3 emission (bundle directory, or the document inside it).
                     It goes through `stage3_adapter.load_stage3_bundle` + `adapt`, which
@@ -348,9 +363,16 @@ def annotation_receipt(admission: AnnotationAdmission, ran: bool, reason_code: s
 
 
 def run_annotation_door(bundle_path: str, evidence_path: Optional[str], outputs_root: str,
-                        receipt_out: Optional[str], write_pointer: bool, method: Any) -> int:
-    """The only door from Stage 3's spot.stage03_drug_annotation.v1 into Stage 4."""
-    admission = adapt_annotation_bundle(bundle_path)
+                        receipt_out: Optional[str], write_pointer: bool, method: Any,
+                        require_external_verifier: bool = False) -> int:
+    """The only door from Stage 3's spot.stage03_drug_annotation.v1 into Stage 4.
+
+    `require_external_verifier=True` is the REAL-run setting: it refuses a bundle that Stage
+    3's own `verifier.verify_stage3` (gate 2) has not actually passed. The Rejection it raises
+    is caught by `main`, which prints `REFUSED [stage3_external_verifier_not_run]` and exits 2.
+    """
+    admission = adapt_annotation_bundle(
+        bundle_path, require_external_verifier=require_external_verifier)
 
     if admission.candidate_set is None:
         _emit_receipt(
@@ -396,6 +418,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--outputs-root", default=DEFAULT_OUTPUTS_ROOT)
     ap.add_argument("--write-production-pointer", action="store_true",
                     help="attempt to advertise this run as the production scorecard set (will refuse)")
+    ap.add_argument("--require-external-verifier", action="store_true",
+                    help="a REAL run: require Stage-3's own verifier.verify_stage3 (gate 2) to "
+                         "have actually PASSED before admitting the bundle. Needs the Stage-3 "
+                         "build context in SPOT_STAGE3_VERIFIER_ROOT / SPOT_STAGE3_CACHE_ROOT / "
+                         "SPOT_STAGE3_DIRECT_RUN / SPOT_STAGE3_DIRECT_INPUTS_ROOT "
+                         "(+ optional SPOT_STAGE3_DIRECT_ANALYSIS). Refuses if gate 2 did not run.")
     args = ap.parse_args(argv)
 
     doors = [bool(args.stage3_bundle), bool(args.stage3_annotation_bundle),
@@ -410,7 +438,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.stage3_annotation_bundle:
             return run_annotation_door(args.stage3_annotation_bundle, args.evidence_bundle,
                                        args.outputs_root, args.receipt_out,
-                                       args.write_production_pointer, method)
+                                       args.write_production_pointer, method,
+                                       require_external_verifier=args.require_external_verifier)
         if args.stage3_bundle:
             return run_stage3_door(args.stage3_bundle, args.evidence_bundle, args.outputs_root,
                                    args.receipt_out, args.write_production_pointer, method)
