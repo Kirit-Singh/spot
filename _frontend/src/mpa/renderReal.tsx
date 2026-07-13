@@ -222,6 +222,7 @@ export function renderTargets(view: JoinedView, bundles: ResolvedBundles): React
 
 /** Pathways route — the two independent pathway panels only (no gene tables). */
 export function renderPathways(view: JoinedView): React.ReactNode {
+  if (!view.pathwayArmA || !view.pathwayArmB) return null;
   return (
     <div data-real-canvas data-route="pathways" className={CANVAS}>
       <PathwayArmTable arm={view.pathwayArmA} context={view.pathway_context} />

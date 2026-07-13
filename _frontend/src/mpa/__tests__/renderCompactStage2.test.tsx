@@ -66,6 +66,7 @@ describe('compact Stage-2 route rendering', () => {
   it('omits every optional pathway column when all producer values are null', async () => {
     const v = await view();
     for (const arm of [v.pathwayArmA, v.pathwayArmB]) {
+      if (!arm) throw new Error('fixture pathway arm missing');
       arm.rows = arm.rows.map((row) => ({ ...row, enrichment_value: null, target_source_coverage: null,
         global_coverage_disposition: null, n_leading_edge: null, peak_rank: null }));
     }

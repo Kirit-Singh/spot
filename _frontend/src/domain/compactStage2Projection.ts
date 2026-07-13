@@ -135,6 +135,7 @@ export interface CompactStage2SelectionView {
   pathway_context: 'condition_matched' | 'endpoint_pathway_context';
   geneArmA: CompactTargetArm;
   geneArmB: CompactTargetArm;
-  pathwayArmA: CompactPathwayArm;
-  pathwayArmB: CompactPathwayArm;
+  /** Null on the targets route so an admitted Direct/Temporal release can render before Pathway lands. */
+  pathwayArmA: CompactPathwayArm | null;
+  pathwayArmB: CompactPathwayArm | null;
 }

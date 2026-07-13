@@ -77,8 +77,8 @@ describe('compact Stage-2 production loader — all dropdown arrangements', () =
     const view = stage2View(result);
     expect(view?.geneArmA.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
     expect(view?.geneArmB.arm_key).toBe(temporalArmKey('prog_beta', 'decrease', from, to));
-    expect(view?.pathwayArmA.context.condition).toBe(from);
-    expect(view?.pathwayArmB.context.condition).toBe(to);
+    expect(view?.pathwayArmA?.context.condition).toBe(from);
+    expect(view?.pathwayArmB?.context.condition).toBe(to);
   });
 });
 

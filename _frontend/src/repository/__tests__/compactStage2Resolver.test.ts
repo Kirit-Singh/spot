@@ -34,8 +34,8 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
     const view = resolveCompactStage2Selection(projection, metadata, selection('within_condition', [condition], 'prog_beta', 'low', 'prog_alpha', 'low'));
     expect(view.geneArmA.arm_key).toBe(directArmKey('prog_beta', 'increase', condition));
     expect(view.geneArmB.arm_key).toBe(directArmKey('prog_alpha', 'decrease', condition));
-    expect(view.pathwayArmA.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', condition, 'reactome'));
-    expect(view.pathwayArmB.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', condition, 'reactome'));
+    expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', condition, 'reactome'));
+    expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', condition, 'reactome'));
     expect(view.pathway_context).toBe('condition_matched');
   });
 
@@ -45,9 +45,21 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
     const view = resolveCompactStage2Selection(projection, metadata, selection('temporal_cross_condition', [from, to]));
     expect(view.geneArmA.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
     expect(view.geneArmB.arm_key).toBe(temporalArmKey('prog_beta', 'increase', from, to));
-    expect(view.pathwayArmA.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', from, 'reactome'));
-    expect(view.pathwayArmB.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', to, 'reactome'));
+    expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', from, 'reactome'));
+    expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', to, 'reactome'));
     expect(view.pathway_context).toBe('endpoint_pathway_context');
+  });
+
+  it('resolves targets without requiring pathway arms, while the pathways route still fails closed', async () => {
+    const { projection, metadata } = await release();
+    for (const [key, arm] of Object.entries(projection.arms)) {
+      if (arm.lane === 'pathway') delete projection.arms[key];
+    }
+    const sel = selection('within_condition', ['Rest']);
+    const targetView = resolveCompactStage2Selection(projection, metadata, sel, 'targets');
+    expect(targetView.geneArmA.arm_key).toBe(directArmKey('prog_alpha', 'decrease', 'Rest'));
+    expect(targetView.pathwayArmA).toBeNull();
+    expect(() => resolveCompactStage2Selection(projection, metadata, sel, 'pathways')).toThrow(/pathway arm/);
   });
 
   it('fails closed when any exact requested arm is absent; it never substitutes another program or condition', async () => {

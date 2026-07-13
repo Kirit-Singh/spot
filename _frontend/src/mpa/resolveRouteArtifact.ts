@@ -230,7 +230,7 @@ export async function loadProductionProjection(
       projection_self_sha256: meta.projection_self_sha256,
     });
 
-    return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection) };
+    return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection, routeKey) };
   } catch {
     return null; // strict-parse rejection / view-resolution failure → unbound
   }
