@@ -95,3 +95,28 @@ until a real run fills them. It ships inside the release under `public/schemas/`
 `handoff_release.sh` re-verifies every staged byte, re-derives the content address, then writes
 `SEAL.json` (`sealed`, `seal_utc`, `manifest_content_sha256`, `verified_file_count`,
 `uploaded: false`). The seal certifies the **content**, not a publication — nothing is uploaded.
+
+## GO-BP-only critical path (Reactome PARKED)
+The pathway lane admits **one** gene-set collection: **GO-BP**. Reactome is **parked** — not
+required, not produced, and never advertised in the deployable UI bundle.
+
+Mark the pathway artifact `"pathway_collection": "go_bp"` and the assembler enforces
+`genesets.py`'s own contract:
+- `pathway_collection: "reactome"` → refused (**parked**); a pathway artifact that *names*
+  reactome → refused; a `dist/` (deployable UI) file that advertises it → refused.
+- GO-BP must name a **dated** `release_id` (YYYY-MM or YYYY-MM-DD) — "GO" is not a version, and an
+  enrichment that names no release cannot be reproduced or contested.
+- The artifact must carry a **64-hex gene-set byte pin** (`geneset_sha256` / `gmt_sha256` / …):
+  the GMT on disk must hash to its pin.
+
+## A consumer may only rest on independently admitted bytes
+`lanes.<stage>.consumes[] = {lane, artifact_sha256}`. Stage-3 reads Stage-2, Stage-4 reads
+Stage-3 — naming the upstream lane is not enough:
+- a null `artifact_sha256` → refused (a consumed artifact must be named by the bytes it *is*);
+- a hash that is not among that lane's admitted staged artifacts → refused;
+- an upstream lane that is not `ADMIT` → refused.
+
+**The producer's own pre-admission state is not an admission.** `verify_release_envelope` declares
+`pending` / `pending_independent_verification` as the producer's honest state; both are treated as
+**negative** verdicts, so they are refused *even with* `--lenient-receipt`. Independent admission
+is the only way in.

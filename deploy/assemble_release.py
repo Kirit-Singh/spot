@@ -103,7 +103,23 @@ MACHINE_PATTERNS = [
 # string cannot flip the decision. Values are matched case-insensitively, exactly.
 VERDICT_KEYS = {"verdict", "status", "result", "decision", "admitted", "verify_ok", "verified", "outcome"}
 POSITIVE_VERDICTS = {"admit", "admitted", "pass", "passed", "verified", "verify_ok", "ok", "accept", "accepted", "green"}
-NEGATIVE_VERDICTS = {"refuse", "refused", "reject", "rejected", "fail", "failed", "no-go", "nogo", "blocked", "deny", "denied", "error"}
+# "pending" / "pending_independent_verification" are the PRODUCER's own honest pre-admission
+# states (02_geneskew verify_release_envelope). They are explicitly NOT an admission, so they are
+# NEGATIVE, not merely "unknown" — otherwise --lenient-receipt would let a producer's unverified
+# artifact into a public release. A consumed artifact must be INDEPENDENTLY admitted.
+NEGATIVE_VERDICTS = {"refuse", "refused", "reject", "rejected", "fail", "failed", "no-go", "nogo",
+                     "blocked", "deny", "denied", "error", "pending", "pending_independent_verification"}
+
+# ---- GO-BP-only critical path. Reactome is PARKED: not required, and never advertised in the
+# deployable UI bundle. (genesets.py KNOWN_SOURCES = reactome | go_bp | fixture.)
+PATHWAY_COLLECTIONS_ALLOWED = {"go_bp"}
+PATHWAY_COLLECTIONS_PARKED = {"reactome"}
+PARKED_IN_DIST = ("reactome",)
+# genesets.py: GO-BP must name a DATED release, and the GMT on disk must hash to its pin.
+DATED_RELEASE = re.compile(r"\d{4}-\d{2}(-\d{2})?")
+GENESET_SOURCE_KEYS = {"source", "geneset_source", "collection", "pathway_collection"}
+GENESET_RELEASE_KEYS = {"release_id", "geneset_release_id"}
+GENESET_PIN_KEYS = {"geneset_sha256", "gmt_sha256", "source_sha256", "geneset_raw_sha256"}
 
 # A receipt that NAMES the bytes it judged (e.g. the Stage-2 display projection's
 # subject.projection_raw_sha256, recomputed by the verifier from the file on disk).
@@ -229,6 +245,54 @@ def check_deny(path: str) -> list[str]:
     return out
 
 
+def check_pathway_artifact(src: str, declared: str) -> list[str]:
+    """GO-BP-only critical path, with the gene-set pin actually verified.
+
+    genesets.py pins BOTH the release id and the raw sha256 of the GMT, because "Reactome"/"GO"
+    is not a version: an enrichment computed against one release is not comparable with another.
+    So a pathway artifact must name a DATED GO-BP release and carry a 64-hex byte pin. Reactome is
+    PARKED: it is not required and must not appear.
+    """
+    out: list[str] = []
+    d = str(declared).strip().lower()
+    if d in PATHWAY_COLLECTIONS_PARKED:
+        return [f"pathway_collection {d!r} is PARKED — the GO-BP-only critical path does not "
+                f"require or advertise it (allowed: {sorted(PATHWAY_COLLECTIONS_ALLOWED)})"]
+    if d not in PATHWAY_COLLECTIONS_ALLOWED:
+        return [f"pathway_collection {d!r} is not on the critical path "
+                f"(allowed: {sorted(PATHWAY_COLLECTIONS_ALLOWED)})"]
+    try:
+        doc = json.load(open(src, encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [f"pathway artifact is not readable/valid JSON ({exc.__class__.__name__})"]
+
+    for parked in PATHWAY_COLLECTIONS_PARKED:
+        if parked in json.dumps(doc).lower():
+            out.append(f"pathway artifact names {parked!r}, which is PARKED and must not reach "
+                       f"the deployable bundle")
+    sources = {str(v).strip().lower() for k, v in _iter_items(doc)
+               if str(k).strip().lower() in GENESET_SOURCE_KEYS and isinstance(v, str)}
+    sources &= (PATHWAY_COLLECTIONS_ALLOWED | PATHWAY_COLLECTIONS_PARKED)
+    if sources and not sources <= PATHWAY_COLLECTIONS_ALLOWED:
+        out.append(f"pathway artifact declares gene-set source(s) {sorted(sources)}; only go_bp is admitted")
+
+    releases = [v for k, v in _iter_items(doc)
+                if str(k).strip().lower() in GENESET_RELEASE_KEYS and isinstance(v, str)]
+    if not releases:
+        out.append("pathway artifact names no gene-set release_id — GO-BP must name a DATED release "
+                   "(an enrichment that names no release cannot be reproduced or contested)")
+    for r in releases:
+        if not DATED_RELEASE.search(r):
+            out.append(f"GO-BP release_id {r!r} is not dated (YYYY-MM or YYYY-MM-DD)")
+
+    pins = [v for k, v in _iter_items(doc)
+            if str(k).strip().lower() in GENESET_PIN_KEYS and isinstance(v, str)]
+    if not any(HEX64.match(p.strip().lower()) for p in pins):
+        out.append("pathway artifact carries no 64-hex gene-set byte pin "
+                   f"(one of {sorted(GENESET_PIN_KEYS)}); the GMT on disk must hash to its pin")
+    return out
+
+
 def check_excluded(src: str, dst: str) -> list[str]:
     """Prefetch-only / cache / private-log / build-junk paths never reach a public release."""
     out = []
@@ -293,6 +357,7 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
     problems: list[str] = []
     files: list[dict] = []
     lanes_out: dict = {}
+    lane_hashes: dict[str, set] = {}
 
     lanes = spec.get("lanes")
     if not isinstance(lanes, dict):
@@ -351,6 +416,9 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
             if not rec:
                 continue
             staged_hashes.add(rec["sha256"])
+            if a.get("pathway_collection"):
+                problems.extend(f"[{lane}] {p}" for p in
+                                check_pathway_artifact(a["src"], a["pathway_collection"]))
             if a.get("bound_by_receipt") and rec["sha256"] not in subject_hashes:
                 problems.append(
                     f"[{lane}] {os.path.basename(dst)} is declared bound_by_receipt but the receipt "
@@ -366,6 +434,31 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
 
         lanes_out[lane] = {"status": ADMIT, "receipt_sha256": receipt_sha,
                            "artifact_count": len(artifacts), "route": entry.get("route")}
+        lane_hashes[lane] = staged_hashes
+
+    # ---- a lane may consume ONLY independently admitted upstream artifacts, named by hash.
+    # Stage-3/4 read Stage-2's arms; naming the upstream lane is not enough — an unnamed or
+    # unmatched hash means the consumer rests on bytes nobody admitted.
+    for lane in REQUIRED_LANES:
+        entry = lanes.get(lane)
+        if not isinstance(entry, dict) or entry.get("status") != ADMIT:
+            continue
+        for c in entry.get("consumes") or []:
+            up = c.get("lane")
+            sha = c.get("artifact_sha256")
+            if up not in REQUIRED_LANES:
+                problems.append(f"[{lane}] consumes unknown lane {up!r}")
+                continue
+            if lanes.get(up, {}).get("status") != ADMIT:
+                problems.append(f"[{lane}] consumes {up} which is not ADMIT — a consumer may only "
+                                f"rest on an independently admitted lane")
+                continue
+            if not sha:
+                problems.append(f"[{lane}] consumes an artifact from {up} with no artifact_sha256 "
+                                f"— a consumed artifact must be named by the bytes it is")
+            elif sha not in lane_hashes.get(up, set()):
+                problems.append(f"[{lane}] consumes {str(sha)[:16]}… from {up}, which is not among "
+                                f"that lane's admitted staged artifacts")
 
     # optional prebuilt UI dist (Cloudflare)
     dist = spec.get("dist") or {}
@@ -382,6 +475,15 @@ def plan(spec: dict, lenient_receipt: bool = False) -> tuple[list[dict], dict, d
                     rel = os.path.relpath(p, root)
                     rec = _plan_file(p, os.path.join("dist", rel), "dist", "dist", None, problems)
                     if rec:
+                        # the deployable UI bundle must not require OR advertise a parked source
+                        try:
+                            text = open(p, encoding="utf-8").read().lower()
+                        except (UnicodeDecodeError, OSError):
+                            text = ""
+                        for parked in PARKED_IN_DIST:
+                            if parked in text:
+                                problems.append(f"[dist] {rel} advertises the PARKED source "
+                                                f"{parked!r}; the deployable UI bundle is GO-BP-only")
                         found.append(rec)
             if not found:
                 problems.append(f"[dist] directory is empty: {root}")

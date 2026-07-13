@@ -42,8 +42,8 @@ a license here is not a claim that spot queries the source today.
 | ChEMBL | CC BY-SA 3.0 | — | EMBL-EBI ChEMBL. Share-alike applies only if we redistribute *derived* ChEMBL data. Planned Stage-3 target→drug. |
 | UniProt | CC BY 4.0 | — | UniProt Consortium. Planned Stage-3 target crosswalk. |
 | PubChem | NCBI: no restrictions on NCBI content (US public domain); depositor content may carry copyright | — | NCBI / NLM. Verify submitter terms before redistributing depositor content. Planned Stage-3 chemistry. |
-| Gene Ontology (GO) | CC BY 4.0 | — | GO Consortium. Planned pathway/annotation context. |
-| Reactome | CC0 1.0 (annotation + interaction data; software/diagrams CC BY 4.0) | — | Reactome. Planned pathway context. |
+| Gene Ontology (GO) | CC BY 4.0 | — | GO Consortium. **GO-BP is the only admitted pathway collection** (critical path); must name a dated release, and its GMT must hash to its pin. |
+| Reactome | CC0 1.0 (annotation + interaction data; software/diagrams CC BY 4.0) | — | **PARKED** — not on the GO-BP-only critical path; not required and never advertised in the deployable UI bundle. Recorded for the record only. |
 | LINCS L1000 / Connectivity Map | CC BY 4.0 | — | Broad Institute LINCS / CMap. Not in the current design; retained as a planned option only. |
 | DGIdb | open (see DGIdb terms) | — | Drug–Gene Interaction Database. Not in the current design; retained as a planned option only. |
 | openFDA / FAERS | CC0 1.0 (openFDA dedication; no FDA endorsement implied) | — | U.S. FDA. Planned Stage-4 safety signal. |

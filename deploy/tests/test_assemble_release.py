@@ -343,6 +343,103 @@ def test_shipped_closeout_spec_refuses_with_pending_lanes(tmp_path):
         assert f"[{lane}] status is 'PENDING'" in msg
 
 
+# ------------------------------------------- GO-BP-only critical path; Reactome PARKED
+GO_BP_OK = {
+    "schema_version": "spot.stage02_pathway_arm_release.v1",
+    "source": "go_bp",
+    "release_id": "go_bp-2026-05-01",
+    "geneset_sha256": "b" * 64,
+    "sets": [{"set_id": "GO:0006955", "name": "immune response"}],
+}
+
+
+def _pathway(tmp, doc, name="pathway_arm_release.json"):
+    p = tmp / name
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def _pathway_spec(tmp, doc, collection="go_bp"):
+    src = _pathway(tmp, doc)
+    return _spec(tmp, stage2={"artifacts": [
+        {"src": src, "dst": "pathway_arm_release.json", "pathway_collection": collection}]})
+
+
+def test_go_bp_pathway_artifact_admits(tmp_path):
+    ar.assemble(_pathway_spec(tmp_path, GO_BP_OK), _staging(tmp_path), run_utc="2026-07-13T00:00:00Z")
+
+
+def test_reactome_collection_is_parked_and_refused(tmp_path):
+    doc = dict(GO_BP_OK, source="reactome")
+    msg = _refuses(tmp_path, _pathway_spec(tmp_path, doc, collection="reactome"))
+    assert "PARKED" in msg
+
+
+def test_pathway_artifact_naming_reactome_is_refused(tmp_path):
+    doc = dict(GO_BP_OK, provenance={"note": "cross-checked against Reactome R-HSA-168256"})
+    msg = _refuses(tmp_path, _pathway_spec(tmp_path, doc))
+    assert "names 'reactome'" in msg and "PARKED" in msg
+
+
+def test_undated_go_bp_release_is_refused(tmp_path):
+    doc = dict(GO_BP_OK, release_id="go_bp-latest")
+    assert "is not dated" in _refuses(tmp_path, _pathway_spec(tmp_path, doc))
+
+
+def test_pathway_without_geneset_byte_pin_is_refused(tmp_path):
+    doc = {k: v for k, v in GO_BP_OK.items() if k != "geneset_sha256"}
+    assert "no 64-hex gene-set byte pin" in _refuses(tmp_path, _pathway_spec(tmp_path, doc))
+
+
+def test_pathway_without_release_id_is_refused(tmp_path):
+    doc = {k: v for k, v in GO_BP_OK.items() if k != "release_id"}
+    assert "names no gene-set release_id" in _refuses(tmp_path, _pathway_spec(tmp_path, doc))
+
+
+def test_dist_advertising_reactome_is_refused(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "01_page.html").write_text("<p>pathways via Reactome</p>", encoding="utf-8")
+    sp = _spec(tmp_path)
+    d = json.loads(open(sp, encoding="utf-8").read())
+    d["dist"] = {"src": str(dist)}
+    open(sp, "w", encoding="utf-8").write(json.dumps(d))
+    msg = _refuses(tmp_path, sp)
+    assert "advertises the PARKED source" in msg and "GO-BP-only" in msg
+
+
+# ------------------------------- producer-pending may never admit; consumers bind to admitted bytes
+@pytest.mark.parametrize("state", ["pending", "pending_independent_verification"])
+def test_producer_pending_state_is_refused_even_when_lenient(tmp_path, state):
+    """The producer's own honest pre-admission state is NOT an admission."""
+    r = tmp_path / "producer_pending.json"
+    r.write_text(json.dumps({"lane": "stage2", "verdict": state}), encoding="utf-8")
+    spec = _spec(tmp_path, stage2={"receipt": {"src": str(r), "dst": "lanes/stage2/receipt.json"}})
+    assert "negative verdict" in _refuses(tmp_path, spec)
+    # even --lenient-receipt must not let it through
+    with pytest.raises(ar.Refusal):
+        ar.assemble(spec, str(tmp_path / "s_len"), run_utc="2026-07-13T00:00:00Z", lenient_receipt=True)
+
+
+def test_stage3_consuming_an_admitted_stage2_artifact_is_accepted(tmp_path):
+    art = _artifact(tmp_path, "stage2", body='{"a":1}', name="s2_for_consume.json")
+    sha = ar.sha256_file(art)
+    spec = _spec(tmp_path,
+                 stage2={"artifacts": [{"src": art, "dst": "s2.json"}]},
+                 stage3={"consumes": [{"lane": "stage2", "artifact_sha256": sha}]})
+    ar.assemble(spec, _staging(tmp_path), run_utc="2026-07-13T00:00:00Z")
+
+
+def test_stage3_consuming_an_unnamed_upstream_artifact_is_refused(tmp_path):
+    spec = _spec(tmp_path, stage3={"consumes": [{"lane": "stage2", "artifact_sha256": None}]})
+    assert "must be named by the bytes it is" in _refuses(tmp_path, spec)
+
+
+def test_stage3_consuming_bytes_no_one_admitted_is_refused(tmp_path):
+    spec = _spec(tmp_path, stage3={"consumes": [{"lane": "stage2", "artifact_sha256": "c" * 64}]})
+    assert "not among that lane's admitted staged artifacts" in _refuses(tmp_path, spec)
+
+
 # ------------------------------------------------- excluded / internal-path scan
 @pytest.mark.parametrize("relpath", [
     "cache/blob.json",
@@ -388,9 +485,19 @@ def test_artifact_provenance_ships_and_declares_no_invented_values(tmp_path):
     lanes = {a["lane"] for a in prov["artifacts"]}
     assert {"stage1", "stage2"} <= lanes
     kinds = {a["id"] for a in prov["artifacts"]}
-    for required in ("stage1_scores_full", "stage1_display_overlay",
-                     "stage2_arm_direct", "stage2_arm_temporal", "stage2_arm_pathway"):
+    for required in ("stage1_scores_full", "stage1_display_overlay", "stage2_arm_direct",
+                     "stage2_arm_temporal", "stage2_arm_pathway_go_bp_rest"):
         assert required in kinds
+
+    # the pathway lane is GO-BP only, with its gene-set pin still unfilled
+    pw = next(a for a in prov["artifacts"] if a["id"] == "stage2_arm_pathway_go_bp_rest")
+    assert pw["geneset_collection"] == "go_bp"
+    assert pw["geneset_release_id"] is None and pw["geneset_gmt_sha256"] is None
+
+    # Reactome is parked, and recorded as parked rather than deleted
+    parked = {p["id"]: p for p in prov["parked_sources"]}
+    assert parked["reactome"]["status"] == "PARKED"
+    assert "reactome" not in {a.get("geneset_collection") for a in prov["artifacts"]}
 
 
 def test_non_empty_staging_refused_and_never_deleted(tmp_path):

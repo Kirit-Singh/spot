@@ -122,18 +122,37 @@
       "admitted": false
     },
     {
-      "id": "stage2_arm_pathway",
+      "id": "stage2_arm_pathway_go_bp_rest",
       "lane": "stage2",
       "kind": "arm",
-      "description": "Pathway arm bundle: INFERRED pathway-node levers, kept typed and separate from measured direct targets - never merged. NOT yet admitted.",
+      "critical_path": "GO-BP only (Rest). Reactome is PARKED - see parked_sources below.",
+      "description": "Pathway arm release for the GO-BP gene-set collection at condition Rest: INFERRED pathway-node levers, kept typed and separate from measured direct targets - never merged. NOT YET PRODUCED: no emitted pathway artifact or receipt exists on any branch, so no path or hash is recorded here.",
       "repo_path": null,
-      "public_path": "lanes/stage2/pathway/arm_bundle.json",
-      "rerun": {"entry_point": "02_geneskew/analysis/direct/run_screen.py", "command": "cd 02_geneskew/analysis && python -m direct.run_screen"},
-      "verifier": "02_geneskew/analysis/direct/verify_display_projection.py",
-      "license": "MIT (spot output over the MIT source); pathway annotation sources per schemas/source_license_inventory.json",
+      "public_path": "lanes/stage2/pathway_arm_release.json",
+      "artifact_schema": "spot.stage02_pathway_arm_release.v1",
+      "inventory_file": "pathway_arm_release.json",
+      "admission_schema": "spot.stage02_pathway_arm_external_admission.v1",
+      "condition_admission_receipt": "w10_admission_Rest.json (schema spot.stage02_direct_arm_bundle_verification.v1)",
+      "geneset_collection": "go_bp",
+      "geneset_release_id": null,
+      "geneset_gmt_sha256": null,
+      "byte_verification": "genesets.py pins BOTH the release id and the raw sha256 of the GMT; the file on disk must hash to the pin. GO-BP must name a DATED release (an enrichment that names no release cannot be reproduced or contested). deploy/assemble_release.py enforces this via pathway_collection: go_bp.",
+      "rerun": {"entry_point": "02_geneskew/analysis/direct/release_inventory.py", "command": "cd 02_geneskew/analysis && python -m direct.release_inventory --lane pathway --bundles-root <bundles> --release <release> --release-root <root> --env-lock <lock>"},
+      "verifier": "02_geneskew/analysis/direct/verify_release_envelope.py (pathway lane declares its OWN admission schema; a temporal report may not admit it)",
+      "license": "MIT (spot output); GO-BP gene sets CC BY 4.0 (Gene Ontology Consortium), dated release required",
       "rerun_utc": null,
       "sha256": null,
-      "admitted": false
+      "admitted": false,
+      "provenance_source": "origin/agent/stage2-runmanifest-round4 (release_inventory.py, verify_release_envelope.py, verify_admission_rules.py, genesets.py)"
+    }
+  ],
+  "parked_sources": [
+    {
+      "id": "reactome",
+      "status": "PARKED",
+      "why": "Not on the GO-BP-only critical path. Not required, not produced, and never advertised in the deployable UI bundle.",
+      "license_for_the_record": "CC0-1.0 (https://reactome.org/license) - annotation/interaction data. Recorded only; not a claim that spot uses it.",
+      "enforced_by": "deploy/assemble_release.py refuses pathway_collection='reactome', refuses a pathway artifact that names reactome, and refuses a dist (deployable UI) file that advertises it."
     }
   ],
   "excluded_from_release": {

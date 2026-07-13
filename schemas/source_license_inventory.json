@@ -11,42 +11,68 @@
       "usage_status": "used",
       "redistributed_by_spot": true,
       "redistribution_target": "Hugging Face KiritSingh/spot-CD4-Marson (derived NTC-subset embedding only)",
-      "license": {"id": "MIT", "scope_note": "upstream CZI dataset license; spot redistributes only a derived subset under MIT"},
+      "license": {
+        "id": "MIT",
+        "scope_note": "upstream CZI dataset license; spot redistributes only a derived subset under MIT"
+      },
       "official_url": "https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson",
-      "license_verified": {"method": "in_repo_croissant_metadata_all_12_splits", "official_quote": null},
+      "license_verified": {
+        "method": "in_repo_croissant_metadata_all_12_splits",
+        "official_quote": null
+      },
       "attribution": "Zhu, Dann, ... Marson 2025; bioRxiv doi:10.64898/2025.12.23.696273; CZI Virtual Cells Platform Acceptable Use Policy applies",
       "redistribution_terms": "MIT with attribution; no raw source matrix bundled"
     },
     {
       "id": "gene_ontology",
       "name": "Gene Ontology (GO)",
-      "usage_status": "planned",
+      "usage_status": "critical_path",
       "redistributed_by_spot": false,
-      "license": {"id": "CC-BY-4.0", "scope_note": "GO Consortium data and data products"},
+      "license": {
+        "id": "CC-BY-4.0",
+        "scope_note": "GO Consortium data and data products"
+      },
       "official_url": "https://geneontology.org/docs/go-citation-policy/",
-      "license_verified": {"method": "official_page", "official_quote": "Gene Ontology Consortium data and data products are licensed under the Creative Commons Attribution 4.0 Unported License."},
+      "license_verified": {
+        "method": "official_page",
+        "official_quote": "Gene Ontology Consortium data and data products are licensed under the Creative Commons Attribution 4.0 Unported License."
+      },
       "attribution": "Gene Ontology Consortium + release date + Zenodo DOI",
-      "redistribution_terms": "CC BY 4.0 attribution required"
+      "redistribution_terms": "CC BY 4.0 attribution required",
+      "critical_path_note": "GO-BP is the ONLY admitted pathway gene-set collection. genesets.py requires a DATED release_id and pins the GMT raw sha256; the file on disk must hash to the pin."
     },
     {
       "id": "reactome",
       "name": "Reactome pathway database",
-      "usage_status": "planned",
+      "usage_status": "parked",
       "redistributed_by_spot": false,
-      "license": {"id": "CC0-1.0", "scope_note": "annotation + interaction data derived from Reactome are CC0; Reactome software/code, data dumps, and pathway illustrations are CC BY 4.0"},
+      "license": {
+        "id": "CC0-1.0",
+        "scope_note": "annotation + interaction data derived from Reactome are CC0; Reactome software/code, data dumps, and pathway illustrations are CC BY 4.0"
+      },
       "official_url": "http://reactome.org/license/",
-      "license_verified": {"method": "official_domain_search", "official_quote": "annotation files and interaction data derived from Reactome are distributed under a Creative Commons Public Domain (CC0 1.0 Universal) Licence"},
+      "license_verified": {
+        "method": "official_domain_search",
+        "official_quote": "annotation files and interaction data derived from Reactome are distributed under a Creative Commons Public Domain (CC0 1.0 Universal) Licence"
+      },
       "attribution": "Reactome (attribution encouraged, not required for CC0 annotation data)",
-      "redistribution_terms": "CC0 for annotation/interaction data; CC BY 4.0 for software/diagrams"
+      "redistribution_terms": "CC0 for annotation/interaction data; CC BY 4.0 for software/diagrams",
+      "parked_note": "PARKED: not on the GO-BP-only critical path. Not required, not produced, and never advertised in the deployable UI bundle. License recorded for the record only; this is not a claim that spot uses Reactome."
     },
     {
       "id": "chembl",
       "name": "ChEMBL (EMBL-EBI)",
       "usage_status": "planned",
       "redistributed_by_spot": false,
-      "license": {"id": "CC-BY-SA-3.0", "scope_note": "Unported; share-alike applies only if derived ChEMBL data is redistributed"},
+      "license": {
+        "id": "CC-BY-SA-3.0",
+        "scope_note": "Unported; share-alike applies only if derived ChEMBL data is redistributed"
+      },
       "official_url": "https://chembl.gitbook.io/chembl-interface-documentation/about",
-      "license_verified": {"method": "official_page", "official_quote": "Creative Commons Attribution-Share Alike 3.0 Unported License"},
+      "license_verified": {
+        "method": "official_page",
+        "official_quote": "Creative Commons Attribution-Share Alike 3.0 Unported License"
+      },
       "attribution": "EMBL-EBI ChEMBL",
       "redistribution_terms": "CC BY-SA 3.0 attribution + share-alike on redistributed derivatives"
     },
@@ -55,9 +81,15 @@
       "name": "UniProt Knowledgebase",
       "usage_status": "planned",
       "redistributed_by_spot": false,
-      "license": {"id": "CC-BY-4.0", "scope_note": "all copyrightable parts of the databases"},
+      "license": {
+        "id": "CC-BY-4.0",
+        "scope_note": "all copyrightable parts of the databases"
+      },
       "official_url": "https://www.uniprot.org/help/license",
-      "license_verified": {"method": "official_ftp_readme", "official_quote": "We have chosen to apply the Creative Commons Attribution 4.0 International (CC BY 4.0) License to all copyrightable parts of our databases."},
+      "license_verified": {
+        "method": "official_ftp_readme",
+        "official_quote": "We have chosen to apply the Creative Commons Attribution 4.0 International (CC BY 4.0) License to all copyrightable parts of our databases."
+      },
       "attribution": "UniProt Consortium",
       "redistribution_terms": "CC BY 4.0 attribution required"
     },
@@ -66,9 +98,15 @@
       "name": "PubChem (NCBI / NLM)",
       "usage_status": "planned",
       "redistributed_by_spot": false,
-      "license": {"id": null, "scope_note": "NCBI places no restrictions on NCBI-created content (US public domain); depositor-contributed content may be protected by copyright and carries the submitter's terms"},
+      "license": {
+        "id": null,
+        "scope_note": "NCBI places no restrictions on NCBI-created content (US public domain); depositor-contributed content may be protected by copyright and carries the submitter's terms"
+      },
       "official_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
-      "license_verified": {"method": "official_page", "official_quote": "NCBI itself places no restrictions on the use or distribution of the data contained therein. ... Some submitters of the original data ... may claim patent, copyright, or other intellectual property rights."},
+      "license_verified": {
+        "method": "official_page",
+        "official_quote": "NCBI itself places no restrictions on the use or distribution of the data contained therein. ... Some submitters of the original data ... may claim patent, copyright, or other intellectual property rights."
+      },
       "attribution": "NCBI/NLM PubChem; adhere to individual submitter terms where asserted",
       "redistribution_terms": "NCBI content unrestricted; verify submitter terms before redistributing depositor content"
     },
@@ -77,9 +115,15 @@
       "name": "openFDA (incl. FAERS)",
       "usage_status": "planned",
       "redistributed_by_spot": false,
-      "license": {"id": "CC0-1.0", "scope_note": "openFDA data dedication; do not imply FDA endorsement; GMDN content needs a separate license for some uses"},
+      "license": {
+        "id": "CC0-1.0",
+        "scope_note": "openFDA data dedication; do not imply FDA endorsement; GMDN content needs a separate license for some uses"
+      },
       "official_url": "https://open.fda.gov/license/",
-      "license_verified": {"method": "official_page", "official_quote": "public domain and made available with a Creative Commons CC0 1.0 Universal dedication"},
+      "license_verified": {
+        "method": "official_page",
+        "official_quote": "public domain and made available with a Creative Commons CC0 1.0 Universal dedication"
+      },
       "attribution": "U.S. FDA (no endorsement implied)",
       "redistribution_terms": "CC0; GMDN content excepted"
     },
@@ -88,9 +132,15 @@
       "name": "DailyMed (NLM)",
       "usage_status": "planned",
       "redistributed_by_spot": false,
-      "license": {"id": null, "scope_note": "NLM-produced content is US-government public domain; manufacturer-submitted label (SPL) content may carry third-party restrictions"},
+      "license": {
+        "id": null,
+        "scope_note": "NLM-produced content is US-government public domain; manufacturer-submitted label (SPL) content may carry third-party restrictions"
+      },
       "official_url": "https://www.nlm.nih.gov/web_policies.html",
-      "license_verified": {"method": "official_page", "official_quote": "Works produced by the U.S. government are not subject to copyright protection in the United States. ... It is your responsibility to determine and satisfy copyright or other use restrictions when using materials that are not in the public domain."},
+      "license_verified": {
+        "method": "official_page",
+        "official_quote": "Works produced by the U.S. government are not subject to copyright protection in the United States. ... It is your responsibility to determine and satisfy copyright or other use restrictions when using materials that are not in the public domain."
+      },
       "attribution": "Courtesy of the National Library of Medicine (NLM requests this phrasing)",
       "redistribution_terms": "NLM-produced content freely reusable; verify third-party label content"
     },
@@ -99,9 +149,15 @@
       "name": "Grossman et al., Neuro-Oncology 2026 (NEBPI brain-penetrance framework)",
       "usage_status": "planned",
       "redistributed_by_spot": false,
-      "license": {"id": "CC-BY-4.0", "scope_note": "PK/brain-penetrance reference framework"},
+      "license": {
+        "id": "CC-BY-4.0",
+        "scope_note": "PK/brain-penetrance reference framework"
+      },
       "official_url": "https://doi.org/10.1093/neuonc/noag051",
-      "license_verified": {"method": "in_repo_citation_only", "official_quote": null},
+      "license_verified": {
+        "method": "in_repo_citation_only",
+        "official_quote": null
+      },
       "attribution": "Grossman et al., Neuro-Oncology 2026; doi:10.1093/neuonc/noag051",
       "redistribution_terms": "cite; publisher OA license not re-verified this pass"
     },
@@ -110,9 +166,15 @@
       "name": "Masopust et al., Nat Rev Immunol 2026 (T-cell nomenclature)",
       "usage_status": "used",
       "redistributed_by_spot": false,
-      "license": {"id": "CC-BY-4.0", "scope_note": "reference framework for Stage-1 program naming only; gene panels are spot's own curation"},
+      "license": {
+        "id": "CC-BY-4.0",
+        "scope_note": "reference framework for Stage-1 program naming only; gene panels are spot's own curation"
+      },
       "official_url": "https://doi.org/10.1038/s41577-025-01238-2",
-      "license_verified": {"method": "in_repo_citation_only", "official_quote": null},
+      "license_verified": {
+        "method": "in_repo_citation_only",
+        "official_quote": null
+      },
       "attribution": "Masopust et al., Nat Rev Immunol 2026; doi:10.1038/s41577-025-01238-2",
       "redistribution_terms": "cite; publisher OA license not re-verified this pass"
     }
