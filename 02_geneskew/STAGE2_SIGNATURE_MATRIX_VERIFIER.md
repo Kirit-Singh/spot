@@ -40,41 +40,41 @@ A4 all-ones / A5 promotion → `V5`; A7 stale ref / A10 container reframe → `V
 padding → `V7`; A9 reduction drift → `V6`; A12 re-ship → `V8`; null manifest identity →
 `V1_REFMAN`; **fully-resealed wrong source mask → `V_EXTERNAL_MASK`**.
 
-## Why `V_EXTERNAL_MASK` — and what W10/W18 must land
+## Why `V_EXTERNAL_MASK` — and the cross-lane binding to W10
 
 Bitmap-recount + a self-bound run id is **not** enough: a forger can rebuild a coherent WRONG
-biological source mask — new bitmap, new counts, new `source_mask_sha256`, new run id — and
-every internal statement agrees. `V4`/`V5`/`V_IDENTITY` all pass. Only an **external,
-independent** re-derivation of the Direct masks refuses it.
+biological source mask — new bitmap, new counts, new `source_mask_sha256`, new `mask_sha256`,
+new run id — and every internal statement agrees. `V4`/`V5`/`V_IDENTITY` all pass. Only an
+**external, independent** re-derivation of the Direct masks refuses it.
 
 W4 does **not** re-derive the mask (that would duplicate ~500 lines of `masks.py`/`guides.py`
-and, under the independence rule, is forbidden). Instead it binds W10's independent Direct
-mask verification. **This is the one piece not yet landed** — the verifier requires it
-fail-closed, and the test fixture ships a stand-in. To close it for real, coordinate:
+and, under the independence rule, is forbidden). Instead it binds **W10's** independent Direct
+mask verification, which re-derives every mask from the pinned contributor manifest + sgRNA
+library under the target + 30 kb + contributing-guide off-target rule and admits them.
 
-1. **W10** produces an independent Direct mask verification report per condition —
-   re-deriving the masks from the pinned contributor manifest + sgRNA library (the W14
-   bindings) and admitting them — naming the `source_mask_sha256` it verified. Interface
-   (proposed, reconcile before landing):
-   ```json
-   {
-     "schema_version": "spot.stage02_direct_mask_verification.v1",
-     "verifier_id": "spot.stage02.direct.mask.independent_verifier.v1",
-     "lane": "direct", "condition": "...", "verdict": "admit",
-     "source_mask_sha256": "..."
-   }
-   ```
-   Its authenticity — that a forger cannot regenerate it for a fake mask — is W10's
-   responsibility (a signature, or W4 invoking W10's verifier as a subprocess to regenerate
-   it from primary inputs).
-2. **W18** ships that report in each pathway bundle as `direct_mask_verification.json` and
-   binds `run_binding.direct_mask_verification = {report_sha256, source_mask_sha256}` so it
-   enters `pathway_run_id`.
-3. **W4** (`V_EXTERNAL_MASK`) requires the report present + `verdict == admit` + its
-   `source_mask_sha256` equal to the matrix manifest's, and bound into the run identity.
+**W10's report is sealed** at `.spot-runs/20260712T021343Z/DIRECT_MASK_VERIFICATION_REPORT.md`
+(sha256 `48ff889b…`), verifier `spot.stage02.direct.arm_bundle.verifier.v1` @ `58f6305`
+(code `7578ae5e…`, gate inventory `cc8fc6ca…`), producer W14 @ `41d9a9d`. `V_EXTERNAL_MASK`
+binds the W10 **verifier identity to those exact clean heads**, and requires the **per-run**
+certified mask to equal the pathway's own `mask_sha256`.
 
-Until W10/W18 land it, the wrong-source-mask closure rests on the shipped stand-in; the
-honest control and every other gate verify **real** `e5f71df` producer bytes.
+**Production distinction (do not violate).** The report's concrete `mask_sha256` `269b4278…`
+and its three bundle ids are **synthetic-fixture** values — they appear only in contract /
+mutation tests and are **never frozen into the verifier** (a test asserts `269b…` is absent
+from the module source). At the real run the pathway binds a **per-run** W10 report over the
+**actual** Direct `masks.parquet`; W7 runs W10 on real Direct output **before** real pathway
+admission. The gate reads `certified_mask_sha256` from the bound per-run report — it never
+hardcodes a mask.
+
+**Still to land:** **W18** must bind, into `run_binding.direct_mask_verification` (and thus
+`pathway_run_id`):
+```
+{ "report_sha256", "verdict": "ADMIT", "verifier_id",
+  "verifier_code_sha256", "gate_inventory_sha256", "certified_mask_sha256" }
+```
+where `certified_mask_sha256 == run_binding.mask_sha256`. Until then the binding is simulated
+in the test fixture; every other gate verifies **real** `e5f71df` producer bytes, and the
+sealed W10 report is replayed from its exact sealed bytes.
 
 Integration (W1) holds until W4 and W18 agree, W10's Direct mask verification is bound, and
 production Step-0 reconfirms deterministic bytes + peak RSS (W7 measured 3.65–3.69 GiB,

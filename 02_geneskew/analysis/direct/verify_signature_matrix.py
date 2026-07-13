@@ -86,12 +86,24 @@ V_EXTERNAL_MASK = "the_source_mask_matches_the_external_independent_direct_mask_
 
 SIGNATURE_BYTE_FILES = ("pathway_signatures.parquet", "signatures.parquet")
 
-# The EXTERNAL Direct-mask verification report (W10), shipped/bound so W4 need not re-derive
-# the biological mask itself (which would duplicate ~500 lines and import producer logic).
-# Its authenticity is W10's responsibility — it is independently produced by re-deriving the
-# masks from the pinned contributor manifest + sgRNA library (W14 bindings); W4 binds it into
-# the run identity and cross-checks the source-mask hash it names.
-DIRECT_MASK_REPORT_FILE = "direct_mask_verification.json"
+# The EXTERNAL Direct-mask verification (W10), bound into the run identity so W4 need not
+# re-derive the biological mask itself (which would duplicate ~500 lines and import producer
+# logic). W10 independently re-derives every mask from the pinned contributor manifest + sgRNA
+# library under the target + 30 kb + contributing-guide off-target rule and admits them.
+#
+# The W10 VERIFIER IDENTITY is bound to exact clean heads — this is WHICH verifier attested,
+# fixed for a given W10 release, and NOT a per-run value. The CERTIFIED MASK is per-run and is
+# read from the bound report, never frozen: at the real run the pathway binds a per-run W10
+# report over the ACTUAL Direct masks.parquet. (The concrete 269b… mask and the three bundle
+# ids in W10's sealed report are SYNTHETIC-FIXTURE values, used only in contract/mutation
+# tests.)
+W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
+W10_VERIFIER_CODE_SHA256 = (
+    "7578ae5eecbd68dda1198b7b5bd933dd09ad08be838d37dfb837fe5e285a4a89")
+W10_GATE_INVENTORY_SHA256 = (
+    "cc8fc6ca81817de411f951309f219d76fdeea5cff3b4f7bf5ee7b38bb07f821d")
+W10_ADMIT = "ADMIT"
+DIRECT_MASK_BINDING_KEY = "direct_mask_verification"
 
 
 def _check(name, ok, detail=""):
@@ -394,14 +406,19 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
         else:
             checks.append(_check(V6, False, f"{bdir}: no convergence.json"))
 
+        # V_IDENTITY + V_EXTERNAL_MASK both read the run binding.
+        prov_path = os.path.join(bdir, PROVENANCE_FILE)
+        run_binding = (_json(prov_path).get("run_binding") or {}
+                       ) if os.path.exists(prov_path) else {}
+
         # V_IDENTITY: the ref IS bound into a re-derivable pathway_run_id
         checks.append(_check(V_IDENTITY, *_verify_identity(bdir, r)))
 
         # V_EXTERNAL_MASK: the source mask is what W10 independently verified — not merely
         # self-consistent. A forger can rebuild a coherent WRONG mask + bitmap + counts +
         # source_mask_sha256 + run_id; only an external, independently re-derived Direct mask
-        # verification refuses it, by naming the TRUE source-mask hash the forger cannot match.
-        checks.append(_check(V_EXTERNAL_MASK, *_verify_external_mask(bdir, r, man)))
+        # verification refuses it, by certifying the TRUE mask the forger cannot match.
+        checks.append(_check(V_EXTERNAL_MASK, *_verify_external_mask(run_binding)))
 
     # ---- V10 ----
     all_matrix_raw = {m["_reread"]["raw_matrix"] for m in man_by_cond.values()
@@ -489,39 +506,42 @@ def _verify_identity(bdir, ref_on_disk):
     return True, ""
 
 
-def _verify_external_mask(bdir, ref, manifest):
+def _verify_external_mask(binding):
     """Bind the EXTERNAL, independent Direct mask verification (W10) and cross-check.
 
     W4 does not re-derive the biological mask (that would duplicate the Direct lane and import
-    producer logic). Instead it binds W10's independent Direct mask verification report — which
-    re-derives the masks from the pinned contributor manifest + sgRNA library and admits them —
-    and requires that the pathway's ``source_mask_sha256`` is exactly the one W10 verified. A
-    forger who fabricates a coherent wrong mask cannot also produce W10's report naming the
-    fake hash, so the shipped report still names the true hash and this gate refuses.
+    producer logic). Instead it binds W10's independent Direct mask verification — which
+    re-derives every mask from the pinned contributor manifest + sgRNA library and admits them.
+
+    The W10 VERIFIER IDENTITY (id + code hash + gate inventory) is bound to exact clean heads:
+    a report from a different or unverified checker is refused. The CERTIFIED MASK is per-run
+    and is read from the bound report — the pathway's own ``mask_sha256`` must equal it, which
+    proves the matrix ran on the masks W10 independently verified. A forger who fabricates a
+    coherent wrong mask changes ``mask_sha256``, and W10's per-run report (produced over the
+    ACTUAL Direct masks.parquet) still certifies the true hash, so this gate refuses.
     """
-    report_path = os.path.join(bdir, DIRECT_MASK_REPORT_FILE)
-    if not os.path.exists(report_path):
-        return False, (f"no {DIRECT_MASK_REPORT_FILE}: the source mask is not backed by an "
-                       "external, independent Direct mask verification, so a coherent "
-                       "wrong-source-mask forgery cannot be distinguished from the truth "
-                       "(coordinate with W10/W18 to ship + bind this report)")
-    report = _json(report_path)
-    prov_path = os.path.join(bdir, PROVENANCE_FILE)
-    binding = (_json(prov_path).get("run_binding") or {}) if os.path.exists(prov_path) else {}
-    bound = binding.get("direct_mask_verification") or {}
+    bound = binding.get(DIRECT_MASK_BINDING_KEY) or {}
+    if not bound:
+        return False, ("no external Direct mask verification is bound into the run identity; "
+                       "bitmap self-consistency cannot distinguish a coherent wrong source "
+                       "mask from the truth. W18 must bind W10's per-run report over the "
+                       "actual Direct masks.parquet")
     problems = []
-    if str(report.get("verdict")) != "admit":
-        problems.append(f"the Direct mask verification did not admit: {report.get('verdict')!r}")
-    if report.get("lane") != "direct":
-        problems.append("the report is not a Direct-lane mask verification")
-    # the report names the source-mask hash it independently verified; it must be ours
-    if report.get("source_mask_sha256") != manifest.get("source_mask_sha256"):
-        problems.append("the source_mask_sha256 W10 verified is not the one this matrix "
-                        "shipped — a wrong source mask, however self-consistent")
-    # ...and the report is bound into THIS run's identity (its content, W10's verifier id)
-    if bound.get("report_sha256") != R.content_sha256(report):
-        problems.append("the Direct mask verification bound in the run identity is not the "
-                        "report shipped in the bundle")
-    if bound.get("source_mask_sha256") != manifest.get("source_mask_sha256"):
-        problems.append("the run identity does not bind the verified source-mask hash")
-    return (not problems), "; ".join(problems[:3])
+    if bound.get("verdict") != W10_ADMIT:
+        problems.append(f"the Direct mask verification did not admit: {bound.get('verdict')!r}")
+    if bound.get("verifier_id") != W10_VERIFIER_ID:
+        problems.append(f"the report is not from the bound W10 verifier {W10_VERIFIER_ID!r}")
+    if bound.get("verifier_code_sha256") != W10_VERIFIER_CODE_SHA256:
+        problems.append("the W10 verifier code identity is not the bound clean head")
+    if bound.get("gate_inventory_sha256") != W10_GATE_INVENTORY_SHA256:
+        problems.append("the W10 gate inventory is not the bound clean head")
+    if not bound.get("report_sha256"):
+        problems.append("the per-run W10 report is not content-addressed in the binding")
+    # PER-RUN, never frozen: the pathway used the exact masks W10 verified.
+    certified = bound.get("certified_mask_sha256")
+    pathway_mask = binding.get("mask_sha256")
+    if not certified or not pathway_mask or certified != pathway_mask:
+        problems.append(f"the pathway mask_sha256 {str(pathway_mask)[:16]}… is not the mask "
+                        f"W10 certified {str(certified)[:16]}… — the matrix did not run on "
+                        "the W10-verified Direct masks")
+    return (not problems), "; ".join(problems[:4])

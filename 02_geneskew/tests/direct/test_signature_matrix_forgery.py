@@ -53,24 +53,40 @@ def shipped(synthetic_run, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# The W10 external Direct mask report (simulated) + the run-identity re-derivation.
+# The W10 external Direct mask verification, bound into the run identity (simulated until W18
+# binds it), + the run-identity re-derivation.
 # --------------------------------------------------------------------------- #
+# The exact sealed W10 report identities (agent/stage2-direct-arm-verifier @ 58f6305). The
+# verifier IDENTITY is a clean head; the CERTIFIED MASK is per-run — for the synthetic fixture
+# it is the run's own mask_sha256, NEVER frozen 269b (that is used only in the contract test).
+W10_REPORT_SHA256 = "48ff889b2888ff73bf24dd6bfa4b7de966552f762fadc186b82dedafa18bfa3d"
+W10_SYNTHETIC_MASK_SHA256 = (
+    "269b42787813661036eb6d7b595207ab43a2b3f2e558e40e802120376c40ce0b")
+
+
+def _external_mask_binding(certified_mask_sha256, *, verdict=V.W10_ADMIT,
+                           verifier_id=V.W10_VERIFIER_ID,
+                           verifier_code_sha256=V.W10_VERIFIER_CODE_SHA256,
+                           gate_inventory_sha256=V.W10_GATE_INVENTORY_SHA256):
+    return {"report_sha256": W10_REPORT_SHA256, "verdict": verdict,
+            "verifier_id": verifier_id, "verifier_code_sha256": verifier_code_sha256,
+            "gate_inventory_sha256": gate_inventory_sha256,
+            "certified_mask_sha256": certified_mask_sha256}
+
+
 def _ship_external_mask_report(shipped):
-    man = _man(shipped)
-    report = {"schema_version": "spot.stage02_direct_mask_verification.v1",
-              "verifier_id": "spot.stage02.direct.mask.independent_verifier.v1",
-              "lane": "direct", "condition": shipped["cond"], "verdict": "admit",
-              "source_mask_sha256": man["source_mask_sha256"]}
-    with open(os.path.join(shipped["bundle_dir"], V.DIRECT_MASK_REPORT_FILE), "w") as fh:
-        json.dump(report, fh, sort_keys=True)
+    # nothing shipped as a file; the binding lives in the run identity (see sync_identity)
+    pass
 
 
-def sync_identity(shipped):
+def sync_identity(shipped, *, external=None):
     """Re-derive the run identity over whatever the artifacts currently say (a full reseal).
 
-    Keeps ref == run_binding.signature_ref, binds the shipped external report, and recomputes
-    pathway_run_id from the binding — so an attack that changed one artifact is caught at its
-    OWN semantic gate, not incidentally at the identity gate.
+    Keeps ref == run_binding.signature_ref, binds W10's per-run Direct mask verification, and
+    recomputes pathway_run_id from the binding — so an attack that changed one artifact is
+    caught at its OWN semantic gate, not incidentally at the identity gate. ``external``
+    overrides the bound W10 verification (default: an honest binding whose certified mask is
+    this run's actual mask_sha256).
     """
     man = _man(shipped)
     ref_path = os.path.join(shipped["bundle_dir"], V.REF_FILE)
@@ -99,10 +115,9 @@ def sync_identity(shipped):
         prov = json.load(fh)
     binding = prov["run_binding"]
     binding["signature_ref"] = ref
-    report = _json(os.path.join(shipped["bundle_dir"], V.DIRECT_MASK_REPORT_FILE))
-    binding["direct_mask_verification"] = {
-        "report_sha256": R.content_sha256(report),
-        "source_mask_sha256": man.get("source_mask_sha256")}
+    # W10's per-run Direct mask verification: the honest binding certifies THIS run's mask.
+    binding[V.DIRECT_MASK_BINDING_KEY] = external if external is not None else \
+        _external_mask_binding(binding.get("mask_sha256"))
     full = R.content_sha256(binding)
     prov["pathway_run_id"] = full[:V.RUN_ID_LEN]
     prov["pathway_run_sha256"] = full
@@ -429,26 +444,114 @@ class TestB_ManifestIdentity:
 # THE FULLY-RESEALED WRONG-SOURCE-MASK ATTACK — caught only externally
 # =========================================================================== #
 class TestWrongSourceMask:
-    """A coherent wrong mask: rebuild the source-mask hash, counts, ref, binding and run id.
+    """A coherent wrong mask: rebuild bitmap/counts/source_mask/ref/binding/run id together.
 
     Bitmap-recount + self-bound run id ADMIT this — every internal statement agrees. Only the
-    EXTERNAL, independent Direct mask verification (W10), which names the TRUE source-mask hash
-    the forger cannot regenerate, refuses it.
+    EXTERNAL, independent Direct mask verification (W10), which certifies the TRUE mask over the
+    ACTUAL Direct masks.parquet, refuses it: the pathway's mask no longer equals what W10 verified.
     """
 
     def test_a_fully_resealed_wrong_source_mask_is_REJECTED(self, shipped):
-        man = _man(shipped)
-        man["source_mask_sha256"] = "f" * 64        # a different, self-consistent source mask
-        write_manifest(shipped, man)
-        sync_identity(shipped)                       # ref + binding + run id all rebuilt
+        # The forger runs the matrix on a WRONG mask -> the pathway mask_sha256 ("f") no longer
+        # equals the true mask W10 independently certified ("e"). The forger cannot regenerate
+        # W10's report for the fake, so the bound certified mask still names the truth. Every
+        # internal statement (ref, binding, run id) is rebuilt coherently.
+        prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+        prov = _json(prov_path)
+        binding = prov["run_binding"]
+        binding["mask_sha256"] = "f" * 64                         # the forged pathway mask
+        binding[V.DIRECT_MASK_BINDING_KEY] = _external_mask_binding("e" * 64)  # W10's truth
+        full = R.content_sha256(binding)
+        prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+        with open(prov_path, "w") as fh:
+            json.dump(prov, fh, sort_keys=True)
         r = verify(shipped)
         assert r["verdict"] == V.REJECT
         assert V.V_EXTERNAL_MASK in failed(r)
         # the internal statements are all self-consistent — nothing else catches it
-        assert V.V_IDENTITY not in failed(r)
-        assert V.V4 not in failed(r)
+        assert V.V_IDENTITY not in failed(r) and V.V4 not in failed(r)
 
-    def test_a_missing_external_report_is_fail_closed(self, shipped):
-        os.remove(os.path.join(shipped["bundle_dir"], V.DIRECT_MASK_REPORT_FILE))
+    def test_a_missing_external_binding_is_fail_closed(self, shipped):
+        prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+        prov = _json(prov_path)
+        del prov["run_binding"][V.DIRECT_MASK_BINDING_KEY]
+        full = R.content_sha256(prov["run_binding"])
+        prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+        with open(prov_path, "w") as fh:
+            json.dump(prov, fh, sort_keys=True)
         r = verify(shipped)
         assert r["verdict"] == V.REJECT and V.V_EXTERNAL_MASK in failed(r)
+
+    def test_a_report_from_an_UNVERIFIED_checker_is_REJECTED(self, shipped):
+        prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+        prov = _json(prov_path)
+        mask = prov["run_binding"].get("mask_sha256")
+        # certified mask matches, but the report is from an unknown verifier / wrong code head
+        prov["run_binding"][V.DIRECT_MASK_BINDING_KEY] = _external_mask_binding(
+            mask, verifier_code_sha256="0" * 64)
+        full = R.content_sha256(prov["run_binding"])
+        prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+        with open(prov_path, "w") as fh:
+            json.dump(prov, fh, sort_keys=True)
+        assert V.V_EXTERNAL_MASK in failed(verify(shipped))
+
+    def test_a_REFUSE_verdict_is_REJECTED(self, shipped):
+        prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+        prov = _json(prov_path)
+        mask = prov["run_binding"].get("mask_sha256")
+        prov["run_binding"][V.DIRECT_MASK_BINDING_KEY] = _external_mask_binding(
+            mask, verdict="REFUSE")
+        full = R.content_sha256(prov["run_binding"])
+        prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+        with open(prov_path, "w") as fh:
+            json.dump(prov, fh, sort_keys=True)
+        assert V.V_EXTERNAL_MASK in failed(verify(shipped))
+
+
+# =========================================================================== #
+# THE EXACT SEALED W10 REPORT — independent replay over its bytes (contract only)
+# =========================================================================== #
+W10_REPORT_PATH = ("/home/tcelab/.spot-runs/20260712T021343Z/"
+                   "DIRECT_MASK_VERIFICATION_REPORT.md")
+
+
+class TestTheSealedW10Report:
+    """The exact bytes W10 sealed. 269b… and the bundle ids are SYNTHETIC — contract only."""
+
+    @pytest.mark.skipif(not os.path.exists(W10_REPORT_PATH),
+                        reason="the sealed W10 report is not on this host")
+    def test_the_report_hashes_to_its_sealed_identity(self):
+        assert R.sha256_file(W10_REPORT_PATH) == W10_REPORT_SHA256
+
+    @pytest.mark.skipif(not os.path.exists(W10_REPORT_PATH),
+                        reason="the sealed W10 report is not on this host")
+    def test_the_report_binds_the_exact_clean_head_verifier_identity(self):
+        with open(W10_REPORT_PATH) as fh:
+            body = fh.read()
+        assert V.W10_VERIFIER_ID in body
+        assert V.W10_VERIFIER_CODE_SHA256 in body
+        assert V.W10_GATE_INVENTORY_SHA256 in body
+        assert "VERDICT: **ADMIT**" in body
+        # the SYNTHETIC certified mask is present, but is never frozen into the verifier
+        assert W10_SYNTHETIC_MASK_SHA256 in body
+
+    def test_the_verifier_does_NOT_freeze_the_synthetic_mask(self):
+        # 269b… must appear only in tests, never in the production verifier.
+        import inspect
+
+        from direct import verify_signature_matrix
+        assert W10_SYNTHETIC_MASK_SHA256 not in inspect.getsource(verify_signature_matrix)
+
+    def test_the_synthetic_mask_admits_only_when_the_pathway_uses_it(self, shipped):
+        # CONTRACT/MUTATION use of 269b: a pathway that ran on W10's synthetic Direct masks
+        # admits; one that did not is refused — the per-run mask equality, exercised.
+        prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+        prov = _json(prov_path)
+        prov["run_binding"]["mask_sha256"] = W10_SYNTHETIC_MASK_SHA256
+        prov["run_binding"][V.DIRECT_MASK_BINDING_KEY] = _external_mask_binding(
+            W10_SYNTHETIC_MASK_SHA256)
+        full = R.content_sha256(prov["run_binding"])
+        prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+        with open(prov_path, "w") as fh:
+            json.dump(prov, fh, sort_keys=True)
+        assert V.V_EXTERNAL_MASK not in failed(verify(shipped))
