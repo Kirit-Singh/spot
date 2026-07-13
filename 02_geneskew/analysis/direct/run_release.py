@@ -7,9 +7,29 @@ It does three things, in this order, and refuses at the first that fails:
      warning", and it is not "included pending review". The producer's own preflight is not
      an admission, and a directory that merely exists is not evidence.
   2. BUILD the aggregate manifest over exactly those bundles.
-  3. INVOKE THE SEPARATE AGGREGATE VERIFIER on the result — a different process, reading the
-     bytes back off disk. This command does not get to certify its own output, and the exit
-     code is the verifier's, not its own.
+  3. INVOKE THE SEPARATE AGGREGATE VERIFIER — as a SEPARATE PROCESS, reading the bytes back
+     off disk and WRITING ITS OWN REPORT. Not an in-process call whose return value this
+     command then summarises: a summary written by the thing being audited is not a
+     verification. The exit code is the verifier's, not its own.
+
+THE CANONICAL LAYOUT (one root; no staging step)
+------------------------------------------------
+    OUT/                                  <- --bundles-root AND --release-inventory-root
+      direct/<bundle-dir>/ ...            (3)   the lane producers write these
+      temporal/<bundle-dir>/ ...          (6)
+      pathway/<bundle-dir>/ ...           (6)
+      direct_release.json                       producer inventory   (PENDING)
+      direct_release_admission.json             W10 external admission
+      temporal_arm_release.json                 producer inventory   (PENDING)
+      temporal_arm_external_admission.json      W11 external admission
+      pathway_arm_release.json                  producer inventory   (PENDING)
+      pathway_arm_external_admission.json       W4 external admission
+      stage2_run_manifest.json                  <- --out (a FILE, not a directory)
+      stage2_aggregate_verification.json        <- --verify-report (the SEPARATE report)
+
+Bundles live in lane subdirectories; the release-level artifacts live at the ROOT. Discovery
+walks the tree, so the subdirectory names are free: a bundle is a bundle because its
+``arm_bundle.json`` says which lane it is, never because of the folder it sits in.
 
 WHAT IT NEVER DOES
 ------------------
@@ -102,31 +122,30 @@ def assemble(args) -> dict[str, Any]:
 
     n_cond = len(release["conditions"])
     n_src = len(release["gene_set_sources"])
-    stage1 = {
-        "release_canonical_sha256": release["release_canonical_sha256"],
-        "registry_scorer_view_canonical_sha256":
-            release["registry_scorer_view_canonical_sha256"],
-        "registry_scorer_projection_sha256":
-            release["registry_scorer_projection_sha256"],
-        "admitted_programs": release["programs"],
-        "conditions": release["conditions"],
-    }
 
     # ---- 2. THE EXACT PER-LANE INVENTORIES ---- #
     inventories, bundles = {}, []
     for lane in LANES:
         dirs = discover(args.bundles_root, lane)
         want = RI.expected_bundle_count(lane, n_cond, n_src)
-        inv = RI.build(lane=lane, bundle_dirs=dirs, root=args.bundles_root,
-                       expect_bundles=want, stage1=stage1,
-                       env_lock_sha256=env_lock_sha256,
-                       producer_commit=args.producer_commit,
-                       verifier_commit=args.verifier_commit)
+        # CONSUME, NEVER MANUFACTURE. The admission binds the inventory by hash, so an
+        # inventory written HERE — after the lane was admitted — would be binding something
+        # that did not exist when the verifier wrote its report. The producer writes it
+        # first (`python -m direct.release_inventory --lane ...`); this step reads it.
         path = os.path.join(args.bundles_root, RI.INVENTORY_FILE_OF[lane])
-        if not os.path.exists(path):          # a lane that ships its own is not overwritten
-            with open(path, "w") as fh:
-                json.dump(inv, fh, indent=2, sort_keys=True)
-                fh.write("\n")
+        if not os.path.exists(path):
+            raise RunManifestError(
+                f"the {lane} lane has no {RI.INVENTORY_FILE_OF[lane]}. The PRODUCER writes "
+                "the pending inventory BEFORE the independent verifier admits it — the "
+                "admission binds it by hash, so it cannot be manufactured here afterwards. "
+                f"Run: python -m direct.release_inventory --lane {lane} --bundles-root "
+                "<root> --release <rel> --release-root <root> --env-lock <lock>")
+        with open(path) as fh:
+            inv = json.load(fh)
+        if len(dirs) != want or int(inv.get("n_bundles") or 0) != want:
+            raise RunManifestError(
+                f"the {lane} release ships {len(dirs)} bundle(s) and its inventory names "
+                f"{inv.get('n_bundles')}; this lane is exactly {want}")
         inventories[lane] = {
             "file": RI.INVENTORY_FILE_OF[lane],
             "admission_mode": RI.ADMISSION_MODE_OF[lane],
@@ -166,11 +185,15 @@ def main(argv=None) -> int:
     ap.add_argument("--expected-code-identity", required=True)
     ap.add_argument("--producer-commit", default=None)
     ap.add_argument("--verifier-commit", default=None)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True,
+                    help="the aggregate manifest. A FILE, not a directory.")
+    ap.add_argument("--verify-report", default=None,
+                    help="where the SEPARATE aggregate verifier writes its report. "
+                         "Default: stage2_aggregate_verification.json beside --out.")
     ap.add_argument("--verify", action="store_true",
-                    help="invoke the SEPARATE aggregate verifier on the result. The exit "
-                         "code becomes the VERIFIER's: this command does not certify its "
-                         "own output.")
+                    help="run the SEPARATE aggregate verifier as its OWN PROCESS. It writes "
+                         "its own report and its exit code becomes ours: this command does "
+                         "not certify its own output.")
     args = ap.parse_args(argv)
 
     try:
@@ -184,23 +207,52 @@ def main(argv=None) -> int:
     if not args.verify:
         return 0 if doc["topology_complete"] else 1
 
-    # THE SEPARATE VERIFIER. A different process, reading the bytes back off disk.
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from . import verify_run_manifest as V
+    # THE SEPARATE VERIFIER — ITS OWN PROCESS, ITS OWN REPORT. Not an in-process call whose
+    # return value this command then prints: a summary written by the thing being audited is
+    # not a verification.
+    report_path = args.verify_report or os.path.join(
+        os.path.dirname(os.path.abspath(args.out)),
+        "stage2_aggregate_verification.json")
+    cmd = [
+        sys.executable, "-m", "direct.verify_run_manifest",
+        "--manifest", doc["path"],
+        "--bundles-root", args.bundles_root,
+        "--release-inventory-root", args.bundles_root,
+        "--release", args.release,
+        "--release-root", args.release_root,
+        "--expect-release-sha256", args.expect_release_sha256,
+        "--expect-gene-sets", args.expect_gene_sets,
+        "--expect-verifiers", args.expect_verifiers,
+        "--expected-code-identity", args.expected_code_identity,
+        "--env-lock", args.env_lock,
+        "--expect-env-lock-sha256", args.expect_env_lock_sha256,
+        "--report", report_path,
+    ]
+    env = dict(os.environ)
+    analysis = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env["PYTHONPATH"] = analysis + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
 
-    report = V.verify(
-        manifest_path=doc["path"], bundles_root=args.bundles_root,
-        release_path=args.release, release_root=args.release_root,
-        expect_release_sha256=args.expect_release_sha256,
-        expect_gene_sets_path=args.expect_gene_sets,
-        expect_verifiers_path=args.expect_verifiers,
-        expected_code_identity_path=args.expected_code_identity,
-        env_lock_path=args.env_lock,
-        expect_env_lock_sha256=args.expect_env_lock_sha256)
-    print(json.dumps({"aggregate_verdict": report["verdict"],
-                      "n_failed": report["n_failed"],
-                      "failed_gates": report["failed_gates"]}, indent=2))
-    return 0 if report["verdict"] == "admit" else 1
+    if not os.path.exists(report_path):
+        print(json.dumps({
+            "aggregate_verdict": None,
+            "error": "the separate aggregate verifier wrote NO report; an admission nobody "
+                     "recorded is not an admission",
+            "verifier_exit_code": proc.returncode}, indent=2))
+        return 1
+    with open(report_path) as fh:
+        report = json.load(fh)
+    print(json.dumps({
+        "aggregate_verdict": report["verdict"],
+        "n_failed": report["n_failed"],
+        "failed_gates": report["failed_gates"],
+        "verifier_report": report_path,
+        "verifier_exit_code": proc.returncode,
+        "verifier_ran_in_a_separate_process": True,
+    }, indent=2))
+    return proc.returncode
 
 
 if __name__ == "__main__":

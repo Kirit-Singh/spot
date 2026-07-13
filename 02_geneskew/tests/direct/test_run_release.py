@@ -262,6 +262,17 @@ class TestTheCapturedCLI:
         assert '"aggregate_verdict": "admit"' in printed
         assert '"n_failed": 0' in printed
 
+        # ...and the verifier ran as its OWN PROCESS and wrote its OWN report. A summary
+        # written by the thing being audited is not a verification.
+        assert '"verifier_ran_in_a_separate_process": true' in printed
+        report = os.path.join(os.path.dirname(out),
+                              "stage2_aggregate_verification.json")
+        assert os.path.exists(report), "the separate verifier wrote no report"
+        doc = json.load(open(report))
+        assert doc["verdict"] == "admit"
+        assert doc["verifier_id"] == "spot.stage02.run_manifest.verifier.v1"
+        assert doc["generator_is_not_verifier"] is True
+
     def test_the_CLI_EXITS_NONZERO_when_the_separate_verifier_REFUSES(self, tmp_path):
         run = F.complete_run(tmp_path)
         out = os.path.join(str(tmp_path), "m.json")
@@ -290,3 +301,89 @@ class TestTheCapturedCLI:
 
         assert rc == 1
         assert '"aggregate_verdict": "reject"' in buf.getvalue()
+
+
+class TestTheProducerWritesTheInventoryBEFOREAdmission:
+    """THE CIRCULARITY. The admission BINDS the inventory by hash.
+
+    So the inventory must exist BEFORE the independent verifier runs. `run_release` used to
+    create a missing one itself — which made the pathway lane impossible to run at all: the
+    admission needed the inventory, and the inventory was only written by the step that
+    needed the admission. `run_release` now CONSUMES; it manufactures nothing.
+    """
+
+    def test_run_release_REFUSES_when_a_lane_inventory_is_ABSENT(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        os.remove(os.path.join(run["root"], "pathway_arm_release.json"))
+
+        with pytest.raises(RunManifestError, match="no pathway_arm_release.json"):
+            run_release.assemble(_Args(run, tmp_path))
+
+    def test_the_PRODUCER_CLI_writes_the_PENDING_inventory_from_the_real_bundles(
+            self, tmp_path):
+        from direct import release_inventory
+
+        run = F.complete_run(tmp_path)
+        path = os.path.join(run["root"], "pathway_arm_release.json")
+        os.remove(path)                            # as the pathway producer leaves it today
+
+        rc = release_inventory.main([
+            "--lane", "pathway",
+            "--bundles-root", run["root"],
+            "--release", run["release_path"],
+            "--release-root", run["release_root"],
+            "--env-lock", run["env_lock"],
+            "--producer-commit", "fc9bdcd",
+        ])
+        assert rc == 0
+        assert os.path.exists(path)
+
+        doc = json.load(open(path))
+        assert doc["n_bundles"] == 6               # the six condition x source bundles
+        assert doc["n_logical_arms"] == 120
+        # ...and it is PENDING. Admitting is not the producer's to do.
+        assert doc["verdict"] == "pending_independent_verification"
+        assert doc["admitted"] is False
+        assert doc["self_admitted"] is False
+        assert doc["verifier_id"] is None
+        # content-addressed over the body the verifier will NOT touch
+        assert len(doc["release_id"]) == 64
+
+    def test_the_CLI_REFUSES_a_lane_that_is_not_EXACTLY_its_count(self, tmp_path):
+        from direct import release_inventory
+
+        run = F.complete_run(tmp_path)
+        shutil.rmtree(run["pathway"][0])           # 5, not 6
+        rc = release_inventory.main([
+            "--lane", "pathway", "--bundles-root", run["root"],
+            "--release", run["release_path"], "--release-root", run["release_root"],
+            "--env-lock", run["env_lock"],
+        ])
+        assert rc == 1                             # refused, and wrote nothing
+
+    def test_END_TO_END_producer_inventory_then_admission_then_aggregate(self, tmp_path):
+        """The real order, from actual producer bytes — no hand-authored manifest."""
+        from direct import release_inventory
+
+        run = F.complete_run(tmp_path)
+        # 1. the lane producers emitted their bundles (the fixture did this)
+        # 2. wipe the inventories + admissions and rebuild them in the PRODUCTION ORDER
+        for f in ("pathway_arm_release.json", "pathway_arm_external_admission.json"):
+            os.remove(os.path.join(run["root"], f))
+
+        assert release_inventory.main([
+            "--lane", "pathway", "--bundles-root", run["root"],
+            "--release", run["release_path"], "--release-root", run["release_root"],
+            "--env-lock", run["env_lock"]]) == 0
+
+        # 3. the INDEPENDENT verifier admits it, binding the inventory it just read
+        F.write_external_admission(run, lane="pathway")
+        F.write_native_admission(run, "pathway")
+
+        # 4. the aggregate CONSUMES both
+        doc = run_release.assemble(_Args(run, tmp_path))
+        assert doc["n_bundles"] == 15
+        assert doc["n_bound_arm_slots"] == 300
+        # the pathway lane's NATIVE verdict, carried verbatim into the manifest
+        assert doc["lane_admissions"]["pathway"]["native_verdict"] == "ADMIT"
+        assert doc["lane_admissions"]["pathway"]["aggregate_disposition"] == "admitted"
