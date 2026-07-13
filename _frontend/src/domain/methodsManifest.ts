@@ -49,8 +49,10 @@ export interface StageMethodsManifest {
 /**
  * The source-tissue fact for a stage — source-backed, never inferred, so it is stated even
  * before an arm is generated. Stage 1/2 (Marson): one experimental source, primary human CD4
- * T cells across donor/stimulation conditions, no multi-tissue expression analysis. Stage-4
- * safety: organ-system groups come only from label evidence, never inferred tissue expression.
+ * T cells across donors D1–D4 × Rest/Stim8hr/Stim48hr — NO tissue/organ axis, no multi-tissue
+ * expression. Stage-4: organ-system context is emitted only from an admitted structured source
+ * field; otherwise not_evaluated/unspecified, never inferred. (Must match SOURCE_TISSUE in
+ * stageMethods.ts, which is the hashed value.)
  */
 export function stageSourceTissue(stage_label: string): string | null {
   const s = stage_label.toLowerCase();
@@ -61,7 +63,7 @@ export function stageSourceTissue(stage_label: string): string | null {
     return 'Biological input is the Stage-2 program/perturbation result from the Marson primary-human-CD4 dataset; drug evidence comes from separately listed public sources.';
   }
   if (s.includes('pk') || s.includes('safety')) {
-    return 'Organ-system safety groups are shown only from source-backed label evidence, never inferred from tissue expression.';
+    return 'Organ-system context is emitted only from an admitted structured source field; otherwise not_evaluated / unspecified — never inferred from target, mechanism, class, or drug name.';
   }
   return null;
 }

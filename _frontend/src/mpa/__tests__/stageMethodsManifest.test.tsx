@@ -211,7 +211,12 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(lims).toMatch(/full CNS-MPO score is incomplete/);
     expect(lims).toMatch(/labels do not establish measured brain exposure/i);
     expect(k.methods.masks_qc ?? '').toMatch(/unspecified \/ not_evaluated/);
-    expect(k.methods.masks_qc ?? '').toMatch(/source-backed only, never inferred/);
+    expect(k.methods.masks_qc ?? '').toMatch(/never inferred from target, mechanism, class, or drug name/);
+    // source-tissue row is SOURCE-CONDITIONAL, not an unconditional "organ-system shown" claim;
+    // Marson has no tissue/organ axis, so nothing is inferred from target/mechanism/class/drug name.
+    expect(k.methods.source_tissue ?? '').toMatch(/emitted only from an admitted structured source field/);
+    expect(k.methods.source_tissue ?? '').toMatch(/never inferred from target, mechanism, class, or drug name/);
+    expect(k.methods.source_tissue ?? '').not.toMatch(/are shown only from source-backed label evidence/);
   });
 
   it('Reactome/GO/Wager/Grossman reference precision: derived-bundle labels, exact release URLs, dated raw snapshots', async () => {

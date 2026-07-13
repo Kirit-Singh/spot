@@ -72,7 +72,7 @@ const SOURCE_TISSUE: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', strin
   drugs:
     'Biological input is the Stage-2 program/perturbation result from the Marson primary-human-CD4 dataset; drug evidence comes from separately listed public sources.',
   pksafety:
-    'Organ-system safety groups are shown only from source-backed label evidence, never inferred from tissue expression.',
+    'Organ-system context is emitted only from an admitted structured source field; otherwise not_evaluated / unspecified — never inferred from target, mechanism, class, or drug name.',
 };
 
 interface RawSource {
@@ -383,7 +383,7 @@ function pksafetyRaw(): RawManifest {
       estimand:
         'CNS-MPO (Wager 2010) six-parameter physicochemical desirability (ClogP, ClogD7.4, MW, TPSA, HBD, most-basic pKa), an equal-weight 0–6 sum — a design heuristic, not measured brain permeability. NEBPI (Grossman 2026) criterion-level brain-penetrance classification keyed to (moiety × route × formulation × dose × schedule × tumour × potency): a class belongs to a context, never to a drug. Exposure / potency margins only from sourced measurements; label safety in five evidence states where no_evidence_found never renders as safe.',
       masks_qc:
-        'Label adapters are pure parsers over cached bytes (no network); each row binds set-ID / application number, active moiety, label version, effective date, the LOINC-coded section, and the raw response hash. A label is never summarised from memory. Organ-system safety groups: with no admitted source supplying the organ-system field, the current adapters emit unspecified / not_evaluated — source-backed only, never inferred.',
+        'Label adapters are pure parsers over cached bytes (no network); each row binds set-ID / application number, active moiety, label version, effective date, the LOINC-coded section, and the raw response hash. A label is never summarised from memory. Organ-system safety groups: with no admitted source supplying the organ-system field, the current adapters emit unspecified / not_evaluated — source-backed only, never inferred from target, mechanism, class, or drug name.',
       upstream_model: 'Required upstream: an admitted Stage-3 drug-candidate bundle (spot.stage03_drug_annotation.v1).',
       limitations: [
         'NEBPI (Grossman 2026) is an expert-consensus review, not FDA guidance; its transcription and interpretation calls need clinical / pharmacology review before any real use.',
@@ -448,7 +448,7 @@ export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pk
   targets: '82345e8f505e52639ae397de0a6848c5ea923aa11420398d4ea86766384c6870',
   pathways: '9f980bbfdc870f4826448ac71f5e94fe852fd3f6a9149a1f810f1a3262067e5f',
   drugs: '59017bfb16f7a8a88e44f5f79eac321f04492a1e3c035d76d1298040ffcd1fa9',
-  pksafety: '8870892cd79431ab707ed94b0c38849e56e42db0206d63dc35581ffd1191ba5b',
+  pksafety: '86a186781ee64406f2246771c1815d72fb37049214db1e4a262e858bc40ab50b',
 };
 
 function keyFor(page: PageKey): keyof typeof STAGE_METHODS_HASHES {
