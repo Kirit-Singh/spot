@@ -421,9 +421,34 @@ def _check_receipts(view: Mapping[str, Any], block: Mapping[str, Any]) -> None:
                     "this document does carry were admitted by nobody.")
 
 
-def _check_view_identity(view: Mapping[str, Any]) -> None:
+def identity_content(view: Mapping[str, Any]) -> dict[str, Any]:
+    """The view's content, with each projected TABLE's rows put in the store's total order.
+
+    A projected table is a ROW SET. The view says so itself
+    (``row_order_is_by_content_id_and_is_not_a_ranking``), and every per-table ``content_sha256``
+    is already order-invariant. But the view's OWN identity was hashed over the raw document, in
+    which the tables are ORDERED lists — so a permutation moved ``view_id`` while every table
+    hash it publishes stayed put. The identity contradicted the guarantee.
+
+    Canonicalising here makes the two agree: a permutation of a row SET is not a finding and does
+    not move the id; a changed cell, an added row or a dropped row still does.
+
+    ``arm_evidence`` is deliberately NOT canonicalised. Its order IS the science — index 0 is A
+    and index 1 is B — and ``arm_evidence_order_hash`` binds exactly that. Sorting it would
+    discard the A/B assignment the selection made.
+    """
     base = without(dict(view), ("view_id", "view_content_sha256"))
-    content = content_hash(base)
+    tables = base.get("tables")
+    if isinstance(tables, dict):
+        base["tables"] = {
+            name: (sorted(rows, key=lambda r: _row_identity(name, r))
+                   if name in av2.TABLES and isinstance(rows, list) else rows)
+            for name, rows in tables.items()}
+    return base
+
+
+def _check_view_identity(view: Mapping[str, Any]) -> None:
+    content = content_hash(identity_content(view))
     if content != view.get("view_content_sha256") or content[:16] != view.get("view_id"):
         _refuse(GATE_VIEW_IDENTITY,
                 f"the view publishes view_id={view.get('view_id')!r} / view_content_sha256="

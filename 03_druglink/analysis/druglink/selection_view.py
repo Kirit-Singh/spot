@@ -58,7 +58,7 @@ from . import stage2_aggregate as sa
 from . import view_projection as vp
 from . import view_store as vst
 from . import workflow as wf
-from .hashing import content_hash, file_sha256, without
+from .hashing import content_hash, file_sha256
 from .view_store import (  # noqa: F401  (one front door for the projection's refusals)
     StoreIdentityError,
     ViewRefusal,
@@ -429,8 +429,11 @@ def _document(*, selection: s3.VerifiedSelection, arms: asel.SelectedArms,
         "headline_arm_permitted": False,
         "p_q_fdr_permitted": False,
     }
-    view["view_id"] = content_hash(view)[:16]
-    view["view_content_sha256"] = content_hash(without(view, ("view_id",)))
+    # The SAME canonicalisation the verifier applies. A projected table is a ROW SET, so a
+    # permutation must not move the id — but the id used to be hashed over the raw document, in
+    # which tables are ORDERED lists. Emit and verify now agree on what the identity is over.
+    view["view_content_sha256"] = content_hash(vp.identity_content(view))
+    view["view_id"] = view["view_content_sha256"][:16]
     return view
 
 

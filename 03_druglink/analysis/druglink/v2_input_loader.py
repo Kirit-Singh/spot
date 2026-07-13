@@ -194,13 +194,25 @@ def _require_admitted_aggregate(admitted: Optional[sa.AdmittedAggregate]) -> Non
     generator_is_not_verifier=true), and reconstructs the full 15-bundle / 300-slot topology
     from the bundles root. A fixture cannot produce that report out of Stage-2's real
     verifier, which is what makes it a gate rather than a label.
+
+    THE CLASS FIREWALL IS NOT THIS GATE. This function used to end with an unconditional
+    ``require_analysis(admitted)``, so a run declaring ``--artifact-class fixture`` was ALSO
+    required to be an analysis, and refused at ``a_fixture_aggregate_cannot_enter_the_analysis_path``.
+    That is wrong twice over: it made a fixture run impossible to execute at all, and it invited
+    the one thing the firewall exists to prevent — relabelling a synthetic aggregate "analysis"
+    just to get it to run.
+
+    A fixture aggregate must be able to emit a FIXTURE bundle (which is barred from Stage 4 by
+    its class), while an ANALYSIS still requires a genuinely admitted production aggregate. So
+    the class check belongs where the class is DECLARED — ``bundle_v2.build_document`` already
+    does it, conditionally, and that is the only place it should live. This gate answers one
+    question only: is there an admitted Stage-2 aggregate at all?
     """
     if admitted is None:
         raise ProductionConsumptionGated(
             f"[{GATE_NO_ADMITTED_AGGREGATE}] a production run requires a Stage-2 aggregate "
             "admitted from disk (druglink.stage2_aggregate.admit_aggregate); Stage 3 will "
             "not serve a production run or generate real candidates without one")
-    sa.require_analysis(admitted)      # Stage-3's OWN class: a fixture run is not an analysis
 
 
 def load_admitted_stage2_inputs(
