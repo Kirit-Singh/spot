@@ -130,18 +130,48 @@ def _temporal_store(root, frm, to, arms, n=120):
     return d
 
 
-def external_admission(root, lane, bundles, *, gates=None, stage1=None, bundle_over=None):
-    """The REAL external envelope (W11 / W4) + the PENDING producer inventory it cleared."""
-    from direct import lane_admission as _LA
-    spec = _LA.EXTERNAL[lane]
+# W11 publishes 188 gates. The fixture must hash to the PUBLISHED inventory sha or the pin
+# refuses it — so the fixture DECLARES that it is a stand-in and monkeypatches the pin only
+# where a stand-in is legitimate. The pin itself is never weakened.
+def w11_gates(n=None):
+    return [f"w11 gate {i}" for i in range(n or LA.W11_N_GATES)]
 
-    # THE PRODUCER INVENTORY: content-addressed, and always PENDING. It never admits itself.
+
+@pytest.fixture(autouse=True)
+def _w11_standin_pin(monkeypatch):
+    """These fixtures are a STAND-IN for W11's real 188-gate inventory.
+
+    The PIN (dc9b6bc1…) is the hash of W11's ACTUAL gate names, which are not on this host. A
+    stand-in cannot hash to it — and it must not be able to. So the pin is redirected to the
+    stand-in's own hash HERE, explicitly and visibly, rather than the pin being softened in the
+    contract. `test_the_PUBLISHED_W11_pin_is_the_real_one` asserts the shipped value is
+    untouched, and the REAL-BYTES control (below) runs against the true pin.
+    """
+    import verify_admission_rules as VR
+    h = content_hash(w11_gates())
+    for mod in (LA, VR):
+        spec = dict(mod.EXTERNAL["temporal"], gate_inventory_sha256=h)
+        monkeypatch.setitem(mod.EXTERNAL, "temporal", spec)
+
+
+def external_admission(root, lane, bundles, *, gates=None, stage1=None, inv_over=None,
+                       binds_over=None):
+    """The REAL external envelope shape (W11 / W4) + the NATIVE producer inventory.
+
+    THE NATIVE TEMPORAL INVENTORY HAS NO TOP-LEVEL verdict/admitted/self_admitted. It says
+    `external_admission.status = pending` and nothing else — "pending is the only honest
+    producer state" (temporal/arms/arm_release.py). The committed contract demanded the
+    other shape and would have REFUSED the real release.
+    """
+    spec = LA.EXTERNAL[lane]
+
     body = {"schema_version": spec["inventory_schema"], "lane": lane,
+            "release_id_rule": "sha256(canonical JSON excluding release_id)",
             "n_bundles": len(bundles), "bundles": bundles,
-            "external_admission": {"status": "pending"},
-            "verdict": "pending_independent_verification",
-            "admitted": False, "self_admitted": False, "verifier_id": None}
-    body.update(bundle_over or {})
+            "external_admission": {"status": "pending",
+                                   "required_verifier_id": spec["verifier_id"],
+                                   "required_report_schema_version": spec["schema"]}}
+    body.update(inv_over or {})
     inv = dict(body, release_id=content_hash(body))
     ip = os.path.join(root, spec["inventory"])
     with open(ip, "w") as fh:
@@ -149,15 +179,38 @@ def external_admission(root, lane, bundles, *, gates=None, stage1=None, bundle_o
     raw = file_sha256(ip)
 
     s1 = stage1 or STAGE1
+    inv_gates = list(spec["gates"]) if gates is None and spec["gates"] else (
+        gates if gates is not None else w11_gates())
+
+    if lane == "temporal":
+        # W11's REAL fourteen binds keys. Stage-1 raw is NESTED.
+        binds = {"bundles": [b["bundle_id"] for b in bundles],
+                 "code_identity": "c" * 64, "env_lock_sha256": "e" * 64,
+                 "method": "spot.stage02.temporal.method.v1",
+                 "native_release_root": "output/temporal",
+                 "per_program_projection_sha256": "p" * 64,
+                 "producer_release_canonical_sha256": content_hash(inv),
+                 "producer_release_file": spec["inventory"],
+                 "producer_release_id": inv["release_id"],
+                 "producer_release_raw_sha256": raw,
+                 "rankings_digest": "r" * 64,
+                 "registry_scorer_projection_sha256":
+                     s1["registry_scorer_projection_sha256"],
+                 "selector_condition_sequence": ["Rest", "Stim8hr", "Stim48hr"],
+                 "stage1_release": {
+                     "stage1_release_raw_sha256": s1["stage1_release_raw_sha256"]}}
+    else:
+        binds = {"producer_release_id": inv["release_id"],
+                 "producer_release_raw_sha256": raw, "inventory_raw_sha256": raw,
+                 "stage1_release_raw_sha256": s1["stage1_release_raw_sha256"]}
+    binds.update(binds_over or {})
+
     env = {"schema_version": spec["schema"], "verifier_id": spec["verifier_id"],
-           "lane": lane, "generator_is_not_verifier": True, "fail_closed": True,
-           "n_bundles": len(bundles),
-           "gate_inventory": list(spec["gates"] if gates is None else gates),
-           "binds": {"producer_release_id": inv["release_id"],
-                     "producer_release_raw_sha256": raw,
-                     "inventory_raw_sha256": raw,
-                     "stage1_release_raw_sha256": s1["stage1_release_raw_sha256"]},
+           "lane": lane, "n_bundles": len(bundles),
+           "gate_inventory": inv_gates, "binds": binds,
            "n_failed": 0, "verdict": "ADMIT"}
+    for a in spec["asserts"]:
+        env[a] = True
     p = os.path.join(root, spec["file"])
     with open(p, "w") as fh:
         json.dump(dict(env, report_id=content_hash(env)), fh, indent=2, sort_keys=True)
@@ -711,23 +764,78 @@ class TestTheEXTERNALEnvelopeIsValidatedNotJustHashed:
         self._refused(root, sp, LA.G_EMPTY_INVENTORY)
 
     @pytest.mark.parametrize("field", ["generator_is_not_verifier", "fail_closed"])
-    def test_a_report_that_ASSERTS_NEITHER_independence_NOR_fail_closed_is_REFUSED(
-            self, tmp_path, field):
+    def test_W4_must_ASSERT_independence_and_fail_closed(self, tmp_path, field):
+        """W4's envelope carries these (ef136a9). W11's is not known to, and REQUIRING them of
+        W11 would refuse the real release — a fail-closed bug is still a bug. So the assertion
+        set is PER LANE, and stated."""
+        assert field in LA.EXTERNAL["pathway"]["asserts"]
+        assert LA.EXTERNAL["temporal"]["asserts"] == ()
+
+    def test_an_INVENTED_pending_field_on_the_native_inventory_is_REFUSED(self, tmp_path):
+        """The native inventory has NO top-level verdict/admitted/self_admitted. A producer
+        that wrote itself one wrote itself an admission."""
+        root, sp, _ = self._temporal(tmp_path)
+        external_admission(root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}],
+                           inv_over={"verdict": "ADMIT", "admitted": True,
+                                     "self_admitted": False})
+        self._refused(root, sp, LA.G_PRODUCER_SELF_ADMITTED)
+
+    def test_a_non_PENDING_external_admission_status_is_REFUSED(self, tmp_path):
+        root, sp, _ = self._temporal(tmp_path)
+        external_admission(root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}],
+                           inv_over={"external_admission": {"status": "admitted"}})
+        self._refused(root, sp, LA.G_PRODUCER_SELF_ADMITTED)
+
+    def test_ONE_MISSING_GATE_is_REFUSED(self, tmp_path):
+        """187 of 188. The count AND the inventory hash both move."""
+        root, sp, _ = self._temporal(tmp_path)
+        external_admission(root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}],
+                           gates=w11_gates(LA.W11_N_GATES - 1))
+        self._refused(root, sp, LA.G_GATES)
+
+    def test_an_EDITED_RANKING_is_REFUSED(self, tmp_path):
+        """The cleared inventory bound every ranking file. Editing one after the fact is
+        exactly the mutation an inventory of hashes exists to catch."""
+        doc = emit(mode=S1.MODE_TEMPORAL, conditions=["Rest", "Stim48hr"])
+        bound = S1.validate(doc, S1.load_schema(SCHEMA_PATH))
+        root = str(tmp_path)
+        keys = [bound["arms"][r]["temporal_arm_key"] for r in ("away_from_A", "toward_B")]
+        d = _temporal_store(root, "Rest", "Stim48hr", keys)
+        for c in ("Rest", "Stim48hr"):
+            _direct_store(root, c, [bound["arms"][r]["direct_arm_key"]
+                                    for r in ("away_from_A", "toward_B")])
+        rel = "rankings/arm_0.json"
+        external_admission(root, "temporal", [{
+            "bundle_id": "T-Rest-Stim48hr",
+            "files": {}, "rankings": {rel: {"raw_sha256": file_sha256(
+                os.path.join(d, rel))}}}])
+        sp = os.path.join(root, "selection.json")
+        with open(sp, "w") as fh:
+            json.dump(doc, fh)
+        # ...and now somebody edits the ranking
+        rd = json.load(open(os.path.join(d, rel)))
+        rd["records"][0]["arm_value"] = -99.0
+        with open(os.path.join(d, rel), "w") as fh:
+            json.dump(rd, fh)
+        self._refused(root, sp, LA.G_BOUND_BYTES)
+
+    def test_a_STALE_NESTED_stage1_raw_is_REFUSED(self, tmp_path):
+        """W11 nests it: binds.stage1_release.stage1_release_raw_sha256 — NOT top-level."""
+        root, sp, _ = self._temporal(tmp_path)
+        external_admission(
+            root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}],
+            binds_over={"stage1_release": {"stage1_release_raw_sha256": "dead" + "0" * 60}})
+        self._refused(root, sp, LA.G_STALE_STAGE1)
+
+    def test_a_MISSING_BINDS_KEY_is_REFUSED(self, tmp_path):
         root, sp, _ = self._temporal(tmp_path)
         p = os.path.join(root, "temporal_arm_external_admission.json")
         rep = json.load(open(p))
-        rep[field] = False
+        del rep["binds"]["rankings_digest"]
         rep["report_id"] = content_hash({k: v for k, v in rep.items() if k != "report_id"})
         with open(p, "w") as fh:
             json.dump(rep, fh)
-        self._refused(root, sp, LA.G_VERIFIER)
-
-    def test_a_SELF_ADMITTED_producer_inventory_is_REFUSED(self, tmp_path):
-        root, sp, _ = self._temporal(tmp_path)
-        external_admission(root, "temporal", [{"bundle_id": "T-Rest-Stim48hr"}],
-                           bundle_over={"verdict": "ADMIT", "admitted": True,
-                                        "self_admitted": True})
-        self._refused(root, sp, LA.G_PRODUCER_SELF_ADMITTED)
+        self._refused(root, sp, LA.G_BOUND_BYTES)
 
     def test_a_report_binding_a_STALE_STAGE1_RELEASE_RAW_is_REFUSED(self, tmp_path):
         """The field W4 ACTUALLY binds: binds.stage1_release_raw_sha256."""
@@ -786,3 +894,96 @@ class TestTheVerifierDoesNotSHARETheProducersImplementation:
         assert VR.W10_REPORT_SCHEMA == LA.W10_REPORT_SCHEMA
         assert VR.SOLVER_LOCK_SHA256 == LA.SOLVER_LOCK_SHA256
         assert VR.W4_GATES == LA.EXTERNAL["pathway"]["gates"]
+
+
+# --------------------------------------------------------------------------- #
+# THE REAL W11 BYTES. Not on this host at the time of writing — and that is REPORTED, not
+# papered over. This control runs against the TRUE published pin the moment they appear.
+# --------------------------------------------------------------------------- #
+W11_INVENTORY = ("/home/tcelab/.spot-runs/temporal-candidate-20260713T174955Z/output/"
+                 "temporal/temporal_arm_release.json")
+W11_ADMISSION = ("/home/tcelab/.spot-audits/temporal-repair-b7de295-independent/results/"
+                 "admission.json")
+W11_INVENTORY_RAW = "0a4929aad0ab5e47f862b041d4d8c7de018b20774786ea77a859de14f6161617"
+W11_RELEASE_ID = "6aaa04a2003b5f0961b26b263ef25b9b9cb9ed7cc20d059bf5c80fc355c73f51"
+W11_REPORT_ID = "15e02e764ee04b79822b2740a464ba05df46dd8b3dc169c4088171668f72633a"
+
+
+class TestTheREALW11Bytes:
+    """No stand-in. The actual immutable files, against the actual published pin."""
+
+    @pytest.fixture(autouse=True)
+    def _no_standin(self, monkeypatch):
+        """Undo the module-wide stand-in pin: this class uses the REAL one."""
+        import verify_admission_rules as VR
+        for mod in (LA, VR):
+            monkeypatch.setitem(mod.EXTERNAL, "temporal",
+                                dict(mod.EXTERNAL["temporal"],
+                                     gate_inventory_sha256=LA.W11_GATE_INVENTORY_SHA256))
+
+    def _real(self):
+        missing = [p for p in (W11_INVENTORY, W11_ADMISSION) if not os.path.exists(p)]
+        if missing:
+            pytest.skip("THE REAL W11 BYTES ARE NOT ON THIS HOST: " + "; ".join(missing) +
+                        ". This control CANNOT be executed here and the temporal branch is "
+                        "therefore NOT proven end-to-end against real bytes. It is not "
+                        "passing — it is skipped, and the skip says so.")
+        return json.load(open(W11_INVENTORY)), json.load(open(W11_ADMISSION))
+
+    def test_the_PUBLISHED_W11_pin_is_the_real_one(self):
+        """The pin itself is asserted here, unpatched, whether or not the bytes are present."""
+        assert LA.W11_N_GATES == 188
+        assert LA.W11_GATE_INVENTORY_SHA256 == (
+            "dc9b6bc14ba56c28efcc4bcabbca456fe49d0e816cba036546f85d98ee27ba97")
+        assert len(LA.W11_BINDS_KEYS) == 14
+        assert "inventory_raw_sha256" not in LA.W11_BINDS_KEYS      # W11 does NOT bind it
+        assert "stage1_release" in LA.W11_BINDS_KEYS                # ...it NESTS Stage-1 there
+
+    def test_the_REAL_inventory_hashes_and_re_derives(self):
+        inv, _ = self._real()
+        assert file_sha256(W11_INVENTORY) == W11_INVENTORY_RAW
+        assert inv["release_id"] == W11_RELEASE_ID
+        assert inv["release_id"] == content_hash(
+            {k: v for k, v in inv.items() if k != "release_id"})
+        # the NATIVE shape: pending, and no top-level verdict at all
+        assert inv["external_admission"]["status"] == "pending"
+        for invented in ("verdict", "admitted", "self_admitted", "verifier_id"):
+            assert invented not in inv
+
+    def test_the_REAL_admission_hashes_and_carries_the_188_gate_inventory(self):
+        _, adm = self._real()
+        assert adm["schema_version"] == "spot.stage02_temporal_arm_external_admission.v1"
+        assert adm["report_id"] == W11_REPORT_ID
+        assert adm["report_id"] == content_hash(
+            {k: v for k, v in adm.items() if k != "report_id"})
+        assert len(adm["gate_inventory"]) == 188
+        assert content_hash(adm["gate_inventory"]) == LA.W11_GATE_INVENTORY_SHA256
+        assert set(adm["binds"]) >= LA.W11_BINDS_KEYS
+        assert adm["binds"]["producer_release_id"] == W11_RELEASE_ID
+        assert adm["binds"]["producer_release_raw_sha256"] == W11_INVENTORY_RAW
+        assert adm["binds"]["stage1_release"]["stage1_release_raw_sha256"]
+
+    def test_END_TO_END_the_REAL_W11_admission_ADMITS(self, tmp_path):
+        """The control: the real inventory + the real admission, through the real contract."""
+        import shutil
+        inv, adm = self._real()
+        root = str(tmp_path)
+        shutil.copyfile(W11_INVENTORY, os.path.join(root, "temporal_arm_release.json"))
+        shutil.copyfile(W11_ADMISSION,
+                        os.path.join(root, "temporal_arm_external_admission.json"))
+
+        # the bundle the release actually ships, at the path the inventory names
+        entry = inv["bundles"][0]
+        bd = os.path.join(root, "temporal", str(entry.get("relative_dir", "b0")))
+        os.makedirs(bd, exist_ok=True)
+        with open(os.path.join(bd, "arm_bundle.json"), "w") as fh:
+            json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
+                       "bundle_id": entry["bundle_id"], "lane": "temporal",
+                       "context": {"from_condition": entry.get("from_condition"),
+                                   "to_condition": entry.get("to_condition")}}, fh)
+
+        s1 = dict(STAGE1, stage1_release_raw_sha256=
+                  adm["binds"]["stage1_release"]["stage1_release_raw_sha256"])
+        out = LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert out["admitted"] is True
+        assert out["n_gates"] == 188

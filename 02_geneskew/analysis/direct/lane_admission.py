@@ -74,41 +74,6 @@ SOLVER_LOCK_SHA256 = "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2
 # Each must BIND the release it admitted, by hash. A verdict that names no artifact could be
 # moved onto any artifact.
 # --------------------------------------------------------------------------- #
-EXTERNAL = {
-    "temporal": {
-        "file": "temporal_arm_external_admission.json",
-        "schema": "spot.stage02_temporal_arm_external_admission.v1",
-        "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
-        "inventory": "temporal_arm_release.json",
-        "inventory_schema": "spot.stage02_temporal_arm_release.v1",
-        "gates": (),          # W11's exact inventory is not yet published — see LIMITS
-        "owner": "W11",
-    },
-    "pathway": {
-        "file": "pathway_arm_external_admission.json",
-        "schema": "spot.stage02_pathway_arm_external_admission.v1",
-        "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
-        "inventory": "pathway_arm_release.json",
-        "inventory_schema": "spot.stage02_pathway_arm_release.v1",
-        # W4's EXACT 12-gate inventory (verify_pathway_release @ ef136a9). A report that ran a
-        # different set of gates is not this verifier's admission.
-        "gates": (
-            "the_condition_and_source_universe_comes_from_the_authoritative_stage1_release",
-            "the_bundles_are_exactly_the_authoritative_condition_x_source_grid_once_each",
-            "every_bundle_reopens_and_its_nonnull_run_id_rederives_from_its_own_binding",
-            "one_scorer_view_and_stage1_that_match_the_release_pins_and_the_pinned_solver_lock",
-            "every_cell_has_a_distinct_nonnull_run_id_and_distinct_nonnull_arm_record_bytes",
-            "each_bundle_agrees_with_itself_about_which_condition_x_source_cell_it_is",
-            "method_gene_sets_binds_two_pinned_sources_agrees_with_provenance_one_universe",
-            "the_gene_set_universes_match_the_authoritative_native_run_binding_universe_fields",
-            "no_p_q_fdr_inferential_key_at_any_depth_of_any_shipped_document",
-            "every_cell_has_one_independent_admitting_report_with_the_exact_gate_inventory",
-            "the_producer_inventory_is_present_pending_native_rederives_and_binds_this",
-            "the_producer_inventory_binds_the_exact_bytes_that_landed_on_disk",
-        ),
-        "owner": "W4",
-    },
-}
 
 # NAMED GATES.
 G_ABSENT = "the_lane_ships_no_independent_verification_report"
@@ -125,6 +90,85 @@ G_ARM_NOT_VERIFIED = "the_arm_being_asked_for_is_not_in_the_inventory_the_report
 G_ENV = "the_report_verified_a_bundle_built_under_another_solver_environment"
 G_EMPTY_INVENTORY = "the_report_verified_an_EMPTY_set_of_arms_or_bundles_and_admitted_it"
 G_PRODUCER_SELF_ADMITTED = "the_producer_inventory_admitted_itself"
+
+# --------------------------------------------------------------------------- #
+# W11 — the TEMPORAL root envelope. Its REAL binds, and its PUBLISHED gate inventory.
+#
+# The committed contract was an invented hybrid: it demanded `inventory_raw_sha256` and a
+# top-level `stage1_release_raw_sha256`, and it demanded the producer inventory carry
+# top-level `verdict/admitted/self_admitted`. THE REAL BYTES HAVE NONE OF THOSE.
+#
+#   * the native inventory (temporal/arms/arm_release.py) says `external_admission.status =
+#     pending` and carries NO top-level verdict/admitted/self_admitted at all — "pending is
+#     the only honest producer state", in its own words. My check would have REFUSED the real
+#     release: a fail-closed bug, which is still a bug.
+#   * W11's root envelope binds the fourteen keys below, and the Stage-1 raw sha lives NESTED
+#     at binds.stage1_release.stage1_release_raw_sha256 — not at the top level.
+#   * its gate inventory is PUBLISHED: 188 gates, canonical sha256 dc9b6bc1…. `gates=()` is no
+#     longer acceptable, and the count alone is not enough — the INVENTORY ITSELF is pinned.
+# --------------------------------------------------------------------------- #
+W4_GATES = (
+    "the_condition_and_source_universe_comes_from_the_authoritative_stage1_release",
+    "the_bundles_are_exactly_the_authoritative_condition_x_source_grid_once_each",
+    "every_bundle_reopens_and_its_nonnull_run_id_rederives_from_its_own_binding",
+    "one_scorer_view_and_stage1_that_match_the_release_pins_and_the_pinned_solver_lock",
+    "every_cell_has_a_distinct_nonnull_run_id_and_distinct_nonnull_arm_record_bytes",
+    "each_bundle_agrees_with_itself_about_which_condition_x_source_cell_it_is",
+    "method_gene_sets_binds_two_pinned_sources_agrees_with_provenance_one_universe",
+    "the_gene_set_universes_match_the_authoritative_native_run_binding_universe_fields",
+    "no_p_q_fdr_inferential_key_at_any_depth_of_any_shipped_document",
+    "every_cell_has_one_independent_admitting_report_with_the_exact_gate_inventory",
+    "the_producer_inventory_is_present_pending_native_rederives_and_binds_this",
+    "the_producer_inventory_binds_the_exact_bytes_that_landed_on_disk",
+)
+
+W11_N_GATES = 188
+W11_GATE_INVENTORY_SHA256 = (
+    "dc9b6bc14ba56c28efcc4bcabbca456fe49d0e816cba036546f85d98ee27ba97")
+
+W11_BINDS_KEYS = frozenset({
+    "bundles", "code_identity", "env_lock_sha256", "method", "native_release_root",
+    "per_program_projection_sha256", "producer_release_canonical_sha256",
+    "producer_release_file", "producer_release_id", "producer_release_raw_sha256",
+    "rankings_digest", "registry_scorer_projection_sha256", "selector_condition_sequence",
+    "stage1_release",
+})
+
+# The producer inventory's ONLY honest state. There is no top-level verdict to read.
+PENDING_STATUS = "pending"
+
+EXTERNAL = {
+    "temporal": {
+        "file": "temporal_arm_external_admission.json",
+        "schema": "spot.stage02_temporal_arm_external_admission.v1",
+        "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
+        "inventory": "temporal_arm_release.json",
+        "inventory_schema": "spot.stage02_temporal_arm_release.v1",
+        # PUBLISHED: 188 gates, pinned by the canonical hash of the inventory ITSELF.
+        "n_gates": W11_N_GATES,
+        "gate_inventory_sha256": W11_GATE_INVENTORY_SHA256,
+        "gates": (),                       # pinned by HASH, not by a copied list
+        "binds_keys": W11_BINDS_KEYS,
+        # W11's envelope is not known to carry these top-level assertions; W4's does. Requiring
+        # them of W11 would REFUSE the real release, and a fail-closed bug is still a bug.
+        "asserts": (),
+        "owner": "W11",
+    },
+    "pathway": {
+        "file": "pathway_arm_external_admission.json",
+        "schema": "spot.stage02_pathway_arm_external_admission.v1",
+        "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
+        "inventory": "pathway_arm_release.json",
+        "inventory_schema": "spot.stage02_pathway_arm_release.v1",
+        "n_gates": len(W4_GATES),
+        "gate_inventory_sha256": None,     # pinned by the exact LIST (ef136a9)
+        "gates": W4_GATES,
+        "binds_keys": frozenset({"producer_release_id", "producer_release_raw_sha256",
+                                 "inventory_raw_sha256", "stage1_release_raw_sha256"}),
+        "asserts": ("generator_is_not_verifier", "fail_closed"),
+        "owner": "W4",
+    },
+}
 
 PRODUCER_PENDING = "pending_independent_verification"
 
@@ -302,109 +346,135 @@ def bind_direct(bundles_root: str, *, condition: str, bundle_dir: str, arm_key: 
 # --------------------------------------------------------------------------- #
 # TEMPORAL (W11) / PATHWAY (W4) — the external admission, BOUND to the release it cleared.
 # --------------------------------------------------------------------------- #
-def bind_external(bundles_root: str, lane: str, *, bundle_dir: str,
-                  stage1: dict | None = None) -> dict[str, Any]:
-    """W11 / W4: the FULL envelope AND the producer inventory — not merely their hashes.
 
-    It used to check the schema, the verifier id, the verdict, the self-hash and the inventory
-    hash, and stop. So a report could assert nothing about its own independence, run NO GATES
-    AT ALL, and clear an EMPTY release — and an admission over an empty release admits nothing
-    while looking exactly like one that admits everything.
-    """
+def _check_external(bundles_root, lane, *, bundle_dir, stage1, EXTERNAL, canon_fn, raw_fn,
+                    load_fn, self_hash_fn, refuse):
+    """W11 / W4, against their REAL bytes. Shared shape; each side calls it with its own hashes."""
     spec = EXTERNAL[lane]
     stage1 = stage1 or {}
-    rep = _load(os.path.join(bundles_root, spec["file"]))
+    rep = load_fn(os.path.join(bundles_root, spec["file"]), f"{spec['owner']} admission")
 
     if rep.get("schema_version") != spec["schema"]:
-        _refuse(G_SHAPE, f"[{lane}] schema {rep.get('schema_version')!r} is not "
-                         f"{spec['schema']!r}")
+        refuse(G_SHAPE, f"[{lane}] schema {rep.get('schema_version')!r}")
     if rep.get("verifier_id") != spec["verifier_id"]:
-        _refuse(G_VERIFIER, f"[{lane}] verifier_id {rep.get('verifier_id')!r}")
+        refuse(G_VERIFIER, f"[{lane}] verifier_id {rep.get('verifier_id')!r}")
     if str(rep.get("lane", lane)) != lane:
-        _refuse(G_SHAPE, f"[{lane}] the report says it is about lane {rep.get('lane')!r}")
-    if rep.get("generator_is_not_verifier") is not True:
-        _refuse(G_VERIFIER, f"[{lane}] the report does not assert generator_is_not_verifier")
-    if rep.get("fail_closed") is not True:
-        _refuse(G_VERIFIER, f"[{lane}] the report does not assert fail_closed")
+        refuse(G_SHAPE, f"[{lane}] the report says it is about lane {rep.get('lane')!r}")
+    for field in spec["asserts"]:
+        if rep.get(field) is not True:
+            refuse(G_VERIFIER, f"[{lane}] the report does not assert {field}")
     if rep.get("verdict") != "ADMIT" or int(rep.get("n_failed") or 0) != 0:
-        _refuse(G_VERDICT, f"[{lane}] verdict {rep.get('verdict')!r} / n_failed "
-                           f"{rep.get('n_failed')!r}")
-    _self_hash(rep, "report_id")
+        refuse(G_VERDICT, f"[{lane}] verdict {rep.get('verdict')!r} / n_failed "
+                          f"{rep.get('n_failed')!r}")
+    self_hash_fn(rep, "report_id")
 
-    if spec["gates"]:
-        got = tuple(rep.get("gate_inventory") or ())
-        if got != spec["gates"]:
-            _refuse(G_GATES,
-                    f"[{lane}] the report ran {len(got)} gate(s); this verifier's EXACT "
-                    f"inventory is {len(spec['gates'])} named gates. A report that ran a "
-                    "different set of gates is not this verifier's admission")
+    # ---- THE GATE INVENTORY. Pinned by its own hash where the verifier publishes one. ----
+    inv_gates = list(rep.get("gate_inventory") or ())
+    if not inv_gates:
+        refuse(G_GATES, f"[{lane}] the report ran NO gates and admitted anyway")
+    if spec["n_gates"] and len(inv_gates) != spec["n_gates"]:
+        refuse(G_GATES, f"[{lane}] the report ran {len(inv_gates)} gate(s); this verifier "
+                        f"publishes {spec['n_gates']}")
+    if spec["gate_inventory_sha256"] and canon_fn(inv_gates) != spec["gate_inventory_sha256"]:
+        refuse(G_GATES,
+               f"[{lane}] the gate inventory hashes to {canon_fn(inv_gates)[:16]}; this "
+               f"verifier's PUBLISHED inventory is {spec['gate_inventory_sha256'][:16]}. A "
+               "report that ran a different set of gates is not this verifier's admission")
+    if spec["gates"] and tuple(inv_gates) != spec["gates"]:
+        refuse(G_GATES, f"[{lane}] the gate inventory is not this verifier's exact list")
+
+    # ---- THE BINDS. Exactly the keys the verifier actually emits. ----
+    binds = rep.get("binds") or {}
+    if not binds:
+        refuse(G_BOUND_BYTES, f"[{lane}] the report binds NOTHING")
+    missing = sorted(spec["binds_keys"] - set(binds))
+    if missing:
+        refuse(G_BOUND_BYTES, f"[{lane}] the binds block is missing {missing}")
 
     # ---- THE PRODUCER INVENTORY IT CLEARED ----
     inv_path = os.path.join(bundles_root, spec["inventory"])
-    inv = _load(inv_path)
-    binds = rep.get("binds") or {}
-    if not binds:
-        _refuse(G_BOUND_BYTES, f"[{lane}] the report binds NOTHING")
+    inv = load_fn(inv_path, f"{lane} producer inventory")
     if inv.get("schema_version") != spec["inventory_schema"]:
-        _refuse(G_SHAPE, f"[{lane}] the producer inventory schema is "
-                         f"{inv.get('schema_version')!r}")
-    if inv.get("verdict") != PRODUCER_PENDING or inv.get("admitted") is not False \
-            or inv.get("self_admitted") is not False:
-        _refuse(G_PRODUCER_SELF_ADMITTED,
-                f"[{lane}] the producer inventory is not PENDING/un-admitted. A release that "
-                "admitted itself was never independently admitted")
+        refuse(G_SHAPE, f"[{lane}] the inventory schema is {inv.get('schema_version')!r}")
 
-    inv_raw = file_sha256(inv_path)
-    if str(binds.get("inventory_raw_sha256")) != inv_raw:
-        _refuse(G_BOUND_BYTES, f"[{lane}] the report bound another inventory's bytes")
+    # THE NATIVE PENDING STATE. There is NO top-level verdict here: the native inventory says
+    # `external_admission.status = pending` and nothing else — "pending is the only honest
+    # producer state". Demanding top-level verdict/admitted/self_admitted REFUSED the real
+    # release. And any INVENTED pending field is a refusal in the other direction: a producer
+    # that wrote itself an `admitted` is a producer that admitted itself.
+    if (inv.get("external_admission") or {}).get("status") != PENDING_STATUS:
+        refuse(G_PRODUCER_SELF_ADMITTED,
+               f"[{lane}] the inventory's external_admission.status is "
+               f"{(inv.get('external_admission') or {}).get('status')!r}, not "
+               f"{PENDING_STATUS!r}")
+    for invented in ("verdict", "admitted", "self_admitted", "verifier_id"):
+        if invented in inv:
+            refuse(G_PRODUCER_SELF_ADMITTED,
+                   f"[{lane}] the native inventory carries no {invented!r}; a producer that "
+                   "wrote itself one wrote itself an admission")
+
+    inv_raw = raw_fn(inv_path)
     if str(binds.get("producer_release_raw_sha256")) != inv_raw:
-        _refuse(G_BOUND_BYTES,
-                f"[{lane}] producer_release_raw_sha256 is not the inventory on disk")
+        refuse(G_BOUND_BYTES, f"[{lane}] the report bound another inventory's bytes")
     if str(binds.get("producer_release_id")) != str(inv.get("release_id")):
-        _refuse(G_BOUND_SUBJECT, f"[{lane}] the report admits another release")
-    rederived = content_hash({k: v for k, v in inv.items() if k != "release_id"})
+        refuse(G_BOUND_SUBJECT, f"[{lane}] the report admits another release")
+    rederived = canon_fn({k: v for k, v in inv.items() if k != "release_id"})
     if str(inv.get("release_id")) != rederived:
-        _refuse(G_SELF_HASH, f"[{lane}] the inventory's release_id does not re-derive")
+        refuse(G_SELF_HASH, f"[{lane}] the inventory's release_id does not re-derive")
+    if lane == "pathway" and str(binds.get("inventory_raw_sha256")) != inv_raw:
+        refuse(G_BOUND_BYTES, f"[{lane}] inventory_raw_sha256 is not the inventory on disk")
 
-    # THE ACTUAL STAGE-1 FIELD W4 BINDS.
+    # ---- STAGE-1. NESTED for W11 (binds.stage1_release.stage1_release_raw_sha256); flat for W4.
     want_s1 = stage1.get("stage1_release_raw_sha256")
-    if want_s1 and str(binds.get("stage1_release_raw_sha256")) != str(want_s1):
-        _refuse(G_STALE_STAGE1,
-                f"[{lane}] the report cleared a release built against Stage-1 "
-                f"{str(binds.get('stage1_release_raw_sha256'))[:16]}, not {str(want_s1)[:16]}")
+    if want_s1:
+        got = (binds.get("stage1_release") or {}).get("stage1_release_raw_sha256") \
+            if lane == "temporal" else binds.get("stage1_release_raw_sha256")
+        if str(got) != str(want_s1):
+            refuse(G_STALE_STAGE1,
+                   f"[{lane}] the report cleared a release built against Stage-1 "
+                   f"{str(got)[:16]}, not {str(want_s1)[:16]}")
 
     # ---- THE BUNDLE LIST. EMPTY IS A REFUSAL. ----
     bundles = inv.get("bundles") or []
     if not bundles:
-        _refuse(G_EMPTY_INVENTORY,
-                f"[{lane}] the cleared inventory lists NO bundles. An admission over an empty "
-                "release admits nothing, and it looks exactly like one that admits everything")
+        refuse(G_EMPTY_INVENTORY,
+               f"[{lane}] the cleared inventory lists NO bundles. An admission over an empty "
+               "release admits nothing, and looks exactly like one that admits everything")
     if int(inv.get("n_bundles") or 0) != len(bundles):
-        _refuse(G_EMPTY_INVENTORY, f"[{lane}] n_bundles disagrees with the bundle list")
+        refuse(G_EMPTY_INVENTORY, f"[{lane}] n_bundles disagrees with the bundle list")
 
     with open(os.path.join(bundle_dir, "arm_bundle.json")) as fh:
         doc = json.load(fh)
     mine = str(doc.get("bundle_id") or doc.get("pathway_run_id"))
     entry = next((b for b in bundles if str(b.get("bundle_id")) == mine), None)
     if entry is None:
-        _refuse(G_BOUND_SUBJECT,
-                f"[{lane}] the bundle being read ({mine[:16]}) is not in the cleared inventory")
+        refuse(G_BOUND_SUBJECT,
+               f"[{lane}] the bundle being read ({mine[:16]}) is not in the cleared inventory")
 
-    # ---- EVERY BOUND FILE HASH, against the bytes on disk ----
+    # ---- EVERY BOUND FILE AND RANKING HASH, against the bytes on disk ----
     for group in ("files", "rankings"):
         for name, e in sorted((entry.get(group) or {}).items()):
             p = os.path.join(bundle_dir, name)
             want = e.get("raw_sha256") if isinstance(e, dict) else e
-            if not os.path.exists(p) or file_sha256(p) != want:
-                _refuse(G_BOUND_BYTES,
-                        f"[{lane}] {name}: the cleared inventory bound different bytes")
+            if not os.path.exists(p) or raw_fn(p) != want:
+                refuse(G_BOUND_BYTES,
+                       f"[{lane}] {name}: the cleared inventory bound different bytes")
 
-    return {
-        "admitted": True, "owner": spec["owner"], "report": spec["file"],
-        "report_schema": spec["schema"], "verifier_id": spec["verifier_id"],
-        "report_id": rep["report_id"], "bound_inventory": spec["inventory"],
-        "bound_inventory_sha256": inv_raw, "bound_bundle_id": mine,
-        "n_bundles": len(bundles),
-        "signature_limit": ("no signature: this proves the report is ABOUT these bytes and is "
-                            "internally whole. It does not prove WHO wrote it"),
-    }
+    return {"admitted": True, "owner": spec["owner"], "report": spec["file"],
+            "report_id": rep["report_id"], "n_bundles": len(bundles),
+            "n_gates": len(inv_gates), "bound_bundle_id": mine,
+            "bound_inventory": spec["inventory"], "bound_inventory_sha256": inv_raw}
+
+
+def bind_external(bundles_root: str, lane: str, *, bundle_dir: str,
+                  stage1: dict | None = None) -> dict[str, Any]:
+    """The PRODUCER'S external admission check, with the PRODUCER'S hashing."""
+    def _load2(path, what):
+        if not os.path.exists(path):
+            _refuse(G_ABSENT, f"no {what} at {os.path.basename(path)}")
+        with open(path) as fh:
+            return json.load(fh)
+
+    return _check_external(bundles_root, lane, bundle_dir=bundle_dir, stage1=stage1,
+                           EXTERNAL=EXTERNAL, canon_fn=content_hash, raw_fn=file_sha256,
+                           load_fn=_load2, self_hash_fn=_self_hash, refuse=_refuse)
