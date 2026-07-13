@@ -157,5 +157,30 @@ choices without regeneration** — so:
   Do NOT ship an optional/nullable `question_id` seam. When W13 lands, INDEPENDENTLY re-derive it and require
   it alongside `selection_id` / `analysis_mode` / arm keys.
 
+## W3 compact display projection (UI payload performance)
+
+The browser consumes W3's **compact, selection-INDEPENDENT display projection** — NOT the full native
+matrices in JSON. W3 applies the method-versioned per-arm cap/projection policy ONCE (deterministic
+serialization, no recompute) and emits, per arm, only the capped rows plus a policy + a native-row-equality
+receipt; the browser renders those rows as a VIEW of the authoritative downloadable native artifacts. The
+browser adds **NO further sort, cap, filter, or pair ranking** (verified: `renderReal` `.map`s rows in the
+given order; `renderRealRoutes.test` asserts out-of-order records render verbatim, uncapped).
+
+Each arm's projection carries (verified by `src/adapters/displayProjectionAdapter.ts` →
+`verifyDisplayProjection`, FAIL-CLOSED):
+```text
+projection_method_version   (starts spot.stage02.display_projection.<ver> — cap/policy is bound to it)
+per_arm_cap                 (max rows emitted per arm)
+projection_policy           (e.g. top_n_by_native_rank_no_recompute)
+counts { n_total, n_evaluable, n_emitted }   (must satisfy n_emitted <= n_evaluable <= n_total, and <= cap)
+source_raw_sha256, source_canonical_sha256   (the authoritative native artifact this is a view of)
+native_row_equality_receipt (sha256 over the emitted rows' canonical form == the native rows)
+artifact_download_refs[]    (authoritative downloadable native artifacts — the "view of" links)
+```
+The verifier re-derives the receipt from the EXACT rows the browser will render and refuses on any policy /
+receipt / count mismatch, and if `n_emitted` != the rendered row count (no client cap/expand). **Pin the
+exact `projection_method_version` id + the per-arm field placement with W3;** the verifier + fail-closed
+semantics + the no-client-sort/cap guarantee are in place to bind against the published contract.
+
 _Deployment stays HELD until real admitted native artifacts + receipts exist. The packager writes nothing
 unless invoked with a real spec; production results are never committed._

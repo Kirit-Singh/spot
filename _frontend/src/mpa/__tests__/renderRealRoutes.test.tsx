@@ -135,6 +135,27 @@ describe('renderRouteReal — distinct native path per route', () => {
     expect(within(canvas).getByText('context_specific')).toBeInTheDocument();
   });
 
+  it('renders gene-arm rows VERBATIM — no browser re-sort, re-cap, or pair ranking', () => {
+    // records deliberately NOT in rank order; the browser must render them in THIS order (the display
+    // projection already applied the cap/sort — the browser is a faithful view, never a re-derivation).
+    const arm = {
+      arm_key: 'temporal|p|decrease|Rest|Stim48hr', program_id: 'p', desired_change: 'decrease',
+      from_condition: 'Rest', to_condition: 'Stim48hr', n_targets: 3, n_evaluable: 3, n_ranked: 3,
+      records: [
+        { target_id: 'ENSG_C', base_key: 'p|ENSG_C', arm_value: -0.05, evaluable: true, temporal_status: 'evaluable', desired_target_modulation: 'x', rank: 3 },
+        { target_id: 'ENSG_A', base_key: 'p|ENSG_A', arm_value: -0.30, evaluable: true, temporal_status: 'evaluable', desired_target_modulation: 'x', rank: 1 },
+        { target_id: 'ENSG_B', base_key: 'p|ENSG_B', arm_value: -0.20, evaluable: true, temporal_status: 'evaluable', desired_target_modulation: 'x', rank: 2 },
+      ],
+    };
+    const view = { mode: 'temporal_cross_condition', geneArmA: arm, geneArmB: null, pathwayArmA: null, pathwayArmB: null, pathway_context: 'reactome' } as unknown as JoinedView;
+    renderRes({ route: 'targets', view, bundles: { temporal: null } as unknown as ResolvedBundles, admission: 'admitted' });
+    const canvas = screen.getByTestId('canvas');
+    const dataRows = [...canvas.querySelectorAll('tbody tr')];
+    expect(dataRows.length).toBe(3); // no cap — every emitted row rendered
+    const ranks = dataRows.map((tr) => tr.querySelector('td')?.textContent); // first column = rank
+    expect(ranks).toEqual(['3', '1', '2']); // rendered in RECORDS order, NOT re-sorted to 1,2,3
+  });
+
   it('Pathways renders pathway arms (not gene arms)', () => {
     renderRes({ route: 'pathways', view: pathwayView(), bundles: {} as unknown as ResolvedBundles, admission: 'admitted' });
     const canvas = screen.getByTestId('canvas');
