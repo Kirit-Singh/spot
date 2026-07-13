@@ -15,6 +15,7 @@ from p2s_arms.synthetic import (  # noqa: F401
     OPPONENT,
     OPPONENT_WEIGHT,
     PROGRAM,
+    REAL_SOLVER_LOCK,  # noqa: F401
     UPSTREAM_OBSERVED,
     base_deltas,
     gene_ids,
@@ -27,4 +28,7 @@ from p2s_arms.synthetic import (  # noqa: F401
     run_producer,
     target_ids,
     write_arm_bundle,
+    write_full_bundle,
+    write_solver_lock,
+    write_w10_report,
 )

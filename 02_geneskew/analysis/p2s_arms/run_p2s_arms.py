@@ -1,12 +1,23 @@
 """The P2S v2 SECONDARY runner: support for ONE reusable Direct arm (and its sibling).
 
     python -m p2s_arms.run_p2s_arms \
-        --arm-key 'direct|treg_like|increase|Stim48hr' \
-        --bundle-dir <the ADMITTED all-arm bundle for that condition> \
-        --verifier-report <that bundle's independent verifier report> \
+        --direct-bundle  <the W10-ADMITTED Direct bundle dir for that condition> \
+        --w10-report     <DIRECT_BUNDLE_ADMISSION_<condition>.json> \
+        --env-lock       analysis/stage02_solver_lock.txt \
         --stage1-release <the bound v3 release> \
+        --arm-key 'direct|treg_like|increase|Stim48hr' \
         --cells <prepared npz> --effects <parquet> --masks <parquet> --eligible <parquet> \
         --out-root <outside every tracked tree>
+
+IT RUNS ONLY FROM A REAL, W10-ADMITTED DIRECT ARM
+-------------------------------------------------
+The four bindings above are REQUIRED. "Sequencing alone is not a binding": a wrapper can run
+this lane after Direct and W10 and still have bound nothing, because a producer that does not
+ACCEPT the bundle and the report cannot be said to have run from them.
+
+Exit 0 = support emitted. Exit 2 = a NAMED refusal, with a TYPED DEFERRED DISPOSITION written
+to ``p2s_deferred_disposition.json``. Never exit 1, which is a crash: a scheduler has to be
+able to tell "P2S declined this arm, for this reason" from "P2S broke".
 
 It writes ONLY into its own content-addressed run directory. It never writes into Direct's
 output, never imports into Direct, and changes no byte under ``analysis/direct/`` — which is
@@ -48,6 +59,9 @@ from . import (
     stability,
     universe,
     upstream,
+)
+from . import (
+    disposition as D,
 )
 
 ALL_DONOR = "all_donor"
@@ -228,16 +242,29 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
 
 
 def build(args, *, fit=None) -> dict[str, Any]:
-    """One run from the command line. Bind, refuse or proceed, verify the pin, execute."""
-    release, view = binding.load_release(
-        release_path=args.stage1_release, kind=args.release_kind,
-        validation_path=args.stage1_validation, gate_spec_path=args.stage1_gate_spec)
+    """One run from the command line. Admit the inputs, bind, verify the pin, execute.
 
-    with open(args.verifier_report) as fh:
-        report = json.load(fh)
+    ORDER MATTERS. The solver lock and W10's admission are checked BEFORE the Stage-1 release
+    is loaded, so that a missing report or an unadmitted bundle comes back as a NAMED typed
+    refusal rather than as whatever the release loader raises on the way past it.
+    """
+    admitted = binding.admit_inputs(
+        bundle_dir=args.direct_bundle, w10_report=args.w10_report,
+        env_lock=args.env_lock, lane=args.lane)
 
-    bound = binding.bind(arm_key=args.arm_key, bundle_dir=args.bundle_dir, view=view,
-                         verifier_report=report)
+    try:
+        release, view = binding.load_release(
+            release_path=args.stage1_release, kind=args.release_kind,
+            validation_path=args.stage1_validation, gate_spec_path=args.stage1_gate_spec)
+    except Exception as e:                      # the loader's own error type is not ours
+        raise D.RefusalError(
+            D.REFUSE_RELEASE_UNREADABLE,
+            f"the bound Stage-1 v3 release could not be loaded ({e})") from e
+
+    bound = binding.bind(
+        arm_key=args.arm_key, bundle_dir=args.direct_bundle, w10_report=args.w10_report,
+        env_lock=args.env_lock, view=view, release=release, lane=args.lane,
+        admitted=admitted)
     up = upstream.identity(expect_tree_sha256=args.upstream_tree_sha256)
 
     return execute(
@@ -252,13 +279,30 @@ def build(args, *, fit=None) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Perturb2State SECONDARY reconstruction support for ONE reusable arm")
+
+    # THE FOUR BINDINGS the W7 wrapper's preflight checks for BY NAME
+    # (stage2_run.py -> SECONDARY_LANE_BINDING_GAP). Its note is the whole point:
+    #
+    #     "Sequencing alone is not a binding."
+    #
+    # A wrapper can run this lane AFTER Direct and W10 and still have bound nothing. A
+    # producer that does not ACCEPT the bundle and the report cannot be said to have run
+    # from them. All four are REQUIRED: a default here would be a binding nobody supplied.
+    ap.add_argument("--direct-bundle", required=True, dest="direct_bundle",
+                    help="the ADMITTED Direct all-arm bundle directory "
+                         "(<out-root>/<arm_bundle_run_id>); discover it with "
+                         "`python -m direct.bundle_index`, never by guessing a path")
+    ap.add_argument("--w10-report", required=True, dest="w10_report",
+                    help="W10's INDEPENDENT admission report for that bundle "
+                         "(DIRECT_BUNDLE_ADMISSION_<condition>.json). NOT the bundle's own "
+                         "verification.json, which is the producer's empty slot")
+    ap.add_argument("--env-lock", required=True, dest="env_lock",
+                    help="analysis/stage02_solver_lock.txt — hashed here and checked against "
+                         "this lane's own pin")
+    ap.add_argument("--stage1-release", required=True)
+
     ap.add_argument("--arm-key", required=True,
                     help="direct|program_id|desired_change|condition")
-    ap.add_argument("--bundle-dir", required=True,
-                    help="the ADMITTED all-arm bundle directory for that condition")
-    ap.add_argument("--verifier-report", required=True,
-                    help="that bundle's INDEPENDENT verifier report (verdict must be admit)")
-    ap.add_argument("--stage1-release", required=True)
     ap.add_argument("--release-kind", default="production",
                     choices=("production", "research_only", "fixture"))
     ap.add_argument("--stage1-validation", default=None)
@@ -269,28 +313,64 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--eligible", required=True)
     ap.add_argument("--out-root", required=True,
                     help="OUTSIDE every tracked tree; the run dir is named for its content")
-    ap.add_argument("--lane", default="production",
-                    choices=("production", "research_only", "synthetic"))
+    ap.add_argument("--lane", default="production", choices=list(config.LANES))
     ap.add_argument("--seed", type=int, default=config.RANDOM_STATE)
-    ap.add_argument("--env-lock", default=None)
     ap.add_argument("--upstream-tree-sha256", default=None,
                     help="pin the upstream source-tree content hash (catches an edited file "
                          "under a pinned commit)")
-    ap.add_argument("--derived-from-role", default=None, choices=(None, "away_from_A",
-                                                                  "toward_B"))
+    ap.add_argument("--derived-from-role", default=None,
+                    choices=(None, "away_from_A", "toward_B"))
     ap.add_argument("--derived-from-pole", default=None, choices=(None, "high", "low"))
     return ap
 
 
+DEFERRED_FILE = "p2s_deferred_disposition.json"
+
+# Exit codes. 0 = support emitted. 2 = a NAMED refusal (never 1, which is a crash): a
+# scheduler must be able to tell "P2S declined this arm, for this reason" from "P2S broke".
+EXIT_OK = 0
+EXIT_REFUSED = 2
+
+
+def emit_deferred(out_root: str, refusal: "D.RefusalError", *, arm_key: str,
+                  argv: list[str]) -> str:
+    """A TYPED DEFERRED DISPOSITION — a refusal RECORDED, never a silence.
+
+    A refused arm is not an arm P2S has no opinion about; it is an arm P2S refused to speak
+    for, and this says which. It NEVER fills a primary slot and it carries no support.
+    """
+    rec = refusal.record(arm_key=arm_key)
+    rec["argv"] = list(argv)
+    rec["lane_role"] = config.LANE_ROLE
+    rec["counts_toward_completeness"] = False
+    rec["filled_a_primary_slot"] = False
+    os.makedirs(out_root, exist_ok=True)
+    path = os.path.join(out_root, DEFERRED_FILE)
+    emit.write_json(path, rec)
+    return path
+
+
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
+
     if args.seed != config.RANDOM_STATE:
         print(f"note: seed {args.seed} is not the pinned {config.RANDOM_STATE}; it is "
               "recorded in the run binding and CHANGES the run id", file=sys.stderr)
-    out = build(args)
+
+    try:
+        out = build(args)
+    except D.RefusalError as e:
+        path = emit_deferred(args.out_root, e, arm_key=args.arm_key, argv=argv)
+        print(json.dumps({"state": "refused", "reason": e.reason,
+                          "arm_key": args.arm_key, "support_emitted": False,
+                          "disposition": os.path.basename(path)}, indent=2),
+              file=sys.stderr)
+        return EXIT_REFUSED
+
     print(f"{out['p2s_run_id']}  {out['arm_key']}  "
           f"{out['n_support_rows']} support row(s)  -> {os.path.basename(out['out_dir'])}")
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

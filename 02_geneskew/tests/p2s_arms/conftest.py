@@ -33,13 +33,20 @@ def view(release) -> dict[str, Any]:
 
 @pytest.fixture
 def bundle_dir(tmp_path, view) -> str:
-    return fx.write_arm_bundle(str(tmp_path / "direct"), view)
+    """A REAL Direct bundle: all ten shipped files, un-admitted (the producer's empty slot)."""
+    return fx.write_full_bundle(str(tmp_path / "direct"), view)
 
 
 @pytest.fixture
-def admit_report() -> dict[str, Any]:
-    return {"verdict": "admit", "verifier_id": "spot.stage02.direct.arm.verifier.v1",
-            "report_sha256": "0" * 64}
+def w10_report(tmp_path, bundle_dir, view) -> str:
+    """A REAL W10 ADMIT report — content-addressed over its own body, bound to those bytes."""
+    return fx.write_w10_report(str(tmp_path / "W10_ADMIT.json"), bundle_dir, view)
+
+
+@pytest.fixture
+def env_lock() -> str:
+    """The REAL committed stage02_solver_lock.txt. The pin is the mechanism."""
+    return fx.REAL_SOLVER_LOCK
 
 
 @pytest.fixture

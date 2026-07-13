@@ -26,7 +26,7 @@ from typing import Any
 import pandas as pd
 from direct.hashing import canonical_json, content_hash, file_sha256, sha256_hex
 
-from . import config, model, stability
+from . import binding, config, model, stability
 
 SUPPORT_FILE = "p2s_arm_support.parquet"
 COEF_FILE = "p2s_coefficients.parquet"
@@ -102,13 +102,12 @@ def method_block(bound: dict[str, Any]) -> dict[str, Any]:
         "rank_column_emitted": config.RANK_COLUMN_EMITTED,
         "model": model.model_block(),
         "support": stability.method_block(),
-        # what this lane is bound to, and derived from
+        # what this lane is bound to, and derived from. THE ADMISSION CHAIN: the solver
+        # lock, W10's independent ADMIT (its hash RE-DERIVED, not quoted), and the exact
+        # bytes of the Direct bundle those arms came from.
         "base_portable": bound["base_portable"],
-        "scorer_view_sha256": bound["scorer_view_sha256"],
         "n_admitted_programs": bound["n_admitted_programs"],
-        "arm_bundle_run_id": bound["arm_bundle_run_id"],
-        "arm_rows_sha256": bound["arm_rows_sha256"],
-        "direct_verifier_verdict": bound["verifier"]["verdict"],
+        **binding.bound_block(bound),
         # the NEGATIVE DECLARATIONS. Exempt from the key-name firewall only while false.
         **dict(config.NEGATIVE_DECLARATIONS),
     }
