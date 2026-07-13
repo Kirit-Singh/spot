@@ -62,11 +62,15 @@ global component anywhere in this module for one to hide in.
 from __future__ import annotations
 
 import math
+import multiprocessing as mp
 from typing import Any, Optional
 
-# v2, not v1: convergence is now the induced intra-pathway component, not a global one.
-# That changes which pathways are called convergent, so it changes the method.
-METHOD_ID = "spot.stage02.pathway.signature_convergence.v2"
+from . import genesets
+
+# v3, not v2: convergence now enforces the already-frozen pathway-size domain. The v2
+# pair builder silently computed giant GO root terms despite ``MAX_SET_SIZE=500`` and could
+# call them convergent. A 10,371-gene "biological process" root is not a specific pathway.
+METHOD_ID = "spot.stage02.pathway.signature_convergence.v3"
 SIMILARITY_METRIC = "cosine_on_shared_unmasked_support"
 
 # THE DEFINITION, and the restriction that makes it honest. Both enter the method hash:
@@ -94,6 +98,70 @@ SINGLE_TARGET_SUPPORT = "single_target_support"
 
 FLOAT_DECIMALS = 6
 ROUNDING_RULE = "half_even_6dp"
+
+# A scientific upper-bound rule, not an execution setting. It is repeated in the method
+# block and every emitted set record, so removing or changing it moves the method/run
+# identity. The convergence method's existing >=2 supporting-perturbation requirement is
+# preserved separately; the enrichment lane's MIN_SET_SIZE=3 is not imported here.
+CONVERGENCE_SIZE_POLICY_ID = (
+    "spot.stage02.pathway.convergence_size_governance.prospective.v1")
+CONVERGENCE_SIZE_BASIS = (
+    "pathway_members_intersect_perturbation_target_universe_intersect_available_"
+    "perturbation_signature_targets")
+MAX_CONVERGENCE_SET_SIZE = genesets.MAX_SET_SIZE
+SIZE_EVALUABLE = "evaluable"
+SIZE_TOO_LARGE = "non_evaluable_set_too_large"
+SIZE_DISPOSITIONS = (SIZE_EVALUABLE, SIZE_TOO_LARGE)
+
+# Execution only: changing these does not change the statistic, its order, or its bytes.
+# ``fork`` is required because the real signature dictionary is several GiB and pickling it
+# into workers would both duplicate the scientific input and erase the speedup.  Production
+# runs on Linux; callers elsewhere retain the serial default and fail closed if they request
+# multiprocessing on a platform without fork.
+DEFAULT_PAIRWISE_WORKERS = 1
+DEFAULT_PAIR_CHUNK_SIZE = 500
+PAIRWISE_EXECUTION_ID = "spot.stage02.convergence.ordered_fork_pair_chunks.v1"
+
+_PAIRWISE_SIGNATURES: Optional[dict[str, dict[str, float]]] = None
+
+
+class ConvergenceExecutionError(ValueError):
+    """The requested execution topology cannot preserve the frozen computation."""
+
+
+def _target_members(gene_set: dict[str, Any]) -> list[str]:
+    """Members in the bound perturbation-target universe, with fixture compatibility."""
+    values = gene_set.get("genes_in_target_universe")
+    if values is None:
+        values = gene_set.get("genes_target", [])
+    return sorted(set(str(g) for g in values))
+
+
+def convergence_size_disposition(
+        gene_set: dict[str, Any], signatures: dict[str, dict[str, float]]) -> dict[str, Any]:
+    """Re-derive whether a set is in the frozen convergence-size domain.
+
+    The induced graph's endpoints are perturbation targets with an available signature.
+    The DE-readout universe supplies the coordinates *inside* each signature; it is not the
+    endpoint membership universe. Both the conservative target-universe count and the
+    actual condition-specific endpoint count are emitted for independent reconstruction.
+    """
+    target_members = _target_members(gene_set)
+    n_target_members = len(target_members)
+    n_endpoints = sum(1 for gene in target_members if gene in signatures)
+    if n_endpoints > MAX_CONVERGENCE_SET_SIZE:
+        disposition = SIZE_TOO_LARGE
+    else:
+        disposition = SIZE_EVALUABLE
+    return {
+        "convergence_size_policy_id": CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": CONVERGENCE_SIZE_BASIS,
+        "max_convergence_set_size": MAX_CONVERGENCE_SET_SIZE,
+        "n_genes_in_target_universe": n_target_members,
+        "n_measured_convergence_endpoints": n_endpoints,
+        "convergence_size_disposition": disposition,
+        "convergence_evaluable": disposition == SIZE_EVALUABLE,
+    }
 
 
 def cosine_on_shared(vec_a: dict[str, float],
@@ -138,8 +206,33 @@ def pairwise(signatures: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
     return out
 
 
+def _pair_record(pair: tuple[str, str],
+                 signatures: dict[str, dict[str, float]]) -> dict[str, Any]:
+    """One frozen pair record, shared by serial and process execution."""
+    a, b = pair
+    sim, n_shared = cosine_on_shared(signatures[a], signatures[b])
+    return {
+        "target_a": a, "target_b": b,
+        "similarity": sim,
+        "n_shared_unmasked_genes": n_shared,
+        "supportive": sim is not None and sim >= SIMILARITY_THRESHOLD,
+        "similarity_metric": SIMILARITY_METRIC,
+        "method_id": METHOD_ID,
+    }
+
+
+def _pair_chunk(pairs: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    """Fork worker. The signatures are inherited read-only; they are never pickled."""
+    if _PAIRWISE_SIGNATURES is None:
+        raise ConvergenceExecutionError(
+            "ordered pair worker has no inherited signature dictionary")
+    return [_pair_record(pair, _PAIRWISE_SIGNATURES) for pair in pairs]
+
+
 def pairwise_within_sets(bundle: dict[str, Any],
-                         signatures: dict[str, dict[str, float]]
+                         signatures: dict[str, dict[str, float]], *,
+                         workers: int = DEFAULT_PAIRWISE_WORKERS,
+                         chunk_size: int = DEFAULT_PAIR_CHUNK_SIZE,
                          ) -> list[dict[str, Any]]:
     """Only the pairs a gene set can actually stand on: BOTH endpoints in the same set.
 
@@ -153,23 +246,48 @@ def pairwise_within_sets(bundle: dict[str, Any],
     """
     wanted: set[tuple[str, str]] = set()
     for s in bundle["sets"].values():
-        measured = sorted(g for g in s["genes_target"] if g in signatures)
+        # Every set remains emitted by ``converge_sets``, but an out-of-domain set
+        # contributes ZERO pair computations. A giant root cannot consume compute or
+        # manufacture a convergence claim merely because it contains most genes.
+        if not convergence_size_disposition(s, signatures)["convergence_evaluable"]:
+            continue
+        measured = sorted(g for g in _target_members(s) if g in signatures)
         for i, a in enumerate(measured):
             for b in measured[i + 1:]:
                 wanted.add((a, b))
 
-    out = []
-    for a, b in sorted(wanted):
-        sim, n_shared = cosine_on_shared(signatures[a], signatures[b])
-        out.append({
-            "target_a": a, "target_b": b,
-            "similarity": sim,
-            "n_shared_unmasked_genes": n_shared,
-            "supportive": sim is not None and sim >= SIMILARITY_THRESHOLD,
-            "similarity_metric": SIMILARITY_METRIC,
-            "method_id": METHOD_ID,
-        })
-    return out
+    if workers < 1:
+        raise ConvergenceExecutionError("pairwise workers must be >= 1")
+    if chunk_size < 1:
+        raise ConvergenceExecutionError("pair chunk size must be >= 1")
+
+    ordered = sorted(wanted)
+    if workers == 1 or len(ordered) <= 1:
+        return [_pair_record(pair, signatures) for pair in ordered]
+
+    if "fork" not in mp.get_all_start_methods():
+        raise ConvergenceExecutionError(
+            "parallel convergence requires multiprocessing start method 'fork'; "
+            "use workers=1 on this platform")
+
+    chunks = [ordered[i:i + chunk_size]
+              for i in range(0, len(ordered), chunk_size)]
+    n_processes = min(workers, len(chunks))
+    global _PAIRWISE_SIGNATURES
+    if _PAIRWISE_SIGNATURES is not None:
+        raise ConvergenceExecutionError(
+            "parallel convergence is already active in this process")
+    _PAIRWISE_SIGNATURES = signatures
+    try:
+        # map() returns in INPUT order. Each chunk is a contiguous slice of sorted pairs,
+        # and flattening therefore reproduces the serial record order byte-for-byte even
+        # when workers finish out of order.
+        ctx = mp.get_context("fork")
+        with ctx.Pool(processes=n_processes) as pool:
+            results = pool.map(_pair_chunk, chunks, chunksize=1)
+        return [record for chunk in results for record in chunk]
+    finally:
+        _PAIRWISE_SIGNATURES = None
 
 
 def induced_components(members: list[str],
@@ -233,30 +351,42 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
 
     for set_id in sorted(bundle["sets"]):
         s = bundle["sets"][set_id]
+        size = convergence_size_disposition(s, signatures)
         # B1: a SIGNATURE exists only for a gene that was PERTURBED, so a set's candidate
         # members live in the PERTURBATION-TARGET universe — not the readout universe. The
         # readout universe is the space the signature VECTORS live in (the cosine is taken
         # over readout genes); it is not the space membership is decided in.
-        measured = sorted(g for g in s["genes_target"] if g in signatures)
+        measured = sorted(g for g in _target_members(s) if g in signatures)
         member_set = set(measured)
 
         # THE INDUCED SUBGRAPH: only pairs whose BOTH endpoints are members of this set.
         internal = []
-        for i, a in enumerate(measured):
-            for b in measured[i + 1:]:
-                p = by_pair.get((a, b)) or by_pair.get((b, a))
-                if p is not None:
-                    internal.append(p)
-        supportive = [p for p in internal if p["supportive"]]
+        if size["convergence_evaluable"]:
+            for i, a in enumerate(measured):
+                for b in measured[i + 1:]:
+                    p = by_pair.get((a, b)) or by_pair.get((b, a))
+                    if p is not None:
+                        internal.append(p)
+        supportive = ([p for p in internal if p["supportive"]]
+                      if size["convergence_evaluable"] else [])
         assert all(p["target_a"] in member_set and p["target_b"] in member_set
                    for p in supportive), "an edge escaped the membership restriction"
 
-        components = induced_components(measured, supportive)
+        components = (induced_components(measured, supportive)
+                      if size["convergence_evaluable"] else [])
         best: list[str] = components[0] if components else []
         n_supporting = len(best)
 
-        convergent = n_supporting >= MIN_PERTURBATIONS_FOR_CONVERGENCE
+        convergent = (size["convergence_evaluable"] and
+                      n_supporting >= MIN_PERTURBATIONS_FOR_CONVERGENCE)
         single = len(measured) == 1
+
+        n_source = s.get("n_source_symbols")
+        n_target = size["n_genes_in_target_universe"]
+        target_source_coverage = s.get("target_source_coverage")
+        if target_source_coverage is None and n_source not in (None, 0):
+            target_source_coverage = round(n_target / int(n_source), 6)
+        coverage = genesets.coverage_disposition(target_source_coverage)
 
         out.append({
             "set_id": set_id,
@@ -270,7 +400,15 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             "membership_restriction": MEMBERSHIP_RESTRICTION,
             "support_may_route_through_non_members":
                 SUPPORT_MAY_ROUTE_THROUGH_NON_MEMBERS,
-            "n_genes_in_set": s["n_genes_target"],
+            "n_genes_in_set": s.get("n_genes_target", n_target),
+            "n_source_symbols": n_source,
+            "n_genes_in_target_universe": n_target,
+            "target_source_coverage": target_source_coverage,
+            "n_genes_in_readout_universe": s.get("n_genes_in_universe"),
+            "readout_source_coverage": s.get("readout_source_coverage"),
+            "global_coverage_disposition": coverage["global_coverage_disposition"],
+            "global_coverage_policy_passed": coverage["global_coverage_policy_passed"],
+            **size,
             "n_measured_perturbations": len(measured),
             "measured_perturbations": measured,
             "n_supporting_perturbations": n_supporting,
@@ -288,10 +426,13 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             # THE RULE. One measured perturbation is one experiment, and calling it a
             # pathway result launders an observation into a mechanism.
             "min_perturbations_for_convergence": MIN_PERTURBATIONS_FOR_CONVERGENCE,
+            "convergence_claim_eligible": size["convergence_evaluable"],
             "convergent": convergent,
             "single_target_support": single,
             "convergence_refused_reason": (
                 None if convergent else
+                size["convergence_size_disposition"]
+                if not size["convergence_evaluable"] else
                 SINGLE_TARGET_SUPPORT if single else
                 "no_measured_perturbation" if not measured else
                 "fewer_than_two_perturbations_converge"),

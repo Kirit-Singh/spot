@@ -407,83 +407,132 @@ def anchor_to_direct(built: dict[str, Any], gene_ids: list[str],
     }
 
 
+REFUSE_W10_NOT_ADMITTED = "the_w10_report_is_not_a_full_admission"
+REFUSE_W10_MASK_GATE_ABSENT = "the_w10_report_does_not_carry_the_named_mask_rederivation_gates"
+
+# The NAMED gates W10 must have passed before this lane may read a mask hash out of a Direct
+# bundle. A report that admitted the bundle WITHOUT re-deriving its mask has admitted the arms,
+# not the mask — and the mask is the only thing this lane is anchoring to.
+REQUIRED_W10_MASK_GATES = (
+    "the MASK's identity is bound into the run and RE-DERIVES from the shipped mask",
+    "every SHIPPED mask is the one the verifier independently derives from the cont",
+)
+
+
 def w10_anchor(report_path: str, direct_bundle_dir: str) -> dict[str, Any]:
-    """Bind the PER-RUN W10 report over the ACTUAL Direct bundle. PARAMETRIC, never frozen.
+    """Bind the PER-RUN W10 report over the ACTUAL Direct bundle. TYPED JSON — never prose.
 
-    Nothing here hard-codes a hash. The report's mask_sha256 and its bundle ids are values OF A
-    RUN — the ones in the synthetic report are fixture values, and freezing one into production
-    would anchor every real bundle to a mask nobody computed on real data. So the report is read
-    at run time, the Direct bundle is read at run time, and the two are required to be ABOUT
-    EACH OTHER: the mask the report certifies must be the mask the bundle bound.
+    The first cut of this REGEXED a line out of a markdown report:
 
-    What IS stable, and is bound as identity rather than as data: the verifier id, its code hash
-    and its gate-inventory hash. Those say WHO checked and WITH WHAT — and they are the same
-    whether the run is synthetic or real.
+        bound mask_sha256           : 269b4278...
+
+    W10's real, final report is TYPED JSON and has no such line. Scraping prose for a hash is a
+    parser that works until somebody reformats a sentence — and the correct response to "the
+    line is missing" is emphatically NOT to manufacture the line. So the report is now READ as
+    the typed document it is.
+
+    THE ORDER MATTERS, and it is the whole point:
+
+      1. the report must be a FULL ADMISSION (verdict ADMIT, zero failed gates);
+      2. it must be bound to THIS bundle — by `bound_artifact.arm_bundle_run_id` AND by the
+         `artifact_sha256["provenance.json"]` of the very file we are about to read. A green
+         report about another bundle, or about a different copy of this one, is not a check of
+         the bytes in front of us;
+      3. it must carry the NAMED mask re-derivation gates, PASSED. A report that admitted the
+         bundle without independently re-deriving its mask has admitted the arms, not the mask;
+      4. ONLY THEN is `mask_sha256` read out of the bundle's own provenance.
+
+    Reading the mask hash first and checking the report afterwards would be the same mistake in
+    a different order: the hash would already be in hand, and the check would be a formality.
     """
-    import re
-
     if not os.path.exists(report_path):
         _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
                 f"no W10 Direct mask report at {os.path.basename(report_path)!r}. The pathway "
                 "mask is self-consistent by construction; without an external re-derivation to "
                 "contradict it, a coherently forged mask is indistinguishable from a real one")
     with open(report_path) as fh:
-        body = fh.read()
-
-    def _one(pattern, what):
-        m = re.search(pattern, body)
-        if not m:
+        try:
+            report = json.load(fh)
+        except json.JSONDecodeError:
             _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
-                    f"the W10 report does not state its {what}; a report that does not say "
-                    "what it certified certifies nothing")
-        return m.group(1)
+                    f"{os.path.basename(report_path)!r} is not a typed W10 JSON report. The "
+                    "prose-scraping parser this replaced is exactly the bug: a hash lifted out "
+                    "of a sentence is a hash nobody bound")
 
-    certified_mask = _one(r"bound mask_sha256\s*:\s*([0-9a-f]{64})", "certified mask_sha256")
-    verifier_id = _one(r"verifier_id\s+(\S+)", "verifier_id")
-    verifier_code = _one(r"verifier_code_sha256\s+([0-9a-f]{64})", "verifier_code_sha256")
-    gate_inventory = _one(r"gate_inventory_sha256\s+([0-9a-f]{64})", "gate_inventory_sha256")
+    # ---- 1. a FULL admission ----
+    verdict = str(report.get("verdict", "")).upper()
+    n_failed = report.get("n_failed", 1)
+    if verdict != "ADMIT" or n_failed != 0:
+        _refuse(REFUSE_W10_NOT_ADMITTED,
+                f"the W10 report is verdict={verdict!r} n_failed={n_failed}. A pathway mask may "
+                "only be anchored to a Direct bundle an independent verifier ADMITTED; a "
+                "refusal, or an admission that contradicts its own gates, is not one")
+
+    bound = report.get("bound_artifact") or {}
+    art = bound.get("artifact_sha256") or {}
+
+    # ---- 2. bound to THIS bundle, and to THIS provenance file ----
+    run_id = os.path.basename(direct_bundle_dir.rstrip("/"))
+    if bound.get("arm_bundle_run_id") != run_id:
+        _refuse(REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE,
+                f"the W10 report admits bundle {bound.get('arm_bundle_run_id')!r}, but this "
+                f"anchor is for {run_id!r}. A green report about another run is not a "
+                "verification of this one")
 
     prov_path = os.path.join(direct_bundle_dir, "provenance.json")
     if not os.path.exists(prov_path):
         _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
-                f"no Direct bundle provenance at {prov_path!r}; the mask cannot be anchored to "
-                "a bundle that is not there")
+                f"no Direct bundle provenance at {prov_path!r}")
+    prov_raw = file_sha256(prov_path)
+    admitted_prov = art.get("provenance.json")
+    if admitted_prov != prov_raw:
+        _refuse(REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE,
+                f"W10 admitted provenance.json {str(admitted_prov)[:16]}..., but the file on "
+                f"disk hashes to {prov_raw[:16]}.... The report admitted DIFFERENT BYTES than "
+                "the ones this run is about to read")
+
+    # ---- 3. the NAMED mask re-derivation gates, PASSED ----
+    gates = {str(g.get("gate", "")): bool(g.get("passed")) for g in (report.get("gates") or [])}
+    missing = []
+    for needle in REQUIRED_W10_MASK_GATES:
+        hit = [name for name in gates if needle in name]
+        if not hit or not all(gates[h] for h in hit):
+            missing.append(needle)
+    if missing:
+        _refuse(REFUSE_W10_MASK_GATE_ABSENT,
+                f"the W10 report does not carry a PASSED mask re-derivation gate for "
+                f"{missing}. It may have admitted the ARMS; this lane is anchoring to the MASK, "
+                "and a report that never re-derived the mask cannot contradict a forged one")
+
+    # ---- 4. ONLY NOW read the mask hash out of the ADMITTED provenance ----
     with open(prov_path) as fh:
         direct_prov = json.load(fh)
     binding = direct_prov["run_binding"]
     bundle_mask = binding.get("mask_sha256")
-
-    # THE CORRESPONDENCE CHECK. A report about a DIFFERENT Direct bundle is not a check of this
-    # one, and it is the easiest anchor to fake: hand over a genuine, green report for some
-    # other run.
-    if certified_mask != bundle_mask:
-        _refuse(REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE,
-                f"the W10 report certifies mask {certified_mask[:16]}... but this Direct bundle "
-                f"bound {str(bundle_mask)[:16]}.... A green report about another run is not a "
-                "verification of this one")
+    if not bundle_mask:
+        _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
+                "the admitted Direct provenance carries no mask_sha256")
 
     return {
-        # WHO checked, and with what. Stable identity — the same synthetic or real.
-        "verifier_id": verifier_id,
-        "verifier_code_sha256": verifier_code,
-        "gate_inventory_sha256": gate_inventory,
+        # WHO checked, and with what. Stable identity, whatever the run.
+        "verifier_id": report.get("verifier_id"),
+        "verifier_code_sha256": report.get("verifier_code_sha256"),
+        "gate_inventory_sha256": report.get("gate_inventory_sha256"),
         # WHAT was checked. PER-RUN, read from the bytes in front of us.
         "report_sha256": file_sha256(report_path),
+        "report_verdict": verdict,
+        "report_n_passed": report.get("n_passed"),
+        "report_n_gates": report.get("n_gates"),
         "direct_mask_sha256": bundle_mask,
-        "direct_arm_bundle_run_id": direct_prov.get("arm_bundle_run_id"),
+        "direct_arm_bundle_run_id": run_id,
+        "direct_provenance_raw_sha256": prov_raw,
         "direct_masks_parquet_sha256": file_sha256(
             os.path.join(direct_bundle_dir, "masks.parquet")),
         "direct_contributor_manifest": binding.get("contributor_manifest"),
-        # THE RELEASE THE DIRECT BUNDLE WAS BUILT ON. Carried so the pathway lane can check
-        # its OWN release against the one the arms it is enriching actually came from — an
-        # enrichment computed over a different Stage-1 release than the ranking it enriches is
-        # describing a different experiment, and every hash in it would still agree.
         "direct_stage1_release_kind":
             (binding.get("arm_bundle_request") or {}).get("stage1_release_kind"),
         "direct_stage1_release_hashes":
             (binding.get("arm_bundle_request") or {}).get("stage1_release_hashes"),
-        # Scope, stated rather than implied: this attests the Direct MASK. It does not attest a
-        # produced real 60-arm release, and the report says so itself.
         "attests_real_60_arm_release": False,
     }
 

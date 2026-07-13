@@ -323,7 +323,8 @@ class TestThePhysicalContract:
                     arm_artifacts.CONTRIB_FILE, arm_artifacts.GUIDE_SUPPORT_FILE,
                     arm_artifacts.DONOR_SUPPORT_FILE, arm_artifacts.INPUTS_FILE,
                     arm_artifacts.UNIVERSE_FILE, arm_artifacts.BUNDLE_FILE,
-                    arm_artifacts.PROVENANCE_FILE, arm_artifacts.VERIFICATION_FILE}
+                    arm_artifacts.PROVENANCE_FILE, arm_artifacts.VERIFICATION_FILE,
+                    arm_artifacts.TARGET_IDENTITY_FILE}
         shipped = set(os.listdir(res["out_dir"]))
         assert shipped == expected
         for w18_file in ("arm_bundle.json", "arms.parquet", "masks.parquet",

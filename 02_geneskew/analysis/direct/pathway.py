@@ -76,6 +76,9 @@ def method_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         "min_shared_unmasked_genes": convergence.MIN_SHARED_GENES,
         "min_perturbations_for_convergence":
             convergence.MIN_PERTURBATIONS_FOR_CONVERGENCE,
+        "convergence_size_policy_id": convergence.CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": convergence.CONVERGENCE_SIZE_BASIS,
+        "max_convergence_set_size": convergence.MAX_CONVERGENCE_SET_SIZE,
         # B1: WHAT convergence means, and the restriction that keeps it honest. Bound
         # into the hash so a run cannot go back to global components under this id.
         "convergence_definition": convergence.CONVERGENCE_DEFINITION,
@@ -114,10 +117,9 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
                   pairs: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
     """The FULL pathway evidence table. Absent bundle -> an explicit unavailable state.
 
-    ``pairs`` may be supplied by the production runner, which computes only the INTRA-SET
-    pairs (the only ones any set is allowed to stand on after B1). Absent, they are
-    computed here over all measured signatures — fine for a fixture, quadratic for a
-    release.
+    ``pairs`` may be supplied by the production runner. Absent, this function computes
+    only the in-domain INTRA-SET pairs itself. The old fixture shortcut computed every
+    global pair and could therefore bypass the frozen set-size domain.
     """
     if bundle is None:
         return {
@@ -131,7 +133,7 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
     per_arm = {arm: {e["set_id"]: e for e in enrichment.enrich_arm(rows, bundle, arm)}
                for arm in config.ARMS}
     if pairs is None:
-        pairs = convergence.pairwise(signatures)
+        pairs = convergence.pairwise_within_sets(bundle, signatures)
     # NO global clustering. Each set's convergence is computed on the subgraph induced by
     # its OWN members, so a non-member can never bridge two of them (B1).
     conv = {c["set_id"]: c
@@ -234,6 +236,13 @@ def _enrichment_block(e: dict[str, Any]) -> dict[str, Any]:
 def _convergence_block(c: dict[str, Any]) -> dict[str, Any]:
     return {
         "convergent": c["convergent"],
+        "convergence_claim_eligible": c["convergence_claim_eligible"],
+        "convergence_evaluable": c["convergence_evaluable"],
+        "convergence_size_policy_id": c["convergence_size_policy_id"],
+        "convergence_size_basis": c["convergence_size_basis"],
+        "max_convergence_set_size": c["max_convergence_set_size"],
+        "convergence_size_disposition": c["convergence_size_disposition"],
+        "n_measured_convergence_endpoints": c["n_measured_convergence_endpoints"],
         "n_measured_perturbations": c["n_measured_perturbations"],
         "measured_perturbations": c["measured_perturbations"],
         "n_supporting_perturbations": c["n_supporting_perturbations"],

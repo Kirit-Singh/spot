@@ -33,7 +33,7 @@ from .hashing import content_hash
 
 SCHEMA_VERSION = "spot.stage02_pathway_arm_bundle.v1"
 BUNDLE_ID = "spot.stage02.pathway.all_arm_bundle.v1"
-CONVERGENCE_SCHEMA = "spot.stage02_pathway_convergence.v1"
+CONVERGENCE_SCHEMA = "spot.stage02_pathway_convergence.v2"
 
 
 def ranked_by_arm(arm_rows: list[dict[str, Any]]) -> dict[str, list[tuple[str, float]]]:
@@ -118,14 +118,18 @@ def enrichment_arms(*, arm_rows: list[dict[str, Any]], bundle: dict[str, Any],
 def convergence_artifact(*, bundle: dict[str, Any],
                          signatures: dict[str, dict[str, float]],
                          condition: str, source: str,
-                         readout_universe_sha256: str) -> dict[str, Any]:
+                         readout_universe_sha256: str,
+                         pairwise_workers: int = convergence.DEFAULT_PAIRWISE_WORKERS,
+                         pair_chunk_size: int = convergence.DEFAULT_PAIR_CHUNK_SIZE,
+                         ) -> dict[str, Any]:
     """The ONE convergence claim for this (condition, source). Referenced, never copied.
 
     It carries no program and no desired_change, because it depends on neither: it is a
     statement about which perturbations move the transcriptome together, and that does not
     change with the direction somebody wishes a program would go.
     """
-    pairs = convergence.pairwise_within_sets(bundle, signatures)
+    pairs = convergence.pairwise_within_sets(
+        bundle, signatures, workers=pairwise_workers, chunk_size=pair_chunk_size)
     sets = convergence.converge_sets(bundle, signatures, pairs)
     doc = {
         "schema_version": CONVERGENCE_SCHEMA,
@@ -133,12 +137,19 @@ def convergence_artifact(*, bundle: dict[str, Any],
         "condition": condition,
         "source": source,
         "convergence_method_id": convergence.METHOD_ID,
+        "convergence_size_policy_id": convergence.CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": convergence.CONVERGENCE_SIZE_BASIS,
+        "max_convergence_set_size": convergence.MAX_CONVERGENCE_SET_SIZE,
         "readout_universe_sha256": readout_universe_sha256,
         "is_shared_across_arms": True,
         "depends_on_program_or_desired_change": False,
         "n_signature_targets": len(signatures),
         "n_intra_set_pairs": len(pairs),
         "n_sets": len(sets),
+        "n_convergence_evaluable_sets": sum(
+            1 for record in sets if record["convergence_evaluable"]),
+        "n_convergence_non_evaluable_sets": sum(
+            1 for record in sets if not record["convergence_evaluable"]),
         "sets": sets,
     }
     doc["convergence_sha256"] = content_hash(
@@ -187,6 +198,9 @@ def method_block(bundle: Optional[dict[str, Any]], view: dict[str, Any]) -> dict
         "enrichment_method_id": enrichment.METHOD_ID,
         "enrichment_statistic_name": enrichment.STATISTIC_NAME,
         "convergence_method_id": convergence.METHOD_ID,
+        "convergence_size_policy_id": convergence.CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": convergence.CONVERGENCE_SIZE_BASIS,
+        "max_convergence_set_size": convergence.MAX_CONVERGENCE_SET_SIZE,
         "arm_key_rule_id": arm_keys.ARM_KEY_RULE_ID,
         "mapping_rule_id": arm_keys.MAPPING_RULE_ID,
         "coverage_policy_id": genesets.COVERAGE_POLICY_ID,
