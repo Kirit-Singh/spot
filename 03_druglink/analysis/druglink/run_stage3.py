@@ -38,7 +38,6 @@ from .hashing import short_id
 # unchanged, and these stay importable from `run_stage3` because callers and tests reach for them
 # here — a split must not silently move another module's public surface.
 from .run_stage3_v2 import (  # noqa: F401
-    GATE_BRIDGE_CONSUMER_NOT_IMPLEMENTED,
     V2_REQUIRED,
     _v2_main,
     bridge_consumer_ready,

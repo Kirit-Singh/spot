@@ -8,9 +8,12 @@ admitted identity and modality when it was not.
 That is the defect this lane keeps meeting in new clothes: a name that isn't a binding. The
 flag named the bridge; nothing bound it.
 
-Until the consumer exists, the v2 path REFUSES BY NAME. It does not run a bridge-less analysis,
-because the native ranking rows carry {target_id, arm_value, evaluable, rank} — no namespace and
-no modality — so a run without the bridge would have to INVENT both.
+THE CONSUMER HAS LANDED. `stage2_bridge.admit_bridge` reads the bytes at the paths these flags
+name, and `bridge_join` types the native records from them. So this file no longer asserts a
+refusal-in-waiting: it asserts that the flags are CONSUMED, and that a bridge that cannot be
+admitted still stops the run dead. The native ranking rows carry {target_id, arm_value, evaluable,
+rank} — no namespace and no modality — so a run without an admitted bridge would have to INVENT
+both, and it will not.
 """
 from __future__ import annotations
 
@@ -41,10 +44,10 @@ def test_the_readiness_check_reports_whether_the_ADMITTER_EXISTS():
     assert run_stage3.bridge_consumer_ready() is hasattr(sa, "admit_bridge")
 
 
-def test_the_v2_path_refuses_by_name_while_the_consumer_is_absent(tmp_path, capsys):
-    if run_stage3.bridge_consumer_ready():
-        pytest.skip("the bridge consumer has landed; this gate is retired")
-
+def test_the_v2_path_REFUSES_when_the_bridge_cannot_be_admitted(tmp_path, capsys):
+    """The flags are consumed, so a bridge that is not on disk stops the run — at a NAMED bridge
+    gate, and with nothing written. A run that shrugged and proceeded would emit an artifact whose
+    identity and modality it had invented."""
     out = tmp_path / "out"
     code = run_stage3.main([
         "--v2", "--artifact-class", "analysis", "--output-root", str(out),
@@ -58,18 +61,16 @@ def test_the_v2_path_refuses_by_name_while_the_consumer_is_absent(tmp_path, caps
         "--stage2-bridge-receipt", str(tmp_path / "receipt.json"),
     ])
     assert code == 3, "a run that cannot honour the bridge must refuse, not proceed"
-
     printed = capsys.readouterr().out
-    assert run_stage3.GATE_BRIDGE_CONSUMER_NOT_IMPLEMENTED in printed, (
+    assert "REFUSED" in printed and "[" in printed, (
         "the refusal must NAME its gate, so nobody reads it as a data-driven 'no candidates'")
-
     # ...and it wrote NOTHING. A refusal that leaves a bundle behind is not a refusal.
     assert not (out.exists() and os.listdir(out)), "a refused run must write no bundle"
 
 
 def test_the_refusal_says_WHY_rather_than_only_that(capsys, tmp_path):
-    if run_stage3.bridge_consumer_ready():
-        pytest.skip("the bridge consumer has landed; this gate is retired")
+    """A gate name tells you WHICH check failed. The sentence must tell you why the check exists —
+    otherwise the next reader deletes it."""
     run_stage3.main([
         "--v2", "--artifact-class", "analysis", "--output-root", str(tmp_path / "o"),
         "--universe-store", str(tmp_path), "--stage2-manifest", str(tmp_path / "m.json"),
@@ -79,8 +80,9 @@ def test_the_refusal_says_WHY_rather_than_only_that(capsys, tmp_path):
         "--stage2-bridge-report", str(tmp_path / "br.json"),
         "--stage2-bridge-receipt", str(tmp_path / "rcpt.json")])
     printed = capsys.readouterr().out.lower()
-    # the two facts that only the bridge carries — the reason a bridge-less run is impossible
-    assert "namespace" in printed and "modality" in printed
+    # the facts that ONLY the bridge carries — the reason a bridge-less run is impossible
+    assert "identity" in printed and "modality" in printed
+    assert "no fixture fallback" in printed
 
 
 def test_a_v2_run_missing_any_required_input_refuses_and_writes_nothing(tmp_path, capsys):
