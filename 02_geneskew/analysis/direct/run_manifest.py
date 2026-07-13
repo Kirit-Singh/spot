@@ -230,7 +230,8 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
 
 def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, Any],
           allow_partial: bool = False, lane_admissions: Optional[dict] = None,
-          code_identity: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+          code_identity: Optional[dict[str, Any]] = None,
+          topology_id: Optional[str] = None) -> dict[str, Any]:
     """The aggregate manifest over every ARM of one Stage-2 run.
 
     The programs, the conditions and the gene-set sources ALL come from the bound
@@ -238,7 +239,23 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
     batch policy is not an authority here: the condition universe is
     ``release.selector.conditions``.
     """
-    conditions, sources = release["conditions"], release["gene_set_sources"]
+    from . import run_topology as RT
+
+    conditions = release["conditions"]
+
+    # WHICH RUN THIS IS. A run DECLARES its topology; it never has one inferred from what it
+    # happened to produce. The exact source list comes from the TOPOLOGY, not from "whatever
+    # the release ships" — that is what narrows GO-BP-only, and what makes a Reactome bundle
+    # under a GO topology a refusal rather than a bonus.
+    #
+    # topology_id=None is the LEGACY path and behaves EXACTLY as before (sources from the
+    # release, full 15-slot completeness). It binds no topology, and Stage-3 refuses a
+    # production manifest that declares none.
+    topology = (RT.binding(topology_id, programs=release["programs"],
+                           conditions=conditions) if topology_id else None)
+    sources = (topology["pathway_sources"] if topology
+               else release["gene_set_sources"])
+
     slots = expected_slots(release["programs"], conditions, sources)
     want_bundles = expected_bundles(conditions, sources)
 
@@ -316,6 +333,10 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
         # different release, and the pinned release hash is what says so.
         "conditions": list(conditions),
         "gene_set_sources": list(sources),
+        # THE DECLARED TOPOLOGY, hashed over its COMPLETE expected set. Stage-3 reads the
+        # expected keys and sources FROM HERE and never carries a 15 (or a 12) of its own.
+        "run_topology": topology,
+        "run_topology_declared": topology is not None,
         "condition_universe_source": release["condition_universe_source"],
         "temporal_estimand": {
             "estimand_level": "population",

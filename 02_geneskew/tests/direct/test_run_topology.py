@@ -11,8 +11,16 @@ distinguish them, and these tests are about proving it does.
 """
 from __future__ import annotations
 
+import os
+import sys
+
 import pytest
 from direct import run_topology as T
+
+# the verifier's modules load FLAT — as the verifier process loads them, never through the
+# producer's package
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "analysis", "direct"))
 from direct.arm_topology import LANE_DIRECT, LANE_PATHWAY, LANE_TEMPORAL, RunManifestError
 
 CONDITIONS = ["Rest", "Stim8hr", "Stim48hr"]
@@ -197,3 +205,104 @@ class TestStage3DerivesFromTheManifestAndNeverHardcodes15:
         # ...and with the conditions, too. Nothing here is a literal.
         assert T.binding(GO, programs=PROGRAMS,
                          conditions=["Rest", "Stim48hr"])["n_expected_bundles_total"] == 2 + 2 + 2
+
+
+# --------------------------------------------------------------------------- #
+# WIRED: the topology is bound into the RUN IDENTITY at preflight and into the MANIFEST,
+# and the VERIFIER re-derives it on load through its OWN restatement.
+# --------------------------------------------------------------------------- #
+class TestItIsBOUNDIntoTheRunIdentityAndTheManifest:
+    def test_the_SCHEDULER_declares_the_GO_topology_and_binds_it_into_the_run_identity(self):
+        from direct import stage2_run as S
+        assert S.RUN_TOPOLOGY_ID == GO
+        # ...and it RUNS only what it declared: Reactome is parked, not invoked
+        assert S.SOURCES == ("go_bp",)
+
+    def test_the_scheduler_SOURCES_are_DERIVED_from_the_topology_not_a_literal(self):
+        from direct import stage2_run as S
+        assert S.SOURCES == T.file_keys(S.RUN_TOPOLOGY_ID)
+        assert T.file_keys(FULL) == ("go_bp", "reactome")     # the legacy one is unchanged
+
+    def test_the_MANIFEST_binds_the_topology_and_NARROWS_the_sources(self):
+        """The exact source list comes from the TOPOLOGY, not from whatever the release ships."""
+        from direct.hashing import content_hash
+        b = T.binding(GO, programs=PROGRAMS, conditions=CONDITIONS)
+        assert b["pathway_sources"] == ["GO-BP"]
+        assert b["topology_sha256"] == content_hash(
+            {k: v for k, v in b.items() if k != "topology_sha256"})
+
+
+class TestTheVERIFIERReDerivesOnLoad:
+    """Through its OWN restatement — a verifier that imported the producer's topology would
+    derive the expected set exactly as the producer did and could never catch it wrong."""
+
+    def _manifest(self, bound, bundles):
+        return {"run_topology": bound, "bundles": bundles}
+
+    def _bundles(self, conditions, sources):
+        out = []
+        for c in conditions:
+            out.append({"lane": "direct", "context": {"condition": c}})
+            for s in sources:
+                out.append({"lane": "pathway",
+                            "context": {"condition": c, "gene_set_source": s}})
+        for a in sorted(conditions):
+            for z in sorted(conditions):
+                if a != z:
+                    out.append({"lane": "temporal",
+                                "context": {"from_condition": a, "to_condition": z}})
+        return out
+
+    def test_a_COMPLETE_GO_run_ADMITS(self):
+        import verify_topology_rules as VT
+        b = T.binding(GO, programs=PROGRAMS, conditions=CONDITIONS)
+        m = self._manifest(b, self._bundles(CONDITIONS, ["GO-BP"]))
+        from direct.verify_run_manifest import check_run_topology
+        assert check_run_topology(m) == []
+        assert VT.TOPOLOGY_SOURCES[GO] == ("GO-BP",)
+
+    def test_ONE_MISSING_GO_bundle_REFUSES(self):
+        from direct.verify_run_manifest import check_run_topology
+        b = T.binding(GO, programs=PROGRAMS, conditions=CONDITIONS)
+        bundles = [x for x in self._bundles(CONDITIONS, ["GO-BP"])
+                   if not (x["lane"] == "pathway"
+                           and x["context"]["condition"] == "Rest")]
+        bad = check_run_topology(self._manifest(b, bundles))
+        assert any("does_not_fill_every_bundle" in x for x in bad)
+
+    def test_INSERTING_REACTOME_under_the_GO_topology_REFUSES(self):
+        from direct.verify_run_manifest import check_run_topology
+        b = T.binding(GO, programs=PROGRAMS, conditions=CONDITIONS)
+        bundles = self._bundles(CONDITIONS, ["GO-BP"]) + [
+            {"lane": "pathway", "context": {"condition": "Rest",
+                                            "gene_set_source": "Reactome"}}]
+        bad = check_run_topology(self._manifest(b, bundles))
+        assert any("pathway_source_its_declared_topology_does_not_include" in x for x in bad)
+        assert any("PARKED" in x for x in bad)
+
+    def test_a_PARTIAL_FULL_run_RELABELLED_as_GO_ONLY_REFUSES_on_HASH(self):
+        """THE ONE THAT MATTERS. Identical bundles; only the declaration differs."""
+        from direct.hashing import content_hash
+        from direct.verify_run_manifest import check_run_topology
+
+        full = T.binding(FULL, programs=PROGRAMS, conditions=CONDITIONS)
+        bundles = self._bundles(CONDITIONS, ["GO-BP"])       # a partial FULL run's bundles
+
+        # left labelled FULL -> INCOMPLETE (the legacy check is not weakened)
+        bad = check_run_topology(self._manifest(full, bundles))
+        assert any("does_not_fill_every_bundle" in x for x in bad)
+
+        # relabelled GO-only, resealed -> the BODY still says GO-BP + Reactome
+        relabelled = dict(full, topology_id=GO)
+        relabelled.pop("topology_sha256")
+        relabelled["topology_sha256"] = content_hash(relabelled)
+        bad = check_run_topology(self._manifest(relabelled, bundles))
+        assert any("does_not_re_derive_from_the_topology_it_names" in x for x in bad)
+        assert any("IDENTICAL BUNDLES" in x for x in bad)
+
+    def test_a_manifest_declaring_NO_topology_refuses_in_PRODUCTION(self):
+        from direct.verify_run_manifest import check_run_topology
+        m = self._manifest(None, [])
+        assert check_run_topology(m) == []                    # legacy path: tolerated
+        bad = check_run_topology(m, require_declared=True)    # production: refused
+        assert any("declares_no_run_topology" in x for x in bad)

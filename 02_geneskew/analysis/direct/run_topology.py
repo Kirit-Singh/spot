@@ -58,6 +58,19 @@ from .hashing import content_hash
 SOURCE_GO_BP = "GO-BP"
 SOURCE_REACTOME = "Reactome"
 
+# The gene-set FILE KEY each source is staged under (genesets_<key>.ensembl.json). The
+# scheduler derives the sources it RUNS from the declared topology through this map — so a run
+# cannot produce a source its own topology refuses. A scheduler that ran Reactome under a GO
+# topology would be manufacturing artifacts its own manifest would then reject: the run would
+# have done something other than what it said it would.
+SOURCE_FILE_KEY = {SOURCE_GO_BP: "go_bp", SOURCE_REACTOME: "reactome"}
+
+
+def file_keys(topology_id: str) -> tuple:
+    """The gene-set file keys THIS topology runs. Derived from the topology, never a literal."""
+    return tuple(SOURCE_FILE_KEY[s] for s in sorted(TOPOLOGIES[topology_id]["pathway_sources"])
+                 if s in SOURCE_FILE_KEY)
+
 # Reactome is PARKED, not deleted. It remains in the FULL topology, which remains valid and
 # remains complete-or-refuse. Parking a source is a decision about which run to do next; it is
 # not a licence to call an incomplete run complete.

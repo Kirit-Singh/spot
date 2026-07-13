@@ -43,6 +43,11 @@ GENESKEW = os.path.dirname(ANALYSIS)                        # .../02_geneskew
 REPO = os.path.dirname(GENESKEW)
 
 SCHEDULER_VERSION = "spot.stage02.scheduler.v1"
+
+# THE DECLARED TOPOLOGY of a production run. Reactome is PARKED — declared out of scope BEFORE
+# the run, not discovered missing after it. The legacy full-15 topology is unchanged and still
+# refuses a run that is short.
+RUN_TOPOLOGY_ID = "spot.stage02.topology.go_bp.v1"
 # P2S production scores input — the staged, independently-verified 396k-row Stage-1 scores.
 # NEVER the 40k overlay. Both hashes are pinned and bound into the run identity + preflight.
 P2S_SCORES_DEFAULT = ("/home/tcelab/.spot-runs/20260712T021343Z/stage1-inputs/"
@@ -52,7 +57,16 @@ P2S_SCORES_CANONICAL_SHA256 = "43c4296d5166740c334441a69df23bb440a073382bbe79628
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 PAIRS = ("Rest__Stim8hr", "Stim8hr__Rest", "Rest__Stim48hr",
          "Stim48hr__Rest", "Stim8hr__Stim48hr", "Stim48hr__Stim8hr")
-SOURCES = ("reactome", "go_bp")
+# DERIVED FROM THE DECLARED TOPOLOGY — never a literal. Under the GO-BP topology this is
+# ("go_bp",) and Reactome is not staged, not invoked, and not produced. A scheduler that ran a
+# source its own topology refuses would manufacture artifacts its own manifest would reject.
+def _sources_of(topology_id):
+    from . import run_topology as _RT
+    return _RT.file_keys(topology_id)
+
+
+SOURCES = _sources_of(RUN_TOPOLOGY_ID)
+SOURCES_FULL = ("go_bp", "reactome")        # the LEGACY full topology's sources, unchanged
 DRY = bool(os.environ.get("SPOT_DRY_RUN"))
 
 # The scientific inputs the run identity binds. An unset input is a refusal, not a guess.
@@ -122,6 +136,19 @@ class Cfg:
 
 
 # ---- run-identity manifest (Phase A) ----------------------------------------------------
+def _admitted_programs(cfg) -> list:
+    """The admitted program set, from the BOUND Stage-1 release. Never a literal."""
+    import json as _json
+    try:
+        with open(cfg.stage1_release) as fh:
+            rel = _json.load(fh)
+    except (OSError, ValueError):
+        return []
+    sel = (rel.get("selector") or {})
+    progs = sel.get("admitted_programs") or []
+    return sorted(str(p) for p in progs)
+
+
 def build_run_identity(cfg: Cfg) -> dict:
     """Canonical, self-hashed identity: every scientific input, Stage-1 release/view, gene sets,
     the integrated producer code identity, verifier pins, and the scheduler version. A resume
@@ -144,11 +171,22 @@ def build_run_identity(cfg: Cfg) -> dict:
         gene_sets[src] = h(gp)
     code_identity = ("<tree:02_geneskew/analysis/direct>" if DRY
                      else "tree:" + tree_sha256(SELF))
+    # WHICH RUN THIS IS — bound BEFORE any bundle exists, and hashed into the run identity.
+    #
+    # This is the whole defence: a PARTIAL FULL run (GO-BP produced, Reactome missing) and a
+    # COMPLETE GO-ONLY run ship IDENTICAL BUNDLES. Nothing readable off the artifacts tells
+    # them apart. Only the declaration can — so it is made at preflight, it is hashed into the
+    # run identity, and relabelling a finished run moves that hash and refuses.
+    from . import run_topology as RT
+    topology = RT.binding(RUN_TOPOLOGY_ID, programs=_admitted_programs(cfg),
+                          conditions=list(CONDITIONS))
+
     manifest = {
         "schema": "spot.stage02.run_identity.v1",
         "scheduler_version": SCHEDULER_VERSION,
         "lane": cfg.lane,
         "conditions": list(CONDITIONS),
+        "run_topology": topology,
         "inputs": inputs,
         "stage1": stage1,
         "gene_sets": gene_sets,

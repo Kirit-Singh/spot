@@ -381,6 +381,13 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
              "the manifest carries or permits a combined cross-arm objective")
 
     truly = all_ok and not dupe_ids and n_filled == n_want
+    # THE DECLARED TOPOLOGY, re-derived. A run cannot be relabelled as a topology it was not
+    # launched under.
+    topo_bad = check_run_topology(manifest)
+    rep.gate(G_TOPOLOGY, not topo_bad,
+             "; ".join(topo_bad[:3]) if topo_bad
+             else "the declared run topology re-derives, and the run fills it exactly")
+
     rep.gate(G_COMPLETE, bool(manifest.get("topology_complete")) == truly,
              f"the manifest declares topology_complete="
              f"{manifest.get('topology_complete')}; {n_filled}/{n_want} slots are filled "
@@ -433,6 +440,50 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
         "stage1_release": os.path.abspath(release_path),
     }
     return doc
+
+
+
+
+# --------------------------------------------------------------------------- #
+# THE DECLARED TOPOLOGY, RE-DERIVED ON LOAD.
+#
+# A PARTIAL FULL run and a COMPLETE GO-ONLY run ship IDENTICAL BUNDLES. The declaration is the
+# only thing that can tell them apart — so it is re-derived here, from the topology it NAMES,
+# over the programs and conditions it BOUND. Relabelling a finished run moves the hash and the
+# manifest refuses.
+# --------------------------------------------------------------------------- #
+G_TOPOLOGY = "the_declared_run_topology_does_not_re_derive_from_the_topology_it_names"
+G_TOPOLOGY_ABSENT = "a_production_manifest_declares_no_run_topology"
+
+
+def check_run_topology(manifest: dict, *, require_declared: bool = False) -> list:
+    """Re-derive the manifest's declared topology and hold the run to it.
+
+    Through the VERIFIER'S OWN restatement (`verify_topology_rules`), never the producer's
+    module: a verifier that imported `run_topology` would derive the expected set exactly the
+    way the producer did, agree by construction, and be unable to catch it computing the wrong
+    one. The check would run, pass, and mean nothing.
+    """
+    import verify_topology_rules as RT
+
+    bound = manifest.get("run_topology")
+    discovered = {lane: [] for lane in ("direct", "temporal", "pathway")}
+    for b in (manifest.get("bundles") or []):
+        lane = str(b.get("lane"))
+        ctx = b.get("context") or {}
+        if lane == "direct":
+            key = str(ctx.get("condition"))
+        elif lane == "temporal":
+            key = f"{ctx.get('from_condition')}->{ctx.get('to_condition')}"
+        else:
+            key = f"{ctx.get('condition')}|{ctx.get('gene_set_source')}"
+        discovered.setdefault(lane, []).append(key)
+
+    sources_seen = sorted({str((b.get("context") or {}).get("gene_set_source"))
+                           for b in (manifest.get("bundles") or [])
+                           if str(b.get("lane")) == "pathway"})
+    return RT.verify(bound, discovered=discovered, sources_seen=sources_seen,
+                     require_declared=require_declared)
 
 
 def main(argv=None) -> int:

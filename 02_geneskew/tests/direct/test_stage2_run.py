@@ -68,15 +68,42 @@ def test_temporal_is_one_all_pairs_over_admitted_endpoints():
 
 def test_native_loaders_get_the_staged_release_root():
     out = _dry()
+    # the pathway source comes from the DECLARED TOPOLOGY — under GO-BP, reactome is PARKED
+    # and is never invoked. Naming it here would have been the test asserting a run the
+    # scheduler no longer declares.
+    from direct import stage2_run as S
+    src = S.SOURCES[0]
     assert "--stage1-release-root" in _block(out, "direct:Rest")
-    assert "--stage1-release-root" in _block(out, "pathway:Rest:reactome")
+    assert "--stage1-release-root" in _block(out, f"pathway:Rest:{src}")
 
 
-def test_topology_is_exactly_3_6_6():
+def test_the_run_invokes_EXACTLY_its_DECLARED_topology():
+    """Not a literal 3/6/6. The scheduler derives its pathway invocations from the topology it
+    DECLARED, so a run cannot produce a source its own manifest would then reject.
+
+    Under the production GO-BP topology that is 3 direct + 6 temporal + 3 pathway. Reactome is
+    PARKED: not staged, not invoked, not produced.
+    """
+    from direct import run_topology as T
+    from direct import stage2_run as S
+
     out = _dry()
-    assert out.count("=== BEGIN direct:") == 3
-    assert len(_tpairs(out)) == 6
-    assert out.count("=== BEGIN pathway:") == 6
+    want = T.binding(S.RUN_TOPOLOGY_ID, programs=["p"], conditions=list(S.CONDITIONS))
+
+    assert out.count("=== BEGIN direct:") == want["n_expected_bundles"]["direct"] == 3
+    assert len(_tpairs(out)) == want["n_expected_bundles"]["temporal"] == 6
+    assert out.count("=== BEGIN pathway:") == want["n_expected_bundles"]["pathway"] == 3
+    assert S.SOURCES == ("go_bp",)
+    assert "reactome" not in out.lower()          # PARKED: never invoked
+
+
+def test_the_LEGACY_full_topology_still_expects_SIX_pathway_bundles():
+    """Unchanged. A run declared FULL and missing Reactome is still INCOMPLETE."""
+    from direct import run_topology as T
+    full = T.binding("spot.stage02.topology.full.v1", programs=["p"],
+                     conditions=["Rest", "Stim8hr", "Stim48hr"])
+    assert full["n_expected_bundles"]["pathway"] == 6
+    assert full["n_expected_bundles_total"] == 15
 
 
 def test_phase_C_invokes_external_verifier_and_adapter():
