@@ -201,12 +201,38 @@ def rewrite_record_honestly(doc, *, n_src, n_tgt, hits):
 class TestMutation4_TheThresholdIsINCLUSIVE:
     """EXACTLY three arm-evaluable members IS rankable. The boundary is part of the rule."""
 
-    def test_exactly_three_is_ACCEPTED_by_the_verifier(self, artifact):
+    def test_a_SELF_CONSISTENT_rewrite_of_the_counts_is_now_REJECTED(self, artifact):
+        """A4: internal consistency is no longer enough, and this test used to say it was.
+
+        It rewrote record 0's counts to n_src=4 / n_tgt=4 / 3 hits per arm, recomputed every
+        ratio and disposition from them, and asserted ADMIT — because the A3 verifier
+        re-derived the coverage arithmetic FROM THE RECORD, so a forgery that agreed with
+        itself agreed with the verifier too. That is exactly the hole an audit walked through
+        to make a zero-coverage pathway headline-rankable.
+
+        The counts are now RECOUNTED from the pinned gene-set bundle, the bound target
+        universe and each arm's ranking. The record's own arithmetic still checks out — and
+        the artifact is refused anyway, because those are not the counts.
+        """
         out, prov = artifact
         r = reseal_and_verify(out, prov, lambda d: rewrite_record_honestly(
             d, n_src=4, n_tgt=4, hits={"away_from_A": 3, "toward_B": 3}))
-        assert COVERAGE_CHECK not in failed(r)
+        assert COVERAGE_CHECK not in failed(r)          # self-consistent, as before
+        assert r["verdict"] == verify_pathway.REJECT    # and false, which is what matters
+        assert {"n_source_genes_rederives_from_the_pinned_gene_set_bundle",
+                "target_intersection_count_mismatch"} & failed(r)
+
+    def test_exactly_three_ranked_members_IS_rankable_on_a_REAL_record(self, artifact):
+        # The inclusive boundary, demonstrated on a record that GENUINELY has 3 of its 5
+        # source genes in the ranking — not on one that was rewritten to claim it does.
+        out, prov = artifact
+        r = verify_pathway.verify(out_dir=out, provenance=prov)
         assert r["verdict"] == verify_pathway.ADMIT
+        truth = r["reconstruction"]["rederived"]["FX:CONVERGENT"]
+        assert truth["n_source_symbols"] == 5
+        assert truth["n_genes_in_target_universe"] == 3
+        assert truth["enrichment"]["away_from_A"]["n_hits_in_ranking"] == 3
+        assert truth["enrichment"]["away_from_A"]["arm_headline_rankable"] is True
 
     def test_two_declared_rankable_is_REJECTED(self, artifact):
         out, prov = artifact

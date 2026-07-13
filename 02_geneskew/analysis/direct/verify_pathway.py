@@ -26,6 +26,7 @@ from typing import Any, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import verify_reconstruct as RC  # noqa: E402  (re-derives the claims from the artifacts)
 import verify_rules as R  # noqa: E402  (the verifier-side reimplementation of the spec)
 
 from .temporal import admission  # noqa: E402  (the ADMISSION contract, not a producer)
@@ -99,8 +100,185 @@ def _arm_disposition(global_passed, n_hits, enrichment_value):
     return RANKABLE, passed
 
 
+# A4 — the named gates of the RE-DERIVATION. The counts are recomputed from the bound
+# artifacts and the DECLARED value must equal the reconstruction; the rankability decision
+# is then taken on the RE-DERIVED counts. ``MEMBER_COUNT_MISMATCH`` is the reason code a
+# count-drift refusal carries, so an audit can assert on the drift itself and not on prose.
+MEMBER_COUNT_MISMATCH = "gene_set_pathway_member_count_mismatch"
+
+GATE_N_SOURCE = "n_source_genes_rederives_from_the_pinned_gene_set_bundle"
+GATE_N_TARGET = RC.GATE_TARGET_INTERSECTION      # "target_intersection_count_mismatch"
+GATE_COVERAGE = "global_coverage_and_disposition_rederive_from_the_bound_artifacts"
+GATE_N_HITS = RC.GATE_RANKING_HITS               # "ranking_hit_count_mismatch"
+GATE_ARM_ELIGIBILITY = "arm_eligibility_rederives_from_the_bound_artifacts"
+GATE_LEADING_EDGE = "the_leading_edge_rederives_from_the_bound_arm_ranking"
+GATE_ENRICHMENT = "the_enrichment_score_rederives_from_the_bound_arm_ranking"
+GATE_CONVERGENCE = "convergence_support_rederives_from_the_bound_masked_signatures"
+GATE_RUN_ID = "pathway_run_id_rederives_from_run_binding"
+
+# The run id is the sha256 of the canonical run binding, truncated. The verifier RECOMPUTES
+# it rather than reading it: an artifact whose id does not follow its own binding has had
+# something changed underneath its name, and the name is what everything downstream cites.
+PATHWAY_RUN_ID_LEN = 16
+
+
 def _check(name: str, ok: bool, detail: str = "") -> dict[str, Any]:
     return {"check": name, "status": PASS if ok else FAIL, "detail": detail}
+
+
+def _same(a, b) -> bool:
+    """Float-tolerant equality that keeps None distinct from 0.0."""
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(float(a) - float(b)) <= FLOAT_TOL
+
+
+def _rederive(records: list[dict[str, Any]], facts: dict[str, Any],
+              checks: list[dict[str, Any]]) -> dict[str, Any]:
+    """The AUTHORITATIVE counts and dispositions, recomputed from the bound artifacts.
+
+    Nothing here reads a count from the record. The record's declarations are COMPARED to
+    the reconstruction, and the coverage, the per-arm eligibility and the headline
+    rankability are decided on the RECONSTRUCTED numbers.
+    """
+    sets = facts["sets"]
+    src, tgt, cov, hits, arm, edge, val, conv = ([] for _ in range(8))
+    authoritative: dict[str, Any] = {}
+
+    for r in records:
+        sid = r["set_id"]
+        f = sets.get(sid)
+        if f is None:
+            src.append(f"{MEMBER_COUNT_MISMATCH} {sid}: the pinned gene-set bundle "
+                       "contains no such set")
+            continue
+
+        n_src, n_tgt = f["n_source_symbols"], f["n_in_target_universe"]
+
+        # (i) THE MEMBER COUNTS. From the bundle and the universes — never from the record.
+        if r.get("n_source_symbols") != n_src:
+            src.append(f"{MEMBER_COUNT_MISMATCH} {sid}: declares n_source_symbols="
+                       f"{r.get('n_source_symbols')}; the PINNED BUNDLE says {n_src}")
+        if r.get("n_genes_in_set") != f["n_genes_in_set"]:
+            src.append(f"{MEMBER_COUNT_MISMATCH} {sid}: declares n_genes_in_set="
+                       f"{r.get('n_genes_in_set')}; the PINNED BUNDLE names "
+                       f"{f['n_genes_in_set']}")
+        if r["n_genes_in_target_universe"] != n_tgt:
+            tgt.append(f"{MEMBER_COUNT_MISMATCH} {sid}: declares "
+                       f"n_genes_in_target_universe="
+                       f"{r['n_genes_in_target_universe']}, but only {n_tgt} of its "
+                       "members lie in the BOUND perturbation-target universe")
+        if r.get("n_genes_in_readout_universe") != f["n_in_readout_universe"]:
+            tgt.append(f"{MEMBER_COUNT_MISMATCH} {sid}: declares "
+                       f"n_genes_in_readout_universe="
+                       f"{r.get('n_genes_in_readout_universe')}; the BOUND readout "
+                       f"universe holds {f['n_in_readout_universe']}")
+
+        # (ii) COVERAGE AND DISPOSITION, decided on the RE-DERIVED counts.
+        true_cov = (round(n_tgt / n_src, 6) if n_src else None)
+        disposition, passed = _global_disposition(true_cov)
+        if not _same(r.get("target_source_coverage"), true_cov):
+            cov.append(f"{sid}: declares target_source_coverage="
+                       f"{r.get('target_source_coverage')}; RE-DERIVED {n_tgt}/{n_src} = "
+                       f"{true_cov}")
+        if r["global_coverage_disposition"] != disposition:
+            cov.append(f"{sid}: declares {r['global_coverage_disposition']}; the "
+                       f"RE-DERIVED coverage {true_cov} is {disposition}")
+        if bool(r["global_coverage_policy_passed"]) != passed:
+            cov.append(f"{sid}: declares global_coverage_policy_passed="
+                       f"{r['global_coverage_policy_passed']}; RE-DERIVED {passed}")
+
+        arms_out: dict[str, Any] = {}
+        for a_name, e in r["enrichment"].items():
+            a = f["arms"].get(a_name)
+            if a is None:
+                hits.append(f"{MEMBER_COUNT_MISMATCH} {sid}/{a_name}: the run bound no "
+                            "ranking for this arm")
+                continue
+
+            # (iii) THE ARM-EVALUABLE COUNT: the members THIS ARM actually ranked.
+            if e["n_hits_in_ranking"] != a["n_hits"]:
+                hits.append(f"{MEMBER_COUNT_MISMATCH} {sid}/{a_name}: declares "
+                            f"n_hits_in_ranking={e['n_hits_in_ranking']}; the BOUND "
+                            f"ranking contains {a['n_hits']} of its members")
+
+            # (iv) ELIGIBILITY, decided on the RE-DERIVED counts. The arms are independent.
+            true_ac = (round(a["n_hits"] / n_src, 6) if n_src else None)
+            a_disp, a_rank = _arm_disposition(passed, a["n_hits"], a["value"])
+            if not _same(e.get("arm_evaluable_source_coverage"), true_ac):
+                arm.append(f"{sid}/{a_name}: declares arm_evaluable_source_coverage="
+                           f"{e.get('arm_evaluable_source_coverage')}; RE-DERIVED "
+                           f"{a['n_hits']}/{n_src} = {true_ac}")
+            if e["arm_coverage_disposition"] != a_disp:
+                arm.append(f"{sid}/{a_name}: declares {e['arm_coverage_disposition']}; "
+                           f"RE-DERIVED {a_disp}")
+            if bool(e["arm_headline_rankable"]) != a_rank:
+                arm.append(f"{sid}/{a_name}: declares arm_headline_rankable="
+                           f"{e['arm_headline_rankable']}; RE-DERIVED {a_rank} from "
+                           f"global_passed={passed}, n_hits={a['n_hits']}, "
+                           f"defined={a['value'] is not None}")
+
+            # (v) THE SCORE AND THE MEMBERS BEHIND IT, walked again on the bound ranking.
+            if not _same(e["enrichment_value"], a["value"]):
+                val.append(f"{sid}/{a_name}: declares enrichment_value="
+                           f"{e['enrichment_value']}; the BOUND ranking produces "
+                           f"{a['value']}")
+            if list(e["leading_edge"]) != list(a["edge"]):
+                edge.append(f"{sid}/{a_name}: declares a {len(e['leading_edge'])}-gene "
+                            f"edge; the BOUND ranking puts {len(a['edge'])} of its "
+                            "members behind that score")
+            if e["n_leading_edge"] != len(a["edge"]) or (
+                    e["leading_edge_side"] != a["side"]):
+                edge.append(f"{sid}/{a_name}: the edge count or side disagrees with the "
+                            "BOUND ranking")
+
+            arms_out[a_name] = {
+                "n_hits_in_ranking": a["n_hits"],
+                "arm_evaluable_source_coverage": true_ac,
+                "arm_coverage_disposition": a_disp,
+                "arm_headline_rankable": a_rank,
+                "enrichment_value": a["value"],
+                "n_leading_edge": len(a["edge"]),
+            }
+
+        # (vi) CONVERGENCE SUPPORT, recomputed on the bound masked signatures.
+        c, dc = f["convergence"], r["convergence"]
+        if (dc["n_measured_perturbations"] != c["n_measured"]
+                or list(dc["measured_perturbations"]) != c["measured"]):
+            conv.append(f"{sid}: declares {dc['n_measured_perturbations']} measured "
+                        f"perturbations; the BOUND signatures hold {c['n_measured']}")
+        if (dc["n_supporting_perturbations"] != c["n_supporting"]
+                or list(dc["supporting_perturbations"]) != c["supporting"]):
+            conv.append(f"{sid}: declares n_supporting_perturbations="
+                        f"{dc['n_supporting_perturbations']}; the BOUND signatures "
+                        f"support {c['n_supporting']}")
+        if bool(dc["convergent"]) != c["convergent"]:
+            conv.append(f"{sid}: declares convergent={dc['convergent']}; RE-DERIVED "
+                        f"{c['convergent']}")
+        if dc["n_supportive_pairs"] != c["n_supportive_pairs"]:
+            conv.append(f"{sid}: declares {dc['n_supportive_pairs']} supportive pairs; "
+                        f"the BOUND signatures produce {c['n_supportive_pairs']}")
+
+        authoritative[sid] = {
+            "n_source_symbols": n_src,
+            "n_genes_in_target_universe": n_tgt,
+            "target_source_coverage": true_cov,
+            "global_coverage_disposition": disposition,
+            "global_coverage_policy_passed": passed,
+            "enrichment": arms_out,
+            "n_supporting_perturbations": c["n_supporting"],
+            "convergent": c["convergent"],
+        }
+
+    checks.append(_check(GATE_N_SOURCE, not src, "; ".join(src[:5])))
+    checks.append(_check(GATE_N_TARGET, not tgt, "; ".join(tgt[:5])))
+    checks.append(_check(GATE_COVERAGE, not cov, "; ".join(cov[:5])))
+    checks.append(_check(GATE_N_HITS, not hits, "; ".join(hits[:5])))
+    checks.append(_check(GATE_ARM_ELIGIBILITY, not arm, "; ".join(arm[:5])))
+    checks.append(_check(GATE_ENRICHMENT, not val, "; ".join(val[:5])))
+    checks.append(_check(GATE_LEADING_EDGE, not edge, "; ".join(edge[:5])))
+    checks.append(_check(GATE_CONVERGENCE, not conv, "; ".join(conv[:5])))
+    return authoritative
 
 
 def _fails(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -111,9 +289,9 @@ PROVENANCE_FILE = "pathway_provenance.json"
 RECORDS_FILE = "pathway.json"
 
 
-def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
-           ) -> dict[str, Any]:
-    """Re-derive every pathway claim from THE BYTES THAT SHIPPED.
+def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None,
+           gene_sets_path: Optional[str] = None) -> dict[str, Any]:
+    """Re-derive every pathway claim from THE BYTES THAT SHIPPED and the ARTIFACTS BOUND.
 
     ``provenance`` is NOT the subject of verification — the shipped
     ``pathway_provenance.json`` is LOADED here and everything below runs on THAT. The
@@ -122,6 +300,12 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
     (The previous version hashed the provenance file and then firewalled the caller's
     dictionary. An independent audit poisoned the emitted provenance on disk with
     ``empirical_p_value``, passed the pristine dict, and got ADMIT.)
+
+    A4: the COUNTS are not read from the record either. They are RECONSTRUCTED from the
+    pinned gene-set bundle, the bound target universe, the exact arm rankings and the bound
+    masked signatures (``verify_reconstruct``), and the rankability decision is taken on the
+    RE-DERIVED counts — never on the declared ones. ``gene_sets_path`` overrides where the
+    pinned bundle is read from; the bytes found there must still hash to the release pin.
     """
     files = {n: (file_sha256(os.path.join(out_dir, n))
                  if os.path.exists(os.path.join(out_dir, n)) else None)
@@ -189,6 +373,24 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
         "every_record_carries_the_run_id",
         all(r.get("pathway_run_id") == provenance["pathway_run_id"]
             for r in records)))
+
+    # ---- 2b. THE RUN ID FOLLOWS THE RUN BINDING. Recomputed, never read. ----
+    # Everything the run stands on lives in the binding: the method, both universes, the
+    # gene-set release, the evidence hashes, the records hash. The id is that binding's
+    # sha256. A forger who edits ANY of it — swapping an evidence hash to match a forged
+    # evidence file, say — and then reseals the documents inside the bundle still has to
+    # produce an id the binding hashes to. A stale or invented id means something moved
+    # underneath the name that every downstream stage cites.
+    full = content_hash(provenance["run_binding"])
+    claimed_id = provenance.get("pathway_run_id")
+    claimed_full = provenance.get("pathway_run_sha256")
+    checks.append(_check(
+        GATE_RUN_ID,
+        claimed_id == full[:PATHWAY_RUN_ID_LEN] and claimed_full == full,
+        f"the run binding hashes to {full[:16]}…, so this run is "
+        f"{full[:PATHWAY_RUN_ID_LEN]!r}; the artifact calls itself {claimed_id!r} "
+        f"(pathway_run_sha256 {str(claimed_full)[:16]}…). An id that does not follow its own "
+        "binding is a name that outlived the thing it named"))
 
     # ---- 3. B1: convergence rests on INTRA-PATHWAY support, and nothing else ----
     bad = []
@@ -322,6 +524,24 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
     checks.append(_check("coverage_and_per_arm_eligibility_rederive_from_the_record",
                          not bad, "; ".join(bad[:5])))
 
+    # ---- 5c. A4: THE COUNTS THEMSELVES, RECONSTRUCTED FROM THE BOUND ARTIFACTS ----
+    # Everything above re-derives the RATIOS from the record's own NUMERATORS and
+    # DENOMINATORS. A forger who edits the counts and then honestly recomputes every ratio,
+    # disposition and edge from them produces an artifact that passes every check above and
+    # is entirely false — an audit promoted a ZERO-coverage pathway to headline-rankable
+    # exactly that way, and it was ADMITTED with n_failed=0.
+    #
+    # So the counts are thrown away and computed again from the artifacts the run is BOUND
+    # to. The declared value must EQUAL the reconstruction, and the RANKABILITY DECISION IS
+    # TAKEN ON THE RECONSTRUCTED COUNTS — never on the declared ones.
+    facts, rc_checks = RC.reconstruct(out_dir=out_dir, provenance=provenance,
+                                      method=method, gene_sets_path=gene_sets_path)
+    checks.extend(rc_checks)
+    reconstruction: dict[str, Any] = {"reconstructed": facts is not None}
+    if facts is not None:
+        reconstruction.update(facts["identity"])
+        reconstruction["rederived"] = _rederive(records, facts, checks)
+
     # ---- 6. the two evidence lines are side by side, NEVER fused ----
     checks.append(_check(
         "the_two_evidence_lines_are_never_combined",
@@ -339,11 +559,13 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
         f"{len(records)} records for {n_sets} sets: a pathway missing from the table is "
         "indistinguishable from one that was tested and found nothing"))
 
-    return _report(provenance, identity, checks, n_records=len(records))
+    return _report(provenance, identity, checks, n_records=len(records),
+                   reconstruction=reconstruction)
 
 
 def _report(provenance: dict[str, Any], identity: dict[str, Any],
-            checks: list[dict[str, Any]], *, n_records: int) -> dict[str, Any]:
+            checks: list[dict[str, Any]], *, n_records: int,
+            reconstruction: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     failures = _fails(checks)
     return {
         "schema_version": "spot.stage02_pathway_verification.v1",
@@ -358,6 +580,9 @@ def _report(provenance: dict[str, Any], identity: dict[str, Any],
             "key_firewall_is_recursive": True,
         },
         "n_records": int(n_records),
+        # WHAT the counts were recounted from, and what they came to. An admission that
+        # names no evidence is an opinion.
+        "reconstruction": reconstruction or {"reconstructed": False},
         "checks": checks,
         "n_failed": len(failures),
         "verdict": ADMIT if not failures else REJECT,
