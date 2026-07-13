@@ -6,7 +6,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "selection_origin", "execution_status", "analysis_mode", "estimator_id",
-               "estimator_status", "estimator", "selection_id", "selection_full_sha256", "canonical_content", "poles",
+               "estimator_status", "estimator", "selection_id", "selection_full_sha256", "canonical_content", "poles", "arms",
                "trust_bindings", "provenance_bindings", "historical_validation_provenance",
                "full_contract_content_sha256"],
   "allOf": [
@@ -80,6 +80,12 @@
       "required": ["A", "B"],
       "properties": {"A": {"$ref": "#/$defs/pole"}, "B": {"$ref": "#/$defs/pole"}}
     },
+    "arms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["away_from_A", "toward_B"],
+      "properties": {"away_from_A": {"$ref": "#/$defs/arm_ref"}, "toward_B": {"$ref": "#/$defs/arm_ref"}}
+    },
     "trust_bindings": {
       "type": "object",
       "additionalProperties": false,
@@ -107,6 +113,22 @@
     }
   },
   "$defs": {
+    "arm_ref": {
+      "$comment": "One independent reusable per-program arm (ROUND4_ADDENDUM c4773562). Keyed by desired_change (increase|decrease), NEVER pole_direction/role. pole_direction is selection metadata only. Keys: direct (program, desired_change, condition), pathway base (+ '|<source>'), temporal (program, desired_change, from, to) in temporal mode.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "program_id", "pole_direction", "desired_change", "condition", "direct_arm_key", "pathway_arm_key_base"],
+      "properties": {
+        "role": {"enum": ["away_from_A", "toward_B"]},
+        "program_id": {"type": "string"},
+        "pole_direction": {"enum": ["high", "low"]},
+        "desired_change": {"enum": ["increase", "decrease"]},
+        "condition": {"enum": ["Rest", "Stim8hr", "Stim48hr"]},
+        "direct_arm_key": {"type": "string"},
+        "pathway_arm_key_base": {"type": "string"},
+        "temporal_arm_key": {"type": "string"}
+      }
+    },
     "canonical_pole": {
       "type": "object",
       "additionalProperties": false,

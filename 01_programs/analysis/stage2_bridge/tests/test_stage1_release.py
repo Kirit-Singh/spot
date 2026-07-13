@@ -1,9 +1,10 @@
-"""Round-4 finding #12 — the Stage-1 v3 RELEASE BUNDLE + concrete production selection contracts.
+"""Round-4 #12 + Addendum Rule 2 — the GENERIC Stage-1 v3 release bundle + deterministic materializer.
 
-Guards the committed release: its self-hash reproduces, it binds the frozen scientific identities (pins),
-every selection file byte-matches a fresh emit (selection_id + full-contract hash) AND passes the
-independent semantic verifier, and the topology is exactly 3 within + 6 ordered temporal for one
-biological A/B question.
+Guards: the bundle self-hash reproduces and binds the frozen scientific pins; it declares a GENERIC selector
+(any program pair, directions, timepoints) — NO biological pair is canonical; the deterministic materializer
+builds a valid, verifiable contract for an arbitrary non-Treg pair; treg->th1 appears only as a labelled
+demo/default; every demo selection byte-matches a fresh emit + verifies + expresses two per-program arm
+references; the demo topology is exactly 3 within + 6 ordered temporal.
 """
 import hashlib
 import json
@@ -42,21 +43,61 @@ def test_release_binds_the_frozen_scientific_pins():
     assert b["registry_scorer_view_canonical_sha256"] == SCORER_VIEW == rv.build_and_hash()[2]
     assert b["components"]["validation"]["raw_sha256"] == VALIDATION_RAW
     assert b["components"]["selectability_v3"]["raw_sha256"] == SELECTABILITY_RAW
-    # every component names both a raw and (for JSON) a canonical hash
     for name, c in b["components"].items():
         assert "raw_sha256" in c or "raw_sha256_staged" in c, name
 
 
-def test_biological_question_is_the_recorded_owner_confirmable_pair():
-    q = _idx()["biological_question"]
-    assert q["A_away_from"] == {"program_id": "treg_like", "direction": "high"}
-    assert q["B_toward"] == {"program_id": "th1_like", "direction": "high"}
-    assert "OWNER-CONFIRMABLE" in q["owner_decision"]
+def test_release_declares_a_generic_selector():
+    s = _rel()["selector"]
+    assert s["kind"] == "generic_continuous_program_selector"
+    assert s["materializer"] == "stage2_bridge/emit_selection_contract.build_contract"
+    # admitted program set is DERIVED from the v3 scorer VIEW (10 base-portable; Th9 excluded), binds its sha
+    assert s["program_set_source"] == "v3_scorer_view"
+    assert s["registry_scorer_view_canonical_sha256"] == SCORER_VIEW == rv.build_and_hash()[2]
+    assert len(s["admitted_programs"]) == 10 and "th9_like" not in s["admitted_programs"]
+    assert s["excluded_nonportable"] == ["th9_like"]
+    assert set(s["modes"]) == {"within_condition", "temporal_cross_condition"}
+    assert set(s["arm_keying"]) == {"direct", "temporal", "pathway"}
+    # frozen (role, pole) -> desired_change mapping (ROUND4 c4773562)
+    assert s["desired_change_mapping"] == {"away_from_A(high)": "decrease", "away_from_A(low)": "increase",
+                                           "toward_B(high)": "increase", "toward_B(low)": "decrease"}
+    # frozen topology: 300 logical slots, 15 physical all-arm bundles, 6 convergence artifacts
+    assert s["arm_topology"]["logical_slots"] == {"direct": 60, "temporal": 120, "pathway": 120, "total": 300}
+    assert s["arm_topology"]["physical_bundles"]["total"] == 15
+    assert s["arm_topology"]["convergence_artifacts"] == 6
+    # frozen capacity: exactly 3,540 valid ordered selections (1,140 within + 2,400 temporal)
+    assert s["selection_capacity"] == {"n_states_per_condition": 20, "within_condition": 1140,
+                                       "temporal_cross_condition": 2400, "total": 3540}
 
 
-def test_every_selection_matches_a_fresh_emit_and_verifies():
+def test_demo_default_is_labelled_demo_not_canonical():
+    idx = _idx()
+    assert idx["selector_is_generic"] is True
+    d = idx["demo_default_selection"]
+    assert d["role"] == "demo_default_only"
+    assert "canonical biology" in d["note"] and "generic" in d["note"]   # explicitly denies canonical biology
+    # no top-level "biological_question"/"canonical" framing survives
+    assert "biological_question" not in idx
+
+
+def test_generic_materializer_produces_arbitrary_pair():
+    # an ARBITRARY non-Treg pair, within + different-timepoint temporal, both materialize + verify + are ready
+    for conds in (["Rest"], ["Rest", "Stim48hr"]):
+        c = sc.build_contract("th2_like", "high", "cd4_ctl_like", "low", conds)
+        ok, reasons = vc.verify_contract(c)
+        assert ok, reasons
+        assert c["execution_status"] == "ready"
+        assert c["arms"]["away_from_A"]["program_id"] == "th2_like"
+        assert c["arms"]["toward_B"]["program_id"] == "cd4_ctl_like"
+        # arms key on desired_change (th2/high away -> decrease; cd4_ctl/low toward -> decrease), NOT the pole
+        assert c["arms"]["away_from_A"]["desired_change"] == "decrease"
+        assert c["arms"]["toward_B"]["desired_change"] == "decrease"
+        assert c["arms"]["away_from_A"]["direct_arm_key"].startswith("direct|th2_like|decrease|")
+
+
+def test_every_demo_selection_matches_a_fresh_emit_and_verifies():
     modes = {}
-    for e in _idx()["selections"]:
+    for e in _idx()["demo_selections"]:
         c = sc.build_contract(e["A"]["program_id"], e["A"]["direction"],
                               e["B"]["program_id"], e["B"]["direction"], e["conditions"])
         assert c["selection_id"] == e["selection_id"], e["matrix_var"]
@@ -65,5 +106,8 @@ def test_every_selection_matches_a_fresh_emit_and_verifies():
         assert on_disk["full_contract_content_sha256"] == e["full_contract_content_sha256"]
         ok, reasons = vc.verify_contract(on_disk)
         assert ok, (e["matrix_var"], reasons)
+        # each selection expresses two independent per-program arm references (no fused pair object)
+        assert on_disk["arms"]["away_from_A"]["program_id"] == on_disk["canonical_content"]["A"]["program_id"]
+        assert on_disk["arms"]["toward_B"]["program_id"] == on_disk["canonical_content"]["B"]["program_id"]
         modes[e["analysis_mode"]] = modes.get(e["analysis_mode"], 0) + 1
-    assert modes == {"within_condition": 3, "temporal_cross_condition": 6}   # the 3+6 matrix topology
+    assert modes == {"within_condition": 3, "temporal_cross_condition": 6}   # demo topology

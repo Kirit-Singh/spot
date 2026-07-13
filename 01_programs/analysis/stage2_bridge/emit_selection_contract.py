@@ -40,6 +40,8 @@ import os
 import build_registry_view as rv
 import canonical
 
+import arm_keys as ak   # canonical desired_change keying + frozen topology (ROUND4_ADDENDUM c4773562)
+
 SCHEMA = "spot.stage01_selection.v3"
 STAGE1_METHOD_VERSION = "stage1-continuous-v3.0.1"
 DATASET_ID = "marson2025_gwcd4_perturbseq"
@@ -163,6 +165,24 @@ def _pole(view_prog, direction, min_panel, min_ctrl):
     }, available
 
 
+def _arm_ref(role, program_id, direction, condition, mode, ordered_conditions):
+    """One INDEPENDENT reusable per-program arm reference (ROUND4_ADDENDUM c4773562). Keyed by DESIRED CHANGE
+    (ak.desired_change(role, direction)) — NEVER the pole direction/role: the same high pole means opposite
+    perturbations by role, so a cached arm must not depend on role/pole. `pole_direction` (high|low) is kept
+    as SELECTION metadata only. The pole sits at THIS condition (away_from_A@conditions[0], toward_B@[-1]) —
+    its endpoint disambiguates poles so a same-program+pole pair at DIFFERENT timepoints is two distinct arms.
+    A temporal (cross-condition) selection additionally references the (from, to) temporal-arm key. The UI
+    JOINS the two arms with NO combined/balanced/weighted score."""
+    dc = ak.desired_change(role, direction)
+    ref = {"role": role, "program_id": program_id, "pole_direction": direction, "desired_change": dc,
+           "condition": condition,
+           "direct_arm_key": ak.direct_key(program_id, dc, condition),
+           "pathway_arm_key_base": ak.pathway_key_base(program_id, dc, condition)}  # + '|<source>' at invocation
+    if mode == "temporal_cross_condition":
+        ref["temporal_arm_key"] = ak.temporal_key(program_id, dc, ordered_conditions[0], ordered_conditions[-1])
+    return ref
+
+
 def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditions,
                    selection_origin="user_selected"):
     if selection_origin not in SELECTION_ORIGINS:
@@ -170,8 +190,6 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
     for d, side in ((a_direction, "A"), (b_direction, "B")):
         if d not in DIRECTIONS:
             raise SelectionError("unknown_direction", f"{side}={d!r}")
-    if a_program_id == b_program_id and a_direction == b_direction:
-        raise SelectionError("objective_incompatible_same_pole", f"{a_program_id}/{a_direction}")
 
     view, view_raw_str, view_canon = rv.build_and_hash()   # pure; no write side effect
     view_raw_sha = canonical.sha256_hex(view_raw_str)
@@ -181,6 +199,13 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
             raise SelectionError("unknown_program", f"{side}={pid!r} (not a selectable primary)")
 
     ordered_conditions, mode = _norm_conditions(conditions)
+    # POLE IDENTITY = (program, direction, condition). Refuse ONLY when all three are identical — i.e. same
+    # program+direction in WITHIN-condition mode (both poles at the same timepoint -> a true self-comparison).
+    # Same program+direction at DIFFERENT timepoints is a VALID temporal comparison (condition disambiguates
+    # the poles), so _norm_conditions collapsing to one condition (mode == within_condition) is the test.
+    if a_program_id == b_program_id and a_direction == b_direction and mode == "within_condition":
+        raise SelectionError("objective_incompatible_same_pole",
+                             f"{a_program_id}/{a_direction}@{ordered_conditions[0]}")
     estimator_id, estimator_status, estimator = _estimator_binding(mode, ordered_conditions)
     min_panel, min_ctrl = _effect_universe_thresholds()
     pole_a, a_avail = _pole(primaries[a_program_id], a_direction, min_panel, min_ctrl)
@@ -224,6 +249,13 @@ def build_contract(a_program_id, a_direction, b_program_id, b_direction, conditi
         "selection_full_sha256": sel_id,
         "canonical_content": cc,
         "poles": {"A": pole_a, "B": pole_b},
+        # the pair expressed as two INDEPENDENT per-program arm references (no fused pair object, no combined
+        # score). Each arm sits at its OWN pole condition: away_from_A at conditions[0], toward_B at
+        # conditions[-1] (same as [0] within-condition; the later timepoint for a temporal comparison).
+        "arms": {
+            "away_from_A": _arm_ref("away_from_A", a_program_id, a_direction, ordered_conditions[0], mode, ordered_conditions),
+            "toward_B": _arm_ref("toward_B", b_program_id, b_direction, ordered_conditions[-1], mode, ordered_conditions),
+        },
         "trust_bindings": {
             "validation_raw_sha256": _sha_file(os.path.join(DATA, "stage01_validation.json")),
             "validation_semantics_raw_sha256": _sha_file(os.path.join(DATA, "stage01_validation_semantics.json")),

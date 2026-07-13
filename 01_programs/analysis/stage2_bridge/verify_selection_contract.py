@@ -16,6 +16,29 @@ import os
 import build_registry_view as rv
 import canonical
 
+# generator != verifier: the verifier RE-DERIVES the frozen (role, pole) -> desired_change mapping and the
+# arm-key string formats from THESE LOCAL literals (ROUND4_ADDENDUM c4773562) — it does NOT import arm_keys
+# (the producer/release module), so a shared helper bug or key-format drift cannot pass both. These literals
+# ARE the spec re-stated here for the independent check.
+_V_DESIRED = {("away_from_A", "high"): "decrease", ("away_from_A", "low"): "increase",
+              ("toward_B", "high"): "increase", ("toward_B", "low"): "decrease"}
+
+
+def _v_desired_change(role, pole):
+    return _V_DESIRED.get((role, pole))
+
+
+def _v_direct_key(pid, dc, cond):
+    return "direct|" + "|".join((pid, dc, cond))
+
+
+def _v_pathway_base(pid, dc, cond):
+    return "pathway|" + "|".join((pid, dc, cond))
+
+
+def _v_temporal_key(pid, dc, frm, to):
+    return "temporal|" + "|".join((pid, dc, frm, to))
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ANALYSIS = os.path.dirname(HERE)
 PROGRAMS = os.path.dirname(ANALYSIS)
@@ -93,6 +116,39 @@ def verify_contract(contract, data_dir=DATA):
             reasons.append("an available temporal estimator must bind a 64-hex method_sha256 (a word cannot pass)")
     if est_status == "not_implemented" and "method_sha256" in e:
         reasons.append("a not_implemented estimator must NOT name a method (relabelling != existence)")
+
+    # ---- 5) POLE IDENTITY = (program, pole, condition); ARMS re-derive with desired_change keying ----
+    a, b = cc.get("A") or {}, cc.get("B") or {}
+    conds = cc.get("conditions") or []
+    # refuse ONLY when program+pole+condition are all identical -> within-condition same program+direction.
+    # (a temporal comparison of the same program+pole at DIFFERENT timepoints is valid and must be admitted)
+    if (a.get("program_id") == b.get("program_id") and a.get("direction") == b.get("direction")
+            and mode == "within_condition"):
+        reasons.append("impossible tuple: identical pole (same program+pole+condition) must be refused at emit")
+    arms = contract.get("arms") or {}
+    if conds:
+        # each arm is INDEPENDENTLY re-derived from the LOCAL frozen rules above (NEVER the producer's arm_keys):
+        # desired_change from the (role, pole) mapping, keys from _v_*, endpoint away_from_A@[0] / toward_B@[-1].
+        expect = {"away_from_A": (a.get("program_id"), a.get("direction"), conds[0]),
+                  "toward_B": (b.get("program_id"), b.get("direction"), conds[-1])}
+        for role, (pid, pole_dir, condition) in expect.items():
+            arm = arms.get(role) or {}
+            dc = _v_desired_change(role, pole_dir)   # LOCAL frozen mapping (no arm_keys import)
+            if dc is None:
+                reasons.append(f"arms.{role}: cannot rederive desired_change for pole {pole_dir!r}")
+                continue
+            if (arm.get("role"), arm.get("program_id"), arm.get("pole_direction"),
+                    arm.get("desired_change"), arm.get("condition")) != (role, pid, pole_dir, dc, condition):
+                reasons.append(f"arms.{role} does not rederive (role/program/pole_direction/desired_change/condition)")
+            if arm.get("direct_arm_key") != _v_direct_key(pid, dc, condition):
+                reasons.append(f"arms.{role}.direct_arm_key does not rederive (must key desired_change, not pole)")
+            if arm.get("pathway_arm_key_base") != _v_pathway_base(pid, dc, condition):
+                reasons.append(f"arms.{role}.pathway_arm_key_base does not rederive")
+            if mode == "temporal_cross_condition":
+                if arm.get("temporal_arm_key") != _v_temporal_key(pid, dc, conds[0], conds[-1]):
+                    reasons.append(f"arms.{role}.temporal_arm_key does not rederive")
+            elif "temporal_arm_key" in arm:
+                reasons.append(f"arms.{role}.temporal_arm_key present on a within-condition selection")
 
     return (len(reasons) == 0), reasons
 

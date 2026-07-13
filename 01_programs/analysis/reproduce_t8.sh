@@ -22,7 +22,7 @@ echo "[1/8] integrate primary-source provenance"; python3 gen_stage1_provenance.
 echo "[2/8] independent provenance verifier";     python3 verify_stage1_provenance.py
 echo "[3/8] generate T8 layer";                   python3 gen_stage1_t8.py
 echo "[4/8] independent T8 verifier";             python3 verify_stage1_t8.py
-echo "[5/8] regenerate v3 selection bundle (browser v3-contract constants)"; python3 stage2_bridge/gen_selection_bundle.py
+echo "[5/8] regenerate v3 selection bundle + fixtures + generic release (browser/Stage-2 v3-contract constants)"; python3 stage2_bridge/gen_selection_bundle.py; python3 stage2_bridge/emit_selection_contract.py; python3 stage2_bridge/gen_stage1_release.py
 echo "[6/8] protected-baseline gate (Stage-2 view + scorer-projection + no Tier-2 leak)"; python3 stage2_bridge/protected_hashes.py
 echo "[7/8] mutation / forgery suites";           python3 -m pytest test_stage1_t8.py test_stage1_provenance.py stage2_bridge/tests -q
 echo "[8/8] full-release attestation";            python3 gen_full_release_verification.py

@@ -1,15 +1,18 @@
-"""Emit the Stage-1 v3 RELEASE BUNDLE + the concrete production selection contracts (round-4 finding #12;
-fills the invocation-matrix $STAGE1_RELEASE / $REGISTRY / $STAGE1_SCHEMA / $SEL_WITHIN_* / $SEL_TEMPORAL_*).
+"""Emit the GENERIC Stage-1 v3 RELEASE BUNDLE + a deterministic materializer index (round-4 finding #12;
+fills the invocation-matrix $STAGE1_RELEASE / $REGISTRY / $STAGE1_SCHEMA).
 
-Deterministic; re-emit is byte-stable. The bundle pins the frozen Stage-1 artifacts by BOTH raw and
-canonical sha256, plus the scorer-projection (008c1da1) and the Stage-2-bound scorer VIEW canonical
-(5d1d8c36) — what selection_id actually binds. The selections are the canonical biological question
-treg_like/high (A = away-from) -> th1_like/high (B = toward): away from the immunosuppressive Treg-like
-program, toward the Th1-like anti-tumor effector. Both are base-portable primary programs (real registry
-IDs). One selection per condition (Direct within_condition) + one per ordered temporal pair.
+The release is GENERIC (Round-4 Addendum Rule 2 — corrects 209edb2, which wrongly hard-coded Treg->Th1 as
+canonical): it pins the frozen Stage-1 artifacts by BOTH raw and canonical sha256 and DECLARES the generic
+selector — registry + v3 schema + the deterministic materializer emit_selection_contract.build_contract,
+which builds a valid spot.stage01_selection.v3 for ANY (program pair, directions, timepoints). NO biological
+pair is canonical.
 
-The A/B pair + directions is the single OWNER-CONFIRMABLE scientific choice; it is recorded explicitly in
-the index so the real run cannot silently adopt an unreviewed hypothesis.
+A pair is expressed as TWO INDEPENDENT per-program arm references (away_from_A on A + toward_B on B; no
+combined score), keyed for reusable arm artifacts: Direct (program, direction, condition); temporal
+(program, direction, from, to); pathway (program, direction, condition, source).
+
+treg_like/high -> th1_like/high is emitted only as a clearly-labelled DEMO/DEFAULT fixture (owner-confirmable),
+never the release's canonical biology.
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ DATA = os.path.join(PROGRAMS, "app", "data")
 sys.path.insert(0, ANALYSIS)
 sys.path.insert(0, HERE)
 
+import arm_keys as ak                   # noqa: E402  (frozen desired_change topology, ROUND4 c4773562)
 import build_registry_view as rv        # noqa: E402
 import canonical                        # noqa: E402
 import emit_selection_contract as sc    # noqa: E402
@@ -34,9 +38,9 @@ import verify_stage1_provenance as prov  # noqa: E402
 OUT = os.path.join(HERE, "release")
 SELDIR = os.path.join(OUT, "selections")
 
-# The canonical biological question (owner-confirmable). Real registry program IDs; both base-portable.
-A = ("treg_like", "high")     # away_from_A: the immunosuppressive Treg-like program
-B = ("th1_like", "high")      # toward_B:   the Th1-like anti-tumor effector program
+# DEMO/DEFAULT only — NOT the release's canonical biology. Owner-confirmable at run time; any pair is valid.
+DEMO_A = ("treg_like", "high")
+DEMO_B = ("th1_like", "high")
 CONDITIONS = ["Rest", "Stim8hr", "Stim48hr"]
 ORDERED_PAIRS = [("Rest", "Stim8hr"), ("Stim8hr", "Rest"), ("Rest", "Stim48hr"),
                  ("Stim48hr", "Rest"), ("Stim8hr", "Stim48hr"), ("Stim48hr", "Stim8hr")]
@@ -69,6 +73,7 @@ def build_release() -> dict:
     reg = json.load(open(reg_p))
     schema_p = os.path.join(HERE, "schemas", "spot.stage01_selection.v3.schema.json")
     prot = json.load(open(os.path.join(HERE, "PROTECTED_HASHES.json")))
+    topo = ak.topology()   # 10 admitted programs derived from the v3 scorer VIEW; binds its canonical sha
     b = {
         "schema": "spot.stage01_v3_release.v1",
         "method_version": sc.STAGE1_METHOD_VERSION,
@@ -80,6 +85,31 @@ def build_release() -> dict:
         "source_h5ad_sha256": sc.SOURCE_H5AD_SHA256,
         "source_hf_revision": sc.SOURCE_HF_REVISION,
         "effect_universe_id": sc.EFFECT_UNIVERSE_ID,
+        # GENERIC selector — NO biological pair is canonical. The admitted program set + arm topology are
+        # DERIVED from the v3 scorer VIEW (10 base-portable; Th9 excluded) and BIND its canonical sha256.
+        "selector": {
+            "kind": "generic_continuous_program_selector",
+            "materializer": "stage2_bridge/emit_selection_contract.build_contract",
+            "selection_schema": "spot.stage01_selection.v3",
+            "program_set_source": topo["program_set_source"],                                  # v3_scorer_view
+            "registry_scorer_view_canonical_sha256": topo["registry_scorer_view_canonical_sha256"],
+            "admitted_programs": topo["base_portable_programs"],                               # 10, from the VIEW
+            "excluded_nonportable": topo["excluded_nonportable"],
+            "directions": list(sc.DIRECTIONS),
+            "conditions": topo["conditions"],
+            "pathway_sources": topo["pathway_sources"],
+            "modes": ["within_condition", "temporal_cross_condition"],
+            "desired_change_mapping": topo["desired_change_mapping"],   # (role, pole) -> increase|decrease
+            "arm_keying": topo["arm_keying"],                          # keyed on desired_change, not pole
+            "arm_topology": {
+                "spec": topo["spec"], "spec_sha256": topo["spec_sha256"],
+                "logical_slots": topo["logical_slots"],                # {direct:60, temporal:120, pathway:120, total:300}
+                "physical_bundles": topo["physical_bundles"],          # {direct:3, temporal:6, pathway:6, total:15}
+                "convergence_artifacts": topo["convergence_artifacts"],   # 6 (one per pathway bundle)
+            },
+            "selection_capacity": topo["selection_capacity"],          # {within:1140, temporal:2400, total:3540}
+            "pair_semantics": topo["pair_semantics"],
+        },
         "components": {
             "registry_v3": _component(reg_p, "program_registry", "effect_universe_gwcd4i"),
             "validation": _component(os.path.join(DATA, "stage01_validation.json"), "frozen_validation"),
@@ -105,18 +135,25 @@ def build_release() -> dict:
     return b
 
 
-def build_selections():
+def _entry(matrix_var, path, c, conds):
+    return {"matrix_var": matrix_var, "path": _rel(path), "analysis_mode": c["analysis_mode"],
+            "conditions": conds, "A": c["canonical_content"]["A"], "B": c["canonical_content"]["B"],
+            "arms": c["arms"], "execution_status": c["execution_status"], "estimator_status": c["estimator_status"],
+            "selection_id": c["selection_id"], "full_contract_content_sha256": c["full_contract_content_sha256"]}
+
+
+def build_demo_selections():
     entries = []
     for cond in CONDITIONS:
-        c = sc.build_contract(A[0], A[1], B[0], B[1], [cond])
+        c = sc.build_contract(DEMO_A[0], DEMO_A[1], DEMO_B[0], DEMO_B[1], [cond])
         p = os.path.join(SELDIR, f"stage01_selection_within_{cond}.v3.json")
         open(p, "w").write(sc.emit_json(c))
-        entries.append(("SEL_WITHIN_" + cond, p, c, [cond]))
+        entries.append(_entry("SEL_WITHIN_" + cond, p, c, [cond]))
     for c1, c2 in ORDERED_PAIRS:
-        c = sc.build_contract(A[0], A[1], B[0], B[1], [c1, c2])
+        c = sc.build_contract(DEMO_A[0], DEMO_A[1], DEMO_B[0], DEMO_B[1], [c1, c2])
         p = os.path.join(SELDIR, f"stage01_selection_temporal_{c1}_{c2}.v3.json")
         open(p, "w").write(sc.emit_json(c))
-        entries.append((f"SEL_TEMPORAL_{c1}_{c2}", p, c, [c1, c2]))
+        entries.append(_entry(f"SEL_TEMPORAL_{c1}_{c2}", p, c, [c1, c2]))
     return entries
 
 
@@ -126,40 +163,38 @@ def main():
     rel_p = os.path.join(OUT, "stage01_v3_release.json")
     open(rel_p, "w").write(json.dumps(rel, indent=2, ensure_ascii=True, sort_keys=False) + "\n")
 
-    entries = build_selections()
+    entries = build_demo_selections()
     index = {
         "schema": "spot.stage01_v3_release_index.v1",
-        "biological_question": {
-            "A_away_from": {"program_id": A[0], "direction": A[1]},
-            "B_toward": {"program_id": B[0], "direction": B[1]},
-            "arms": ["away_from_A", "toward_B"],
-            "rationale": "canonical Stage-1 question: away from the immunosuppressive Treg-like program, "
-                         "toward the Th1-like anti-tumor effector. Both are base-portable primary programs.",
-            "owner_decision": "OWNER-CONFIRMABLE: the A/B pair + directions determine the biological hypothesis; "
-                              "confirm or override before authorizing the real run (alternatives: B=cd4_ctl_like; direction variants).",
-        },
         "release_bundle": _rel(rel_p),
         "release_self_release_sha256": rel["self_release_sha256"],
         "selection_schema": _rel(os.path.join(HERE, "schemas", "spot.stage01_selection.v3.schema.json")),
         "registry": _rel(os.path.join(DATA, "stage01_program_registry_v3.json")),
-        "selections": [
-            {"matrix_var": var, "path": _rel(p), "analysis_mode": c["analysis_mode"], "conditions": conds,
-             "A": c["canonical_content"]["A"], "B": c["canonical_content"]["B"],
-             "execution_status": c["execution_status"], "estimator_status": c["estimator_status"],
-             "selection_id": c["selection_id"], "full_contract_content_sha256": c["full_contract_content_sha256"]}
-            for var, p, c, conds in entries
-        ],
+        "materializer": "stage2_bridge/emit_selection_contract.build_contract",
+        "selector_is_generic": True,
+        "demo_default_selection": {
+            "role": "demo_default_only",
+            "note": "DEMO/DEFAULT fixture ONLY — NOT the release's canonical biology. The selector is generic "
+                    "(any program pair, independent directions, same or different timepoints); the owner confirms "
+                    "the real A/B at run time. Alternatives: B=cd4_ctl_like; direction variants; any registry pair.",
+            "A_away_from": {"program_id": DEMO_A[0], "direction": DEMO_A[1]},
+            "B_toward": {"program_id": DEMO_B[0], "direction": DEMO_B[1]},
+            "arms": ["away_from_A", "toward_B"],
+        },
+        "demo_selections": entries,
     }
     idx_p = os.path.join(OUT, "stage01_v3_release_index.json")
     open(idx_p, "w").write(json.dumps(index, indent=2, ensure_ascii=True, sort_keys=False) + "\n")
 
-    print("RELEASE BUNDLE:", _rel(rel_p))
-    print("  self_release_sha256:", rel["self_release_sha256"])
-    print("  raw_sha256:", _raw(rel_p))
+    print("GENERIC RELEASE BUNDLE:", _rel(rel_p))
+    print("  self_release_sha256:", rel["self_release_sha256"], "| raw:", _raw(rel_p))
+    print("  selector.kind:", rel["selector"]["kind"], "| admitted programs:", len(rel["selector"]["admitted_programs"]),
+          "| logical arms:", rel["selector"]["arm_topology"]["logical_slots"]["total"],
+          "| capacity:", rel["selector"]["selection_capacity"]["total"])
     print("INDEX:", _rel(idx_p), "raw:", _raw(idx_p))
-    print("\nSELECTIONS (matrix_var | mode | exec | selection_id | full_contract_content_sha256):")
-    for e in index["selections"]:
-        print(f"  {e['matrix_var']:26s} {e['analysis_mode']:22s} {e['execution_status']:18s} "
+    print("\nDEMO/DEFAULT selections (matrix_var | mode | exec | selection_id | full_contract_content_sha256):")
+    for e in entries:
+        print(f"  {e['matrix_var']:26s} {e['analysis_mode']:22s} {e['execution_status']:6s} "
               f"{e['selection_id']} {e['full_contract_content_sha256']}")
 
 

@@ -806,6 +806,14 @@ async function sha256hex(str){
 function _normConds(cs){const seen={},o=[];cs.forEach(c=>{if(!seen[c]){seen[c]=1;o.push(c);}});return {ordered:o,mode:o.length===1?'within_condition':'temporal_cross_condition'};}
 function _poleV3(pid,direction){const p=(BUNDLE.poles||{})[pid]||{};return {program_id:pid,direction:direction,effect_projection_status:p.effect_projection_status,n_measured:p.n_measured,n_panel_in_effect_universe:p.n_panel_in_effect_universe,n_control_in_effect_universe:p.n_control_in_effect_universe,reason_codes:(p.reason_codes||[]).slice()};}
 function _estBinding(mode,nConds){const id=BUNDLE.estimator_for_mode[mode];const present=(BUNDLE.implemented_estimators||[]).indexOf(id)>=0;const status=present?'available':'not_implemented';let b;if(present&&BUNDLE.estimator_registry&&BUNDLE.estimator_registry[id]){b=Object.assign({},BUNDLE.estimator_registry[id]);b.status=status;b.n_conditions=nConds;}else{b={estimator_id:id,analysis_mode:mode,n_conditions:nConds,status:status};}return {id:id,status:status,binding:b};}
+// frozen (role, pole) -> desired_change (ROUND4_ADDENDUM c4773562; mirrors arm_keys.desired_change). Reusable
+// arms key on desired_change, NEVER pole high|low: away_from_A(high)=decrease, away_from_A(low)=increase,
+// toward_B(high)=increase, toward_B(low)=decrease.
+function _desiredChange(role,direction){return role==='toward_B'?(direction==='high'?'increase':'decrease'):(direction==='high'?'decrease':'increase');}
+// one INDEPENDENT reusable per-program arm reference (mirrors emit_selection_contract._arm_ref). Keyed by
+// DESIRED CHANGE; pole_direction kept as selection metadata only. away_from_A@conditions[0], toward_B@[-1];
+// a temporal selection also carries the (from,to) key. UI joins the two arms with NO combined score.
+function _armRef(role,pid,direction,condition,mode,ordered){const dc=_desiredChange(role,direction);const r={role:role,program_id:pid,pole_direction:direction,desired_change:dc,condition:condition,direct_arm_key:'direct|'+pid+'|'+dc+'|'+condition,pathway_arm_key_base:'pathway|'+pid+'|'+dc+'|'+condition};if(mode==='temporal_cross_condition')r.temporal_arm_key='temporal|'+pid+'|'+dc+'|'+ordered[0]+'|'+ordered[ordered.length-1];return r;}
 // the biological body selection_id hashes — A/B poles + mode + conditions + the scorer-VIEW binding
 function canonicalContent(){
   const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{},nc=_normConds([axisA.condition,axisB.condition]);
@@ -829,7 +837,9 @@ async function computeContrast(){
   const contract={schema_version:'spot.stage01_selection.v3',selection_origin:'user_selected',
     execution_status:exec,analysis_mode:nc.mode,estimator_id:est.id,estimator_status:est.status,estimator:est.binding,
     selection_id:selFull.slice(0,16),selection_full_sha256:selFull,canonical_content:cc,
-    poles:{A:pA,B:pB},trust_bindings:BUNDLE.trust_bindings,provenance_bindings:BUNDLE.provenance_bindings,
+    poles:{A:pA,B:pB},
+    arms:{away_from_A:_armRef('away_from_A',A.program_id,axisA.direction,nc.ordered[0],nc.mode,nc.ordered),toward_B:_armRef('toward_B',B.program_id,axisB.direction,nc.ordered[nc.ordered.length-1],nc.mode,nc.ordered)},
+    trust_bindings:BUNDLE.trust_bindings,provenance_bindings:BUNDLE.provenance_bindings,
     historical_validation_provenance:BUNDLE.historical_validation_provenance};
   const body=Object.assign({},contract);delete body.full_contract_content_sha256;
   contract.full_contract_content_sha256=await sha256hex(canonicalJSON(body));
@@ -840,24 +850,39 @@ function hashesOk(){return !!(V3_OK&&V3&&BUNDLE&&METHOD_VERSION===V3.method_vers
 // RESEARCH-only readiness gate — Identify-genes is enabled ONLY when this returns ok:true.
 // It decides research readiness from base portability + a concrete shared timepoint. It does NOT
 // consult the frozen 0/33 PRODUCTION-selectability flag (that governs production promotion only).
-// preflight → {ok, sev, reason}. sev drives the single #ctstate box: 'err' (red, hard fault) · 'warn'
-// (amber, correctable/advisory) · 'ok' (accent, ready) · '' (empty selection → box hidden).
+// the temporal estimator is executable only when it is implemented + bound in the served bundle;
+// otherwise a cross-condition selection is awaiting_estimator (button disabled). Mirrors emit_selection_contract.
+function temporalEstimatorAvailable(){
+  if(!BUNDLE)return false;
+  const id=(BUNDLE.estimator_for_mode||{}).temporal_cross_condition||'temporal_cross_condition_v1';
+  return (BUNDLE.implemented_estimators||[]).indexOf(id)>=0;
+}
+// preflight → {ok, sev, reason}. GENERIC selector: any two primary programs, independent directions, and
+// the SAME timepoint (within_condition) OR DIFFERENT timepoints (temporal_cross_condition). sev drives the
+// single #ctstate box: 'err' (hard fault) · 'warn' (correctable/advisory) · 'ok' (ready) · '' (hidden).
 function preflight(){
   if(!REGISTRY_OK)return{ok:false,sev:'warn',reason:'Program registry unavailable — cannot resolve program IDs'};
   if(!axisA.field||!axisB.field)return{ok:false,sev:'',reason:''};                 // partial selection: no advisory line yet
   const A=regByField[axisA.field],B=regByField[axisB.field];
   if(!A||!B)return{ok:false,sev:'warn',reason:'Program registry incomplete for a selected axis'};
   if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,sev:'warn',reason:'A sensitivity field cannot be a contrast axis'};
-  // identical requires same program + direction + CONDITION. Same program/direction across DIFFERENT
-  // timepoints is a temporal cross-condition comparison (awaiting_estimator), NOT identical — this guard
-  // mirrors the routingReason.ts fix (f656d6d); without the condition term it wrongly refused as "identical".
-  if(A.program_id===B.program_id&&axisA.direction===axisB.direction&&axisA.condition===axisB.condition)return{ok:false,sev:'err',reason:'From and To are identical\nPick distinct programs or opposite directions'};
-  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,sev:'warn',reason:'Pick an analysis timepoint (Rest / Stim8hr / Stim48hr)\nPooled “All” is display only'};   // within-condition needs one concrete timepoint
-  if(axisA.condition!==axisB.condition)return{ok:false,sev:'warn',reason:'Cross-condition analysis feature in progress'};   // temporal cross-condition ⇒ awaiting_estimator (never ready)
+  // POLE IDENTITY = (program, direction, condition). Refuse ONLY when all three are identical — same
+  // program+direction at the SAME timepoint (a true self-comparison). Same program+direction at DIFFERENT
+  // timepoints is a VALID temporal comparison (condition disambiguates the poles) and falls through to the
+  // cross-condition route below. Mirrors the emitter (objective_incompatible_same_pole fires only within-condition).
+  if(A.program_id===B.program_id&&axisA.direction===axisB.direction&&axisA.condition===axisB.condition)
+    return{ok:false,sev:'err',reason:'From and To are identical\nPick distinct programs, opposite directions, or different timepoints'};
+  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,sev:'warn',reason:'Pick an analysis timepoint (Rest / Stim8hr / Stim48hr)\nPooled “All” is display only'};   // needs a concrete timepoint per axis
   if(!BASE_PORTABLE[A.program_id])return{ok:false,sev:'warn',reason:stage2Reason(A)};          // Stage-2 base portability (A) from frozen validation: excludes Th9 / nonportable
   if(!BASE_PORTABLE[B.program_id])return{ok:false,sev:'warn',reason:stage2Reason(B)};          // Stage-2 base portability (B) from frozen validation
   if(!hashesOk())return{ok:false,sev:'warn',reason:'Unknown dataset or method hash — cannot build a verifiable contrast'};
-  return{ok:true,sev:'ok',reason:''};
+  // DIFFERENT timepoints = temporal cross-condition: READY when the temporal estimator is available (a v3
+  // temporal_cross_condition contract materializes), else awaiting_estimator.
+  if(axisA.condition!==axisB.condition){
+    if(!temporalEstimatorAvailable())return{ok:false,sev:'warn',reason:'Cross-condition analysis awaits the temporal estimator'};
+    return{ok:true,sev:'ok',reason:''};
+  }
+  return{ok:true,sev:'ok',reason:''};   // within-condition ready
 }
 // base-portability reason (from frozen validation): sensitivity lanes are display-only; a nonportable
 // primary (Th9) has no panel genes in the effect universe.
@@ -883,9 +908,9 @@ function runPreflightUI(){
   }
   err.textContent='';
   btn.disabled=false;btn.classList.add('ready');btn.title='ID program skew genes for this contrast';
-  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.contrast_id;pend.style.display='';pend.textContent=r.contrast_id.slice(0,8);
+  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.selection_id;pend.style.display='';pend.textContent=r.selection_id.slice(0,8);
     if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes the contrast condition (analysis uses '+condShort(axisA.condition)+')';}
-    else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.contrast_id;}
+    else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.selection_id;}
   });
 }
 // The emitted artifact IS the full spot.stage01_selection.v3 contract from computeContrast() (external
