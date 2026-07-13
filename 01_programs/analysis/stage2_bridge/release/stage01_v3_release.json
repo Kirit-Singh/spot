@@ -1,0 +1,149 @@
+{
+  "schema": "spot.stage01_v3_release.v1",
+  "method_version": "stage1-continuous-v3.0.1",
+  "stage1_registry_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
+  "registry_scorer_projection_sha256": "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85",
+  "registry_scorer_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
+  "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
+  "coordinates_sha256": "c3d3a0a752614470693a0148ba37a45cf20aba290a6e54b4f7fa0bc468a6605b",
+  "source_h5ad_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43",
+  "source_hf_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6",
+  "effect_universe_id": "marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad",
+  "selector": {
+    "kind": "generic_continuous_program_selector",
+    "materializer": "stage2_bridge/emit_selection_contract.build_contract",
+    "selection_schema": "spot.stage01_selection.v3",
+    "program_set_source": "v3_scorer_view",
+    "registry_scorer_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
+    "admitted_programs": [
+      "cd4_ctl_like",
+      "diff_activated",
+      "diff_checkpoint",
+      "diff_memory",
+      "diff_naive",
+      "tfh_like",
+      "th17_like",
+      "th1_like",
+      "th2_like",
+      "treg_like"
+    ],
+    "excluded_nonportable": [
+      "th9_like"
+    ],
+    "directions": [
+      "high",
+      "low"
+    ],
+    "conditions": [
+      "Rest",
+      "Stim8hr",
+      "Stim48hr"
+    ],
+    "pathway_sources": [
+      "GO-BP",
+      "Reactome"
+    ],
+    "modes": [
+      "within_condition",
+      "temporal_cross_condition"
+    ],
+    "desired_change_mapping": {
+      "away_from_A(high)": "decrease",
+      "away_from_A(low)": "increase",
+      "toward_B(high)": "increase",
+      "toward_B(low)": "decrease"
+    },
+    "arm_keying": {
+      "direct": "(program, desired_change, condition)",
+      "temporal": "(program, desired_change, from, to)",
+      "pathway": "(program, desired_change, condition, source)"
+    },
+    "arm_topology": {
+      "spec": "ROUND4_ADDENDUM.md",
+      "spec_sha256": "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f",
+      "logical_slots": {
+        "direct": 60,
+        "temporal": 120,
+        "pathway": 120,
+        "total": 300
+      },
+      "physical_bundles": {
+        "direct": 3,
+        "temporal": 6,
+        "pathway": 6,
+        "total": 15
+      },
+      "convergence_artifacts": 6
+    },
+    "selection_capacity": {
+      "n_states_per_condition": 20,
+      "within_condition": 1140,
+      "temporal_cross_condition": 2400,
+      "total": 3540
+    },
+    "pair_semantics": "a pair = a join of two INDEPENDENT per-program reusable arms (away_from_A on A + toward_B on B); no combined/balanced/weighted score; any pair-derived Pareto/concordance is join-time display-only, off by default, not stored, not in this manifest"
+  },
+  "components": {
+    "registry_v3": {
+      "path": "01_programs/app/data/stage01_program_registry_v3.json",
+      "raw_sha256": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664",
+      "canonical_content_sha256": "17eaea374b86d78268c06cfd7d54efa4f47adc2d4a418db1bd7e1e8258834dd5",
+      "role": "program_registry",
+      "universe": "effect_universe_gwcd4i"
+    },
+    "validation": {
+      "path": "01_programs/app/data/stage01_validation.json",
+      "raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+      "canonical_content_sha256": "1ab6c0e0dc7537ca06d94e66d8067581a2690d2653bb7f7354907d1d23ed7dbf",
+      "role": "frozen_validation"
+    },
+    "selectability_v3": {
+      "path": "01_programs/app/data/stage01_selectability_v3.json",
+      "raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+      "canonical_content_sha256": "520c904003015af7a6074cf4311e654b259c638d22384e45ef5bad3ea6657edc",
+      "role": "historical_within_condition_validation",
+      "active_gate": false
+    },
+    "gate_spec": {
+      "path": "01_programs/app/data/stage01_gate_spec.json",
+      "raw_sha256": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
+      "canonical_content_sha256": "14dcd756d595057e1888e71968020ff67f295823898e679431966d3e57ca583b",
+      "role": "pre_registered_gate_spec"
+    },
+    "selection_schema_v3": {
+      "path": "01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json",
+      "raw_sha256": "647e7592fcd7bca5e2123dbd14001dd7684364bf5575c4d6809475b2732b600e",
+      "canonical_content_sha256": "40dcbb5cf7ff8398524557a307e565bda1265c840b7207b4bcb3efa50eaad730",
+      "role": "selection_contract_schema"
+    },
+    "stage2_registry_view": {
+      "path": "01_programs/app/data/stage01_stage2_registry_view.json",
+      "raw_sha256": "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f",
+      "canonical_content_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
+      "role": "executable_scorer_view",
+      "note": "canonical == registry_scorer_view_canonical_sha256; what selection_id binds"
+    },
+    "effect_universe": {
+      "path": "01_programs/analysis/effect_universe_gwcd4i.json",
+      "raw_sha256": "d27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b",
+      "canonical_content_sha256": "8fd8ba97fd9e19455ff75a29645a18c932773d601ce6aa21e352f718a1313eea",
+      "role": "effect_universe_target_space"
+    },
+    "scores_parquet": {
+      "role": "continuous_program_scores_396k",
+      "canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
+      "raw_sha256_staged": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
+      "location": "release_staging_not_served",
+      "n_rows": 396000,
+      "note": "gitignored; regenerated from the public h5ad by gen_stage1_scores_v3.py, proves 43c4296d"
+    },
+    "activation_association": {
+      "path": "01_programs/app/data/stage01_activation_association_v1.json",
+      "raw_sha256": "fd1d9bb0a53ad7ecbde1d9999ccc9bdf8be1cc765f6ff4ef4619a662c4a63c22",
+      "canonical_content_sha256": "12b46364147d501642a8dcc3f07d09f020c1b8f0701e6e3408513126656a7e07",
+      "role": "descriptive_activation_association",
+      "active_gate": false
+    }
+  },
+  "self_release_sha256": "182510e37415f70d892a0f0cd8a66952fbbd344ed0207e6bb1bb711c0c8eb6f1"
+}

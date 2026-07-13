@@ -1,0 +1,466 @@
+{
+ "schema": "spot.stage01_activation_association.v1",
+ "estimand": "spearman_rho_vs_diff_activated_score",
+ "inference_status": "descriptive_only_no_p_q_fdr",
+ "note_scope": "association is confounded by timepoint structure; a residual is a sensitivity check, not deconfounding",
+ "n_cells": 396000,
+ "conditions": [
+  "Rest",
+  "Stim48hr",
+  "Stim8hr"
+ ],
+ "donors": [
+  "D1",
+  "D2",
+  "D3",
+  "D4"
+ ],
+ "programs": {
+  "th1_like_score": {
+   "pooled_rho": 0.381424,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.118863,
+      "D2": -0.160246,
+      "D3": 0.061106,
+      "D4": 0.005555
+     },
+     "max_abs_donor_rho": 0.160246
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.097469,
+      "D2": 0.016406,
+      "D3": 0.152371,
+      "D4": 0.055146
+     },
+     "max_abs_donor_rho": 0.152371
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.242878,
+      "D2": 0.054427,
+      "D3": 0.21925,
+      "D4": 0.190841
+     },
+     "max_abs_donor_rho": 0.242878
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.242878
+  },
+  "th2_like_score": {
+   "pooled_rho": 0.287502,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.08305,
+      "D2": -0.030694,
+      "D3": -0.018185,
+      "D4": -0.062921
+     },
+     "max_abs_donor_rho": 0.08305
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.112186,
+      "D2": 0.081155,
+      "D3": 0.154298,
+      "D4": 0.121876
+     },
+     "max_abs_donor_rho": 0.154298
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.013051,
+      "D2": 0.028259,
+      "D3": -0.020187,
+      "D4": -0.011623
+     },
+     "max_abs_donor_rho": 0.028259
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.154298
+  },
+  "th17_like_score": {
+   "pooled_rho": -0.066791,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": 0.006217,
+      "D2": 0.028786,
+      "D3": -0.019938,
+      "D4": -0.016441
+     },
+     "max_abs_donor_rho": 0.028786
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": -0.015169,
+      "D2": 0.008807,
+      "D3": 0.019007,
+      "D4": -0.008266
+     },
+     "max_abs_donor_rho": 0.019007
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": -0.005196,
+      "D2": -0.006462,
+      "D3": 0.004693,
+      "D4": 0.013517
+     },
+     "max_abs_donor_rho": 0.013517
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.028786
+  },
+  "tfh_like_score": {
+   "pooled_rho": 0.105989,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.032953,
+      "D2": 0.001692,
+      "D3": -0.029785,
+      "D4": -0.047826
+     },
+     "max_abs_donor_rho": 0.047826
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.04018,
+      "D2": -0.004406,
+      "D3": 0.017328,
+      "D4": 0.013508
+     },
+     "max_abs_donor_rho": 0.04018
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.082206,
+      "D2": 0.032857,
+      "D3": 0.039108,
+      "D4": 0.020771
+     },
+     "max_abs_donor_rho": 0.082206
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.082206
+  },
+  "treg_like_score": {
+   "pooled_rho": 0.434988,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.042803,
+      "D2": -0.023464,
+      "D3": 0.044531,
+      "D4": 0.027367
+     },
+     "max_abs_donor_rho": 0.044531
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.238086,
+      "D2": 0.143751,
+      "D3": 0.264324,
+      "D4": 0.214401
+     },
+     "max_abs_donor_rho": 0.264324
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.002681,
+      "D2": 0.036262,
+      "D3": 0.12666,
+      "D4": 0.073462
+     },
+     "max_abs_donor_rho": 0.12666
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.264324
+  },
+  "cd4_ctl_like_score": {
+   "pooled_rho": 0.44656,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": 0.053357,
+      "D2": 0.048868,
+      "D3": 0.082316,
+      "D4": 0.087251
+     },
+     "max_abs_donor_rho": 0.087251
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.302649,
+      "D2": 0.138398,
+      "D3": 0.259185,
+      "D4": 0.188961
+     },
+     "max_abs_donor_rho": 0.302649
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.305832,
+      "D2": 0.171664,
+      "D3": 0.32522,
+      "D4": 0.230364
+     },
+     "max_abs_donor_rho": 0.32522
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.32522
+  },
+  "th9_like_score": {
+   "pooled_rho": -0.040944,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.018122,
+      "D2": -0.001444,
+      "D3": -0.06082,
+      "D4": -0.048244
+     },
+     "max_abs_donor_rho": 0.06082
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.04314,
+      "D2": 0.008131,
+      "D3": 0.04054,
+      "D4": 0.028085
+     },
+     "max_abs_donor_rho": 0.04314
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.004837,
+      "D2": -0.014075,
+      "D3": 0.019393,
+      "D4": 0.025129
+     },
+     "max_abs_donor_rho": 0.025129
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.06082
+  },
+  "diff_naive_score": {
+   "pooled_rho": -0.566503,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.238894,
+      "D2": -0.175869,
+      "D3": -0.331589,
+      "D4": -0.337267
+     },
+     "max_abs_donor_rho": 0.337267
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.232839,
+      "D2": 0.10993,
+      "D3": 0.194142,
+      "D4": 0.081452
+     },
+     "max_abs_donor_rho": 0.232839
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.005782,
+      "D2": -0.083039,
+      "D3": 0.054823,
+      "D4": 0.012228
+     },
+     "max_abs_donor_rho": 0.083039
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.337267
+  },
+  "diff_activated_score": {
+   "pooled_rho": 1.0,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": 1.0,
+      "D2": 1.0,
+      "D3": 1.0,
+      "D4": 1.0
+     },
+     "max_abs_donor_rho": 1.0
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 1.0,
+      "D2": 1.0,
+      "D3": 1.0,
+      "D4": 1.0
+     },
+     "max_abs_donor_rho": 1.0
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 1.0,
+      "D2": 1.0,
+      "D3": 1.0,
+      "D4": 1.0
+     },
+     "max_abs_donor_rho": 1.0
+    }
+   },
+   "max_abs_donor_rho_any_condition": 1.0
+  },
+  "diff_memory_score": {
+   "pooled_rho": -0.502767,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.340346,
+      "D2": -0.291819,
+      "D3": -0.36486,
+      "D4": -0.314918
+     },
+     "max_abs_donor_rho": 0.36486
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.257727,
+      "D2": 0.117048,
+      "D3": 0.2466,
+      "D4": 0.122243
+     },
+     "max_abs_donor_rho": 0.257727
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": -0.086727,
+      "D2": -0.168196,
+      "D3": 0.03866,
+      "D4": -0.08789
+     },
+     "max_abs_donor_rho": 0.168196
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.36486
+  },
+  "diff_checkpoint_score": {
+   "pooled_rho": 0.507425,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.182311,
+      "D2": -0.147704,
+      "D3": -0.047012,
+      "D4": -0.092562
+     },
+     "max_abs_donor_rho": 0.182311
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.348324,
+      "D2": 0.19739,
+      "D3": 0.307525,
+      "D4": 0.257029
+     },
+     "max_abs_donor_rho": 0.348324
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.147495,
+      "D2": 0.05233,
+      "D3": 0.240327,
+      "D4": 0.125211
+     },
+     "max_abs_donor_rho": 0.240327
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.348324
+  },
+  "cd4_ctl_like_score_actadj": {
+   "pooled_rho": 0.035249,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": -0.277482,
+      "D2": -0.434864,
+      "D3": -0.208498,
+      "D4": -0.228423
+     },
+     "max_abs_donor_rho": 0.434864
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 0.039887,
+      "D2": -0.133556,
+      "D3": 0.020763,
+      "D4": -0.057899
+     },
+     "max_abs_donor_rho": 0.133556
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 0.083279,
+      "D2": -0.103326,
+      "D3": 0.059083,
+      "D4": -0.033145
+     },
+     "max_abs_donor_rho": 0.103326
+    }
+   },
+   "max_abs_donor_rho_any_condition": 0.434864
+  }
+ },
+ "pooled_ranking": [
+  [
+   "diff_activated_score",
+   1.0
+  ],
+  [
+   "diff_naive_score",
+   -0.566503
+  ],
+  [
+   "diff_checkpoint_score",
+   0.507425
+  ],
+  [
+   "diff_memory_score",
+   -0.502767
+  ],
+  [
+   "cd4_ctl_like_score",
+   0.44656
+  ],
+  [
+   "treg_like_score",
+   0.434988
+  ],
+  [
+   "th1_like_score",
+   0.381424
+  ],
+  [
+   "th2_like_score",
+   0.287502
+  ],
+  [
+   "tfh_like_score",
+   0.105989
+  ],
+  [
+   "th17_like_score",
+   -0.066791
+  ],
+  [
+   "th9_like_score",
+   -0.040944
+  ],
+  [
+   "cd4_ctl_like_score_actadj",
+   0.035249
+  ]
+ ]
+}

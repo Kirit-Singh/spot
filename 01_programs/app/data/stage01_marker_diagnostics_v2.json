@@ -1,0 +1,5626 @@
+{
+ "schema_version": "spot.stage01_marker_diagnostics.v2",
+ "method_version": "stage1-continuous-v3.0.1",
+ "use_for_eligibility": false,
+ "source_constituent_content_sha256": "1813cab50df528391d5e07dc2503afd65c1d30cbdb2fa1934e2e25840bd2076a",
+ "conditions": [
+  "Rest",
+  "Stim8hr",
+  "Stim48hr"
+ ],
+ "donors": [
+  "D1",
+  "D2",
+  "D3",
+  "D4"
+ ],
+ "n_programs": 11,
+ "programs": [
+  {
+   "program_id": "cd4_ctl_like",
+   "n_markers": 6,
+   "markers": [
+    {
+     "removed_marker": "GNLY",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9419493204161437,
+       "max_leave_one_marker_out_shift": 0.2203263042000521,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9812063669581127,
+         "shift": 0.21611335333698586,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9825594403761322,
+         "shift": 0.2203263042000521,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9419493204161437,
+         "shift": 0.18054541350263656,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.966590626386021,
+         "shift": 0.1615199890435673,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9614148909352841,
+       "max_leave_one_marker_out_shift": 0.3839801565368774,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9957880117397808,
+         "shift": 0.22007858791374846,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9958971608792516,
+         "shift": 0.3033482878333183,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9614148909352841,
+         "shift": 0.3839801565368774,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9832429724013269,
+         "shift": 0.3460076339548492,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9666778304419222,
+       "max_leave_one_marker_out_shift": 0.2434041665773102,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.989999590063603,
+         "shift": 0.14811577017828134,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9832338368470526,
+         "shift": 0.2434041665773102,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9666778304419222,
+         "shift": 0.18683015797416355,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9856410312507956,
+         "shift": 0.20534870110079637,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "GZMB",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8972806675847664,
+       "max_leave_one_marker_out_shift": 0.21301375848665158,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9573837051170137,
+         "shift": 0.19062224046325604,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9518883763815833,
+         "shift": 0.21301375848665158,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8972806675847664,
+         "shift": 0.20117865839928162,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.917630663195747,
+         "shift": 0.16693082730482411,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8184952717153954,
+       "max_leave_one_marker_out_shift": 1.1899237314433537,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8868312705512684,
+         "shift": 0.43384433028646313,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8184952717153954,
+         "shift": 0.8696694185491193,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.944394555127258,
+         "shift": 1.1899237314433537,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9185152865920055,
+         "shift": 0.977466191652686,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8329995943845039,
+       "max_leave_one_marker_out_shift": 0.6031074258461223,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8508131984309022,
+         "shift": 0.2398178612787381,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8329995943845039,
+         "shift": 0.6031074258461223,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8794498189902575,
+         "shift": 0.5321613054175656,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8413862978028981,
+         "shift": 0.46560474912137034,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "GZMH",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9944692432685107,
+       "max_leave_one_marker_out_shift": 0.2217635632340376,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9965177711135615,
+         "shift": 0.21215759508665605,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.999535083563983,
+         "shift": 0.2217635632340376,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9972007188402315,
+         "shift": 0.1898631277941599,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9944692432685107,
+         "shift": 0.15571449618066954,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9833069346035864,
+       "max_leave_one_marker_out_shift": 0.40214478763679096,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9960987391335191,
+         "shift": 0.19924212180866616,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9946404568855525,
+         "shift": 0.28307999242528026,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9923256844422796,
+         "shift": 0.40214478763679096,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9833069346035864,
+         "shift": 0.3067053495088715,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9931375683909548,
+       "max_leave_one_marker_out_shift": 0.2585245470067443,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9971826790590821,
+         "shift": 0.14796218733403396,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9978411556911356,
+         "shift": 0.2585245470067443,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9977385787423972,
+         "shift": 0.20987688497526982,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9931375683909548,
+         "shift": 0.18655073425640425,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "KLRD1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.999760055674497,
+       "max_leave_one_marker_out_shift": 0.22353634109514145,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9999374716181416,
+         "shift": 0.22353634109514145,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.999760055674497,
+         "shift": 0.22217114403718155,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9998865991865296,
+         "shift": 0.2008133670131109,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9998901506727847,
+         "shift": 0.16989050178196843,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.999493653723651,
+       "max_leave_one_marker_out_shift": 0.4362752965604748,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.999924740740366,
+         "shift": 0.22931711385705317,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.999493653723651,
+         "shift": 0.3103009763268668,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9996588668374877,
+         "shift": 0.4362752965604748,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9997306075272572,
+         "shift": 0.369849839562918,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.999745965240701,
+       "max_leave_one_marker_out_shift": 0.26874201116402646,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9999481562974963,
+         "shift": 0.16707110513571277,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.999745965240701,
+         "shift": 0.26874201116402646,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9999530221430811,
+         "shift": 0.22531880830338274,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.999912747177365,
+         "shift": 0.22813638021001548,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "NKG7",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8168685074361897,
+       "max_leave_one_marker_out_shift": 0.264654755525119,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8468964998320995,
+         "shift": 0.26279135925630887,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8168685074361897,
+         "shift": 0.264654755525119,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9458089417575791,
+         "shift": 0.15360669490623038,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9293033928775207,
+         "shift": 0.16110893889494993,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.94793494642967,
+       "max_leave_one_marker_out_shift": 0.16840682039094074,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9647360906743951,
+         "shift": 0.13454044144583155,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9560163466462916,
+         "shift": 0.15011786569040156,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.94793494642967,
+         "shift": 0.16840682039094074,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9513307206156683,
+         "shift": 0.16225780375503135,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9497556779561594,
+       "max_leave_one_marker_out_shift": 0.19117117216696147,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9587543942570443,
+         "shift": 0.14073496215386255,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9497556779561594,
+         "shift": 0.19117117216696147,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.972232691147082,
+         "shift": 0.11428178456952487,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.962123047586339,
+         "shift": 0.1421803516540721,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "PRF1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.746295621111058,
+       "max_leave_one_marker_out_shift": 0.5830042037059001,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8650379580035984,
+         "shift": 0.5097140920495868,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.746295621111058,
+         "shift": 0.5830042037059001,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9233788617942743,
+         "shift": 0.311201373097757,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.892683592132106,
+         "shift": 0.3021770387441999,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9306728445796925,
+       "max_leave_one_marker_out_shift": 0.20268050271981494,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9547376576654264,
+         "shift": 0.17152723330365038,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9389884858191286,
+         "shift": 0.17822729712345164,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9306728445796925,
+         "shift": 0.19994204884941524,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.930738990206307,
+         "shift": 0.20268050271981494,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9490643324590247,
+       "max_leave_one_marker_out_shift": 0.1646495275074478,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9586842971133255,
+         "shift": 0.11893252370726377,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9490643324590247,
+         "shift": 0.1646495275074478,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9661349787612552,
+         "shift": 0.12338948295263513,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9613441001497384,
+         "shift": 0.13380145751624153,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "PRF1",
+     "min_leave_one_marker_out_rho": 0.746295621111058
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "GZMB",
+     "min_leave_one_marker_out_rho": 0.8184952717153954
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "GZMB",
+     "min_leave_one_marker_out_rho": 0.8329995943845039
+    }
+   ]
+  },
+  {
+   "program_id": "diff_activated",
+   "n_markers": 5,
+   "markers": [
+    {
+     "removed_marker": "CD38",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9583305223164372,
+       "max_leave_one_marker_out_shift": 0.19758101403154552,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9844595255283742,
+         "shift": 0.16506690323310427,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9762469224267215,
+         "shift": 0.19758101403154552,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9583305223164372,
+         "shift": 0.19358749125947636,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9654173147687314,
+         "shift": 0.17051120323891522,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8899040810719914,
+       "max_leave_one_marker_out_shift": 0.6767207559751659,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9341546762583668,
+         "shift": 0.6767207559751659,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9300491375365623,
+         "shift": 0.6521052465240681,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8899040810719914,
+         "shift": 0.4133905715300153,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9062355481769713,
+         "shift": 0.49209558565216255,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8931416039097059,
+       "max_leave_one_marker_out_shift": 0.7556923384044518,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9379119230557084,
+         "shift": 0.7556923384044518,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9173734200188873,
+         "shift": 0.6998173604045721,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8931416039097059,
+         "shift": 0.5711522325270755,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9123139192398402,
+         "shift": 0.7162537364270346,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "CD69",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9144257443236248,
+       "max_leave_one_marker_out_shift": 0.1874958769895003,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9144257443236248,
+         "shift": 0.16106519746408915,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9478628593394248,
+         "shift": 0.1874958769895003,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9442796490280546,
+         "shift": 0.18325530249219257,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9561885744170054,
+         "shift": 0.174013929292191,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8538221294526791,
+       "max_leave_one_marker_out_shift": 0.4460840714201589,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.853939990329955,
+         "shift": 0.33663140059427304,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8577568347057543,
+         "shift": 0.39886699795956954,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8683816150725898,
+         "shift": 0.4460840714201589,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8538221294526791,
+         "shift": 0.39587328793991233,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8354985597863189,
+       "max_leave_one_marker_out_shift": 0.5834099912453753,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8512715433386244,
+         "shift": 0.41190131518159295,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8354985597863189,
+         "shift": 0.4337163030369374,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8808922660312964,
+         "shift": 0.4773987161773913,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8857980443058557,
+         "shift": 0.5834099912453753,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL2RA",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8925250568418104,
+       "max_leave_one_marker_out_shift": 0.23351607903154084,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.936317785513301,
+         "shift": 0.167272033405318,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8925250568418104,
+         "shift": 0.23351607903154084,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.898731383980015,
+         "shift": 0.20699800051299871,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.909930270316613,
+         "shift": 0.1871073653026194,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9157997937533388,
+       "max_leave_one_marker_out_shift": 1.126320666743067,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9404162474886882,
+         "shift": 1.126320666743067,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9391481016630084,
+         "shift": 1.087229901894729,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9205594965759084,
+         "shift": 0.972719453221288,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9157997937533388,
+         "shift": 0.8889861064498827,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9030476144960942,
+       "max_leave_one_marker_out_shift": 1.3608138676217634,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9078680501587677,
+         "shift": 1.3608138676217634,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9053675632207691,
+         "shift": 1.3569661447338288,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9096217626029846,
+         "shift": 1.1554706473468923,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9030476144960942,
+         "shift": 1.3476824831155578,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "MKI67",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.5535946811144762,
+       "max_leave_one_marker_out_shift": 0.3291238704855382,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.580800287634363,
+         "shift": 0.24419194759890978,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.5535946811144762,
+         "shift": 0.2831698069559528,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7286729080205347,
+         "shift": 0.3291238704855382,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.669447477599469,
+         "shift": 0.3068272201649158,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.7858344327941392,
+       "max_leave_one_marker_out_shift": 0.5798364918181189,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8233320410597428,
+         "shift": 0.5798364918181189,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7858344327941392,
+         "shift": 0.564879247327206,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8392447010234017,
+         "shift": 0.4719513022026174,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8373660469095415,
+         "shift": 0.5060268999302022,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.774328501712848,
+       "max_leave_one_marker_out_shift": 0.49424796605999705,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8453953184676603,
+         "shift": 0.3632093599381878,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.774328501712848,
+         "shift": 0.4336027074855778,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8380275576163905,
+         "shift": 0.396979455759326,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8222616563150726,
+         "shift": 0.49424796605999705,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "TNFRSF9",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9918538839961298,
+       "max_leave_one_marker_out_shift": 0.2221251254606293,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.992352869558154,
+         "shift": 0.17110706789468158,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9931311846728617,
+         "shift": 0.21017500211808895,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9918538839961298,
+         "shift": 0.2221251254606293,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9944256474967802,
+         "shift": 0.19600762262160404,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.75070019925904,
+       "max_leave_one_marker_out_shift": 0.44472063992238897,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.75070019925904,
+         "shift": 0.4403238706719794,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7712619293502346,
+         "shift": 0.44472063992238897,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7990621685570505,
+         "shift": 0.35797599335447045,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8011941608528653,
+         "shift": 0.4062424550929832,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8855806994452297,
+       "max_leave_one_marker_out_shift": 0.6247825109695029,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8948535213783664,
+         "shift": 0.5765204889603022,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.908600823376814,
+         "shift": 0.6247825109695029,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8912423044037262,
+         "shift": 0.4806222155825669,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8855806994452297,
+         "shift": 0.5762753470141226,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "MKI67",
+     "min_leave_one_marker_out_rho": 0.5535946811144762
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "TNFRSF9",
+     "min_leave_one_marker_out_rho": 0.75070019925904
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "MKI67",
+     "min_leave_one_marker_out_rho": 0.774328501712848
+    }
+   ]
+  },
+  {
+   "program_id": "diff_checkpoint",
+   "n_markers": 6,
+   "markers": [
+    {
+     "removed_marker": "ENTPD1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9750157340637081,
+       "max_leave_one_marker_out_shift": 0.11034781693076301,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9845313318955403,
+         "shift": 0.10384980423398645,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9769973160828836,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9935810335048458,
+         "shift": 0.11034781693076301,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9750157340637081,
+         "shift": 0.09351526928337747,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9819765551208588,
+       "max_leave_one_marker_out_shift": 0.25488198211040186,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9926255040393764,
+         "shift": 0.19992145311973836,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9819765551208588,
+         "shift": 0.1922294305661409,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9984482582981749,
+         "shift": 0.25488198211040186,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9921744063396203,
+         "shift": 0.18821948414364842,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9256080033042464,
+       "max_leave_one_marker_out_shift": 0.2593999450948784,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.957044629806976,
+         "shift": 0.215902324257983,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9256080033042464,
+         "shift": 0.24028842353917856,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.988629432448141,
+         "shift": 0.25274811681936366,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9416630215768587,
+         "shift": 0.2593999450948784,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "HAVCR2",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.3107622093439082,
+       "max_leave_one_marker_out_shift": 0.3977691755427863,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.3107622093439082,
+         "shift": 0.3977691755427863,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.47452135438415155,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.5690095881645726,
+         "shift": 0.3271782902967642,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.5081880589605294,
+         "shift": 0.15667759014633648,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8451834937283962,
+       "max_leave_one_marker_out_shift": 0.32290339716637206,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8463932483179097,
+         "shift": 0.32290339716637206,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8451834937283962,
+         "shift": 0.2824200662418458,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8895599140777187,
+         "shift": 0.2622946688983896,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8913936311933237,
+         "shift": 0.21878380502248046,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8981461721931139,
+       "max_leave_one_marker_out_shift": 0.2537384340028092,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9131437926481397,
+         "shift": 0.22824225418625477,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8981461721931139,
+         "shift": 0.2537384340028092,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9011505490619254,
+         "shift": 0.23680668539579527,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9051864023712874,
+         "shift": 0.23482364701831834,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "LAG3",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9149945093215275,
+       "max_leave_one_marker_out_shift": 0.118891854394174,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9804167751314847,
+         "shift": 0.10405643484471089,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9813230289338523,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9149945093215275,
+         "shift": 0.118891854394174,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9541417670293658,
+         "shift": 0.09502191330691387,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.7291806315517223,
+       "max_leave_one_marker_out_shift": 0.6381227102623259,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7291806315517223,
+         "shift": 0.338035267187355,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7588836732579497,
+         "shift": 0.29507961973093233,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.775035982833105,
+         "shift": 0.6381227102623259,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7528526414393227,
+         "shift": 0.45345545205196214,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.7770820733041807,
+       "max_leave_one_marker_out_shift": 0.7758134883416677,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8017227377975682,
+         "shift": 0.6337513984193516,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7786348924308114,
+         "shift": 0.5895494610817675,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7770820733041807,
+         "shift": 0.720565191139141,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7824966395359456,
+         "shift": 0.7758134883416677,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "PDCD1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9911905239421351,
+       "max_leave_one_marker_out_shift": 0.10971058428189388,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9942918799165621,
+         "shift": 0.10289661655365079,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9911905239421351,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9925323416539178,
+         "shift": 0.10971058428189388,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9929352502142617,
+         "shift": 0.09147003933377418,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9586873042434823,
+       "max_leave_one_marker_out_shift": 0.20028204601489316,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9667427003960213,
+         "shift": 0.17665944736847647,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9607430740053987,
+         "shift": 0.1758691004372953,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9672979471621168,
+         "shift": 0.20028204601489316,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9586873042434823,
+         "shift": 0.16363574368991718,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9821961257865446,
+       "max_leave_one_marker_out_shift": 0.24816447223353413,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9840891397060652,
+         "shift": 0.21086998169641558,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.987037906392763,
+         "shift": 0.2478170114629171,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9895684491187239,
+         "shift": 0.23571401969513409,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9821961257865446,
+         "shift": 0.24816447223353413,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "TIGIT",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9616257326020938,
+       "max_leave_one_marker_out_shift": 0.11039978434095253,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9931900912850654,
+         "shift": 0.10293955802910426,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9616257326020938,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.982741017721561,
+         "shift": 0.11039978434095253,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9933769788130176,
+         "shift": 0.09149325684980442,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9656195396934448,
+       "max_leave_one_marker_out_shift": 0.2363925026492419,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9907342407451311,
+         "shift": 0.20040294377833487,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9656195396934448,
+         "shift": 0.19526213300305711,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9785545026051665,
+         "shift": 0.2363925026492419,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.992108088934485,
+         "shift": 0.19033175139534744,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9603585650422115,
+       "max_leave_one_marker_out_shift": 0.2727136360037128,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9886417485813349,
+         "shift": 0.2385042776029524,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9603585650422115,
+         "shift": 0.25314132398522676,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9731841523396078,
+         "shift": 0.23797015121755144,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9835944241151121,
+         "shift": 0.2727136360037128,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "TOX",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9729820839581933,
+       "max_leave_one_marker_out_shift": 0.11032535180204012,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.997875553859859,
+         "shift": 0.10283840460492005,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9729820839581933,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9897009713275643,
+         "shift": 0.11032535180204012,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.987163156395496,
+         "shift": 0.0919308621436868,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9940162688748618,
+       "max_leave_one_marker_out_shift": 0.24268753348457295,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9992301865543118,
+         "shift": 0.20504687320041165,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9945732083427381,
+         "shift": 0.19556163361842027,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9940162688748618,
+         "shift": 0.24268753348457295,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.998214705549738,
+         "shift": 0.1923670664152402,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9906359921839365,
+       "max_leave_one_marker_out_shift": 0.2871162723977374,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9989376114863087,
+         "shift": 0.2516213198116133,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.991748034466698,
+         "shift": 0.2614692005716723,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9906359921839365,
+         "shift": 0.24478343771133704,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9959651229474705,
+         "shift": 0.2871162723977374,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "HAVCR2",
+     "min_leave_one_marker_out_rho": 0.3107622093439082
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "LAG3",
+     "min_leave_one_marker_out_rho": 0.7291806315517223
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "LAG3",
+     "min_leave_one_marker_out_rho": 0.7770820733041807
+    }
+   ]
+  },
+  {
+   "program_id": "diff_memory",
+   "n_markers": 6,
+   "markers": [
+    {
+     "removed_marker": "CD27",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8706030351455399,
+       "max_leave_one_marker_out_shift": 0.26982240374675065,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8706030351455399,
+         "shift": 0.2546610563437477,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8796695521713249,
+         "shift": 0.2437138884385224,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8890236683608348,
+         "shift": 0.2637535594577174,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8822178968974395,
+         "shift": 0.26982240374675065,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8719604108406394,
+       "max_leave_one_marker_out_shift": 0.2714722244501242,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8725307292917647,
+         "shift": 0.26989724381648145,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8719604108406394,
+         "shift": 0.2714722244501242,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8967037641397637,
+         "shift": 0.2683544900760099,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.885842186954191,
+         "shift": 0.2670411542996934,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9315655270927402,
+       "max_leave_one_marker_out_shift": 0.3446603135440704,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9454180188568105,
+         "shift": 0.2450029763617666,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9315655270927402,
+         "shift": 0.2711402360649425,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9613913733309879,
+         "shift": 0.3446603135440704,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9342921793026487,
+         "shift": 0.30288592400999576,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "CD58",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9366613466000338,
+       "max_leave_one_marker_out_shift": 0.6947956155024728,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9366613466000338,
+         "shift": 0.6488662161201287,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9553926063724535,
+         "shift": 0.6947956155024728,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9464985559873912,
+         "shift": 0.3835488035047716,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9385568165951519,
+         "shift": 0.46409158589741695,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9541229770352533,
+       "max_leave_one_marker_out_shift": 0.3317887211646474,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9579583775777535,
+         "shift": 0.27038237232188356,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9615784814301157,
+         "shift": 0.3317887211646474,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9577620583506568,
+         "shift": 0.20899200756545466,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9541229770352533,
+         "shift": 0.23137903582075003,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9508236691934022,
+       "max_leave_one_marker_out_shift": 0.27523205169262993,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9635458237981113,
+         "shift": 0.20913122022496247,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.959882968214237,
+         "shift": 0.27523205169262993,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9508236691934022,
+         "shift": 0.1851611496938781,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9523438944180107,
+         "shift": 0.22429033398506046,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "FAS",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9102754953999665,
+       "max_leave_one_marker_out_shift": 0.46489588193841175,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9102754953999665,
+         "shift": 0.4425237543962969,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9218795516803199,
+         "shift": 0.46489588193841175,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9400498000579552,
+         "shift": 0.35899579054952424,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9314029422182053,
+         "shift": 0.41142789952957476,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9424885817563273,
+       "max_leave_one_marker_out_shift": 0.29659570896793713,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9460666617086256,
+         "shift": 0.2777012636142998,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9424885817563273,
+         "shift": 0.29659570896793713,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9537683906976683,
+         "shift": 0.27590583657320733,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.953640184830053,
+         "shift": 0.2959058153662953,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9477563050722488,
+       "max_leave_one_marker_out_shift": 0.27120753340968606,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9599074490586242,
+         "shift": 0.23187106428031382,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9477563050722488,
+         "shift": 0.23912279057295033,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9501983557861989,
+         "shift": 0.21892504770159277,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9535414207757937,
+         "shift": 0.27120753340968606,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "ITGA4",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8981419375086097,
+       "max_leave_one_marker_out_shift": 0.45069779305352003,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9100878824372677,
+         "shift": 0.377321039787974,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9103429270002704,
+         "shift": 0.45069779305352003,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9102775760705707,
+         "shift": 0.29464731425234475,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8981419375086097,
+         "shift": 0.2913351718261372,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9301949545343744,
+       "max_leave_one_marker_out_shift": 0.19719512937803732,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9340004788550677,
+         "shift": 0.1884768050686703,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9341595621974061,
+         "shift": 0.18990547562916843,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9340102271435547,
+         "shift": 0.18842152240897445,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9301949545343744,
+         "shift": 0.19719512937803732,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9271715133723578,
+       "max_leave_one_marker_out_shift": 0.22694508956127618,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.941725774212114,
+         "shift": 0.20117699432277264,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9341444543097189,
+         "shift": 0.1908379268608529,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9344605449115392,
+         "shift": 0.20218326012950769,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9271715133723578,
+         "shift": 0.22694508956127618,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "ITGAL",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9154362986940308,
+       "max_leave_one_marker_out_shift": 0.21644296100408536,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9316784414955771,
+         "shift": 0.21644296100408536,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9154362986940308,
+         "shift": 0.19191903005612085,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.932791737450999,
+         "shift": 0.20019790427391732,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9244283300242306,
+         "shift": 0.21253223209115354,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9210388546819883,
+       "max_leave_one_marker_out_shift": 0.216635329276373,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9250753812174456,
+         "shift": 0.19860986698946514,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9210388546819883,
+         "shift": 0.216635329276373,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9334537900034396,
+         "shift": 0.20005085795771368,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9237043227827583,
+         "shift": 0.20457919104366867,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9358455556594767,
+       "max_leave_one_marker_out_shift": 0.20977305364737217,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9468015870257069,
+         "shift": 0.16236188023215575,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9358455556594767,
+         "shift": 0.20977305364737217,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9410096602923758,
+         "shift": 0.20570852844468643,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9370217613972818,
+         "shift": 0.1959445103077342,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "S100A4",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8979905321924891,
+       "max_leave_one_marker_out_shift": 0.9356181571733032,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9391470489524624,
+         "shift": 0.8653764924264784,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9230474434063984,
+         "shift": 0.9356181571733032,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8979905321924891,
+         "shift": 0.7106843391762534,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.92216890958063,
+         "shift": 0.8420112365744546,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8890120098997509,
+       "max_leave_one_marker_out_shift": 0.5930342769928828,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9244215297994937,
+         "shift": 0.4092400836291878,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9144126853020804,
+         "shift": 0.5930342769928828,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8890120098997509,
+         "shift": 0.43709873630145385,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9107990798149189,
+         "shift": 0.5405060174301937,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8753491628894661,
+       "max_leave_one_marker_out_shift": 0.5745803685768368,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8921800624381119,
+         "shift": 0.45433248565988255,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8846939072947175,
+         "shift": 0.5745803685768368,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8753491628894661,
+         "shift": 0.44233348759484753,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8954433211206952,
+         "shift": 0.4968280932906054,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "CD27",
+     "min_leave_one_marker_out_rho": 0.8706030351455399
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "CD27",
+     "min_leave_one_marker_out_rho": 0.8719604108406394
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "S100A4",
+     "min_leave_one_marker_out_rho": 0.8753491628894661
+    }
+   ]
+  },
+  {
+   "program_id": "diff_naive",
+   "n_markers": 6,
+   "markers": [
+    {
+     "removed_marker": "CCR7",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9816208483873298,
+       "max_leave_one_marker_out_shift": 0.5833646216950685,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9851971881653211,
+         "shift": 0.5833646216950685,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9865082782073644,
+         "shift": 0.5249229246229998,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.988701811494272,
+         "shift": 0.4596103761174466,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9816208483873298,
+         "shift": 0.4372189338747517,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9077890533513453,
+       "max_leave_one_marker_out_shift": 0.2824001710863189,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9077890533513453,
+         "shift": 0.2824001710863189,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9215269500054261,
+         "shift": 0.234141772102951,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9107341919867833,
+         "shift": 0.24080764574107563,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9092708584478245,
+         "shift": 0.2359640891915407,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9208143379257226,
+       "max_leave_one_marker_out_shift": 0.27047675774464314,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9208143379257226,
+         "shift": 0.2581178145231416,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9299303123644274,
+         "shift": 0.27047675774464314,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9407802239047043,
+         "shift": 0.24861485858137455,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9265454833847855,
+         "shift": 0.24853390823620092,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL7R",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8458736887355942,
+       "max_leave_one_marker_out_shift": 0.37644552283724864,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8734696106611144,
+         "shift": 0.37644552283724864,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8982446190002771,
+         "shift": 0.2722483553158507,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8458736887355942,
+         "shift": 0.30745686897127616,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8781858729997024,
+         "shift": 0.2828687102121742,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.954932923150638,
+       "max_leave_one_marker_out_shift": 0.261011019393992,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9586982971618606,
+         "shift": 0.261011019393992,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9564846511877775,
+         "shift": 0.2060192158468847,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9593867713393093,
+         "shift": 0.22454742849282175,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.954932923150638,
+         "shift": 0.22460710283388766,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9509908398073972,
+       "max_leave_one_marker_out_shift": 0.28307089804450614,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9545616881461778,
+         "shift": 0.26897417699641457,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9790616064748678,
+         "shift": 0.28307089804450614,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9740076994302331,
+         "shift": 0.2538746930466405,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9509908398073972,
+         "shift": 0.2736263634306821,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "LEF1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9283872886091323,
+       "max_leave_one_marker_out_shift": 0.20044867509314424,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9354261582519896,
+         "shift": 0.17674690119814437,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9416390797877567,
+         "shift": 0.16550472072263975,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9283872886091323,
+         "shift": 0.20044867509314424,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9408304629423131,
+         "shift": 0.17988044126169433,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.927653290698201,
+       "max_leave_one_marker_out_shift": 0.20693552722185232,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9351479555751864,
+         "shift": 0.20693552722185232,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9571540236653976,
+         "shift": 0.16975878686792156,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.927653290698201,
+         "shift": 0.2006740569849199,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9428837920752235,
+         "shift": 0.18515806134924698,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9517129889649929,
+       "max_leave_one_marker_out_shift": 0.24254087982433573,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9545414065446033,
+         "shift": 0.2138951818893859,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9579640316533852,
+         "shift": 0.24254087982433573,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9517129889649929,
+         "shift": 0.2193636373108593,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9596918341558713,
+         "shift": 0.20850366884222435,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "MAL",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9144991455592615,
+       "max_leave_one_marker_out_shift": 0.7868604995306023,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9577069788350309,
+         "shift": 0.6557482827408507,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9509179872672169,
+         "shift": 0.5799449194457769,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9144991455592615,
+         "shift": 0.7868604995306023,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9549522694336232,
+         "shift": 0.6170807351572574,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8433722525367945,
+       "max_leave_one_marker_out_shift": 0.28755607990789395,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8433722525367945,
+         "shift": 0.28755607990789395,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8932307754173007,
+         "shift": 0.22410753876214362,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8467978342669988,
+         "shift": 0.2575975235514647,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8833543118445779,
+         "shift": 0.2297043767087666,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.6693825606078657,
+       "max_leave_one_marker_out_shift": 0.7357492542939326,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7393756624878253,
+         "shift": 0.5807786843799398,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8056489774021949,
+         "shift": 0.7357492542939326,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.6693825606078657,
+         "shift": 0.6851282113550528,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8135797731034847,
+         "shift": 0.6586381272896933,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "SELL",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9073105922261906,
+       "max_leave_one_marker_out_shift": 0.26708677685814275,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9082698782094845,
+         "shift": 0.21408593904289927,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9073105922261906,
+         "shift": 0.24487936170297805,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9121084903210368,
+         "shift": 0.26708677685814275,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9171015943968346,
+         "shift": 0.22146576849237734,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.825312550108615,
+       "max_leave_one_marker_out_shift": 0.4565302788644193,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8269698556341195,
+         "shift": 0.4565302788644193,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8766419816454912,
+         "shift": 0.37580644286611253,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.825312550108615,
+         "shift": 0.28155773843029136,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8532098024974345,
+         "shift": 0.33790111947902773,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8499640451885483,
+       "max_leave_one_marker_out_shift": 0.26890800903254025,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8820889703100604,
+         "shift": 0.24224066455967602,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8499640451885483,
+         "shift": 0.26890800903254025,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9018457351603548,
+         "shift": 0.23009736280391893,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8915750202022387,
+         "shift": 0.23285225167663495,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "TCF7",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9130519799799472,
+       "max_leave_one_marker_out_shift": 0.38143949360231355,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9130519799799472,
+         "shift": 0.3267430647309426,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9261556968078177,
+         "shift": 0.31712911013926703,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9566279770516161,
+         "shift": 0.38143949360231355,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9495448380405207,
+         "shift": 0.35135921715260865,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9775169819461292,
+       "max_leave_one_marker_out_shift": 0.30689361748752353,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9907645602955252,
+         "shift": 0.30689361748752353,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9839487097597857,
+         "shift": 0.2377899323939268,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9920368530593685,
+         "shift": 0.2485178699102164,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9775169819461292,
+         "shift": 0.2366307061115163,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.991949290570861,
+       "max_leave_one_marker_out_shift": 0.30170006761828355,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9958473519936939,
+         "shift": 0.2941168735861854,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9979532235990954,
+         "shift": 0.30170006761828355,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9989312556157129,
+         "shift": 0.2653538540198698,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.991949290570861,
+         "shift": 0.2997182651348311,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "IL7R",
+     "min_leave_one_marker_out_rho": 0.8458736887355942
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "SELL",
+     "min_leave_one_marker_out_rho": 0.825312550108615
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "MAL",
+     "min_leave_one_marker_out_rho": 0.6693825606078657
+    }
+   ]
+  },
+  {
+   "program_id": "tfh_like",
+   "n_markers": 3,
+   "markers": [
+    {
+     "removed_marker": "BCL6",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.1887415852571661,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.20041053016221688,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.1887415852571661,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.41692566548865057,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.3440987765499517,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.6632758591702361,
+       "max_leave_one_marker_out_shift": 0.0,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.6632758591702361,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.6850873934955144,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7810964014522138,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.6953775859000234,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.48807080417961685,
+       "max_leave_one_marker_out_shift": 0.0,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.6470103500332964,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.48807080417961685,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.5294130103647996,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.6293761078066415,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "CXCR5",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9611792278530318,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9888054067660033,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9902205414479298,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9611792278530318,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9752144380818965,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8645362362535501,
+       "max_leave_one_marker_out_shift": 0.0,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8755087814342912,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8763021938925726,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8645362362535501,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8743061229754646,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9175330679931833,
+       "max_leave_one_marker_out_shift": 0.0,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9192232994609157,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9511954945575803,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9286202413590812,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9175330679931833,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL21",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9617242452508747,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9907377871859324,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9908195652662728,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9617242452508747,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9684476213986933,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.824393853159166,
+       "max_leave_one_marker_out_shift": 0.0,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8967158545599357,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8848200378990541,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.824393853159166,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8719175002699998,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8627930087154723,
+       "max_leave_one_marker_out_shift": 0.0,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8627930087154723,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9207981489006141,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9152360097639214,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.879947016078204,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "BCL6",
+     "min_leave_one_marker_out_rho": 0.1887415852571661
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "BCL6",
+     "min_leave_one_marker_out_rho": 0.6632758591702361
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "BCL6",
+     "min_leave_one_marker_out_rho": 0.48807080417961685
+    }
+   ]
+  },
+  {
+   "program_id": "th17_like",
+   "n_markers": 6,
+   "markers": [
+    {
+     "removed_marker": "CCR6",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.7051122276102721,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7051122276102721,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7753585879385911,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8178980164732226,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8834795511631148,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8980369481631496,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9083328714588061,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9410026189866522,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8980369481631496,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9707347988904681,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.933435527936311,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9726910888157996,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.943013150618316,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.933435527936311,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9692653090658171,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL17A",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9743827556538511,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9880171328409895,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9743827556538511,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9992882060827744,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9996126906362599,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9188013785196997,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9700729394784336,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9188013785196997,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9957276769809497,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9925020220256326,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9930536240935988,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.99916917231861,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9930536240935988,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9991438118745969,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9980295000543373,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL17F",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9487943471278718,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9705148923303819,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9487943471278718,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9929443161789211,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.995228255908151,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8102385496884366,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8705269971757535,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8102385496884366,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9810112640374566,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9509713296177533,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9730591251590212,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9898714355182953,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9730591251590212,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9942806848476509,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9859257384891583,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL23R",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9201101720137969,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9980213384500665,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9962997152831573,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9201101720137969,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9673200323293422,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8686109853949506,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9354596318449474,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9930722713394468,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8686109853949506,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9302922378811516,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.38943748184941523,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.38943748184941523,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7382908138244932,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.5756462183376377,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.5573165159280921,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "KLRB1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.746654078521101,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9467291855335944,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8944467870155927,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7710489218548772,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.746654078521101,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9404146252443896,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.961703337245055,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9637109774538624,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9549616118262272,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9404146252443896,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9396291552840068,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9919606033894385,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.940581797558453,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9476806224563227,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9396291552840068,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "RORC",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8463946748622821,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8463946748622821,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9415624201645919,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.948377620064166,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8741933159866394,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.6554318922754,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8533603262701183,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8704852539532297,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7609848218574657,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.6554318922754,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8795232022434667,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9719329171679251,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8795232022434667,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9581865404657097,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9506114835837076,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "CCR6",
+     "min_leave_one_marker_out_rho": 0.7051122276102721
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "RORC",
+     "min_leave_one_marker_out_rho": 0.6554318922754
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "IL23R",
+     "min_leave_one_marker_out_rho": 0.38943748184941523
+    }
+   ]
+  },
+  {
+   "program_id": "th1_like",
+   "n_markers": 4,
+   "markers": [
+    {
+     "removed_marker": "CXCR3",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.7641729607325386,
+       "max_leave_one_marker_out_shift": 0.5848723435562414,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7641729607325386,
+         "shift": 0.5848723435562414,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7777442046935299,
+         "shift": 0.19385610992980717,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8109837816116575,
+         "shift": 0.37628091345809217,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7718808321805967,
+         "shift": 0.40919565484230425,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.953161394682276,
+       "max_leave_one_marker_out_shift": 0.45054766086323855,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9654581824842902,
+         "shift": 0.45054766086323855,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.953161394682276,
+         "shift": 0.29297442789410677,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9673495550580592,
+         "shift": 0.4264175296554205,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.96097551696941,
+         "shift": 0.40055350592320016,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8822064461758654,
+       "max_leave_one_marker_out_shift": 0.2615953752817548,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9455617166686474,
+         "shift": 0.2325519688563544,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8822064461758654,
+         "shift": 0.2615953752817548,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9317807902377824,
+         "shift": 0.24456513216803247,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9264529870432829,
+         "shift": 0.23267056809560568,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IFNG",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9112199596048024,
+       "max_leave_one_marker_out_shift": 0.322679875600073,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9556100027599826,
+         "shift": 0.322679875600073,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9257751047561643,
+         "shift": 0.18114152630958286,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9112199596048024,
+         "shift": 0.25082765024903325,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9382250513063424,
+         "shift": 0.2556465980193328,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.5904455966921609,
+       "max_leave_one_marker_out_shift": 0.5694069826975693,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.6007366142565327,
+         "shift": 0.5320158773666313,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7917459459884095,
+         "shift": 0.3015317664772355,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.6471857162063738,
+         "shift": 0.5694069826975693,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.5904455966921609,
+         "shift": 0.4901269142139732,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.7240355711356521,
+       "max_leave_one_marker_out_shift": 0.35792185661512993,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7240355711356521,
+         "shift": 0.35792185661512993,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8852628573548763,
+         "shift": 0.2707353290018017,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7696545843372954,
+         "shift": 0.2878532992264725,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7493522420116013,
+         "shift": 0.2842905861254535,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL12RB2",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.7955538880742876,
+       "max_leave_one_marker_out_shift": 0.3019179883616067,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9025288836188355,
+         "shift": 0.3019179883616067,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7955538880742876,
+         "shift": 0.19541849369556835,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.905211088291972,
+         "shift": 0.2583756538849263,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9120375105546348,
+         "shift": 0.2630854153466417,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9026171867697109,
+       "max_leave_one_marker_out_shift": 0.35987485714172684,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9475826106594797,
+         "shift": 0.213654271356784,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9026171867697109,
+         "shift": 0.35987485714172684,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.950047184888316,
+         "shift": 0.2119079662740384,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9374326470049902,
+         "shift": 0.24545210276143045,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8320896793188154,
+       "max_leave_one_marker_out_shift": 0.3247658315269535,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9458311589009769,
+         "shift": 0.19075541302142573,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8320896793188154,
+         "shift": 0.3247658315269535,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9072904534209354,
+         "shift": 0.2667430896704509,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9166122476246624,
+         "shift": 0.23864178256630514,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "TBX21",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9089310830512098,
+       "max_leave_one_marker_out_shift": 0.27007405084735026,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9089310830512098,
+         "shift": 0.27007405084735026,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9565223927091346,
+         "shift": 0.17316082781296122,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9279092221462328,
+         "shift": 0.2442315713630815,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9286021447985816,
+         "shift": 0.2398782840486116,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8892974867301929,
+       "max_leave_one_marker_out_shift": 0.24284132956390925,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.935520214317145,
+         "shift": 0.2154773243320983,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8892974867301929,
+         "shift": 0.24284132956390925,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9354821747659335,
+         "shift": 0.22629974262013594,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9211219412942002,
+         "shift": 0.22452967942661353,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9259669258658113,
+       "max_leave_one_marker_out_shift": 0.2502554907890557,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9564981921838921,
+         "shift": 0.23486715816914006,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9259669258658113,
+         "shift": 0.24962499704040148,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.952188267414467,
+         "shift": 0.2502554907890557,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9483708971483225,
+         "shift": 0.2485156558114375,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "CXCR3",
+     "min_leave_one_marker_out_rho": 0.7641729607325386
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "IFNG",
+     "min_leave_one_marker_out_rho": 0.5904455966921609
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "IFNG",
+     "min_leave_one_marker_out_rho": 0.7240355711356521
+    }
+   ]
+  },
+  {
+   "program_id": "th2_like",
+   "n_markers": 4,
+   "markers": [
+    {
+     "removed_marker": "IL13",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.5105520224120212,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.5105520224120212,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8029198104810178,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.5284468001037674,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.6013966147963264,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.4786847944914369,
+       "max_leave_one_marker_out_shift": 0.21961529056385867,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.48379048069921854,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.5129258125684832,
+         "shift": 0.21961529056385867,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.4786847944914369,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.5556482149466161,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.46321431509699357,
+       "max_leave_one_marker_out_shift": 0.3048459993719005,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.5283718262318888,
+         "shift": 0.23198642138321815,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.5142590791993327,
+         "shift": 0.3048459993719005,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.46321431509699357,
+         "shift": 0.2170944711152143,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.4969371101207676,
+         "shift": 0.211212596544663,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL4",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9183152526675792,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9568605121144234,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.983372095266079,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9421828100245431,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9183152526675792,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9537019924363195,
+       "max_leave_one_marker_out_shift": 0.08195361143716247,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9693678506048028,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9854950975632465,
+         "shift": 0.08195361143716247,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9793779822399862,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9537019924363195,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9820437975672546,
+       "max_leave_one_marker_out_shift": 0.1145281364195583,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9830334459992355,
+         "shift": 0.08816388009061366,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9882150455324608,
+         "shift": 0.1145281364195583,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9887285304880322,
+         "shift": 0.08188660826388819,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9820437975672546,
+         "shift": 0.08016698961171281,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IL5",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9221043757456545,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9221043757456545,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9661537824344519,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9727732645365387,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9614510968815413,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9636293032209143,
+       "max_leave_one_marker_out_shift": 0.08696604127731913,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9636293032209143,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9752295017411162,
+         "shift": 0.08696604127731913,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9752898097442573,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9708246066362081,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9776208057437079,
+       "max_leave_one_marker_out_shift": 0.11774598881464508,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9839360206287435,
+         "shift": 0.09354973823348066,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9776208057437079,
+         "shift": 0.11774598881464508,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9871709449392609,
+         "shift": 0.08510649345301989,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9896117287907057,
+         "shift": 0.0856652113856173,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "PTGDR2",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.6791951760761253,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.985851779778447,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.6791951760761253,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9770696744402699,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9576562968850972,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9962777416222159,
+       "max_leave_one_marker_out_shift": 0.08702203348162138,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9967521725770802,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9996381808471099,
+         "shift": 0.08702203348162138,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9985225058104934,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9962777416222159,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9989274913015646,
+       "max_leave_one_marker_out_shift": 0.12673696388580172,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9989274913015646,
+         "shift": 0.09680778794114404,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9995041880004076,
+         "shift": 0.12673696388580172,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9993499575181101,
+         "shift": 0.08895446666055105,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.999216678381933,
+         "shift": 0.08767288827421198,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "IL13",
+     "min_leave_one_marker_out_rho": 0.5105520224120212
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "IL13",
+     "min_leave_one_marker_out_rho": 0.4786847944914369
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "IL13",
+     "min_leave_one_marker_out_rho": 0.46321431509699357
+    }
+   ]
+  },
+  {
+   "program_id": "th9_like",
+   "n_markers": 2,
+   "markers": [
+    {
+     "removed_marker": "IL9",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.61707773638734,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.61707773638734,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.6900341727197379,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7164782446382777,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8164388219707381,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.1236111264801672,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.499775550048533,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.1236111264801672,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.3301808000292231,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.45242018490657193,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.20320011478460936,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.20320011478460936,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.20525018987085467,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.41289338143956855,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.4672565910340574,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "SPI1",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.5772219178655833,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7867113805320504,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.723557355895147,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.6968047800895023,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.5772219178655833,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.8658923202001695,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8658923202001695,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9922405236937046,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9450152898537467,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8913720715008682,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.883209145312013,
+       "max_leave_one_marker_out_shift": null,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.979655156477575,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9809890429973908,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9098393214591481,
+         "shift": null,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.883209145312013,
+         "shift": null,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "SPI1",
+     "min_leave_one_marker_out_rho": 0.5772219178655833
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "IL9",
+     "min_leave_one_marker_out_rho": 0.1236111264801672
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "IL9",
+     "min_leave_one_marker_out_rho": 0.20320011478460936
+    }
+   ]
+  },
+  {
+   "program_id": "treg_like",
+   "n_markers": 5,
+   "markers": [
+    {
+     "removed_marker": "CCR8",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.7227562590953246,
+       "max_leave_one_marker_out_shift": 0.10987527630706836,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9576661598764615,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7227562590953246,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8952261783461845,
+         "shift": 0.10987527630706836,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.855614946110018,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9440114531685163,
+       "max_leave_one_marker_out_shift": 0.24539695605919887,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9898588533312515,
+         "shift": 0.22554303988826122,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9440114531685163,
+         "shift": 0.24401062435915302,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9859575278742204,
+         "shift": 0.24539695605919887,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9621810077153796,
+         "shift": 0.19364566204677786,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9462312483784419,
+       "max_leave_one_marker_out_shift": 0.22972330140494795,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9872704368506605,
+         "shift": 0.2077046383393618,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9462312483784419,
+         "shift": 0.22972330140494795,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.973426296937782,
+         "shift": 0.18982994204304177,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9626669195124877,
+         "shift": 0.18444696591492724,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "CTLA4",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9110104121147146,
+       "max_leave_one_marker_out_shift": 0.11419255023070281,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.964751866303465,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9744515129123077,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9161772397007734,
+         "shift": 0.11419255023070281,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9110104121147146,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.7382746267453891,
+       "max_leave_one_marker_out_shift": 0.31685032459618184,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8311352345300537,
+         "shift": 0.23629926625846437,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7382746267453891,
+         "shift": 0.31685032459618184,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7407596325699308,
+         "shift": 0.3162484931779256,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7972653558074447,
+         "shift": 0.22351671276741328,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.7023808189183388,
+       "max_leave_one_marker_out_shift": 0.521890176685563,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.7023808189183388,
+         "shift": 0.46738994589188426,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.7673644311990836,
+         "shift": 0.521890176685563,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7285346894872236,
+         "shift": 0.4182232966440788,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7503941555329888,
+         "shift": 0.3555415585852021,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "FOXP3",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.8677673183814957,
+       "max_leave_one_marker_out_shift": 0.10386750037955214,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8677673183814957,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8969094016692206,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9145920503924713,
+         "shift": 0.10386750037955214,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9256014251900808,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9602938427478613,
+       "max_leave_one_marker_out_shift": 0.25799487161696616,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9602938427478613,
+         "shift": 0.22255303616952204,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9690066755728647,
+         "shift": 0.25799487161696616,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9662220353034753,
+         "shift": 0.23997951990899577,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9791698473090441,
+         "shift": 0.19230094507641726,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.8704078773850542,
+       "max_leave_one_marker_out_shift": 0.23715895818963897,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.8704078773850542,
+         "shift": 0.207772777276417,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9116840712403702,
+         "shift": 0.23715895818963897,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9368465155459726,
+         "shift": 0.1862846331000031,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8829499498239216,
+         "shift": 0.19014815941810762,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "IKZF2",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.9656101298260756,
+       "max_leave_one_marker_out_shift": 0.10519855144084041,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9930361385268748,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9704722363818737,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9792007480157813,
+         "shift": 0.10519855144084041,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9656101298260756,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.9817040527126013,
+       "max_leave_one_marker_out_shift": 0.25912001891266423,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9949444068378132,
+         "shift": 0.22582017096958015,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9830959073327173,
+         "shift": 0.25912001891266423,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9876618102201071,
+         "shift": 0.2463880567548151,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9817040527126013,
+         "shift": 0.19201636126244373,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9817768419489319,
+       "max_leave_one_marker_out_shift": 0.252179202127796,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9964864987952853,
+         "shift": 0.21197504195226788,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9817768419489319,
+         "shift": 0.252179202127796,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.987525593533794,
+         "shift": 0.19245578492156665,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9822836626645465,
+         "shift": 0.1881192426313787,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "removed_marker": "TNFRSF18",
+     "by_condition": [
+      {
+       "condition": "Rest",
+       "min_leave_one_marker_out_rho": 0.6010361195341674,
+       "max_leave_one_marker_out_shift": 0.11382212699337182,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.6010361195341674,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.8677614954614026,
+         "shift": 0.0,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.7185117652305697,
+         "shift": 0.11382212699337182,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.8052492256442468,
+         "shift": 0.0,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim8hr",
+       "min_leave_one_marker_out_rho": 0.6190490810372499,
+       "max_leave_one_marker_out_shift": 0.5229826788038445,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.6190490810372499,
+         "shift": 0.5229826788038445,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.812673720437075,
+         "shift": 0.3586155341621485,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.8045943965660001,
+         "shift": 0.34220318133827654,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.7335457907525338,
+         "shift": 0.3070328569539143,
+         "defined": true
+        }
+       ]
+      },
+      {
+       "condition": "Stim48hr",
+       "min_leave_one_marker_out_rho": 0.9183520629050441,
+       "max_leave_one_marker_out_shift": 0.22020332929167968,
+       "n_undefined": 0,
+       "donors": [
+        {
+         "donor": "D1",
+         "rho": 0.9432170688507142,
+         "shift": 0.19479045258175484,
+         "defined": true
+        },
+        {
+         "donor": "D2",
+         "rho": 0.9268851520110604,
+         "shift": 0.22020332929167968,
+         "defined": true
+        },
+        {
+         "donor": "D3",
+         "rho": 0.9183520629050441,
+         "shift": 0.17971263498574366,
+         "defined": true
+        },
+        {
+         "donor": "D4",
+         "rho": 0.9492987787845605,
+         "shift": 0.17966450172175155,
+         "defined": true
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "per_condition": [
+    {
+     "condition": "Rest",
+     "most_sensitive_removed_marker": "TNFRSF18",
+     "min_leave_one_marker_out_rho": 0.6010361195341674
+    },
+    {
+     "condition": "Stim8hr",
+     "most_sensitive_removed_marker": "TNFRSF18",
+     "min_leave_one_marker_out_rho": 0.6190490810372499
+    },
+    {
+     "condition": "Stim48hr",
+     "most_sensitive_removed_marker": "CTLA4",
+     "min_leave_one_marker_out_rho": 0.7023808189183388
+    }
+   ]
+  }
+ ]
+}
