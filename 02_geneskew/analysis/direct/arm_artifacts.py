@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from . import target_identity
 from .hashing import file_sha256
 
 SCHEMA_VERIFICATION = "spot.stage02_arm_bundle_verification.v1"
@@ -24,7 +25,11 @@ GUIDE_SUPPORT_FILE = "guide_support.parquet"
 DONOR_SUPPORT_FILE = "donor_support.parquet"
 INPUTS_FILE = "input_manifest.json"
 UNIVERSE_FILE = "gene_universe.json"
-TARGET_IDENTITY_FILE = "target_identity.json"
+# THE ONE definition, re-exported. `target_identity` owns the file's name AND its schema, and
+# every consumer (W10, P2S, W3) imports them rather than writing the string again — a second
+# literal is how `.json` quietly becomes `.parquet` in somebody's test.
+TARGET_IDENTITY_FILE = target_identity.TARGET_IDENTITY_FILE
+TARGET_IDENTITY_SCHEMA = target_identity.SCHEMA_VERSION
 BUNDLE_FILE = "arm_bundle.json"
 PROVENANCE_FILE = "provenance.json"
 VERIFICATION_FILE = "verification.json"
@@ -33,7 +38,8 @@ VERDICT_PENDING = "pending_independent_verification"
 
 # Everything an independent verifier is expected to read back off disk.
 VERIFIED_PATHS = (BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE, MASKS_FILE, CONTRIB_FILE,
-                  GUIDE_SUPPORT_FILE, DONOR_SUPPORT_FILE, INPUTS_FILE, UNIVERSE_FILE)
+                  GUIDE_SUPPORT_FILE, DONOR_SUPPORT_FILE, INPUTS_FILE, UNIVERSE_FILE,
+                  TARGET_IDENTITY_FILE)
 
 
 def artifact_manifest(out_dir: str) -> list[dict[str, Any]]:

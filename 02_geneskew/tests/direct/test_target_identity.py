@@ -204,3 +204,91 @@ class TestTheMODALITYIsDeclaredNotDefaulted:
         assert block["observed_perturbation_modality"] == "CRISPRi_knockdown"
         assert block["modality_rule_id"]
 
+
+
+class TestTheProducerVerifierIntegration:
+    """The EXACT contract W10 verifies against, and the format mismatch it must not create.
+
+    The producer emits `target_identity.json`. That is the only shape there is. A verifier that
+    expected a parquet would either fail to find the artifact or WRITE ONE OF ITS OWN — and a
+    verifier that creates the file it is supposed to be checking has checked its own work.
+    """
+
+    @pytest.fixture
+    def bundle(self, synthetic_run, tmp_path):
+        from direct import run_arms
+        args = synthetic_run()
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / "d")
+        return run_arms.build_bundle(args)["out_dir"]
+
+    def test_the_file_is_JSON_and_there_is_NO_parquet_variant(self, bundle):
+        import os
+        assert os.path.exists(os.path.join(bundle, "target_identity.json"))
+        assert not os.path.exists(os.path.join(bundle, "target_identity.parquet"))
+
+    def test_ONE_shared_constant_not_two_literals(self):
+        # two literals for one filename is how `.json` quietly becomes `.parquet` in a test
+        from direct import arm_artifacts
+        assert arm_artifacts.TARGET_IDENTITY_FILE is ti.TARGET_IDENTITY_FILE
+        assert arm_artifacts.TARGET_IDENTITY_SCHEMA == ti.SCHEMA_VERSION
+
+    def test_it_is_in_VERIFIED_PATHS_so_the_verifier_READS_it_BACK(self, bundle):
+        from direct import arm_artifacts
+        assert ti.TARGET_IDENTITY_FILE in arm_artifacts.VERIFIED_PATHS
+
+    def test_it_is_in_the_bundle_ARTIFACT_MANIFEST_with_its_raw_hash(self, bundle):
+        from direct import arm_artifacts
+        names = {e["name"]: e for e in arm_artifacts.artifact_manifest(bundle)}
+        assert ti.TARGET_IDENTITY_FILE in names
+        assert len(names[ti.TARGET_IDENTITY_FILE]["raw_sha256"]) == 64
+
+    def test_a_CONSUMER_reads_the_PRODUCER_BYTES_in_place_and_they_ADMIT(self, bundle):
+        import pandas as pd
+        arms = set(pd.read_parquet(os.path.join(bundle, "arms.parquet"))["target_id"])
+        loaded = ti.load(bundle, scored_targets=arms)     # W10 / P2S / W3 entry point
+        assert loaded["doc"]["schema_version"] == ti.SCHEMA_VERSION
+        assert len(loaded["raw_sha256"]) == 64
+
+    def test_the_LOADED_hash_is_the_hash_the_RUN_BOUND(self, bundle):
+        loaded = ti.load(bundle)
+        with open(os.path.join(bundle, "provenance.json")) as fh:
+            block = json.load(fh)["run_binding"]["target_identity"]
+        assert loaded["raw_sha256"] == block["raw_sha256"]
+        assert loaded["canonical_sha256"] == block["canonical_sha256"]
+
+    def test_reading_it_does_NOT_CREATE_OR_OVERWRITE_anything(self, bundle):
+        # a verifier that writes the artifact it is checking has checked its own work
+        before = {n: os.path.getmtime(os.path.join(bundle, n))
+                  for n in sorted(os.listdir(bundle))}
+        ti.load(bundle)
+        after = {n: os.path.getmtime(os.path.join(bundle, n))
+                 for n in sorted(os.listdir(bundle))}
+        assert before == after, "loading the artifact must not touch the bundle"
+
+    def test_a_MUTATION_is_made_on_a_COPY_and_the_PRODUCER_BYTES_survive(self, bundle,
+                                                                        tmp_path):
+        # the shipped bytes are evidence; a mutation test that edits them in place destroys the
+        # very thing it is supposed to be attacking
+        original = ti.load(bundle)["raw_sha256"]
+
+        copy_dir = tmp_path / "attack"
+        copy_dir.mkdir()
+        with open(os.path.join(bundle, ti.TARGET_IDENTITY_FILE)) as fh:
+            doc = json.load(fh)
+        doc["records"][0]["observed_perturbation_modality"] = "CRISPRa_overexpression"
+        with open(copy_dir / ti.TARGET_IDENTITY_FILE, "w") as fh:
+            json.dump(doc, fh)
+
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.load(str(copy_dir))
+        assert exc.value.gate == ti.REFUSE_MODALITY
+        assert ti.load(bundle)["raw_sha256"] == original     # untouched
+
+    def test_a_MISSING_artifact_is_REFUSED_not_INFERRED(self, tmp_path):
+        # identity is not reconstructable from the masks or from the shape of a target_id: the
+        # release perturbs four bare SYMBOLS whose keys look nothing like the other 11,522, so a
+        # string heuristic is wrong for exactly the rows nobody thinks about
+        with pytest.raises(ti.TargetIdentityError) as exc:
+            ti.load(str(tmp_path))
+        assert exc.value.gate == ti.REFUSE_ABSENT

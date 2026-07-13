@@ -39,6 +39,7 @@ identity, and anything other than the pinned value is refused by name.
 """
 from __future__ import annotations
 
+import os
 from typing import Any, Optional
 
 from .hashing import content_hash
@@ -63,6 +64,7 @@ REFUSE_EXTRANEOUS = "target_identity_carries_a_target_the_bundle_never_scored"
 REFUSE_MODALITY = "observed_perturbation_modality_is_not_the_pinned_assay_modality"
 REFUSE_NAMESPACE = "target_id_namespace_is_not_a_declared_namespace"
 REFUSE_SYMBOL_HAS_ENSEMBL = "a_gene_symbol_row_carries_a_target_ensembl"
+REFUSE_ABSENT = "the_bundle_ships_no_target_identity_artifact"
 
 
 class TargetIdentityError(ValueError):
@@ -213,6 +215,36 @@ def verify(doc: dict[str, Any], *, scored_targets: Optional[set] = None) -> dict
                              if r["target_id_namespace"] == NAMESPACE_SYMBOL),
         "verified": True,
     }
+
+
+def load(bundle_dir: str, *, scored_targets: Optional[set] = None) -> dict[str, Any]:
+    """THE consumer entry point. Reopen the PRODUCER-EMITTED bytes, verify, return them + hash.
+
+    Every consumer — the independent verifier, P2S, the Stage-3 join — reads the artifact
+    THROUGH THIS, off the bundle, in place. Nobody re-derives identity from a mask, and nobody
+    reads a target_id to guess what it is: the release perturbs four bare SYMBOLS whose keys look
+    nothing like the other 11,522, so a string heuristic is wrong for exactly the rows nobody
+    thinks about.
+
+    The producer emits `target_identity.json`. It is the only shape there is: a consumer that
+    expected a parquet would either fail to find the artifact or write one of its own, and a
+    verifier that creates the file it is supposed to be checking has checked its own work.
+    """
+    import json
+
+    from .hashing import file_sha256
+
+    path = os.path.join(bundle_dir, TARGET_IDENTITY_FILE)
+    if not os.path.exists(path):
+        _refuse(REFUSE_ABSENT,
+                f"the bundle ships no {TARGET_IDENTITY_FILE!r}. Identity is not something a "
+                "consumer may reconstruct from the masks or from the shape of a target_id — it "
+                "is a bound artifact, and its absence is a refusal, not a prompt to infer")
+    with open(path) as fh:
+        doc = json.load(fh)
+    verify(doc, scored_targets=scored_targets)
+    return {"doc": doc, "raw_sha256": file_sha256(path), "path": path,
+            "canonical_sha256": content_hash(doc)}
 
 
 def binding_block(doc: dict[str, Any], raw_sha256: str) -> dict[str, Any]:
