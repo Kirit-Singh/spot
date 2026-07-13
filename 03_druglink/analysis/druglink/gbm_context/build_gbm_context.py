@@ -50,6 +50,7 @@ def build_handoff(arm_rows: list[dict[str, Any]], *,
                   dep_handoff: Optional[dict[str, Any]],
                   sources: Optional[dict[str, Any]] = None,
                   tissue_organ_axis: Optional[dict[str, Any]] = None,
+                  raw_response_artifacts: Optional[dict[str, Any]] = None,
                   run_provenance: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Group arm rows by Ensembl id and emit the descriptive, non-gating handoff.
 
@@ -93,5 +94,6 @@ def build_handoff(arm_rows: list[dict[str, Any]], *,
         "sources": sources or {},
         "tissue_organ_axis": tissue_organ_axis or {},
         "depmap_release_provenance": db.release_provenance(loaded_dep),
+        "raw_response_artifacts": raw_response_artifacts or {},
         "genes": genes,
         "run_provenance": run_provenance or {}}

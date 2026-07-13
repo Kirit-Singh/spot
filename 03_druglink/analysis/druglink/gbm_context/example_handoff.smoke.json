@@ -1,10 +1,14 @@
 {
   "classification": "descriptive_non_gating",
   "depmap_release_provenance": {
-    "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; dependency is read from CRISPRGeneDependency (probability >= 0.5 => dependent line) and CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap (config.ALLOWED_TREE_TYPE='Lineage').",
+    "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; a line is called dependent iff its CRISPRGeneDependency probability is STRICTLY greater than 0.5 (raw value, not rounded); gene effect is read from CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap.",
+    "coverage_claimed": false,
+    "dependency_prob_comparator": ">",
+    "dependency_prob_threshold": 0.5,
     "evaluated": false,
     "license": "CC BY 4.0",
     "license_url": "https://depmap.org/portal/data_page/?tab=allData",
+    "official_catalog_populated": false,
     "portal": "https://depmap.org/portal/",
     "reason": "depmap_official_catalog_empty_no_dependency_handoff",
     "release_id": "depmap_public_26q1",
@@ -51,6 +55,15 @@
             "reported_overall_association_score": 0.0014783194187388072,
             "used_for_gating_or_ranking": false
           }
+        },
+        "source_provenance": {
+          "api_version": "26.6.3",
+          "data_version": "26.06",
+          "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+          "http_status": 200,
+          "license": "CC0 1.0",
+          "raw_sha256": "c46fafe0acea8be3e0ae163dcfbf2a5b298f2db98f375ef4936d318c1dac4c86",
+          "response_artifact": "ot_ENSG00000030419_c46fafe0.json"
         },
         "state": "association_evidence_present"
       },
@@ -109,6 +122,15 @@
             "used_for_gating_or_ranking": false
           }
         },
+        "source_provenance": {
+          "api_version": "26.6.3",
+          "data_version": "26.06",
+          "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+          "http_status": 200,
+          "license": "CC0 1.0",
+          "raw_sha256": "b1afa91e875a956416641b45312ea6fd7ab7e1663496ab456c844a3769a86e35",
+          "response_artifact": "ot_ENSG00000049768_b1afa91e.json"
+        },
         "state": "association_evidence_present"
       },
       "immune_axis": {
@@ -166,6 +188,15 @@
             "reported_overall_association_score": 0.018124605820522784,
             "used_for_gating_or_ranking": false
           }
+        },
+        "source_provenance": {
+          "api_version": "26.6.3",
+          "data_version": "26.06",
+          "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+          "http_status": 200,
+          "license": "CC0 1.0",
+          "raw_sha256": "51bc8b979b74ef8d0abbc7b9fcb52c3129300733ae11deb4e92b9b4c17575fab",
+          "response_artifact": "ot_ENSG00000134460_51bc8b97.json"
         },
         "state": "association_evidence_present"
       },
@@ -233,6 +264,15 @@
             "used_for_gating_or_ranking": false
           }
         },
+        "source_provenance": {
+          "api_version": "26.6.3",
+          "data_version": "26.06",
+          "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+          "http_status": 200,
+          "license": "CC0 1.0",
+          "raw_sha256": "0ac55a97bb9a14a95b9fe9f2469063021d3b14cd815766c2aa334ddc0e0dd6df",
+          "response_artifact": "ot_ENSG00000146648_0ac55a97.json"
+        },
         "state": "association_evidence_present"
       },
       "immune_axis": {
@@ -290,6 +330,15 @@
             "reported_overall_association_score": 0.07917602782647254,
             "used_for_gating_or_ranking": false
           }
+        },
+        "source_provenance": {
+          "api_version": "26.6.3",
+          "data_version": "26.06",
+          "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+          "http_status": 200,
+          "license": "CC0 1.0",
+          "raw_sha256": "4f6f2b0797df00699c5f29a1aeee1f17ba1252c0f6a96655f0e74880a5c28e99",
+          "response_artifact": "ot_ENSG00000163131_4f6f2b07.json"
         },
         "state": "association_evidence_present"
       },
@@ -350,6 +399,15 @@
             "used_for_gating_or_ranking": false
           }
         },
+        "source_provenance": {
+          "api_version": "26.6.3",
+          "data_version": "26.06",
+          "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+          "http_status": 200,
+          "license": "CC0 1.0",
+          "raw_sha256": "76f374c162ff1de9350885d0858d55391730d8ffb7fd356e2d6bc6056f944525",
+          "response_artifact": "ot_ENSG00000163599_76f374c1.json"
+        },
         "state": "association_evidence_present"
       },
       "immune_axis": {
@@ -383,8 +441,64 @@
   "n_genes": 6,
   "never_alters_ranks": true,
   "no_pq_no_overall_rank": true,
+  "raw_response_artifacts": {
+    "ENSG00000030419": {
+      "api_version": "26.6.3",
+      "basename": "ot_ENSG00000030419_c46fafe0.json",
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "http_status": 200,
+      "license": "CC0 1.0",
+      "sha256": "c46fafe0acea8be3e0ae163dcfbf2a5b298f2db98f375ef4936d318c1dac4c86"
+    },
+    "ENSG00000049768": {
+      "api_version": "26.6.3",
+      "basename": "ot_ENSG00000049768_b1afa91e.json",
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "http_status": 200,
+      "license": "CC0 1.0",
+      "sha256": "b1afa91e875a956416641b45312ea6fd7ab7e1663496ab456c844a3769a86e35"
+    },
+    "ENSG00000134460": {
+      "api_version": "26.6.3",
+      "basename": "ot_ENSG00000134460_51bc8b97.json",
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "http_status": 200,
+      "license": "CC0 1.0",
+      "sha256": "51bc8b979b74ef8d0abbc7b9fcb52c3129300733ae11deb4e92b9b4c17575fab"
+    },
+    "ENSG00000146648": {
+      "api_version": "26.6.3",
+      "basename": "ot_ENSG00000146648_0ac55a97.json",
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "http_status": 200,
+      "license": "CC0 1.0",
+      "sha256": "0ac55a97bb9a14a95b9fe9f2469063021d3b14cd815766c2aa334ddc0e0dd6df"
+    },
+    "ENSG00000163131": {
+      "api_version": "26.6.3",
+      "basename": "ot_ENSG00000163131_4f6f2b07.json",
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "http_status": 200,
+      "license": "CC0 1.0",
+      "sha256": "4f6f2b0797df00699c5f29a1aeee1f17ba1252c0f6a96655f0e74880a5c28e99"
+    },
+    "ENSG00000163599": {
+      "api_version": "26.6.3",
+      "basename": "ot_ENSG00000163599_76f374c1.json",
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "http_status": 200,
+      "license": "CC0 1.0",
+      "sha256": "76f374c162ff1de9350885d0858d55391730d8ffb7fd356e2d6bc6056f944525"
+    }
+  },
   "run_provenance": {
-    "code_sha256": "7041723770ee7b84fb7ed029782e94d5d757fd7b507d2719be94a7d1b943cb4d",
+    "code_sha256": "e72d8a66c5650698adb2c96e5e15baf4cbc342943dbc54eb31599a7f65f4c31d",
     "env": {
       "implementation": "CPython",
       "platform": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
@@ -396,12 +510,13 @@
       "immune_direction_stage2_arm": "populated",
       "tumor_dependency_depmap": "not_evaluated"
     },
+    "raw_response_artifacts_dir": "gbm_context_handoff.smoke.json.artifacts",
     "rerun_command": "python -m druglink.gbm_context.run_gbm_context --arms <selected_arms.json> --out gbm_context_handoff.json --live-open-targets [--depmap-handoff <optional depmap_dependency_handoff.json>]",
     "run_class": "real_open_targets_smoke",
-    "run_timestamp_utc": "2026-07-13T17:01:28Z",
+    "run_timestamp_utc": "2026-07-13T17:42:55Z",
     "sources": {
       "depmap": {
-        "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; dependency is read from CRISPRGeneDependency (probability >= 0.5 => dependent line) and CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap (config.ALLOWED_TREE_TYPE='Lineage').",
+        "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; a line is called dependent iff its CRISPRGeneDependency probability is STRICTLY greater than 0.5 (raw value, not rounded); gene effect is read from CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap.",
         "license": "CC BY 4.0",
         "license_url": "https://depmap.org/portal/data_page/?tab=allData",
         "name": "DepMap Public 26Q1",
@@ -440,7 +555,7 @@
   },
   "sources": {
     "depmap": {
-      "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; dependency is read from CRISPRGeneDependency (probability >= 0.5 => dependent line) and CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap (config.ALLOWED_TREE_TYPE='Lineage').",
+      "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; a line is called dependent iff its CRISPRGeneDependency probability is STRICTLY greater than 0.5 (raw value, not rounded); gene effect is read from CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap.",
       "license": "CC BY 4.0",
       "license_url": "https://depmap.org/portal/data_page/?tab=allData",
       "name": "DepMap Public 26Q1",

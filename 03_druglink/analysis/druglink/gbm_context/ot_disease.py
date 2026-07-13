@@ -60,6 +60,13 @@ def data_version_of(obj: dict[str, Any]) -> str:
     return f'{dv["year"]}.{dv["month"]}'
 
 
+def api_version_of(obj: dict[str, Any]) -> Optional[str]:
+    av = (obj.get("data") or {}).get("meta", {}).get("apiVersion") or {}
+    if not av:
+        return None
+    return f'{av.get("x")}.{av.get("y")}.{av.get("z")}'
+
+
 def verify_data_version(obj: dict[str, Any]) -> str:
     got = data_version_of(obj)
     if got != OT_DATA_VERSION_EXPECTED:
@@ -77,7 +84,8 @@ def parse_association(obj: dict[str, Any], ensembl_id: str) -> dict[str, Any]:
     version = data_version_of(obj)
     target = data.get("target")
     if target is None:
-        return {"evaluated": True, "data_version": version, "diseases": {}}
+        return {"evaluated": True, "data_version": version,
+                "api_version": api_version_of(obj), "diseases": {}}
     if target.get("id") not in (None, ensembl_id):
         raise GbmContextError(
             f"OT response is for target {target.get('id')!r}, not requested "
@@ -95,6 +103,7 @@ def parse_association(obj: dict[str, Any], ensembl_id: str) -> dict[str, Any]:
             "datatype_evidence": {s["id"]: s["score"]
                                   for s in (row.get("datatypeScores") or [])}}
     return {"evaluated": True, "data_version": version,
+            "api_version": api_version_of(obj),
             "approved_symbol": target.get("approvedSymbol"), "diseases": diseases}
 
 
@@ -128,4 +137,5 @@ def fetch_gene(ensembl_id: str, *, transport: Transport) -> dict[str, Any]:
     result["http_status"] = status
     result["raw_sha256"] = hashlib.sha256(raw).hexdigest()
     result["license"] = OT_LICENSE
+    result["raw_response_text"] = raw.decode("utf-8")
     return result

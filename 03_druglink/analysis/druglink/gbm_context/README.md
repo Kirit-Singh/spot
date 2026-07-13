@@ -10,7 +10,7 @@ it emits **three SEPARATE axes** plus a typed, **SUGGESTIVE** compatibility stat
 | axis | source | meaning |
 |------|--------|---------|
 | `immune_axis` | Stage-2 arm `desired_change` | desired immune-program perturbation (increase / decrease), per arm |
-| `tumor_axis` | DepMap Public 26Q1 | tumor-cell dependency **direction + coverage** across named GBM/glioma cell lines |
+| `tumor_axis` | DepMap Public 26Q1 | tumor-cell dependency **direction + coverage** across named GBM/glioma cell lines (a line is dependent iff CRISPRGeneDependency **> 0.5, strict**, matching the frozen engine) |
 | `disease_axis` | Open Targets Data 26.06 | GBM/glioma target–disease association evidence (datatype breakdown) |
 | `compatibility` | derived | per immune direction: `dual_mechanism_compatible_suggestive` / `immune_axis_only_no_tumor_dependency` / `tumor_context_not_evaluated` — categorical, **never a number, never causal** |
 
@@ -26,9 +26,23 @@ context stay **separate** (never fused into one score); **missing evidence is
   `open_targets_reported_upstream` with `used_for_gating_or_ranking: false`.
 - **DepMap Public 26Q1** — licence **CC BY 4.0**. Byte pinning + the dependency computation
   are **owned by the Stage-2 DepMap lane** (`02_geneskew/analysis/depmap`), whose official
-  catalog is fail-closed and currently **empty**. This layer consumes that lane's per-gene
-  dependency **handoff** when it exists, honouring its trust model, and otherwise reports the
-  tumor axis as `not_evaluated` with the release identity + cell-line inclusion rule recorded.
+  catalog is fail-closed and currently **empty (0 entries)**. **No tumor-cell coverage is
+  claimed** until that catalog is populated: an `official` dependency handoff is **refused**
+  while `DEPMAP_OFFICIAL_CATALOG_POPULATED` is false; the tumor axis stays `not_evaluated`
+  (`coverage_claimed: false`) with the release identity + strict-`>0.5` inclusion rule recorded.
+  The dependency-call rule mirrors the frozen engine exactly (`DEPENDENCY_PROB_THRESHOLD=0.5`,
+  `DEPENDENCY_PROB_STRICT=True`); `is_dependent_line(0.5)` is **False**.
+
+## Trace every number to the exact bytes
+Each gene's `disease_axis.source_provenance` records `endpoint`, `http_status`,
+`api_version` (26.6.3), `data_version` (26.06), `raw_sha256`, `license`, and the
+`response_artifact` basename — so a displayed disease score traces to the exact pinned
+response. The handoff also carries a top-level `raw_response_artifacts` manifest
+(basename + sha256 + endpoint + status + versions + licence, **basenames only, never a
+machine-local path**). The run pins each raw public response to
+`<out>.artifacts/` (a gitignored runtime sidecar, **not** inventoried by path); the same
+bytes regenerate byte-identically on re-run (sha-pinned). The six real smoke responses are
+preserved in-repo under `example_raw_responses/` (CC0), basenames matching the manifest.
 
 ## No tissue/organ axis
 The immune effect is an **in-vitro CD4+ T-cell (blood) Perturb-seq** assay — donor × condition
