@@ -12,6 +12,7 @@ import { compactProjectionRaw, compactReceiptAdmitted, CONDITIONS, SOURCES } fro
 interface Packager {
   pack: (spec: unknown) => { tree: Record<string, string>; current: unknown };
   deriveCompactProjection: (route: string, native: unknown) => unknown;
+  hydrateStage2FileInputs: (spec: any, baseDir: string, readText: (path: string) => string) => any;
 }
 async function importPack(): Promise<Packager> {
   const modPath: string = '../../../deploy/pack_ui_projections.mjs';
@@ -85,6 +86,27 @@ const deps = (sel: SelectionV3 | null, tree: Record<string, string>): RouteLoade
 });
 
 describe('packager → browser loader round-trip', () => {
+  it('hydrates exact W3 projection/receipt files without embedding or reserializing their bytes', async () => {
+    const { pack, hydrateStage2FileInputs } = await importPack();
+    const projection = await compactProjectionRaw();
+    const projectionText = JSON.stringify(projection, null, 1) + '\n';
+    const admitted = await compactReceiptAdmitted(projection, projectionText);
+    const spec = await makeSpec({ projection, projectionText });
+    for (const route of ['targets', 'pathways'] as const) {
+      delete (spec.routes[route] as any).projection_text;
+      delete (spec.routes[route] as any).display_verifier_receipt;
+      Object.assign(spec.routes[route], {
+        projection_file: 'projection.json', display_verifier_receipt_file: 'receipt.json',
+      });
+    }
+    const files: Record<string, string> = {
+      '/run/projection.json': projectionText, '/run/receipt.json': JSON.stringify(admitted),
+    };
+    hydrateStage2FileInputs(spec, '/run', (path) => files[path]);
+    const { tree } = pack(spec);
+    expect(tree['stage02/stage2_display_projection.json']).toBe(projectionText);
+  });
+
   it('preserves one exact W3 projection for both Stage-2 routes and binds its receipt/hashes', async () => {
     const { pack } = await importPack();
     const { tree, current } = pack(await makeSpec());

@@ -19,7 +19,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 // ── canonical JSON + sha256 — byte-exact replicas of _frontend/src/stage1/canonical.ts ──
 function ensureAsciiString(s) {
@@ -461,6 +461,26 @@ export function pack(spec) {
   return { tree, current };
 }
 
+/**
+ * CLI convenience for large, byte-bound Stage-2 artifacts. A small run spec may name the exact W3
+ * projection and receipt files instead of embedding a multi-megabyte JSON string. Paths are resolved
+ * relative to the spec file; the projection is read as TEXT and passed through verbatim.
+ */
+export function hydrateStage2FileInputs(spec, baseDir, readText = (path) => readFileSync(path, 'utf8')) {
+  if (!spec || typeof spec !== 'object' || !spec.routes || typeof spec.routes !== 'object') return spec;
+  for (const route of ['targets', 'pathways']) {
+    const input = spec.routes[route];
+    if (!input || typeof input !== 'object') continue;
+    if (input.projection_text === undefined && typeof input.projection_file === 'string') {
+      input.projection_text = readText(resolve(baseDir, input.projection_file));
+    }
+    if (input.display_verifier_receipt === undefined && typeof input.display_verifier_receipt_file === 'string') {
+      input.display_verifier_receipt = JSON.parse(readText(resolve(baseDir, input.display_verifier_receipt_file)));
+    }
+  }
+  return spec;
+}
+
 // ── CLI: write the tree to <out_results_dir>. Only runs when invoked explicitly with a real spec. ──
 function main() {
   const [specPath, outDir] = process.argv.slice(2);
@@ -468,7 +488,7 @@ function main() {
     console.error('usage: pack_ui_projections.mjs <spec.json> <out_results_dir>');
     process.exit(2);
   }
-  const spec = JSON.parse(readFileSync(specPath, 'utf8'));
+  const spec = hydrateStage2FileInputs(JSON.parse(readFileSync(specPath, 'utf8')), dirname(resolve(specPath)));
   const { tree } = pack(spec);
   for (const [rel, text] of Object.entries(tree)) {
     const dst = join(outDir, rel);
