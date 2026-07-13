@@ -56,6 +56,11 @@ from . import admitted_universe as au
 from . import universe_verify as uv
 from .hashing import content_hash
 from .universe_edges import (
+    GATE_NAMESPACE_CROSS_JOIN,
+    GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE,
+    GATE_UNTYPED_TARGET_QUERY,
+    STORE_NAMESPACES,
+    drug_edges_for_targets,
     DISP_AMBIGUOUS_IDENTITY,
     GATE_AMBIGUOUS_ROW_HAS_RANKABLE_EVIDENCE,
     GATE_CACHE_CARRIES_A_DIRECTION_VERDICT,
@@ -71,8 +76,6 @@ from .universe_edges import (
     VARIANT_UNDEFINED_MUTATION,
     DrugEdgeError,
     UniverseRowsError,
-    build_edge,
-    gate_row,
     is_variant_assertion,
     order_edges,
     rankable_edges,
@@ -142,7 +145,7 @@ ADMITTED_SCIENTIFIC_CONTENT_SHA256 = \
     "95f81cb11abf1b39d9345edb182344f0b90b60e08dd7605145b40c08eda391eb"
 NS_ENSEMBL_GENE = uv.NS_ENSEMBL_GENE                             # "ensembl_gene_id"
 NS_SYMBOL = uv.NS_SYMBOL                                         # "gene_symbol"
-STORE_NAMESPACES = uv.STORE_NAMESPACES
+
 RETIRED_NAMESPACES = uv.RETIRED_NAMESPACES
 
 DISP_DRUG_EVIDENCE = "drug_evidence"
@@ -162,9 +165,8 @@ GATE_MISSING_ARTIFACT = "a_required_store_artifact_is_missing"
 GATE_ARTIFACT_HASH_DRIFT = "a_store_artifact_no_longer_hashes_to_its_manifest_pin"
 GATE_LICENSE_BINDING_MISSING = "the_store_does_not_carry_its_source_licence_and_attribution"
 GATE_STORE_DID_NOT_VERIFY = "the_universe_store_did_not_verify_from_its_own_bytes"
-GATE_UNTYPED_TARGET_QUERY = "a_drug_edge_query_must_carry_an_exact_typed_target_identity"
-GATE_NAMESPACE_CROSS_JOIN = "a_target_id_may_not_be_joined_across_namespaces"
-GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE = "the_target_is_not_in_the_admitted_typed_universe"
+
+
 GATE_UNKNOWN_NAMESPACE_TOKEN = "a_store_row_carries_a_namespace_token_nobody_agreed_to"
 
 
@@ -409,94 +411,3 @@ def load_store(store_dir: str) -> AdmittedStore:
         source_provenance=loaded[PROVENANCE_NAME], licences=licences,
         typed_universe=typed, typed_universe_sha256=universe_sha, store_binding=binding,
         _index={(r["target_id_namespace"], r["target_id"]): r for r in rows})
-
-
-# --------------------------------------------------------------------------- #
-# 3. The adapter: typed target identity -> source drug assertions
-# --------------------------------------------------------------------------- #
-def _release_binding(store: AdmittedStore) -> dict[str, Any]:
-    rel = store.releases
-    chembl = rel.get("chembl") or {}
-    uniprot = rel.get("uniprot") or {}
-    return {
-        "store_id": store.store_id,
-        "typed_universe_sha256": store.typed_universe_sha256,
-        "chembl_release": chembl.get("source_release"),
-        "chembl_source_sha256": chembl.get("source_sha256"),
-        "chembl_doi": chembl.get("doi"),
-        "chembl_license": chembl.get("license"),
-        "chembl_required_attribution": chembl.get("attribution"),
-        "uniprot_release": uniprot.get("source_release"),
-        "uniprot_source_sha256": uniprot.get("source_sha256"),
-        "uniprot_license": uniprot.get("license"),
-        "uniprot_attribution": uniprot.get("attribution"),
-    }
-
-
-def _typed_key(query: Any) -> tuple[str, str]:
-    """A query is a TYPED identity, or it is refused. A bare id is a symbol join waiting."""
-    if isinstance(query, Mapping):
-        tid, ns = query.get("target_id"), query.get("target_id_namespace")
-    elif isinstance(query, (tuple, list)) and len(query) == 2:
-        tid, ns = query
-    else:
-        raise DrugEdgeError(
-            GATE_UNTYPED_TARGET_QUERY,
-            f"{query!r} is not a typed target identity. The store is joined ONLY by exact "
-            "(target_id, target_id_namespace). Joining by a bare id — a gene SYMBOL above all "
-            "— looks identical the day it is written, and silently re-attributes every edge "
-            "the first time a gene is renamed or a symbol is reused")
-    if not tid or not ns:
-        raise DrugEdgeError(
-            GATE_UNTYPED_TARGET_QUERY,
-            f"target_id={tid!r} target_id_namespace={ns!r}: both halves of the typed identity "
-            "are required. A namespace-less id is a name, and names are not identities")
-    return str(ns), str(tid)
-
-
-def drug_edges_for_targets(store: AdmittedStore,
-                           target_ids: Iterable[Any]) -> list[dict[str, Any]]:
-    """Every SOURCE drug assertion held for these targets, joined by exact typed identity.
-
-    ``target_ids`` are TYPED identities: ``{"target_id": …, "target_id_namespace": …}`` or a
-    ``(target_id, namespace)`` pair. A bare string is refused — see :func:`_typed_key`.
-
-    Every assertion is emitted — general, variant-specific, and ambiguous-identity copies
-    alike — each typed by its lane and carrying its own rankability disposition. Only
-    ``lane == general_gene_rankable`` may rank a gene (:func:`rankable_edges`). The
-    non-rankable lanes travel with the result deliberately: an assertion that is silently
-    dropped is indistinguishable from a drug nobody found, and the store's entire point is
-    that those two are different things.
-
-    A symbol-only target answers with ZERO edges and its ``unsupported_namespace``
-    disposition — which means "this acquisition ROUTE cannot reach it", and never "no drug
-    evidence exists".
-    """
-    binding = _release_binding(store)
-    edges: list[dict[str, Any]] = []
-    for query in target_ids:
-        ns, tid = _typed_key(query)
-        row = store.row_for(tid, ns)
-        if row is None:
-            other = [n for n in STORE_NAMESPACES if store.row_for(tid, n) is not None]
-            if other:
-                raise DrugEdgeError(
-                    GATE_NAMESPACE_CROSS_JOIN,
-                    f"{tid} is in the admitted universe under namespace {other[0]!r}, and you "
-                    f"asked under {ns!r}. A namespace-crossing match is silent "
-                    "mis-attribution, so the join refuses rather than guessing which one you "
-                    "meant")
-            raise DrugEdgeError(
-                GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE,
-                f"{ns}:{tid} is not one of the {len(store.typed_universe)} targets in the "
-                "admitted typed universe. The join is by exact typed identity and never "
-                "degrades to a symbol match, so this refuses rather than answering about some "
-                "other gene")
-        gate_row(row)
-        for lane, container in LANE_CONTAINERS:
-            for assertion in (row.get(container) or []):
-                edges.append(build_edge(row, assertion, lane, binding))
-
-    edges.sort(key=lambda e: (e["target_id_namespace"], e["target_id"], e["lane"],
-                              str(e["source_row_id"])))
-    return edges

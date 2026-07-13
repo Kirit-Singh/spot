@@ -31,10 +31,14 @@ gate:
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
 from .hashing import content_hash, short_id
+from . import universe_verify as uv
 from .universe_verify import FORBIDDEN_DRUG_KEYS
+
+if TYPE_CHECKING:                       # a type reference only — importing
+    from .universe_rows import AdmittedStore   # universe_rows here would be circular
 
 EDGE_POLICY_VERSION = "stage3-universe-edges-v1"
 
@@ -233,3 +237,105 @@ def order_edges(edges: Iterable[Mapping[str, Any]], *,
     rows = [dict(e) for e in edges]
     rows.sort(key=lambda e: tuple(content_hash(e.get(k)) for k in by))
     return rows
+
+
+
+# The join's own vocabulary, moved here with the adapter it belongs to.
+GATE_UNTYPED_TARGET_QUERY = "a_drug_edge_query_must_carry_an_exact_typed_target_identity"
+GATE_NAMESPACE_CROSS_JOIN = "a_target_id_may_not_be_joined_across_namespaces"
+GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE = "the_target_is_not_in_the_admitted_typed_universe"
+STORE_NAMESPACES = uv.STORE_NAMESPACES
+
+
+# --------------------------------------------------------------------------- #
+# 3. The adapter: typed target identity -> source drug assertions
+#    (moved here from universe_rows, which breached the 500-line gate. universe_rows owns
+#     target IDENTITY; this owns what happens once an identity is admitted. A move, not a
+#     rewrite — universe_rows re-exports these, so the single front door is preserved.)
+# --------------------------------------------------------------------------- #
+def _release_binding(store: AdmittedStore) -> dict[str, Any]:
+    rel = store.releases
+    chembl = rel.get("chembl") or {}
+    uniprot = rel.get("uniprot") or {}
+    return {
+        "store_id": store.store_id,
+        "typed_universe_sha256": store.typed_universe_sha256,
+        "chembl_release": chembl.get("source_release"),
+        "chembl_source_sha256": chembl.get("source_sha256"),
+        "chembl_doi": chembl.get("doi"),
+        "chembl_license": chembl.get("license"),
+        "chembl_required_attribution": chembl.get("attribution"),
+        "uniprot_release": uniprot.get("source_release"),
+        "uniprot_source_sha256": uniprot.get("source_sha256"),
+        "uniprot_license": uniprot.get("license"),
+        "uniprot_attribution": uniprot.get("attribution"),
+    }
+
+
+def _typed_key(query: Any) -> tuple[str, str]:
+    """A query is a TYPED identity, or it is refused. A bare id is a symbol join waiting."""
+    if isinstance(query, Mapping):
+        tid, ns = query.get("target_id"), query.get("target_id_namespace")
+    elif isinstance(query, (tuple, list)) and len(query) == 2:
+        tid, ns = query
+    else:
+        raise DrugEdgeError(
+            GATE_UNTYPED_TARGET_QUERY,
+            f"{query!r} is not a typed target identity. The store is joined ONLY by exact "
+            "(target_id, target_id_namespace). Joining by a bare id — a gene SYMBOL above all "
+            "— looks identical the day it is written, and silently re-attributes every edge "
+            "the first time a gene is renamed or a symbol is reused")
+    if not tid or not ns:
+        raise DrugEdgeError(
+            GATE_UNTYPED_TARGET_QUERY,
+            f"target_id={tid!r} target_id_namespace={ns!r}: both halves of the typed identity "
+            "are required. A namespace-less id is a name, and names are not identities")
+    return str(ns), str(tid)
+
+
+def drug_edges_for_targets(store: AdmittedStore,
+                           target_ids: Iterable[Any]) -> list[dict[str, Any]]:
+    """Every SOURCE drug assertion held for these targets, joined by exact typed identity.
+
+    ``target_ids`` are TYPED identities: ``{"target_id": …, "target_id_namespace": …}`` or a
+    ``(target_id, namespace)`` pair. A bare string is refused — see :func:`_typed_key`.
+
+    Every assertion is emitted — general, variant-specific, and ambiguous-identity copies
+    alike — each typed by its lane and carrying its own rankability disposition. Only
+    ``lane == general_gene_rankable`` may rank a gene (:func:`rankable_edges`). The
+    non-rankable lanes travel with the result deliberately: an assertion that is silently
+    dropped is indistinguishable from a drug nobody found, and the store's entire point is
+    that those two are different things.
+
+    A symbol-only target answers with ZERO edges and its ``unsupported_namespace``
+    disposition — which means "this acquisition ROUTE cannot reach it", and never "no drug
+    evidence exists".
+    """
+    binding = _release_binding(store)
+    edges: list[dict[str, Any]] = []
+    for query in target_ids:
+        ns, tid = _typed_key(query)
+        row = store.row_for(tid, ns)
+        if row is None:
+            other = [n for n in STORE_NAMESPACES if store.row_for(tid, n) is not None]
+            if other:
+                raise DrugEdgeError(
+                    GATE_NAMESPACE_CROSS_JOIN,
+                    f"{tid} is in the admitted universe under namespace {other[0]!r}, and you "
+                    f"asked under {ns!r}. A namespace-crossing match is silent "
+                    "mis-attribution, so the join refuses rather than guessing which one you "
+                    "meant")
+            raise DrugEdgeError(
+                GATE_TARGET_NOT_IN_ADMITTED_UNIVERSE,
+                f"{ns}:{tid} is not one of the {len(store.typed_universe)} targets in the "
+                "admitted typed universe. The join is by exact typed identity and never "
+                "degrades to a symbol match, so this refuses rather than answering about some "
+                "other gene")
+        gate_row(row)
+        for lane, container in LANE_CONTAINERS:
+            for assertion in (row.get(container) or []):
+                edges.append(build_edge(row, assertion, lane, binding))
+
+    edges.sort(key=lambda e: (e["target_id_namespace"], e["target_id"], e["lane"],
+                              str(e["source_row_id"])))
+    return edges
