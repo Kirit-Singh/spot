@@ -31,6 +31,7 @@ import numpy as np
 
 from . import (
     arms,
+    code_digest,
     config,
     disposition,
     domain,
@@ -485,7 +486,12 @@ def build_screen(args) -> dict:
         evidence_domain=_domain_block(ctx),
         # ...and WHAT proved the release gate. An unbound gate can be swapped for a
         # friendlier one after the fact and the run would still answer to its name.
-        release_gate=release_gate)
+        release_gate=release_gate,
+        # M2: the reproducible code-identity tuple. A RELEASE-grade lane must be taken
+        # from a CLEAN checkout: a digest over uncommitted bytes does not identify the
+        # commit printed beside it.
+        code_identity=code_identity_for(
+            lane, getattr(args, "allow_dirty_tree", False)))
     run_id, run_sha = runid.run_id_of(binding)
 
     for rows in (screen_rows, mask_rows, guide_rows, donor_rows, contrib_rows):
@@ -545,6 +551,24 @@ def build_screen(args) -> dict:
             "mask_sha256": mask_sha,
             "gene_universe_sha256": gene_universe["sha256"],
             "verification": verification}
+
+
+RELEASE_LANES = (config.LANE_PRODUCTION, config.LANE_RESEARCH)
+
+
+def code_identity_for(lane: str, allow_dirty_tree: bool = False) -> dict[str, Any]:
+    """The (commit, clean_tree, manifest_sha256, canonical_digest) tuple this run binds.
+
+    A release-grade lane REFUSES a dirty tree (M2): a digest computed over uncommitted
+    bytes does not identify the commit printed beside it.
+
+    ``allow_dirty_tree`` is the ONLY way past that, and it is not a quiet one — it is
+    RECORDED in the binding (``clean_checkout_required: false``, ``clean_tree: false``)
+    and therefore CHANGES THE RUN ID. A dirty release is allowed to exist; it is not
+    allowed to look like a clean one.
+    """
+    require_clean = (lane in RELEASE_LANES) and not allow_dirty_tree
+    return code_digest.run_binding(require_clean=require_clean)
 
 
 def _domain_block(ctx: dict) -> dict[str, Any]:

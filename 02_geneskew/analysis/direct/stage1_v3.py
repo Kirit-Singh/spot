@@ -23,16 +23,26 @@ WHAT THIS GATE REFUSES
     ``poles_separate`` must be true — a combined score handed down from Stage-1 would
     reintroduce, one stage earlier, the objective this whole lane exists to refuse.
 
-THE SELECTION_ID IS A CITATION, NOT A KEY
------------------------------------------
-The frozen contract states that ``selection_id`` is a 16-hex biological id, invariant
-over the scoring-view hash. It does NOT publish the rule that derives it, so Stage-2
-cannot recompute it and does not pretend to: it is carried verbatim as provenance.
+THE SELECTION_ID IS RE-DERIVED, AND IT IS CHECKED (m2)
+-----------------------------------------------------
+This module used to declare the ``selection_id`` non-derivable — "a citation, not a key" —
+and carried it verbatim, unchecked. That was wrong, and an independent audit published the
+recipe:
 
-What Stage-2 keys its own results on is the biology it ACTUALLY READ — re-derived here as
-``selection_biology_sha256`` and bound into ``stage2_run_id``. So two different selections
-can never share a Stage-2 run id, whatever their selection_ids say. See
-``STAGE1_SELECTION_ID_NOT_REDERIVABLE`` for the exact boundary this leaves.
+    selection_id = sha256( canonical_json( contract.canonical_content ) )[:16]
+
+where ``canonical_json`` is compact, sorted-key JSON — exactly what ``jq -cS`` emits.
+(Verified byte-for-byte against ``jq -cS '.canonical_content' | shasum -a 256`` in
+``test_stage1_v3_selection_id``.)
+
+So it IS derivable, it IS derived here, and a contract whose declared ``selection_id``
+disagrees with its own canonical content is REFUSED
+(``REFUSE_SELECTION_ID``). An id nobody recomputes is a label, and a label can be moved
+onto a different contract without anything noticing.
+
+Stage-2 additionally keys its own results on the biology it ACTUALLY READ
+(``selection_biology_sha256``), bound into ``stage2_run_id`` — so two different selections
+can never share a Stage-2 run id even if a producer somehow reused an id.
 
 THE HISTORICAL GATE IS NOT A GATE
 ---------------------------------
@@ -112,9 +122,34 @@ REFUSE_STAGE1_METHOD = "stage1_method_version_is_not_the_accepted_v3"
 REFUSE_HISTORICAL_GATE = "historical_selectability_is_being_used_as_a_live_gate"
 REFUSE_CONDITIONS = "condition_count_does_not_match_the_analysis_mode"
 
-# The boundary this gate cannot cross, stated once, as an id.
+REFUSE_SELECTION_ID = "selection_id_does_not_derive_from_its_own_canonical_content"
+
+# THE RULE, published (m2). It was previously declared non-derivable and carried
+# unchecked; an independent audit published the recipe and it is now enforced.
+SELECTION_ID_RULE_ID = (
+    "spot.stage01.selection_id.sha256_of_canonical_content_first16.v1")
+SELECTION_ID_RULE = (
+    "selection_id = sha256(canonical_json(contract.canonical_content))[:16], where "
+    "canonical_json is compact sorted-key JSON — byte-identical to `jq -cS "
+    "'.canonical_content' | shasum -a 256`")
+SELECTION_ID_LEN = 16
+
+# Retired. Kept as a NAMED retraction so a reader who meets the old id in an archived
+# artifact learns it was withdrawn, rather than concluding the check never existed.
 STAGE1_SELECTION_ID_NOT_REDERIVABLE = (
-    "spot.stage02.gate_b.selection_id_is_a_citation_not_a_recomputable_key.v1")
+    "RETIRED:spot.stage02.gate_b.selection_id_is_a_citation_not_a_recomputable_key.v1"
+    " — superseded by " + SELECTION_ID_RULE_ID + "; the id IS derivable and is now "
+    "re-derived and enforced")
+
+
+def derive_selection_id(doc: dict[str, Any]) -> str:
+    """Re-derive the selection_id from the contract's OWN canonical content."""
+    return content_hash(doc["canonical_content"])[:SELECTION_ID_LEN]
+
+
+def canonical_content_sha256(doc: dict[str, Any]) -> str:
+    """The full 64-hex hash the selection_id is the first 16 of."""
+    return content_hash(doc["canonical_content"])
 
 
 def estimator_registry() -> dict[str, Any]:
@@ -238,6 +273,20 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
                 f"but the contract's own content hashes to {derived!r}. A contract whose "
                 "hash does not cover its content has not been bound to anything")
 
+    # ---- the SELECTION_ID must derive from the contract's own canonical content (m2) ----
+    # It used to be carried verbatim and unchecked, on the grounds that the rule was not
+    # published. The rule IS published. An id nobody recomputes is a label, and a label
+    # can be moved onto a different contract without anything noticing.
+    declared_id = str(doc["selection_id"])
+    derived_id = derive_selection_id(doc)
+    if declared_id != derived_id:
+        _refuse(REFUSE_SELECTION_ID,
+                f"selection_id is {declared_id!r} but the contract's own "
+                f"canonical_content derives {derived_id!r} "
+                f"(rule: {SELECTION_ID_RULE}). A selection whose id does not follow from "
+                "the biology it names could be pointed at a different biology and keep "
+                "its name")
+
     # ---- Stage-1 must be the accepted v3 method ----
     if str(c["stage1_method_version"]) != STAGE1_METHOD_VERSION:
         _refuse(REFUSE_STAGE1_METHOD,
@@ -340,12 +389,15 @@ def bind(doc: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_ID,
         "selection_origin": doc["selection_origin"],
-        # carried VERBATIM as provenance. Stage-2 cannot recompute it and does not key on
-        # it — see STAGE1_SELECTION_ID_NOT_REDERIVABLE.
+        # RE-DERIVED and CHECKED (m2), not carried on trust. `validate` refuses a contract
+        # whose declared id does not follow from its own canonical content.
         "selection_id": doc["selection_id"],
+        "selection_id_rederived": derive_selection_id(doc),
+        "selection_id_rule_id": SELECTION_ID_RULE_ID,
+        "selection_id_rule": SELECTION_ID_RULE,
+        "canonical_content_sha256": canonical_content_sha256(doc),
         "selection_full_sha256": doc["selection_full_sha256"],
         "full_contract_content_sha256": doc["full_contract_content_sha256"],
-        "selection_id_rule_id": STAGE1_SELECTION_ID_NOT_REDERIVABLE,
         # ...and the key Stage-2 DOES use: the biology it actually read.
         "selection_biology_sha256": selection_biology_sha256(doc),
         "biology": selection_biology(doc),

@@ -45,6 +45,12 @@ from .hashing import content_hash, file_sha256
 DIGEST_ID = "spot.stage02.code_digest.v1"
 DIGEST_LEN = 16
 
+# Compact rule IDs. The rules themselves are stated ONCE, in this module's docstring; a
+# served artifact carries the ID, not the paragraph.
+INCLUDE_RULE_ID = "spot.stage02.code_digest.include_rule.py_json_sorted_relpath.v1"
+BINDING_RULE_ID = (
+    "spot.stage02.code_digest.binding_rule.commit_cleantree_manifest_digest.v1")
+
 # WHAT IS IN THE DIGEST. Stated as a rule, not as a count: "65 py + 3 json" is an
 # OUTCOME of a recipe, and quoting the outcome as if it were the recipe is how the
 # irreproducible number happened in the first place.
@@ -126,6 +132,65 @@ def build(root: str, repo: Optional[str] = None) -> dict[str, Any]:
             "a run binds (git.commit, git.clean_tree, manifest_sha256, "
             "canonical_digest) — never the digest alone, and never a digest recorded "
             "without the manifest that produced it"),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# THE RUN BINDING (M2). Every production run carries the code identity TUPLE.
+# --------------------------------------------------------------------------- #
+DIRTY_TREE_REFUSED = "code_tree_is_dirty_and_the_digest_does_not_identify_the_commit"
+
+
+class DirtyTreeError(RuntimeError):
+    """A release-grade run may not be taken from an uncommitted tree."""
+
+
+def run_binding(root: Optional[str] = None, repo: Optional[str] = None, *,
+                require_clean: bool = False) -> dict[str, Any]:
+    """The code-identity TUPLE a run binds: (commit, clean_tree, manifest, digest).
+
+    The digest ALONE is not an identity. It pins the CONTENT; the commit pins the
+    HISTORY; ``clean_tree`` says whether the two can even be compared. A dirty tree with a
+    matching digest is a coincidence, not a provenance claim.
+
+    ``require_clean`` is the release-grade gate: a production run taken from an
+    uncommitted tree is bound to bytes that exist on somebody's disk and in no commit, so
+    the commit id beside it identifies nothing. It REFUSES rather than annotating.
+
+    The per-file manifest is deliberately NOT inlined into the binding — it would put
+    ~140 hashes into every run id for no extra identity, since ``manifest_sha256`` already
+    covers it exactly. It is emitted alongside, so the digest stays falsifiable.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = root or os.path.dirname(os.path.dirname(here))       # 02_geneskew/
+    repo = repo or os.path.dirname(root)
+
+    doc = build(root, repo)
+    git = doc["git"]
+    if require_clean and git["clean_tree"] is not True:
+        raise DirtyTreeError(
+            f"{DIRTY_TREE_REFUSED}: the working tree is dirty "
+            f"({len(git['dirty_paths'])} path(s), e.g. {git['dirty_paths'][:3]}). A "
+            "release-grade run must be taken from a clean checkout — a digest computed "
+            "over uncommitted bytes does not identify the commit printed beside it. "
+            "To take a run from a dirty tree anyway, pass --allow-dirty-tree: it is "
+            "RECORDED in the run binding and changes the run id, so the artifact says "
+            "so out loud")
+    # A MACHINE block: ids, hashes, counts and booleans. The rules themselves are stated
+    # ONCE, in this module's docstring, and referenced by id — prose re-serialised into
+    # every artifact is not provenance, it is noise that drifts.
+    return {
+        "digest_id": DIGEST_ID,
+        "include_rule_id": INCLUDE_RULE_ID,
+        "binding_rule_id": BINDING_RULE_ID,
+        "digest_root": doc["digest_root"],
+        "commit": git["commit"],
+        "clean_tree": git["clean_tree"],
+        "n_dirty_paths": len(git["dirty_paths"]),
+        "manifest_sha256": doc["manifest_sha256"],
+        "canonical_digest": doc["canonical_digest"],
+        "n_files": doc["n_files"],
+        "clean_checkout_required": bool(require_clean),
     }
 
 

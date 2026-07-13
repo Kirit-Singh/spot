@@ -126,6 +126,9 @@ def build_pathway(args) -> dict[str, Any]:
         "gene_universe_sha256": gene_universe["sha256"],
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
+        # M2: the reproducible code-identity tuple; a release lane refuses a dirty tree
+        "code_identity": rs.code_identity_for(
+            ctx["lane"], getattr(args, "allow_dirty_tree", False)),
         "environment_lock": runid.env_lock_block(args.env_lock),
         # WHAT the records are, by content: a run that emitted different records under
         # the same id would be citing numbers it does not hold.
@@ -209,6 +212,11 @@ def main(argv=None) -> int:
     ap.add_argument("--target-identity-map", default=None)
     ap.add_argument("--donor-crosswalk", default=None)
     ap.add_argument("--env-lock", default=None)
+    ap.add_argument("--allow-dirty-tree", action="store_true",
+                    help="take a RELEASE-grade run from an uncommitted tree. The digest "
+                         "then describes bytes that exist in no commit, so this is "
+                         "RECORDED in the run binding and CHANGES the run id — a dirty "
+                         "release is allowed to exist, not to look like a clean one.")
     ap.add_argument("--lane", default=config.LANE_PRODUCTION, choices=list(config.LANES))
     ap.add_argument("--strict-replay", action="store_true")
     ap.add_argument("--pseudobulk", default=None)

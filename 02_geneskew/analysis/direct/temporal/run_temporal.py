@@ -233,6 +233,9 @@ def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, An
         "evidence_domain": rs._domain_block(ctx),
         "support_contract": ctx["support_contract"],
         "release_gate": verdict["release_gate"],
+        # M2: the reproducible code-identity tuple; a release lane refuses a dirty tree
+        "code_identity": rs.code_identity_for(
+            ctx["lane"], getattr(args, "allow_dirty_tree", False)),
         "environment_lock": runid.env_lock_block(args.env_lock),
     }
     full = sha256_hex(canonical_json(binding))

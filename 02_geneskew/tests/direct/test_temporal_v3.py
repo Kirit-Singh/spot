@@ -64,8 +64,16 @@ TRUST_KEYS = ("validation_raw_sha256", "validation_semantics_raw_sha256",
               "scoring_view_canonical_sha256")
 
 
-def _reseal(doc):
+def _reseal(doc, derive_id=True):
+    """Seal the contract the way an HONEST producer does.
+
+    The selection_id DERIVES from canonical_content (m2), so it is computed here before
+    the full-contract hash is taken over the finished document. ``derive_id=False`` leaves
+    a caller-supplied id in place — that is the forgery path, and the gate refuses it.
+    """
     from direct.hashing import content_hash
+    if derive_id:
+        doc["selection_id"] = G.derive_selection_id(doc)
     payload = {k: v for k, v in doc.items() if k != "full_contract_content_sha256"}
     doc["full_contract_content_sha256"] = content_hash(payload)
     return doc

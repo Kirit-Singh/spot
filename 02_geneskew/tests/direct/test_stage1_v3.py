@@ -109,8 +109,15 @@ def emit(a="prog_alpha", dir_a="high", b="prog_beta", dir_b="low",
     return reseal(doc)
 
 
-def reseal(doc):
-    """Recompute the contract's own content hash — an HONEST producer's forgery."""
+def reseal(doc, derive_id=True):
+    """Seal the contract the way an HONEST producer does.
+
+    The selection_id DERIVES from canonical_content (m2), so it is computed before the
+    full-contract hash is taken over the finished document. ``derive_id=False`` keeps a
+    caller-supplied id — the forgery path the gate must refuse.
+    """
+    if derive_id:
+        doc["selection_id"] = G.derive_selection_id(doc)
     payload = {k: v for k, v in doc.items() if k != "full_contract_content_sha256"}
     doc["full_contract_content_sha256"] = content_hash(payload)
     return doc
@@ -349,13 +356,31 @@ def test_a_contract_that_names_TWO_BIOLOGIES_is_refused(schema, pole, field, val
 
 
 def test_stage2_keys_on_the_BIOLOGY_it_read_not_on_the_selection_id(schema):
-    """Stage-1's selection_id derivation is not published, so Stage-2 cannot recompute
-    it and does not pretend to. It keys on the biology it actually read, so two different
-    selections can never share a stage2_run_id — whatever their selection_ids say."""
+    """Stage-2 keys on the biology it ACTUALLY READ, so two different selections can never
+    share a stage2_run_id — whatever their selection_ids say.
+
+    The selection_id is now re-derived and enforced (m2), so two different biologies get
+    two different ids anyway. This is the DEFENCE IN DEPTH behind that: even if a producer
+    somehow reused an id, the Stage-2 run id would still separate them, because it is
+    keyed on the biology and not on the label.
+    """
     one = G.validate(emit(a="p1"), schema)
     two = G.validate(emit(a="p2"), schema)
-    assert one["selection_id"] == two["selection_id"]          # a STALE id, unchanged
+    # m2: the ids now DERIVE, so different biology => different id
+    assert one["selection_id"] != two["selection_id"]
+    assert one["selection_id"] == G.derive_selection_id(emit(a="p1"))
     assert one["selection_biology_sha256"] != two["selection_biology_sha256"]
+
+    # ...and the run id does not depend on the id at all: forge them equal and it still
+    # separates the two selections.
+    two_forged = dict(two, selection_id=one["selection_id"])
+    assert G.stage2_run_id(G.stage2_run_binding(
+        one, effect_universe_sha256="e" * 64,
+        perturbation_source_hashes={"de": "d" * 64},
+        direct_config_sha256="c" * 64)) != G.stage2_run_id(G.stage2_run_binding(
+            two_forged, effect_universe_sha256="e" * 64,
+            perturbation_source_hashes={"de": "d" * 64},
+            direct_config_sha256="c" * 64))
 
     def run_id(sel):
         return G.stage2_run_id(G.stage2_run_binding(
@@ -364,7 +389,10 @@ def test_stage2_keys_on_the_BIOLOGY_it_read_not_on_the_selection_id(schema):
             direct_config_sha256="c" * 64))
 
     assert run_id(one) != run_id(two)      # ...and the results cannot collide
-    assert one["selection_id_rule_id"] == G.STAGE1_SELECTION_ID_NOT_REDERIVABLE
+    # m2: the binding now publishes the DERIVATION rule, not the retired
+    # "non-recomputable citation" claim.
+    assert one["selection_id_rule_id"] == G.SELECTION_ID_RULE_ID
+    assert one["selection_id_rederived"] == one["selection_id"]
 
 
 # --------------------------------------------------------------------------- #

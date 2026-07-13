@@ -426,3 +426,10 @@ class RunArgs:
     # invites a test to re-legitimise it.
     strict_replay: bool = False
     pseudobulk: Optional[str] = None
+    # M2. A FIXTURE run is never a release, and a dev tree is never clean, so the fixture
+    # says so out loud rather than pretending otherwise: the emitted binding records
+    # clean_tree=false / clean_checkout_required=false. The real gate — a release lane
+    # REFUSING a dirty tree — is exercised against a real git repo in
+    # test_code_digest.py::test_a_release_lane_REFUSES_a_dirty_tree, and against the real
+    # build path in test_a_release_BUILD_refuses_a_dirty_tree below.
+    allow_dirty_tree: bool = True

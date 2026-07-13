@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 
+import pytest
 from direct import code_digest
 
 
@@ -121,3 +122,101 @@ class TestWhatARunActuallyBinds:
         here = os.path.dirname(os.path.dirname(os.path.abspath(code_digest.__file__)))
         doc = code_digest.build(here, repo=os.path.dirname(os.path.dirname(here)))
         assert not doc["canonical_digest"].startswith("5694444e")
+
+
+# --------------------------------------------------------------------------- #
+# M2 (re-audit) — the digest was reproducible but NOTHING BOUND IT. A run that does
+# not carry the code identity is a run nobody can tie to the code that produced it.
+# --------------------------------------------------------------------------- #
+class TestTheRunBindingCarriesTheCodeIdentity:
+    def test_the_tuple_is_the_binding_not_the_digest_alone(self):
+        b = code_digest.run_binding()
+        assert set(b) >= {"commit", "clean_tree", "manifest_sha256",
+                          "canonical_digest"}
+        assert len(b["manifest_sha256"]) == 64
+        assert len(b["canonical_digest"]) == code_digest.DIGEST_LEN
+
+    def test_a_release_lane_REFUSES_a_dirty_tree(self, tmp_path):
+        # A digest taken over uncommitted bytes does not identify the commit printed
+        # beside it. A release-grade run refuses rather than annotating.
+        import subprocess
+        repo = str(tmp_path)
+        subprocess.run(["git", "init", "-q", repo], check=True)
+        subprocess.run(["git", "-C", repo, "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", repo, "config", "user.name", "t"], check=True)
+        with open(os.path.join(repo, "a.py"), "w") as fh:
+            fh.write("x = 1\n")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", repo, "commit", "-qm", "init"], check=True)
+
+        clean = code_digest.run_binding(repo, repo, require_clean=True)
+        assert clean["clean_tree"] is True
+
+        with open(os.path.join(repo, "a.py"), "w") as fh:
+            fh.write("x = 2\n")                      # uncommitted
+        with pytest.raises(code_digest.DirtyTreeError) as exc:
+            code_digest.run_binding(repo, repo, require_clean=True)
+        assert code_digest.DIRTY_TREE_REFUSED in str(exc.value)
+
+        # ...and a NON-release lane records it honestly rather than pretending
+        dirty = code_digest.run_binding(repo, repo, require_clean=False)
+        assert dirty["clean_tree"] is False
+
+    def test_the_direct_run_binds_it(self, synthetic_run):
+        from direct import run_screen
+        res = run_screen.build_screen(synthetic_run())
+        with open(os.path.join(res["out_dir"], "provenance.json")) as fh:
+            prov = json.load(fh)
+        ci = prov["run_binding"]["code_identity"]
+        assert ci["canonical_digest"] == code_digest.run_binding()["canonical_digest"]
+        assert ci["manifest_sha256"] == code_digest.run_binding()["manifest_sha256"]
+
+    def test_the_temporal_run_binds_it(self, temporal_run):
+        from direct.temporal import run_temporal
+        res = run_temporal.build_temporal(temporal_run())
+        with open(os.path.join(res["out_dir"], "temporal_provenance.json")) as fh:
+            prov = json.load(fh)
+        ci = prov["run_binding"]["code_identity"]
+        assert ci["canonical_digest"] == code_digest.run_binding()["canonical_digest"]
+
+    def test_the_run_id_MOVES_when_the_code_identity_moves(self, synthetic_run):
+        # The tuple is bound INTO the identity, not merely printed beside it.
+        from direct import run_screen, runid
+        args = synthetic_run()
+        res = run_screen.build_screen(args)
+        with open(os.path.join(res["out_dir"], "provenance.json")) as fh:
+            binding = json.load(fh)["run_binding"]
+        moved = json.loads(json.dumps(binding))
+        moved["code_identity"]["canonical_digest"] = "0" * 16
+        assert runid.run_id_of(moved)[0] != res["run_id"]
+
+    def test_a_release_BUILD_refuses_a_dirty_tree_through_the_real_path(
+            self, synthetic_run, monkeypatch):
+        """The gate, through build_screen itself — not just the helper."""
+        from direct import run_screen
+        args = synthetic_run(lane="production", stage1_selectable=True)
+        args.allow_dirty_tree = False           # a real release does not opt out
+
+        # force the "dirty" verdict without touching the developer's actual tree
+        monkeypatch.setattr(code_digest, "git_identity", lambda repo: {
+            "commit": "d" * 40, "clean_tree": False, "dirty_paths": ["a.py"]})
+
+        with pytest.raises(code_digest.DirtyTreeError):
+            run_screen.build_screen(args)
+
+    def test_the_dirty_opt_out_is_RECORDED_and_changes_the_run_id(
+            self, synthetic_run, monkeypatch):
+        # A dirty release is allowed to exist; it is not allowed to look like a clean one.
+        from direct import run_screen
+        monkeypatch.setattr(code_digest, "git_identity", lambda repo: {
+            "commit": "d" * 40, "clean_tree": False, "dirty_paths": ["a.py"]})
+        dirty = run_screen.build_screen(synthetic_run())      # fixture opts out
+        with open(os.path.join(dirty["out_dir"], "provenance.json")) as fh:
+            ci = json.load(fh)["run_binding"]["code_identity"]
+        assert ci["clean_tree"] is False
+        assert ci["clean_checkout_required"] is False
+
+        monkeypatch.setattr(code_digest, "git_identity", lambda repo: {
+            "commit": "d" * 40, "clean_tree": True, "dirty_paths": []})
+        clean = run_screen.build_screen(synthetic_run())
+        assert clean["run_id"] != dirty["run_id"]     # the flag is BOUND, not annotated

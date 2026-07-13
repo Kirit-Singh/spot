@@ -84,7 +84,9 @@ def build_run_binding(*, selection, lane: str, stage1_release,
                       env_lock: dict[str, Any],
                       support_contract: dict[str, Any],
                       evidence_domain: dict[str, Any],
-                      release_gate: dict[str, Any]) -> dict[str, Any]:
+                      release_gate: dict[str, Any],
+                      code_identity: Optional[dict[str, Any]] = None
+                      ) -> dict[str, Any]:
     """Assemble the canonical, timestamp-free content that run_id hashes.
 
     Three claims are bound here that a run could otherwise have changed while keeping
@@ -145,6 +147,11 @@ def build_run_binding(*, selection, lane: str, stage1_release,
         "mask_sha256": mask_sha256,
         "gene_universe_sha256": gene_universe_sha256,
         "code_tree_sha256": code_tree,
+        # M2: the REPRODUCIBLE code-identity TUPLE — (commit, clean_tree, manifest_sha256,
+        # canonical_digest). `code_tree_sha256` above hashes only the .py files in this one
+        # package directory; this identifies the whole Stage-2 tree against a committed
+        # history, by a recipe anybody can re-run (`python -m direct.code_digest`).
+        "code_identity": code_identity,
         "environment_lock": env_lock,
     }
 

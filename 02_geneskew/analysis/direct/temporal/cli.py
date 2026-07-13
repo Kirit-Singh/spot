@@ -37,6 +37,11 @@ def main(argv=None):
     ap.add_argument("--target-identity-map", default=None)
     ap.add_argument("--donor-crosswalk", default=None)
     ap.add_argument("--env-lock", default=None)
+    ap.add_argument("--allow-dirty-tree", action="store_true",
+                    help="take a RELEASE-grade run from an uncommitted tree. The digest "
+                         "then describes bytes that exist in no commit, so this is "
+                         "RECORDED in the run binding and CHANGES the run id — a dirty "
+                         "release is allowed to exist, not to look like a clean one.")
     ap.add_argument("--lane", default=config.LANE_PRODUCTION,
                     choices=list(config.LANES))
     ap.add_argument("--strict-replay", action="store_true",

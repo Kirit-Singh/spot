@@ -39,6 +39,11 @@ def main(argv=None):
     ap.add_argument("--donor-crosswalk", default=None,
                     help="explicit Stage-1-donor-label -> release-donor-token map")
     ap.add_argument("--env-lock", default=None)
+    ap.add_argument("--allow-dirty-tree", action="store_true",
+                    help="take a RELEASE-grade run from an uncommitted tree. The digest "
+                         "then describes bytes that exist in no commit, so this is "
+                         "RECORDED in the run binding and CHANGES the run id — a dirty "
+                         "release is allowed to exist, not to look like a clean one.")
     ap.add_argument("--lane", default=config.LANE_PRODUCTION,
                     choices=list(config.LANES),
                     help="must match the selection contract's declared lane")
