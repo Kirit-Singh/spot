@@ -10,6 +10,11 @@ export type AdapterErrorCode =
   | 'cross_namespace_pointer'
   | 'stale_combined_field'
   | 'illegal_rank_on_ineligible_arm'
+  | 'content_hash_mismatch'
+  | 'stage_label_mismatch'
+  | 'arm_key_mismatch'
+  | 'legacy_pair_shape'
+  | 'convergence_ref_mismatch'
   | 'malformed';
 
 export class AdapterError extends Error {

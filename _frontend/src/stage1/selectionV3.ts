@@ -15,6 +15,7 @@ export const ESTIMATOR_ID = ['within_condition_v1', 'temporal_cross_condition_v1
 export const CONDITIONS = ['Rest', 'Stim8hr', 'Stim48hr'] as const;
 
 export type ExecutionStatus = (typeof EXECUTION_STATUS)[number];
+export type EstimatorStatus = (typeof ESTIMATOR_STATUS)[number];
 export type AnalysisMode = (typeof ANALYSIS_MODE)[number];
 export type EffectProjectionStatus = (typeof EFFECT_PROJECTION_STATUS)[number];
 
@@ -67,13 +68,19 @@ export interface VerifiedSelectionV3 {
   derived_execution_status: ExecutionStatus;
 }
 
-/** Pure routing derivation from mode + poles — the UI's own decision, per the contract rules. */
+/** Pure routing derivation from mode + poles + estimator — the UI's own decision, per the contract rules. */
 export function deriveExecutionStatus(
   mode: AnalysisMode,
   poleAStatus: EffectProjectionStatus,
   poleBStatus: EffectProjectionStatus,
+  estimatorStatus: EstimatorStatus,
 ): ExecutionStatus {
-  if (mode === 'temporal_cross_condition') return 'awaiting_estimator';
+  if (mode === 'temporal_cross_condition') {
+    // The temporal estimator now EXISTS: ready IFF its estimator is implemented/available;
+    // still awaiting_estimator when the estimator is not_implemented. (No "temporal can
+    // never be ready" rule any more — see w18_to_w13_temporal_v3 handoff.)
+    return estimatorStatus === 'available' ? 'ready' : 'awaiting_estimator';
+  }
   // within_condition: refused if either pole's effect projection is unavailable, else ready.
   if (poleAStatus === 'unavailable' || poleBStatus === 'unavailable') return 'refused';
   return 'ready';
@@ -120,9 +127,11 @@ export async function verifySelectionV3(input: unknown): Promise<VerifiedSelecti
 
   const expectedEstimator = analysis_mode === 'within_condition' ? 'within_condition_v1' : 'temporal_cross_condition_v1';
   if (estimator_id !== expectedEstimator) fail('estimator_mode_mismatch', `estimator_id ${estimator_id} != ${expectedEstimator}`);
-  const expectedEstimatorStatus = analysis_mode === 'within_condition' ? 'available' : 'not_implemented';
-  if (estimator_status !== expectedEstimatorStatus) {
-    fail('estimator_mode_mismatch', `estimator_status ${estimator_status} != ${expectedEstimatorStatus} for ${analysis_mode}`);
+  // within_condition is always implemented → its estimator must be available. The temporal
+  // estimator may now be available (built) OR not_implemented (hypothetical): both are legal,
+  // and the ready-vs-awaiting routing is re-derived from estimator_status below.
+  if (analysis_mode === 'within_condition' && estimator_status !== 'available') {
+    fail('estimator_mode_mismatch', `estimator_status ${estimator_status} != available for within_condition`);
   }
 
   const ccA = cc.A as Record<string, unknown>;
@@ -145,11 +154,11 @@ export async function verifySelectionV3(input: unknown): Promise<VerifiedSelecti
   // ── re-derive routing and enforce it against the declared status ──
   const aStatus = enumOf(pA.effect_projection_status, EFFECT_PROJECTION_STATUS, 'poles.A.effect_projection_status');
   const bStatus = enumOf(pB.effect_projection_status, EFFECT_PROJECTION_STATUS, 'poles.B.effect_projection_status');
-  const derived = deriveExecutionStatus(analysis_mode, aStatus, bStatus);
+  const derived = deriveExecutionStatus(analysis_mode, aStatus, bStatus, estimator_status);
 
-  if (analysis_mode === 'temporal_cross_condition' && execution_status === 'ready') {
-    fail('temporal_labeled_ready', 'temporal_cross_condition can never be ready');
-  }
+  // execution_status must FOLLOW from the contract's own content (mode + estimator + poles);
+  // it is never asserted independently. A temporal contract IS allowed to be ready now —
+  // iff its estimator is available.
   if (execution_status !== derived) {
     fail('execution_status_mismatch', `declared ${execution_status} != re-derived ${derived}`);
   }
