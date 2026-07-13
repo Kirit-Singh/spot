@@ -142,8 +142,15 @@ def _edge(arm: dict[str, Any], rec: dict[str, Any], assertion: dict[str, Any],
 # value they state (arm_value, evaluable, rank), so the merge below cannot let a bridge re-state
 # a measurement. The bridge ADDS; it never CHANGES.
 # --------------------------------------------------------------------------- #
+# EXACTLY the fields the bridge ADDS to a native ranking row — and not one more. `target_symbol`
+# and `target_ensembl` belong here too: they are the rest of the identity tuple the bridge joined,
+# and an edge that dropped them would carry a typed target nobody could name.
+#
+# The producer merges the SAME set (`druglink.stage2_bridge.BRIDGE_SUPPLIED_FIELDS`). Both sides
+# state it independently, and the table hashes are what proves they agree: if either side merged a
+# field the other did not, the reconstruction would drift and this verifier would refuse.
 BRIDGE_SUPPLIED = (S.FIELD_NAMESPACE, S.FIELD_MODALITY, S.FIELD_MODULATION,
-                   S.FIELD_PHENOCOPY_CLASS)
+                   S.FIELD_PHENOCOPY_CLASS, "target_symbol", "target_ensembl")
 
 
 def typed_record(arm: dict[str, Any], rec: dict[str, Any],
@@ -203,14 +210,23 @@ def reconstruct(rep: Report, *, aggregate: dict[str, Any], store: dict[str, Any]
     # names its identity and its assay.
     typed: dict[str, list[dict[str, Any]]] = {}
     refusals: list[str] = []
-    ranked_inferred: list[str] = []
     targets: set[tuple[str, str]] = set()
     for arm in aggregate["arms"]:
         origin = C.ORIGIN_FOR_LANE[arm["lane"]]
         for rec in arm["records"]:
-            # AN INFERRED NODE WAS NEVER PERTURBED, so it has no rank to carry.
-            if origin in v2.INFERRED_ORIGINS and rec.get("rank") is not None:
-                ranked_inferred.append(f"{arm['arm_key']}:{rec.get('target_id')}")
+            # THE NO-RANK RULE IS NOT CHECKED HERE. It used to be, and it fired on the wrong
+            # rows: these are Stage-2's RAW NATIVE pathway ranking records, and they legitimately
+            # carry ranks — a pathway arm ranks perturbation targets in order to COMPUTE its
+            # enrichment. They are upstream INPUTS, not Stage-3's emitted inferred evidence.
+            #
+            # The rule ("an inferred node was never perturbed, so it has no rank to carry") is
+            # about what Stage 3 EMITS. It is enforced on the emitted pathway_context rows, in
+            # v2_table_checks.check_no_rank_on_emitted_inferred_evidence — which is also where
+            # W3's CTX_FORBIDDEN firewall lives, so the two agree about the same rows.
+            #
+            # Checking it here refused an honest bundle over bytes Stage 3 never emitted, and the
+            # only ways to "fix" it there would have been to strip or mutate a native rank — i.e.
+            # to edit an upstream measurement so a downstream gate would pass.
             if origin not in v2.MEASURED_ORIGINS:
                 continue
             try:
@@ -220,15 +236,11 @@ def reconstruct(rep: Report, *, aggregate: dict[str, Any], store: dict[str, Any]
             except S.SignRuleError as exc:
                 refusals.append(str(exc))
 
-    ok = _gate(rep, C.GATE_INFERRED_ROW_CARRIES_A_MEASURED_RANK,
-               "no INFERRED (pathway-origin) record carries a measured rank — nobody perturbed "
-               "it, so it has no rank to carry",
-               not ranked_inferred, str(ranked_inferred[:3]))
     ok = _gate(rep, C.GATE_SYMBOL_JOIN,
                "every measured arm record joins the store by EXACT typed identity (target_id AND "
                "its own per-row namespace token). A symbol join looks identical the day it is "
                "written and silently re-attributes every edge the first time a gene is renamed",
-               not refusals, "; ".join(refusals[:2])) and ok
+               not refusals, "; ".join(refusals[:2]))
     if not ok:
         return None
 

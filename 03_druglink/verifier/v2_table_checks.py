@@ -180,6 +180,25 @@ def check_tables(rep: Report, *, emitted: dict[str, list[dict[str, Any]]],
           not pathway_edges and not context_rows,
           f"{len(pathway_edges)} pathway edge(s), {len(context_rows)} context row(s)")
 
+    # AN INFERRED NODE WAS NEVER PERTURBED, so it has no rank to carry.
+    #
+    # This gate lives HERE, on the rows Stage 3 EMITS, and nowhere else. It used to run in
+    # v2_rebuild over Stage-2's RAW NATIVE pathway ranking records — which legitimately carry
+    # ranks, because a pathway arm ranks perturbation targets in order to compute its enrichment.
+    # Those are upstream INPUTS, not Stage-3 evidence, and refusing them refused an honest bundle
+    # over bytes Stage 3 never emitted. The only ways to make that pass would have been to strip
+    # or mutate a native rank: editing an upstream MEASUREMENT so a downstream gate goes green.
+    ranked = [r.get("target_id") or r.get("context_id")
+              for r in (list(context_rows)
+                        + [e for e in (emitted.get("target_drug_edges") or [])
+                           if e.get("origin_type") in v2.INFERRED_ORIGINS])
+              if r.get("rank") is not None or r.get("arm_rank") is not None]
+    _gate(rep, C.GATE_INFERRED_ROW_CARRIES_A_MEASURED_RANK,
+          "no EMITTED inferred-origin row carries a measured rank — nobody perturbed it, so it "
+          "has no rank to carry. A rank on an inferred row would let a gene that was never "
+          "knocked down sort among genes that were",
+          not ranked, f"{len(ranked)} ranked inferred row(s): {ranked[:3]}")
+
     # AN ENRICHMENT VALUE NEVER SOURCED AN EDGE, and a gene-set id never became a target.
     set_level = [e.get("edge_id") for e in (emitted.get("target_drug_edges") or [])
                  if any(e.get(f) not in (None, "")
