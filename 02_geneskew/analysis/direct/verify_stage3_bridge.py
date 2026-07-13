@@ -81,6 +81,17 @@ AGGREGATE_REPORT = "stage2_aggregate_verification.json"
 
 G_AGGREGATE = "the_bridge_binds_an_ADMITTED_aggregate_and_the_bytes_still_match"
 
+# THE RECEIPT — the immutable-aggregate <-> bridge join. Stage 3 gates on it, so it is a
+# referent like any other: it is REOPENED and RE-DERIVED, never taken at its word.
+RECEIPT_FILE = "stage2_stage3_receipt.json"
+RECEIPT_SCHEMA = "spot.stage02_stage3_receipt.v1"
+
+G_RECEIPT_ABSENT = "the_release_ships_no_stage3_receipt"
+G_RECEIPT_SELF_HASH = "the_receipt_hashes_to_what_it_says_it_does"
+G_RECEIPT_BINDS = "every_artifact_the_receipt_names_is_on_disk_with_exactly_the_bound_bytes"
+G_RECEIPT_ADMITTED = "the_bridge_report_the_receipt_names_actually_ADMITS_the_bridge"
+G_RECEIPT_RESEALED = "the_receipt_names_the_aggregate_that_was_actually_admitted"
+
 G_SELF_HASH = "the_bridge_hashes_to_what_it_says_it_does"
 G_BINDINGS = "the_bridge_binds_the_admitted_native_bytes_it_was_built_from"
 G_SOURCE_BYTES = "the_bound_native_bytes_are_on_disk_and_unchanged"
@@ -536,9 +547,19 @@ def main(argv=None) -> int:
     ap.add_argument("--bridge-root", required=True)
     ap.add_argument("--bundles-root", required=True)
     ap.add_argument("--report", required=True, help="a FILE, not a directory")
+    ap.add_argument("--receipt-only", action="store_true",
+                    help="verify stage2_stage3_receipt.json INSTEAD — the join Stage 3 gates "
+                         "on. A swapped receipt is a swapped release. Its report is written "
+                         "separately: the receipt binds the bridge report, so rewriting that "
+                         "report while checking the receipt would invalidate it.")
     args = ap.parse_args(argv)
 
-    report = verify(args.bridge_root, bundles_root=args.bundles_root)
+    # RECEIPT-ONLY is a SEPARATE pass with a SEPARATE report, and it must be: the receipt
+    # BINDS the bridge report, so re-writing that report while checking the receipt would
+    # invalidate the very hash the receipt was built on. The chain only grows forward.
+    report = (verify_receipt(args.bridge_root, bundles_root=args.bundles_root)
+              if args.receipt_only
+              else verify(args.bridge_root, bundles_root=args.bundles_root))
     with open(args.report, "w") as fh:
         json.dump(report, fh, indent=2, sort_keys=True)
     print(json.dumps({k: v for k, v in report.items() if k != "failures"}, indent=2))
@@ -546,6 +567,95 @@ def main(argv=None) -> int:
         print(f"  - {f}")
     return 0 if report["verdict"] == "admit" else 1
 
+
+
+def verify_receipt(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
+    """REOPEN the receipt and re-derive every artifact it names.
+
+    The receipt is what lets a reader walk from an ADMITTED aggregate to its Stage-3 handoff
+    WITHOUT either artifact having been re-sealed. Stage 3 gates on it — so a swapped receipt
+    is a swapped release. It could point at a different bridge, a different aggregate, or a
+    bridge report that never admitted anything, and every hash inside it would still agree
+    with itself.
+
+    So nothing here is taken at its word: every path it names is reopened, re-hashed against
+    the bytes it bound, and the bridge report it names must actually say `admit`.
+    """
+    failures: list[str] = []
+    path = os.path.join(bridge_root, RECEIPT_FILE)
+    if not os.path.exists(path):
+        return {"verdict": "reject", "n_failed": 1, "receipt": None,
+                "failures": [f"{G_RECEIPT_ABSENT}: no {RECEIPT_FILE} at {bridge_root}. The "
+                             "receipt is the ONLY thing that joins an admitted aggregate to "
+                             "its Stage-3 handoff; without it, Stage 3 is trusting a bridge "
+                             "that names an aggregate nobody re-checked"]}
+    with open(path) as fh:
+        doc = json.load(fh)
+
+    if doc.get("schema_version") != RECEIPT_SCHEMA:
+        failures.append(f"{G_RECEIPT_SELF_HASH}: schema {doc.get('schema_version')!r} is not "
+                        f"{RECEIPT_SCHEMA!r}")
+
+    claimed = doc.get("receipt_sha256")
+    derived = _canon({k: v for k, v in doc.items() if k != "receipt_sha256"})
+    if claimed != derived:
+        failures.append(f"{G_RECEIPT_SELF_HASH}: says {str(claimed)[:16]}; its own content "
+                        f"hashes to {derived[:16]}")
+
+    # THE AGGREGATE MUST NOT HAVE BEEN RE-SEALED. The receipt exists precisely to make that
+    # unnecessary; a receipt that claimed otherwise would be describing a different design.
+    if (doc.get("aggregate_is_immutable") is not True
+            or doc.get("aggregate_was_resealed") is not False):
+        failures.append(
+            f"{G_RECEIPT_RESEALED}: the receipt says aggregate_was_resealed="
+            f"{doc.get('aggregate_was_resealed')!r}. An admitted aggregate is never rewritten "
+            "— the chain only grows forward")
+
+    # EVERY REFERENT, REOPENED. raw AND canonical, against the bytes on disk.
+    referents = {
+        "aggregate.manifest": (doc.get("aggregate") or {}).get("manifest"),
+        "aggregate.report": (doc.get("aggregate") or {}).get("report"),
+        "bridge": doc.get("bridge"),
+        "bridge_report": doc.get("bridge_report"),
+    }
+    loaded: dict[str, Any] = {}
+    for name, bound in referents.items():
+        if not bound:
+            failures.append(f"{G_RECEIPT_BINDS}: the receipt names no {name}")
+            continue
+        p = bound.get("path")
+        if not p or not os.path.exists(p):
+            failures.append(f"{G_RECEIPT_BINDS}: {name}: {p!r} is named but is not on disk")
+            continue
+        if _sha256(p) != bound.get("raw_sha256"):
+            failures.append(
+                f"{G_RECEIPT_BINDS}: {name}: bound {str(bound.get('raw_sha256'))[:16]}, on "
+                f"disk {_sha256(p)[:16]} — the receipt names a different artifact than the "
+                "one that is there")
+            continue
+        with open(p) as fh:
+            body = json.load(fh)
+        if bound.get("canonical_sha256") and _canon(body) != bound["canonical_sha256"]:
+            failures.append(f"{G_RECEIPT_BINDS}: {name}: canonical hash does not match")
+        loaded[name] = body
+
+    # ...and the reports it names must actually ADMIT. A receipt binding a REJECT report is a
+    # receipt for a release that was refused.
+    for name, want in (("aggregate.report", "admit"), ("bridge_report", "admit")):
+        body = loaded.get(name)
+        if body is not None and body.get("verdict") != want:
+            failures.append(
+                f"{G_RECEIPT_ADMITTED}: {name} says verdict={body.get('verdict')!r}, not "
+                f"{want!r}. The receipt is a receipt FOR AN ADMISSION")
+
+    return {
+        "verifier_id": "spot.stage02.stage3_receipt.independent_verifier.v1",
+        "generator_is_not_verifier": True,
+        "receipt": RECEIPT_FILE,
+        "n_failed": len(failures),
+        "failures": failures[:50],
+        "verdict": "admit" if not failures else "reject",
+    }
 
 if __name__ == "__main__":
     raise SystemExit(main())

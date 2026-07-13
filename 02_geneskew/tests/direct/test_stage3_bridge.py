@@ -697,3 +697,120 @@ class TestTheFiveSWAPS:
         assert r["verdict"] == "reject"
         assert any(V.G_CTX_FLAGS in f for f in r["failures"])
         assert any(V.G_CTX_ALLOWLIST in f for f in r["failures"])
+
+
+class TestTheRECEIPTIsAReferentLikeAnyOther:
+    """Stage 3 gates on the receipt (W16 --stage2-bridge-receipt). A swapped receipt is a
+    swapped release: it can name a different bridge, a different aggregate, or a report that
+    never admitted anything — and every hash inside it still agrees with itself."""
+
+    def _built(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, d, p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+        return root, d, bridge
+
+    def test_the_receipt_is_INDEPENDENTLY_verified_and_ADMITS(self, tmp_path):
+        root, _d, bridge = self._built(tmp_path)
+        rec = V.verify_receipt(bridge, bundles_root=root)
+        assert rec["verdict"] == "admit", rec["failures"]
+        assert rec["generator_is_not_verifier"] is True
+
+    def test_a_MISSING_receipt_is_REFUSED(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, bridge = self._built(tmp_path)
+        os.remove(os.path.join(bridge, BB.RECEIPT_FILE))
+        rec = V.verify_receipt(bridge, bundles_root=root)
+        assert rec["verdict"] == "reject"
+        assert any(V.G_RECEIPT_ABSENT in f for f in rec["failures"])
+
+    def test_a_SWAPPED_receipt_naming_a_DIFFERENT_bridge_is_REFUSED(self, tmp_path):
+        """The attack W16's gate needs: the bridge is replaced, the receipt still points at
+        it by path, and the receipt is resealed so its own hash is valid."""
+        from direct import stage3_bridge as BB
+        root, _d, bridge = self._built(tmp_path)
+
+        bpath = os.path.join(bridge, BB.BRIDGE_FILE)
+        doc = json.load(open(bpath))
+        doc["target_rows"][0]["arm_value"] = -0.5          # a different bridge entirely
+        with open(bpath, "w") as fh:
+            json.dump(_reseal(doc), fh)
+
+        rec = V.verify_receipt(bridge, bundles_root=root)
+        assert rec["verdict"] == "reject"
+        assert any(V.G_RECEIPT_BINDS in f for f in rec["failures"])
+        assert any("a different artifact than the one that is there" in f
+                   for f in rec["failures"])
+
+    def test_a_receipt_binding_a_REJECTING_bridge_report_is_REFUSED(self, tmp_path):
+        """A receipt is a receipt FOR AN ADMISSION."""
+        import hashlib
+
+        from direct import stage3_bridge as BB
+        root, _d, bridge = self._built(tmp_path)
+
+        rpath = os.path.join(bridge, BB.BRIDGE_REPORT_FILE)
+        with open(rpath, "w") as fh:
+            json.dump({"verdict": "reject", "n_failed": 4, "failures": []}, fh,
+                      indent=2, sort_keys=True)
+        # ...and re-point the receipt at it, honestly, so only the VERDICT is wrong
+        recp = os.path.join(bridge, BB.RECEIPT_FILE)
+        doc = json.load(open(recp))
+        doc["bridge_report"]["raw_sha256"] = _sha(rpath)
+        doc["bridge_report"]["canonical_sha256"] = hashlib.sha256(json.dumps(
+            json.load(open(rpath)), sort_keys=True, separators=(",", ":"),
+            ensure_ascii=True).encode()).hexdigest()
+        doc.pop("receipt_sha256")
+        doc["receipt_sha256"] = hashlib.sha256(json.dumps(
+            doc, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+        with open(recp, "w") as fh:
+            json.dump(doc, fh, indent=2, sort_keys=True)
+
+        rec = V.verify_receipt(bridge, bundles_root=root)
+        assert rec["verdict"] == "reject"
+        assert any(V.G_RECEIPT_ADMITTED in f for f in rec["failures"])
+
+    def test_a_receipt_CLAIMING_the_aggregate_was_RESEALED_is_REFUSED(self, tmp_path):
+        import hashlib
+
+        from direct import stage3_bridge as BB
+        root, _d, bridge = self._built(tmp_path)
+        recp = os.path.join(bridge, BB.RECEIPT_FILE)
+        doc = json.load(open(recp))
+        doc["aggregate_was_resealed"] = True
+        doc.pop("receipt_sha256")
+        doc["receipt_sha256"] = hashlib.sha256(json.dumps(
+            doc, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+        with open(recp, "w") as fh:
+            json.dump(doc, fh, indent=2, sort_keys=True)
+
+        rec = V.verify_receipt(bridge, bundles_root=root)
+        assert rec["verdict"] == "reject"
+        assert any(V.G_RECEIPT_RESEALED in f for f in rec["failures"])
+
+    def test_a_TAMPERED_receipt_fails_its_OWN_hash(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, bridge = self._built(tmp_path)
+        recp = os.path.join(bridge, BB.RECEIPT_FILE)
+        doc = json.load(open(recp))
+        doc["bridge"]["raw_sha256"] = "0" * 64
+        with open(recp, "w") as fh:
+            json.dump(doc, fh, indent=2, sort_keys=True)
+
+        rec = V.verify_receipt(bridge, bundles_root=root)
+        assert rec["verdict"] == "reject"
+        assert any(V.G_RECEIPT_SELF_HASH in f for f in rec["failures"])
+
+    def test_the_CLI_verifies_the_receipt_it_just_WROTE(self, tmp_path):
+        """generator != verifier, at the process level: the producer writes the receipt, and a
+        SEPARATE process re-derives it."""
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+        # the receipt's report is SEPARATE — it binds the bridge report, so re-writing that
+        # report while checking the receipt would invalidate the hash it was built on
+        rec = json.load(open(os.path.join(bridge, BB.RECEIPT_REPORT_FILE)))
+        assert rec["verdict"] == "admit"
+        assert rec["generator_is_not_verifier"] is True

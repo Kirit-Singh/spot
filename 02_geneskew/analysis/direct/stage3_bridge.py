@@ -16,6 +16,28 @@ lane's exact identity/assay source.
 The producer of this bridge admits nothing. ``verify_stage3_bridge`` reopens the admitted
 native bytes and REBUILDS every row and context — because a self-hash proves only that a
 document agrees with itself, and a forgery can be made to agree with itself.
+
+THE FOUR ARTIFACTS STAGE 3 CONSUMES (W16's `--v2` path; all four REQUIRED)
+-------------------------------------------------------------------------
+    python -m direct.stage3_bridge \
+      --bundles-root OUT --bridge-root OUT --verify
+
+    OUT/stage2_run_manifest.json            the aggregate       (immutable; never re-sealed)
+    OUT/stage2_aggregate_verification.json  its INDEPENDENT report
+    OUT/stage3_bridge.json                  --stage2-bridge
+    OUT/stage3_bridge_verification.json     --stage2-bridge-report
+    OUT/stage2_stage3_receipt.json          --stage2-bridge-receipt   <- THE JOIN
+    OUT/stage3_receipt_verification.json    the receipt's OWN report
+
+THE RECEIPT IS NOT OPTIONAL. It is the only artifact that ties an ADMITTED aggregate to this
+bridge, and it is the reason the aggregate never has to be re-sealed. Without it Stage 3 is
+trusting a bridge that merely *claims* which aggregate it was built over. So it is verified
+like any other referent — reopened, re-derived, and refused if it names a different bridge, a
+different aggregate, or a report that never admitted anything.
+
+Its report is written SEPARATELY, and must be: the receipt BINDS the bridge report, so
+re-writing that report while checking the receipt would invalidate the very hash the receipt
+was built on. The chain only grows forward.
 """
 from __future__ import annotations
 
@@ -75,6 +97,7 @@ def build_bridge(*, bindings: dict[str, Any], rows: list, contexts: list) -> dic
 RECEIPT_FILE = "stage2_stage3_receipt.json"
 RECEIPT_SCHEMA = "spot.stage02_stage3_receipt.v1"
 BRIDGE_REPORT_FILE = "stage3_bridge_verification.json"
+RECEIPT_REPORT_FILE = "stage3_receipt_verification.json"
 
 AGGREGATE_MANIFEST = "stage2_run_manifest.json"
 AGGREGATE_REPORT = "stage2_aggregate_verification.json"
@@ -375,9 +398,22 @@ def main(argv=None) -> int:
                   report_binding=report_binding)
     with open(os.path.join(args.bridge_root, RECEIPT_FILE), "w") as fh:
         json.dump(rec, fh, indent=2, sort_keys=True)
+
+    # ...and the SEPARATE verifier re-derives the receipt it did not write. Stage 3 gates on
+    # this file, so it is a referent like any other: a receipt nobody checked is a claim.
+    receipt_report = os.path.join(args.bridge_root, RECEIPT_REPORT_FILE)
+    proc = subprocess.run(
+        [sys.executable, "-m", "direct.verify_stage3_bridge",
+         "--bridge-root", args.bridge_root, "--bundles-root", args.bundles_root,
+         "--report", receipt_report, "--receipt-only"], env=env, capture_output=True,
+        text=True)
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
     print(json.dumps({"receipt": RECEIPT_FILE,
-                      "aggregate_was_resealed": rec["aggregate_was_resealed"]}, indent=2))
-    return 0
+                      "receipt_report": RECEIPT_REPORT_FILE,
+                      "aggregate_was_resealed": rec["aggregate_was_resealed"],
+                      "receipt_independently_verified": proc.returncode == 0}, indent=2))
+    return proc.returncode
 
 
 if __name__ == "__main__":
