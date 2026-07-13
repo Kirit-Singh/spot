@@ -1233,3 +1233,103 @@ class TestTheREALW11Bytes:
             "the W11 contract cannot be exercised, so the temporal lane is NOT proven "
             "end-to-end on real bytes. Production is fail-closed without them (bind_external "
             "re-hashes each one). Copy output/temporal/<relative_dir>/ from tcefold to close it.")
+
+
+# --------------------------------------------------------------------------- #
+# THE W10 CODE PIN. RE-DERIVED, never copied.
+#
+# I inherited 8290802638… and it REFUSED THREE GENUINE, GREEN W10 REPORTS. A gate that refuses
+# real evidence is not a strict gate, it is a broken one — and the failure mode is nastier than
+# a fail-open, because it looks like rigour. The reports were never the problem; the constant
+# was. So the pin is now RE-DERIVED from the checkout that actually wrote them.
+# --------------------------------------------------------------------------- #
+W10_PRODUCER_ROOT = ("/home/tcelab/worktrees/spot-stage2-w10-producer-root/"
+                     "02_geneskew/analysis/direct")
+
+
+class TestTheW10CodePinIsRE_DERIVED:
+    def test_the_pin_RE_DERIVES_from_the_canonical_W10_checkout(self):
+        """Not copied from a doc. Computed, from the tree that wrote the reports."""
+        if not os.path.isdir(W10_PRODUCER_ROOT):
+            pytest.skip("the W10 producer-root checkout is not on this host")
+        import subprocess
+        out = subprocess.run(
+            [sys.executable, "-c",
+             "import sys;sys.path.insert(0,'.');import verify_arm_report as R;"
+             "print(R.verifier_code_sha256())"],
+            cwd=W10_PRODUCER_ROOT, capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.strip() == LA.W10_VERIFIER_CODE
+
+    def test_the_STALE_pin_is_NAMED_and_is_NOT_the_pin(self):
+        import verify_admission_rules as VR
+        stale = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
+        assert LA.W10_VERIFIER_CODE_PREVIOUS == stale
+        assert LA.W10_VERIFIER_CODE != stale
+        assert LA.W10_VERIFIER_CODE == (
+            "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174")
+        assert VR.W10_VERIFIER_CODE == LA.W10_VERIFIER_CODE      # both sides re-pinned
+
+    def test_a_report_bound_to_the_STALE_pin_is_REFUSED(self, tmp_path):
+        """The pre-producer-code-root build is not the current verifier."""
+        doc = emit()
+        bound = S1.validate(doc, S1.load_schema(SCHEMA_PATH))
+        root = str(tmp_path)
+        keys = [bound["arms"][r]["direct_arm_key"] for r in ("away_from_A", "toward_B")]
+        d = _direct_store(root, "Rest", keys)
+        rp = os.path.join(root, LA.W10_REPORT_FILE.format(condition="Rest"))
+        rep = json.load(open(rp))
+        rep["verifier_code_sha256"] = LA.W10_VERIFIER_CODE_PREVIOUS
+        rep["report_sha256"] = content_hash(
+            {k: v for k, v in rep.items() if k != "report_sha256"})
+        with open(rp, "w") as fh:
+            json.dump(rep, fh)
+
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_direct(root, condition="Rest", bundle_dir=d,
+                           arm_key=keys[0], stage1={})
+        assert exc.value.gate == LA.G_VERIFIER
+
+    def test_the_REAL_admitted_W10_reports_carry_the_CANONICAL_pin(self):
+        """The three real reports, unedited, bind 943d32bd… — the current verifier."""
+        base = "/home/tcelab/.spot-audits/w3-ui-integration-real-direct"
+        if not os.path.isdir(base):
+            pytest.skip("the real Direct audit bundles are not on this host")
+        for c in ("Rest", "Stim8hr", "Stim48hr"):
+            rep = json.load(open(os.path.join(base, f"w10_admission_{c}.json")))
+            assert rep["verifier_code_sha256"] == LA.W10_VERIFIER_CODE
+            assert rep["verdict"] == "ADMIT" and rep["n_failed"] == 0
+
+    def test_ALL_W10_pin_consumers_AGREE_on_the_canonical_hash(self):
+        """Every consumer of the W10 code pin, in one place.
+
+        The pin lived in THREE places and they DISAGREED: lane_admission and
+        verify_admission_rules were re-pinned to 943d…, while the SCHEDULER'S RUNTIME BINDING
+        (`stage2_run`) still carried 8290… — so the same three genuine reports would have been
+        admitted by the projection and REFUSED by the run. A pin that is true in one module and
+        false in another is not a pin; it is a disagreement waiting to be discovered in
+        production.
+        """
+        import verify_admission_rules as VR
+        from direct import stage2_run as S2
+
+        canonical = "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174"
+        stale = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
+
+        consumers = {
+            "lane_admission": LA.W10_VERIFIER_CODE,
+            "verify_admission_rules": VR.W10_VERIFIER_CODE,
+            "stage2_run": S2.W10_VERIFIER_CODE,
+        }
+        for name, got in consumers.items():
+            assert got == canonical, f"{name} pins {got[:12]}, not the canonical {canonical[:12]}"
+            assert got != stale, f"{name} still pins the PREVIOUS pre-producer-code-root hash"
+
+    def test_the_RUN_IDENTITY_binds_the_canonical_pin_and_the_matching_head(self):
+        """The head must name the SAME TREE the code hash re-derives from."""
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                                "analysis", "direct", "stage2_run.py")).read()
+        assert "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174" in src
+        assert "f6da8047a61411aa5374d6281fe6672979573af5" in src        # producer-root head
+        # 2c3031e hashes to the PREVIOUS pin and must not be the bound head any more
+        assert '"direct_verifier_head": "2c3031e' not in src

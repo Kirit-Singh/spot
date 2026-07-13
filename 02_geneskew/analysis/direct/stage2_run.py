@@ -157,8 +157,14 @@ def build_run_identity(cfg: Cfg) -> dict:
         "verifier_pins": {
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
-                "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f",
-            "direct_verifier_head": "2c3031e00bd6df8d6683a0da1054197f01d8e449",  # W10 FINAL adapter (6 release cross-pins)
+                # CANONICAL W10 code hash, re-derived from the producer-root checkout that
+                # WROTE the admitted reports (agent/stage2-w10-producer-root-fix @ f6da804).
+                # The previous value (8290802638…) is the pre-producer-code-root pin and
+                # REFUSES three genuine, green W10 reports.
+                "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174",
+            # The head must name the SAME TREE the code hash re-derives from. 2c3031e hashes
+            # to the PREVIOUS pin (8290…); the producer-root checkout below re-derives 943d….
+            "direct_verifier_head": "f6da8047a61411aa5374d6281fe6672979573af5",  # agent/stage2-w10-producer-root-fix
             "direct_verifier_tree_sha256": (("tree:" + tree_sha256(cfg.direct_verifier))
                                             if (not DRY and os.path.isdir(cfg.direct_verifier))
                                             else "<unbound>"),
@@ -391,7 +397,8 @@ def native_report_path(cfg, cond):
 
 
 BINDING_SCHEMA = "spot.stage02.direct_admission_binding.v1"
-W10_VERIFIER_CODE = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
+# CANONICAL. Re-derived, not copied — see test_all_W10_pin_consumers_agree.
+W10_VERIFIER_CODE = "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174"
 W10_BUNDLE_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
 
 

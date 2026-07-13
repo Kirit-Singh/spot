@@ -27,7 +27,16 @@ from typing import Any
 W10_REPORT_FILE = "w10_admission_{condition}.json"
 W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
 W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
-W10_VERIFIER_CODE = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
+# THE CANONICAL W10 VERIFIER CODE HASH — re-derived from the producer-root checkout that
+# actually wrote the admitted reports (agent/stage2-w10-producer-root-fix @ f6da804), and
+# confirmed by that tree's own verify_arm_contract_pins, which documents the value below as the
+# PREVIOUS, pre-producer-code-root pin.
+#
+# I INHERITED THE STALE ONE. It refused three GENUINE, green W10 reports — and a gate that
+# refuses real evidence is not a strict gate, it is a broken one. The reports were never the
+# problem; the constant was. (This is why the pin is RE-DERIVED in a test rather than copied.)
+W10_VERIFIER_CODE = "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174"
+W10_VERIFIER_CODE_PREVIOUS = "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"        # pre producer-code-root; MUST be refused
 W10_RECOMPUTE_MODE = "all"
 W10_MIN_GATES = 50
 W10_REQUIRED_GATE_MARKERS = ("BYTES ON DISK",
