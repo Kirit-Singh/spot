@@ -109,7 +109,7 @@ def test_MUTATION_flipping_a_negative_declaration_to_TRUE_fires_the_firewall(run
 def test_MUTATION_an_edited_support_row_breaks_the_content_address(run_dir):
     path = os.path.join(run_dir, "p2s_arm_support.parquet")
     df = pd.read_parquet(path)
-    df.loc[0, "median_coefficient"] = 99.0
+    df.loc[0, "primary_coefficient"] = 99.0
     df.to_parquet(path, index=False)
 
     rep = V.verify(run_dir)
@@ -118,19 +118,18 @@ def test_MUTATION_an_edited_support_row_breaks_the_content_address(run_dir):
                for c in rep["checks"] if c["status"] == "fail")
 
 
-def test_MUTATION_laundering_an_opposed_target_into_support_is_REJECTED(run_dir):
-    """The status is RE-DERIVED from the frequencies, so relabelling one cannot pass."""
+def test_MUTATION_flipping_the_opposed_flag_off_its_primary_sign_is_REJECTED(run_dir):
+    """`opposed` is EXACTLY the primary-sign-is-opposed fact; relabelling it cannot pass."""
     path = os.path.join(run_dir, "p2s_arm_support.parquet")
     df = pd.read_parquet(path)
-    opp = df.index[df["support_status"] == "p2s_opposed"]
+    opp = df.index[df["primary_sign"] == "opposed"]
     assert len(opp) > 0, "the fixture must plant an opposed contributor"
-    df.loc[opp[0], "support_status"] = "p2s_supported"
-    df.loc[opp[0], "opposed"] = False
+    df.loc[opp[0], "opposed"] = False          # lie: opposed sign, opposed flag off
     df.to_parquet(path, index=False)
 
     rep = V.verify(run_dir)
     assert rep["verdict"] == V.REJECT
-    assert any("opposed is never converted to support" in c["check"]
+    assert any("support is continuous" in c["check"]
                for c in rep["checks"] if c["status"] == "fail")
 
 

@@ -156,43 +156,74 @@ class ModelConfig:
     n_pcs: int
 
 
-# FROZEN TO pca_off FOR THIS PRODUCTION RELEASE.
+# THE PAPER'S METHOD, MADE DETERMINISTIC. Marson Methods p.46 uses truncated SVD (to mitigate
+# multicollinearity) then elastic net, DEFAULT D=60. Real-input validation on tcefold (Stim8
+# Th2/Th1, 8947 genes x 3926 targets) settled the config:
 #
-# `pca_on_50` is NOT DETERMINISTIC and must not be shipped as if it were. Upstream builds the
-# projection as
-#
-#     Perturb2StateModel.py:108   pca = TruncatedSVD(n_components=self.n_pcs)
-#
-# with NO `random_state`. sklearn's TruncatedSVD defaults to `algorithm="randomized"`, which
-# then draws from a fresh global RNG on every call — so `random_state=42` on the wrapper does
-# nothing for it. An independent replay measured a repeat max-coefficient delta of ~0.004236.
-#
-# Our own determinism test did not catch this, and the reason is worth writing down: it drove
-# the INJECTED stand-in fitter, which is deterministic by construction. A stand-in hides
-# exactly the defect it stands in for.
-CONFIGS = (ModelConfig("pca_off", False, 0),)
+#   * PCA-OFF IS MATERIALLY DIFFERENT, not a faithful P2S: coef Spearman rho 0.268 vs seeded
+#     PCA, nonzero Jaccard 0.029, mean test R2 .086 vs .124. So pca_off is a NAMED SENSITIVITY,
+#     never the primary — calling it method-faithful P2S would be wrong;
+#   * SEEDED D=60 SVD IS BYTE-DETERMINISTIC: repeat max coefficient delta 0.0 (Spearman 1.0).
+#     The determinism comes from `deterministic_p2s.seeded_upstream_svd`, which injects the
+#     model's own random_state into upstream TruncatedSVD (which omits it at commit 2c2e3095).
+#     Surgical: one estimator, one seed, no other upstream byte changed.
+PRIMARY_CONFIG = ModelConfig("pca_on_60", True, 60)          # seeded SVD, the paper's D=60
+SENSITIVITY_CONFIG = ModelConfig("pca_off", False, 0)        # named sensitivity ONLY
+CONFIGS = (PRIMARY_CONFIG, SENSITIVITY_CONFIG)
+N_PCS = 60
 
-# Retained, NOT run. Restoring it requires patching upstream to seed TruncatedSVD and PROVING
-# byte-stability across repeats — not merely asserting it.
-DEFERRED_CONFIGS = (ModelConfig("pca_on_50", True, 50),)
-PCA_ON_50_DEFERRED_REASON = (
-    "upstream TruncatedSVD is constructed without random_state (Perturb2StateModel.py:108), "
-    "so the projection is not reproducible under a fixed wrapper seed; measured repeat max "
-    "coefficient delta ~0.004236")
-DETERMINISM_SCOPE = "pca_off only; pca_on_50 is deferred and is NOT claimed deterministic"
+PCA_DETERMINISM_MECHANISM = (
+    "seeded via deterministic_p2s.seeded_upstream_svd — it injects model.random_state into "
+    "upstream TruncatedSVD, which omits it at commit 2c2e3095. Verified on tcefold: repeat "
+    "max coefficient delta = 0.0 for the seeded D=60 SVD (0.0666 unseeded)")
+DETERMINISM_SCOPE = (
+    "seeded D=60 SVD is the method-faithful PRIMARY (Marson Methods p.46); pca_off is a NAMED "
+    "SENSITIVITY that materially differs (coef rho 0.268) and is labelled as such")
+# We read coefficients via get_coefs() and metrics via model.eval, NEVER get_prediction —
+# whose pca=None branch uses the UNSCALED X_array despite fitting on a StandardScaler. The
+# deterministic wrapper refuses pca_off for exactly this reason (fails closed).
+UPSTREAM_PREDICTION_PATH_USED = False
 
 # --------------------------------------------------------------------------- #
-# Support. Judged PER ARM — there is no other kind of support here.
-# --------------------------------------------------------------------------- #
-SUPPORT_MIN_SELECTION = 0.5           # nonzero-selection frequency to count as "selected"
-SUPPORT_SIGN_DOMINANCE = 0.75         # fraction of selected runs sharing one sign
+# SUPPORT — CONTINUOUS, because the SVD backprojection is DENSE.
+#
+# Under the seeded D=60 SVD, get_coefs() back-projects the elastic-net coefficients through
+# the PCA components, and that projection is DENSE: real-input validation found 3923/3926
+# targets nonzero. A "selection frequency" built on `coefficient != 0` would therefore mark
+# nearly EVERY target as selected — the flag would say "supported" about almost everything and
+# mean nothing.
+#
+# So there is NO discrete p2s_supported/opposed/weak flag. The lane emits the CONTINUOUS
+# quantities a reader can threshold PROSPECTIVELY for themselves: the coefficient magnitude,
+# its sign, and the sign AGREEMENT across runs. No threshold is invented here.
+SUPPORT_IS_CONTINUOUS = True
+SUPPORT_IS_DISCRETE_FLAG = False
+DENSE_BACKPROJECTION_NOTE = (
+    "the seeded SVD backprojection is dense (~3923/3926 targets nonzero), so a "
+    "nonzero-selection-frequency cannot define support; this lane emits continuous "
+    "coefficient magnitude + sign stability and defines no discrete support threshold")
+# The sign a coefficient carries is still meaningful (a negative coefficient is OPPOSED — the
+# inverse of the measured knockdown). Sign STABILITY across runs is emitted; a magnitude
+# threshold is the consumer's, defined prospectively, never here.
+SIGN_OPPOSED = "opposed"              # a per-row sign fact, NOT a support verdict
+SIGN_SUPPORTIVE = "supportive"
+SIGN_ZERO = "zero"
 
-SUPPORTED = "p2s_supported"           # selected + positive sign dominant
-OPPOSED = "p2s_opposed"               # selected + negative sign dominant (inverse knockdown)
-MIXED = "p2s_mixed"                   # selected, neither sign dominates
-WEAK = "p2s_weak"                     # selected in < 50% of runs
-NOT_SELECTED = "p2s_not_selected"     # never selected
-SUPPORT_STATUS_VALUES = (SUPPORTED, OPPOSED, MIXED, WEAK, NOT_SELECTED)
+# THE PRIMARY ESTIMAND — exactly one fit family. Everything else is a NAMED SENSITIVITY and
+# is never pooled into the primary magnitude or sign. Pooling across donor scopes, effect
+# layers and config families would blend different estimands and let a sensitivity move the
+# number a reader sees as "the" P2S coefficient.
+PRIMARY_SCOPE = "all_donor"
+PRIMARY_LAYER = AUTHOR_LAYER               # zscore
+PRIMARY_MODEL_CONFIG = "pca_on_60"         # the seeded D=60 SVD
+
+# The sensitivity families, each typed. A reader compares them to the primary; they never
+# determine it.
+SENSITIVITY_FAMILIES = {
+    "effect_layer_log_fc": "same fit, log_fc instead of zscore",
+    "model_config_pca_off": "same fit, PCA disabled (materially different; see config)",
+    "donor_lodo": "leave-one-donor-out; OVERLAPPING, not independent replicates",
+}
 
 # --------------------------------------------------------------------------- #
 # What this lane does NOT emit. Absence, not prohibition-by-check.
@@ -338,6 +369,12 @@ PREPARE_ID = "spot.stage02.p2s_arms.prepare_inputs.v1"
 P2S_RUNTIME_LOCK_SHA256 = \
     "93823984bda6053c19bf758c38abd91644e50a761d62679449a48cf5312a5c42"
 P2S_RUNTIME_LOCK_FILENAME = "stage02_p2s_runtime_lock.txt"
+# Committed beside the package (like the Direct lock), copied byte-for-byte from tcefold.
+import os as _os  # noqa: E402
+
+P2S_RUNTIME_LOCK_PATH = _os.path.join(
+    _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+    "analysis", P2S_RUNTIME_LOCK_FILENAME)
 LOCK_ROLES = {
     "direct_solver_lock": "the environment the ADMITTED DIRECT ARMS were computed in",
     "p2s_runtime_lock": "the environment THIS lane executes in (sklearn + pert2state_model)",
@@ -358,13 +395,17 @@ DIRECT_LOCK_EXECUTES_P2S = False
 # --------------------------------------------------------------------------- #
 STAGE1_SCORES_RAW_SHA256 = \
     "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f"
-STAGE1_SCORES_CANONICAL_SHA256_DECLARED = \
+# REPRODUCED and GATED. The recipe: primary field order (NOT alphabetical), stable
+# argsort(barcode), f"{round(x,5):.5f}" per field, rows tab-joined, body newline-joined WITH
+# a trailing newline. See ``stage1_canonical``. The earlier "could not reproduce" was a wrong
+# FIELD ORDER; with the correct order it matches the parquet byte-for-byte.
+STAGE1_SCORES_CANONICAL_SHA256 = \
     "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316"
-STAGE1_SCORES_CANONICAL_INDEPENDENTLY_REPRODUCED = False
+STAGE1_SCORES_CANONICAL_INDEPENDENTLY_REPRODUCED = True
 STAGE1_SCORES_CANONICAL_STATUS = (
-    "DECLARED by Stage-1 and recorded; NOT independently reproduced here (25 formulations of "
-    "the published sorted-barcode/5-decimal recipe tried). The raw sha256 is authoritative "
-    "and is what this lane gates on")
+    "REPRODUCED byte-for-byte from the parquet and GATED (not advisory). Both the raw sha256 "
+    "and this canonical hash are hard gates: the raw pins the bytes, the canonical pins the "
+    "science those bytes encode in Stage-1's frozen form")
 STAGE1_SCORES_N_ROWS_PER_CONDITION = 132000
 
 # --------------------------------------------------------------------------- #

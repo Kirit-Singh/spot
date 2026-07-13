@@ -1,77 +1,64 @@
-"""Stability across the run grid, and the SUPPORT STATUS — judged PER ARM.
+"""Stability — a SINGLE primary estimand, with SEPARATELY TYPED sensitivity families.
 
-There is no other kind of support here. Legacy judged support on ``combined_A_to_B``, which
-is ``z(away) + z(toward)`` — a combined objective by another name. A target whose support
-was entirely on one arm, and OPPOSED on the other, carried a strong combined number, and a
-consumer reading one ``support_status`` could not tell which arm the support was for.
-"Supported", on such a target, means the opposite of what it appears to mean.
+TWO THINGS THIS MODULE REFUSES TO DO
+------------------------------------
+  * **pool families.** The PRIMARY P2S coefficient is exactly one fit — ``all_donor`` +
+    author ``zscore`` + the seeded ``pca_on_60`` SVD. ``log_fc``, ``pca_off`` and each
+    leave-one-donor-out fit are SEPARATELY TYPED SENSITIVITIES. Taking a median across all of
+    them would blend different estimands and let a sensitivity move the number a reader sees
+    as "the" coefficient. So the primary magnitude and sign come from the primary fit ALONE;
+  * **invent a support threshold.** Under the seeded SVD the coefficient backprojection is
+    DENSE (~3923/3926 nonzero), so a ``selection_frequency`` on ``coefficient != 0`` would
+    mark almost everything "selected". There is NO discrete ``p2s_supported`` flag and NO
+    rank. The lane emits the CONTINUOUS primary coefficient, its sign, and the cross-family
+    sign CONCORDANCE with denominators; a magnitude threshold is the consumer's, prospective.
 
-So support is emitted once per reusable ``arm_key``, and there is no combined lane to
-quarantine — there is no combined lane at all.
-
-THREE COUNTING RULES, EACH FROM A REAL DEFECT
----------------------------------------------
-  * a ZERO coefficient does not disappear from coverage. ``n_runs`` counts every run in
-    which the target was a column, not only the runs in which it was selected — otherwise a
-    target selected once out of twenty renders as a flawless 1.0;
-  * the DENOMINATOR ships with the frequency. One nonzero of many is not robustness;
-  * overlapping LODO fits are NOT independent replicates. ``lodo_sign_agreement`` is
-    agreement among overlapping fits and says so — it is not a replication claim.
-
-NO RANK COLUMN. A lane with no rank column has no surface on which to reorder anything,
-which is a stronger guarantee than a rule saying it must not.
+The sign is still meaningful: a negative primary coefficient is OPPOSED — the inverse of the
+measured knockdown. Cross-family sign concordance is DESCRIPTIVE and carries its denominator;
+it never overrides the primary sign.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable
-
-import numpy as np
+from typing import Any, Iterable, Optional
 
 from . import config
 
-ALL_DONOR = "all_donor"
 LODO_PREFIX = "lodo_"
 
-LODO_SEMANTICS = ("agreement among OVERLAPPING leave-one-donor-out fits; they share most "
-                  "of their cells and are not independent replicates")
+LODO_SEMANTICS = ("agreement among OVERLAPPING leave-one-donor-out fits; they share most of "
+                  "their cells and are not independent replicates")
 
 
-def _freq(flags: list[bool]) -> float:
-    return round(sum(1 for f in flags if f) / len(flags), 6) if flags else 0.0
+def _sign(coefficient: Optional[float]) -> str:
+    if coefficient is None or abs(coefficient) <= config.NONZERO_TOL:
+        return config.SIGN_ZERO
+    return config.SIGN_SUPPORTIVE if coefficient > 0 else config.SIGN_OPPOSED
 
 
-def _sign_agreement(signs: list[int]) -> Any:
-    """The fraction of NONZERO signs that share the dominant sign, or None if there are 0.
-
-    ``None``, not ``1.0``: no evidence is not perfect agreement, and a 1.0 here would read
-    as the strongest possible support for a target nothing ever selected.
-    """
-    nz = [s for s in signs if s != 0]
-    if not nz:
-        return None
-    dominant = max(sum(1 for s in nz if s > 0), sum(1 for s in nz if s < 0))
-    return round(dominant / len(nz), 6)
+def _is_primary(r: dict[str, Any]) -> bool:
+    return (str(r["donor_scope"]) == config.PRIMARY_SCOPE
+            and str(r["effect_layer"]) == config.PRIMARY_LAYER
+            and str(r["model_config"]) == config.PRIMARY_MODEL_CONFIG)
 
 
-def support_status(*, selection_frequency: float, positive_frequency: float,
-                   negative_frequency: float) -> str:
-    """The frozen categorical rule. Positive = supportive; NEGATIVE = OPPOSED, and stays so.
-
-    ``positive_frequency`` and ``negative_frequency`` are fractions OF THE SELECTED RUNS.
-    """
-    if selection_frequency <= 0:
-        return config.NOT_SELECTED
-    if selection_frequency < config.SUPPORT_MIN_SELECTION:
-        return config.WEAK
-    if positive_frequency >= config.SUPPORT_SIGN_DOMINANCE:
-        return config.SUPPORTED
-    if negative_frequency >= config.SUPPORT_SIGN_DOMINANCE:
-        return config.OPPOSED
-    return config.MIXED
+def _family(r: dict[str, Any]) -> Optional[str]:
+    """Which SENSITIVITY family a non-primary fit belongs to. Typed, never pooled."""
+    scope, layer, cfg = (str(r["donor_scope"]), str(r["effect_layer"]),
+                         str(r["model_config"]))
+    if scope.startswith(LODO_PREFIX) and layer == config.PRIMARY_LAYER \
+            and cfg == config.PRIMARY_MODEL_CONFIG:
+        return "donor_lodo"
+    if scope == config.PRIMARY_SCOPE and cfg == config.PRIMARY_MODEL_CONFIG \
+            and layer == "log_fc":
+        return "effect_layer_log_fc"
+    if scope == config.PRIMARY_SCOPE and layer == config.PRIMARY_LAYER \
+            and cfg == "pca_off":
+        return "model_config_pca_off"
+    return None                              # any other grid cell is not a named family
 
 
 def compute(coef_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per (arm_key, target_id), over every run that target appeared in."""
+    """One row per (arm_key, target_id): the PRIMARY coefficient + typed sensitivity concordance."""
     by_key: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for r in coef_rows:
         by_key.setdefault((str(r["arm_key"]), str(r["target_id"])), []).append(r)
@@ -79,24 +66,41 @@ def compute(coef_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for (arm_key, target_id), rows in sorted(by_key.items()):
         first = rows[0]
-        coefs = [float(r["coefficient"]) for r in rows]
-        nonzero = [bool(r["nonzero"]) for r in rows]
-        signs = [int(r["sign"]) for r in rows]
 
-        n_runs = len(rows)                      # the DENOMINATOR. Zeros are counted.
-        sel_freq = _freq(nonzero)
-        selected_signs = [s for s in signs if s != 0]
-        n_sel = len(selected_signs)
-        pos_freq = round(sum(1 for s in selected_signs if s > 0) / n_sel, 6) if n_sel else 0.0
-        neg_freq = round(sum(1 for s in selected_signs if s < 0) / n_sel, 6) if n_sel else 0.0
+        primary = next((r for r in rows if _is_primary(r)), None)
+        primary_coef = round(float(primary["coefficient"]), 6) if primary else None
+        primary_sign = _sign(primary_coef)
 
-        lodo = [r for r in rows if str(r["donor_scope"]).startswith(LODO_PREFIX)]
-        layers = {str(r["effect_layer"]) for r in rows}
-        layer_signs = [int(r["sign"]) for r in rows if str(r["donor_scope"]) == ALL_DONOR]
+        # sensitivity families, TYPED and kept apart. Each carries its own sign; none feeds
+        # the primary. Concordance is the fraction agreeing with the primary sign, WITH its
+        # denominator — descriptive only.
+        fam_rows: dict[str, list[dict[str, Any]]] = {}
+        for r in rows:
+            fam = _family(r)
+            if fam:
+                fam_rows.setdefault(fam, []).append(r)
 
-        status = support_status(selection_frequency=sel_freq,
-                                positive_frequency=pos_freq,
-                                negative_frequency=neg_freq)
+        lodo = fam_rows.get("donor_lodo", [])
+        log_fc = fam_rows.get("effect_layer_log_fc", [])
+        pca_off = fam_rows.get("model_config_pca_off", [])
+
+        # cross-family sign concordance vs the primary (single value per family where the
+        # family is one fit; LODO is summarised over its fits). Denominators shipped.
+        def _concord(fam_list):
+            if primary_sign == config.SIGN_ZERO or not fam_list:
+                return None, len(fam_list)
+            agree = sum(1 for r in fam_list
+                        if _sign(round(float(r["coefficient"]), 6)) == primary_sign)
+            return round(agree / len(fam_list), 6), len(fam_list)
+
+        lodo_conc, n_lodo = _concord(lodo)
+        logfc_conc, n_logfc = _concord(log_fc)
+        pcaoff_conc, n_pcaoff = _concord(pca_off)
+
+        n_sens = n_lodo + n_logfc + n_pcaoff
+        n_concord = sum(int(round(c * n)) for c, n in
+                        ((lodo_conc, n_lodo), (logfc_conc, n_logfc), (pcaoff_conc, n_pcaoff))
+                        if c is not None)
 
         out.append({
             "arm_key": arm_key,
@@ -104,36 +108,42 @@ def compute(coef_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             "desired_change": str(first["desired_change"]),
             "condition": str(first["condition"]),
             "target_id": target_id,
-            "n_runs": n_runs,
-            "n_selected_runs": n_sel,
-            "selection_frequency": sel_freq,
-            "positive_frequency": pos_freq,
-            "negative_frequency": neg_freq,
-            "median_coefficient": round(float(np.median(coefs)), 6),
-            "coefficient_min": round(float(np.min(coefs)), 6),
-            "coefficient_max": round(float(np.max(coefs)), 6),
-            "lodo_sign_agreement": _sign_agreement([int(r["sign"]) for r in lodo]),
-            "n_lodo_runs": len(lodo),
-            # renamed from the legacy `logfc_zscore_agreement`: that name contains "score",
-            # which the round-4 key-name firewall refuses at any depth.
-            "effect_layer_agreement": _sign_agreement(layer_signs) if len(layers) > 1
-            else None,
-            "n_effect_layers": len(layers),
-            "support_status": status,
-            "opposed": status == config.OPPOSED,
+            "n_runs": len(rows),
+            # THE PRIMARY — from the primary fit ALONE. Continuous; no threshold.
+            "primary_coefficient": primary_coef,
+            "primary_abs_coefficient": round(abs(primary_coef), 6)
+            if primary_coef is not None else None,
+            "primary_sign": primary_sign,
+            "opposed": primary_sign == config.SIGN_OPPOSED,
+            "primary_available": primary is not None,
+            # SENSITIVITY families — each typed, each with its own denominator, never pooled.
+            "sens_log_fc_sign_concordance": logfc_conc,
+            "n_log_fc": n_logfc,
+            "sens_pca_off_sign_concordance": pcaoff_conc,
+            "n_pca_off": n_pcaoff,
+            "lodo_sign_concordance": lodo_conc,
+            "n_lodo": n_lodo,
+            "n_sensitivity_fits": n_sens,
+            "n_sensitivity_sign_concordant": n_concord,
         })
     return out
 
 
 def method_block() -> dict[str, Any]:
-    """The support rule, as one hashable object."""
+    """The support method, as one hashable object. Primary/sensitivity separated; continuous."""
     return {
-        "support_is_judged_per_arm": True,
-        "support_min_selection": config.SUPPORT_MIN_SELECTION,
-        "support_sign_dominance": config.SUPPORT_SIGN_DOMINANCE,
-        "support_status_values": list(config.SUPPORT_STATUS_VALUES),
-        "nonzero_tolerance": config.NONZERO_TOL,
-        "zero_coefficients_counted_in_denominator": True,
+        "primary_estimand": {
+            "donor_scope": config.PRIMARY_SCOPE,
+            "effect_layer": config.PRIMARY_LAYER,
+            "model_config": config.PRIMARY_MODEL_CONFIG,
+        },
+        "sensitivity_families": dict(config.SENSITIVITY_FAMILIES),
+        "families_are_pooled_into_primary": False,
+        "support_is_continuous": config.SUPPORT_IS_CONTINUOUS,
+        "support_is_discrete_flag": config.SUPPORT_IS_DISCRETE_FLAG,
+        "support_threshold_defined_here": False,
+        "dense_backprojection_note": config.DENSE_BACKPROJECTION_NOTE,
+        "sign_values": [config.SIGN_SUPPORTIVE, config.SIGN_OPPOSED, config.SIGN_ZERO],
         "lodo_semantics": LODO_SEMANTICS,
         "lodo_fits_are_independent_replicates": False,
         "rank_column_emitted": config.RANK_COLUMN_EMITTED,

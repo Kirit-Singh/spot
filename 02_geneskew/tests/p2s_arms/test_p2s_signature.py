@@ -127,11 +127,22 @@ def test_a_cell_axis_disagreement_is_refused():
 def test_panel_and_control_genes_may_never_enter_the_readout():
     """Otherwise the model reconstructs the program from the genes it was DEFINED by."""
     uni = universe.build(effect_gene_ids=["G1", "G2", "G3", "G4"],
-                         excluded_program_genes=["G1"], target_gene_ids=["G2"])
-    assert uni["gene_ids"] == ["G3", "G4"]
+                         excluded_program_genes=["G1"])
+    assert uni["gene_ids"] == ["G2", "G3", "G4"]     # only panel/control G1 removed
     assert uni["n_panel_control_excluded"] == 1
-    assert uni["n_target_genes_excluded"] == 1
     universe.assert_clean(uni, ["G1"])
+
+
+def test_perturbation_target_genes_are_NOT_subtracted_globally():
+    """~11k targets vs 10,282 genes: global subtraction would delete most of the assay.
+
+    The self-gene is neutralised PER COLUMN by the Direct mask, not removed from the universe.
+    """
+    uni = universe.build(effect_gene_ids=["G1", "G2", "G3", "G4"],
+                         excluded_program_genes=[])
+    assert uni["gene_ids"] == ["G1", "G2", "G3", "G4"]   # nothing target-subtracted
+    assert uni["target_genes_subtracted_globally"] is False
+    assert uni["self_gene_neutralised_per_column_by_direct_mask"] is True
 
 
 def test_a_leaked_panel_gene_is_caught():
@@ -143,14 +154,11 @@ def test_a_leaked_panel_gene_is_caught():
 
 def test_an_empty_readout_universe_is_refused():
     with pytest.raises(universe.UniverseError) as e:
-        universe.build(effect_gene_ids=["G1"], excluded_program_genes=["G1"],
-                       target_gene_ids=[])
+        universe.build(effect_gene_ids=["G1"], excluded_program_genes=["G1"])
     assert e.value.reason == "readout_universe_is_empty"
 
 
 def test_the_universe_hash_is_order_invariant():
-    a = universe.build(effect_gene_ids=["G3", "G1", "G2"], excluded_program_genes=[],
-                       target_gene_ids=[])
-    b = universe.build(effect_gene_ids=["G1", "G2", "G3"], excluded_program_genes=[],
-                       target_gene_ids=[])
+    a = universe.build(effect_gene_ids=["G3", "G1", "G2"], excluded_program_genes=[])
+    b = universe.build(effect_gene_ids=["G1", "G2", "G3"], excluded_program_genes=[])
     assert a["gene_universe_sha256"] == b["gene_universe_sha256"]

@@ -88,10 +88,6 @@ def make_release(*, portable: Optional[dict[str, bool]] = None,
         hashes={}, selectable_pairs=frozenset())
 
 
-
-
-
-
 # --------------------------------------------------------------------------- #
 # A REAL all-arm Direct bundle, through direct.arm_bundle.
 # --------------------------------------------------------------------------- #
@@ -150,10 +146,6 @@ def write_arm_bundle(out_root: str, view: dict[str, Any], *,
                               sort_by=["arm_key", "target_id"],
                               nullable_int_columns=("rank",))
     return out_dir
-
-
-
-
 
 
 # --------------------------------------------------------------------------- #
@@ -232,8 +224,6 @@ def make_eligible(path: str, *, states: Optional[dict[str, str]] = None) -> str:
     return path
 
 
-
-
 # --------------------------------------------------------------------------- #
 # A deterministic stand-in for the pinned model, so the ARM ARITHMETIC can be
 # tested without the upstream package. Production always uses the pinned one.
@@ -273,8 +263,6 @@ def linear_fit(x: pd.DataFrame, y: pd.Series, cfg, model_id: str, *, seed: int =
     }
 
 
-
-
 # --------------------------------------------------------------------------- #
 # Drive the REAL producer end to end, with the deterministic stand-in model.
 #
@@ -286,7 +274,7 @@ UPSTREAM_OBSERVED = {
     "commit": None,          # filled from config at call time
     "dirty": False,
     "version": None,
-    "tree_sha256": None,   # filled from the pin at call time
+    "tree_sha256": None,   # callers fill from config.UPSTREAM_TREE_SHA256
 }
 
 
@@ -336,6 +324,7 @@ from p2s_arms.w10 import content_sha256 as _csha  # noqa: E402
 from p2s_arms.w10 import file_sha256 as _fsha  # noqa: E402
 
 REAL_SOLVER_LOCK = _envlock.DEFAULT_PATH
+REAL_P2S_LOCK = _cfg.P2S_RUNTIME_LOCK_PATH
 
 
 def write_solver_lock(path: str, *, pinned: bool = True, stage1: bool = False) -> str:
@@ -352,12 +341,44 @@ def write_solver_lock(path: str, *, pinned: bool = True, stage1: bool = False) -
 
 def write_full_bundle(out_root: str, view, *, condition: str = CONDITION,
                       lane: str = "synthetic", tamper_rank: bool = False,
-                      self_admitted: bool = False) -> str:
-    """All TEN files an admitted Direct bundle ships."""
+                      self_admitted: bool = False, mask_scope_union: bool = False,
+                      drop_mask_for: Optional[str] = None,
+                      no_main_mask: bool = False) -> str:
+    """All TEN files an admitted Direct bundle ships.
+
+    ``masks.parquet`` carries the REAL schema: ``masked_gene_ensembl`` +
+    ``estimate_type``/``estimate_id``, with a MAIN-estimate row for every target. The knobs
+    inject the attacks: a guide-scope-only union, a dropped main mask for one target, or no
+    main mask at all.
+    """
     d = write_arm_bundle(out_root, view, condition=condition, tamper_rank=tamper_rank)
 
-    # the seven files beyond arm_bundle.json / arms.parquet
-    for name in ("masks.parquet", "contributing_guides.parquet", "guide_support.parquet",
+    # THE REAL MASK SCHEMA: main-estimate rows carry masked_gene_ensembl + target_ensembl,
+    # and INCLUDE the target's OWN gene (its positive control). Each target's self-gene is a
+    # distinct ENSG so the self-gene-masked check is meaningful.
+    genes = gene_ids()
+    mask_rows = []
+    for i, t in enumerate(target_ids()):
+        if drop_mask_for == t or no_main_mask:
+            continue
+        self_gene = genes[i]                     # the target's OWN gene, masked as its control
+        for g in (self_gene, genes[(i + 50) % len(genes)]):   # self + one off-target
+            mask_rows.append({"target_id": t, "masked_gene_ensembl": g,
+                              "target_ensembl": self_gene,
+                              "estimate_type": "main", "estimate_id": "main"})
+    if mask_scope_union or no_main_mask:
+        # guide-slot rows for the same targets — a DIFFERENT estimate. Unioning them would
+        # mask genes for a perturbation that had no reason to mask them.
+        for i, t in enumerate(target_ids()):
+            mask_rows.append({"target_id": t, "masked_gene_ensembl": genes[100 + i],
+                              "target_ensembl": genes[i],
+                              "estimate_type": "guide", "estimate_id": "guide_1"})
+    pd.DataFrame(mask_rows or [{"target_id": None, "masked_gene_ensembl": None,
+                                "target_ensembl": None, "estimate_type": None,
+                                "estimate_id": None}]).to_parquet(
+        os.path.join(d, "masks.parquet"), index=False)
+
+    for name in ("contributing_guides.parquet", "guide_support.parquet",
                  "donor_support.parquet"):
         pd.DataFrame([{"target_id": t, "gene_id": gene_ids()[0]}
                       for t in target_ids()[:2]]).to_parquet(os.path.join(d, name),
@@ -458,3 +479,16 @@ from .synthetic_inputs import (  # noqa: E402,F401
     write_ntc_h5ad,
     write_stage1_scores,
 )
+
+P2S_RUNTIME_LOCK_BYTES = b"# synthetic P2S runtime lock (sklearn + pert2state_model)\n"
+
+
+def write_p2s_runtime_lock(path: str, *, pinned: bool = True) -> str:
+    """A stand-in for stage02_p2s_runtime_lock.txt. Tests patch the pin to its hash.
+
+    The real lock file does not exist yet (it must be generated in the spot-run env and
+    committed); the GATE is what these tests exercise, not the specific bytes.
+    """
+    with open(path, "wb") as fh:
+        fh.write(P2S_RUNTIME_LOCK_BYTES if pinned else b"# a different p2s environment\n")
+    return path

@@ -36,12 +36,16 @@ PROVENANCE_FILE = "p2s_provenance.json"
 
 ARTIFACT_FILES = (SUPPORT_FILE, COEF_FILE, RECON_FILE, DOC_FILE)
 
+# CONTINUOUS support, PRIMARY estimand only + separately typed sensitivity concordance. No
+# selection frequency, no discrete verdict, no rank; a magnitude threshold is the consumer's.
 SUPPORT_COLUMNS = (
     "arm_key", "program_id", "desired_change", "condition", "target_id",
-    "n_runs", "n_selected_runs", "selection_frequency", "positive_frequency",
-    "negative_frequency", "median_coefficient", "coefficient_min", "coefficient_max",
-    "lodo_sign_agreement", "n_lodo_runs", "effect_layer_agreement", "n_effect_layers",
-    "support_status", "opposed",
+    "n_runs", "primary_coefficient", "primary_abs_coefficient", "primary_sign",
+    "opposed", "primary_available",
+    "sens_log_fc_sign_concordance", "n_log_fc",
+    "sens_pca_off_sign_concordance", "n_pca_off",
+    "lodo_sign_concordance", "n_lodo",
+    "n_sensitivity_fits", "n_sensitivity_sign_concordant",
 )
 
 COEF_COLUMNS = (
@@ -165,12 +169,11 @@ def canonical_support(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "arm_key": str(r["arm_key"]),
             "target_id": str(r["target_id"]),
             "n_runs": int(r["n_runs"]),
-            "selection_frequency": _num(r["selection_frequency"]),
-            "positive_frequency": _num(r["positive_frequency"]),
-            "negative_frequency": _num(r["negative_frequency"]),
-            "median_coefficient": _num(r["median_coefficient"]),
-            "support_status": str(r["support_status"]),
+            "primary_coefficient": _num(r["primary_coefficient"]),
+            "primary_sign": str(r["primary_sign"]),
             "opposed": bool(r["opposed"]),
+            "n_sensitivity_fits": int(r["n_sensitivity_fits"]),
+            "n_sensitivity_sign_concordant": int(r["n_sensitivity_sign_concordant"]),
         })
     out.sort(key=lambda r: (r["arm_key"], r["target_id"]))
     return out

@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 
 from . import config
+from . import deterministic_p2s as det
 
 
 class ModelError(RuntimeError):
@@ -96,7 +97,7 @@ def build(cfg: config.ModelConfig, *, seed: int = config.RANDOM_STATE):
         n_repeats=config.N_REPEATS,
         random_state=seed,
         pca_transform=cfg.pca_transform,
-        n_pcs=cfg.n_pcs if cfg.pca_transform else 50,
+        n_pcs=cfg.n_pcs if cfg.pca_transform else config.N_PCS,
         positive=config.POSITIVE,
         alpha=np.asarray(config.ALPHA_GRID, dtype=float),
         l1_ratio=np.asarray(validate_l1_grid(config.L1_RATIO_GRID), dtype=float),
@@ -120,12 +121,27 @@ def run_one(x: pd.DataFrame, y: pd.Series, cfg: config.ModelConfig,
             "the target signature has no value for some gene in the perturbation matrix; a "
             "missing readout gene stays missing and is never imputed to zero")
 
-    model.fit(x, y, model_id=model_id)
+    # DETERMINISM via the narrow wrapper, NOT a global seed. `deterministic_p2s` injects the
+    # model's own random_state into upstream TruncatedSVD (which omits it at commit 2c2e3095)
+    # for the scope of the fit, rejects any conflicting explicit seed, and asserts every
+    # fitted SVD carries the frozen seed. Seeding the global RNG would leave each SVD's
+    # random_state=None and rely on mutable global state — repeatable only by luck of call
+    # order. The wrapper requires pca_transform=True (upstream's pca=None path uses unscaled
+    # X), which is why the PRIMARY config is the seeded D=60 SVD, not pca_off.
+    wrapper_meta: dict[str, Any] = {}
+    if cfg.pca_transform:
+        wrapper_meta = det.fit_deterministic(model, x, y, model_id=model_id)
+    else:
+        # the pca_off SENSITIVITY path. It never touches get_prediction (we read get_coefs),
+        # so the unscaled-X bug does not reach us; and it carries no SVD to seed.
+        model.fit(x, y, model_id=model_id)
+        wrapper_meta = {"wrapper": "none", "svd_override": "n/a_pca_off_sensitivity"}
     coefs = model.get_coefs()
     coefs.index = model.perturbation_names
 
     ev = model.eval
     return {
+        "svd_determinism": wrapper_meta,
         "coefficients": pd.DataFrame({
             "coefficient": coefs["coef_mean"].astype(float),
             config.COEF_SEM_COLUMN: coefs["coef_sem"].astype(float),

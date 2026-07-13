@@ -91,14 +91,16 @@ def test_MUTATION_an_opposed_contributor_is_reported_opposed_and_never_as_suppor
     rows = fit_both(planted)["coefficients"]
     support = {(r["arm_key"], r["target_id"]): r for r in stability.compute(rows)}
 
+    # CONTINUOUS: the sign comes from the PRIMARY coefficient, not a selection frequency.
     opponent = support[(INC, OPPONENT)]
-    assert opponent["support_status"] == config.OPPOSED
+    assert opponent["primary_sign"] == config.SIGN_OPPOSED
     assert opponent["opposed"] is True
-    assert opponent["negative_frequency"] >= config.SUPPORT_SIGN_DOMINANCE
+    assert opponent["primary_coefficient"] < 0
 
     contributor = support[(INC, CONTRIBUTOR)]
-    assert contributor["support_status"] == config.SUPPORTED
+    assert contributor["primary_sign"] == config.SIGN_SUPPORTIVE
     assert contributor["opposed"] is False
+    assert contributor["primary_coefficient"] > 0
 
 
 def test_MUTATION_the_opposed_status_FLIPS_with_the_arm(planted):
@@ -106,10 +108,10 @@ def test_MUTATION_the_opposed_status_FLIPS_with_the_arm(planted):
     rows = fit_both(planted)["coefficients"]
     support = {(r["arm_key"], r["target_id"]): r for r in stability.compute(rows)}
 
-    assert support[(INC, CONTRIBUTOR)]["support_status"] == config.SUPPORTED
-    assert support[(DEC, CONTRIBUTOR)]["support_status"] == config.OPPOSED
-    assert support[(INC, OPPONENT)]["support_status"] == config.OPPOSED
-    assert support[(DEC, OPPONENT)]["support_status"] == config.SUPPORTED
+    assert support[(INC, CONTRIBUTOR)]["primary_sign"] == config.SIGN_SUPPORTIVE
+    assert support[(DEC, CONTRIBUTOR)]["primary_sign"] == config.SIGN_OPPOSED
+    assert support[(INC, OPPONENT)]["primary_sign"] == config.SIGN_OPPOSED
+    assert support[(DEC, OPPONENT)]["primary_sign"] == config.SIGN_SUPPORTIVE
 
 
 def test_a_positive_constraint_that_would_erase_opposed_contributors_is_REFUSED():
@@ -155,28 +157,46 @@ def test_an_empty_l1_grid_is_refused():
 
 
 # --------------------------------------------------------------------------- #
-# Counting rules: a zero never disappears, and no-evidence is never perfect agreement.
+# PRIMARY comes from ONE fit; sensitivities are typed and never pooled; denominators ship.
 # --------------------------------------------------------------------------- #
-def test_a_zero_coefficient_stays_in_the_denominator():
+def _row(coef, layer, cfg, scope):
+    return {"arm_key": INC, "program_id": PROGRAM, "desired_change": "increase",
+            "condition": CONDITION, "target_id": "T00", "coefficient": coef,
+            "nonzero": coef != 0, "sign": int(np.sign(coef)),
+            "effect_layer": layer, "model_config": cfg, "donor_scope": scope}
+
+
+def test_the_PRIMARY_is_the_single_seeded_svd_fit_and_sensitivities_never_pool_it():
     rows = [
-        {"arm_key": INC, "program_id": PROGRAM, "desired_change": "increase",
-         "condition": CONDITION, "target_id": "T00", "coefficient": c,
-         "nonzero": c != 0, "sign": int(np.sign(c)), "effect_layer": "zscore",
-         "model_config": "pca_off", "donor_scope": s}
-        for c, s in [(1.0, "all_donor"), (0.0, "lodo_D1"), (0.0, "lodo_D2"),
-                     (0.0, "lodo_D3")]
+        _row(2.0, "zscore", "pca_on_60", "all_donor"),   # THE primary
+        _row(-9.0, "log_fc", "pca_on_60", "all_donor"),  # sensitivity: log_fc
+        _row(-9.0, "zscore", "pca_off", "all_donor"),    # sensitivity: pca_off
+        _row(-9.0, "zscore", "pca_on_60", "lodo_D1"),    # sensitivity: LODO
     ]
     got = stability.compute(rows)[0]
-    assert got["n_runs"] == 4                       # the DENOMINATOR ships with the number
-    assert got["n_selected_runs"] == 1
-    assert got["selection_frequency"] == 0.25
-    assert got["support_status"] == config.WEAK     # 1-of-4 is not robustness
+    # the PRIMARY is 2.0 (supportive) — the -9.0 sensitivities do NOT move it or its sign
+    assert got["primary_coefficient"] == 2.0
+    assert got["primary_sign"] == config.SIGN_SUPPORTIVE
+    assert got["opposed"] is False
+    # denominators ship: 3 sensitivity fits, 0 concordant (all disagree with the primary sign)
+    assert got["n_sensitivity_fits"] == 3
+    assert got["n_sensitivity_sign_concordant"] == 0
+    assert got["n_log_fc"] == 1 and got["n_pca_off"] == 1 and got["n_lodo"] == 1
+    assert got["sens_pca_off_sign_concordance"] == 0.0
+
+
+def test_a_missing_primary_fit_is_marked_unavailable_never_pooled_from_sensitivities():
+    rows = [_row(-9.0, "zscore", "pca_off", "all_donor")]   # only a sensitivity, no primary
+    got = stability.compute(rows)[0]
+    assert got["primary_available"] is False
+    assert got["primary_coefficient"] is None
+    assert got["primary_sign"] == config.SIGN_ZERO
 
 
 def test_no_evidence_is_reported_as_None_never_as_perfect_agreement():
-    assert stability._sign_agreement([0, 0, 0]) is None
-    assert stability._sign_agreement([1, 1, 1]) == 1.0
-    assert stability._sign_agreement([1, -1]) == 0.5
+    assert stability._sign(None) == config.SIGN_ZERO
+    assert stability._sign(2.0) == config.SIGN_SUPPORTIVE
+    assert stability._sign(-2.0) == config.SIGN_OPPOSED
 
 
 def test_lodo_fits_are_never_called_independent_replicates():

@@ -28,7 +28,7 @@ which is the most permissive possible mask and the exact opposite of the safe de
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -73,7 +73,24 @@ def main_estimate_masks(bundle_dir: str) -> dict[str, Any]:
     for r in rows.itertuples(index=False):
         by_target.setdefault(str(r.target_id), set()).add(str(r.gene_id))
 
+    # THE TARGET ENSEMBL id comes from the MAIN MASK rows, NOT from arms.parquet — Direct's
+    # ARM_ROW_COLUMNS carries no target_ensembl. It must be CONSISTENT per target (a target
+    # naming two Ensembl ids in its own mask is a contradiction). A symbol-namespace target
+    # whose mask carries no Ensembl id stays NULL — never guessed.
+    ens_by_target: dict[str, Optional[str]] = {}
+    if "target_ensembl" in scoped.columns:
+        for t, g in scoped.groupby("target_id"):
+            ids = {str(v) for v in g["target_ensembl"].dropna().tolist()
+                   if str(v) not in ("", "None", "nan")}
+            if len(ids) > 1:
+                raise D.RefusalError(
+                    D.REFUSE_BUNDLE_INCOMPLETE,
+                    f"target {t!r} names more than one target_ensembl in its main mask "
+                    f"({sorted(ids)[:3]}); a target's own Ensembl id is not a set")
+            ens_by_target[str(t)] = next(iter(ids)) if ids else None
+
     return {"rows": rows.to_dict("records"), "by_target": by_target,
+            "target_ensembl_by_target": ens_by_target,
             "n_rows_all_scopes": int(n_all), "n_rows_main": int(len(rows)),
             "scopes_unioned": config.MASK_SCOPES_MAY_BE_UNIONED,
             "estimate_type": config.MASK_MAIN_ESTIMATE_TYPE,
@@ -114,8 +131,10 @@ def evaluable_targets(bundle_dir: str, *, program_id: str, condition: str) -> di
             f"only-decrease={only_dec}). They are one measurement and a sign; a disagreement "
             "here means something re-derived one of them")
 
-    states = (arms[arms["arm_key"].astype(str) == inc.arm_key]
-              .set_index("target_id")["base_state"].astype(str).to_dict())
+    sub_inc = arms[arms["arm_key"].astype(str) == inc.arm_key]
+    states = sub_inc.set_index("target_id")["base_state"].astype(str).to_dict()
+    # Direct's ARM_ROW_COLUMNS carries NO target_ensembl — it lives on the MAIN MASK rows.
+    # evaluable_targets does not read it here; direct_inventory.bind attaches it from masks.
     return {
         "targets": inc_targets,
         "n_evaluable": len(inc_targets),
@@ -144,5 +163,24 @@ def bind(bundle_dir: str, *, program_id: str, condition: str) -> dict[str, Any]:
             "empty mask: it would withhold nothing, which is the most permissive mask there "
             "is and the exact opposite of the safe default")
 
+    # attach the target Ensembl id from the MAIN MASK rows, and — when it is known — require
+    # the target's OWN gene to be in its mask (Direct's main mask includes it; a mask missing
+    # it would leave the self-gene in the reconstruction as a positive control).
+    ens = masks.get("target_ensembl_by_target", {})
+    target_ensembl = {t: ens.get(t) for t in elig["targets"]}
+    unresolved = sorted(t for t in elig["targets"] if not target_ensembl[t])
+    self_gene_absent = sorted(
+        t for t in elig["targets"]
+        if target_ensembl[t] and target_ensembl[t] not in masks["by_target"].get(t, set()))
+    if self_gene_absent:
+        raise D.RefusalError(
+            D.REFUSE_MASK_MISSING_FOR_ELIGIBLE,
+            f"{len(self_gene_absent)} target(s) with a known Ensembl id do not mask their "
+            f"OWN gene (e.g. {self_gene_absent[:3]}). The self-gene is the perturbation's "
+            "positive control; leaving it unmasked would let the target reconstruct itself")
+
     return {"masks": masks, "eligible": elig,
-            "targets": elig["targets"], "mask_by_target": masks["by_target"]}
+            "targets": elig["targets"], "mask_by_target": masks["by_target"],
+            "target_ensembl_by_target": target_ensembl,
+            "n_symbol_targets_unresolved": len(unresolved),
+            "symbol_targets_unresolved": unresolved[:10]}

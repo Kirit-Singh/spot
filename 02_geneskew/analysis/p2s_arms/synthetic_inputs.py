@@ -80,13 +80,19 @@ def write_stage1_scores(path: str, ntc_path: str, program_ids, *,
         dn = [b.decode() for b in obs["donor"][:]]
         cd = [b.decode() for b in obs["condition"][:]]
 
+    # write ALL 12 canonical score columns, as the real 396k table does — the canonical hash
+    # recipe is defined over the full field set, not a per-run subset. `program_ids` still
+    # decides which are treated as ADMITTED downstream, but the table itself is complete.
+    from p2s_arms.stage1_canonical import CANONICAL_FIELD_ORDER
+    all_fields = set(CANONICAL_FIELD_ORDER) | {
+        f"{p}{_cfg.SCORE_FIELD_SUFFIX}" for p in program_ids}
     rows = []
     for b, d, c in zip(bc, dn, cd):
         r = {"barcode": b, "donor": d, "condition": c}
-        for p in program_ids:
-            if p == omit_program:
+        for f in sorted(all_fields):
+            if omit_program and f == f"{omit_program}{_cfg.SCORE_FIELD_SUFFIX}":
                 continue
-            r[f"{p}{_cfg.SCORE_FIELD_SUFFIX}"] = float(rng.normal())
+            r[f] = float(rng.normal())
         rows.append(r)
 
     if drop_barcodes:

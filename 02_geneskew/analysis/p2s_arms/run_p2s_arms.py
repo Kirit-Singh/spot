@@ -49,12 +49,14 @@ from direct.hashing import content_hash
 
 from . import (
     armfit,
+    armref,
     binding,
     config,
     emit,
     io_data,
     model,
     pmatrix,
+    prepared,
     signature,
     stability,
     universe,
@@ -158,12 +160,18 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
             lane: str = "production", seed: int = config.RANDOM_STATE,
             env_lock: Optional[str] = None, argv: Optional[list[str]] = None,
             derived_from: Optional[dict[str, Any]] = None,
+            p2s_lock: Optional[dict[str, Any]] = None,
+            prepared: Optional[dict[str, Any]] = None,
             fit=None) -> dict[str, Any]:
     """The pipeline AFTER binding: fit, stabilise, emit. Pure of argparse.
 
     ``fit`` is injectable so the whole producer can be driven end to end without the
     upstream package — the tests exercise THIS function, not a re-implementation of it.
     It is REFUSED outside the synthetic lane (see below).
+
+    ``p2s_lock`` and ``prepared`` are the SECOND environment lock and the verified
+    prepared-inputs binding; both go into the run identity so a run cannot be re-attributed
+    to another environment or have its matrices swapped.
     """
     if fit is not None and lane != LANE_SYNTHETIC:
         raise model.ModelError(
@@ -177,16 +185,25 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
     ref = bound["arm"]
 
     cells = io_data.load_cells(paths["cells"])
+    # THE CONDITION the cells were prepared for must be the arm's condition — a run cannot
+    # reconstruct a Stim48hr arm from Rest cells that were handed in under the wrong name.
+    if cells.get("condition") is not None and cells["condition"] != ref.condition:
+        raise D.RefusalError(
+            D.REFUSE_PREPARED_CONDITION,
+            f"the prepared cells are for condition {cells['condition']!r}, but this arm is "
+            f"{ref.condition!r}")
     effects = io_data.load_effects(paths["effects"])
     masks = io_data.load_masks(paths["masks"])
-    elig = io_data.load_eligible(paths["eligible"])
+    # ARM-SPECIFIC: only the targets evaluable on THIS arm become perturbation columns.
+    elig = io_data.load_eligible(paths["eligible"], arm_key=ref.arm_key)
 
+    # GLOBAL exclusion is program panel/control (+ activation) ONLY. Target self-genes are
+    # neutralised PER COLUMN by the Direct mask — never subtracted from the whole universe.
     excluded = universe.panel_and_control(
         release.programs,
         list(view["admitted_program_ids"]) + [config.ACTIVATION_PROGRAM_ID])
     uni = universe.build(effect_gene_ids=effects["gene_ids"],
-                         excluded_program_genes=excluded,
-                         target_gene_ids=elig["target_gene_ids"])
+                         excluded_program_genes=excluded)
     universe.assert_clean(uni, excluded)
 
     got = run_grid(
@@ -215,6 +232,13 @@ def execute(*, bound: dict[str, Any], release, view: dict[str, Any],
                                ("masks", masks), ("eligible", elig))],
             key=lambda i: i["name"]),
         "environment_lock": runid.env_lock_block(env_lock),
+        # TWO ENVIRONMENTS, TWO LOCKS: the Direct lock the arms were computed under, and the
+        # P2S runtime lock THIS fit runs under. Both in the identity.
+        "direct_solver_lock_sha256": bound["solver_lock"]["sha256"],
+        "p2s_runtime_lock_sha256": (p2s_lock or {}).get("sha256"),
+        # the VERIFIED prepared-inputs binding: their run id, hashes and the pins they carry.
+        # A substituted matrix changes this, hence the run id.
+        "prepared_inputs": (prepared or {}).get("manifest_binding"),
         "support_rows_sha256": doc["support_rows_sha256"],
         "coefficient_rows_sha256": doc["coefficient_rows_sha256"],
         "seed": seed,
@@ -251,6 +275,14 @@ def build(args, *, fit=None) -> dict[str, Any]:
     admitted = binding.admit_inputs(
         bundle_dir=args.direct_bundle, w10_report=args.w10_report,
         env_lock=args.env_lock, lane=args.lane)
+    # THE SECOND ENVIRONMENT. The Direct lock pins where the arms came from; this pins where
+    # the fit runs. Bound separately; supplying the Direct lock in its place is refused.
+    p2s_lock = binding.verify_p2s_runtime_lock(args.p2s_env_lock)
+
+    ref = armref.parse(args.arm_key)
+    # VERIFY THE PREPARED INPUTS before a number is computed: re-hash every matrix against its
+    # manifest and re-check the pins it bound. A substituted matrix keeps its filename.
+    prep = prepared.load_and_verify(args.inputs, condition=ref.condition, lane=args.lane)
 
     try:
         release, view = binding.load_release(
@@ -268,12 +300,26 @@ def build(args, *, fit=None) -> dict[str, Any]:
     up = upstream.identity(expect_tree_sha256=args.upstream_tree_sha256)
 
     return execute(
-        bound=bound, release=release, view=view, up=up,
-        paths={"cells": args.cells, "effects": args.effects, "masks": args.masks,
-               "eligible": args.eligible},
+        bound=bound, release=release, view=view, up=up, paths=prep["paths"],
         out_root=args.out_root, lane=args.lane, seed=args.seed, env_lock=args.env_lock,
+        p2s_lock=p2s_lock, prepared={"manifest_binding": _prepared_binding(prep)},
         derived_from={"role": args.derived_from_role, "pole": args.derived_from_pole},
         fit=fit)
+
+
+def _prepared_binding(prep: dict[str, Any]) -> dict[str, Any]:
+    """The verified prepared-inputs binding that goes into the run identity."""
+    m = prep["manifest"]
+    return {
+        "p2s_inputs_run_id": prep["p2s_inputs_run_id"],
+        "condition": prep["condition"],
+        "artifact_sha256": m.get("artifact_sha256"),
+        "artifact_sha256_verified": True,
+        "stage1_scores_raw_sha256": prep["stage1_scores"].get("raw_sha256"),
+        "stage1_scores_canonical_sha256":
+            prep["stage1_scores"].get("canonical_scores_sha256"),
+        "public_source": m.get("public_source"),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -297,8 +343,14 @@ def build_parser() -> argparse.ArgumentParser:
                          "(DIRECT_BUNDLE_ADMISSION_<condition>.json). NOT the bundle's own "
                          "verification.json, which is the producer's empty slot")
     ap.add_argument("--env-lock", required=True, dest="env_lock",
-                    help="analysis/stage02_solver_lock.txt — hashed here and checked against "
-                         "this lane's own pin")
+                    help="the DIRECT solver lock (stage02_solver_lock.txt) — the environment "
+                         "the ARMS were computed in")
+    ap.add_argument("--p2s-env-lock", required=True, dest="p2s_env_lock",
+                    help="the P2S RUNTIME lock (stage02_p2s_runtime_lock.txt) — a SEPARATE "
+                         "environment; the Direct lock cannot execute this lane")
+    ap.add_argument("--inputs", required=True,
+                    help="the directory `prepare_inputs` produced; its p2s_inputs.json is "
+                         "verified against code literals and every matrix re-hashed")
     ap.add_argument("--stage1-release", required=True)
 
     ap.add_argument("--arm-key", required=True,
@@ -307,10 +359,6 @@ def build_parser() -> argparse.ArgumentParser:
                     choices=("production", "research_only", "fixture"))
     ap.add_argument("--stage1-validation", default=None)
     ap.add_argument("--stage1-gate-spec", default=None)
-    ap.add_argument("--cells", required=True, help="prepared npz (scores read by barcode)")
-    ap.add_argument("--effects", required=True)
-    ap.add_argument("--masks", required=True)
-    ap.add_argument("--eligible", required=True)
     ap.add_argument("--out-root", required=True,
                     help="OUTSIDE every tracked tree; the run dir is named for its content")
     ap.add_argument("--lane", default="production", choices=list(config.LANES))

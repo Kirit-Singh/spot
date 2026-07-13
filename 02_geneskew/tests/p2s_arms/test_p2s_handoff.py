@@ -13,17 +13,23 @@ CONDITION = "Stim48hr"
 
 
 @pytest.fixture
-def prepared(tmp_path, view, bundle_dir, w10_report, monkeypatch):
+def prepared(tmp_path, view, bundle_dir, w10_report, p2s_lock, monkeypatch):
     programs = list(view["admitted_program_ids"])
     ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
     scores = fx.write_stage1_scores(str(tmp_path / "s.parquet"), ntc, programs)
     de = fx.write_de_readout(str(tmp_path / "de.h5ad"), fx.target_ids())
     monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
     monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
+    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
+    import pandas as pd
+    from p2s_arms import stage1_canonical
+    monkeypatch.setattr(stage1_canonical, "EXPECTED",
+                        stage1_canonical.canonical_scores_sha256(pd.read_parquet(scores)))
 
     argv = ["--ntc", ntc, "--stage1-scores", scores, "--de-main", de,
             "--direct-bundle", bundle_dir, "--w10-report", w10_report,
-            "--env-lock", fx.REAL_SOLVER_LOCK, "--stage1-release", "x",
+            "--env-lock", fx.REAL_SOLVER_LOCK, "--p2s-env-lock", p2s_lock,
+            "--stage1-release", "x",
             "--condition", CONDITION, "--out-root", str(tmp_path / "prep"),
             "--lane", "synthetic", "--release-kind", "fixture"]
     args = prepare_inputs.build_parser().parse_args(argv)
@@ -32,7 +38,8 @@ def prepared(tmp_path, view, bundle_dir, w10_report, monkeypatch):
 
 def _handoff(tmp_path, prepared, view, bundle_dir, w10_report, **over):
     a = {"--direct-bundle": bundle_dir, "--w10-report": w10_report,
-         "--env-lock": fx.REAL_SOLVER_LOCK, "--stage1-release": "x",
+         "--env-lock": fx.REAL_SOLVER_LOCK, "--p2s-env-lock": fx.REAL_P2S_LOCK,
+         "--stage1-release": "x",
          "--condition": CONDITION, "--inputs": prepared["out_dir"],
          "--out-root": str(tmp_path / "out"), "--out": str(tmp_path / "handoff.json"),
          "--lane": "synthetic", "--release-kind": "fixture"}
@@ -42,24 +49,48 @@ def _handoff(tmp_path, prepared, view, bundle_dir, w10_report, **over):
     return scheduler_handoff.build(args, view=view)
 
 
-def test_ONE_fit_per_program_condition_and_BOTH_arms_per_fit(tmp_path, prepared, view,
-                                                             bundle_dir, w10_report):
-    """Scheduling both arms would run the same fit twice, and invite them to disagree."""
+def test_ONE_INVOCATION_runs_the_whole_grid_and_emits_BOTH_arms(tmp_path, prepared, view,
+                                                               bundle_dir, w10_report):
+    """"One unit" is NOT "one fit". One invocation runs the fit grid and emits both sign arms.
+
+    Scheduling the sibling arm would run the same base effect twice and invite the two to
+    disagree by a hair about a magnitude they SHARE.
+    """
     doc = _handoff(tmp_path, prepared, view, bundle_dir, w10_report)
 
     assert doc["n_units"] == view["n_admitted_programs"]
-    assert doc["n_fits"] == doc["n_units"]                   # ONE fit per unit
-    assert doc["n_arms"] == 2 * doc["n_units"]               # ...and TWO arms out of it
-    assert doc["one_fit_per_program_condition"] is True
-    assert doc["both_sign_arms_emitted_per_fit"] is True
+    assert doc["n_arms"] == 2 * doc["n_units"]               # two sign arms per unit
+    assert doc["one_invocation_per_program_condition"] is True
+    assert doc["both_sign_arms_emitted_per_invocation"] is True
+
+    grid = doc["fit_grid"]
+    # 5 base signatures (one per donor scope); 8 model fits (all_donor x 2 layers x 2 configs
+    # = 4, plus 4 LODO). Both configs ship: seeded pca_on_60 primary + pca_off sensitivity.
+    assert grid["base_signatures_per_unit"] == 5
+    assert grid["fit_grid_members_per_unit"] == 8
+    assert grid["model_configs"] == ["pca_on_60", "pca_off"]
+    assert grid["sign_arms_per_fit"] == 2
+    assert doc["n_fit_grid_members_total"] == 8 * doc["n_units"]
 
     for u in doc["units"]:
-        assert u["n_fits"] == 1 and u["arms_emitted_per_unit"] == 2
+        assert u["invocations_per_unit"] == 1
+        assert u["fit_grid_members_per_unit"] == 8
+        assert u["arms_emitted_per_unit"] == 2
+        assert "n_fits" not in u                              # the misleading field is gone
         inc, dec = u["arm_keys"]
         assert "|increase|" in inc and "|decrease|" in dec
-        assert "--arm-key" in u["argv"]
-        # the FIT is taken on the increase arm; decrease is its exact negation
+        # the invocation is taken on the increase arm; decrease is its exact negation
         assert u["argv"][u["argv"].index("--arm-key") + 1] == inc
+
+
+def test_the_worker_profile_prefers_ONE_condition_worker(tmp_path, prepared, view,
+                                                         bundle_dir, w10_report):
+    """A second worker re-reads the same 396k matrix for no scientific gain."""
+    doc = _handoff(tmp_path, prepared, view, bundle_dir, w10_report)
+    wp = doc["worker_profile"]
+    assert wp["max_condition_workers"] == 2
+    assert wp["preferred_condition_workers"] == 1
+    assert wp["cells_and_effects_are_shared_within_a_condition"] is True
 
 
 def test_EVERY_argv_is_PARSER_VALID_against_the_producers_own_CLI(tmp_path, prepared, view,
@@ -72,7 +103,8 @@ def test_EVERY_argv_is_PARSER_VALID_against_the_producers_own_CLI(tmp_path, prep
     for u in doc["units"]:
         args = run_p2s_arms.build_parser().parse_args(u["argv"])   # must not SystemExit
         assert args.arm_key == u["arm_keys"][0]
-        assert os.path.basename(args.cells) == "cells.npz"
+        assert os.path.isdir(args.inputs) or args.inputs   # the prepared dir, not raw files
+        assert "--cells" not in u["argv"] and "--effects" not in u["argv"]
 
 
 def test_a_unit_whose_argv_does_not_parse_is_REFUSED():
@@ -96,7 +128,7 @@ def test_the_handoff_is_NON_GATING_and_content_addressed(tmp_path, prepared, vie
     assert doc["counts_toward_completeness"] is False
     assert all(u["may_gate_or_alter_direct_ranks"] is False for u in doc["units"])
     assert len(doc["handoff_sha256"]) == 64
-    assert doc["solver_lock_sha256"].startswith("2983d140")
+    assert doc["direct_solver_lock_sha256"].startswith("2983d140")
     assert doc["p2s_inputs_run_id"] == prepared["p2s_inputs_run_id"]
 
 
