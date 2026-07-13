@@ -152,6 +152,38 @@ describe('compact Stage-2 route rendering', () => {
     }
   });
 
+  it('keeps a pinned gene visible in every arm that ranks it, even outside the current filter', async () => {
+    const v = await view();
+    const rows = (prefix: string, label: string) =>
+      Array.from({ length: 30 }, (_, i) => ({
+        target_id: `ENSG${prefix}${String(i).padStart(4, '0')}`,
+        target_symbol: `${label}_${i + 1}`,
+        rank: i + 1,
+        arm_value: 1 - i * 0.02,
+      }));
+    const SHARED = 'ENSG99999999999';
+    v.geneArmA.rows = rows('3000000', 'A_DEC');
+    v.geneArmB.rows = rows('4000000', 'B_INC');
+    v.geneArmA.rows[24] = { ...v.geneArmA.rows[24], target_id: SHARED, target_symbol: 'PINME' }; // rank 25
+    v.geneArmB.rows[2] = { ...v.geneArmB.rows[2], target_id: SHARED, target_symbol: 'PINME' }; // rank 3
+
+    render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
+    const canvas = screen.getByTestId('canvas');
+    const pinmeRows = () => [...canvas.querySelectorAll('tbody tr')].filter((tr) => tr.textContent?.includes('PINME'));
+
+    // in the top-ten default it is visible only in the arm that ranks it 3rd
+    expect(pinmeRows()).toHaveLength(1);
+
+    fireEvent.click(within(canvas).getAllByRole('img', { name: /^PINME,/ })[0]);
+
+    // pinned: now present in BOTH arms — the arm that ranks it 25th re-admits it at its true rank
+    const pinned = pinmeRows();
+    expect(pinned).toHaveLength(2);
+    for (const row of pinned) expect(row.getAttribute('aria-selected')).toBe('true');
+    // arm A re-admits it at rank 25 (outside its top ten); arm B already had it at rank 3
+    expect(pinned.map((row) => row.querySelector('td')?.textContent)).toEqual(['25', '3']);
+  });
+
   it('binds every displayed row to its typed Ensembl HPA page and keeps the exact producer value', async () => {
     const v = await view();
     render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);

@@ -163,6 +163,8 @@ export interface EffectRankPlotProps {
   facet: CompactEffectRankFacet;
   /** Tier-2 display label for the facet's program; falls back to the raw id upstream. */
   programLabel?: string;
+  /** This pole's own condition, in the page header's vocabulary (rest / 8 hr / 48 hr). */
+  condition?: string;
   /** Gene currently hovered or pinned anywhere on the canvas (may belong to the other facet). */
   activeId?: string | null;
   pinnedId?: string | null;
@@ -177,6 +179,7 @@ const EMPTY: ReadonlySet<string> = new Set();
 export function EffectRankPlot({
   facet,
   programLabel,
+  condition,
   activeId = null,
   pinnedId = null,
   bothArmIds = EMPTY,
@@ -213,10 +216,12 @@ export function EffectRankPlot({
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
         <PoleChip role={facet.role} />
-        {programLabel && programLabel !== facet.program_id && (
-          <span className="text-[13.5px] font-semibold text-ink">{programLabel}</span>
-        )}
-        <span className="font-mono text-[11px] text-ink-2">{facet.program_id}</span>
+        {/* the pole as the page header states it — label + its own condition; the raw program_id
+            stays in the accessible name, not on the card */}
+        <span className="text-[13.5px] font-semibold text-ink">
+          {programLabel ?? facet.program_id}
+          {condition && <span className="font-normal text-ink-2"> ({condition})</span>}
+        </span>
         <span className="ml-auto">
           <Legend bothCount={bothArmIds.size} />
         </span>

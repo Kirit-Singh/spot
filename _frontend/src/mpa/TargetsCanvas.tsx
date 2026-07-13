@@ -12,6 +12,7 @@ import type {
   CompactTargetArm,
   CompactTargetRow,
 } from '../domain/compactStage2Projection';
+import { conditionLabel } from './contrastTitle';
 import { EffectRankPlot } from './EffectRankPlot';
 
 const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
@@ -59,16 +60,48 @@ function contextLabel(arm: CompactTargetArm): string {
 }
 
 const ARROW: Record<'increase' | 'decrease', string> = { increase: '↑', decrease: '↓' };
+const MOTION: Record<'increase' | 'decrease', string> = { increase: 'increasing', decrease: 'decreasing' };
+
+/**
+ * The condition this POLE was selected at, in the page header's vocabulary. A within-condition
+ * selection puts both poles at the same timepoint; a temporal one runs From → To, so the From facet
+ * brackets the start condition and the To facet the end one.
+ */
+function facetCondition(facet: CompactStage2SelectionView['effectRankFacets'][number]): string {
+  const ctx = facet.increase.context;
+  if ('condition' in ctx) return conditionLabel(ctx.condition);
+  return conditionLabel(facet.role === 'A' ? ctx.from_condition : ctx.to_condition);
+}
 
 /** How many producer rows a table shows. The arm itself is untouched: this is a display filter. */
 export type RowMode = 'top10' | 'both' | 'all';
 
 const TOP_N = 10;
 
-function rowsFor(arm: CompactTargetArm, mode: RowMode, bothArmIds: ReadonlySet<string>): CompactTargetRow[] {
-  if (mode === 'both') return arm.rows.filter((row) => bothArmIds.has(row.target_id));
-  if (mode === 'top10') return arm.rows.filter((row) => row.rank <= TOP_N);
-  return arm.rows;
+/**
+ * The rows a table shows: the mode's filter, PLUS the pinned gene wherever it ranks.
+ *
+ * A pinned gene must be visible in every arm that ranks it — pin WDR26 from the map and it is rank 5
+ * in one arm but rank 30 in the other, so a plain top-ten filter would silently drop the very row the
+ * user asked to see. It is re-inserted at its true rank; the filter is display-only and the producer's
+ * rows and ranks are never touched.
+ */
+function rowsFor(
+  arm: CompactTargetArm,
+  mode: RowMode,
+  bothArmIds: ReadonlySet<string>,
+  pinnedId: string | null,
+): CompactTargetRow[] {
+  const base =
+    mode === 'both'
+      ? arm.rows.filter((row) => bothArmIds.has(row.target_id))
+      : mode === 'top10'
+        ? arm.rows.filter((row) => row.rank <= TOP_N)
+        : arm.rows;
+
+  if (!pinnedId || base.some((row) => row.target_id === pinnedId)) return base;
+  const pinned = arm.rows.find((row) => row.target_id === pinnedId);
+  return pinned ? [...base, pinned].sort((a, b) => a.rank - b.rank) : base;
 }
 
 /** Stage-1's `.seg` grammar (Show cells · condition): one bordered group, a rule between each button,
@@ -143,7 +176,7 @@ function GeneArmTable({
   onHover,
   onPin,
 }: ArmTableProps) {
-  const rows = rowsFor(arm, mode, bothArmIds);
+  const rows = rowsFor(arm, mode, bothArmIds, pinnedId);
   const showValue = rows.some((row) => row.arm_value !== null);
   const dir = armDirection(view, arm);
   const programId = armProgramId(view, arm);
@@ -161,7 +194,7 @@ function GeneArmTable({
         {program && <span className="text-[13.5px] font-semibold text-ink">{program}</span>}
         {dir && (
           <span className="font-mono text-[11px] text-ink-2">
-            {ARROW[dir]} desired {dir}
+            {ARROW[dir]} {MOTION[dir]}
           </span>
         )}
         <span className="font-mono text-[11px] text-muted">{armContext(arm)}</span>
@@ -324,6 +357,7 @@ export function TargetsCanvas({
               <EffectRankPlot
                 facet={facet}
                 programLabel={name(facet.program_id)}
+                condition={facetCondition(facet)}
                 activeId={activeId}
                 pinnedId={pinned}
                 bothArmIds={bothArmIds}

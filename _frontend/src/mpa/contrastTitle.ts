@@ -108,6 +108,11 @@ export async function readStage1SelectionV3(): Promise<SelectionV3 | null> {
 const DIR: Record<string, string> = { high: 'hi', low: 'lo' };
 const COND: Record<string, string> = { Rest: 'rest', Stim8hr: '8 hr', Stim48hr: '48 hr' };
 
+/** The header's condition vocabulary, shared so downstream cards bracket a pole the same way. */
+export function conditionLabel(condition: string): string {
+  return COND[condition] ?? condition.toLowerCase();
+}
+
 function pole(p: Pole | undefined, cond: string): string {
   const label = p?.display_label ?? '—';
   const dir = p?.direction ? (DIR[p.direction] ?? p.direction) : '';
