@@ -24,9 +24,16 @@ from ... import runid
 
 ENV_LOCK_RULE_ID = "spot.stage02.temporal.arm.env_lock.stage2_solver_lock_sha256.v1"
 
+# THE AUTHORITATIVE, FROZEN/STAGED Stage-2 solver-lock sha256 — the ONE lock every lane
+# (Direct, pathway, temporal) and the real run bind. Any other lock is wrong: the earlier
+# ``_requirements/base.lock`` (b9284e63…) is NOT this lock. A missing lock, that b928 lock,
+# or any other disagreeing bytes are refused BY NAME.
+AUTHORITATIVE_ENV_LOCK_SHA256 = (
+    "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe")
+
 
 class EnvLockError(ValueError):
-    """The environment lock is missing or swapped. Refuse; a run's env identity is required."""
+    """The environment lock is missing, wrong or swapped. Refuse; env identity is required."""
 
 
 def env_lock_block(path: Optional[str] = None, *, expect_sha256: Optional[str] = None,
@@ -34,7 +41,10 @@ def env_lock_block(path: Optional[str] = None, *, expect_sha256: Optional[str] =
     """The env-lock identity for a temporal bundle. Bytes verified, path never carried.
 
     Exactly one of ``path`` (production) or ``synthetic_sha256`` (fixture) is used. Passing
-    neither is a refusal: a bundle with no environment identity cannot be reproduced.
+    neither is a refusal: a bundle with no environment identity cannot be reproduced. In
+    production the lock BYTES must hash to the authoritative Stage-2 solver lock (or an
+    explicit ``expect_sha256`` override, for exercising the read mechanism); a wrong or
+    missing lock fails BY NAME so no run silently binds the wrong environment.
     """
     if synthetic_sha256 is not None:
         return {
@@ -48,12 +58,14 @@ def env_lock_block(path: Optional[str] = None, *, expect_sha256: Optional[str] =
     sha = shared.get("sha256")
     if not sha:
         raise EnvLockError(
-            "production temporal output must bind the committed Stage-2 solver-lock; the "
+            "production temporal output must bind the authoritative Stage-2 solver-lock; the "
             f"env-lock is missing ({shared.get('status')!r}). Identity may not be omitted")
-    if expect_sha256 and sha != str(expect_sha256):
+    expected = str(expect_sha256) if expect_sha256 else AUTHORITATIVE_ENV_LOCK_SHA256
+    if sha != expected:
         raise EnvLockError(
-            f"the env-lock bytes hash to {sha[:16]}, not the expected "
-            f"{str(expect_sha256)[:16]} — a swapped lock is refused")
+            f"the env-lock bytes hash to {sha[:16]}…, not the authoritative Stage-2 solver "
+            f"lock {expected[:16]}… — a wrong or swapped lock is refused BY NAME. Every lane "
+            "binds the SAME lock; the old _requirements/base.lock (b9284e63…) is not it")
     return {
         "env_lock_sha256": sha,
         "env_lock_name": shared.get("name"),

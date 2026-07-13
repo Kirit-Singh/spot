@@ -1447,17 +1447,21 @@ class TestAuditDefectsClosed:
         with pytest.raises(arm_release.ReleaseError, match="code_identity|one build"):
             arm_release.build_release(addrs, root)
 
-    def test_6_the_bundle_binds_the_stage2_solver_lock_identity(self, tmp_path):
+    def test_6_the_bundle_binds_the_authoritative_stage2_solver_lock(self, tmp_path):
+        from direct.temporal.arms import arm_env
+        auth = arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
+        assert auth == \
+            "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe"
         b = FX.build()
         el = b["env_lock"]
-        assert el["env_lock_sha256"] == "d0" * 32
+        assert el["env_lock_sha256"] == auth         # the SAME lock every lane binds
         assert el["env_lock_is_synthetic"] is True   # fixture: synthetic but NOT omitted
         assert el["env_lock_rule_id"].endswith("stage2_solver_lock_sha256.v1")
         # carried into the root inventory identity too
         arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
         man = json.loads(
             open(os.path.join(str(tmp_path), arm_emit.RELEASE_FILENAME), "rb").read())
-        assert man["env_lock_sha256"] == "d0" * 32
+        assert man["env_lock_sha256"] == auth
 
     def test_6_a_bundle_with_no_env_lock_is_refused(self):
         from direct.temporal.arms import arm_bundle
@@ -1475,25 +1479,37 @@ class TestAuditDefectsClosed:
         assert report["admitted"] is False
         assert any("env_lock" in f or "solver_lock" in f for f in report["failures"])
 
-    def test_6_production_env_lock_block_reads_and_verifies_actual_bytes(self, tmp_path):
-        from direct.temporal.arms import arm_env
-        lock = tmp_path / "base.lock"
-        lock.write_bytes(b"numpy==1.26.4\nscipy==1.13.0\n")
+    def test_6_production_env_lock_reads_actual_bytes_against_an_explicit_expected(
+            self, tmp_path):
         from direct.hashing import file_sha256
-        blk = arm_env.env_lock_block(str(lock))
-        assert blk["env_lock_verified_from_bytes"] is True
-        assert blk["env_lock_is_synthetic"] is False
+        from direct.temporal.arms import arm_env
+        lock = tmp_path / "stage02_solver_lock.txt"
+        lock.write_bytes(b"numpy==1.26.4\nscipy==1.13.0\n")
+        # expect_sha256 = the file's own sha exercises the READ mechanism on a non-auth lock
+        blk = arm_env.env_lock_block(str(lock), expect_sha256=file_sha256(str(lock)))
+        assert blk["env_lock_verified_from_bytes"] is True and not blk["env_lock_is_synthetic"]
         assert blk["env_lock_sha256"] == file_sha256(str(lock))   # bytes, not a supplied hash
-        assert blk["env_lock_name"] == "base.lock"                # basename, never the path
+        assert blk["env_lock_name"] == "stage02_solver_lock.txt"  # basename, never the path
 
-    def test_6_a_missing_or_swapped_production_lock_is_refused(self, tmp_path):
+    def test_6_the_authoritative_lock_verifies_the_wrong_base_lock_is_refused_by_name(
+            self, tmp_path):
+        from direct.temporal.arms import arm_env
+        # the REAL authoritative Stage-2 solver lock, if staged, verifies to 2983…
+        auth = "/home/tcelab/.spot-runs/20260712T021343Z/stage02_solver_lock.txt"
+        if os.path.exists(auth):
+            blk = arm_env.env_lock_block(auth)
+            assert blk["env_lock_sha256"] == arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
+            assert blk["env_lock_verified_from_bytes"] is True
+        # the WRONG _requirements/base.lock (b9284e63…) is refused BY NAME
+        base = tmp_path / "base.lock"
+        base.write_bytes(b"this is not the authoritative solver lock\n")
+        with pytest.raises(arm_env.EnvLockError, match="not the authoritative"):
+            arm_env.env_lock_block(str(base))
+
+    def test_6_a_missing_production_lock_is_refused_by_name(self):
         from direct.temporal.arms import arm_env
         with pytest.raises(arm_env.EnvLockError, match="missing"):
             arm_env.env_lock_block("/no/such/lock")
-        lock = tmp_path / "base.lock"
-        lock.write_bytes(b"real")
-        with pytest.raises(arm_env.EnvLockError, match="swapped"):
-            arm_env.env_lock_block(str(lock), expect_sha256="0" * 64)
 
     def test_5_reverse_pair_arm_values_are_exact_negations_across_bundles(self):
         fwd = FX.build("FixRest", "FixStim48")
@@ -1662,6 +1678,91 @@ class TestPreflightAndReleaseManifest:
         a = arm_emit.emit_release(FX.build_all(), str(tmp_path / "a"), expect_n_bundles=6)
         b = arm_emit.emit_release(FX.build_all(), str(tmp_path / "b"), expect_n_bundles=6)
         assert a["release_id"] == b["release_id"] and len(a["release_id"]) == 64
+
+
+# =========================================================================== #
+# 10k. THE PRODUCTION ALL-ARM CLI (the entrypoint the scheduler invokes)
+# =========================================================================== #
+_AUTH_LOCK = "/home/tcelab/.spot-runs/20260712T021343Z/stage02_solver_lock.txt"
+
+
+def _write_cli_inputs(tmp_path):
+    """Synthetic — clearly-marked FIXTURE — Stage-1 view, effect source and release."""
+    import numpy as np
+    view = {"schema_version": "spot.stage01_stage2_registry_view.v1",
+            "effect_universe_symbols_sha256": "e" * 64,
+            "programs": [FX.programs_registry()[p] for p in FX.PORTABLE_IDS]
+            + [FX.programs_registry()[FX.NON_PORTABLE_ID]]}
+    conditions = {}
+    for cond in FX.CONDITIONS:
+        targets = {}
+        for i, tid in enumerate(FX.TARGETS):
+            targets[tid] = {"effect": np.asarray(FX.effect_row(i, cond)).tolist(),
+                            "mask": [], "released_estimate_id": f"{tid}|{cond}",
+                            "target_symbol": f"SYM{i}", "target_ensembl": f"ENSGT{i:011d}",
+                            "target_id_namespace": "fixture",
+                            "qc_ontarget_significant": True, "n_guide_slots_released": 4,
+                            "n_splits_total": 3, "effective_donor_n": 4}
+        conditions[cond] = {"targets": targets}
+    effect = {"schema_version": "spot.stage02_temporal_arm_effect_source.v1",
+              "gene_index": FX.GENE_INDEX, "conditions": conditions}
+    release = {"release_self_sha256": "b" * 64,
+               "registry_scorer_projection_sha256": "c0" * 32,
+               "temporal_method_sha256": "f" * 64, "direct_config_sha256": "e" * 64}
+    import json as _json
+    vp, ep, rp = (tmp_path / "view.json", tmp_path / "effect.json",
+                  tmp_path / "release.json")
+    vp.write_text(_json.dumps(view))
+    ep.write_text(_json.dumps(effect))
+    rp.write_text(_json.dumps(release))
+    return str(vp), str(ep), str(rp)
+
+
+class TestProductionCLI:
+    """arm_bundle is NOT test-only machinery: a real CLI entrypoint builds and emits the
+    content-addressed release from explicit Stage-1 view, effect source, env lock and out
+    root — the shape the scheduler invokes."""
+
+    def test_the_cli_help_documents_every_required_input(self):
+        from direct.temporal.arms import run_temporal_arms
+        help_text = run_temporal_arms.build_parser().format_help()
+        for flag in ("--stage1-view", "--effect-source", "--env-lock", "--conditions",
+                     "--out-root", "--from-condition", "--to-condition", "--all-pairs"):
+            assert flag in help_text
+
+    def test_the_cli_emits_a_content_addressed_release_end_to_end(self, tmp_path):
+        from direct.temporal.arms import arm_admission, run_temporal_arms
+        if not os.path.exists(_AUTH_LOCK):
+            pytest.skip("authoritative Stage-2 solver lock not staged")
+        vp, ep, rp = _write_cli_inputs(tmp_path)
+        out = str(tmp_path / "out")
+        rc = run_temporal_arms.main([
+            "--stage1-view", vp, "--stage1-release", rp, "--effect-source", ep,
+            "--env-lock", _AUTH_LOCK, "--conditions", "FixRest,FixStim8,FixStim48",
+            "--out-root", out, "--all-pairs"])
+        assert rc == 0
+        man = json.loads(open(os.path.join(out, "temporal_arm_release.json")).read())
+        assert man["n_bundles"] == 6 and man["n_logical_arms"] == 120
+        assert man["env_lock_sha256"] == arm_env_auth()
+        # every emitted bundle is admissible by the standalone verifier
+        for d in [b["relative_dir"] for b in man["bundles"]]:
+            assert arm_admission.verify_shipped(os.path.join(out, d))["admitted"] is True
+
+    def test_the_cli_refuses_a_wrong_env_lock_by_name(self, tmp_path):
+        from direct.temporal.arms import arm_env, run_temporal_arms
+        vp, ep, rp = _write_cli_inputs(tmp_path)
+        badlock = tmp_path / "base.lock"
+        badlock.write_bytes(b"not the authoritative lock\n")
+        with pytest.raises(arm_env.EnvLockError, match="not the authoritative"):
+            run_temporal_arms.run(run_temporal_arms.build_parser().parse_args([
+                "--stage1-view", vp, "--stage1-release", rp, "--effect-source", ep,
+                "--env-lock", str(badlock), "--conditions", "FixRest,FixStim8,FixStim48",
+                "--out-root", str(tmp_path / "o"), "--all-pairs"]))
+
+
+def arm_env_auth():
+    from direct.temporal.arms import arm_env
+    return arm_env.AUTHORITATIVE_ENV_LOCK_SHA256
 
 
 # =========================================================================== #

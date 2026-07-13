@@ -91,9 +91,11 @@ def condition_universe(release=None):
 
 
 def env_lock():
-    """A FIXTURE env-lock — explicitly SYNTHETIC, but never identity-less (marked)."""
+    """A FIXTURE env-lock — explicitly SYNTHETIC, but binding the AUTHORITATIVE Stage-2
+    solver-lock sha (2983d140…) so the detached replay uses the same lock everywhere.
+    Marked synthetic because the fixture does not ship the lock's actual bytes."""
     from direct.temporal.arms import arm_env
-    return arm_env.env_lock_block(synthetic_sha256="d0" * 32)
+    return arm_env.env_lock_block(synthetic_sha256=arm_env.AUTHORITATIVE_ENV_LOCK_SHA256)
 
 
 def stage1(release=None):
