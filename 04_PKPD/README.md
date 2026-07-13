@@ -80,11 +80,31 @@ time, the HTTP status and media type, the source release, the **licence/terms UR
 count + SHA-256, the adapter code hash and the exact extraction transform
 (`spot.stage04_acquisition_manifest.v1`).
 
+**The full chain.** Until the materializer landed, step 2 did not exist: `run_acquire` wrote an
+acquisition manifest, `run_stage4` consumed an evidence bundle, and nothing turned one into the
+other — so every green run was scoring a fixture.
+
 ```bash
-python -m analysis.run_acquire --stage3-bundle <dir> --run-root <dir>   # offline: no network
-python -m analysis.run_acquire --stage3-bundle <dir> --run-root <dir> \
+# 1. acquire public bytes (offline by default; cached outside Git, addressed by SHA-256)
+python -m analysis.run_acquire     --stage3-bundle <dir> --run-root <R>
+python -m analysis.run_acquire     --stage3-bundle <dir> --run-root <R> \
     --acquire-identity temozolomide --allow-network --dailymed-setid <setid>
+
+# 2. materialize the typed evidence bundle from what was actually acquired
+python -m analysis.run_materialize --stage3-bundle <dir> --run-root <R> --out <B>
+python -m verifier.verify_bundle   <B> --run-root <R>      # independent; 0 = verified
+
+# 3. score, emit, verify
+python -m analysis.run_stage4      --stage3-bundle <dir> --evidence-bundle <B>
 ```
+
+The materializer states `not_evaluated`, with a reason, for **every lane a public acquisition
+cannot reach** — exposure, transporters, NEBPI observations, fu — and those reasons are hashed
+into `scorecard_set_id`, so an absence is part of the release's identity rather than a gap in it.
+It maps only the CNS-MPO inputs PubChem honestly supplies (MW, TPSA, HBD); **XLogP3 is not
+BioByte ClogP**, so `clogp`, `clogd_74` and `pka_most_basic` stay unsourced and CNS-MPO comes out
+**incomplete**. It refuses fixture evidence, refuses a label whose molecule is not the candidate's,
+and never infers an organ system.
 
 - **Raw bytes live outside Git**, under a caller-supplied run root, addressed by their own
   SHA-256. `RunRoot` *refuses* a cache inside the working tree. Git holds synthetic fixtures only.
