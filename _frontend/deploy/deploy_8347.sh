@@ -347,6 +347,19 @@ hygiene_scan "$REL_MANIFEST" "$DEPLOY_MANIFEST"
 say "       release manifest + record emitted ($(wc -l < "$REL_ENTRIES" | tr -d ' ') files: built+preserved-stage1+stage1-data)"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 9b. Served-manifest consistency — refuse to promote a served tree whose Stage-1 release
+#     ATTESTATION contradicts the bytes actually served (e.g. overlay_release_ok=false / overlay
+#     release_staging_not_served while the v3 overlay is served + required by 01_page.html). This does
+#     NOT regenerate/flip the attestation (that is gen_stage1_t8.py / gen_full_release_verification.py
+#     on the compute host) — it only FAILS CLOSED so a self-contradicting release cannot be promoted.
+# ─────────────────────────────────────────────────────────────────────────────
+say "[9b/10] verifying served-manifest consistency (attestation ↔ served bytes)"
+command -v node >/dev/null 2>&1 || die "node required for the served-manifest consistency check"
+node "$SCRIPT_DIR/servedManifestConsistency.mjs" "$TARGET_ROOT" \
+  || die "served Stage-1 manifests contradict the served bytes — regenerate the release attestation on the compute host so overlay/app gates match reality (do NOT promote the contradiction)"
+say "       served attestation consistent with served bytes"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 10. Remote sync (authoritative data + pages) — prove remote == pinned baseline
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$SKIP_REMOTE" = "1" ]; then
