@@ -82,7 +82,8 @@ export interface CompactStage2Projection {
 /** Explicit release identity carried by each Stage-2 results/current.json route entry. */
 export interface CompactStage2ReleaseMetadata {
   schema_version: 'spot.ui_compact_stage2_release.v1';
-  run_id: string;
+  /** Content-addressed identity of the admitted selection-independent DISPLAY release; not an estimator run. */
+  display_release_id: string;
   release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'];
   pathway_sources: ['reactome', 'go_bp'];
   active_pathway_source: 'reactome' | 'go_bp';
@@ -129,7 +130,7 @@ export interface CompactDisplayVerificationReceipt {
 
 export interface CompactStage2SelectionView {
   schema_version: 'spot.ui_compact_stage2_selection_view.v1';
-  run_id: string;
+  display_release_id: string;
   pathway_source: 'reactome' | 'go_bp';
   mode: 'within_condition' | 'temporal_cross_condition';
   pathway_context: 'condition_matched' | 'endpoint_pathway_context';

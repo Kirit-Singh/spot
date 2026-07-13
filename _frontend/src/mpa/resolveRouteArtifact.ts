@@ -212,7 +212,7 @@ export async function loadProductionProjection(
     // Stage-2 (targets | pathways): W3's compact all-arm prefix, selected at join time. Release
     // order/source/run identity comes ONLY from the explicit route metadata — never inferred from keys.
     const meta = entry.compact_stage2;
-    if (!meta || meta.run_id !== chain.stage2_run_id) return null;
+    if (!meta || meta.display_release_id !== chain.stage2_display_release_id) return null;
     if ((await sha256Hex(projectionText)) !== meta.projection_raw_sha256) return null;
     if ((await sha256Hex(canonicalJson(raw))) !== meta.projection_canonical_sha256) return null;
     const proj = await parseCompactStage2Projection(raw, meta.projection_self_sha256);

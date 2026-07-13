@@ -34,7 +34,8 @@ async function release(
       selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256,
       release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256,
     },
-    chain: { stage2_run_id: meta.run_id, stage3_bundle_id: null, stage4_scorecard_set_id: null },
+    chain: { stage2_display_release_id: meta.display_release_id, stage2_run_id: null,
+      stage3_bundle_id: null, stage4_scorecard_set_id: null },
     routes: {
       targets: { manifest_path: 'manifests/targets.json', content_hash: H,
         projection_path: 'stage02/display.json', projection_content_hash: meta.projection_canonical_sha256,

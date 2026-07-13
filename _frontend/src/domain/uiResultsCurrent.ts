@@ -46,7 +46,10 @@ export interface Stage1Binding {
  * chain EXACTLY — an admitted receipt for run A packaged over data from run B is refused.
  */
 export interface ResultChain {
-  stage2_run_id: string; // the admitted Stage-2 run id every downstream result descends from
+  /** Selection-independent admitted Stage-2 display aggregation; explicitly not an estimator run id. */
+  stage2_display_release_id: string;
+  /** Real Stage-2 aggregate/run identity bound by Stage-3, or null until a Stage-3 bundle is admitted. */
+  stage2_run_id: string | null;
   stage3_bundle_id: string | null; // the admitted Stage-3 bundle id (Drugs), or null until bound
   stage4_scorecard_set_id: string | null; // the admitted Stage-4 scorecard-set id (PK & Safety), or null
 }

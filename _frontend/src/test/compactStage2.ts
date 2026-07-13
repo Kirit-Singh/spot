@@ -115,7 +115,7 @@ export async function compactMetadata(projection: unknown, receipt: unknown): Pr
   const projectionText = JSON.stringify(projection);
   const receiptText = JSON.stringify(receipt);
   return {
-    schema_version: 'spot.ui_compact_stage2_release.v1', run_id: 'stage2-run-1',
+    schema_version: 'spot.ui_compact_stage2_release.v1', display_release_id: 'stage2-display-1',
     release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES], active_pathway_source: 'reactome',
     projection_raw_sha256: await sha256Hex(projectionText),
     projection_canonical_sha256: await sha256Hex(canonicalJson(projection)),

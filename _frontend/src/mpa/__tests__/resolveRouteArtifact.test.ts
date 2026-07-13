@@ -74,7 +74,7 @@ async function admittedManifest(page: PageKey, over: Record<string, unknown> = {
 function current(routes: Record<string, unknown>): UiResultsCurrent {
   return parseUiResultsCurrent({
     schema: 'spot.ui_results_current.v1',
-    stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64), selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256, release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256 }, chain: { stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null },
+    stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64), selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256, release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256 }, chain: { stage2_display_release_id: 'display_1', stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null },
     routes,
   });
 }
@@ -145,7 +145,7 @@ describe('resolveRouteArtifact — route-discriminated admitted resolution', () 
     return {
       [CURRENT_PATH]: JSON.stringify({
         schema: 'spot.ui_results_current.v1',
-        stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64), selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256, release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256 }, chain: { stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null },
+        stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64), selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256, release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256 }, chain: { stage2_display_release_id: 'display_1', stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null },
         routes: { [page]: entry(manifestPath, m.hash) },
       }),
       ['results/' + manifestPath]: m.json,

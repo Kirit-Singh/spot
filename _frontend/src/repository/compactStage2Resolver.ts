@@ -67,7 +67,7 @@ export function resolveCompactStage2Selection(
     const condition = selection.conditions[0];
     return {
       schema_version: 'spot.ui_compact_stage2_selection_view.v1',
-      run_id: metadata.run_id,
+      display_release_id: metadata.display_release_id,
       pathway_source: source,
       mode: selection.analysis_mode,
       pathway_context: 'condition_matched',
@@ -83,7 +83,7 @@ export function resolveCompactStage2Selection(
   if (from === to) fail('malformed', 'cross-condition endpoints must differ');
   return {
     schema_version: 'spot.ui_compact_stage2_selection_view.v1',
-    run_id: metadata.run_id,
+    display_release_id: metadata.display_release_id,
     pathway_source: source,
     mode: selection.analysis_mode,
     pathway_context: 'endpoint_pathway_context',

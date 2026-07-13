@@ -58,7 +58,7 @@ function compactStage2Metadata(v: unknown, path: string): CompactStage2ReleaseMe
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
   exactKeys(v, ['active_pathway_source', 'independent_verifier', 'pathway_sources',
     'projection_canonical_sha256', 'projection_raw_sha256', 'projection_self_sha256',
-    'release_conditions', 'run_id', 'schema_version'], path);
+    'release_conditions', 'display_release_id', 'schema_version'], path);
   if (str(v.schema_version, `${path}.schema_version`) !== 'spot.ui_compact_stage2_release.v1') {
     fail('unknown_schema_version', `${path}.schema_version must be spot.ui_compact_stage2_release.v1`);
   }
@@ -76,7 +76,7 @@ function compactStage2Metadata(v: unknown, path: string): CompactStage2ReleaseMe
   }
   return {
     schema_version: 'spot.ui_compact_stage2_release.v1',
-    run_id: reqStr(v.run_id, `${path}.run_id`),
+    display_release_id: reqStr(v.display_release_id, `${path}.display_release_id`),
     release_conditions: conditions as CompactStage2ReleaseMetadata['release_conditions'],
     pathway_sources: sources as CompactStage2ReleaseMetadata['pathway_sources'],
     active_pathway_source: active as CompactStage2ReleaseMetadata['active_pathway_source'],
@@ -109,8 +109,8 @@ function routeEntry(v: unknown, path: string, route: ResultRouteKey, chain: Resu
     fail('malformed', `${path}.compact_stage2 is only valid on targets/pathways routes`);
   }
   if (compact_stage2) {
-    if (compact_stage2.run_id !== chain.stage2_run_id) {
-      fail('content_hash_mismatch', `${path}.compact_stage2.run_id does not match chain.stage2_run_id`);
+    if (compact_stage2.display_release_id !== chain.stage2_display_release_id) {
+      fail('content_hash_mismatch', `${path}.compact_stage2.display_release_id does not match chain.stage2_display_release_id`);
     }
     if (compact_stage2.projection_canonical_sha256 !== projection_content_hash) {
       fail('content_hash_mismatch', `${path}.compact_stage2 projection canonical hash does not match projection_content_hash`);
@@ -139,7 +139,8 @@ function stage1Binding(v: unknown, path: string): Stage1Binding {
 function resultChain(v: unknown, path: string): ResultChain {
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
   return {
-    stage2_run_id: reqStr(v.stage2_run_id, `${path}.stage2_run_id`),
+    stage2_display_release_id: reqStr(v.stage2_display_release_id, `${path}.stage2_display_release_id`),
+    stage2_run_id: optStr(v.stage2_run_id, `${path}.stage2_run_id`),
     stage3_bundle_id: optStr(v.stage3_bundle_id, `${path}.stage3_bundle_id`),
     stage4_scorecard_set_id: optStr(v.stage4_scorecard_set_id, `${path}.stage4_scorecard_set_id`),
   };

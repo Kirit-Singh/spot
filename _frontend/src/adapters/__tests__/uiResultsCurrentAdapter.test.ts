@@ -13,10 +13,11 @@ const BINDING = {
   selection_schema_raw_sha256: 'b'.repeat(64),
   release_self_sha256: 'c'.repeat(64),
 };
-const CHAIN = { stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null };
+const CHAIN = { stage2_display_release_id: 'display_1', stage2_run_id: null,
+  stage3_bundle_id: null, stage4_scorecard_set_id: null };
 const ENTRY = { manifest_path: 'results/manifests/targets.ui_release.json', content_hash: H, projection_path: null, projection_content_hash: null, compact_stage2: null };
 const COMPACT = {
-  schema_version: 'spot.ui_compact_stage2_release.v1', run_id: 'run_1',
+  schema_version: 'spot.ui_compact_stage2_release.v1', display_release_id: 'display_1',
   release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'], pathway_sources: ['reactome', 'go_bp'], active_pathway_source: 'reactome',
   projection_raw_sha256: 'd'.repeat(64), projection_canonical_sha256: H, projection_self_sha256: 'e'.repeat(64),
   independent_verifier: {
@@ -64,7 +65,7 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: shortReleaseSelf, chain: CHAIN, routes: {} })).toThrow(AdapterError);
   });
 
-  it('rejects a missing / malformed chain (stage2_run_id required)', () => {
+  it('rejects a missing display release id while allowing the production run id to remain null', () => {
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: {} })).toThrow(AdapterError);
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: { stage3_bundle_id: null, stage4_scorecard_set_id: null }, routes: {} })).toThrow(AdapterError);
   });
@@ -88,7 +89,7 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   it('requires exact compact release metadata for bound Stage-2 routes and cross-checks run/hash', () => {
     const base = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H };
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: base } })).toThrow(/compact_stage2/);
-    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: { ...base, compact_stage2: { ...COMPACT, run_id: 'other' } } } })).toThrow(/run_id/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: { ...base, compact_stage2: { ...COMPACT, display_release_id: 'other' } } } })).toThrow(/display_release_id/);
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: { ...base, compact_stage2: { ...COMPACT, projection_canonical_sha256: '2'.repeat(64) } } } })).toThrow(/canonical hash/);
   });
 

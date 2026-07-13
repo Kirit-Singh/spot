@@ -313,7 +313,8 @@ function compactStage2Input(routeInput) {
   const admittedInputs = nObj(displayReceipt.admitted_inputs, 'stage2 route.display_verifier_receipt.admitted_inputs');
   if (Object.keys(admittedInputs).length === 0) fail('stage2 display receipt admitted_inputs must be non-empty');
   const release = nObj(routeInput.compact_release, 'stage2 route.compact_release');
-  const runId = nStr(release.run_id, 'stage2 route.compact_release.run_id');
+  const displayReleaseId = nStr(release.display_release_id,
+    'stage2 route.compact_release.display_release_id');
   const releaseConditions = exactList(release.release_conditions, RELEASE_CONDITIONS,
     'stage2 route.compact_release.release_conditions');
   const pathwaySources = exactList(release.pathway_sources, PATHWAY_SOURCES,
@@ -329,16 +330,16 @@ function compactStage2Input(routeInput) {
       displayReceipt.n_arms !== projection.n_arms) {
     fail('stage2 independent display-verifier receipt is not admitted for this projection');
   }
-  return { projection, projectionText, displayReceipt, runId, releaseConditions, pathwaySources, activeSource };
+  return { projection, projectionText, displayReceipt, displayReleaseId, releaseConditions, pathwaySources, activeSource };
 }
 
 /** Accumulate the admitted cross-stage chain ids from each route's derived projection. */
-function collectChain(route, projection, ids, stage2RunId = null) {
+function collectChain(route, projection, ids, displayReleaseId = null) {
   if (route === 'targets' || route === 'pathways') {
-    if (ids.stage2_run_id !== null && ids.stage2_run_id !== stage2RunId) {
-      fail(`chain: stage-2 run_id differs across routes ("${ids.stage2_run_id}" vs "${stage2RunId}")`);
+    if (ids.stage2_display_release_id !== null && ids.stage2_display_release_id !== displayReleaseId) {
+      fail(`chain: stage-2 display_release_id differs across routes ("${ids.stage2_display_release_id}" vs "${displayReleaseId}")`);
     }
-    ids.stage2_run_id = stage2RunId;
+    ids.stage2_display_release_id = displayReleaseId;
   } else if (route === 'drugs') {
     ids.stage3_bundle_id = projection.artifact.bundle_id;
     ids._drugsUpstream = projection.artifact.upstream_stage2_run;
@@ -356,10 +357,11 @@ function finalizeChain(ids, nRoutes) {
   if (ids._pksafetyUpstream !== null && ids._pksafetyUpstream !== ids.stage3_bundle_id) {
     fail(`chain: pksafety upstream_stage3_bundle "${ids._pksafetyUpstream}" != stage-3 bundle_id "${ids.stage3_bundle_id}"`);
   }
-  if (nRoutes > 0 && ids.stage2_run_id === null) {
-    fail('chain: a bound release requires a Stage-2 route (targets/pathways) to anchor stage2_run_id');
+  if (nRoutes > 0 && ids.stage2_display_release_id === null) {
+    fail('chain: a bound release requires a Stage-2 route (targets/pathways) to anchor stage2_display_release_id');
   }
-  return { stage2_run_id: ids.stage2_run_id, stage3_bundle_id: ids.stage3_bundle_id, stage4_scorecard_set_id: ids.stage4_scorecard_set_id };
+  return { stage2_display_release_id: ids.stage2_display_release_id, stage2_run_id: ids.stage2_run_id,
+    stage3_bundle_id: ids.stage3_bundle_id, stage4_scorecard_set_id: ids.stage4_scorecard_set_id };
 }
 
 /** Derive the compact route projection from that route's admitted NATIVE bundle(s). */
@@ -387,7 +389,10 @@ export function pack(spec) {
 
   const tree = {}; // results-relative path → text (pretty JSON; hashes are over the canonical form / raw bytes)
   const routes = {};
-  const chainIds = { stage2_run_id: null, stage3_bundle_id: null, stage4_scorecard_set_id: null, _drugsUpstream: null, _pksafetyUpstream: null };
+  const declaredStage2RunId = spec.stage2_run_id == null ? null : nStr(spec.stage2_run_id,
+    'spec.stage2_run_id');
+  const chainIds = { stage2_display_release_id: null, stage2_run_id: declaredStage2RunId, stage3_bundle_id: null,
+    stage4_scorecard_set_id: null, _drugsUpstream: null, _pksafetyUpstream: null };
   for (const route of Object.keys(routesIn)) {
     const def = ROUTES[route];
     if (!def) fail(`unknown route "${route}"`);
@@ -397,7 +402,7 @@ export function pack(spec) {
     const compact = isStage2 ? compactStage2Input(routeInput) : null;
     const projection = compact ? compact.projection : deriveCompactProjection(route, native);
     validateProjectionEnvelope(route, def, projection);
-    collectChain(route, projection, chainIds, compact?.runId ?? null);
+    collectChain(route, projection, chainIds, compact?.displayReleaseId ?? null);
 
     // Compact Stage-2 serves W3's EXACT projection bytes VERBATIM (never re-serialized); derived
     // Stage-3/4 projections have no external raw text and are serialized here.
@@ -430,7 +435,7 @@ export function pack(spec) {
       }
       compact_stage2 = {
         schema_version: 'spot.ui_compact_stage2_release.v1',
-        run_id: compact.runId,
+        display_release_id: compact.displayReleaseId,
         release_conditions: compact.releaseConditions,
         pathway_sources: compact.pathwaySources,
         active_pathway_source: compact.activeSource,

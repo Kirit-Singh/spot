@@ -61,11 +61,12 @@ async function makeSpec(opts?: { projection?: Awaited<ReturnType<typeof compactP
   const text = opts?.projectionText ?? JSON.stringify(projection, null, 2);
   const display_verifier_receipt = await compactReceiptAdmitted(projection, text);
   const compact_release = {
-    run_id: 'stage2-run-1', release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES],
+    display_release_id: 'stage2-display-1', release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES],
     active_pathway_source: 'reactome',
   };
   const stage2 = { projection_text: text, display_verifier_receipt, compact_release };
   return {
+    stage2_run_id: 'stage2-run-1',
     stage1_binding: {
       release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64),
       selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256,
@@ -112,7 +113,8 @@ describe('packager → browser loader round-trip', () => {
     const { tree, current } = pack(await makeSpec());
     expect(tree['stage02/stage2_display_projection.json']).toBeTruthy();
     expect(tree['stage02/display_projection.verification.json']).toBeTruthy();
-    const cur = current as { chain: { stage2_run_id: string }; routes: Record<string, { compact_stage2: { release_conditions: string[]; pathway_sources: string[]; projection_self_sha256: string } }> };
+    const cur = current as { chain: { stage2_display_release_id: string; stage2_run_id: string | null }; routes: Record<string, { compact_stage2: { release_conditions: string[]; pathway_sources: string[]; projection_self_sha256: string } }> };
+    expect(cur.chain.stage2_display_release_id).toBe('stage2-display-1');
     expect(cur.chain.stage2_run_id).toBe('stage2-run-1');
     expect(cur.routes.targets.compact_stage2.release_conditions).toEqual(CONDITIONS);
     expect(cur.routes.targets.compact_stage2.pathway_sources).toEqual(SOURCES);
@@ -194,7 +196,7 @@ describe('packager refuses invented or inconsistent Stage-2 releases', () => {
     const target = base.routes.targets;
     expect(() => pack({ ...base, routes: { targets: { ...target, display_verifier_receipt: { ...target.display_verifier_receipt, verdict: 'reject' } } } })).toThrow(/verifier receipt/);
     expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, release_conditions: ['Stim8hr', 'Rest', 'Stim48hr'] } } } })).toThrow(/exactly/);
-    expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, run_id: 'other' } }, pathways: base.routes.pathways } })).toThrow(/run_id differs/);
+    expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, display_release_id: 'other' } }, pathways: base.routes.pathways } })).toThrow(/display_release_id differs/);
     expect(() => pack({ ...base, routes: { targets: target, pathways: { ...base.routes.pathways,
       compact_release: { ...base.routes.pathways.compact_release, active_pathway_source: 'go_bp' } } } })).toThrow(/metadata disagrees/);
   });
