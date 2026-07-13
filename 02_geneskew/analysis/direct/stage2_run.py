@@ -612,6 +612,45 @@ def verify_direct_gate(cfg):
                    prereqs=[f"B.direct.{c}" for c in CONDITIONS])
 
 
+def verify_direct_release(cfg):
+    """Phase C (release level): the pinned EXTERNAL Direct release verifier independently opens and
+    re-hashes the NATIVE OUT/direct/direct_release.json (its own direct_release_sha256), requires
+    EVERY condition the bound Stage-1 release ships to be admitted in full, and writes its admission
+    to the native lane root OUT/direct/direct_release_admission.json (exit 0=ADMIT, 1=REFUSE). The
+    scheduler never self-admits; it requires verdict==ADMIT. No manufactured top-level inventory."""
+    _phase("C direct RELEASE admission (pinned EXTERNAL verify_direct_release over native OUT/direct)")
+    if _completed(cfg, "C.direct_release_admitted"):
+        return
+    _require_clean_verifier(cfg, "direct", cfg.direct_verifier)
+    dv = cfg.direct_verifier
+    rel_dir = os.path.join(cfg.out, "direct")                     # native release dir (holds direct_release.json)
+    native_release = os.path.join(rel_dir, "direct_release.json")
+    admission = os.path.join(rel_dir, "direct_release_admission.json")   # native lane-root admission
+    run("direct-release-verify",
+        [("python" if DRY else sys.executable), os.path.join(dv, "verify_direct_release.py"),
+         "--release", rel_dir,
+         "--de-main", cfg.de, "--sgrna", cfg.sgrna, "--by-guide", cfg.guide,
+         "--by-donors", cfg.donor, "--guide-manifest", cfg.manifest,
+         "--source-registry", cfg.srcreg, "--pseudobulk", cfg.pb,
+         "--stage1-v3-release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
+         "--env-lock", cfg.env_lock,
+         "--expect-h5ad-sha256", ("<sha256:DE.h5ad>" if DRY else file_sha256(cfg.de)),
+         "--recompute", "all", "--report", admission],
+        consumes=[f"w10_admission:{c}" for c in CONDITIONS], produces=["direct_release_admission"], cwd=dv)
+    if not DRY:
+        try:
+            adm = json.load(open(admission))
+        except Exception as e:
+            raise SchedulerError(f"Phase C REFUSED: verify_direct_release wrote no readable admission: {e}")
+        if (adm.get("verdict") != "ADMIT"
+                or adm.get("verifier_id") != "spot.stage02.direct.release.verifier.v1"):
+            raise SchedulerError(
+                "Phase C REFUSED: the Direct release was not independently ADMITTED "
+                f"(verdict={adm.get('verdict')!r}, verifier_id={adm.get('verifier_id')!r})")
+    _write_receipt(cfg, "C.direct_release_admitted", argv=["verify_direct_release"],
+                   inputs=[native_release], outputs=[admission], prereqs=["C.direct_admitted"])
+
+
 def lane_step0(cfg):
     _phase("D step0")
     if _completed(cfg, "D.step0"):
@@ -799,8 +838,9 @@ def lane_downstream(cfg):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m direct.stage2_run")
     ap.add_argument("phase", nargs="?", default="all",
-                    choices=["preflight", "direct", "verify-direct-gate", "step0", "temporal",
-                             "pathway", "verify-lanes", "p2s", "downstream", "aggregate", "all"])
+                    choices=["preflight", "direct", "verify-direct-gate", "verify-direct-release",
+                             "step0", "temporal", "pathway", "verify-lanes", "p2s", "downstream",
+                             "aggregate", "all"])
     args = ap.parse_args(argv)
     cfg = Cfg()
     if args.phase != "preflight" and not DRY and os.path.isfile(identity_path(cfg)):
@@ -812,6 +852,8 @@ def main(argv=None):
         phaseA_preflight(cfg); lane_direct(cfg)
     elif args.phase == "verify-direct-gate":
         verify_direct_gate(cfg)
+    elif args.phase == "verify-direct-release":
+        verify_direct_release(cfg)
     elif args.phase == "step0":
         lane_step0(cfg)
     elif args.phase == "temporal":
@@ -833,7 +875,8 @@ def main(argv=None):
         # are never rerun or overwritten). require_admitted_direct / verify_receipt still fail closed.
         phaseA_preflight(cfg)
         lane_direct(cfg)           # Phase B: produce (or skip) the Direct release
-        verify_direct_gate(cfg)    # Phase C: AUTO-invoke the pinned EXTERNAL W10 verifier + adapter
+        verify_direct_gate(cfg)    # Phase C: AUTO-invoke the pinned EXTERNAL W10 per-bundle verifier
+        verify_direct_release(cfg) # Phase C: pinned EXTERNAL release-level admission over native OUT/direct
         lane_downstream(cfg)       # Phase D: step0 -> temporal(--all-pairs) -> pathway
         verify_lanes(cfg)          # Phase E: external temporal(W11)/pathway(W4) lane admissions
         lane_aggregate(cfg)        # Phase F: primary aggregate — NO P2S in the primary chain

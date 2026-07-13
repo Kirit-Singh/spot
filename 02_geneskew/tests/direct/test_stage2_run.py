@@ -410,3 +410,14 @@ def test_run_identity_binds_all_three_external_verifiers(monkeypatch):
     assert "direct_verifier_head" not in vp
     body = {k: v for k, v in m.items() if k != "run_identity_sha256"}
     assert m["run_identity_sha256"] == S.content_sha256(body)
+
+
+def test_phase_C_release_invokes_pinned_verify_direct_release():
+    """Phase C invokes the pinned EXTERNAL verify_direct_release over the NATIVE OUT/direct release
+    (not a manufactured top-level inventory) and writes the admission to the native lane root."""
+    out = _dry()
+    blk = _block(out, "direct-release-verify")
+    assert "verify_direct_release.py" in blk
+    assert "--release" in blk and "--report" in blk
+    assert "/o/direct" in blk                       # native release dir, not a top-level copy
+    assert "direct_release_admission.json" in blk   # admission at the native lane root
