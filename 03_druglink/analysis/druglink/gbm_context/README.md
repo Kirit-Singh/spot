@@ -1,0 +1,71 @@
+# Stage-3 v2 — GBM disease-context evidence (descriptive, NON-RANKING, NON-GATING)
+
+The deferred "dual-mechanism bonus" axis from the design spec
+(`docs/superpowers/specs/2026-07-08-...`: *"never a filter, so an immune target is never
+dropped for lacking glioma-cell dependency"*), built as a **descriptive** evidence overlay.
+
+For each gene in the selected Stage-2 arms (joined on its **Ensembl id, never a symbol**)
+it emits **three SEPARATE axes** plus a typed, **SUGGESTIVE** compatibility state:
+
+| axis | source | meaning |
+|------|--------|---------|
+| `immune_axis` | Stage-2 arm `desired_change` | desired immune-program perturbation (increase / decrease), per arm |
+| `tumor_axis` | DepMap Public 26Q1 | tumor-cell dependency **direction + coverage** across named GBM/glioma cell lines |
+| `disease_axis` | Open Targets Data 26.06 | GBM/glioma target–disease association evidence (datatype breakdown) |
+| `compatibility` | derived | per immune direction: `dual_mechanism_compatible_suggestive` / `immune_axis_only_no_tumor_dependency` / `tumor_context_not_evaluated` — categorical, **never a number, never causal** |
+
+It **never ranks, gates, or alters** any Stage-2 output; immune-cell effect and tumor-cell
+context stay **separate** (never fused into one score); **missing evidence is
+`not_evaluated`** and is never invented; **no p/q and no overall rank** ever reach a field.
+
+## Sources (verified against primary/official APIs on 2026-07-13 — nothing hallucinated)
+- **Open Targets Platform, Data 26.06** — GraphQL `api.platform.opentargets.org/api/v4/graphql`,
+  licence **CC0 1.0**. Disease ids verified live: **glioblastoma `MONDO_0018177`**, **glioma
+  `MONDO_0021042`** (`EFO_0000519` is null/deprecated and was NOT used). Association via
+  `Target.associatedDiseases(Bs: [diseaseIds])`. OT's aggregated scores are carried as
+  `open_targets_reported_upstream` with `used_for_gating_or_ranking: false`.
+- **DepMap Public 26Q1** — licence **CC BY 4.0**. Byte pinning + the dependency computation
+  are **owned by the Stage-2 DepMap lane** (`02_geneskew/analysis/depmap`), whose official
+  catalog is fail-closed and currently **empty**. This layer consumes that lane's per-gene
+  dependency **handoff** when it exists, honouring its trust model, and otherwise reports the
+  tumor axis as `not_evaluated` with the release identity + cell-line inclusion rule recorded.
+
+## No tissue/organ axis
+The immune effect is an **in-vitro CD4+ T-cell (blood) Perturb-seq** assay — donor × condition
+× perturbation only, **no tissue/organ axis** and none inferred. The tumor context is a discrete
+GBM/glioma **cell-line** panel (not a tissue-expression gradient); the disease context is the
+GBM/glioma **disease** category. All three are recorded in `provenance.TISSUE_ORGAN_AXIS`.
+
+## Handoff for W16 (`build_handoff` → JSON)
+`handoff_id: spot.stage03.gbm_context.v1`, `join_key: target_ensembl`. W16 merges each
+`genes[<ENSG>]` into the Stage-3 v2 candidates **by stable gene identity**, keeping its own
+ranks. Carries `sources` (+ licences), `tissue_organ_axis`, `depmap_release_provenance`, and a
+`run_provenance` block (UTC timestamp, `code_sha256`, env, rerun command, populated-vs-missing).
+
+## Files
+- `states.py` — pure typed-state logic (immune / tumor / disease / compatibility); no network.
+- `ot_disease.py` — Open Targets acquisition (transport is a parameter; fail-closed on data-version drift; refuses target mis-attribution).
+- `depmap_bridge.py` — pinned DepMap release identity + inclusion rule; validates/consumes a per-gene dependency handoff; refuses a foreign or unverified release.
+- `build_gbm_context.py` — assembles the per-gene records + the handoff.
+- `provenance.py` — source pins + licences, tissue-axis record, deterministic code hash, env, rerun command, populated-vs-missing.
+- `run_gbm_context.py` — CLI + testable `run()`.
+- `tests/gbm_context/` — 37 tests (synthetic fixtures + a real pinned OT response + a network-gated live smoke).
+
+## Rerun
+```
+python -m druglink.gbm_context.run_gbm_context \
+  --arms <selected_arms.json> --out gbm_context_handoff.json \
+  --live-open-targets [--depmap-handoff <depmap_dependency_handoff.json>] \
+  [--run-class real_open_targets_smoke]
+```
+`selected_arms.json` is a list of Stage-2 arm rows (`target_ensembl`, `target_symbol`,
+`desired_change`, `program_id`, `arm_key`).
+
+## Populated vs still missing (real run, `run_class: real_open_targets_smoke`, 6 real genes)
+- **Populated:** `immune_direction` (Stage-2 arm) and `disease_association` (live Open Targets,
+  real scores — e.g. EGFR↔glioblastoma 0.654, CTLA4 0.349, FOXP3 0.100).
+- **Still missing (`not_evaluated`):** `tumor_dependency` (DepMap) — awaiting the Stage-2 DepMap
+  lane pinning its official 26Q1 bytes; the contract + `compatibility` dual-mechanism path are
+  ready and unit-tested, and will populate as soon as a validated dependency handoff is supplied.
+- `example_handoff.smoke.json` is that real smoke output (6 representative real immune genes —
+  **illustrative, not the final Stage-2 selection**).

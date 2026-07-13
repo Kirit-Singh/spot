@@ -1,0 +1,480 @@
+{
+  "classification": "descriptive_non_gating",
+  "depmap_release_provenance": {
+    "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; dependency is read from CRISPRGeneDependency (probability >= 0.5 => dependent line) and CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap (config.ALLOWED_TREE_TYPE='Lineage').",
+    "evaluated": false,
+    "license": "CC BY 4.0",
+    "license_url": "https://depmap.org/portal/data_page/?tab=allData",
+    "portal": "https://depmap.org/portal/",
+    "reason": "depmap_official_catalog_empty_no_dependency_handoff",
+    "release_id": "depmap_public_26q1",
+    "release_name": "DepMap Public 26Q1",
+    "required_files": [
+      "Model.csv",
+      "SubtypeTree.csv",
+      "SubtypeMatrix.csv",
+      "Gene.csv",
+      "CRISPRGeneEffect.csv",
+      "CRISPRGeneDependency.csv"
+    ],
+    "source_class": null,
+    "source_module": "02_geneskew/analysis/depmap"
+  },
+  "genes": {
+    "ENSG00000030419": {
+      "compatibility": {
+        "decrease": {
+          "causal": false,
+          "immune_direction": "decrease",
+          "state": "tumor_context_not_evaluated",
+          "suggestive": true,
+          "tumor_state": "not_evaluated"
+        }
+      },
+      "disease_axis": {
+        "diseases": {
+          "MONDO_0018177": {
+            "datatype_evidence": {
+              "literature": 0.10168965142935561
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioblastoma",
+            "reported_overall_association_score": 0.012364054180459176,
+            "used_for_gating_or_ranking": false
+          },
+          "MONDO_0021042": {
+            "datatype_evidence": {
+              "literature": 0.012158615952232422
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioma",
+            "reported_overall_association_score": 0.0014783194187388072,
+            "used_for_gating_or_ranking": false
+          }
+        },
+        "state": "association_evidence_present"
+      },
+      "immune_axis": {
+        "arms": [
+          {
+            "arm_key": "smoke:IKZF2:decrease",
+            "desired_change": "decrease",
+            "desired_perturbation_direction": "decrease",
+            "program_id": "SMOKE.treg_illustrative"
+          }
+        ],
+        "directions": [
+          "decrease"
+        ],
+        "source": "stage2_arm"
+      },
+      "target_ensembl": "ENSG00000030419",
+      "target_symbol": "IKZF2",
+      "tumor_axis": {
+        "coverage": null,
+        "direction": null,
+        "median_gene_effect": null,
+        "reason": "depmap_official_bytes_not_pinned",
+        "state": "not_evaluated"
+      }
+    },
+    "ENSG00000049768": {
+      "compatibility": {
+        "increase": {
+          "causal": false,
+          "immune_direction": "increase",
+          "state": "tumor_context_not_evaluated",
+          "suggestive": true,
+          "tumor_state": "not_evaluated"
+        }
+      },
+      "disease_axis": {
+        "diseases": {
+          "MONDO_0018177": {
+            "datatype_evidence": {
+              "literature": 0.8249620234790457
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioblastoma",
+            "reported_overall_association_score": 0.10030396418658262,
+            "used_for_gating_or_ranking": false
+          },
+          "MONDO_0021042": {
+            "datatype_evidence": {
+              "literature": 0.8752425952951569
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioma",
+            "reported_overall_association_score": 0.10641738581229002,
+            "used_for_gating_or_ranking": false
+          }
+        },
+        "state": "association_evidence_present"
+      },
+      "immune_axis": {
+        "arms": [
+          {
+            "arm_key": "smoke:FOXP3:increase",
+            "desired_change": "increase",
+            "desired_perturbation_direction": "increase",
+            "program_id": "SMOKE.treg_illustrative"
+          }
+        ],
+        "directions": [
+          "increase"
+        ],
+        "source": "stage2_arm"
+      },
+      "target_ensembl": "ENSG00000049768",
+      "target_symbol": "FOXP3",
+      "tumor_axis": {
+        "coverage": null,
+        "direction": null,
+        "median_gene_effect": null,
+        "reason": "depmap_official_bytes_not_pinned",
+        "state": "not_evaluated"
+      }
+    },
+    "ENSG00000134460": {
+      "compatibility": {
+        "decrease": {
+          "causal": false,
+          "immune_direction": "decrease",
+          "state": "tumor_context_not_evaluated",
+          "suggestive": true,
+          "tumor_state": "not_evaluated"
+        }
+      },
+      "disease_axis": {
+        "diseases": {
+          "MONDO_0018177": {
+            "datatype_evidence": {
+              "clinical": 0.1822131362463649,
+              "literature": 0.31304568060447097
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioblastoma",
+            "reported_overall_association_score": 0.12028848276850504,
+            "used_for_gating_or_ranking": false
+          },
+          "MONDO_0021042": {
+            "datatype_evidence": {
+              "literature": 0.14906800158610944
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioma",
+            "reported_overall_association_score": 0.018124605820522784,
+            "used_for_gating_or_ranking": false
+          }
+        },
+        "state": "association_evidence_present"
+      },
+      "immune_axis": {
+        "arms": [
+          {
+            "arm_key": "smoke:IL2RA:decrease",
+            "desired_change": "decrease",
+            "desired_perturbation_direction": "decrease",
+            "program_id": "SMOKE.treg_illustrative"
+          }
+        ],
+        "directions": [
+          "decrease"
+        ],
+        "source": "stage2_arm"
+      },
+      "target_ensembl": "ENSG00000134460",
+      "target_symbol": "IL2RA",
+      "tumor_axis": {
+        "coverage": null,
+        "direction": null,
+        "median_gene_effect": null,
+        "reason": "depmap_official_bytes_not_pinned",
+        "state": "not_evaluated"
+      }
+    },
+    "ENSG00000146648": {
+      "compatibility": {
+        "decrease": {
+          "causal": false,
+          "immune_direction": "decrease",
+          "state": "tumor_context_not_evaluated",
+          "suggestive": true,
+          "tumor_state": "not_evaluated"
+        }
+      },
+      "disease_axis": {
+        "diseases": {
+          "MONDO_0018177": {
+            "datatype_evidence": {
+              "affected_pathway": 0.607930797611621,
+              "clinical": 0.6306736117890006,
+              "genetic_association": 0.2182204632768534,
+              "literature": 0.9967011588440321,
+              "rna_expression": 0.16888491508015668,
+              "somatic_mutation": 0.8571354637442761
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioblastoma",
+            "reported_overall_association_score": 0.654417479113579,
+            "used_for_gating_or_ranking": false
+          },
+          "MONDO_0021042": {
+            "datatype_evidence": {
+              "affected_pathway": 0.9190679877429972,
+              "clinical": 0.1765527188584178,
+              "genetic_association": 0.5302755540467491,
+              "literature": 0.9890467051618217,
+              "somatic_mutation": 0.4559480982087158
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioma",
+            "reported_overall_association_score": 0.43481955141744416,
+            "used_for_gating_or_ranking": false
+          }
+        },
+        "state": "association_evidence_present"
+      },
+      "immune_axis": {
+        "arms": [
+          {
+            "arm_key": "smoke:EGFR:decrease",
+            "desired_change": "decrease",
+            "desired_perturbation_direction": "decrease",
+            "program_id": "SMOKE.treg_illustrative"
+          }
+        ],
+        "directions": [
+          "decrease"
+        ],
+        "source": "stage2_arm"
+      },
+      "target_ensembl": "ENSG00000146648",
+      "target_symbol": "EGFR",
+      "tumor_axis": {
+        "coverage": null,
+        "direction": null,
+        "median_gene_effect": null,
+        "reason": "depmap_official_bytes_not_pinned",
+        "state": "not_evaluated"
+      }
+    },
+    "ENSG00000163131": {
+      "compatibility": {
+        "decrease": {
+          "causal": false,
+          "immune_direction": "decrease",
+          "state": "tumor_context_not_evaluated",
+          "suggestive": true,
+          "tumor_state": "not_evaluated"
+        }
+      },
+      "disease_axis": {
+        "diseases": {
+          "MONDO_0018177": {
+            "datatype_evidence": {
+              "literature": 0.7468328248233593,
+              "rna_expression": 0.05846000147535941
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioblastoma",
+            "reported_overall_association_score": 0.09258151674174557,
+            "used_for_gating_or_ranking": false
+          },
+          "MONDO_0021042": {
+            "datatype_evidence": {
+              "literature": 0.6511927684658481
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioma",
+            "reported_overall_association_score": 0.07917602782647254,
+            "used_for_gating_or_ranking": false
+          }
+        },
+        "state": "association_evidence_present"
+      },
+      "immune_axis": {
+        "arms": [
+          {
+            "arm_key": "smoke:CTSS:decrease",
+            "desired_change": "decrease",
+            "desired_perturbation_direction": "decrease",
+            "program_id": "SMOKE.treg_illustrative"
+          }
+        ],
+        "directions": [
+          "decrease"
+        ],
+        "source": "stage2_arm"
+      },
+      "target_ensembl": "ENSG00000163131",
+      "target_symbol": "CTSS",
+      "tumor_axis": {
+        "coverage": null,
+        "direction": null,
+        "median_gene_effect": null,
+        "reason": "depmap_official_bytes_not_pinned",
+        "state": "not_evaluated"
+      }
+    },
+    "ENSG00000163599": {
+      "compatibility": {
+        "decrease": {
+          "causal": false,
+          "immune_direction": "decrease",
+          "state": "tumor_context_not_evaluated",
+          "suggestive": true,
+          "tumor_state": "not_evaluated"
+        }
+      },
+      "disease_axis": {
+        "diseases": {
+          "MONDO_0018177": {
+            "datatype_evidence": {
+              "clinical": 0.5393385903473402,
+              "literature": 0.69358024287154
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioblastoma",
+            "reported_overall_association_score": 0.3489629789254138,
+            "used_for_gating_or_ranking": false
+          },
+          "MONDO_0021042": {
+            "datatype_evidence": {
+              "clinical": 0.13745990812662767,
+              "literature": 0.709921611020504
+            },
+            "label": "open_targets_reported_upstream",
+            "name": "glioma",
+            "reported_overall_association_score": 0.10720817014264464,
+            "used_for_gating_or_ranking": false
+          }
+        },
+        "state": "association_evidence_present"
+      },
+      "immune_axis": {
+        "arms": [
+          {
+            "arm_key": "smoke:CTLA4:decrease",
+            "desired_change": "decrease",
+            "desired_perturbation_direction": "decrease",
+            "program_id": "SMOKE.treg_illustrative"
+          }
+        ],
+        "directions": [
+          "decrease"
+        ],
+        "source": "stage2_arm"
+      },
+      "target_ensembl": "ENSG00000163599",
+      "target_symbol": "CTLA4",
+      "tumor_axis": {
+        "coverage": null,
+        "direction": null,
+        "median_gene_effect": null,
+        "reason": "depmap_official_bytes_not_pinned",
+        "state": "not_evaluated"
+      }
+    }
+  },
+  "handoff_id": "spot.stage03.gbm_context.v1",
+  "join_key": "target_ensembl",
+  "merge_note": "W16 merges each gene into the Stage-3 v2 candidates by target_ensembl; immune-cell effect and tumor-cell context stay separate; missing evidence is not_evaluated.",
+  "n_genes": 6,
+  "never_alters_ranks": true,
+  "no_pq_no_overall_rank": true,
+  "run_provenance": {
+    "code_sha256": "7041723770ee7b84fb7ed029782e94d5d757fd7b507d2719be94a7d1b943cb4d",
+    "env": {
+      "implementation": "CPython",
+      "platform": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3"
+    },
+    "n_genes": 6,
+    "populated_vs_missing": {
+      "disease_association_open_targets": "populated",
+      "immune_direction_stage2_arm": "populated",
+      "tumor_dependency_depmap": "not_evaluated"
+    },
+    "rerun_command": "python -m druglink.gbm_context.run_gbm_context --arms <selected_arms.json> --out gbm_context_handoff.json --live-open-targets [--depmap-handoff <optional depmap_dependency_handoff.json>]",
+    "run_class": "real_open_targets_smoke",
+    "run_timestamp_utc": "2026-07-13T17:01:28Z",
+    "sources": {
+      "depmap": {
+        "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; dependency is read from CRISPRGeneDependency (probability >= 0.5 => dependent line) and CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap (config.ALLOWED_TREE_TYPE='Lineage').",
+        "license": "CC BY 4.0",
+        "license_url": "https://depmap.org/portal/data_page/?tab=allData",
+        "name": "DepMap Public 26Q1",
+        "note": "byte pinning + dependency computation are owned by the Stage-2 DepMap lane; consumed here only via a validated per-gene handoff.",
+        "portal": "https://depmap.org/portal/",
+        "release_id": "depmap_public_26q1",
+        "required_files": [
+          "Model.csv",
+          "SubtypeTree.csv",
+          "SubtypeMatrix.csv",
+          "Gene.csv",
+          "CRISPRGeneEffect.csv",
+          "CRISPRGeneDependency.csv"
+        ],
+        "source_module": "02_geneskew/analysis/depmap"
+      },
+      "open_targets": {
+        "data_version": "26.06",
+        "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+        "glioblastoma_id": "MONDO_0018177",
+        "glioma_id": "MONDO_0021042",
+        "license": "CC0 1.0",
+        "license_url": "https://platform-docs.opentargets.org/licence",
+        "name": "Open Targets Platform",
+        "note": "disease ids verified live against the API; EFO_0000519 is null/deprecated and was NOT used. Association scores are upstream-reported, non-gating.",
+        "query_field": "Target.associatedDiseases(Bs: [diseaseIds])",
+        "verified_on": "2026-07-13"
+      }
+    },
+    "tissue_organ_axis": {
+      "disease_context": "Disease association is to glioblastoma (MONDO_0018177) and glioma (MONDO_0021042) as single disease categories, not a tissue axis.",
+      "immune_assay_rationale": "The immune-cell effect comes from an in-vitro CD4+ T-cell (blood) Perturb-seq assay with donor x condition x perturbation axes only; there is no tissue/organ axis and none is inferred.",
+      "immune_assay_tissue_organ_axis_present": false,
+      "tumor_context": "Tumor-cell dependency is over named GBM/glioma cell lines (DepMap lineage node); a discrete cell-line panel, not a tissue-expression gradient."
+    }
+  },
+  "sources": {
+    "depmap": {
+      "cell_line_inclusion_rule": "GBM/glioma lineage: models whose membership column (the selected SubtypeTree node's own DepmapModelType code, TreeType='Lineage') is set in SubtypeMatrix; dependency is read from CRISPRGeneDependency (probability >= 0.5 => dependent line) and CRISPRGeneEffect (Chronos). Node selection + verification is owned by 02_geneskew/analysis/depmap (config.ALLOWED_TREE_TYPE='Lineage').",
+      "license": "CC BY 4.0",
+      "license_url": "https://depmap.org/portal/data_page/?tab=allData",
+      "name": "DepMap Public 26Q1",
+      "note": "byte pinning + dependency computation are owned by the Stage-2 DepMap lane; consumed here only via a validated per-gene handoff.",
+      "portal": "https://depmap.org/portal/",
+      "release_id": "depmap_public_26q1",
+      "required_files": [
+        "Model.csv",
+        "SubtypeTree.csv",
+        "SubtypeMatrix.csv",
+        "Gene.csv",
+        "CRISPRGeneEffect.csv",
+        "CRISPRGeneDependency.csv"
+      ],
+      "source_module": "02_geneskew/analysis/depmap"
+    },
+    "open_targets": {
+      "data_version": "26.06",
+      "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+      "glioblastoma_id": "MONDO_0018177",
+      "glioma_id": "MONDO_0021042",
+      "license": "CC0 1.0",
+      "license_url": "https://platform-docs.opentargets.org/licence",
+      "name": "Open Targets Platform",
+      "note": "disease ids verified live against the API; EFO_0000519 is null/deprecated and was NOT used. Association scores are upstream-reported, non-gating.",
+      "query_field": "Target.associatedDiseases(Bs: [diseaseIds])",
+      "verified_on": "2026-07-13"
+    }
+  },
+  "suggestive_only": true,
+  "tissue_organ_axis": {
+    "disease_context": "Disease association is to glioblastoma (MONDO_0018177) and glioma (MONDO_0021042) as single disease categories, not a tissue axis.",
+    "immune_assay_rationale": "The immune-cell effect comes from an in-vitro CD4+ T-cell (blood) Perturb-seq assay with donor x condition x perturbation axes only; there is no tissue/organ axis and none is inferred.",
+    "immune_assay_tissue_organ_axis_present": false,
+    "tumor_context": "Tumor-cell dependency is over named GBM/glioma cell lines (DepMap lineage node); a discrete cell-line panel, not a tissue-expression gradient."
+  }
+}
