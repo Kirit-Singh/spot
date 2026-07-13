@@ -6,7 +6,10 @@ independent admission audit before publish**. Post-extraction audit `fa64054e` +
 (verdict REPAIR) worklists fully applied test-first and regenerated (details at end).
 
 ## Store identity
-- **store_id:** `b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e`
+- **store_id:** `bdf41b69df2be61d3f625aafa0429e643581fe50823698e77e079054c6145160`
+  (W16 admitted the bytes at b20ec29b; this supersedes it with the UniProt-locator +
+  provenance-gate reproducibility repair below. Eligibility science unchanged:
+  `eligibility_evidence_sha256 cf5d7088…` byte-identical across the repair.)
 - Bound into `store_id`: store_rows_sha256, eligibility_evidence_sha256, public_source_provenance_sha256,
   typed_universe_sha256, extraction_query_sha256, both source shas.
 - **verify_ok: true** via `universe_verify.verify_from_disk` (loads + hashes + predicate-**replays** the
@@ -72,6 +75,17 @@ independent admission audit before publish**. Post-extraction audit `fa64054e` +
 6. Mixed-license release gate: `CHEMBL_LICENSE` + `CHEMBL_REQUIRED_ATTRIBUTION` packaged in the store dir;
    ChEMBL-derived layer CC BY-SA 3.0, UniProt-derived identity CC BY 4.0 — cache data is NOT the code's MIT.
 
-**Ask of W16/W1:** independent admission audit of `store_id b20ec29b…` — re-run `universe_verify.verify_from_disk`,
+## W16 re-admission repair (post-admission of b20ec29b) — UniProt locator + provenance gate
+- **UniProt locator:** primary-source check confirms `current_release` is still 2026_02 and
+  `previous_releases/` archives only through 2026_01 — so `release-2026_02/` does NOT exist and is not
+  invented. The real `current_release` URL is kept; the **release=2026_02 association is proven by bound
+  bytes**: `UNIPROT_2026_02.relnotes.txt` (says "Release 2026_02") + `UNIPROT_2026_02.by_organism.RELEASE.metalink`
+  (attests this file's MD5 `7ef6a677…`), both hashed into the provenance and packaged. An immutable
+  `previous_releases/release-2026_02/` URL is to be added once UniProt archives it — without changing bytes.
+- **Provenance gate:** `verify_from_disk` now also reopens and hashes `source_provenance.public.json` and
+  fails with `public_source_provenance_hash_drift` on any on-disk change (proven on the real store; mutation
+  test added). Packaged release metadata: `CHEMBL_checksums.txt`, `UNIPROT_2026_02.*`.
+
+**Ask of W16/W1:** independent admission audit of `store_id bdf41b69…` — re-run `universe_verify.verify_from_disk`,
 re-hash both sources vs publisher, re-parse all JSON (zero path leaks), replay eligibility predicates, confirm
 dispositions/counts, review the two schemas, and reconcile with W16's `03_druglink/verifier/`. Publish only on pass.

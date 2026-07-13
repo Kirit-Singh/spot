@@ -1,0 +1,278 @@
+<metalink xmlns="http://www.metalinker.org/" version="3.0">
+  <publisher>
+    <name>UniProt Consortium</name>
+    <url>http://www.uniprot.org/</url>
+  </publisher>
+  <license>
+    <name>Creative Commons Attribution 4.0 International (CC BY 4.0)</name>
+    <url>http://creativecommons.org/licenses/by/4.0/</url>
+  </license>
+  <description>UniProt</description>
+  <version>2026_02</version>
+  <files>
+    <file name="YEAST_559292_idmapping_selected.tab.gz">
+      <size>2015849</size>
+      <verification>
+        <hash type="md5">9ffd7270fa97d8c22fa846e3825b061c</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/YEAST_559292_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/YEAST_559292_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/YEAST_559292_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="CHICK_9031_idmapping.dat.gz">
+      <size>6413164</size>
+      <verification>
+        <hash type="md5">f3289a783bf8969e044d29997b1bde39</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CHICK_9031_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CHICK_9031_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CHICK_9031_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="MOUSE_10090_idmapping.dat.gz">
+      <size>15569488</size>
+      <verification>
+        <hash type="md5">7e5d060f53636d553fb71d75251bf5a4</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="HUMAN_9606_idmapping_selected.tab.gz">
+      <size>64657002</size>
+      <verification>
+        <hash type="md5">74c77117d5ee20b323def1a83943fcd3</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="HUMAN_9606_idmapping.dat.gz">
+      <size>37842957</size>
+      <verification>
+        <hash type="md5">7ef6a677d4db949397c3b352c466e499</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="DROME_7227_idmapping.dat.gz">
+      <size>8210126</size>
+      <verification>
+        <hash type="md5">b12845e7d440fa2cf6a9f5a3377f07eb</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="DICDI_44689_idmapping.dat.gz">
+      <size>1907845</size>
+      <verification>
+        <hash type="md5">6d3241063f96a9b42238c4ac7297518a</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DICDI_44689_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DICDI_44689_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DICDI_44689_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="DICDI_44689_idmapping_selected.tab.gz">
+      <size>781716</size>
+      <verification>
+        <hash type="md5">5d2a1078fa4b5369891cc35854070ab9</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DICDI_44689_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DICDI_44689_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DICDI_44689_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="ECOLI_83333_idmapping.dat.gz">
+      <size>1740597</size>
+      <verification>
+        <hash type="md5">e80415a4853ac67d66787d5e86e5108b</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ECOLI_83333_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ECOLI_83333_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ECOLI_83333_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="RAT_10116_idmapping_selected.tab.gz">
+      <size>6815594</size>
+      <verification>
+        <hash type="md5">64f994a29745f70af3d6d229740db072</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RAT_10116_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RAT_10116_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RAT_10116_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="YEAST_559292_idmapping.dat.gz">
+      <size>1870591</size>
+      <verification>
+        <hash type="md5">a367d383941d0d089239c8ffbdf5c4a9</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/YEAST_559292_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/YEAST_559292_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/YEAST_559292_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="ARATH_3702_idmapping_selected.tab.gz">
+      <size>6232665</size>
+      <verification>
+        <hash type="md5">ad66cfb1e0795f48ca2c101c8ce8aca4</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ARATH_3702_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ARATH_3702_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ARATH_3702_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="DANRE_7955_idmapping_selected.tab.gz">
+      <size>4990030</size>
+      <verification>
+        <hash type="md5">fc8ea02f862c82bf3799a376d40c87f3</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="MOUSE_10090_idmapping_selected.tab.gz">
+      <size>19645578</size>
+      <verification>
+        <hash type="md5">b98fad71baa7778c48207ea01ba27988</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="ECOLI_83333_idmapping_selected.tab.gz">
+      <size>1026210</size>
+      <verification>
+        <hash type="md5">3d82031e42820b4bd6753d523ddc1d42</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ECOLI_83333_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ECOLI_83333_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ECOLI_83333_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="ARATH_3702_idmapping.dat.gz">
+      <size>9825182</size>
+      <verification>
+        <hash type="md5">2324dca2bf5d96adfc4c735d81916513</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ARATH_3702_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ARATH_3702_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/ARATH_3702_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="DANRE_7955_idmapping.dat.gz">
+      <size>10101422</size>
+      <verification>
+        <hash type="md5">6dc4bba748ebc7ed07bc6404e4aeca66</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="CAEEL_6239_idmapping_selected.tab.gz">
+      <size>2422769</size>
+      <verification>
+        <hash type="md5">d9a7eda7de866e5e7e05fbfa347e7f68</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="CHICK_9031_idmapping_selected.tab.gz">
+      <size>3434452</size>
+      <verification>
+        <hash type="md5">6305fe802d256c82fc371b12d88a869a</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CHICK_9031_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CHICK_9031_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CHICK_9031_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="SCHPO_284812_idmapping_selected.tab.gz">
+      <size>520546</size>
+      <verification>
+        <hash type="md5">a516865f7ca67b679c4a008326959882</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/SCHPO_284812_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/SCHPO_284812_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/SCHPO_284812_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="SCHPO_284812_idmapping.dat.gz">
+      <size>860840</size>
+      <verification>
+        <hash type="md5">261b6f031235c52320d4b4f3f4b40208</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/SCHPO_284812_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/SCHPO_284812_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/SCHPO_284812_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="RAT_10116_idmapping.dat.gz">
+      <size>9408175</size>
+      <verification>
+        <hash type="md5">4dc2d8d35aed7073adaf98762ed05e98</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RAT_10116_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RAT_10116_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RAT_10116_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  <file name="DROME_7227_idmapping_selected.tab.gz">
+      <size>9776195</size>
+      <verification>
+        <hash type="md5">06b63f6421b8fac478abf8f1cac86878</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping_selected.tab.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping_selected.tab.gz</url>
+      </resources>
+    </file>
+  <file name="CAEEL_6239_idmapping.dat.gz">
+      <size>4994189</size>
+      <verification>
+        <hash type="md5">edf43073dedfc4b92e3456d1a97f6022</hash>
+      </verification>
+      <resources>
+        <url type="ftp" location="ch" preference="100">ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping.dat.gz</url>
+        <url type="ftp" location="uk" preference="100">ftp://ftp.ebi.ac.uk/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping.dat.gz</url>
+        <url type="ftp" location="us" preference="100">ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping.dat.gz</url>
+      </resources>
+    </file>
+  </files>
+</metalink>
