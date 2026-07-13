@@ -479,7 +479,7 @@ class TestThePathwayLaneRunsOnTheRekeyedSets:
         assert b["gene_universe_sha256"] != b["target_universe_sha256"]
 
     def test_NO_p_q_or_FDR_anywhere_in_the_artifact(self, rekeyed):
-        from direct.temporal import admission
+        from direct import admission
         args, _, _, _ = rekeyed
         res = run_pathway.build_pathway(args)
         for name in ("pathway.json", "pathway_provenance.json"):

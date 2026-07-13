@@ -69,7 +69,7 @@ from ... import disposition
 from ... import projection as proj
 from ...arm_keys import DESIRED_CHANGES, SIGN, derive_arm_values, temporal_arm_key
 from ...hashing import canonical_num
-from .. import config, estimand
+from . import config, estimand
 
 __all__ = [
     "BASE_FORMULA_ID", "BASE_FORMULA", "ARM_VALUE_FORMULA_ID", "ARM_VALUE_FORMULA",

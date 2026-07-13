@@ -37,9 +37,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ... import admission as comparison_admission
 from ...arm_keys import DESIRED_CHANGES, SIGN
 from ...hashing import content_hash
-from .. import admission as comparison_admission
 from . import arm_bundle as ab
 from . import arm_env, arm_programs
 from . import arm_estimand as est

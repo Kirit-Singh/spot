@@ -16,20 +16,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..", "..", "analysis")))
 sys.path.insert(0, _HERE)
 
 import fixtures_temporal_arms as FX  # noqa: E402
+from direct import admission as shared_admission  # noqa: E402
 from direct import arm_keys, projection  # noqa: E402
 from direct import config as direct_config
-from direct.temporal import (  # noqa: E402
-    admission as direct_admission,
-)
-from direct.temporal import (
-    estimand as legacy_estimand,
-)
-from direct.temporal import (
-    policy as legacy_policy,
-)
-from direct.temporal import (
-    run_temporal as legacy_run,
-)
 from direct.temporal.arms import (  # noqa: E402
     arm_admission,
     arm_bundle,
@@ -41,6 +30,7 @@ from direct.temporal.arms import (  # noqa: E402
 from direct.temporal.arms import (
     arm_estimand as est,
 )
+from direct.temporal.arms import estimand as legacy_estimand  # noqa: E402
 
 CHANGES = ("increase", "decrease")
 
@@ -487,7 +477,7 @@ class TestNoForbiddenFields:
             "registry_scorer_view_sha256", "scorer_view_raw_sha256",
             "scorer_view_canonical_sha256", "registry_scorer_projection_sha256",
             "from_scorer_view_sha256", "to_scorer_view_sha256"}
-        raw = {h.rsplit(".", 1)[-1] for h in direct_admission.forbidden_keys(FX.build())}
+        raw = {h.rsplit(".", 1)[-1] for h in shared_admission.forbidden_keys(FX.build())}
         assert raw <= arm_admission.INHERITED_FIREWALL_EXCEPTIONS
         assert arm_admission.inherited_forbidden_keys(FX.build()) == []
 
@@ -2014,69 +2004,36 @@ class TestRequestAdapterBoundary:
 
 
 # =========================================================================== #
-# 12. LEGACY BYTE INVARIANCE — THIS LAYER CANNOT MOVE THE COMPARISON ARTIFACT
+# 12. THE DEPENDENCY RUNS ONE WAY — temporal.arms is self-contained
 # =========================================================================== #
-class TestLegacyByteInvariance:
-    """The reusable-arm layer is ADDITIVE. It may not move a single byte of the existing
-    pair-shaped temporal artifact, whose compatibility is retained.
+class TestTheArmLaneIsSelfContained:
+    """After the fixed-pair flat lane was retired, ``temporal`` ships only ``arms`` + its
+    ``__init__``. The arm lane may not reach back UP into ``direct.temporal`` for a flat-lane
+    module (they are gone) — its estimand and config live inside ``arms`` itself. Checked on
+    the IMPORT GRAPH, not on the word "arms", which appears in the prose of every module."""
 
-    ``run_temporal.method_block`` binds ``temporal_code_tree_sha256`` over a FLAT listing
-    of the ``.py`` files directly in the temporal package directory. Had these modules been
-    dropped beside ``run_temporal.py``, that hash — and therefore ``temporal_method_sha256``
-    and ``temporal_run_id`` on EVERY row of ``temporal.parquet`` — would have changed.
-    Measured: it moved from b3c9b969… to 3afb2687…. In the ``arms`` SUBpackage it does not
-    move at all, which is the whole reason the subpackage exists.
-    """
-
-    # The temporal method hash at the committed tip, BEFORE this layer existed.
-    FROZEN_TEMPORAL_METHOD_SHA256 = (
-        "b3c9b969688a293db40f90b02d7d4c521c0d1e4f7a386fba984b7a2714f67f85")
-
-    def test_the_legacy_temporal_method_hash_is_unchanged(self):
-        assert legacy_run.temporal_method_sha256(legacy_policy.load()) == \
-            self.FROZEN_TEMPORAL_METHOD_SHA256, (
-                "the reusable-arm layer moved the temporal method hash; every legacy "
-                "temporal_run_id and temporal_method_sha256 would change with it")
-
-    def test_the_arm_layer_is_invisible_to_the_temporal_code_tree(self):
-        import os
-
-        from direct import runid
-        tdir = os.path.dirname(os.path.abspath(legacy_run.__file__))
-        listed = [n for n in sorted(os.listdir(tdir)) if n.endswith(".py")]
-        assert not any(n.startswith("arm_") for n in listed), \
-            "an arm module beside run_temporal.py would enter the temporal code tree hash"
-        assert runid.code_tree_sha256(tdir)  # the flat listing is what binds
-
-    def test_the_dependency_runs_one_way(self):
-        """temporal.arms imports temporal. NOTHING in temporal imports temporal.arms.
-
-        Checked on the IMPORT GRAPH, not on the word "arms" — which appears in the prose of
-        every module in this lane ("both arms", "the two arms"). A substring scan would
-        have failed on a docstring and passed on a real import written any other way.
-        """
+    def test_no_arm_module_imports_a_retired_flat_temporal_module(self):
         import ast
         import os
 
-        tdir = os.path.dirname(os.path.abspath(legacy_run.__file__))
-        for name in sorted(os.listdir(tdir)):
+        from direct.temporal import arms
+        RETIRED = {"admission", "cli", "config", "estimand", "policy", "records",
+                   "run_temporal", "verify_temporal"}
+        adir = os.path.dirname(os.path.abspath(arms.__file__))
+        for name in sorted(os.listdir(adir)):
             if not name.endswith(".py"):
                 continue
-            tree = ast.parse(open(os.path.join(tdir, name)).read())
+            tree = ast.parse(open(os.path.join(adir, name)).read())
             for node in ast.walk(tree):
-                imported: list[str] = []
-                if isinstance(node, ast.ImportFrom):
-                    imported.append(node.module or "")
-                    imported += [a.name for a in node.names]
-                elif isinstance(node, ast.Import):
-                    imported += [a.name for a in node.names]
-                for mod in imported:
-                    assert mod.split(".")[0] != "arms" and not mod.endswith(".arms"), \
-                        (f"{name} imports {mod!r}: the comparison layer reaches into the "
-                         "arm layer, and the dependency must run ONE way")
-
-    def test_the_legacy_estimand_still_answers_the_legacy_question(self):
-        # The frozen comparison-level DiD is untouched and still differences pole-signed
-        # arm values. This layer re-expresses it; it does not replace it.
-        assert legacy_estimand.temporal_did(0.25, 0.75) == pytest.approx(0.5)
-        assert legacy_estimand.ESTIMATED == "estimated"
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                parts = (node.module or "").split(".")
+                # `from .. import config` (level 2, module empty) would reach direct.temporal;
+                # `from . import config` (level 1) is the arm lane's OWN relocated module.
+                reaches_parent = node.level == 2 and not node.module
+                if reaches_parent:
+                    bad = [a.name for a in node.names if a.name in RETIRED]
+                    assert not bad, f"{name} reaches direct.temporal for {bad}"
+                if parts[-1:] == ["temporal"]:
+                    bad = [a.name for a in node.names if a.name in RETIRED]
+                    assert not bad, f"{name} imports {bad} from a flat temporal lane"

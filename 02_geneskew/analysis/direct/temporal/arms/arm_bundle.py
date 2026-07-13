@@ -43,9 +43,8 @@ from typing import Any, Optional
 from ... import code_digest
 from ...arm_keys import DESIRED_CHANGES
 from ...hashing import canonical_json, content_hash, sha256_hex
-from .. import config, estimand
 from . import arm_estimand as est
-from . import arm_preflight, arm_programs, arm_report
+from . import arm_preflight, arm_programs, arm_report, config, estimand
 
 SCHEMA_BUNDLE = "spot.stage02_temporal_arm_bundle.v1"
 BUNDLE_KIND = "temporal"

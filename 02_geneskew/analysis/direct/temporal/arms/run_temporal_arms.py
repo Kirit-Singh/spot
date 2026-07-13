@@ -55,10 +55,10 @@ import sys
 from typing import Any, Optional
 
 from ...hashing import content_hash, file_sha256
-from .. import config as tconfig
 from . import arm_bundle as ab
 from . import arm_direct_source as src
 from . import arm_emit, arm_env, arm_programs
+from . import config as tconfig
 
 
 class _Release:

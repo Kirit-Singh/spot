@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import verify_rules as R  # noqa: E402  (the verifier-side reimplementation of the spec)
 
-from .temporal import admission  # noqa: E402  (the ADMISSION contract, not a producer)
+from . import admission  # noqa: E402  (the shared ADMISSION contract, not a producer)
 
 # The canonical hashes are RE-DERIVED from the written spec (``verify_rules``), never
 # imported from the generator's ``hashing``. A verifier that hashed with the producer's

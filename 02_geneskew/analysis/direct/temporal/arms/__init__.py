@@ -1,35 +1,30 @@
-"""The REUSABLE TEMPORAL ARM layer. Strictly additive; invisible to what it stands on.
+"""The REUSABLE TEMPORAL ARM lane — the Stage-2 temporal production lane.
 
-WHY THIS IS A SUBPACKAGE, AND NOT SIX FILES IN THE PARENT
---------------------------------------------------------
-``runid.code_tree_sha256`` hashes the ``.py`` files DIRECTLY IN a package directory — a
-flat listing, not a walk. The temporal run binds ``temporal_code_tree_sha256`` over its own
-directory, so a module dropped beside ``run_temporal.py`` would change the temporal method
-hash, and with it ``temporal_run_id`` and ``temporal_method_sha256`` on every row of the
-EXISTING ``temporal.parquet`` — an artifact this layer must not be able to move.
+It differences two admitted within-condition Direct all-arm bundles by the frozen estimand
+(a POPULATION-level difference-in-differences on program projections) and emits
+content-addressed, all-program, pair-agnostic reusable temporal arm bundles.
 
-Measured, not assumed: adding these modules to the parent directory moved the temporal
-method hash from ``b3c9b969…`` to ``3afb2687…``. In a subdirectory it is unchanged.
-
-This is the SAME idiom, one level down: ``direct``'s code tree does not see
-``direct/temporal`` for exactly this reason, which is what makes the temporal lane a
-strictly additive layer on the within-condition screen. The reusable-arm layer is a
-strictly additive layer on the temporal lane, and the dependency runs ONE WAY —
-``temporal.arms`` imports ``temporal`` and ``direct``; neither imports back.
-
-The invariance is asserted, not asserted-ish, in ``test_temporal_arms.py``
-(``TestLegacyByteInvariance``).
+SELF-CONTAINED. After the fixed-pair flat lane was retired, this subpackage owns the whole
+production surface: the estimand arithmetic (``estimand``) and the estimator identity
+(``config``) that used to live in the parent ``temporal`` package now live HERE. It reaches
+UP only for shared ``direct`` infrastructure — hashing, ``arm_keys``, ``code_digest``, the
+shared ``direct.admission`` key firewall — and the dependency runs ONE WAY: nothing in
+``direct`` or ``direct.temporal`` imports ``direct.temporal.arms``.
 
 WHAT LIVES HERE
 ---------------
-``arm_estimand``   the base temporal delta, the sign transform, the frozen rank rule
-``arm_programs``   the admitted program axis, DERIVED from the bound v3 scorer view
-``arm_bundle``     one all-program, pair-agnostic bundle per ordered condition pair
-``arm_admission``  the fail-closed allowlist + firewalls + independent re-derivation
-``arm_emit``       deterministic, content-addressed emission
-``arm_request``    the narrow adapter boundary for W18's bundle-scoped request object
+``config``            the generic estimator identity + the temporal method hash the bridge binds
+``estimand``          the DiD subtraction and the cross-condition status enum (pure arithmetic)
+``arm_estimand``      the base temporal delta, the sign transform, the frozen rank rule
+``arm_direct_source`` reads two admitted Direct all-arm bundles into temporal endpoints
+``arm_programs``      the admitted program axis, DERIVED from the bound v3 scorer view
+``arm_bundle``        one all-program, pair-agnostic bundle per ordered condition pair
+``arm_admission``     the fail-closed allowlist + firewalls + independent re-derivation
+``arm_emit``          deterministic, content-addressed emission
+``arm_request``       the narrow adapter boundary for W18's bundle-scoped request object
+``run_temporal_arms`` the production CLI the scheduler invokes
 """
 from __future__ import annotations
 
-__all__ = ["arm_admission", "arm_bundle", "arm_emit", "arm_estimand", "arm_programs",
-           "arm_request"]
+__all__ = ["arm_admission", "arm_bundle", "arm_direct_source", "arm_emit", "arm_estimand",
+           "arm_programs", "arm_request", "config", "estimand", "run_temporal_arms"]
