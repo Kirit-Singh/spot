@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import pytest
 
+from verifier import admitted_store as ast
 from verifier import source_manifest as sm
-from verifier.report import Report
+from verifier.report import Report  # noqa: F401
 
 CHEMBL_SHA = "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281"
 
@@ -200,10 +201,63 @@ def test_w2s_chembl_source_sha_equals_the_publishers():
     assert sm.CHEMBL["publisher_sha256"] == CHEMBL_SHA
 
 
-def test_w2s_store_identities_are_pinned():
-    assert sm.W2_PRODUCER_COMMIT.startswith("e298770")
-    assert sm.W2_STORE_ID.startswith("446c3b78")
-    assert sm.W2_ELIGIBILITY_EVIDENCE_SHA256.startswith("cf5d7088")
+def test_the_ADMITTED_store_is_the_binding():
+    """bdf41b69 @ d268a74, from tcefold — NOT the older checked-in reports."""
+    assert ast.ADMITTED_STORE_ID.startswith("bdf41b69")
+    assert ast.ADMITTED_MANIFEST_CONTENT_SHA256.startswith("7cd1cfc8")
+    assert ast.ADMITTED_PRODUCER_COMMIT.startswith("d268a74")
+    assert ast.ADMITTED_STORE_PATH.startswith("tcefold:")
+
+
+def test_every_superseded_store_is_explicitly_REFUSED():
+    """A stale binding must not creep back in."""
+    assert any(k.startswith("446c3b78") for k in ast.REFUSED_STORES)
+    assert any(k.startswith("b20ec29b") for k in ast.REFUSED_STORES)
+    assert any(k.startswith("d6066b7") for k in ast.REFUSED_PRODUCERS)
+
+
+def _binding(**over):
+    b = {"store_id": ast.ADMITTED_STORE_ID,
+         "manifest_content_sha256": ast.ADMITTED_MANIFEST_CONTENT_SHA256,
+         "producer_commit": ast.ADMITTED_PRODUCER_COMMIT}
+    b.update(over)
+    return b
+
+
+def test_the_admitted_binding_passes():
+    rep = Report()
+    ast.check_admitted_store_is_bound(rep, _binding())
+    assert not _failed(rep)
+
+
+def test_binding_the_RETRACTED_b20ec_store_is_refused():
+    rep = Report()
+    ast.check_admitted_store_is_bound(
+        rep, _binding(store_id="b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e"))
+    assert any("REFUSED one" in n for n in _failed(rep))
+
+
+def test_binding_the_PRE_REPAIR_446c_store_is_refused():
+    rep = Report()
+    ast.check_admitted_store_is_bound(
+        rep, _binding(store_id="446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d"))
+    assert any("REFUSED one" in n for n in _failed(rep))
+
+
+def test_the_SAME_BYTES_under_the_FAIL_OPEN_producer_are_refused():
+    """bdf41b69 built by d6066b7: bytes fine, gate fail-open."""
+    rep = Report()
+    ast.check_admitted_store_is_bound(
+        rep, _binding(producer_commit="d6066b7759a8bc57190365732f316b111eab85a1"))
+    failed = _failed(rep)
+    assert any("SAME BYTES under a different producer" in n for n in failed)
+
+
+def test_a_stale_manifest_hash_is_refused():
+    rep = Report()
+    ast.check_admitted_store_is_bound(
+        rep, _binding(manifest_content_sha256="fbe09b9e" + "0"*56))
+    assert any("manifest content hash" in n for n in _failed(rep))
 
 
 def test_the_eligibility_evidence_was_SHIPPED_and_REPLAYED():
@@ -213,44 +267,41 @@ def test_the_eligibility_evidence_was_SHIPPED_and_REPLAYED():
     tcefold all along. Checking one host and calling an artifact missing is the same error
     as trusting a claim without checking: both substitute a convenient answer for a look.
     """
-    assert sm.W2_EVIDENCE_SHIPPED is True
-    assert sm.W2_STORE_PATH.startswith("tcefold:")
+    assert ast.EVIDENCE_SHIPPED is True
+    assert ast.ADMITTED_STORE_PATH.startswith("tcefold:")
 
 
 def test_all_11055_eligibility_verdicts_replay_with_zero_mismatches():
-    r = sm.W2_REPLAY
+    r = ast.ADMITTED_REPLAY
     assert r["eligibility_records_replayed"] == 11_055
     assert r["verdict_mismatches"] == 0
 
 
 def test_ambiguous_shared_accessions_carry_NO_drug_evidence_in_the_real_store():
-    r = sm.W2_REPLAY
+    r = ast.ADMITTED_REPLAY
     assert r["ambiguous_identity_rows"] == 86
     assert r["ambiguous_rows_carrying_drug_evidence"] == 0
 
 
 def test_all_29_variant_assertions_are_excluded_from_general_ranking():
     """Including the 10 that carry the -1 UNDEFINED MUTATION sentinel."""
-    r = sm.W2_REPLAY
+    r = ast.ADMITTED_REPLAY
     assert r["variant_assertions"] == 29
     assert r["variant_assertions_leaking_into_general_ranking"] == 0
     assert r["variant_undefined_mutation_sentinels"] == 10
 
 
-def test_w2s_coverage_arithmetic_reconciles():
-    """505 drug-evidence + 10,931 none + 86 ambiguous = 11,522 ENSG; + 4 symbol = 11,526.
-
-    Nothing vanished to make a denominator look tidy.
-    """
-    c = sm.W2_COUNTS
+def test_admitted_coverage_arithmetic_reconciles():
+    """505 drug-evidence + 10,931 none + 86 ambiguous = 11,522 ENSG; + 4 symbol = 11,526."""
+    c = ast.ADMITTED_COUNTS
     assert c["drug_evidence_targets"] + 10_931 + c["ambiguous_identity"] == 11_522
     assert 11_522 + c["unsupported_namespace"] == c["universe_total"] == 11_526
 
 
-def test_w2s_eligibility_counts_sum():
-    c = sm.W2_COUNTS
+def test_admitted_eligibility_counts_sum():
+    c = ast.ADMITTED_COUNTS
     assert c["eligible"] + c["rejected"] == c["chembl_mappings_evaluated"] == 11_055
 
 
 def test_the_29_variant_assertions_are_the_ones_the_gate_must_exclude():
-    assert sm.W2_COUNTS["variant_specific_assertions"] == 29
+    assert ast.ADMITTED_COUNTS["variant_specific_assertions"] == 29

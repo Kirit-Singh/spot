@@ -238,3 +238,42 @@ def test_this_contract_does_not_import_the_producer():
     src = inspect.getsource(v2)
     assert "from druglink" not in src
     assert "import druglink" not in src
+
+
+# --------------------------------------------------------------------------- #
+# ATTACK RESULT vs the producer's v2 loader at 9814898 — FAILED, so NOT integrated.
+#
+# The loader emits BOTH Direct and temporal levers with origin_type='direct_target'.
+# 120 temporal levers from a real admitted temporal bundle all came back labelled as
+# Direct. The rows do carry time_scope='cross_time', so the information exists — but a
+# consumer reading the field NAMED FOR ORIGIN sees a cross-time DiD lever as a same-time
+# Direct one, and reading time_scope instead is exactly the "inference of its own" that
+# clause 1 forbids.
+#
+# This is the same shape as the CALM1/2/3 nested assertions: correct at the level someone
+# happened to look at, wrong one field over, and a flattening consumer reads the wrong one.
+# --------------------------------------------------------------------------- #
+def test_temporal_levers_labelled_as_DIRECT_are_refused():
+    """The exact 9814898 defect. Same-time and cross-time are different measurements."""
+    fused = [_row(v2.ORIGIN_DIRECT, edge_id="t1", time_scope="cross_time",
+                  from_condition="Rest", to_condition="Stim48hr",
+                  condition_pair_is_ordered=True)]
+    rep = Report()
+    v2.check_origins_are_typed_and_separate(rep, fused)
+    # origin says Direct; the row is cross-time. The contract requires the ORIGIN to say so.
+    assert fused[0]["evidence_origin"] == v2.ORIGIN_DIRECT
+    assert fused[0]["time_scope"] == "cross_time"
+    assert v2.ORIGIN_TEMPORAL not in {r["evidence_origin"] for r in fused}, (
+        "a cross-time lever whose ORIGIN says direct_same_time_measured is mislabelled; "
+        "a consumer reading origin_type cannot tell them apart, and having to read "
+        "time_scope instead is the inference clause 1 forbids")
+
+
+def test_an_empty_row_set_must_not_pass_VACUOUSLY():
+    """My first attack run emitted 0 levers and every check 'passed'. That is a vacuous
+    pass — the exact failure mode this lane keeps finding in other people's gates."""
+    rep = Report()
+    v2.check_origins_are_typed_and_separate(rep, [])
+    assert not _failed(rep), "empty input trivially passes..."
+    # ...so a caller must assert non-emptiness itself. Recorded so nobody forgets.
+    assert len(_rows()) == 3, "a real attack must run over a NON-EMPTY row set"

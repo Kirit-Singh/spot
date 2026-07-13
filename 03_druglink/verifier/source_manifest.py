@@ -211,55 +211,6 @@ def check_extractor_sql_is_frozen(rep: Report,
 
 
 # --------------------------------------------------------------------------- #
-# W2's regenerated compact cache — identities recorded at e298770.
-#
-# The full store lives on TCEFOLD at /home/tcelab/.cache/spot-stage3-universe/store/ (Git
-# intentionally carries only the compact reports). Copied to a fresh scratch dir and
-# audited independently: the bound content hash recomputes, and all 11,055 eligibility
-# verdicts REPLAY from their own predicate inputs with zero mismatches.
-# --------------------------------------------------------------------------- #
-W2_PRODUCER_COMMIT = "e2987705625791989d1abdcad9202af218e21955"
-W2_STORE_ID = "446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d"
-W2_MANIFEST_CONTENT_SHA256 = \
-    "fbe09b9e87124e78c35cd984186180d949c0f23776184fed91b60e8fcdad2ee6"
-W2_STORE_ROWS_SHA256 = \
-    "6c88b53a0bf2752149bfb033c2c7f8ff7c3aa2bbd28d4316a292a38693ef31e1"
-W2_EXTRACTION_QUERY_SHA256 = \
-    "a5ad29d22c0edba601c00ab2b95845aadabf5bd25c663dabbf48159650d98be0"
-W2_ELIGIBILITY_EVIDENCE_SHA256 = \
-    "cf5d70884240d2e8ba9c2c5c60a986cf1ec665e73d2ae821d47495dff174167c"
-
-# Counts as reported at e298770. The replay must reproduce these, not accept them.
-W2_COUNTS = {
-    "chembl_mappings_evaluated": 11_055,
-    "eligible": 5_869,
-    "rejected": 5_186,
-    "universe_total": 11_526,
-    "drug_evidence_targets": 505,
-    "ambiguous_identity": 86,
-    "unsupported_namespace": 4,
-    "general_drug_assertions": 2_227,
-    "variant_specific_assertions": 29,
-}
-
-# The evidence artifact — shipped on tcefold, copied, and independently replayed.
-W2_EVIDENCE_SHIPPED = True
-W2_STORE_PATH = "tcefold:/home/tcelab/.cache/spot-stage3-universe/store/"
-
-# Independently reproduced by Stage 3 against the real bytes (not accepted from W2):
-W2_REPLAY = {
-    "eligibility_records_replayed": 11_055,
-    "verdict_mismatches": 0,
-    "ambiguous_identity_rows": 86,
-    "ambiguous_rows_carrying_drug_evidence": 0,
-    "variant_assertions": 29,
-    "variant_assertions_leaking_into_general_ranking": 0,
-    "variant_undefined_mutation_sentinels": 10,     # variant_id == -1
-    "store_rows": 11_526,
-}
-
-
-# --------------------------------------------------------------------------- #
 # FINAL ADMISSION CRITERION — sealed re-audit 1f6008c2, corrected by primary source.
 #
 # I recommended REPLACING the mutable UniProt `current_release` locator with an immutable
