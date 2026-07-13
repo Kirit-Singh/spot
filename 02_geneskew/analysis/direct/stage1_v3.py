@@ -141,6 +141,58 @@ REFUSE_DEGENERATE_AXIS = "the_two_poles_are_the_same_axis"
 REFUSE_QUESTION_ID = "question_id_does_not_derive_from_the_biology_it_names"
 REFUSE_DUPLICATE_ENDPOINT = "a_cross_condition_comparison_names_one_condition_twice"
 REFUSE_ESTIMATOR_INCOHERENT = "the_estimator_block_contradicts_the_contract_it_rides_on"
+REFUSE_METHOD_IDENTITY_MISSING = "the_estimator_names_a_method_but_binds_no_method_identity"
+
+
+# --------------------------------------------------------------------------- #
+# THE DECLARED METHOD IDENTITY — bound, preserved, and NOT re-derived here.
+#
+# TWO DIFFERENT HASHES LIVE UNDER THE NAME `method_sha256`, AND CONFLATING THEM IS A BUG:
+#
+#   1. THE CONTRACT'S (`doc.estimator.method_sha256`). Stage-1's ESTIMAND-IDENTITY hash: the
+#      content hash of the estimand block — WHAT is being estimated (a population-level
+#      difference-in-differences on program projections, not calibrated). Stage-1 states
+#      explicitly that it is NOT a code-tree or batch/confound-policy hash. It is an
+#      EXTERNALLY BOUND identity: Stage-1 derived it from the temporal-arms lane, and THIS
+#      lane has no way to recompute it.
+#
+#   2. THIS BRANCH'S (`estimator_registry()[...]['method_sha256']`). An IMPLEMENTATION
+#      binding: a hash over the temporal code trees and the frozen batch policy — WHICH CODE
+#      would run. A different quantity, answering a different question.
+#
+# They are not equal and they are not supposed to be. So this module NEVER compares them, and
+# it never lets one stand in for the other. Comparing them would fail-closed on the
+# authoritative Stage-1 contract — a false refusal, which is exactly as damaging as a false
+# admission.
+#
+# WHAT IS ACTUALLY PROVED HERE, THEN. The declared identity is carried through bytes that ARE
+# proved: the contract's own `full_contract_content_sha256` (re-derived), the pinned schema,
+# and the admitted Stage-1 release. So a contract cannot be edited in flight to name a
+# different method without the content hash failing. What is NOT proved here is that the hash
+# corresponds to the code that will run — Stage-2's Direct lane cannot re-derive an estimand
+# identity minted in another lane, and it does not pretend to.
+#
+# THAT RE-DERIVATION IS OWNED BY THE TEMPORAL PRODUCER/VERIFIER (W5/W11). It is named here so
+# that the absence of the check is a DECLARED LIMIT with an owner, not a gap a reader has to
+# infer from silence. (Same pattern as the release loader's scorer-PROJECTION hash, which is
+# likewise bound-as-declared because its derivation rules live in Stage-1.)
+# --------------------------------------------------------------------------- #
+METHOD_IDENTITY_RULE_ID = (
+    "spot.stage02.stage1_v3.declared_method_identity.bound_not_rederived.v1")
+METHOD_IDENTITY_BINDING = "declared_by_stage1_bound_by_contract_bytes_not_rederived_here"
+METHOD_IDENTITY_KIND = "stage1_estimand_identity_hash"
+METHOD_IDENTITY_NOT_A = "stage2_implementation_code_tree_hash"
+METHOD_IDENTITY_REDERIVATION_OWNER = "spot.stage02.temporal.producer_verifier.W5_W11"
+METHOD_IDENTITY_NOT_REDERIVED_BECAUSE = (
+    "the contract's estimator.method_sha256 is Stage-1's ESTIMAND-IDENTITY hash, minted in "
+    "the temporal-arms lane; it is not a code-tree hash and the Direct lane cannot recompute "
+    "it. It is bound through verified contract bytes and preserved downstream. Re-deriving "
+    "the IMPLEMENTATION-code binding is the temporal producer/verifier's job (W5/W11), and "
+    "comparing it with this branch's code-tree hash would refuse the real contract")
+
+# The method fields a contract may declare. Carried VERBATIM — never invented, never defaulted.
+METHOD_IDENTITY_FIELDS = ("method_id", "method_version", "method_sha256", "estimand_id",
+                          "estimand_level", "estimand_is_per_cell_fate", "inference_status")
 
 
 # --------------------------------------------------------------------------- #
@@ -306,6 +358,33 @@ def derive_selection_id(doc: dict[str, Any]) -> str:
 def canonical_content_sha256(doc: dict[str, Any]) -> str:
     """The full 64-hex hash the selection_id is the first 16 of."""
     return content_hash(doc["canonical_content"])
+
+
+def declared_method_identity(doc: dict[str, Any]) -> dict[str, Any]:
+    """WHAT METHOD the contract says it was admitted against — carried verbatim, and LABELLED.
+
+    Every field is the contract's own. Nothing here is derived, defaulted or repaired; the
+    block additionally says, in machine-readable form, WHAT KIND of hash this is, that
+    Stage-2 did not re-derive it, and WHO owns the re-derivation — so a downstream reader can
+    never mistake it for a locally proved implementation binding.
+    """
+    est = doc.get("estimator") or {}
+    identity = {f: est[f] for f in METHOD_IDENTITY_FIELDS if f in est}
+    identity.update({
+        "declared": bool(identity),
+        "binding": METHOD_IDENTITY_BINDING,
+        "rule_id": METHOD_IDENTITY_RULE_ID,
+        "identity_kind": METHOD_IDENTITY_KIND,
+        "is_not": METHOD_IDENTITY_NOT_A,
+        "rederived_by_stage2_direct": False,
+        "not_rederived_because": METHOD_IDENTITY_NOT_REDERIVED_BECAUSE,
+        "rederivation_owner": METHOD_IDENTITY_REDERIVATION_OWNER,
+        # anchored by bytes that ARE proved: the contract hashes its own content, and the
+        # schema and the Stage-1 release it arrived in are both pinned.
+        "anchored_by": ["full_contract_content_sha256", "selection_schema_sha256",
+                        "admitted_stage1_v3_release"],
+    })
+    return identity
 
 
 def estimator_registry() -> dict[str, Any]:
@@ -576,6 +655,22 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
                     "reader who trusted the block would believe a different measurement had "
                     "been made")
 
+    # ---- an estimator that NAMES a method must BIND one ----
+    # Stage-1's own words: a contract that says "available" while naming no method hash has
+    # admitted only a word. This is the check that can be made WITHOUT conflating the two
+    # `method_sha256` quantities — it asks whether an identity is bound at all, never whether
+    # it equals this branch's implementation code-tree hash (a different quantity; see
+    # METHOD_IDENTITY_RULE_ID). Generic: it fires for ANY estimator that names a method, so
+    # no mode is special-cased and the next estimator inherits it.
+    if est.get("method_id") is not None:
+        sha = est.get("method_sha256")
+        if not (isinstance(sha, str) and len(sha) == 64):
+            _refuse(REFUSE_METHOD_IDENTITY_MISSING,
+                    f"the estimator block names method_id {est['method_id']!r} but binds "
+                    f"method_sha256={sha!r}. A contract that names a method while binding no "
+                    "identity for it has admitted a word, and a reader could not tell WHICH "
+                    "method was admitted")
+
     declared = str(doc["estimator_status"])
     built = estimator in IMPLEMENTED_ESTIMATORS
     if declared == ESTIMATOR_AVAILABLE and not built:
@@ -642,10 +737,14 @@ def bind(doc: dict[str, Any]) -> dict[str, Any]:
         "conditions": list(c["conditions"]),
         "estimator_id": doc["estimator_id"],
         "estimator_status": doc["estimator_status"],
-        # The METHOD the contract declares it was admitted against, carried verbatim so a
-        # verifier can compare it with the method Stage-2 actually executes. It is BOUND,
-        # not believed: Stage-2 decides what Stage-2 has built (IMPLEMENTED_ESTIMATORS).
+        # The METHOD the contract declares it was admitted against, carried VERBATIM. It is
+        # BOUND, not believed: Stage-2 still decides what Stage-2 has built
+        # (IMPLEMENTED_ESTIMATORS). The declared identity is Stage-1's ESTIMAND-IDENTITY hash
+        # and is NEVER compared with this branch's implementation code-tree hash — see
+        # METHOD_IDENTITY_RULE_ID. The companion block says so in machine-readable form, so
+        # the limit travels with the value instead of living in a comment nobody reads.
         "estimator": dict(doc["estimator"]),
+        "estimator_method_identity": declared_method_identity(doc),
         "execution_status": doc["execution_status"],
         "stage1_method_version": c["stage1_method_version"],
         "dataset_id": c["dataset_id"],
@@ -868,6 +967,11 @@ def binding_block(v3, full_contract_sha256: Optional[str] = None
         "conditions": list(v3.conditions),
         "endpoints": v3.bound["endpoints"],
         "estimator_id": v3.estimator_id,
+        # WHAT METHOD the contract was admitted against, bound INTO THE RUN IDENTITY — so a
+        # run cannot later be re-attributed to a different method, and Stage-3 receives the
+        # method identity together with the declaration that Stage-2's Direct lane did not
+        # re-derive it (owner: the temporal producer/verifier, W5/W11).
+        "estimator_method_identity": v3.bound["estimator_method_identity"],
         "execution_status": v3.execution_status,
         "poles": {"A": {"program_id": v3.a.program_id, "direction": v3.a.direction},
                   "B": {"program_id": v3.b.program_id, "direction": v3.b.direction}},
