@@ -159,25 +159,86 @@ class _Klaxon:
         raise AssertionError(f"THE WIRE WAS TOUCHED WHILE HELD: {url!r}")
 
 
-def test_warming_is_held_until_the_adapters_pass_the_source_totals_through(tmp_path):
-    """THE INTEGRATION GATE. It is not enough for AcquisitionRecord to HAVE the fields — the real
-    adapter constructors must pass selection_disposition / pin / match_total_reported /
-    records_returned / result_set_complete through `record_from_response`, from the response the
-    source actually sent. Until they do, a receipt could not state how many records each source
-    claimed to have, and stamping a `1` because one row came back would be a fabricated total.
+def test_warming_is_held_until_w9_gives_the_end_to_end_adapter_GO(tmp_path, monkeypatch):
+    """THE HOLD, as an explicit switch.
 
-    So the run refuses, and it refuses BEFORE THE WIRE.
+    Until W6 landed, the network happened to be shut because AcquisitionRecord could not carry the
+    selection proof at all. That is a coincidence, not a gate — and it evaporated the moment the
+    field arrived. So the hold is now a switch W9 throws, and the wire stays shut without it.
     """
     from analysis.acquire_http import Client
+    from analysis.source_totals import ADAPTER_GO_ENV
+
+    monkeypatch.delenv(ADAPTER_GO_ENV, raising=False)
 
     with pytest.raises(Rejection) as exc:
         warm(_manifest(tmp_path), str(tmp_path / "run"),
              client=Client(transport=_Klaxon(), allow_network=True))
 
-    assert exc.value.code == "source_totals_not_bound"
+    assert exc.value.code == "adapter_go_not_given"
     assert "NO REQUEST IS MADE" in exc.value.detail
     # not one byte was fetched, and no run root was even created
     assert not os.path.exists(str(tmp_path / "run" / "raw"))
+
+
+def test_the_contract_now_carries_the_selection_proof_so_the_model_preflight_passes():
+    """W6 landed it. Recorded as a fact, so nobody mistakes the (now-passing) model check for the
+    thing that is holding the wire — the W9 GO is."""
+    from analysis.source_totals import assert_model_carries_totals
+
+    assert_model_carries_totals()      # does not raise: the five fields exist
+
+
+def test_every_real_adapter_record_satisfies_the_gate(tmp_path):
+    """THE INTEGRATION CHECK. Not 'the model has the fields' — the real constructors must PASS them
+    through record_from_response, from the response the source actually sent. This drives all four
+    adapters and puts every record they build through the gate."""
+    from analysis.acquire_http import Client
+    from analysis.acquisition import RunRoot
+    from analysis.dailymed_select import acquire_label, acquire_rxcui
+    from analysis.openfda_approval import acquire_approval
+    from analysis.pubchem import acquire_pubchem_identity
+    from analysis.source_totals import assert_totals_bound
+
+    root = RunRoot(str(tmp_path / "run"))
+    client = Client(transport=StaticTransport(_routes(), clock=CLOCK), allow_network=True)
+
+    _, pubchem_records = acquire_pubchem_identity(client, root, NAME)
+    _, rx = acquire_rxcui(client, root, NAME)
+    label, label_records = acquire_label(client, root, NAME)
+    _, approval_records = acquire_approval(client, root, label.listing.setid)
+    records = [*pubchem_records, rx, *label_records, *approval_records]
+
+    assert_totals_bound(records)                      # raises if any adapter dropped or mislabelled
+    assert len(records) == 7
+    # and the honest nulls really are null — not stamped 1
+    direct = [r for r in records if r.selection_disposition in ("identity_get", "sorted_unique")]
+    assert direct and all(r.match_total_reported is None for r in direct)
+
+
+def test_a_search_labelled_as_an_identity_get_is_refused(tmp_path):
+    """THE LAUNDERING PATH. An adapter that calls an openFDA SEARCH an `identity_get` is excused
+    from reporting a total — a dropped total wearing an honest null's clothes."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("openfda", 'drug/label.json?limit=25&search=x',
+                                  selection_disposition="identity_get",
+                                  match_total_reported=None, result_set_complete=None)])
+    assert exc.value.code == "selection_disposition_mismatch"
+
+
+def test_an_identity_get_that_carries_a_total_is_refused():
+    """An identity GET returns ONE named record. There is no result set, so a total and a
+    completeness boolean are answers to a question the request never asked."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("pubchem", "compound/cid/5394/property/InChIKey/JSON",
+                                  selection_disposition="identity_get",
+                                  match_total_reported=1, records_returned=1,
+                                  result_set_complete=True)])
+    assert exc.value.code == "source_total_invented"
 
 
 class _Rec:
@@ -187,9 +248,14 @@ class _Rec:
     acquisition_record_id = "acq_x"
 
     def __init__(self, source_key, canonical_query, **over):
+        from analysis.source_totals import SEARCH_LIST, query_class
+
         self.source_key = source_key
         self.canonical_query = canonical_query
-        self.selection_disposition = "unique"
+        # a disposition the endpoint may honestly claim, unless the test overrides it
+        self.selection_disposition = (
+            "exactly_one" if query_class(source_key, canonical_query) == SEARCH_LIST
+            else "identity_get")
         self.selection_pin = None
         self.match_total_reported = None
         self.records_returned = 1
@@ -252,14 +318,19 @@ def test_a_direct_endpoint_may_honestly_report_no_total(source_key, query):
 ])
 def test_stamping_total_1_on_an_endpoint_that_reports_none_is_refused(source_key, query):
     """THE FORBIDDEN MOVE. A `1` that merely echoes the single row that arrived is
-    indistinguishable in the artifact from a total the source actually stated."""
+    indistinguishable in the artifact from a total the source actually stated.
+
+    Driven with the disposition the REAL adapter uses for these (`sorted_unique`: a name-to-list
+    query returns the whole list), so this is the shape the stamp would actually have arrived in.
+    """
     from analysis.source_totals import assert_totals_bound
 
     with pytest.raises(Rejection) as exc:
-        assert_totals_bound([_Rec(source_key, query, match_total_reported=1, records_returned=1,
+        assert_totals_bound([_Rec(source_key, query, selection_disposition="sorted_unique",
+                                  match_total_reported=1, records_returned=1,
                                   result_set_complete=True)])
     assert exc.value.code == "source_total_invented"
-    assert "fabricated" in exc.value.detail or "invented" in exc.value.detail.lower()
+    assert "null" in exc.value.detail
 
 
 def test_a_direct_endpoint_may_not_assert_completeness_it_cannot_derive():

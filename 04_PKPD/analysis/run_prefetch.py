@@ -42,7 +42,12 @@ from .acquisition import RunRoot
 from .canonical import strict_content_sha256
 from .firewall import Rejection
 from .prefetch_verify import VerifiedPrefetchManifest, verify_prefetch_manifest
-from .source_totals import assert_model_carries_totals, assert_totals_bound, totals_of
+from .source_totals import (
+    assert_adapter_go,
+    assert_model_carries_totals,
+    assert_totals_bound,
+    totals_of,
+)
 
 MAX_CONCURRENCY = 4
 RECEIPT = "prefetch_receipt.json"
@@ -174,7 +179,8 @@ def run_prefetch(manifest_path: str, run_root_dir: str, *, client: Optional[Clie
     # PREFLIGHT, before the wire. If the contract cannot carry the source-reported totals, no
     # adapter can be passing them through, and a warm-up would produce a receipt that cannot say
     # how many records each source claimed to have. Refuse now — not after 3,000 requests.
-    assert_model_carries_totals()
+    assert_model_carries_totals()     # the contract can hold the proof (W6)
+    assert_adapter_go()               # W9 has attacked the adapters end to end and passed
 
     manifest = verified.document
     run_root = RunRoot(run_root_dir)

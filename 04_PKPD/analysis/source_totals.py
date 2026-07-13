@@ -60,6 +60,25 @@ SEARCH_LIST = "search_list"
 DIRECT = "direct"
 UNKNOWN = "unknown"
 
+# W6's typed proof, carried from the fetch. It is AUTHORITATIVE — the adapter knows what it asked
+# for — but it is cross-checked against the endpoint, because an adapter that labels a SEARCH as an
+# `identity_get` would skip the total requirement entirely. That is the one path that launders a
+# dropped total into a legitimate-looking null.
+IDENTITY_GET = "identity_get"      # one named record. No result set, so no total, no completeness.
+EXACTLY_ONE = "exactly_one"        # a search pinned to one record. The source reports a total.
+SORTED_UNIQUE = "sorted_unique"    # collect-all in canonical order. Nothing chosen, nothing dropped.
+
+# Which dispositions an endpoint class may honestly claim.
+ALLOWED_BY_CLASS = {
+    SEARCH_LIST: {EXACTLY_ONE, SORTED_UNIQUE},
+    DIRECT: {IDENTITY_GET, SORTED_UNIQUE},
+}
+
+# W9's end-to-end adapter GO. The wire stays shut until it is set — an explicit switch, not an
+# accident of a missing field. (Before W6 landed, the hold happened to come from the model being
+# unable to carry the proof at all; that is not a gate, it is a coincidence.)
+ADAPTER_GO_ENV = "SPOT_STAGE4_ADAPTER_GO"
+
 
 def query_class(source_key: str, canonical_query: str) -> str:
     """Does THIS endpoint report a match total? The rule is the endpoint's, not the record's."""
@@ -74,11 +93,7 @@ def query_class(source_key: str, canonical_query: str) -> str:
 
 
 def assert_model_carries_totals() -> None:
-    """PREFLIGHT. Refuse before a single request if the contract cannot even hold the fields.
-
-    Without this the gate would fire only after the bytes were fetched — refused, but with the
-    network already touched. The hold is checked BEFORE the wire, not after it.
-    """
+    """PREFLIGHT 1. The contract must be able to hold the proof at all."""
     from .acquisition import AcquisitionRecord
 
     fields = set(getattr(AcquisitionRecord, "model_fields", {}))
@@ -88,8 +103,25 @@ def assert_model_carries_totals() -> None:
             "source_totals_not_bound",
             f"AcquisitionRecord cannot carry {absent}, so no adapter can pass the source-reported "
             "totals through record_from_response and no receipt could state them. NO REQUEST IS "
-            "MADE. Held pending the exact W6 commit (the fields AND the adapter constructors that "
-            "fill them) and W9's end-to-end adapter GO.")
+            "MADE.")
+
+
+def assert_adapter_go() -> None:
+    """PREFLIGHT 2. W9's end-to-end adapter GO. The wire stays shut without it.
+
+    This is an EXPLICIT switch, deliberately. Until W6 landed, the network happened to be held
+    because the model could not carry the selection proof — but a hold that depends on a field
+    being missing evaporates the moment the field arrives, which is exactly what happened. A gate
+    has to be a gate.
+    """
+    import os
+
+    if os.environ.get(ADAPTER_GO_ENV) != "1":
+        raise Rejection(
+            "adapter_go_not_given",
+            f"W9's end-to-end adapter GO has not been given ({ADAPTER_GO_ENV} is not set). The "
+            "selection proof now reaches the record, but no request goes on the wire until the "
+            "adapters have been attacked end to end and passed. NO REQUEST IS MADE.")
 
 
 def totals_of(record: Any) -> dict[str, Any]:
@@ -142,6 +174,27 @@ def assert_totals_bound(records: Iterable[Any]) -> None:
         total = _as_int(getattr(record, "match_total_reported", None))
         returned = _as_int(getattr(record, "records_returned", None))
         complete = getattr(record, "result_set_complete", None)
+        disposition = str(getattr(record, "selection_disposition", ""))
+
+        # The adapter's typed claim must match what the endpoint actually IS. An adapter that calls
+        # an openFDA SEARCH an `identity_get` would be excused from reporting a total — a dropped
+        # total wearing an honest null's clothes.
+        if disposition not in ALLOWED_BY_CLASS.get(cls, set()):
+            raise Rejection(
+                "selection_disposition_mismatch",
+                f"{rid!r}: the adapter claims selection_disposition={disposition!r} for "
+                f"{source_key!r} {canonical_query!r}, which is a {cls} endpoint (allowed: "
+                f"{sorted(ALLOWED_BY_CLASS.get(cls, set()))}). A search labelled an identity GET "
+                "escapes the source-total requirement entirely; the label must match the request "
+                "that was actually made.")
+
+        # An identity GET has no result set, so completeness is not a question it can answer.
+        if disposition == IDENTITY_GET and (total is not None or complete is not None):
+            raise Rejection(
+                "source_total_invented",
+                f"{rid!r}: an identity_get returns ONE named record — there is no result set, so "
+                f"match_total_reported={total!r} / result_set_complete={complete!r} are answers to "
+                "a question the request never asked. Both stay null.")
 
         if cls == SEARCH_LIST:
             # The source DOES report a total here. Its absence is a dropped field, not an honest
