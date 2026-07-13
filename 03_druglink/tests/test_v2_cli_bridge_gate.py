@@ -69,17 +69,28 @@ def test_the_v2_path_REFUSES_when_the_bridge_cannot_be_admitted(tmp_path, capsys
 
 
 def test_the_refusal_says_WHY_rather_than_only_that(capsys, tmp_path):
-    """A gate name tells you WHICH check failed. The sentence must tell you why the check exists —
-    otherwise the next reader deletes it."""
+    """A gate name tells you WHICH check failed. The sentence must say why the check EXISTS —
+    otherwise the next reader deletes it.
+
+    The aggregate is REAL here, so the run gets past the aggregate gate and the BRIDGE gate is the
+    one that speaks. (With a missing manifest the aggregate refuses first, which is correct
+    ordering and a different sentence entirely.)
+    """
+    import native_aggregate_fixture as NAF
+    paths = NAF.build(str(tmp_path / "agg"))
+    os.remove(paths["bridge"])
+
     run_stage3.main([
-        "--v2", "--artifact-class", "analysis", "--output-root", str(tmp_path / "o"),
-        "--universe-store", str(tmp_path), "--stage2-manifest", str(tmp_path / "m.json"),
-        "--stage2-report", str(tmp_path / "r.json"), "--bundles-root", str(tmp_path),
-        "--stage1-release", str(tmp_path / "rel.json"),
-        "--stage2-bridge", str(tmp_path / "b.json"),
-        "--stage2-bridge-report", str(tmp_path / "br.json"),
-        "--stage2-bridge-receipt", str(tmp_path / "rcpt.json")])
+        "--v2", "--artifact-class", "fixture", "--output-root", str(tmp_path / "o"),
+        "--universe-store", str(tmp_path),
+        "--stage2-manifest", paths["manifest"], "--stage2-report", paths["report"],
+        "--bundles-root", paths["bundles_root"],
+        "--stage1-release", paths["stage1_release"],
+        "--stage2-bridge", paths["bridge"],
+        "--stage2-bridge-report", paths["bridge_report"],
+        "--stage2-bridge-receipt", paths["receipt"]])
     printed = capsys.readouterr().out.lower()
+    assert "the_stage3_bridge_is_not_on_disk" in printed
     # the facts that ONLY the bridge carries — the reason a bridge-less run is impossible
     assert "identity" in printed and "modality" in printed
     assert "no fixture fallback" in printed

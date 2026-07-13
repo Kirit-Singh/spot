@@ -1,13 +1,20 @@
-"""END TO END, THROUGH THE REAL CLI: admitted bytes -> bridge -> v2 bundle -> view -> receipt.
+"""END TO END: admitted bytes -> BRIDGE -> v2 bundle -> selection view -> membership receipt.
 
-This is the test the whole lane exists for. It runs ``run_stage3 --v2`` over a real-shaped Stage-2
-release + its bridge + the admitted universe store, and requires an actual content-addressed
-bundle, a SELECTION-BOUND view with rows in it, and a membership receipt whose verdict is ``admit``
-and whose two named ids differ.
+This is the test the whole lane exists for. It drives the REAL producer chain — the same admission
+gates, the same bridge consumer, the same emitter, the same membership verifier production runs —
+and requires an actual content-addressed bundle, a SELECTION-BOUND view with rows in it, and a
+membership receipt whose verdict is ``admit`` and whose two named ids differ.
+
+WHY THE HAPPY PATH DOES NOT GO THROUGH THE CLI. The CLI additionally opens the UNIVERSE STORE via
+``universe_rows.load_store``, which is PINNED to the exact ``store_id`` an independent verifier
+admitted. A synthetic store can never satisfy that, and that is the entire point of it — so the
+sealed store is loaded the way the rest of this suite loads it, and the CLI's store firewall is
+asserted SEPARATELY (``test_the_cli_refuses_a_synthetic_store``) rather than weakened to get a
+green tick. The CLI's own happy path is exercised the moment a real admitted store and a real
+admitted Stage-2 release are both present; until then this is the honest boundary.
 
 The release is sealed and NON-PRODUCTION (``artifact_class: fixture``, ``FIXTURE_*`` everywhere), so
-nothing here is a scientific finding. What is real is the MECHANISM: the same admission gates, the
-same bridge consumer, the same emitter, the same membership verifier that production runs.
+nothing here is a scientific finding. What is real is the MECHANISM.
 """
 from __future__ import annotations
 
@@ -18,10 +25,16 @@ import pytest
 
 import native_aggregate_fixture as NAF
 import selection_fixture as SF
-from v2_fixture import write_store
+from v2_fixture import load_fixture_store, write_store
+from druglink import artifacts_v2 as av2
+from druglink import bundle_v2 as bv2
+from druglink import candidates_v2 as cv2
 from druglink import membership_receipt as mr
 from druglink import run_stage3
+from druglink import selection_v3 as s3
+from druglink import selection_view as sv
 from druglink import stage2_aggregate as sa
+from druglink import view_contract as vc
 
 
 def _run(root, paths, store_dir, *, selection=None, artifact_class="fixture"):
@@ -56,88 +69,105 @@ def _selection_file(root, paths, aggregate):
 
 @pytest.fixture(scope="module")
 def chain(tmp_path_factory):
-    root = tmp_path_factory.mktemp("bridge_e2e")
-    paths = NAF.build(os.path.join(str(root), "agg"))
-    store_dir = write_store(os.path.join(str(root), "store"))
-    aggregate = NAF.admit(paths)
-    return {"root": str(root), "paths": paths, "store_dir": store_dir,
-            "aggregate": aggregate,
-            "selection": _selection_file(str(root), paths, aggregate)}
+    """The REAL chain, end to end: admit -> bridge -> join -> emit -> project -> receipt."""
+    root = str(tmp_path_factory.mktemp("bridge_e2e"))
+    paths = NAF.build(os.path.join(root, "agg"))
+    store_dir = write_store(os.path.join(root, "store"))
+    store = load_fixture_store(store_dir)
+
+    native = NAF.admit(paths)
+    bridge = NAF.admit_bridge(paths, native)
+    aggregate = sa.bind_bridge(native, bridge)          # THE JOIN
+
+    tables = cv2.build(artifact_class="fixture", aggregate=aggregate, store=store)
+    report = bv2.bind_report(paths["report"], aggregate)
+    tables["provenance"] = bv2.provenance_rows(
+        aggregate=aggregate, store=store, report=report, method=bv2.method_block(store),
+        bridge=bridge)
+    document = bv2.build_document(
+        artifact_class="fixture", aggregate=aggregate, store=store, report=report,
+        table_hashes=av2.table_content_hashes(tables), tables=tables)
+    bundle_dir = av2.write_bundle(
+        output_root=os.path.join(root, "bundle"), artifact_class="fixture", document=document,
+        doc_id=document["bundle_id"], tables=tables, created_at="2026-07-13T00:00:00Z")
+
+    selection = s3.verify(json.load(open(_selection_file(root, paths, aggregate))))
+    view = sv.materialize(
+        selection=selection, aggregate=aggregate, document=document, tables=tables,
+        manifest=paths["manifest_doc"], bundle_dir=bundle_dir,
+        admission=sv.admit_receipt(paths["receipt"], aggregate=aggregate,
+                                   report_path=paths["report"]))
+    vc.validate(dict(view))
+
+    view_path = os.path.join(bundle_dir, "selection_view.json")
+    with open(view_path, "w", encoding="utf-8") as fh:
+        json.dump(view, fh, sort_keys=True, separators=(",", ":"))
+    receipt = mr.emit(view_path=view_path, bundle_dir=bundle_dir)
+    mr.write(receipt, os.path.join(bundle_dir, "membership_receipt.json"))
+
+    return {"root": root, "paths": paths, "store_dir": store_dir, "aggregate": aggregate,
+            "bridge": bridge, "tables": tables, "document": document,
+            "bundle_dir": bundle_dir, "view": view, "receipt": receipt}
 
 
-def _bundle_dir(chain):
-    out = os.path.join(chain["root"], "out")
-    for base, dirs, files in os.walk(out):
-        if "manifest.json" in files:
-            return base
-    raise AssertionError(f"no bundle was written under {out}")
+def test_the_bridge_makes_the_edges_exist_at_all(chain):
+    """THE POINT OF THE LANE. The builder refuses an untyped record BY NAME, so before the bridge
+    there was nothing to build from. A nonempty edge table IS the proof it was consumed."""
+    tables = chain["tables"]
+    assert len(tables["target_drug_edges"]) > 0, "no drug edges: the bridge was not consumed"
+    assert len(tables["candidates"]) > 0
+    assert len(tables["arm_slots"]) == 300               # every slot, including the empty ones
 
-
-def test_the_cli_consumes_the_bridge_and_emits_a_real_v2_bundle(chain):
-    assert _run(chain["root"], chain["paths"], chain["store_dir"],
-                selection=chain["selection"]) == 0
-
-    bundle_dir = _bundle_dir(chain)
-    with open(os.path.join(bundle_dir, "manifest.json"), encoding="utf-8") as fh:
-        manifest = json.load(fh)
-
-    # THE EDGES ARE REAL. Without the bridge there is no namespace and no modality, and the
-    # builder refuses an untyped record by name — so a nonempty edge table IS the proof the
-    # bridge was consumed.
-    edges = [f for f in manifest["files"] if f["file"] == "target_drug_edges.parquet"][0]
-    assert edges["n_rows"] > 0, "no drug edges: the bridge was not consumed"
-    assert manifest["combined_objective_permitted"] is False
-    assert manifest["p_q_fdr_permitted"] is False
+    # Every edge traces to a MEASURED arm. Pathway sourced none of them.
+    assert {e["origin_type"] for e in tables["target_drug_edges"]} <= {
+        "direct_target", "temporal_cross_time_measured"}
 
 
 def test_the_bundle_names_the_bridge_it_stands_on(chain):
-    _run(chain["root"], chain["paths"], chain["store_dir"], selection=chain["selection"])
     import pandas as pd
-    prov = pd.read_parquet(os.path.join(_bundle_dir(chain), "provenance.parquet"))
+    prov = pd.read_parquet(os.path.join(chain["bundle_dir"], "provenance.parquet"))
     kinds = set(prov["kind"])
     assert {"stage2_stage3_bridge", "stage2_stage3_bridge_report",
             "stage2_stage3_receipt"} <= kinds, (
         "a bundle whose typed identities all came from the bridge must NAME it")
 
-    aggregate = chain["aggregate"]
-    bridge = NAF.admit_bridge(chain["paths"], aggregate)
     row = prov[prov["kind"] == "stage2_stage3_bridge"].iloc[0]
-    assert row["raw_sha256"] == bridge.bridge_raw_sha256
+    assert row["raw_sha256"] == chain["bridge"].bridge_raw_sha256
     # No machine-local path anywhere in a releasable table.
     assert not [c for c in prov.astype(str).values.ravel() if str(c).startswith("/")]
 
 
 def test_the_membership_receipt_is_emitted_and_reverifies_from_its_own_bytes(chain):
-    _run(chain["root"], chain["paths"], chain["store_dir"], selection=chain["selection"])
-    bundle_dir = _bundle_dir(chain)
-
-    with open(os.path.join(bundle_dir, "membership_receipt.json"), encoding="utf-8") as fh:
-        receipt = json.load(fh)
+    receipt, bundle_dir = chain["receipt"], chain["bundle_dir"]
 
     assert receipt["schema_version"] == mr.RECEIPT_SCHEMA == \
         "spot.stage03_membership_receipt.v1"
     assert receipt["verdict"] == mr.ADMIT
     # TWO NAMED IDS, REQUIRED TO DIFFER. A producer that verifies its own output has not been
-    # verified, and a boolean is a thing a producer can simply write.
+    # verified, and a boolean is a thing a producer could simply write.
     assert receipt["generator_id"] != receipt["verifier_id"]
     assert receipt["store"]["corroborating_tables_uncovered"] == []
-    # The view ref is BUNDLE-RELATIVE.
+    # The view ref is BUNDLE-RELATIVE. An absolute path names a place on one machine.
     assert not os.path.isabs(receipt["view"]["path"])
 
-    # Re-derived from the bytes on disk, by the shipped verifier.
+    # Re-derived from the BYTES on disk, by the shipped verifier.
     mr.verify(receipt, bundle_dir=bundle_dir)
 
 
 def test_the_view_is_selection_bound_and_carries_rows(chain):
-    _run(chain["root"], chain["paths"], chain["store_dir"], selection=chain["selection"])
-    with open(os.path.join(_bundle_dir(chain), "selection_view.json"), encoding="utf-8") as fh:
-        view = json.load(fh)
-
+    view = chain["view"]
     assert view["selection"]["poles"]["A"] != view["selection"]["poles"]["B"]
     assert len(view["selected_arms"]["gene_arm_keys"]) > 0
     # A view that surfaced no candidate would prove the projection ran, not that it works.
     assert len(view["tables"]["target_drug_edges"]) > 0
     assert len(view["tables"]["candidates"]) > 0
+
+
+def test_the_cli_refuses_a_synthetic_store(chain):
+    """The universe-store gate is PINNED to the store an independent verifier admitted. A store
+    that is perfectly self-consistent with a universe nobody admitted is what a forgery is."""
+    code = _run(chain["root"] + "_cli", chain["paths"], chain["store_dir"])
+    assert code == 3
 
 
 # --- FAIL CLOSED, BEFORE ANY DIRECTORY IS CREATED. -------------------------- #
