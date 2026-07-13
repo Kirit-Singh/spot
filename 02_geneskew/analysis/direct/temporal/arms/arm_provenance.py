@@ -66,21 +66,15 @@ def build_provenance(bundle: dict[str, Any], *, bundle_file: str,
             "estimator_id": method.get("estimator_id"),
             "estimator_version": method.get("estimator_version"),
             "temporal_method_sha256": method.get("temporal_method_sha256"),
-            "direct_method_version": method.get("direct_method_version"),
-            "direct_config_sha256": method.get("direct_config_sha256"),
-            "effect_source_sha256": method.get("effect_source_sha256"),
-            "effect_universe_sha256": method.get("effect_universe_sha256"),
-            # the STAGE-1 binding, independently verifiable: the scorer-view hash the
-            # admitted program set was re-derived from, the programs themselves, and the
-            # release/source hashes — no pair or pole field, and no fabricated value.
-            "selection_release": {
-                "registry_scorer_view_sha256":
-                    admission.get("registry_scorer_view_sha256"),
-                "programs_derived_from": admission.get("programs_derived_from"),
-                "admitted_programs": list(admission.get("programs") or []),
-                "n_programs": admission.get("n_programs"),
-                "effect_universe_sha256": method.get("effect_universe_sha256"),
+            # A FIXED EXACT-KEY OBJECT whose keys name the inputs directly — no generic
+            # ``role`` label/value mini-language (sealed cross-check §B).
+            "stage2_inputs": {
+                "direct_method_version": method.get("direct_method_version"),
+                "direct_config_sha256": method.get("direct_config_sha256"),
                 "effect_source_sha256": method.get("effect_source_sha256"),
             },
+            # the STAGE-1 v3 release binding the bundle carries — the SAME object, so
+            # provenance and the arm inventory cannot name different Stage-1 identities.
+            "selection_release": dict(bundle["stage1_binding"]),
         },
     }

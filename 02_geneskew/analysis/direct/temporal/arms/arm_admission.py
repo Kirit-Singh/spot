@@ -42,6 +42,7 @@ from ...hashing import content_hash
 from .. import admission as comparison_admission
 from . import arm_bundle as ab
 from . import arm_estimand as est
+from . import arm_programs
 
 # --------------------------------------------------------------------------- #
 # Gate 3: the arm firewall. A reusable arm carries NONE of these.
@@ -68,7 +69,12 @@ ARM_NEGATIVE_DECLARATIONS = {"bundle_carries_role_or_pole": False}
 #
 # The exemption is the EXACT SPELLING, not the shape. There is no pattern-shaped hole here
 # for a ``combined_scorer`` or a ``scorer_value`` to walk through.
-INHERITED_FIREWALL_EXCEPTIONS = frozenset({"registry_scorer_view_sha256"})
+# The scorer-view hashes match ``/score/`` only because "scorer" contains "score". They are
+# the Stage-1 v3 scorer VIEW content hashes (registry + raw + canonical), carried under the
+# contract's own spelling; nothing ranks, gates or sorts on them. Exempt by EXACT spelling.
+INHERITED_FIREWALL_EXCEPTIONS = frozenset({
+    "registry_scorer_view_sha256", "scorer_view_raw_sha256",
+    "scorer_view_canonical_sha256"})
 
 
 def inherited_forbidden_keys(obj: Any) -> list[str]:
@@ -129,9 +135,9 @@ BUNDLE_KEYS = frozenset({
     "schema_version", "bundle_kind", "lane", "analysis_mode", "context", "bundle_key",
     "bundle_id", "from_condition", "to_condition",
     "n_programs", "n_desired_changes", "n_arms", "n_targets", "n_base_records",
-    "arm_keys", "base_records", "arms", "program_admission", "estimand", "perturbation",
-    "method", "code_identity", "preflight_ref", "external_admission_requirement",
-    "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
+    "arm_keys", "base_records", "arms", "program_admission", "stage1_binding", "estimand",
+    "perturbation", "method", "code_identity", "preflight_ref",
+    "external_admission_requirement", "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
 })
 
 # The two roles the run binding must keep DISTINCT. ``code_identity`` = WHICH BUILD (the
@@ -190,10 +196,13 @@ def _exempt(key: str, value: Any) -> bool:
     return False
 
 
-# A reusable arm is PAIR-AGNOSTIC. It never carries a pole-derived quantity or a pair-based
-# program projection: those belong to a pair somebody chose, and the Stage-1 binding a
-# consumer verifies is the SCORER VIEW + admitted programs, not a projection keyed on poles.
-_PAIR_PROJECTION_RE = re.compile(r"derived_from_pole|program_projection", re.IGNORECASE)
+# A reusable arm is PAIR-AGNOSTIC. It never carries a pole-derived quantity or a POLE/PAIR-
+# scoped program projection: those belong to a pair somebody chose. The legitimate Stage-1
+# ``per_program_projection_sha256`` (a per-PROGRAM scorer-view hash) is NOT pair-based and is
+# not caught — only a projection keyed on a pole or a pair is.
+_PAIR_PROJECTION_RE = re.compile(
+    r"derived_from_pole|(pole|pair)[a-z_]*projection|projection[a-z_]*(pole|pair)",
+    re.IGNORECASE)
 
 
 def _pair_projection_keys(obj: Any, path: str = "") -> list[str]:
@@ -314,6 +323,19 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     check("no_pole_derived_or_pair_based_program_projection_field", not projection_hits,
           f"pair/pole-derived projection keys: {projection_hits[:6]}")
 
+    # ---- gate 9: the Stage-1 v3 release binding is COMPLETE (no null identity) ----
+    s1 = bundle.get("stage1_binding") or {}
+    s1_nulls = arm_programs.stage1_binding_nulls(s1)
+    check("stage1_binding_is_complete_and_non_null", not s1_nulls,
+          f"stage1_binding null/absent fields: {s1_nulls}")
+    pa = bundle.get("program_admission") or {}
+    check("stage1_binding_programs_match_the_admitted_program_set",
+          list(s1.get("admitted_programs") or []) == list(pa.get("programs") or []),
+          "the stage1 binding names a different program set than program_admission")
+    check("stage1_binding_scorer_view_matches_program_admission",
+          s1.get("scorer_view_canonical_sha256") == pa.get("registry_scorer_view_sha256"),
+          "the stage1 scorer-view hash disagrees with program_admission")
+
     # ---- the inventory: n_programs x 2, complete and not invented ----
     programs = bundle["program_admission"]["programs"]
     expected = {est.arm_key(p, c, bundle["from_condition"], bundle["to_condition"])
@@ -432,21 +454,26 @@ def verify_shipped(out_dir: str) -> dict[str, Any]:
     import os
 
     from ...hashing import content_hash, sha256_hex
+    from . import arm_provenance
 
     path = os.path.join(out_dir, ab.BUNDLE_FILENAME)
     if not os.path.exists(path):
         return {"admitted": False, "failures": [f"[no_bundle] {ab.BUNDLE_FILENAME} absent"],
                 "checks": [], "out_dir": out_dir}
     with open(path, "rb") as fh:
-        bundle = json.loads(fh.read())
+        bundle_raw = fh.read()
+    bundle = json.loads(bundle_raw)
+    arm_raw = sha256_hex(bundle_raw)
 
     result = verify_bundle(bundle)
     failures = list(result["failures"])
 
     # the on-disk ranking files must be present and match the bindings the bundle carries
+    expected_rankings = set()
     for arm in bundle.get("arms", []):
         binding = arm.get("ranking") or {}
         rel = str(binding.get("path", ""))
+        expected_rankings.add(rel)
         rpath = os.path.join(out_dir, rel)
         if os.path.isabs(rel) or ".." in rel.split("/") or not os.path.exists(rpath):
             failures.append(f"[ranking_file_missing_or_not_relative] {rel!r}")
@@ -457,8 +484,33 @@ def verify_shipped(out_dir: str) -> dict[str, Any]:
                 or content_hash(json.loads(raw)) != binding.get("canonical_sha256"):
             failures.append(f"[ranking_file_hash_mismatch] {rel!r}")
 
+    # NO STALE / EXTRA ranking files: the rankings dir must hold EXACTLY the bound set. A
+    # left-over ranking from a program no longer admitted is an arm nobody bound but a
+    # reader could pick up, so it is a refusal, not a shrug.
+    rdir = os.path.join(out_dir, ab.RANKINGS_DIR)
+    on_disk = {f"{ab.RANKINGS_DIR}/{fn}" for fn in os.listdir(rdir)} \
+        if os.path.isdir(rdir) else set()
+    stale = sorted(on_disk - expected_rankings)
+    if stale:
+        failures.append(f"[stale_or_extra_ranking_files] {stale[:6]}")
+
+    # if the provenance shipped, it must RE-DERIVE from the bundle and bind this bundle's
+    # bytes — so the self-check covers the provenance the preflight then binds, rather than
+    # a document produced after the check that nothing validated.
+    prov_path = os.path.join(out_dir, ab.PROVENANCE_FILENAME)
+    if os.path.exists(prov_path):
+        with open(prov_path, "rb") as fh:
+            shipped_prov = json.loads(fh.read())
+        want_prov = arm_provenance.build_provenance(
+            bundle, bundle_file=ab.BUNDLE_FILENAME, bundle_raw_sha256=arm_raw)
+        if shipped_prov != want_prov:
+            failures.append("[provenance_does_not_rederive_from_the_bundle]")
+        if shipped_prov.get("bundle_raw_sha256") != arm_raw:
+            failures.append("[provenance_binds_a_different_bundle]")
+
     result = dict(result)
     result["failures"] = failures
     result["admitted"] = not failures
     result["out_dir"] = out_dir
+    result["arm_bundle_sha256"] = arm_raw
     return result

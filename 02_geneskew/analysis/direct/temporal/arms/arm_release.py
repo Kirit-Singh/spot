@@ -68,52 +68,150 @@ def _bundle_entry(a: dict[str, Any], out_dir: str) -> dict[str, Any]:
     }
 
 
-def stage1_binding(prov: dict[str, Any], conditions: list[str]) -> dict[str, Any]:
-    """The v3 release / scorer / program / condition identity the release stood on.
+def stage1_binding(prov: dict[str, Any]) -> dict[str, Any]:
+    """The hash-bound v3 release / scorer / program / condition identity the release stood on.
 
-    Built from the provenance the producer actually read — no fabricated value. Fields the
-    producer does not yet bind (per-program projection hashes, the release self-hash) are
-    explicit ``null``, flagged for the larger Stage-1 binding follow-up, never invented.
+    Carried through from the provenance the producer actually read — the SAME block the
+    bundle bound. No fabricated value; the completeness gate refuses any null field.
     """
-    sr = (prov.get("run_binding") or {}).get("selection_release") or {}
+    return dict((prov.get("run_binding") or {}).get("selection_release") or {})
+
+
+TOPOLOGY_RULE_ID = "spot.stage02.temporal.arm.topology.programs_x_changes_x_ordered_pairs.v1"
+
+
+def ordered_pairs(conditions: list[str]) -> list[tuple[str, str]]:
+    c = sorted({str(x) for x in conditions})
+    return [(a, b) for a in c for b in c if a != b]
+
+
+def expected_topology(programs: list[str], conditions: list[str]) -> dict[str, Any]:
+    """The six-bundle / 120-arm topology, DERIVED from the Stage-1 programs + conditions.
+
+    A COMPLETE run is not a fixture assertion of "120": it is exactly ``n_programs x 2
+    desired changes x n_ordered_pairs`` arms over ``n_ordered_pairs`` bundles, and both
+    counts fall out of the bound release. The independent verifier re-derives the same set;
+    the producer records the derivation so it can be disagreed with.
+    """
+    progs = sorted({str(p) for p in programs})
+    pairs = ordered_pairs(conditions)
+    arm_keys = sorted(f"temporal|{p}|{dc}|{frm}|{to}"
+                      for p in progs for dc in ("increase", "decrease")
+                      for frm, to in pairs)
     return {
-        "registry_scorer_view_sha256": sr.get("registry_scorer_view_sha256"),
-        "programs_derived_from": sr.get("programs_derived_from"),
-        "admitted_programs": list(sr.get("admitted_programs") or []),
-        "n_programs": sr.get("n_programs"),
-        "conditions": sorted({str(c) for c in conditions}),
+        "topology_rule_id": TOPOLOGY_RULE_ID,
+        "n_programs": len(progs),
+        "n_desired_changes": 2,
         "n_conditions": len({str(c) for c in conditions}),
-        "effect_universe_sha256": sr.get("effect_universe_sha256"),
-        "effect_source_sha256": sr.get("effect_source_sha256"),
-        # NOT yet bound — carried as null, never fabricated (Stage-1 binding follow-up)
-        "stage1_release_self_sha256": None,
-        "per_program_projection_sha256": None,
-        "selector_condition_sequence": None,
+        # the DECLARED selector order, carried verbatim — NOT the sorted inventory order.
+        "selector_condition_sequence": [str(c) for c in conditions],
+        "n_ordered_pairs": len(pairs),
+        "expected_n_bundles": len(pairs),
+        "expected_n_logical_arms": len(arm_keys),
+        "ordered_pairs": [f"{a}->{b}" for a, b in pairs],
+        "expected_arm_keys": arm_keys,
     }
+
+
+class ReleaseError(ValueError):
+    """The release inventory cannot be built as a COMPLETE release. Refuse; never truncate."""
+
+
+# The identity every one of the six bundles must share, because they are ONE release built
+# by ONE code from ONE Stage-1 binding. A non-first bundle with a self-consistent fake
+# commit or a divergent method would otherwise hide in the middle of a release an
+# aggregate that only pins the first bundle would admit.
+_CROSS_BUNDLE_IDENTICAL = ("code_identity", "stage1_binding", "method", "program_admission")
+
+
+def _check_cross_bundle_identity(bundle_docs: list[dict[str, Any]]) -> list[str]:
+    """Every bundle must agree on WHICH BUILD, WHICH Stage-1 release, WHICH method/scorer."""
+    problems: list[str] = []
+    first = bundle_docs[0]
+    for field in _CROSS_BUNDLE_IDENTICAL:
+        ref = first.get(field)
+        for doc in bundle_docs[1:]:
+            if doc.get(field) != ref:
+                problems.append(
+                    f"bundle {doc.get('bundle_key')!r} carries a different {field} than "
+                    f"{first.get('bundle_key')!r} — a six-bundle release is ONE build of "
+                    "ONE Stage-1 release; a divergent bundle is a forgery hiding in the set")
+                break
+    return problems
 
 
 def build_release(addresses: list[dict[str, Any]], out_root: str,
                   provenance: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    """The root inventory over every emitted bundle. Deterministic and self-addressed.
+    """The root inventory over every emitted bundle. Deterministic, self-addressed, complete.
 
-    ``provenance`` is any one bundle's provenance (all six share the release identity); the
-    Stage-1 binding is read from it. On-disk hashes are re-read here so the inventory binds
-    what actually LANDED, not what a caller claimed.
+    Reads every bundle's OWN bytes and refuses a release whose bundles disagree on the build
+    (code_identity), the Stage-1 release, the method or the scorer view — an aggregate that
+    pinned only the first bundle would admit a forgery hiding in the middle. On-disk hashes
+    are re-read so the inventory binds what actually LANDED, the six-bundle / 120-arm
+    topology is RE-DERIVED from the Stage-1 release, and the emitted bundles must fill it
+    EXACTLY: a short, extra or duplicated bundle/arm/ranking is refused, not inventoried.
     """
+    import json
+
     addrs = sorted(addresses, key=lambda a: a["bundle_key"])
+    bundle_docs = [json.loads(
+        open(os.path.join(out_root, a["dir"], arm_bundle.BUNDLE_FILENAME), "rb").read())
+        for a in addrs]
+    identity_problems = _check_cross_bundle_identity(bundle_docs)
+    if identity_problems:
+        raise ReleaseError(f"the six-bundle release is not one build: {identity_problems}")
+
     bundles = [_bundle_entry(a, os.path.join(out_root, a["dir"])) for a in addrs]
-    conditions = sorted({a["from_condition"] for a in addrs}
-                        | {a["to_condition"] for a in addrs})
+    # EXACT ranking set: every bundle binds ONE ranking per arm and NO more. A 121st
+    # fully-valid resealed ranking is still an arm nobody bound — refused here.
+    for entry, doc in zip(bundles, bundle_docs):
+        if len(entry["rankings"]) != doc["n_arms"]:
+            raise ReleaseError(
+                f"bundle {doc['bundle_key']!r} inventories {len(entry['rankings'])} ranking "
+                f"files but binds {doc['n_arms']} arms; an unbound ranking is unverified "
+                "and indistinguishable from evidence")
+
+    s1 = dict(bundle_docs[0]["stage1_binding"])
+    topology = expected_topology(s1.get("admitted_programs") or [],
+                                 s1.get("selector_condition_sequence") or [])
+
+    # COMPLETENESS + cross-bundle identity, all re-derived from the Stage-1 release.
+    got_bundle_dirs = [f"{b['from_condition']}->{b['to_condition']}" for b in bundles]
+    got_keys = [k for b in bundles for k in b["arm_keys"]]
+    want_keys = set(topology["expected_arm_keys"])
+    problems = []
+    if sorted(got_bundle_dirs) != sorted(topology["ordered_pairs"]):
+        problems.append(f"ordered-pair bundles {sorted(got_bundle_dirs)} != expected "
+                        f"{sorted(topology['ordered_pairs'])}")
+    if len(got_bundle_dirs) != len(set(got_bundle_dirs)):
+        problems.append("a duplicate ordered-pair bundle")
+    if set(got_keys) != want_keys:
+        problems.append(f"missing={sorted(want_keys - set(got_keys))[:4]} "
+                        f"extra={sorted(set(got_keys) - want_keys)[:4]}")
+    if len(got_keys) != len(set(got_keys)):
+        problems.append("a duplicate arm key across bundles")
+    # cross-bundle: every ordered pair's REVERSE is also present (both directions shipped)
+    dirs = set(got_bundle_dirs)
+    missing_reverse = sorted(d for d in dirs
+                             if f"{d.split('->')[1]}->{d.split('->')[0]}" not in dirs)
+    if missing_reverse:
+        problems.append(f"ordered pairs missing their reverse: {missing_reverse}")
+    if problems:
+        raise ReleaseError(
+            "the emitted bundles do not fill the derived six-bundle topology exactly: "
+            f"{problems}. A complete temporal release is programs x 2 x ordered-pairs; a "
+            "run that is short, extra or duplicated is not a release")
 
     manifest: dict[str, Any] = {
         "schema_version": SCHEMA_RELEASE,
         "release_id_rule": RELEASE_ID_RULE,
         "lane": arm_bundle.BUNDLE_LANE,
         "analysis_mode": arm_bundle.ANALYSIS_MODE,
-        "stage1_binding": stage1_binding(provenance or {}, conditions),
+        "stage1_binding": s1,
+        "topology": topology,
         "n_bundles": len(bundles),
-        "n_logical_arms": sum(len(b["arm_keys"]) for b in bundles),
-        "arm_keys": sorted(k for b in bundles for k in b["arm_keys"]),
+        "n_logical_arms": len(got_keys),
+        "arm_keys": sorted(got_keys),
         "bundles": bundles,
         # NO admission here. `pending` is the only honest producer state; the independent
         # verifier emits a SEPARATE content-addressed envelope and never rewrites this.

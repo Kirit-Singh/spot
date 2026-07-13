@@ -134,28 +134,29 @@ def _emit_into(bundle: dict[str, Any], out_dir: str) -> None:
     bundle_path = os.path.join(out_dir, BUNDLE_FILENAME)
     with open(bundle_path, "wb") as fh:
         fh.write(bundle_bytes(bundle))
+    with open(bundle_path, "rb") as fh:
+        arm_raw = sha256_hex(fh.read())
 
-    # 3. PRODUCER SELF-CHECK (fail-closed) — read the bytes back off disk and re-derive.
-    # This is NOT an independent admission: the producer invoked it, so it may not claim
-    # independence. It refuses to leave behind bytes it cannot itself reconstruct.
+    # 3. provenance — binds the arm inventory by hash. Written BEFORE the self-check so the
+    # check covers it, rather than a document produced afterwards that nothing validated.
+    prov = arm_provenance.build_provenance(bundle, bundle_file=BUNDLE_FILENAME,
+                                           bundle_raw_sha256=arm_raw)
+    _refuse_machine_local(prov, "provenance")
+    _, prov_raw = _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
+
+    # 4. PRODUCER SELF-CHECK (fail-closed) — read ALL the shipped bytes back off disk and
+    # re-derive: the bundle, every ranking file (no stale/extra), AND the provenance. NOT an
+    # independent admission — the producer invoked it — but it now covers exactly what the
+    # preflight will bind, and refuses to leave behind bytes it cannot itself reconstruct.
     result = arm_admission.verify_shipped(out_dir)
     if not result["admitted"]:
         raise EmitRefused(
             f"the emitted bundle {bundle['bundle_key']!r} did not survive the producer "
             f"self-check: {result['failures'][:8]}")
 
-    with open(bundle_path, "rb") as fh:
-        arm_raw = sha256_hex(fh.read())
-
-    # 4. provenance — binds the arm inventory by hash.
-    prov = arm_provenance.build_provenance(bundle, bundle_file=BUNDLE_FILENAME,
-                                           bundle_raw_sha256=arm_raw)
-    _refuse_machine_local(prov, "provenance")
-    _, prov_raw = _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
-
     # 5. the PRODUCER PREFLIGHT — the self-check recorded as pass|fail, never an admission.
-    # The authoritative external admission is the INDEPENDENT verifier's (W11's) root
-    # envelope, written after it reopens these bytes.
+    # It binds ONLY what the self-check above covered. The authoritative external admission
+    # is the INDEPENDENT verifier's (W11's) root envelope, written after it reopens these.
     preflight = arm_preflight.build_preflight(
         result, bundle=bundle, arm_bundle_sha256=arm_raw, provenance_sha256=prov_raw)
     _refuse_machine_local(preflight, "producer preflight")

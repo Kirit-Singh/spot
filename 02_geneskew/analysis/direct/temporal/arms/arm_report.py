@@ -74,6 +74,8 @@ REQUIRED_GATES = (
     "bundle_binds_a_structural_code_identity_without_self_admitting_clean",
     "method_digest_and_code_identity_are_both_bound_as_distinct_roles",
     "no_pole_derived_or_pair_based_program_projection_field",
+    "stage1_binding_is_complete_and_non_null",
+    "stage1_binding_programs_match_the_admitted_program_set",
     "arm_inventory_is_every_program_x_every_desired_change",
     "arm_record_joins_to_exactly_one_base_record",
     "arm_record_and_its_base_record_name_the_same_target",

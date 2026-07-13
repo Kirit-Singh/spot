@@ -314,6 +314,7 @@ def build_bundle(*, from_condition: str, to_condition: str,
                  method: dict[str, Any],
                  conditions: Optional[list[str]] = None,
                  scorer_view_sha256: Optional[str] = None,
+                 stage1: Optional[dict[str, Any]] = None,
                  code: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The complete, deterministic bundle for ONE frozen ordered condition pair.
 
@@ -382,6 +383,11 @@ def build_bundle(*, from_condition: str, to_condition: str,
         "base_records": bases,
         "arms": arms,
         "program_admission": arm_programs.admission_block(admitted, scorer_view_sha256),
+        # the hash-bound Stage-1 v3 release identity — non-null in a release-ready bundle
+        "stage1_binding": arm_programs.stage1_binding_block(
+            stage1 or {}, admitted,
+            effect_universe_sha256=method.get("effect_universe_sha256"),
+            effect_source_sha256=method.get("effect_source_sha256")),
         "estimand": est.estimand_block(),
         # the perturbation modality + the SUGGESTIVE modulation rule, stated once
         "perturbation": est.perturbation_block(),

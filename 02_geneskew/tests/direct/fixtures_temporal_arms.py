@@ -49,7 +49,9 @@ def programs_registry() -> dict[str, dict]:
     """The FIXTURE Stage-1 scorer view: 10 base-portable + 1 explicitly non-portable."""
     reg = {
         pid: {"program_id": pid, "panel_ensembl": _panel(i), "control_ensembl": CONTROLS,
-              "base_portable": True, "primary": True, "stage2_selectable": True}
+              "base_portable": True, "primary": True, "stage2_selectable": True,
+              # FIXTURE per-program projection hash (the scorer view's method_hash)
+              "method_hash": f"{(i + 1):064x}"}
         for i, pid in enumerate(PORTABLE_IDS)
     }
     reg[NON_PORTABLE_ID] = {
@@ -84,6 +86,21 @@ def admitted():
 def condition_universe(release=None):
     from direct.temporal.arms import arm_programs
     return arm_programs.admitted_conditions(FixtureRelease() if release is None else release)
+
+
+def stage1(release=None):
+    """The FIXTURE Stage-1 v3 release binding. Every hash is INVENTED, clearly-marked
+    fixture data — never a measurement — but complete (non-null) so the release is GO."""
+    reg = programs_registry() if release is None else release.programs
+    return {
+        "release_self_sha256": "b" * 64,                   # FIXTURE v3 release self-hash
+        "scorer_view_raw_sha256": "a" * 64,                # FIXTURE scorer view raw
+        "scorer_view_canonical_sha256": "a" * 64,          # == scorer_view_sha256 below
+        # the DECLARED selector sequence — carried verbatim, NOT canonical-sorted away
+        "selector_condition_sequence": list(CONDITIONS),
+        "per_program_projection_sha256": {
+            pid: reg[pid]["method_hash"] for pid in PORTABLE_IDS},
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -185,6 +202,7 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
     meth = kw.pop("method", _UNSET)
     conds = kw.pop("conditions", _UNSET)
     code = kw.pop("code", _UNSET)
+    s1 = kw.pop("stage1", _UNSET)
     return arm_bundle.build_bundle(
         from_condition=from_condition, to_condition=to_condition,
         admitted=admitted() if progs is _UNSET else progs,
@@ -193,6 +211,7 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
         method=method() if meth is _UNSET else meth,
         conditions=list(CONDITIONS) if conds is _UNSET else conds,
         scorer_view_sha256=kw.pop("scorer_view_sha256", "a" * 64),
+        stage1=stage1() if s1 is _UNSET else s1,
         code=code_identity() if code is _UNSET else code,
         **kw)
 

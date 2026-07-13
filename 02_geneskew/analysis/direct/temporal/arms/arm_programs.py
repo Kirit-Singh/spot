@@ -151,6 +151,63 @@ def require_ordered_pair(conditions: list[str], from_condition: str,
             f"ordered pair ({frm} -> {to}) compares a condition with itself")
 
 
+# --------------------------------------------------------------------------- #
+# THE STAGE-1 v3 RELEASE BINDING carried on every bundle — hash-bound, non-null.
+#
+# An arm nobody can attribute to a Stage-1 release is an arm that could have come from
+# anywhere. So the bundle binds the release self-hash, the scorer-view raw AND canonical
+# hashes, the EXACT declared selector condition sequence (never silently canonical-sorted
+# away), the admitted programs, and a per-program projection hash for each. None of these
+# may be null in a release-ready bundle — a null identity is the NO-GO the audit found.
+# --------------------------------------------------------------------------- #
+STAGE1_REQUIRED_NONNULL = ("release_self_sha256", "scorer_view_raw_sha256",
+                           "scorer_view_canonical_sha256", "effect_universe_sha256",
+                           "effect_source_sha256")
+
+
+def stage1_binding_block(stage1: dict[str, Any], admitted: dict[str, dict[str, Any]], *,
+                         effect_universe_sha256: Any,
+                         effect_source_sha256: Any) -> dict[str, Any]:
+    """The v3 release / scorer / program / condition identity, from the bound inputs.
+
+    Built from what the producer actually read — never a fabricated value. The declared
+    selector sequence is carried verbatim; the per-program projection hash is carried for
+    every admitted program.
+    """
+    stage1 = stage1 or {}
+    programs = sorted(admitted)
+    seq = [str(c) for c in (stage1.get("selector_condition_sequence") or [])]
+    per = stage1.get("per_program_projection_sha256") or {}
+    return {
+        # the canonical scorer-view hash, under the name the independent verifier reads
+        # (``registry_scorer_view_sha256``) AND the raw/canonical pair, so both consumers
+        # find it; they are the SAME canonical hash and the gate holds them equal.
+        "registry_scorer_view_sha256": stage1.get("scorer_view_canonical_sha256"),
+        "release_self_sha256": stage1.get("release_self_sha256"),
+        "scorer_view_raw_sha256": stage1.get("scorer_view_raw_sha256"),
+        "scorer_view_canonical_sha256": stage1.get("scorer_view_canonical_sha256"),
+        "selector_condition_sequence": seq,
+        "n_conditions": len(seq),
+        "admitted_programs": programs,
+        "n_programs": len(programs),
+        "per_program_projection_sha256": {p: per.get(p) for p in programs},
+        "effect_universe_sha256": effect_universe_sha256,
+        "effect_source_sha256": effect_source_sha256,
+        "programs_derived_from": "bound_stage1_v3_scorer_view",
+    }
+
+
+def stage1_binding_nulls(block: dict[str, Any]) -> list[str]:
+    """Every REQUIRED stage-1 field that is still null/absent. Empty means release-ready."""
+    missing = [f for f in STAGE1_REQUIRED_NONNULL if not (block or {}).get(f)]
+    if not (block or {}).get("selector_condition_sequence"):
+        missing.append("selector_condition_sequence")
+    proj = (block or {}).get("per_program_projection_sha256") or {}
+    if not proj or any(v is None for v in proj.values()):
+        missing.append("per_program_projection_sha256")
+    return missing
+
+
 def require_program(admitted: dict[str, dict[str, Any]], program_id: str) -> None:
     """Refuse a program the bound release did not admit. Never guess a near match."""
     if str(program_id) not in admitted:
