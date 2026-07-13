@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import os
 import sys
@@ -52,6 +53,7 @@ from . import (
 from . import manifest as mf
 from . import projection as proj
 from . import run_screen as rs
+from . import target_identity as tgt_id
 from . import universe as uni
 
 # THE NATIVE FILE SET lives in `arm_artifacts` — "what the bundle ships" is a thing with a
@@ -66,6 +68,7 @@ from .arm_artifacts import (
     MASKS_FILE,
     PROVENANCE_FILE,
     ROWS_FILE,
+    TARGET_IDENTITY_FILE,
     UNIVERSE_FILE,
     VERDICT_PENDING,
     VERIFICATION_FILE,
@@ -264,6 +267,19 @@ def build_bundle(args) -> dict[str, Any]:
     # THE BUNDLE'S OWN input manifest — never the pair path's. `stage2_input_manifest` hashes
     # `args.selection`, which both crashed this CLI (no such flag) and made a supposedly
     # pair-independent identity move with a pair the bundle never loaded.
+    # ---- THE PER-TARGET IDENTITY / ASSAY ARTIFACT (Stage-3 handoff) ----
+    # Hashed BEFORE the run id, from the EXACT bytes. The raw hash of a file cannot normally
+    # exist before the id names the directory it goes in — but these bytes are deterministic, so
+    # they are serialized once, hashed, bound, and then written unchanged. Nothing is hashed
+    # that is not shipped, and nothing is shipped that was not hashed.
+    identity_doc = tgt_id.build(
+        ctx["identities_by_condition"][cond], condition=cond,
+        scored_targets={r["target_id"] for r in rows})
+    identity_bytes = (json.dumps(identity_doc, indent=2, sort_keys=True, default=str)
+                      + "\n").encode("utf-8")
+    identity_binding = tgt_id.binding_block(
+        identity_doc, hashlib.sha256(identity_bytes).hexdigest())
+
     manifest = arm_inputs.bundle_input_manifest(args)
     arm_inputs.assert_no_pair_input(manifest)
 
@@ -317,6 +333,10 @@ def build_bundle(args) -> dict[str, Any]:
         # refused. Recording a lock beside a run says which environment the producer HAD;
         # binding a VERIFIED one into the run id says which environment the numbers CAME FROM.
         "environment_lock": envlock.block(getattr(args, "env_lock", None)),
+        # WHAT each target IS, and what the assay DID to it. Stage 3 joins this to arms.parquet;
+        # a bundle that shipped arm VALUES with no bound statement of the namespace would force
+        # a consumer to infer it from the shape of the key — the one inference this lane forbids.
+        "target_identity": identity_binding,
         "arm_rows_sha256": doc["arm_rows_sha256"],
     }
     full = sha256_hex(canonical_json(binding))
@@ -342,6 +362,10 @@ def build_bundle(args) -> dict[str, Any]:
     # bound hash was taken over. Re-sorting here on a partial key — six of the fourteen
     # identity columns — is exactly what let the shipped order drift from the hashed one.
     emit.write_parquet(canonical_masks, os.path.join(out_dir, MASKS_FILE), [])
+    # the VERY SAME BYTES that were hashed above — not a re-serialization, which would be a
+    # different file that happens to mean the same thing
+    with open(os.path.join(out_dir, TARGET_IDENTITY_FILE), "wb") as fh:
+        fh.write(identity_bytes)
     emit.write_parquet(scanned["contrib_rows"], os.path.join(out_dir, CONTRIB_FILE),
                        ["estimate_type", "estimate_id", "target_id", "guide_id"])
     emit.write_parquet(scanned["guide_rows"], os.path.join(out_dir, GUIDE_SUPPORT_FILE),
