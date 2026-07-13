@@ -533,17 +533,16 @@ def require_admitted_direct(cfg):
 
 
 def _completed(cfg, name):
-    """Resume: a phase whose receipt EXISTS and RE-VERIFIES is done -> skip it. Never rerun a
-    producer or overwrite native/admitted bytes on resume. DRY never skips (topology must always
-    emit every block); a missing or non-verifying receipt is NOT complete (fail-open to running)."""
+    """Resume gate. ABSENT receipt -> not done, run the phase fresh (False). PRESENT receipt -> it
+    MUST re-verify: verify_receipt REFUSES (raises SchedulerError) on a tampered/invalid/stale
+    receipt — we let that propagate, never swallow it into a silent rerun/overwrite of native or
+    admitted bytes. PRESENT and valid -> done, skip (True). DRY never skips (topology always emits)."""
     if DRY:
         return False
     if not os.path.isfile(_receipt_path(cfg, name)):
-        return False
-    try:
-        return verify_receipt(cfg, name) is True
-    except SchedulerError:
-        return False
+        return False                     # absent -> run the phase fresh
+    verify_receipt(cfg, name)            # present -> re-verify; a tampered/invalid receipt RAISES here
+    return True                          # present AND verified -> skip (no rerun / no overwrite)
 
 
 # ---- phases -----------------------------------------------------------------------------

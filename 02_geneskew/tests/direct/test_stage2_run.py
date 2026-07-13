@@ -377,9 +377,11 @@ def test_completed_receipts_skip_on_resume(tmp_path, monkeypatch):
                      outputs=[str(inv)], prereqs=["C.direct_admitted"])
     assert S._completed(C, "D.temporal") is True
 
-    inv.write_text("MUTATED")                       # bound output changed -> not complete
-    assert S._completed(C, "D.temporal") is False
-    inv.write_text("inv")                           # restore -> complete again
+    import pytest
+    inv.write_text("MUTATED")                       # bound output changed -> receipt no longer verifies
+    with pytest.raises(S.SchedulerError):
+        S._completed(C, "D.temporal")               # a tampered receipt REFUSES, never silently reruns
+    inv.write_text("inv")                           # restore -> verifies again
 
     calls = []
     monkeypatch.setattr(S, "run", lambda *a, **k: calls.append(a))
