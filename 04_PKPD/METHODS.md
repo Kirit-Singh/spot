@@ -17,8 +17,9 @@ averaged, or remembered. **Claude/LLM output is never a source**: there is no
 | `dailymed_spl_structure_probe` | Live DailyMed SPL v2 responses | Used **only** to verify XML paths + LOINC codes. No drug content from the probes is used as evidence |
 
 Raw documents are **not bundled** in the repo (public-data-only rule + ACS copyright).
-They are cached outside it, at `/home/tcelab/.spot-runs/20260712T021343Z/…`, and pinned by
-hash so a reviewer can re-verify byte-for-byte. All method parameters live in
+They are cached **outside the working tree**, under the caller's run root
+(`--run-root`, addressed by content SHA-256; `RunRoot` refuses a cache inside the tree), and
+pinned by hash so a reviewer can re-verify byte-for-byte. All method parameters live in
 `method/*.json`, whose file hashes feed `scorecard_set_id`.
 
 ---
@@ -29,7 +30,11 @@ Six inputs only: **ClogP, ClogD(7.4), MW, TPSA, HBD, most-basic pKa**. Each is t
 to a desirability value `T0 ∈ [0,1]`; the score is their **sum**, range **0–6**, equal
 weights.
 
-**Table 1 (transcribed verbatim):**
+**The parameters** — the transform shape and the two inflection points per property. These are
+the numeric facts the method computes with, encoded in `method/cns_mpo_wager2010_v1.json`
+(`properties[]`). Wager 2010 is **ACS-copyrighted and not in the PMC open-access subset**, so
+spot encodes the parameters and cites the locator; it does not reproduce the paper's table or
+quote its prose. Source: Wager 2010, Table 1 (DOI 10.1021/cn100008c, PMCID PMC3368654).
 
 | property | transform | T0 = 1.0 | T0 = 0.0 |
 |---|---|---|---|
@@ -251,15 +256,48 @@ ROUND_HALF_UP (Python's half-to-even does not reproduce printed tables).
 Written **atomically** to `outputs/<scorecard_set_id>/` (temp dir + swap: a reader sees the
 whole set or nothing):
 
-`delivery_evidence.parquet` · `transporter_evidence.parquet` · `exposure_evidence.parquet` ·
-`safety_evidence.parquet` · `scorecards.json` · `manifest.json` · `verification.json` ·
-`selection.json`
+**v1 — 19 artifacts.** Four documents — `scorecards.json` · `manifest.json` ·
+`verification.json` · `selection.json` — and fifteen parquet tables:
+
+`contexts` · `drug_forms` · `property_evidence` · `potency_evidence` ·
+`potency_context_links` · `transporter_evidence` · `exposure_evidence` ·
+`delivery_assignments` · `delivery_evidence` · `nebpi_observations` · `nebpi_criteria` ·
+`nebpi_decisions` · `safety_evidence` · `search_manifests` · `source_catalog`
+
+**v2 — 21.** The same set plus `fraction_unbound.parquet` and `source_acquisition.parquet`.
+The emitted set is checked against an **allowlist**: an extra production-looking file in the
+directory is a failure, not a bonus.
 
 Each parquet table has a fixed column order, fixed dtypes and a fixed sort key
-(`schemas/spot.stage04_evidence_tables.v1.schema.json`), and two hashes: `content_sha256`
-(canonical rows — writer-independent, the scientific identity) and `file_sha256` (the bytes).
-`scorecards.json` carries a per-candidate **provenance chain**: every displayed field → its
-source response hash and the deterministic transform that produced it.
+(`schemas/spot.stage04_evidence_tables.v1.schema.json`, and `…v2…` for v2), and two hashes:
+`content_sha256` (canonical rows — writer-independent, the scientific identity) and
+`file_sha256` (the bytes). `scorecards.json` carries a per-candidate **provenance chain**:
+every displayed field → its source response hash and the deterministic transform that produced
+it.
+
+### 7a. The evidence contract is versioned — v1 is frozen, v2 is the acquisition contract
+
+A run speaks the contract its **evidence bundle declares** (`schema_id`:
+`spot.stage04_evidence_bundle.v1` / `.v2`). Absent means **v1**. An *unknown* schema is
+**refused by name** — "unverifiable" and "probably v1" are not the same answer, and only one of
+them is safe to act on.
+
+| | v1 | v2 |
+|---|---|---|
+| method files bound into `scorecard_set_id` | **7** (frozen) | **9** — adds `nebpi_source_framing_v2.json` + `safety_taxonomy_v2.json` |
+| evidence lanes | 10 | 12 — adds `fraction_unbound`, `source_acquisition` |
+| forbidden output names | the v1 list | **+ `p_value`, `q_value`, `fdr`, `adjusted_p`, `organ_system_score`, `organ_system_burden`, `toxicity_score`, `safety_grade`, `organ_risk`** — scanned **recursively**, at any nesting depth |
+
+Stage 4 computes no statistic and consumes none, so a *p*/*q* value anywhere in an emitted
+document is a fabrication and is refused. **v1 is byte-frozen**: releases emitted under it hash
+their seven method files into their identity, so a v2 addition may never reach back into it, and
+a v1 release is never asked for a column that did not exist when it was written.
+
+**v2 demands acquisition for the bytes it CONSUMES** — every source a Stage-4 evidence row rests
+on must carry a canonical query, an access time, a terms URL and an adapter build, or the bundle
+is refused (`source_not_acquired`). It does **not** demand one for Stage-3's source records,
+which are carried across as upstream provenance: Stage 4 never fetched those bytes and can hold
+no acquisition record for them.
 
 ---
 

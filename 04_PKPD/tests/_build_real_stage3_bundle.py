@@ -28,7 +28,13 @@ import sys
 UPSTREAM_EXIT = 3
 
 # The Stage-2 Direct worktree, resolved exactly as Stage-3's direct_fixture resolves it.
-STAGE2_WT = os.environ.get("SPOT_DIRECT_WT", "/home/tcelab/worktrees/spot-stage2-direct")
+#
+# `$SPOT_DIRECT_WT`, else the sibling worktree next to this one. A hard-coded absolute default
+# binds one developer's checkout into a tracked helper and points at nothing anywhere else —
+# and a path that silently resolves to nothing turns this proof into a permanent skip.
+_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))      # .../<worktree>/04_PKPD
+_SIBLING = os.path.join(os.path.dirname(os.path.dirname(_HERE)), "spot-stage2-direct")
+STAGE2_WT = os.environ.get("SPOT_DIRECT_WT") or _SIBLING
 
 
 def stage2_tree_is_dirty() -> str | None:

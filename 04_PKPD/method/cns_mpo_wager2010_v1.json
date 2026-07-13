@@ -8,28 +8,33 @@
   "source_anchors": {
     "six_properties_and_scale": {
       "source_id": "wager2010_cnsmpo_jats",
-      "quote": "Using a set of six physicochemical parameters ((a) lipophilicity, calculated partition coefficient (ClogP); (b) calculated distribution coefficient at pH = 7.4 (ClogD); (c) molecular weight (MW); (d) topological polar surface area (TPSA); (e) number of hydrogen bond donors (HBD); (f) most basic center (pKa)), a druglikeness central nervous system multiparameter optimization (CNS MPO) algorithm was built ... (MPO desirability score >= 4, using a scale of 0-6)",
+      "paraphrase": "Establishes the six inputs (ClogP, ClogD7.4, MW, TPSA, HBD, most-basic pKa) and that the score is their equally weighted sum on a 0-6 scale.",
+      "quotation_withheld": "Wager 2010 is ACS-copyrighted and not in the PMC open-access subset. The locator is given so the passage can be read at the source.",
       "location": "Abstract"
     },
     "function_shapes_and_summation": {
       "source_id": "wager2010_cnsmpo_pmc_web",
-      "quote": "A monotonic decreasing function was used for ClogP, ClogD, MW, HBD, and pKa, and a hump function was used for TPSA. All physicochemical properties were weighted equally with a desirability score ranging from 0.0 to 1.0 for each property. ... Transformed values (T0) of the six properties were determined for each compound, and the summation of the transformed component score yielded the final “CNS MPO” desirability score, which can range from zero (0) to six (6).",
+      "paraphrase": "Establishes the transform shape per property: monotonic decreasing for ClogP, ClogD, MW, HBD and pKa; a hump for TPSA. Each yields a desirability T0 in [0,1], all weighted equally.",
+      "quotation_withheld": "Wager 2010 is ACS-copyrighted and not in the PMC open-access subset. The locator is given so the passage can be read at the source.",
       "location": "Results and Discussion, 'A CNS Multiparameter Optimization and Desirability Score'"
     },
     "linear_interpolation": {
       "source_id": "wager2010_cnsmpo_pmc_web",
-      "quote": "a monotonic decreasing function is defined by a desirable region if the property x <= x1 and an undesirable region for x > x2. A linear transformation is applied between the two inflection points (x1 < x <= x2). Similarly, a hump function is defined by two undesirable regions and one desirable region, with linear transformation between the inflection points",
+      "paraphrase": "Establishes the interpolation rule: a monotonic function is 1.0 up to x1, 0.0 beyond x2, and linear between the two inflection points; a hump has one desirable region between two undesirable ones. These are the x1/x2 encoded per property below.",
+      "quotation_withheld": "Wager 2010 is ACS-copyrighted and not in the PMC open-access subset. The locator is given so the passage can be read at the source.",
       "location": "Results and Discussion + Figure 3 caption"
     },
     "calculators_used_by_the_authors": {
       "source_id": "wager2010_cnsmpo_pmc_web",
-      "quote": "For the work herein, calculated physicochemical properties were obtained using standard commercial packages: Biobyte for ClogP calculations, ACD/Laboratories for ClogD at pH 7.4, and ACD/Laboratories for pKa. For calculation of TPSA, see ref (8).",
+      "paraphrase": "Establishes which commercial packages produced each published input (BioByte for ClogP; ACD/Labs for ClogD7.4 and pKa; a cited method for TPSA) — i.e. the calculator identity is part of the method, not an implementation detail.",
+      "quotation_withheld": "Wager 2010 is ACS-copyrighted and not in the PMC open-access subset. The locator is given so the passage can be read at the source.",
       "location": "Methods",
       "consequence": "Defines the published method for each property input; see calculator_policy_v1.json. RDKit implements neither ClogD(7.4) nor most-basic pKa and must never be substituted for them."
     },
     "score_is_not_a_measurement": {
       "source_id": "wager2010_cnsmpo_pmc_web",
-      "quote": "This analysis suggests that this algorithm could potentially be used to identify compounds with a higher probability of successfully testing hypotheses in the clinic.",
+      "paraphrase": "The authors state the algorithm may help IDENTIFY compounds with a higher probability of success — a design-space heuristic, not a measurement.",
+      "quotation_withheld": "Wager 2010 is ACS-copyrighted and not in the PMC open-access subset. The locator is given so the passage can be read at the source.",
       "location": "Abstract",
       "consequence": "CNS MPO is a design-space desirability score. It is NOT a measured brain concentration, NOT a probability of CNS exposure, and NOT an NEBPI class. Stage 4 never promotes it to any of those."
     }
@@ -119,7 +124,8 @@
   "table1_provenance": {
     "source_id": "wager2010_cnsmpo_pmc_web",
     "table": "Table 1. The CNS MPO Properties, Functions, Weighting, Value Range and Parameter Ranges.",
-    "transcription": "properties | transformation (T0) | weight | more desirable range (T0 = 1.0) | less desirable range (T0 = 0.0) :: ClogP | monotonic decreasing | 1.0 | ClogP <= 3 | ClogP > 5 :: ClogD | monotonic decreasing | 1.0 | ClogD <= 2 | ClogD > 4 :: MW | monotonic decreasing | 1.0 | MW <= 360 | MW > 500 :: TPSA | hump function | 1.0 | 40 < TPSA <= 90 | TPSA <= 20; TPSA > 120 :: HBD | monotonic decreasing | 1.0 | HBD <= 0.5 | HBD > 3.5 :: pKa | monotonic decreasing | 1.0 | pKa <= 8 | pKa > 10"
+    "parameters_encoded_in": "properties[] — transform, weight and the x1/x2 inflection points",
+    "note": "The table itself is NOT reproduced here: the numeric parameters are the method and are encoded per property; the published table is ACS-copyrighted expression."
   },
   "total": {
     "aggregation": "sum_of_six_T0",

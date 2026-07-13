@@ -12,10 +12,20 @@ combined verdict would hide exactly the provenance this stage exists to preserve
 is decision-support — not a prescriber, a PK/tox oracle, or a substitute for clinical,
 regulatory or safety expertise.
 
-> **Status: fixture-only.** No real drug is characterised, ranked, or claimed to be safe,
-> brain-permeable, NEBPI-classified or clinically suitable. Every candidate in this pass is
-> a labelled `FIXTURE-*`. Stage 3 has not landed, no real-source evidence loader is wired,
-> and the production-pointer and selection gates are fail-closed.
+> **Status — stated per gate, because "done" means four different things.**
+>
+> | | |
+> |---|---|
+> | Engine + verifier implemented | **yes** — evidence contract v1 (frozen) and v2 (acquisition) |
+> | Stage-3 → Stage-4 admission wired | **yes** — two gates: Stage-4 restates the bundle byte-for-byte, *and* Stage-3's own `verifier.verify_stage3` must pass out-of-process. Schema-valid is not admitted |
+> | Public acquisition adapters | **yes** — PubChem, RxNorm, DailyMed, openFDA; offline unless `--allow-network` |
+> | Selection-specific real run | **NO** |
+> | Public release | **NO** |
+>
+> **No real drug is characterised, ranked, or claimed to be safe, brain-permeable,
+> NEBPI-classified or clinically suitable.** Every candidate in the test corpus is a labelled
+> `FIXTURE-*`. A real Stage-4 result is gated on an externally admitted real Stage-3 v2 bundle;
+> the production-pointer and selection gates are fail-closed until then.
 
 ## The six lanes
 
@@ -40,10 +50,13 @@ The lanes never merge. The scorecard puts candidates side by side in a declared
   `method/nebpi_grossman2026_v1.json`.
 - **CNS-MPO** — Wager et al., *Moving beyond Rules: The Development of a Central Nervous
   System Multiparameter Optimization (CNS MPO) Approach…*, ACS Chem Neurosci
-  2010;1(6):435–449, **DOI 10.1021/cn100008c**, **PMCID PMC3368654**. Table 1
-  (transformation functions) and Table 2 (published golden scores) are transcribed in
-  `method/cns_mpo_wager2010_v1.json`. CNS-MPO is a **physicochemical heuristic** — a
-  design-space desirability score. It is **not** measured CNS exposure.
+  2010;1(6):435–449, **DOI 10.1021/cn100008c**, **PMCID PMC3368654**. **ACS-copyrighted, and
+  not in the PMC open-access subset**: `method/cns_mpo_wager2010_v1.json` encodes the *numeric
+  parameters* (the transform shape and inflection points per property) and the published golden
+  scores used as arithmetic test vectors, with the locator for each. It does not reproduce the
+  paper's tables or quote its prose, and the article bytes are never committed. CNS-MPO is a
+  **physicochemical heuristic** — a design-space desirability score. It is **not** measured CNS
+  exposure.
 - **Label structure** — LOINC section codes read from live DailyMed SPL responses, not recalled.
 
 **Claude/LLM output is never a scientific source.** There is no `model_output` source type,
@@ -56,8 +69,8 @@ analysis/   the engine — one purpose per module, every file < 500 lines
 method/     source-bound method parameters: the published numbers live here, not in code,
             so editing one moves the method hash and invalidates every cached scorecard set
 schemas/    generated JSON Schema + parquet table contracts (a test guards against drift)
-tests/      195 tests, no network. tests/fixtures/ holds labelled synthetic public-shaped records
-outputs/    <scorecard_set_id>/ — eight artifacts, written atomically (gitignored)
+tests/      1244 tests, no network. tests/fixtures/ holds labelled synthetic public-shaped records
+outputs/    <scorecard_set_id>/ — 19 artifacts (v1) / 21 (v2), written atomically (gitignored)
 ```
 
 ## Public acquisition
@@ -104,6 +117,16 @@ python -m analysis.schemas_export                                 # regenerate s
 # one bounded live probe (TEMODAR/temozolomide — a reference probe, never a candidate)
 SPOT_STAGE4_LIVE=1 SPOT_STAGE4_RUN_ROOT=/tmp/spot-live pytest tests/test_live_reference_smoke.py
 ```
+
+**Tests that read real public bytes are SUPPLIED, never committed.** The bytes are public but
+are not redistributed here (ChEMBL CC BY-SA 3.0, UniProt CC BY 4.0 — see
+[DATA_LICENSES.md](../DATA_LICENSES.md)). Without these the tests **skip**, and say so:
+
+| variable | supplies |
+|---|---|
+| `SPOT_STAGE3_ANNOTATION_CACHE` | the raw ChEMBL/UniProt responses the Stage-3 candidate reconstruction rebuilds its claims from (`acquisition_manifest.json` + `raw/`) |
+| `SPOT_SOURCE_CACHE` | the cited primary-source documents (e.g. `PMC13338342.bioc.xml`), re-hashed against `method/sources.json` |
+| `SPOT_STAGE3_ROOT` | a Stage-3 checkout, so gate 2 (`verifier.verify_stage3`) runs out-of-process |
 
 Environment: `requirements-stage4.lock` — a real solver lock (`pip-compile
 --generate-hashes`), installable with `pip install --require-hashes -r

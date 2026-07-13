@@ -45,18 +45,22 @@ from verifier.nebpi_source import NebpiRereadError, load_source, reread, verify
 
 import fixtures as fx
 
-CACHE = "/home/tcelab/.spot-runs/20260712T021343Z/references"
+# The primary-source cache lives OUTSIDE the tree (public-data-only rule): raw article bytes
+# are never committed. Point SPOT_SOURCE_CACHE at it; without it these tests skip rather than
+# bind one machine's path into the suite.
+CACHE = os.environ.get("SPOT_SOURCE_CACHE", "")
 METHOD_FILE = os.path.join(METHOD_DIR, "nebpi_grossman2026_v1.json")
 
 # The bytes this method was transcribed from, recorded so a silent re-pin is impossible.
 PINNED_CONTENT_SHA = "90ffdf2a07f742f58128bdafeeebedb3d3779640884142783152113fc6473937"
 PINNED_RAW_SHA = "8bb0324def170ae1f9aa26e906c8b7327690b8c6eebcd3d3e29f5e5a88b23f47"
 
-SOURCE_AVAILABLE = os.path.exists(os.path.join(CACHE, "PMC13338342.bioc.xml"))
+SOURCE_AVAILABLE = bool(CACHE) and os.path.exists(os.path.join(CACHE, "PMC13338342.bioc.xml"))
 needs_source = pytest.mark.skipif(
     not SOURCE_AVAILABLE,
-    reason=f"the NEBPI primary source is not cached at {CACHE}; re-fetch from the "
-           "retrieval_url in method/sources.json")
+    reason="the NEBPI primary source is not cached: set SPOT_SOURCE_CACHE to a directory "
+           "holding PMC13338342.bioc.xml, re-fetched from the retrieval_url in "
+           "method/sources.json")
 
 
 @pytest.fixture(scope="module")

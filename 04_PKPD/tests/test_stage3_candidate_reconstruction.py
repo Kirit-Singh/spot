@@ -31,7 +31,27 @@ from analysis.stage3_annotation import adapt_annotation_bundle
 
 FIXTURES = os.path.join(STAGE4_DIR, "tests", "fixtures", "stage3_annotation")
 BUNDLE = os.path.join(FIXTURES, "s3_0b119088734643bf")
-CACHE = os.path.join(FIXTURES, "cache")
+
+# The raw ChEMBL/UniProt response bytes these tests reconstruct from are REAL public responses.
+# They used to be tracked here, under `fixtures/stage3_annotation/cache/` — 26 files that the
+# repo's own rule forbids ("Git holds small synthetic fixtures and manifests only") and that
+# `DATA_LICENSES.md` denied existed. ChEMBL is CC BY-SA 3.0, not MIT.
+#
+# So the cache is SUPPLIED, not committed: point `SPOT_STAGE3_ANNOTATION_CACHE` at it. Without it
+# these tests skip — a reconstruction from bytes nobody has is not a check that passed, and saying
+# so is the point.
+#
+# Deliberately NOT `SPOT_STAGE3_CACHE_ROOT`: that one is the pinned acquisition cache of the
+# two-gate verifier context, which refuses a half-configured set of roots
+# (`stage3_verifier_context_incomplete`). Borrowing it here would set one of the four and turn a
+# real admission guard into a configuration error.
+CACHE = os.environ.get("SPOT_STAGE3_ANNOTATION_CACHE", "")
+CACHE_AVAILABLE = bool(CACHE) and os.path.exists(os.path.join(CACHE, "acquisition_manifest.json"))
+needs_cache = pytest.mark.skipif(
+    not CACHE_AVAILABLE,
+    reason="no acquisition cache supplied: set SPOT_STAGE3_ANNOTATION_CACHE to a directory "
+           "holding acquisition_manifest.json + raw/. The bytes are public but are not "
+           "redistributed in this repo (ChEMBL CC BY-SA 3.0, UniProt CC BY 4.0).")
 
 # How many queued candidates to reconstruct from raw bytes. The task asks for >= 2; every
 # candidate whose moiety is reachable in the raw ChEMBL molecule pages is reconstructed.
@@ -92,6 +112,7 @@ def raw_molecules():
     return _chembl_molecules()
 
 
+@needs_cache
 def test_the_raw_cache_bytes_hash_to_the_acquisition_manifest():
     """If the bytes moved, nothing below is evidence of anything."""
     acquired = [e for e in _acquisition_entries()
@@ -103,6 +124,7 @@ def test_the_raw_cache_bytes_hash_to_the_acquisition_manifest():
         assert len(raw) == e["raw_bytes"]
 
 
+@needs_cache
 def test_at_least_two_queued_candidates_reconstruct_from_the_raw_bytes(
         admission, raw_molecules):
     """The moiety, its name and its development state come from the raw response — or not at all."""
@@ -143,6 +165,7 @@ def test_at_least_two_queued_candidates_reconstruct_from_the_raw_bytes(
         f"bytes; at least {MIN_SAMPLED} must be")
 
 
+@needs_cache
 def test_every_edge_rests_on_a_mechanism_the_raw_bytes_actually_state(admission):
     """No mechanism assertion may exist that the raw ChEMBL response does not state."""
     mechanisms = _chembl_mechanisms()
@@ -166,6 +189,7 @@ def test_every_edge_rests_on_a_mechanism_the_raw_bytes_actually_state(admission)
         f"only {checked} mechanism assertion(s) were traceable to raw bytes")
 
 
+@needs_cache
 def test_a_candidate_is_never_queued_without_a_moiety_the_sources_resolve(admission):
     """Every queued candidate resolves to a real, source-backed active moiety."""
     moieties = {m["active_moiety_id"]: m
@@ -178,6 +202,7 @@ def test_a_candidate_is_never_queued_without_a_moiety_the_sources_resolve(admiss
             f"{q.candidate_id} was queued with no resolved ChEMBL identity")
 
 
+@needs_cache
 def test_potency_is_not_evaluated_and_that_is_not_zero(admission):
     """`not_evaluated` means potency was NOT ACQUIRED — not zero, not absence of activity."""
     rows = pq.read_table(os.path.join(BUNDLE, "potency_evidence.parquet")).to_pylist()
