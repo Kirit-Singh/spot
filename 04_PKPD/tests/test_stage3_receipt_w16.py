@@ -361,3 +361,119 @@ def test_W16s_receipt_hash_rule_REPRODUCES_exactly():
         {k: v for k, v in view.items() if k not in ("view_id", "view_content_sha256")})
     assert content == receipt["view"]["view_content_sha256"]
     assert receipt["view"]["view_id"] == content[:16]
+
+
+# ================== THE DOOR: the gate must run in PRODUCTION, not only in its own tests
+#
+# `build_v2_projection` had NO production caller. Every gate in the membership seam — the receipt
+# re-hash, the ordered A/B roles, the exactly-one typed column, the join reconciliation — was
+# reachable only from the tests that were written for it. A gate with no caller is a gate that never
+# runs, and a suite that is its only consumer proves the code works, not that the pipeline uses it.
+
+def _cli(*argv) -> tuple[int, str]:
+    import contextlib
+    import io
+
+    from analysis.run_stage4 import main
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        code = main(list(argv))
+    return code, buf.getvalue()
+
+
+@real_bytes
+def test_the_CLI_native_v2_door_RUNS_the_membership_seam_on_W16s_real_bytes(tmp_path):
+    """The contract path: W16's real receipt + view, through the actual `run_stage4` dispatch."""
+    out = os.path.join(str(tmp_path), "out")
+    code, log = _cli("--stage3-membership-receipt", W16_RECEIPT,
+                     "--stage3-membership-bundle", W16_BUNDLE, "--outputs-root", out)
+
+    assert code == 0, log
+    assert "verdict=admit" in log and "artifact_class=fixture" in log
+    assert "typed placements" in log
+    # And it says, in the run's own output, that this is not a result.
+    assert "no drug fetched" in log
+
+    with open(os.path.join(out, "browser_projection.v2.json"), encoding="utf-8") as fh:
+        doc = json.load(fh)
+    assert doc["counts"]["n_displayed"] > 0
+    assert doc["source_is_selection_view"] is True
+    assert doc["store_is_global_and_was_not_filtered"] is False
+    assert "_view_document" not in json.dumps(doc)
+
+
+@real_bytes
+def test_the_CLI_PRODUCTION_path_REFUSES_the_fixture_BY_NAME(tmp_path):
+    """`artifact_class: fixture` is the real SHAPE — real producer, real verifier — but it is not a
+    result. Publishing it would publish a fixture as a finding. Refused BY NAME, not incidentally,
+    so the refusal says what is actually wrong."""
+    out = os.path.join(str(tmp_path), "out")
+    code, log = _cli("--stage3-membership-receipt", W16_RECEIPT,
+                     "--stage3-membership-bundle", W16_BUNDLE, "--outputs-root", out,
+                     "--write-production-pointer")
+
+    assert code == 2, log
+    assert "REFUSED [stage3_bundle_is_a_fixture]" in log
+    # Nothing was published.
+    assert not os.path.exists(os.path.join(out, "current.json"))
+
+
+@real_bytes
+def test_the_CLI_door_REFUSES_a_receipt_with_NO_bundle(tmp_path):
+    """A receipt is a claim ABOUT bytes; without the bundle nothing it names could be re-hashed."""
+    out = os.path.join(str(tmp_path), "out")
+    code, log = _cli("--stage3-membership-receipt", W16_RECEIPT, "--outputs-root", out)
+
+    assert code == 2, log
+    assert "stage3_membership_bundle_required" in log
+
+
+@real_bytes
+def test_the_CLI_door_REFUSES_an_ALTERED_ON_DISK_receipt(tmp_path):
+    """The door reads the bytes — it does not take the run's word for them."""
+    bundle = _bundle(tmp_path)
+    path = _receipt_path(bundle)
+    with open(path, encoding="utf-8") as fh:
+        on_disk = json.load(fh)
+    on_disk["verdict"] = "admit"
+    on_disk["store"]["store_manifest_sha256"] = "9" * 64      # edited after sealing
+    _write(path, on_disk)
+
+    out = os.path.join(str(tmp_path), "out")
+    code, log = _cli("--stage3-membership-receipt", path,
+                     "--stage3-membership-bundle", bundle, "--outputs-root", out)
+
+    assert code == 2, log
+    assert "stage4_stage3_receipt_self_hash_does_not_recompute" in log
+
+
+@real_bytes
+def test_the_CLI_door_REFUSES_a_SUBSTITUTED_caller_view(tmp_path):
+    """The forged-question attack, through the door: the receipt and the receipt's own view stay
+    untouched on disk, and a DIFFERENT view is dropped into the bundle at the path the receipt
+    names. The receipt no longer describes the bytes it points at."""
+    bundle = _bundle(tmp_path)
+    view_path = os.path.join(bundle, "selection_view.fixture.v1.json")
+    with open(view_path, encoding="utf-8") as fh:
+        view = json.load(fh)
+    view["selection"]["question_id"] = "FORGED_QUESTION_ID"
+    _write(view_path, view)          # substituted; the receipt's view hashes are now stale
+
+    out = os.path.join(str(tmp_path), "out")
+    code, log = _cli("--stage3-membership-receipt", _receipt_path(bundle),
+                     "--stage3-membership-bundle", bundle, "--outputs-root", out)
+
+    assert code == 2, log
+    assert "stage4_stage3_view_does_not_rehash_to_its_receipt" in log
+    assert "FORGED_QUESTION_ID" not in log
+
+
+@real_bytes
+def test_the_LEGACY_doors_are_UNTOUCHED():
+    """The native-v2 door is added beside them, never in place of them."""
+    from analysis.run_stage4 import run_annotation_door, run_stage3_door  # noqa: F401
+
+    code, log = _cli("--stage3-membership-receipt", W16_RECEIPT,
+                     "--stage3-annotation-bundle", W16_BUNDLE)
+    assert code == 2, log          # exactly ONE door per run

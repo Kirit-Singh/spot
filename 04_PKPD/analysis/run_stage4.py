@@ -15,6 +15,12 @@ bundle is admitted on gate 1 alone and the run is NOT a data-bound integration.
 
 The doors, and no others:
 
+  --stage3-membership-receipt + --stage3-membership-bundle
+                    NATIVE v2. W16's `spot.stage03_membership_receipt.v1`, READ FROM DISK: every
+                    hash it states is recomputed, and the hash-bound selection view it names is
+                    what gets projected -- never a copy the caller passes in. A production pointer
+                    is REFUSED for a fixture BY NAME (`stage3_bundle_is_a_fixture`).
+
   --stage3-annotation-bundle  the current frozen-Stage-3 contract. Admits only rows with
                     stage4_assessment_status=queued; an assessment is not promotion. With
                     --require-external-verifier a bundle Stage-3's own verifier never passed is
@@ -65,6 +71,7 @@ from .contracts import Namespace
 from .evidence_bundle import is_empty, load_evidence_bundle
 from .emit import emit
 from .firewall import Rejection
+from .membership_door import run_membership_door
 from .contract_version import SCHEMA_TO_VERSION, ContractVersion
 from .method_config import STAGE4_DIR, MethodBundle, load_method_bundle
 from .pipeline import Stage4Inputs, Stage4Result, run_pipeline
@@ -446,6 +453,18 @@ def main(argv: Optional[list[str]] = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage3-bundle",
                     help="a real Stage-3 emission: the bundle directory, or the document in it")
+    ap.add_argument("--stage3-membership-receipt",
+                    help="NATIVE v2: the path to W16's spot.stage03_membership_receipt.v1 on disk. "
+                         "Its bytes are read and every hash it states is recomputed; a receipt "
+                         "handed over in memory is refused.")
+    ap.add_argument("--stage3-membership-bundle",
+                    help="NATIVE v2: the bundle directory the receipt's `view.path` resolves "
+                         "against. Required with --stage3-membership-receipt: without it nothing "
+                         "the receipt names could be re-hashed.")
+    ap.add_argument("--stage3-store-dir",
+                    help="NATIVE v2, optional: the directory holding the store's parquet. Supplied "
+                         "-> the corroborating tables are re-hashed against store.table_hashes and "
+                         "the projection may claim the global store.")
     ap.add_argument("--stage3-annotation-bundle",
                     help="a Stage-3 spot.stage03_drug_annotation.v1 bundle directory "
                          "(artifact_class=analysis). Admits only rows with "
@@ -467,7 +486,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = ap.parse_args(argv)
 
     doors = [bool(args.stage3_bundle), bool(args.stage3_annotation_bundle),
-             bool(args.fixtures)]
+             bool(args.fixtures), bool(args.stage3_membership_receipt)]
     if sum(doors) != 1:
         print("REFUSED [no_input] supply exactly one of --stage3-bundle, "
               "--stage3-annotation-bundle or --fixtures", file=sys.stderr)
@@ -498,6 +517,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "reported as success, is the worst of the three outcomes.",
             )
 
+        if args.stage3_membership_receipt:
+            if not args.stage3_membership_bundle:
+                print("REFUSED [stage3_membership_bundle_required] --stage3-membership-receipt "
+                      "needs --stage3-membership-bundle: without the bundle nothing the receipt "
+                      "names could be re-hashed, and a receipt is a claim ABOUT bytes.")
+                return 2
+            return run_membership_door(args.stage3_membership_receipt,
+                                       args.stage3_membership_bundle, args.outputs_root,
+                                       args.write_production_pointer, args.stage3_store_dir)
         if args.stage3_annotation_bundle:
             return run_annotation_door(args.stage3_annotation_bundle, args.evidence_bundle,
                                        args.outputs_root, args.receipt_out,
