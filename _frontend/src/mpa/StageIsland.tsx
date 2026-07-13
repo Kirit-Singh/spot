@@ -135,12 +135,16 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
       }
     : undefined;
 
-  // The drawer manifest: the REAL method-definition manifest once resolved, else the honest
-  // pre-resolution fallback (source-tissue only; other definition rows + run details are OMITTED and
-  // the drawer shows ONE route status — no "unavailable" wall). The harness may internally call
-  // missing run fields "unavailable", but they are ABSENT from the DOM in this pending state. Never
-  // blocks on result admission; never a synthetic fixture.
-  const methodsManifest = prod.manifest ?? unavailableManifest(subtitle);
+  // The drawer manifest, in fail-closed precedence:
+  //   1. prod.real.manifest — an ADMITTED run: the STATIC route method-definition MERGED with the
+  //      admitted run's exact code / environment / run-UTC / generator / verifier / artifacts /
+  //      reproduce command / Claude-Science notebook (mergeAdmittedManifest, after the release manifest
+  //      passes parseUiReleaseManifest). isRunBound → true, so the drawer shows the real run rows.
+  //   2. prod.manifest — the static, content-addressed route method-DEFINITION (no admitted bundle):
+  //      run-status stays collapsed to the ONE-LINE unbound status row.
+  //   3. the honest pre-resolution fallback (source-tissue only; other rows omitted; one status row).
+  // Never blocks on result admission; never a synthetic fixture.
+  const methodsManifest = prod.real?.manifest ?? prod.manifest ?? unavailableManifest(subtitle);
 
   return (
     <PageShell

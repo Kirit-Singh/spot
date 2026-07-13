@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import type { Provenance } from '../domain/common';
 import type { Stage1Bindings, StageSelection } from '../domain/selection';
 import type { MethodsBlock, ProvenanceBlock, SourceChainLink, StageMethodsManifest } from '../domain/methodsManifest';
+import { isAdmittedVerifier } from '../domain/uiReleaseManifest';
 import type { DrawerSection, ProvNote } from './provenanceContext';
 import { NamespaceChip, EligibilityChip } from './chips';
 
@@ -151,16 +152,9 @@ function stepHeadings(stageLabel: string): { estimand: string; masks: string } {
   return STEP_HEADINGS[stageLabel] ?? { estimand: 'Estimand', masks: 'Masks & QC' };
 }
 
-// Strict, ANCHORED admission vocabulary — the WHOLE normalized verifier status must equal one of
-// these exact tokens. Substring matching is unsafe ("not passed" contains "pass"; "unverified"
-// contains "verified"), so a phrase like "not passed" / "pending independent verification" / "failed"
-// is NOT admitted. A future manifest binds the exact admitted token its schema specifies.
-const ADMITTED_VERIFIER_TOKENS = new Set(['admit', 'admitted', 'pass', 'passed', 'verified', 'ok']);
-/** True only when the verifier status is EXACTLY an admitted token (normalized, whole-string). */
-export function isAdmittedVerifier(status: string | null): boolean {
-  if (!status) return false;
-  return ADMITTED_VERIFIER_TOKENS.has(status.trim().toLowerCase());
-}
+// The admission vocabulary is the single source of truth in the domain (shared with the fail-closed
+// UI-release-manifest adapter). Re-exported here for existing importers.
+export { isAdmittedVerifier };
 
 /** Whether a COMPLETE admitted-run identity is bound. FAIL-CLOSED: every required run field must be
  *  present (release + raw + canonical + generator + an ADMITTED verifier + nonempty artifacts +

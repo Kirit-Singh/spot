@@ -29,6 +29,9 @@ import { manifestFromProvenance } from '../../domain/methodsManifest';
 import type { Provenance } from '../../domain/common';
 import { StageIsland } from '../StageIsland';
 import { ProvenanceDrawer } from '../../shell/ProvenanceDrawer';
+import { mergeAdmittedManifest } from '../../adapters/uiReleaseManifestAdapter';
+import { UI_RELEASE_SCHEMA_VERSION } from '../../domain/uiReleaseManifest';
+import type { UiReleaseManifest } from '../../domain/uiReleaseManifest';
 import { PAGES } from '../pages';
 import type { PageKey } from '../pages';
 
@@ -389,6 +392,40 @@ describe('CLEAN unbound state — one route status, exactly zero "unavailable" (
     expect((await buildStageMethodsManifest('pksafety')).methods.method_id).toContain('stage4-evidence-v2');
     expect((await buildStageMethodsManifest('pksafety')).methods.upstream_model).toContain('spot.stage03_drug_annotation.v1');
     expect((await buildStageMethodsManifest('targets')).methods.method_id).toContain('masked_program_projection');
+  });
+
+  it('an ADMITTED merged manifest binds the real run rows + reproduce (no unbound status row)', async () => {
+    const staticDef = await buildStageMethodsManifest('targets');
+    const admitted: UiReleaseManifest = {
+      schema_version: UI_RELEASE_SCHEMA_VERSION,
+      stage_label: 'Targets',
+      method_id: staticDef.methods.method_id!,
+      release_revision: 'spot.stage02.direct@rev1',
+      raw_sha256: 'a'.repeat(64),
+      canonical_sha256: 'b'.repeat(64),
+      method_code_sha256: 'c'.repeat(64),
+      environment: 'conda:stage2@lock-9f1',
+      last_run_utc: '2026-07-13T04:00:00Z',
+      generator_status: 'generated',
+      verifier_status: 'admitted',
+      reproduce_command: 'cd 02_geneskew && python -m analysis.direct.run_arms --condition Rest --out-root $OUT',
+      cs_notebook_url: 'https://science.example.org/notebooks/stage02-abc',
+      artifact_paths: ['out/arms/bundle.json'],
+      source_artifact_ids: ['marson2025_gwcd4_perturbseq@c355f535'],
+    };
+    const merged = mergeAdmittedManifest(staticDef, admitted);
+    render(<ProvenanceDrawer open title="Targets" provenance={null} methods={merged} onClose={() => {}} />);
+    const d = screen.getByRole('dialog');
+    expect(within(d).queryByText('No admitted Stage-2 run bundle bound')).toBeNull(); // unbound status REPLACED
+    expect(within(d).getByText('Release')).toBeInTheDocument();
+    expect(within(d).getByText('Last run UTC')).toBeInTheDocument();
+    expect(within(d).getByText('Code sha256')).toBeInTheDocument();
+    expect(d).toHaveTextContent('2026-07-13T04:00:00Z');
+    expect(d).toHaveTextContent('spot.stage02.direct@rev1');
+    expect(within(d).getByRole('button', { name: /Copy reproduce command/ })).toBeInTheDocument();
+    expect(d).toHaveTextContent(/run_arms --condition Rest/);
+    expect(d).toHaveTextContent('marson2025_gwcd4_perturbseq@c355f535'); // preserved source artifact id
+    expect(d).toHaveTextContent(/Direct & temporal effects/); // static definition preserved
   });
 
   it('the "no admitted P2S bundle bound" status appears EXACTLY once, only on Targets (neutral Reference label)', async () => {
