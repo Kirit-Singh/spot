@@ -332,26 +332,96 @@ class TestA11_NonFinite:
         assert V.V2_ANCHOR in f or V.V2_FINITE in f
 
 
-class TestA3_GeneAxisPermutation:
-    def test_a_permuted_axis_is_REJECTED(self, shipped):
+def _write_axis(axis_path, ids):
+    tbl = pa.table({"gene_id": pa.array(ids, pa.string())})
+    with pa.OSFile(axis_path, "wb") as sink:
+        with pa.ipc.new_file(sink, tbl.schema) as w:
+            w.write_table(tbl, max_chunksize=len(ids))
+
+
+def _reseal_axis(shipped, perm):
+    """Re-seal EVERY hash that references the gene axis: the gene_axis block, the matrix and
+    mask canonical descriptors (both hash gene_axis_sha256), the manifest identity, the ref and
+    the run id. The forgery is then internally self-consistent — superficially well-formed."""
+    axis_path = os.path.join(shipped["matrix_root"], "gene_axis.arrow")
+    _write_axis(axis_path, perm)
+    man = _man(shipped)
+    n_genes = man["n_genes"]
+    raw = R.sha256_file(axis_path)
+    man["gene_axis"]["raw_sha256"] = raw
+    man["gene_axis"]["canonical_sha256"] = R.content_sha256(perm)
+    man["gene_axis"]["readout_universe_sha256"] = R.content_sha256(perm)
+    tgt, _v = _read_matrix(os.path.join(shipped["cond_dir"], "signatures.matrix.arrow"), n_genes)
+    man["matrix"]["canonical_sha256"] = V.matrix_canonical(
+        man["condition"], tgt, man["matrix"]["values_sha256"], raw, n_genes)
+    man["mask"]["canonical_sha256"] = V.mask_canonical(
+        man["condition"], tgt, man["matrix"]["values_sha256"], man["mask"]["bits_sha256"],
+        raw, n_genes)
+    write_manifest(shipped, man)
+    sync_identity(shipped)
+
+
+class TestA3_GeneAxisAlignment:
+    """A permuted axis transposes every signature: gene_ids[j] now labels a value that belongs
+    to a different gene. The real axis is SORTED, so a test that merely reverses it and leaves a
+    stale hash proves nothing — a real forger reseals every hash. These reseal EVERYTHING and
+    prove the verifier still refuses, because it re-derives the axis from the pinned de_main."""
+
+    def test_a_FULLY_RESEALED_axis_permutation_is_REJECTED(self, shipped):
+        # swap two ADJACENT genes — a minimal, non-obvious permutation — and reseal every hash.
         axis_path = os.path.join(shipped["matrix_root"], "gene_axis.arrow")
         ids = [str(x) for x in pa.ipc.open_file(
             pa.memory_map(axis_path)).read_all().column("gene_id").to_pylist()]
-        perm = ids[::-1]
-        if perm == ids:
+        if len(ids) < 2:
             pytest.skip("degenerate axis")
-        with pa.OSFile(axis_path, "wb") as sink:
-            with pa.ipc.new_file(sink, pa.table(
-                    {"gene_id": pa.array(perm, pa.string())}).schema) as w:
-                w.write_table(pa.table({"gene_id": pa.array(perm, pa.string())}),
-                              max_chunksize=len(perm))
+        perm = list(ids)
+        perm[0], perm[1] = perm[1], perm[0]
+        _reseal_axis(shipped, perm)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT
+        assert V.V3 in failed(r)                 # the de_main order anchor — reseal-proof
+        assert V.V2_CANON not in failed(r)       # every internal hash was resealed
+        assert V.V_IDENTITY not in failed(r)     # the run id re-derives
+
+    def test_a_CONSISTENT_axis_value_and_bitmap_permutation_is_REJECTED(self, shipped):
+        # the subtle one: permute the axis AND the matrix columns AND the bitmap columns TOGETHER
+        # for a pair of genes with DIFFERENT values, so gene_ids[j] still labels values[:, j] and
+        # bitmap[:, j] — the gene->value and gene->mask mappings are intact (reconstruct is
+        # unchanged: V6 passes, the mask still matches the Direct table: V_EXTERNAL_MASK passes) —
+        # but the (axis, values) PAIR no longer matches de_main. ONLY the two de_main
+        # re-derivations catch it: the axis order (V3) and the value bytes (V2 anchor).
         man = _man(shipped)
-        man["gene_axis"]["raw_sha256"] = R.sha256_file(axis_path)
-        man["gene_axis"]["canonical_sha256"] = R.content_sha256(perm)
-        man["gene_axis"]["readout_universe_sha256"] = R.content_sha256(perm)
-        write_manifest(shipped, man)
-        sync_identity(shipped)
-        assert V.V3 in failed(verify(shipped))
+        n_genes, width = man["n_genes"], man["bitmap_width_bytes"]
+        axis_path = os.path.join(shipped["matrix_root"], "gene_axis.arrow")
+        ids = [str(x) for x in pa.ipc.open_file(
+            pa.memory_map(axis_path)).read_all().column("gene_id").to_pylist()]
+        m_path = os.path.join(shipped["cond_dir"], "signatures.matrix.arrow")
+        k_path = os.path.join(shipped["cond_dir"], "signatures.mask.arrow")
+        tgt, vals = _read_matrix(m_path, n_genes)
+        ktgt, bmp = _read_mask(k_path, width)
+        # a gene pair whose value columns genuinely differ (else the swap is a no-op)
+        pair = next(((i, j) for i in range(n_genes) for j in range(i + 1, n_genes)
+                     if not np.array_equal(vals[:, i], vals[:, j])), None)
+        if pair is None:
+            pytest.skip("all value columns are identical")
+        i, j = pair
+        perm = list(ids)
+        perm[i], perm[j] = perm[j], perm[i]
+        vals = vals.copy()
+        vals[:, [i, j]] = vals[:, [j, i]]
+        bits = np.unpackbits(bmp, axis=1)[:, :n_genes]
+        bits[:, [i, j]] = bits[:, [j, i]]
+        bmp2 = np.packbits(bits, axis=1)
+        _write_matrix(m_path, tgt, vals)
+        _write_mask(k_path, ktgt, bmp2)
+        reseal_matrix(shipped, tgt, vals)
+        reseal_mask(shipped, ktgt, bmp2)
+        _reseal_axis(shipped, perm)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT
+        f = failed(r)
+        assert V.V3 in f and V.V2_ANCHOR in f    # ONLY the de_main re-derivations catch it
+        assert V.V6 not in f and V.V_EXTERNAL_MASK not in f   # the internal alignment is intact
 
 
 # =========================================================================== #
