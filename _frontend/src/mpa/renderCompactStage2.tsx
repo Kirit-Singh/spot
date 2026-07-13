@@ -145,6 +145,7 @@ export function renderCompactTargets(view: CompactStage2SelectionView): React.Re
 }
 
 export function renderCompactPathways(view: CompactStage2SelectionView): React.ReactNode {
+  if (!view.pathwayArmA || !view.pathwayArmB) return null;
   return (
     <div data-real-canvas data-route="pathways" className={CANVAS}>
       <ReleaseStrip view={view} />

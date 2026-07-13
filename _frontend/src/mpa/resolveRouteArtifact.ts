@@ -223,7 +223,7 @@ export async function loadProductionProjection(
     if ((await sha256Hex(canonicalJson(receiptRaw))) !== meta.independent_verifier.receipt_canonical_sha256) return null;
     parseCompactDisplayReceipt(receiptRaw, proj.n_arms);
 
-    return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection) };
+    return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection, routeKey) };
   } catch {
     return null; // strict-parse rejection / view-resolution failure → unbound
   }

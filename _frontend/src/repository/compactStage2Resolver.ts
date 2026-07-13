@@ -51,6 +51,7 @@ export function resolveCompactStage2Selection(
   projection: CompactStage2Projection,
   metadata: CompactStage2ReleaseMetadata,
   selection: SelectionV3,
+  route: 'targets' | 'pathways' | 'all' = 'all',
 ): CompactStage2SelectionView {
   validateReleaseAxes(projection, metadata);
   const released = metadata.release_conditions;
@@ -72,8 +73,8 @@ export function resolveCompactStage2Selection(
       pathway_context: 'condition_matched',
       geneArmA: targetArm(projection, directArmKey(selection.A.program_id, changeA, condition), 'direct'),
       geneArmB: targetArm(projection, directArmKey(selection.B.program_id, changeB, condition), 'direct'),
-      pathwayArmA: pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, condition, source)),
-      pathwayArmB: pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, condition, source)),
+      pathwayArmA: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, condition, source)),
+      pathwayArmB: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, condition, source)),
     };
   }
 
@@ -88,7 +89,7 @@ export function resolveCompactStage2Selection(
     pathway_context: 'endpoint_pathway_context',
     geneArmA: targetArm(projection, temporalArmKey(selection.A.program_id, changeA, from, to), 'temporal'),
     geneArmB: targetArm(projection, temporalArmKey(selection.B.program_id, changeB, from, to), 'temporal'),
-    pathwayArmA: pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, from, source)),
-    pathwayArmB: pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, to, source)),
+    pathwayArmA: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, from, source)),
+    pathwayArmB: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, to, source)),
   };
 }
