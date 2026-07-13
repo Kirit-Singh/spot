@@ -65,6 +65,55 @@ class TestThePhysicalContract:
         assert ref["reduction_order_id"] == \
             "spot.stage02.convergence.reduction.sorted_gene_left_fold.v1"
 
+    def test_the_reference_binds_the_SHARED_MANIFEST_and_it_is_NEVER_NULL(self, built):
+        """It WAS null, silently. `write()` adds `manifest_sha256` to the dict AFTER dumping
+        the JSON, so the manifest ON DISK never carried it, and the producer — which reloads
+        the shipped file — bound `None` via `.get()`.
+
+        A null manifest hash is not cosmetic. It is the one binding that says WHICH shared
+        matrix a bundle is entitled to read. Without it, Rest's matrix can be served as
+        Stim8hr's and the schemas would agree — nothing else would notice.
+        """
+        res, _, prov, _ = built
+        for ref in (prov["run_binding"]["signature_ref"],
+                    json.load(open(os.path.join(res["out_dir"], "signature_ref.json")))):
+            assert ref["signature_manifest_sha256"] is not None
+            assert len(ref["signature_manifest_raw_sha256"]) == 64
+            assert len(ref["signature_manifest_canonical_sha256"]) == 64
+
+    def test_the_AMENDED_BITMAP_COUNTS_are_bound_into_the_run_identity(self, built):
+        # not merely covered by the manifest hash: carried, so a swapped count cannot survive
+        _, doc, prov, _ = built
+        ref = prov["run_binding"]["signature_ref"]
+        for key in ("n_unresolved_no_signature", "n_resolved_all_ones",
+                    "n_resolved_no_masked_readout_gene",
+                    "n_resolved_masked_readout_genes"):
+            assert isinstance(ref[key], int), key
+        assert ref["bitmap_rule_id"] == \
+            "spot.stage02.signature.bitmap_zeros_are_the_mask_axis_intersection.v2"
+        assert len(ref["source_mask_sha256"]) == 64
+        assert doc["method"]["bitmap_rule_id"] == ref["bitmap_rule_id"]
+
+    def test_the_two_all_ones_counts_AGREE_in_the_binding(self, built):
+        _, _, prov, _ = built
+        ref = prov["run_binding"]["signature_ref"]
+        assert ref["n_resolved_all_ones"] == ref["n_resolved_no_masked_readout_gene"]
+
+    def test_the_manifest_identity_is_IN_the_pathway_run_id(self, built):
+        # a reference outside the id could be swapped after the fact and keep the id
+        from direct.hashing import canonical_json, sha256_hex
+        _, _, prov, _ = built
+        assert prov["run_binding"]["signature_ref"]["signature_manifest_raw_sha256"]
+        full = sha256_hex(canonical_json(prov["run_binding"]))
+        assert prov["pathway_run_id"] == full[:16]
+
+    def test_a_reference_with_NO_manifest_identity_is_REFUSED_not_defaulted(self, built):
+        from direct import signature_matrix as sm
+        with pytest.raises(sm.SignatureMatrixError) as exc:
+            sm.signature_ref(manifest={}, condition="Rest", source="go_bp",
+                             member_target_ids=[])
+        assert exc.value.gate == sm.REFUSE_MANIFEST_IDENTITY_ABSENT
+
     def test_the_reference_binds_the_MATRIX_and_the_BITMAP_hashes(self, built):
         _, _, prov, _ = built
         ref = prov["run_binding"]["signature_ref"]

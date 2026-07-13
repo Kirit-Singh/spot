@@ -69,12 +69,50 @@ REDUCTION_ORDER_ID = "spot.stage02.convergence.reduction.sorted_gene_left_fold.v
 MASK_RULE_ID = "spot.stage02.direct.mask.build_estimate_mask.v1"
 MEMBER_RULE_ID = "spot.stage02.pathway.members.genes_target_intersect_resolved.v1"
 
+# THE BITMAP RULE, amended after W7's production-size Step 0 (P5/V5/A5).
+#
+# The original gate asserted that a RESOLVED row can never be all-ones, on the reasoning that
+# build_estimate_mask always masks the target's own gene. That reasoning is right about the
+# BIOLOGICAL mask and wrong about the BITMAP, and the difference is a whole gene universe:
+#
+#   the mask is derived in the TARGET universe   (11,526 perturbed genes)
+#   the bitmap is written over the READOUT axis  (10,282 measured genes)
+#
+# 1,217-1,243 resolved targets per condition have a perfectly good non-empty mask — the target,
+# its 30kb neighbours, its contributing guides' off-targets — NONE of which is a readout gene.
+# Their mask INTERSECTED WITH THE AXIS is empty, so no readout gene is masked, so the row is
+# legitimately all-ones. The old gate called that a producer bug and refused ~11% of every
+# condition.
+#
+# The rule that is actually true, and is what is enforced now:
+#
+#   the bitmap's ZERO bits == (source mask INTERSECT readout axis), EXACTLY.
+#
+# Everything else follows from it. An empty intersection means a valid all-ones row, and it
+# carries an explicit disposition and the binding of its NON-EMPTY source mask, so "no readout
+# gene was masked" can never be confused with "no mask was derived". A NON-empty intersection
+# with an all-ones row is still a refusal — that one really is a bug.
+BITMAP_RULE_ID = "spot.stage02.signature.bitmap_zeros_are_the_mask_axis_intersection.v2"
+BITMAP_RULE = (
+    "a bitmap zero bit means the readout gene is IN (source mask INTERSECT readout axis); the "
+    "zeros equal that intersection exactly. An all-zero row means UNRESOLVED / no signature. "
+    "An all-ones row is VALID iff the intersection is empty while the source mask is not — the "
+    "mask lives in the 11,526-gene target universe and the axis is the 10,282-gene readout "
+    "universe, so a real mask can miss the axis entirely")
+
+DISPOSITION_UNRESOLVED = "unresolved_no_signature"
+DISPOSITION_MASKED_READOUT = "resolved_masked_readout_genes"
+DISPOSITION_NO_MASKED_READOUT = "resolved_no_masked_readout_gene"
+
 # ---- P-gates. Every one a refusal; none a warning. ----
 REFUSE_INPUT_PIN_MISMATCH = "REFUSE_INPUT_PIN_MISMATCH"
 REFUSE_MASK_NOT_DERIVED = "REFUSE_MASK_NOT_DERIVED"
 REFUSE_GENE_AXIS_MISMATCH = "REFUSE_GENE_AXIS_MISMATCH"
 REFUSE_ROW_ORDER = "REFUSE_ROW_ORDER"
 REFUSE_RESOLVED_ROW_UNMASKED = "REFUSE_RESOLVED_ROW_UNMASKED"
+REFUSE_BITMAP_NOT_MASK_INTERSECTION = "REFUSE_BITMAP_NOT_MASK_INTERSECTION"
+REFUSE_RESOLVED_SOURCE_MASK_EMPTY = "REFUSE_RESOLVED_SOURCE_MASK_EMPTY"
+REFUSE_MANIFEST_IDENTITY_ABSENT = "REFUSE_MANIFEST_IDENTITY_ABSENT"
 REFUSE_PADDING_BITS = "REFUSE_PADDING_BITS"
 REFUSE_NONFINITE_UNDECLARED = "REFUSE_NONFINITE_UNDECLARED"
 REFUSE_MASK_ARTIFACT_ABSENT = "REFUSE_MASK_ARTIFACT_ABSENT"
@@ -159,15 +197,72 @@ def build(*, condition: str, main: dict[str, Any],
 
     popcount = bits.sum(axis=1)
     resolved = np.array([mask_sets[t] is not None for t in targets])
+    axis_set = set(gene_ids)
 
-    # P5: a resolved target ALWAYS has its own gene masked, so it can never be all-ones.
-    unmasked_resolved = [targets[i] for i in np.nonzero(resolved & (popcount == n_genes))[0]]
-    if unmasked_resolved:
+    # ---- P5 (AMENDED): the bitmap's ZEROS ARE the mask-axis intersection, exactly. ----
+    dispositions: dict[str, str] = {}
+    source_mask: dict[str, list[str]] = {}
+    n_masked_readout: dict[str, int] = {}
+    n_masked_source: dict[str, int] = {}
+    no_masked_readout: list[str] = []
+
+    for i, t in enumerate(targets):
+        ms = mask_sets[t]
+        if ms is None:
+            dispositions[t] = DISPOSITION_UNRESOLVED
+            continue
+
+        # A resolved target's SOURCE mask is never empty — build_estimate_mask always masks
+        # the target itself. An empty one means no mask was derived, and that is not the same
+        # thing as a mask that misses the readout axis.
+        if not ms:
+            _refuse(REFUSE_RESOLVED_SOURCE_MASK_EMPTY,
+                    f"resolved target {t!r} has an EMPTY source mask. build_estimate_mask "
+                    "always masks the intended target — its own repression is QC, never skew "
+                    "evidence — so an empty source mask means the mask was not derived")
+
+        inter = sorted(set(map(str, ms)) & axis_set)
+        zeros = {gene_ids[j] for j in np.nonzero(~bits[i])[0]}
+        # THE RULE. Everything else is a consequence of it.
+        if zeros != set(inter):
+            _refuse(REFUSE_BITMAP_NOT_MASK_INTERSECTION,
+                    f"target {t!r}: the bitmap's zero bits are not the mask-axis "
+                    f"intersection ({len(zeros)} zeros vs {len(inter)} intersected genes). "
+                    "A bitmap that does not say exactly which readout genes were masked is "
+                    "not a mask")
+
+        source_mask[t] = sorted(str(g) for g in ms)
+        n_masked_source[t] = len(ms)
+        n_masked_readout[t] = len(inter)
+        if inter:
+            dispositions[t] = DISPOSITION_MASKED_READOUT
+        else:
+            # VALID, and it must say so out loud: a real, non-empty mask that simply does not
+            # touch the readout axis. Silence here would read as "nothing was masked".
+            dispositions[t] = DISPOSITION_NO_MASKED_READOUT
+            no_masked_readout.append(t)
+
+    # RECOUNTED FROM THE BITMAP, not from the dispositions: two independent statements of the
+    # same fact, so a drift between them can surface. A resolved row is all-ones iff its mask
+    # missed the readout axis entirely, so these two counts MUST agree — and if they ever do
+    # not, one of them is lying and the artifact does not ship.
+    n_resolved_all_ones = int(sum(1 for i in range(len(targets))
+                                  if resolved[i] and popcount[i] == n_genes))
+    if n_resolved_all_ones != len(no_masked_readout):
+        _refuse(REFUSE_BITMAP_NOT_MASK_INTERSECTION,
+                f"{n_resolved_all_ones} resolved rows are all-ones in the BITMAP but "
+                f"{len(no_masked_readout)} targets have an empty mask-axis intersection. A "
+                "resolved row is all-ones exactly when its mask misses the axis; these two "
+                "counts cannot disagree")
+
+    # An all-ones row is a REFUSAL only when the intersection is NOT empty — that one is a bug.
+    bad = [t for i, t in enumerate(targets)
+           if resolved[i] and popcount[i] == n_genes and n_masked_readout.get(t, 0) > 0]
+    if bad:
         _refuse(REFUSE_RESOLVED_ROW_UNMASKED,
-                f"{len(unmasked_resolved)} resolved target(s) have NO masked gene (e.g. "
-                f"{unmasked_resolved[:3]}). build_estimate_mask always masks the intended "
-                "target — its own repression is QC, never skew evidence — so an all-ones "
-                "resolved row means the mask was not derived")
+                f"{len(bad)} resolved target(s) (e.g. {bad[:3]}) mask readout genes and yet "
+                "their bitmap masks none. A row that claims to mask nothing while its mask "
+                "intersects the axis has lost its mask")
 
     # P6: bits beyond n_genes are padding and must be zero. Re-unpacked and checked, not
     # trusted to packbits.
@@ -187,6 +282,18 @@ def build(*, condition: str, main: dict[str, Any],
         "n_genes": n_genes,
         "n_resolved": int(resolved.sum()),
         "n_unresolved_no_signature": int((~resolved).sum()),
+        # THE AMENDED DISPOSITION. A resolved target whose non-empty mask does not touch the
+        # readout axis is a legitimate all-ones row, and it is COUNTED and NAMED rather than
+        # refused — W7 measured 1,217-1,243 of them per condition.
+        "n_resolved_no_masked_readout_gene": len(no_masked_readout),
+        "n_resolved_masked_readout_genes": int(resolved.sum()) - len(no_masked_readout),
+        # the same fact, RECOUNTED from the bitmap itself
+        "n_resolved_all_ones": n_resolved_all_ones,
+        "resolved_no_masked_readout_gene_target_ids": sorted(no_masked_readout),
+        "dispositions": dispositions,
+        "source_mask_sha256": content_hash(source_mask),
+        "n_masked_source": n_masked_source,
+        "n_masked_readout": n_masked_readout,
         "all_values_finite": all_finite,
         "popcount": popcount,
     }
@@ -299,6 +406,27 @@ def write(built: dict[str, Any], *, out_root: str, gene_axis: dict[str, Any],
         "n_targets": built["n_targets"],
         "n_resolved": built["n_resolved"],
         "n_unresolved_no_signature": built["n_unresolved_no_signature"],
+        # AMENDED (P5/V5/A5). A resolved target whose non-empty mask does not intersect the
+        # readout axis has a legitimately all-ones row. W7 measured 1,217-1,243 per condition.
+        # Named and counted, never silent: "no readout gene was masked" and "no mask was
+        # derived" are different states and must not print the same.
+        "bitmap_rule_id": BITMAP_RULE_ID,
+        "bitmap_rule": BITMAP_RULE,
+        "n_resolved_masked_readout_genes": built["n_resolved_masked_readout_genes"],
+        "n_resolved_no_masked_readout_gene": built["n_resolved_no_masked_readout_gene"],
+        # FIRST-CLASS, and recounted from the bitmap rather than restated from the
+        # disposition. W4 recomputes it as #{resolved rows with popcount == n_genes}.
+        "n_resolved_all_ones": built["n_resolved_all_ones"],
+        "resolved_no_masked_readout_gene_target_ids":
+            built["resolved_no_masked_readout_gene_target_ids"],
+        # THE NON-EMPTY SOURCE MASK, bound. It is what proves an all-ones row had a real mask
+        # that simply missed the axis — rather than no mask at all.
+        "source_mask_sha256": built["source_mask_sha256"],
+        "dispositions": {
+            "unresolved_no_signature": DISPOSITION_UNRESOLVED,
+            "resolved_masked_readout_genes": DISPOSITION_MASKED_READOUT,
+            "resolved_no_masked_readout_gene": DISPOSITION_NO_MASKED_READOUT,
+        },
         "n_genes": n_genes,
         "bitmap_width_bytes": width,
         "dtype": DTYPE,
@@ -321,12 +449,29 @@ def write(built: dict[str, Any], *, out_root: str, gene_axis: dict[str, Any],
         "mask_rule_id": MASK_RULE_ID,
         "all_values_finite": built["all_values_finite"],
     }
+    # The manifest's CONTENT hash goes INSIDE the manifest, so the shipped file carries its own
+    # canonical identity and a consumer that reloads it can bind a non-null hash. (The RAW hash
+    # of the file cannot live inside the file; it is recomputed from the bytes on read.)
+    manifest["manifest_canonical_sha256"] = content_hash(manifest)
     path = os.path.join(cond_dir, MANIFEST_FILE)
     with open(path, "w") as fh:
         json.dump(manifest, fh, indent=2, sort_keys=True)
         fh.write("\n")
     manifest["manifest_sha256"] = file_sha256(path)
     return manifest
+
+
+def load_manifest(cond_dir: str) -> dict[str, Any]:
+    """Load a shipped manifest AND its non-null identity. The raw hash is of the BYTES."""
+    path = os.path.join(cond_dir, MANIFEST_FILE)
+    with open(path) as fh:
+        doc = json.load(fh)
+    doc["manifest_sha256"] = file_sha256(path)
+    if not doc.get("manifest_canonical_sha256"):
+        _refuse(REFUSE_MANIFEST_IDENTITY_ABSENT,
+                f"the shipped manifest at {MANIFEST_FILE!r} carries no "
+                "manifest_canonical_sha256; it cannot be bound by content")
+    return doc
 
 
 def read(manifest: dict[str, Any], cond_dir: str) -> dict[str, Any]:
@@ -386,13 +531,35 @@ def reconstruct_signatures(mat: dict[str, Any], gene_ids: list[str],
 
 
 def signature_ref(*, manifest: dict[str, Any], condition: str, source: str,
-                  member_target_ids: list[str]) -> dict[str, Any]:
-    """The bundle's TINY reference. It ships NO signature bytes of its own (P11)."""
+                  member_target_ids: list[str],
+                  manifest_raw_sha256: Optional[str] = None,
+                  manifest_canonical_sha256: Optional[str] = None) -> dict[str, Any]:
+    """The bundle's TINY reference. It ships NO signature bytes of its own (P11).
+
+    THE MANIFEST IDENTITY IS MANDATORY AND NON-NULL. It was silently None: ``write()`` adds
+    ``manifest_sha256`` to the dict AFTER dumping the JSON, so the manifest ON DISK never
+    carries it, and a consumer that reloads the shipped file got ``None`` from ``.get()``.
+
+    A null manifest hash is not a cosmetic gap. It is the one binding that says WHICH shared
+    matrix this bundle is entitled to read, and without it Rest's matrix can be served as
+    Stim8hr's — the schemas are identical, so nothing else would notice. So it is refused,
+    not defaulted: a reference that cannot name the artifact it references is not a reference.
+    """
+    raw = manifest_raw_sha256 or manifest.get("manifest_sha256")
+    canonical = manifest_canonical_sha256 or manifest.get("manifest_canonical_sha256")
+    if not raw or not canonical:
+        _refuse(REFUSE_MANIFEST_IDENTITY_ABSENT,
+                f"signature_ref for {condition!r}/{source!r} has no manifest identity "
+                f"(raw={raw!r}, canonical={canonical!r}). Without it, another condition's "
+                "matrix can be substituted for this one and the schemas would agree")
     return {
         "schema_version": REF_SCHEMA_VERSION,
         "condition": condition,
         "source": source,
-        "signature_manifest_sha256": manifest.get("manifest_sha256"),
+        # THE EXACT shared manifest this bundle is bound to. Never null.
+        "signature_manifest_sha256": raw,
+        "signature_manifest_raw_sha256": raw,
+        "signature_manifest_canonical_sha256": canonical,
         "matrix_raw_sha256": manifest["matrix"]["raw_sha256"],
         "matrix_canonical_sha256": manifest["matrix"]["canonical_sha256"],
         "matrix_values_sha256": manifest["matrix"]["values_sha256"],
@@ -401,6 +568,19 @@ def signature_ref(*, manifest: dict[str, Any], condition: str, source: str,
         "mask_bits_sha256": manifest["mask"]["bits_sha256"],
         "gene_axis_raw_sha256": manifest["gene_axis"]["raw_sha256"],
         "reduction_order_id": manifest["reduction_order_id"],
+        # THE AMENDED BITMAP COUNTS, carried INTO the bundle's run identity — not merely
+        # covered by the manifest hash. W4 recounts each from the shipped bitmap:
+        #   n_unresolved_no_signature      = #{rows with popcount == 0}
+        #   n_resolved_all_ones            = #{resolved rows with popcount == n_genes}
+        #   n_resolved_no_masked_readout_gene = #{resolved targets whose mask misses the axis}
+        # The last two are independent statements of one fact and must agree.
+        "bitmap_rule_id": manifest["bitmap_rule_id"],
+        "n_unresolved_no_signature": manifest["n_unresolved_no_signature"],
+        "n_resolved_all_ones": manifest["n_resolved_all_ones"],
+        "n_resolved_no_masked_readout_gene":
+            manifest["n_resolved_no_masked_readout_gene"],
+        "n_resolved_masked_readout_genes": manifest["n_resolved_masked_readout_genes"],
+        "source_mask_sha256": manifest["source_mask_sha256"],
         "member_target_ids": sorted(str(t) for t in member_target_ids),
         "n_member_targets": len(set(str(t) for t in member_target_ids)),
         "member_rule_id": MEMBER_RULE_ID,

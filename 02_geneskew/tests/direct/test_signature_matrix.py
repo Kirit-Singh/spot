@@ -105,15 +105,130 @@ class TestTheALLZEROBitmapRuleIsNOSIGNATURE:
         assert int((pop > 0).sum()) == m["n_resolved"]
         assert m["n_resolved"] + m["n_unresolved_no_signature"] == m["n_targets"]
 
-    def test_a_RESOLVED_row_can_NEVER_be_all_ones(self, emitted):
-        # build_estimate_mask always masks the target's own gene: its own repression is QC,
-        # never skew evidence. An all-ones resolved row means the mask was not derived (P5).
+
+class TestTheAMENDEDAllOnesRule:
+    """P5/V5/A5, corrected after W7's production-size Step 0.
+
+    The old gate refused ANY resolved all-ones row, reasoning that build_estimate_mask always
+    masks the target's own gene. That is true of the BIOLOGICAL mask and false of the BITMAP,
+    and the gap between them is a whole gene universe:
+
+        the mask is derived in the TARGET universe   (11,526 perturbed genes)
+        the bitmap is written over the READOUT axis  (10,282 measured genes)
+
+    1,217-1,243 resolved targets per condition have a perfectly good non-empty mask — target,
+    30kb neighbours, contributing guides' off-targets — none of which is a readout gene. Their
+    intersection with the axis is EMPTY, so no readout gene is masked, so the row is
+    legitimately all-ones. The old gate called ~11% of every condition a producer bug.
+
+    The rule that is actually true: the bitmap's ZEROS ARE the mask-axis intersection, exactly.
+    """
+
+    def _build(self, emitted, mask_sets):
+        args, _, _, _ = emitted
+        main = io_data.load_main(args.de_main, "StimX")
+        gene_ids = [str(g) for g in main["gene_ids"]]
+        return sm.build(condition="StimX", main=main, mask_sets=mask_sets,
+                        gene_ids=gene_ids), gene_ids
+
+    def _masks(self, emitted):
+        args, _, _, _ = emitted
+        main = io_data.load_main(args.de_main, "StimX")
+        return sm.mask_sets_for_condition(args, "StimX", main), main
+
+    def test_the_bitmap_ZEROS_ARE_the_mask_axis_intersection_exactly(self, emitted):
+        mask_sets, main = self._masks(emitted)
+        built, gene_ids = self._build(emitted, mask_sets)
+        axis = set(gene_ids)
+        bits = np.unpackbits(built["bitmap"], axis=1)[:, :built["n_genes"]]
+        for i, t in enumerate(built["target_ids"]):
+            ms = mask_sets[t]
+            if ms is None:
+                continue
+            zeros = {gene_ids[j] for j in np.nonzero(bits[i] == 0)[0]}
+            assert zeros == set(map(str, ms)) & axis
+
+    def test_a_MASK_THAT_MISSES_THE_AXIS_gives_a_VALID_all_ones_row(self, emitted):
+        # the production case: a real, non-empty mask, none of whose genes is a readout gene
+        mask_sets, main = self._masks(emitted)
+        off_axis = {"ENSG_NOT_A_READOUT_GENE_1", "ENSG_NOT_A_READOUT_GENE_2"}
+        victim = next(t for t, m in mask_sets.items() if m is not None)
+        mask_sets = dict(mask_sets, **{victim: off_axis})
+
+        built, gene_ids = self._build(emitted, mask_sets)          # must NOT refuse
+        i = built["target_ids"].index(victim)
+        bits = np.unpackbits(built["bitmap"][i])[:built["n_genes"]]
+        assert bits.all(), "a mask that misses the axis must leave every readout gene unmasked"
+        assert built["dispositions"][victim] == sm.DISPOSITION_NO_MASKED_READOUT
+        assert victim in built["resolved_no_masked_readout_gene_target_ids"]
+        assert built["n_masked_source"][victim] == 2      # the source mask is NOT empty
+        assert built["n_masked_readout"][victim] == 0
+
+    def test_such_a_target_STILL_HAS_a_signature(self, emitted):
+        # all-ones is not all-zero: it is a full, unmasked readout vector, and it is measured
+        mask_sets, _ = self._masks(emitted)
+        victim = next(t for t, m in mask_sets.items() if m is not None)
+        mask_sets = dict(mask_sets, **{victim: {"ENSG_OFF_AXIS"}})
+        built, gene_ids = self._build(emitted, mask_sets)
+        sigs = sm.reconstruct_signatures(built, gene_ids, [victim])
+        assert victim in sigs
+        assert len(sigs[victim]) == built["n_genes"]
+
+    def test_an_all_ones_row_whose_mask_DOES_hit_the_axis_is_REFUSED(self, emitted):
+        # that one really is a lost mask
+        mask_sets, main = self._masks(emitted)
+        built, gene_ids = self._build(emitted, mask_sets)
+        t = built["target_ids"][0]
+        # a mask that DOES intersect the axis must leave a zero bit; an all-ones row here
+        # would mean the mask was lost
+        forged = dict(mask_sets)
+        forged[t] = {gene_ids[0]}
+        good, _ = self._build(emitted, forged)
+        bits = np.unpackbits(good["bitmap"][good["target_ids"].index(t)])[:good["n_genes"]]
+        assert not bits.all(), "the intersection is non-empty, so the row must have a zero"
+
+    def test_a_RESOLVED_target_with_an_EMPTY_source_mask_is_REFUSED(self, emitted):
+        # an empty source mask is not a mask that missed the axis — it is no mask at all
+        mask_sets, _ = self._masks(emitted)
+        victim = next(t for t, m in mask_sets.items() if m is not None)
+        with pytest.raises(sm.SignatureMatrixError) as exc:
+            self._build(emitted, dict(mask_sets, **{victim: set()}))
+        assert exc.value.gate == sm.REFUSE_RESOLVED_SOURCE_MASK_EMPTY
+
+    def test_n_resolved_all_ones_RECOUNTS_from_the_bitmap(self, emitted):
+        # a first-class manifest field, and the bitmap's own statement of it
         _, _, cond_dir, m = emitted
         mat = sm.read(m, cond_dir)
-        for i, row in enumerate(mat["bitmap"]):
-            bits = np.unpackbits(row)[:m["n_genes"]]
-            if bits.any():
-                assert bits.sum() < m["n_genes"], f"{mat['target_ids'][i]} masks nothing"
+        pop = np.array([np.unpackbits(r)[:m["n_genes"]].sum() for r in mat["bitmap"]])
+        assert m["n_resolved_all_ones"] == int((pop == m["n_genes"]).sum())
+
+    def test_the_two_counts_are_INDEPENDENT_statements_of_the_same_fact(self, emitted):
+        # a resolved row is all-ones exactly when its mask missed the axis; if these two ever
+        # disagree, one of them is lying and the artifact does not ship
+        _, _, _, m = emitted
+        assert m["n_resolved_all_ones"] == m["n_resolved_no_masked_readout_gene"]
+
+    def test_the_three_dispositions_PARTITION_the_condition(self, emitted):
+        _, _, _, m = emitted
+        assert (m["n_unresolved_no_signature"]
+                + m["n_resolved_masked_readout_genes"]
+                + m["n_resolved_no_masked_readout_gene"]) == m["n_targets"]
+
+    def test_the_NON_EMPTY_SOURCE_MASK_is_bound(self, emitted):
+        # what proves an all-ones row had a real mask rather than none at all
+        _, _, _, m = emitted
+        assert len(m["source_mask_sha256"]) == 64
+        assert m["bitmap_rule_id"] == sm.BITMAP_RULE_ID
+
+    def test_ALL_ZERO_still_means_UNRESOLVED_and_never_an_unmasked_vector(self, emitted):
+        # the one thing the amendment does NOT change
+        mask_sets, _ = self._masks(emitted)
+        victim = next(t for t, m in mask_sets.items() if m is not None)
+        built, gene_ids = self._build(emitted, dict(mask_sets, **{victim: None}))
+        i = built["target_ids"].index(victim)
+        assert not np.unpackbits(built["bitmap"][i])[:built["n_genes"]].any()
+        assert built["dispositions"][victim] == sm.DISPOSITION_UNRESOLVED
+        assert sm.reconstruct_signatures(built, gene_ids, [victim]) == {}
 
     def test_the_padding_bits_are_ZERO(self, emitted):
         _, _, cond_dir, m = emitted
@@ -214,17 +329,35 @@ class TestThePrecisionBearingDigest:
 
 
 class TestTheGeneAxisIsVERBATIM:
-    def test_a_SORTED_axis_is_refused(self, emitted):
-        # A3: a sorted axis looks canonical and transposes every signature.
+    def test_a_PERMUTED_axis_is_refused(self, emitted):
+        """A3. A GENUINE permutation, not a sort.
+
+        `sorted()` is the tempting probe and it is a WEAK one: the real gene axis is already
+        in sorted order, so sorting it is a NO-OP and the probe would pass against a producer
+        that had done nothing at all. A swap of two adjacent ids is a real permutation whether
+        or not the axis was sorted to begin with — and it transposes two signatures.
+        """
         args, _, _, _ = emitted
         main = io_data.load_main(args.de_main, "StimX")
         gene_ids = [str(g) for g in main["gene_ids"]]
-        scrambled = sorted(gene_ids, reverse=True)
-        if scrambled == gene_ids:
-            pytest.skip("the fixture axis is already reverse-sorted")
+        assert len(gene_ids) >= 2
+
+        permuted = list(gene_ids)
+        permuted[0], permuted[1] = permuted[1], permuted[0]
+        assert permuted != gene_ids, "the permutation must actually change the axis"
+        assert sorted(permuted) == sorted(gene_ids), "it must be a permutation, not an edit"
+
         with pytest.raises(sm.SignatureMatrixError) as exc:
-            sm.build(condition="StimX", main=main, mask_sets={}, gene_ids=scrambled)
+            sm.build(condition="StimX", main=main, mask_sets={}, gene_ids=permuted)
         assert exc.value.gate == sm.REFUSE_GENE_AXIS_MISMATCH
+
+    def test_SORTING_the_axis_would_be_a_NO_OP_on_a_sorted_axis(self, emitted):
+        # why the probe above must not be a sort: it would prove nothing on the real release
+        args, _, _, _ = emitted
+        gene_ids = [str(g) for g in
+                    io_data.load_main(args.de_main, "StimX")["gene_ids"]]
+        if sorted(gene_ids) == gene_ids:
+            assert sorted(gene_ids) == gene_ids   # a sort-based probe cannot fail here
 
     def test_a_target_with_NO_derived_mask_is_refused(self, emitted):
         # P2: a target with no derived mask is not a target with an empty mask.

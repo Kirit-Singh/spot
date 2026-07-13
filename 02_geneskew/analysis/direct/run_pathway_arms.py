@@ -162,7 +162,9 @@ def build_pathway_arms(args) -> dict[str, Any]:
         # not carry them.
         "signature_ref": signature_matrix.signature_ref(
             manifest=sig_manifest, condition=cond, source=source,
-            member_target_ids=signatures.keys()),
+            member_target_ids=signatures.keys(),
+            manifest_raw_sha256=sig_manifest["manifest_sha256"],
+            manifest_canonical_sha256=sig_manifest["manifest_canonical_sha256"]),
         "contributor_manifest": rs.contributor_manifest_identity(args, ctx),
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
@@ -290,8 +292,9 @@ def load_shared_signatures(args, cond: str):
             f"--signature-matrix-root. The shared matrix is Step 0 and runs BEFORE any "
             "pathway bundle; a bundle that "
             "rebuilt its own signatures would reintroduce the duplication this design removes")
-    with open(manifest_path) as fh:
-        sig_manifest = json.load(fh)
+    # load_manifest recomputes the RAW hash from the shipped bytes and refuses a manifest
+    # that carries no canonical identity — so the bundle's reference can never be null.
+    sig_manifest = signature_matrix.load_manifest(cond_dir)
     return sig_manifest, signature_matrix.read(sig_manifest, cond_dir)
 
 

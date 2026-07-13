@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from . import arm_keys, convergence, enrichment, genesets
+from . import arm_keys, convergence, enrichment, genesets, signature_matrix
 from .hashing import content_hash
 
 SCHEMA_VERSION = "spot.stage02_pathway_arm_bundle.v1"
@@ -200,6 +200,9 @@ def method_block(bundle: Optional[dict[str, Any]], view: dict[str, Any]) -> dict
         "enrichment_arms_are_computed_not_derived": True,
         "enrichment_rank_antisymmetry_assumed": False,
         "convergence_is_shared_across_arms": True,
+        # the amended bitmap semantics this bundle's signatures were read under
+        "bitmap_rule_id": signature_matrix.BITMAP_RULE_ID,
+        "bitmap_rule": signature_matrix.BITMAP_RULE,
         # what this bundle will not carry, at any depth
         "pair_fields_emitted": False,
         "pole_or_role_emitted": False,
