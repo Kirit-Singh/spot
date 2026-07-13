@@ -511,10 +511,74 @@ def assert_store_is_selection_independent(view: dict[str, Any]) -> None:
         )
 
 
+# The Stage-2 aggregate verifier, by its REAL id. W16's own history records a retired substring
+# rule (`pattern: "independent"`) that refused every honest report and admitted the wrong thing —
+# so this is matched exactly, never by a pattern that happens to contain a hopeful word.
+STAGE2_VERIFIER_ID = "spot.stage02.run_manifest.verifier.v1"
+STAGE2_ADMIT_VERDICT = "admit"
+
+
+def assert_admission_receipt_bound(view: dict[str, Any]) -> None:
+    """The view, the store and the admission receipt must all name the SAME Stage-2 aggregate.
+
+    This is the swap attack, and it is the shape of a self-consistent lie. Take a real bundle, a real
+    verification report and a real store — each individually valid, each internally consistent, each
+    hashing to exactly what it claims — and pair them with EACH OTHER. Every artifact verifies. The
+    combination is a fiction.
+
+    The view names the Stage-2 manifest TWICE: once in `admission` (the receipt of what was verified)
+    and once in `store` (what the store was built on). That redundancy is the only reason a swap is
+    detectable at all — a bundle verified against somebody else's report agrees with itself
+    perfectly, and self-consistency is exactly what a forgery HAS.
+    """
+    admission = view.get("admission") or {}
+    store = view.get("store") or {}
+
+    if admission.get("aggregate_verdict") != STAGE2_ADMIT_VERDICT:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_aggregate_not_admitted",
+            f"the Stage-2 aggregate verdict is {admission.get('aggregate_verdict')!r}, not "
+            f"{STAGE2_ADMIT_VERDICT!r}. Emitted is not admitted.",
+        )
+
+    verifier = admission.get("aggregate_verifier_id")
+    if verifier != STAGE2_VERIFIER_ID:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_aggregate_verifier_unknown",
+            f"the aggregate was verified by {verifier!r}, and Stage 4 admits only "
+            f"{STAGE2_VERIFIER_ID!r}. The id is matched EXACTLY, never by a substring: a rule that "
+            "accepted any id containing a hopeful word once refused every honest report and "
+            "admitted the wrong thing.",
+        )
+
+    pairs = (
+        ("aggregate_manifest_canonical_sha256", "stage2_manifest_canonical_sha256"),
+        ("aggregate_manifest_raw_sha256", "stage2_manifest_raw_sha256"),
+    )
+    for receipt_field, store_field in pairs:
+        seen, built = admission.get(receipt_field), store.get(store_field)
+        if not seen or not built:
+            raise Stage3V2ViewRejected(
+                "stage3_v2_aggregate_binding_absent",
+                f"the view does not bind {receipt_field!r} to {store_field!r}. Without both, "
+                "nothing detects a store built on one aggregate and verified against another.",
+            )
+        if seen != built:
+            raise Stage3V2ViewRejected(
+                "stage3_v2_aggregate_swapped",
+                f"the admission receipt verified aggregate {seen[:16]}… and the store was built on "
+                f"{built[:16]}…. Each artifact may be perfectly valid on its own — that is what "
+                "makes this the dangerous shape. A bundle verified against SOMEONE ELSE'S report "
+                "agrees with itself, and self-consistency is what a forgery has; admission is what "
+                "it lacks.",
+            )
+
+
 def check_view_receipt(view: dict[str, Any]) -> dict[str, Any]:
     """Every receipt check, in order. Refuses ee4810c — and the refusal is the finding."""
     bound = bind_selection_view_v2(view)
     assert_store_is_selection_independent(view)
+    assert_admission_receipt_bound(view)
     assert_store_receipt_rebound(view)
     assert_tables_sealed(view)
     bound["receipt_state"] = "checked"

@@ -467,3 +467,89 @@ def test_ee4810c_IS_NOT_PINNED_and_schemas_sha256_stays_None():
     assert v2.is_pinned() is False
     with pytest.raises(v2.Stage3V2ContractNotPinned):
         v2.admit_v2("/any/bundle")
+
+
+# ========== THE SWAP ATTACKS: each artifact valid, the combination a fiction ==========
+
+def test_the_REAL_view_binds_its_admission_receipt_to_its_store():
+    """W16's real view is clean: the receipt of what was verified and the store's own binding name
+    the SAME Stage-2 aggregate. That redundancy is the only reason a swap is detectable."""
+    v2.assert_admission_receipt_bound(_view())
+
+    view = _view()
+    assert (view["admission"]["aggregate_manifest_canonical_sha256"]
+            == view["store"]["stage2_manifest_canonical_sha256"])
+
+
+def test_a_SWAPPED_AGGREGATE_is_refused_even_though_every_artifact_is_valid():
+    """THE shape of a self-consistent lie.
+
+    Take a real bundle, a real verification report and a real store — each individually valid, each
+    internally consistent, each hashing to exactly what it claims — and pair them with EACH OTHER.
+    Every artifact verifies. The combination is a fiction, and a bundle verified against SOMEONE
+    ELSE'S report agrees with itself perfectly. Self-consistency is what a forgery HAS; admission is
+    what it lacks.
+    """
+    swapped = copy.deepcopy(_view())
+    swapped["store"]["stage2_manifest_canonical_sha256"] = "a" * 64      # a different, real store
+
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.assert_admission_receipt_bound(swapped)
+
+    assert exc.value.code == "stage3_v2_aggregate_swapped"
+    assert "someone else's report" in str(exc.value).lower()
+
+
+def test_a_SWAPPED_REPORT_is_refused():
+    """The mirror: the receipt says it verified a different aggregate than the store was built on."""
+    swapped = copy.deepcopy(_view())
+    swapped["admission"]["aggregate_manifest_raw_sha256"] = "b" * 64
+
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.assert_admission_receipt_bound(swapped)
+    assert exc.value.code == "stage3_v2_aggregate_swapped"
+
+
+def test_an_aggregate_that_was_NOT_ADMITTED_is_refused():
+    """Emitted is not admitted. A report that ran and did not say `admit` is a report that said no."""
+    for verdict in ("refuse", "incomplete", None):
+        view = copy.deepcopy(_view())
+        view["admission"]["aggregate_verdict"] = verdict
+        with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+            v2.assert_admission_receipt_bound(view)
+        assert exc.value.code == "stage3_v2_aggregate_not_admitted"
+
+
+def test_the_aggregate_VERIFIER_ID_is_matched_EXACTLY_never_by_substring():
+    """W16's own history records a retired substring rule (`pattern: "independent"`) that refused
+    every honest report and admitted the wrong thing. An id is matched exactly, never by a rule that
+    accepts anything containing a hopeful word."""
+    assert v2.STAGE2_VERIFIER_ID == "spot.stage02.run_manifest.verifier.v1"
+    assert _view()["admission"]["aggregate_verifier_id"] == v2.STAGE2_VERIFIER_ID
+
+    for impostor in ("independent_verifier", "spot.stage02.run_manifest.verifier.v2",
+                     "not.the.verifier.independent"):
+        view = copy.deepcopy(_view())
+        view["admission"]["aggregate_verifier_id"] = impostor
+        with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+            v2.assert_admission_receipt_bound(view)
+        assert exc.value.code == "stage3_v2_aggregate_verifier_unknown"
+
+
+def test_a_view_with_NO_aggregate_binding_is_refused():
+    """Without both halves, nothing detects a store built on one aggregate and verified against
+    another. An absent cross-check is not a passed one."""
+    view = copy.deepcopy(_view())
+    view["admission"].pop("aggregate_manifest_canonical_sha256")
+
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.assert_admission_receipt_bound(view)
+    assert exc.value.code == "stage3_v2_aggregate_binding_absent"
+
+
+def test_the_full_receipt_check_still_refuses_ee4810c_on_the_TABLE_SEAL():
+    """The swap gates pass on W16's real bytes — and the table-seal gate still refuses them. The
+    ordering matters: Stage 4 does not report a bundle 'nearly admissible'."""
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.check_view_receipt(_view())
+    assert exc.value.code == "stage3_v2_view_tables_not_sealed"
