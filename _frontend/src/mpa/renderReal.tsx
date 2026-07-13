@@ -280,8 +280,25 @@ export function renderDrugs(artifact: Stage3UiArtifact): React.ReactNode {
 // Stage-4 — PK & Safety (scorecard evidence lanes; missing stays missing, never inferred)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function eligibilityTone(v: boolean | null): 'ok' | 'amber' | 'muted' {
-  return v === null ? 'muted' : v ? 'ok' : 'amber';
+function eligibilityTone(v: boolean): 'ok' | 'amber' {
+  return v ? 'ok' : 'amber';
+}
+
+function jsonField(v: unknown, key: string): unknown {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>)[key] : null;
+}
+
+function stage4LaneLabel(v: unknown): string {
+  if (v === null) return 'not_evaluated';
+  if (Array.isArray(v)) return `${v.length} record${v.length === 1 ? '' : 's'}`;
+  if (typeof v === 'object') {
+    for (const key of ['status', 'state', 'evidence_state']) {
+      const explicit = jsonField(v, key);
+      if (typeof explicit === 'string') return explicit;
+    }
+    return 'available';
+  }
+  return String(v);
 }
 
 function ScorecardCandidate({ c }: { c: Stage4Candidate }) {
@@ -290,25 +307,27 @@ function ScorecardCandidate({ c }: { c: Stage4Candidate }) {
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
         <StatePill label="candidate" tone="muted" />
         <span className="break-all font-mono text-[10.5px] text-ink-2">{c.candidate_id}</span>
-        {c.active_moiety && <span className="font-mono text-[10.5px] text-ink">{c.active_moiety}</span>}
+        {typeof c.active_moiety?.active_moiety_name === 'string' && (
+          <span className="font-mono text-[10.5px] text-ink">{c.active_moiety.active_moiety_name}</span>
+        )}
         <StatePill
-          label={c.production_eligible === null ? 'eligibility not_evaluated' : c.production_eligible ? 'production eligible' : 'not eligible'}
-          tone={eligibilityTone(c.production_eligible)}
+          label={c.production_eligible.eligible ? 'production eligible' : 'not eligible'}
+          tone={eligibilityTone(c.production_eligible.eligible)}
         />
       </header>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-3 py-2 sm:grid-cols-3">
         <Field label="target" value={txt(c.target)} />
         <Field label="mechanism" value={txt(c.mechanism)} />
-        <Field label="eligibility reason" value={txt(c.production_eligible_reason)} />
+        <Field label="direction" value={txt(c.direction_compatibility)} />
+        <Field label="eligibility reason" value={txt(c.production_eligible.reason_code)} />
       </div>
-      {/* six INDEPENDENT evidence lanes — a not-evaluated lane is typed-missing, never a positive result */}
+      {/* independent nested evidence lanes; only explicit native states/counts are rendered */}
       <div className="flex flex-wrap gap-1.5 border-t border-line px-3 py-2">
         {STAGE4_LANE_KEYS.map((lane) => {
-          const state = c.lanes[lane];
           return (
             <span key={lane} className="inline-flex items-center gap-1">
               <span className="font-mono text-[9.5px] uppercase tracking-wide text-muted">{lane}</span>
-              <StatePill label={state === null ? 'not_evaluated' : state} tone="muted" />
+              <StatePill label={stage4LaneLabel(c.lanes[lane])} tone="muted" />
             </span>
           );
         })}
@@ -324,7 +343,7 @@ export function renderPkSafety(artifact: Stage4UiArtifact): React.ReactNode {
       <div className="flex flex-wrap items-center gap-2">
         <StatePill label="stage-4 scorecard set" tone="muted" />
         <span className="break-all font-mono text-[10.5px] text-ink-2">{artifact.scorecard_set_id}</span>
-        <StatePill label="from stage-3 bundle" tone="muted" />
+        <StatePill label="from stage-3 candidate set" tone="muted" />
         <span className="break-all font-mono text-[10.5px] text-ink-2">{artifact.upstream_stage3_bundle}</span>
       </div>
       {artifact.candidates.length === 0 ? (

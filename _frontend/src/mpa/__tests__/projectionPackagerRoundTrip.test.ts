@@ -41,8 +41,15 @@ const drugsNative = {
   candidates: [{ candidate_id: 'cand-1', preferred_name: 'Examplib', identity_status: 'resolved', development_state_aggregate: 'approved', potency_state: null }],
 };
 const pksafetyNative = {
-  scorecard_set_id: 's4_1', stage4_method_version: 'stage4-evidence-v2', upstream_stage3_bundle: 's3_b1',
-  candidates: [{ candidate_id: 'cand-1', active_moiety: 'Examplib', target: 'T1', mechanism: 'inhibitor', production_eligible: null, lanes: { delivery: 'oral', safety: null } }],
+  schema_id: 'spot.stage04_browser_projection.v1', scorecard_set_id: 's4_1',
+  upstream: { candidate_set_id: 's3_b1', namespace: 'production', is_fixture: false },
+  store_is_selection_independent: true, is_ranking: false, ordering: { by: 'candidate_id' }, guards: [],
+  active_selection_view: null, active_view_candidate_ids: ['cand-1'],
+  candidates: [{ candidate_id: 'cand-1', active_moiety: { active_moiety_name: 'Examplib' },
+    compound_ids: { chembl_id: 'CID1' }, target: 'T1', mechanism: 'inhibitor', direction_compatibility: 'supported',
+    production_eligible: { eligible: true, reason_code: null }, provenance_chain: [], stage3_arm_membership: {},
+    in_active_view: true, lanes: { delivery: [], cns_mpo: { status: 'complete' }, transporters: {}, exposure: [],
+      nebpi: [], safety: { rows: [] }, potency: { state: 'not_evaluated' }, evidence_availability: {} } }],
 };
 
 const withinSelection: SelectionV3 = {
@@ -158,8 +165,9 @@ describe('packager → browser loader round-trip', () => {
     expect(drugs && drugs.route === 'drugs' ? drugs.artifact.candidates[0].potency_state : 'x').toBeNull();
     const pk = await resolveRouteArtifact('pksafety', deps(withinSelection, tree));
     const art = pk && pk.route === 'pksafety' ? pk.artifact : null;
-    expect(art?.candidates[0].lanes.delivery).toBe('oral');
-    expect(art?.candidates[0].lanes.transporters).toBeNull();
+    expect(art?.candidates[0].lanes.delivery).toEqual([]);
+    expect(art?.candidates[0].lanes.transporters).toEqual({});
+    expect(art?.candidates[0].lanes.potency).toEqual({ state: 'not_evaluated' });
   });
 
   it('fails closed when projection or independent-receipt bytes change', async () => {

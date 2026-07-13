@@ -203,7 +203,6 @@ function nObj(v, path) { if (!v || typeof v !== 'object' || Array.isArray(v)) fa
 function nStr(v, path) { if (typeof v !== 'string' || v.trim() === '') fail(`${path} must be a non-empty string`); return v; }
 function nOptStr(v, path) { if (v === undefined || v === null) return null; if (typeof v !== 'string') fail(`${path} must be a string or null`); return v; }
 function nOptNum(v, path) { if (v === undefined || v === null) return null; if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${path} must be a finite number or null`); return v; }
-function nOptBool(v, path) { if (v === undefined || v === null) return null; if (typeof v !== 'boolean') fail(`${path} must be a boolean or null`); return v; }
 function nStrList(v, path) { if (v === undefined || v === null) return []; if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) fail(`${path} must be a string[]`); return v; }
 function nArr(v, path) { if (!Array.isArray(v)) fail(`${path} must be an array`); return v; }
 
@@ -247,35 +246,25 @@ function nativeToDrugsProjection(nat) {
   };
 }
 
-// Stage-4 native scorecards → compact PK & Safety projection (fields per §8 "Required Stage-4 UI model").
-const S4_LANES = ['delivery', 'cns_mpo', 'transporters', 'exposure', 'nebpi', 'safety'];
+// Stage-4's native browser projection is ALREADY browser-safe. Preserve every nested object and
+// null exactly; only add the compact envelope + the explicit chain id copied from native upstream.
 function nativeToPkSafetyProjection(nat) {
   nObj(nat, 'pksafety native');
-  const candidates = nArr(nat.candidates, 'pksafety native.candidates').map((c, i) => {
+  if (nat.schema_id !== 'spot.stage04_browser_projection.v1') fail('pksafety native.schema_id must be spot.stage04_browser_projection.v1');
+  if (nat.store_is_selection_independent !== true || nat.is_ranking !== false) fail('pksafety native must be selection-independent and non-ranking');
+  const upstream = nObj(nat.upstream, 'pksafety native.upstream');
+  if (upstream.namespace !== 'production' || upstream.is_fixture !== false) fail('pksafety native upstream is not admitted production');
+  const upstreamStage3 = nStr(upstream.candidate_set_id, 'pksafety native.upstream.candidate_set_id');
+  nArr(nat.candidates, 'pksafety native.candidates').forEach((c, i) => {
     const p = `pksafety native.candidates[${i}]`;
-    nObj(c, p);
-    const lanesRaw = c.lanes && typeof c.lanes === 'object' && !Array.isArray(c.lanes) ? c.lanes : {};
-    const lanes = {};
-    for (const l of S4_LANES) lanes[l] = nOptStr(lanesRaw[l], `${p}.lanes.${l}`);
-    return {
-      candidate_id: nStr(c.candidate_id, `${p}.candidate_id`),
-      active_moiety: nOptStr(c.active_moiety, `${p}.active_moiety`),
-      compound_ids: nStrList(c.compound_ids, `${p}.compound_ids`),
-      target: nOptStr(c.target, `${p}.target`),
-      mechanism: nOptStr(c.mechanism, `${p}.mechanism`),
-      production_eligible: nOptBool(c.production_eligible, `${p}.production_eligible`),
-      production_eligible_reason: nOptStr(c.production_eligible_reason, `${p}.production_eligible_reason`),
-      lanes,
-    };
+    nObj(c, p); nStr(c.candidate_id, `${p}.candidate_id`); nObj(c.lanes, `${p}.lanes`);
   });
   return {
     schema_version: 'spot.ui_projection.pksafety.v1', route: 'pksafety',
     artifact: {
-      schema_version: 'spot.stage04_scorecards.v1',
-      scorecard_set_id: nStr(nat.scorecard_set_id, 'pksafety native.scorecard_set_id'),
-      stage4_method_version: nStr(nat.stage4_method_version, 'pksafety native.stage4_method_version'),
-      upstream_stage3_bundle: nStr(nat.upstream_stage3_bundle, 'pksafety native.upstream_stage3_bundle'),
-      candidates,
+      ...nat,
+      schema_version: nat.schema_id,
+      upstream_stage3_bundle: upstreamStage3,
     },
   };
 }

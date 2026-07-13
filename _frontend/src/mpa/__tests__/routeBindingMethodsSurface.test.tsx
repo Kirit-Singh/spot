@@ -76,10 +76,16 @@ function stage3(): Stage3UiArtifact {
 }
 function stage4(): Stage4UiArtifact {
   return {
-    schema_version: 'spot.stage04_scorecards.v1',
+    schema_version: 'spot.stage04_browser_projection.v1',
     scorecard_set_id: 's4_set01',
-    stage4_method_version: 'stage4-evidence-v2',
     upstream_stage3_bundle: 's3_bundle01',
+    upstream: { candidate_set_id: 's3_bundle01', namespace: 'production', is_fixture: false },
+    store_is_selection_independent: true,
+    is_ranking: false,
+    ordering: { by: 'candidate_id' },
+    guards: [],
+    active_selection_view: null,
+    active_view_candidate_ids: [],
     candidates: [],
   };
 }

@@ -12,7 +12,7 @@ import type { ResolvedBundles } from '../repository/joinResolver';
 import type { SelectionV3 } from './selectionV3Adapter';
 import type { Stage3Candidate, Stage3UiArtifact } from '../domain/stage3UiArtifact';
 import { STAGE3_UI_ARTIFACT_SCHEMA } from '../domain/stage3UiArtifact';
-import type { Stage4Candidate, Stage4Lanes, Stage4UiArtifact } from '../domain/stage4UiArtifact';
+import type { JsonObject, JsonValue, Stage4Candidate, Stage4Lanes, Stage4ProductionEligibility, Stage4UiArtifact } from '../domain/stage4UiArtifact';
 import { STAGE4_LANE_KEYS, STAGE4_UI_ARTIFACT_SCHEMA } from '../domain/stage4UiArtifact';
 import { parseNativeTemporalArmBundle } from './nativeTemporalArmAdapter';
 import { parseDirectArmBundle, parsePathwayArmBundle } from './reusableArmAdapter';
@@ -190,23 +190,59 @@ export function parseDrugsProjection(raw: unknown): Stage3UiArtifact {
 }
 
 // ── Stage-4 (PK & Safety) ──────────────────────────────────────────────────────
-function parseStage4Lanes(v: unknown, path: string): Stage4Lanes {
+// Stage 4's browser projection is already the intended browser-safe document.  Its nested objects
+// carry missingness/provenance semantics, so this adapter validates JSON shape and preserves them
+// rather than flattening a lane to a string.
+function jsonValue(v: unknown, path: string): JsonValue {
+  if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) fail('malformed', `${path} must be finite JSON`);
+    return v;
+  }
+  if (Array.isArray(v)) return v.map((x, i) => jsonValue(x, `${path}[${i}]`));
+  if (isObject(v)) {
+    const out: JsonObject = {};
+    for (const [key, child] of Object.entries(v)) out[key] = jsonValue(child, `${path}.${key}`);
+    return out;
+  }
+  fail('malformed', `${path} must be JSON`);
+}
+function jsonObject(v: unknown, path: string): JsonObject {
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
+  return jsonValue(v, path) as JsonObject;
+}
+function parseStage4Lanes(v: unknown, path: string): Stage4Lanes {
+  const raw = jsonObject(v, path);
   const lanes = {} as Stage4Lanes;
-  for (const lane of STAGE4_LANE_KEYS) lanes[lane] = optStr(v[lane], `${path}.${lane}`);
+  for (const lane of STAGE4_LANE_KEYS) {
+    if (!(lane in raw)) fail('malformed', `${path}.${lane} is required`);
+    lanes[lane] = raw[lane];
+  }
   return lanes;
+}
+function parseProductionEligibility(v: unknown, path: string): Stage4ProductionEligibility {
+  const raw = jsonObject(v, path);
+  if (typeof raw.eligible !== 'boolean') fail('malformed', `${path}.eligible must be boolean`);
+  if (raw.reason_code !== null && typeof raw.reason_code !== 'string') {
+    fail('malformed', `${path}.reason_code must be string or null`);
+  }
+  return raw as Stage4ProductionEligibility;
 }
 function parseStage4Candidate(v: unknown, path: string): Stage4Candidate {
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
+  const active = v.active_moiety === null ? null : jsonObject(v.active_moiety, `${path}.active_moiety`);
   return {
     candidate_id: prodId(v.candidate_id, `${path}.candidate_id`),
-    active_moiety: optStr(v.active_moiety, `${path}.active_moiety`),
-    compound_ids: strList(v.compound_ids, `${path}.compound_ids`),
+    active_moiety: active,
+    compound_ids: jsonObject(v.compound_ids, `${path}.compound_ids`),
     target: optStr(v.target, `${path}.target`),
     mechanism: optStr(v.mechanism, `${path}.mechanism`),
-    production_eligible: optBool(v.production_eligible, `${path}.production_eligible`),
-    production_eligible_reason: optStr(v.production_eligible_reason, `${path}.production_eligible_reason`),
+    direction_compatibility: optStr(v.direction_compatibility, `${path}.direction_compatibility`),
+    production_eligible: parseProductionEligibility(v.production_eligible, `${path}.production_eligible`),
     lanes: parseStage4Lanes(v.lanes, `${path}.lanes`),
+    provenance_chain: arr(v.provenance_chain, `${path}.provenance_chain`).map((x, i) => jsonValue(x, `${path}.provenance_chain[${i}]`)),
+    stage3_arm_membership: jsonObject(v.stage3_arm_membership, `${path}.stage3_arm_membership`),
+    in_active_view: optBool(v.in_active_view, `${path}.in_active_view`),
   };
 }
 
@@ -220,14 +256,28 @@ export function parsePkSafetyProjection(raw: unknown): Stage4UiArtifact {
   if (str(raw.route, 'route') !== 'pksafety') fail('malformed', 'pksafety projection route must be pksafety');
   const a = raw.artifact;
   if (!isObject(a)) fail('malformed', 'pksafety projection.artifact must be an object');
-  if (str(a.schema_version, 'artifact.schema_version') !== STAGE4_UI_ARTIFACT_SCHEMA) {
-    fail('unknown_schema_version', `artifact.schema_version must be ${STAGE4_UI_ARTIFACT_SCHEMA}`);
+  if (str(a.schema_version, 'artifact.schema_version') !== STAGE4_UI_ARTIFACT_SCHEMA) fail('unknown_schema_version', `artifact.schema_version must be ${STAGE4_UI_ARTIFACT_SCHEMA}`);
+  const upstream = jsonObject(a.upstream, 'artifact.upstream');
+  if (upstream.namespace !== 'production' || upstream.is_fixture !== false) {
+    fail('namespace_mismatch', 'artifact.upstream must be admitted production and not a fixture');
   }
+  const upstreamBundle = prodId(upstream.candidate_set_id, 'artifact.upstream.candidate_set_id');
+  if (a.store_is_selection_independent !== true || a.is_ranking !== false) {
+    fail('malformed', 'Stage-4 projection must be a selection-independent, non-ranking store');
+  }
+  const activeSelection = a.active_selection_view === undefined || a.active_selection_view === null
+    ? null : jsonObject(a.active_selection_view, 'artifact.active_selection_view');
   return {
     schema_version: STAGE4_UI_ARTIFACT_SCHEMA,
     scorecard_set_id: prodId(a.scorecard_set_id, 'artifact.scorecard_set_id'),
-    stage4_method_version: str(a.stage4_method_version, 'artifact.stage4_method_version'),
-    upstream_stage3_bundle: prodId(a.upstream_stage3_bundle, 'artifact.upstream_stage3_bundle'),
+    upstream_stage3_bundle: upstreamBundle,
+    upstream,
+    store_is_selection_independent: true,
+    is_ranking: false,
+    ordering: jsonValue(a.ordering, 'artifact.ordering'),
+    guards: jsonValue(a.guards, 'artifact.guards'),
+    active_selection_view: activeSelection,
+    active_view_candidate_ids: a.active_view_candidate_ids === undefined ? [] : strList(a.active_view_candidate_ids, 'artifact.active_view_candidate_ids'),
     candidates: arr(a.candidates, 'artifact.candidates').map((c, i) => parseStage4Candidate(c, `artifact.candidates[${i}]`)),
   };
 }

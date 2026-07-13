@@ -36,13 +36,20 @@ function pksafetyRaw() {
     schema_version: 'spot.ui_projection.pksafety.v1',
     route: 'pksafety',
     artifact: {
-      schema_version: 'spot.stage04_scorecards.v1', scorecard_set_id: 's4_1', stage4_method_version: 'stage4-evidence-v2',
-      upstream_stage3_bundle: 's3_b1',
+      schema_version: 'spot.stage04_browser_projection.v1', schema_id: 'spot.stage04_browser_projection.v1',
+      scorecard_set_id: 's4_1', upstream_stage3_bundle: 's3_b1',
+      upstream: { candidate_set_id: 's3_b1', namespace: 'production', is_fixture: false },
+      store_is_selection_independent: true, is_ranking: false, ordering: { by: 'candidate_id' }, guards: [],
+      active_selection_view: null, active_view_candidate_ids: [],
       candidates: [
         {
-          candidate_id: 'cand-1', active_moiety: 'Examplib', compound_ids: ['CID1'], target: 'T1', mechanism: 'inhibitor',
-          production_eligible: null, production_eligible_reason: null,
-          lanes: { delivery: 'oral', cns_mpo: '4.5', transporters: null, exposure: null, nebpi: 'context_specific', safety: null },
+          candidate_id: 'cand-1', active_moiety: { active_moiety_name: 'Examplib' }, compound_ids: { chembl_id: 'CID1' },
+          target: 'T1', mechanism: 'inhibitor', direction_compatibility: 'supported',
+          production_eligible: { eligible: true, reason_code: null }, provenance_chain: [], stage3_arm_membership: {},
+          in_active_view: true,
+          lanes: { delivery: [], cns_mpo: { status: 'complete', total_published: 4.5 }, transporters: {},
+            exposure: [], nebpi: [], safety: { rows: [] }, potency: { state: 'not_evaluated' },
+            evidence_availability: { brain_exposure: 'not_evaluated' } },
         },
       ],
     },
@@ -105,13 +112,18 @@ describe('parsePkSafetyProjection — strict', () => {
   it('parses a valid pksafety projection; not-evaluated lanes stay null', () => {
     const a = parsePkSafetyProjection(pksafetyRaw());
     expect(a.scorecard_set_id).toBe('s4_1');
-    expect(a.candidates[0].production_eligible).toBeNull();
-    expect(a.candidates[0].lanes.safety).toBeNull();
-    expect(a.candidates[0].lanes.nebpi).toBe('context_specific');
+    expect(a.candidates[0].production_eligible.eligible).toBe(true);
+    expect(a.candidates[0].lanes.safety).toEqual({ rows: [] });
+    expect(a.candidates[0].lanes.cns_mpo).toEqual({ status: 'complete', total_published: 4.5 });
   });
   it('rejects an unknown schema / wrong route', () => {
     expect(() => parsePkSafetyProjection({ ...pksafetyRaw(), schema_version: 'x' })).toThrow(AdapterError);
     expect(() => parsePkSafetyProjection({ ...pksafetyRaw(), route: 'drugs' })).toThrow(AdapterError);
+  });
+  it('rejects a research-only or fixture Stage-4 projection', () => {
+    const raw = pksafetyRaw();
+    raw.artifact.upstream.namespace = 'research_only';
+    expect(() => parsePkSafetyProjection(raw)).toThrow(/production|fixture/);
   });
 });
 

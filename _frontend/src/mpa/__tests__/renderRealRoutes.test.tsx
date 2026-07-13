@@ -51,20 +51,31 @@ function stage3(): Stage3UiArtifact {
 
 function stage4(): Stage4UiArtifact {
   return {
-    schema_version: 'spot.stage04_scorecards.v1',
+    schema_version: 'spot.stage04_browser_projection.v1',
     scorecard_set_id: 's4_set01',
-    stage4_method_version: 'stage4-evidence-v2',
     upstream_stage3_bundle: 's3_bundle01',
+    upstream: { candidate_set_id: 's3_bundle01', namespace: 'production', is_fixture: false },
+    store_is_selection_independent: true,
+    is_ranking: false,
+    ordering: { by: 'candidate_id' },
+    guards: [],
+    active_selection_view: null,
+    active_view_candidate_ids: ['cand-1'],
     candidates: [
       {
         candidate_id: 'cand-1',
-        active_moiety: 'Examplib',
-        compound_ids: ['CID1'],
+        active_moiety: { active_moiety_name: 'Examplib' },
+        compound_ids: { chembl_id: 'CID1' },
         target: 'TARGET1',
         mechanism: 'inhibitor',
-        production_eligible: null, // → eligibility not_evaluated, never "not eligible"
-        production_eligible_reason: null,
-        lanes: { delivery: 'oral', cns_mpo: '4.5', transporters: null, exposure: null, nebpi: 'context_specific', safety: null },
+        direction_compatibility: 'supported',
+        production_eligible: { eligible: true, reason_code: null },
+        provenance_chain: [],
+        stage3_arm_membership: {},
+        in_active_view: true,
+        lanes: { delivery: [], cns_mpo: { status: 'complete', total_published: 4.5 }, transporters: {},
+          exposure: [], nebpi: [], safety: { rows: [] }, potency: { state: 'not_evaluated' },
+          evidence_availability: { brain_exposure: 'not_evaluated' } },
       },
     ],
   };
@@ -123,16 +134,15 @@ describe('renderRouteReal — distinct native path per route', () => {
     renderRes({ route: 'pksafety', artifact: stage4(), admission: 'admitted' });
     const canvas = screen.getByTestId('canvas');
     expect(canvas.querySelector('[data-route="pksafety"]')).toBeTruthy();
-    for (const lane of ['delivery', 'cns_mpo', 'transporters', 'exposure', 'nebpi', 'safety']) {
+    for (const lane of ['delivery', 'cns_mpo', 'transporters', 'exposure', 'nebpi', 'safety', 'potency', 'evidence_availability']) {
       expect(within(canvas).getByText(lane)).toBeInTheDocument();
     }
-    // three null lanes (transporters/exposure/safety) → not_evaluated; never an inferred negative
-    expect(within(canvas).getAllByText('not_evaluated').length).toBeGreaterThanOrEqual(3);
+    // The native potency state is rendered verbatim; empty arrays stay record counts, not negatives.
+    expect(within(canvas).getByText('not_evaluated')).toBeInTheDocument();
+    expect(within(canvas).getAllByText('0 records').length).toBeGreaterThanOrEqual(3);
     expect(canvas.textContent).not.toMatch(/brain[- ]?penetrant|\bsafe\b/i);
-    // eligibility null → not_evaluated pill, never "not eligible"; NEBPI keeps context specificity
-    expect(within(canvas).getByText(/eligibility not_evaluated/i)).toBeInTheDocument();
+    expect(within(canvas).getByText('production eligible')).toBeInTheDocument();
     expect(within(canvas).queryByText('not eligible')).toBeNull();
-    expect(within(canvas).getByText('context_specific')).toBeInTheDocument();
   });
 
   it('renders gene-arm rows VERBATIM — no browser re-sort, re-cap, or pair ranking', () => {
