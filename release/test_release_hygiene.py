@@ -10,9 +10,11 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,18 +164,46 @@ def allowlist_row_is_policy_permitted(row: dict) -> bool:
     return False
 
 
+class AllowlistValidationError(AssertionError):
+    """Allowlist rejection whose message never contains attacker-controlled bytes."""
+
+
+def reject_allowlist_entry(position: int, issue: str) -> None:
+    """Raise a fixed-shape error without formatting any rejected-row field."""
+    raise AllowlistValidationError(
+        f"machine-path allowlist entry {position}: {issue}"
+    )
+
+
 def load_and_validate_allowlist() -> Counter[tuple[str, str]]:
     doc = json.loads(ALLOWLIST.read_text())
-    assert doc["schema"] == "spot.release.machine_path_allowlist.v1"
+    if not isinstance(doc, dict):
+        raise AllowlistValidationError("machine-path allowlist document must be an object")
+    if doc.get("schema") != "spot.release.machine_path_allowlist.v1":
+        raise AllowlistValidationError("machine-path allowlist schema is invalid")
+    entries = doc.get("entries")
+    if not isinstance(entries, list):
+        raise AllowlistValidationError("machine-path allowlist entries must be a list")
     expected: Counter[tuple[str, str]] = Counter()
-    for row in doc["entries"]:
-        assert allowlist_row_is_policy_permitted(row), (
-            "machine-path exception is outside its permitted immutable class: "
-            f"{row.get('path')} ({row.get('classification')})"
-        )
-        assert row["reason"].strip()
-        assert re.fullmatch(r"[0-9a-f]{64}", row["line_sha256"])
-        expected[(row["path"], row["line_sha256"])] += int(row.get("count", 1))
+    for position, row in enumerate(entries, 1):
+        if not isinstance(row, dict):
+            reject_allowlist_entry(position, "entry must be an object")
+        path = row.get("path")
+        classification = row.get("classification")
+        reason = row.get("reason")
+        digest = row.get("line_sha256")
+        count = row.get("count", 1)
+        if not isinstance(path, str) or not isinstance(classification, str):
+            reject_allowlist_entry(position, "path or classification is invalid")
+        if not allowlist_row_is_policy_permitted(row):
+            reject_allowlist_entry(position, "outside its permitted immutable class")
+        if not isinstance(reason, str) or not reason.strip():
+            reject_allowlist_entry(position, "reason is missing")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            reject_allowlist_entry(position, "line digest is invalid")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            reject_allowlist_entry(position, "count is invalid")
+        expected[(path, digest)] += count
     return expected
 
 
@@ -292,6 +322,69 @@ def test_active_code_cannot_self_authorize_with_resealed_allowlist():
     assert unallowlisted_machine_findings(
         [(attack["path"], "index", [attack_line])], Counter()
     )
+
+
+def test_invalid_allowlist_failure_never_echoes_sensitive_payload(tmp_path):
+    """Exercise normal pytest rendering, not merely the exception's message."""
+    fake = "hf_" + ("A" * 30)
+    malicious_allowlist = {
+        "schema": "spot.release.machine_path_allowlist.v1",
+        "entries": [
+            {
+                "path": "deploy/serve_static.py",
+                "line_sha256": "0" * 64,
+                "classification": "immutable_historical_provenance",
+                "reason": "invalid row carrying " + fake,
+            }
+        ],
+    }
+    allowlist_path = tmp_path / "malicious_allowlist.json"
+    allowlist_path.write_text(json.dumps(malicious_allowlist))
+    probe_path = tmp_path / "test_allowlist_output_probe.py"
+    probe_path.write_text(
+        "\n".join(
+            (
+                "import importlib.util",
+                "import os",
+                "from pathlib import Path",
+                f"SCANNER = Path({str(Path(__file__).resolve())!r})",
+                "spec = importlib.util.spec_from_file_location('release_hygiene_probe', SCANNER)",
+                "module = importlib.util.module_from_spec(spec)",
+                "spec.loader.exec_module(module)",
+                "module.ALLOWLIST = Path(os.environ['SPOT_AUDIT_ALLOWLIST'])",
+                "def test_invalid_row():",
+                "    module.load_and_validate_allowlist()",
+                "",
+            )
+        )
+    )
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["SPOT_AUDIT_ALLOWLIST"] = str(allowlist_path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            str(probe_path),
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    rendered = result.stdout + result.stderr
+    if result.returncode != 1:
+        raise AssertionError("invalid allowlist subprocess did not fail at the named gate")
+    if fake in rendered:
+        raise AssertionError("invalid allowlist failure exposed the sensitive-shaped value")
+    if "outside its permitted immutable class" not in rendered:
+        raise AssertionError("invalid allowlist subprocess missed the sanitized gate")
 
 
 def test_no_secret_signatures_in_any_tracked_or_staged_text():
