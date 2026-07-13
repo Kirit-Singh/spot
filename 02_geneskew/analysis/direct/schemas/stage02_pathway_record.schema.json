@@ -82,6 +82,22 @@
               "convergent": {
                 "type": "boolean"
               },
+              "convergence_claim_eligible": {
+                "type": "boolean"
+              },
+              "convergence_evaluable": {
+                "type": "boolean"
+              },
+              "convergence_size_disposition": {
+                "enum": [
+                  "evaluable",
+                  "non_evaluable_set_too_small",
+                  "non_evaluable_set_too_large"
+                ]
+              },
+              "convergence_size_policy_id": {
+                "const": "spot.stage02.pathway.convergence_size_governance.prospective.v1"
+              },
               "intra_set_components": {
                 "items": {
                   "items": {
@@ -102,7 +118,13 @@
                 "type": "string"
               },
               "method_id": {
-                "const": "spot.stage02.pathway.signature_convergence.v2"
+                "const": "spot.stage02.pathway.signature_convergence.v3"
+              },
+              "max_convergence_set_size": {
+                "const": 500
+              },
+              "min_convergence_set_size": {
+                "const": 3
               },
               "min_perturbations_for_convergence": {
                 "const": 2
@@ -182,6 +204,12 @@
             },
             "required": [
               "convergent",
+              "convergence_claim_eligible",
+              "convergence_evaluable",
+              "convergence_size_policy_id",
+              "min_convergence_set_size",
+              "max_convergence_set_size",
+              "convergence_size_disposition",
               "n_measured_perturbations",
               "measured_perturbations",
               "n_supporting_perturbations",

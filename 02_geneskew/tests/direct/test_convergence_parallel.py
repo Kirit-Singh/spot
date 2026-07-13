@@ -78,3 +78,79 @@ def test_cli_exposes_explicit_execution_only_controls():
     defaults = {a.dest: a.default for a in parser._actions}
     assert defaults["convergence_workers"] == convergence.DEFAULT_PAIRWISE_WORKERS
     assert defaults["convergence_chunk_size"] == convergence.DEFAULT_PAIR_CHUNK_SIZE
+
+
+def _size_bundle(n: int, set_id: str = "GO:SIZE") -> dict:
+    members = [f"T{i:05d}" for i in range(n)]
+    return {"sets": {set_id: {
+        "name": set_id,
+        "genes_target": members,
+        "genes_in_target_universe": members,
+        "n_genes_target": n,
+        "n_genes_in_target_universe": n,
+        "n_source_symbols": n,
+        "target_source_coverage": 1.0,
+    }}}
+
+
+def test_convergence_size_boundary_is_inclusive_at_500_and_refuses_501():
+    at_boundary = convergence.convergence_size_disposition(_size_bundle(500)["sets"]["GO:SIZE"])
+    over_boundary = convergence.convergence_size_disposition(_size_bundle(501)["sets"]["GO:SIZE"])
+
+    assert at_boundary["convergence_evaluable"] is True
+    assert at_boundary["convergence_size_disposition"] == convergence.SIZE_EVALUABLE
+    assert over_boundary["convergence_evaluable"] is False
+    assert over_boundary["convergence_size_disposition"] == convergence.SIZE_TOO_LARGE
+
+
+def test_giant_go_root_emits_coverage_but_generates_no_pairs(monkeypatch):
+    # GO:0008150 (biological_process) has 10,371 target-universe members in the pinned
+    # bundle. Its presence must be visible, but it cannot make ~54M pair calls or a claim.
+    n_root = 10_371
+    bundle = _size_bundle(n_root, "GO:0008150")
+    signatures = {"T00000": _vec(0.0), "T00001": _vec(0.1)}
+
+    def forbidden_cosine(*_args, **_kwargs):
+        raise AssertionError("an oversized set attempted a pair computation")
+
+    monkeypatch.setattr(convergence, "cosine_on_shared", forbidden_cosine)
+    pairs = convergence.pairwise_within_sets(bundle, signatures)
+    records = convergence.converge_sets(bundle, signatures, pairs)
+
+    assert pairs == []
+    assert len(records) == 1
+    record = records[0]
+    assert record["set_id"] == "GO:0008150"
+    assert record["n_source_symbols"] == n_root
+    assert record["n_genes_in_target_universe"] == n_root
+    assert record["target_source_coverage"] == 1.0
+    assert record["convergence_evaluable"] is False
+    assert record["convergence_claim_eligible"] is False
+    assert record["convergent"] is False
+    assert record["convergence_refused_reason"] == convergence.SIZE_TOO_LARGE
+    assert record["n_supportive_pairs"] == 0
+    assert record["pairwise_support"] == []
+    assert record["supporting_perturbations"] == []
+    assert record["intra_set_components"] == []
+
+
+def test_size_policy_and_limits_are_bound_into_artifact_and_hash():
+    bundle = _size_bundle(501)
+    signatures = {"T00000": _vec(0.0), "T00001": _vec(0.1)}
+    doc = pathway_arms.convergence_artifact(
+        bundle=bundle, signatures=signatures, condition="Rest", source="go_bp",
+        readout_universe_sha256="b" * 64)
+
+    assert doc["schema_version"] == "spot.stage02_pathway_convergence.v2"
+    assert doc["convergence_method_id"] == convergence.METHOD_ID
+    assert doc["convergence_size_policy_id"] == convergence.CONVERGENCE_SIZE_POLICY_ID
+    assert doc["min_convergence_set_size"] == 3
+    assert doc["max_convergence_set_size"] == 500
+    assert doc["n_convergence_evaluable_sets"] == 0
+    assert doc["n_convergence_non_evaluable_sets"] == 1
+
+    from direct.hashing import content_hash
+    mutated = dict(doc)
+    mutated["max_convergence_set_size"] = 501
+    mutated.pop("convergence_sha256")
+    assert content_hash(mutated) != doc["convergence_sha256"]

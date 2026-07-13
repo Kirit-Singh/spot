@@ -65,9 +65,12 @@ import math
 import multiprocessing as mp
 from typing import Any, Optional
 
-# v2, not v1: convergence is now the induced intra-pathway component, not a global one.
-# That changes which pathways are called convergent, so it changes the method.
-METHOD_ID = "spot.stage02.pathway.signature_convergence.v2"
+from . import genesets
+
+# v3, not v2: convergence now enforces the already-frozen pathway-size domain. The v2
+# pair builder silently computed giant GO root terms despite ``MAX_SET_SIZE=500`` and could
+# call them convergent. A 10,371-gene "biological process" root is not a specific pathway.
+METHOD_ID = "spot.stage02.pathway.signature_convergence.v3"
 SIMILARITY_METRIC = "cosine_on_shared_unmasked_support"
 
 # THE DEFINITION, and the restriction that makes it honest. Both enter the method hash:
@@ -96,6 +99,17 @@ SINGLE_TARGET_SUPPORT = "single_target_support"
 FLOAT_DECIMALS = 6
 ROUNDING_RULE = "half_even_6dp"
 
+# A scientific domain rule, not an execution setting. It is repeated in the method block
+# and every emitted set record, so removing or changing it moves the method/run identity.
+CONVERGENCE_SIZE_POLICY_ID = (
+    "spot.stage02.pathway.convergence_size_governance.prospective.v1")
+MIN_CONVERGENCE_SET_SIZE = genesets.MIN_SET_SIZE
+MAX_CONVERGENCE_SET_SIZE = genesets.MAX_SET_SIZE
+SIZE_EVALUABLE = "evaluable"
+SIZE_TOO_SMALL = "non_evaluable_set_too_small"
+SIZE_TOO_LARGE = "non_evaluable_set_too_large"
+SIZE_DISPOSITIONS = (SIZE_EVALUABLE, SIZE_TOO_SMALL, SIZE_TOO_LARGE)
+
 # Execution only: changing these does not change the statistic, its order, or its bytes.
 # ``fork`` is required because the real signature dictionary is several GiB and pickling it
 # into workers would both duplicate the scientific input and erase the speedup.  Production
@@ -110,6 +124,37 @@ _PAIRWISE_SIGNATURES: Optional[dict[str, dict[str, float]]] = None
 
 class ConvergenceExecutionError(ValueError):
     """The requested execution topology cannot preserve the frozen computation."""
+
+
+def _target_members(gene_set: dict[str, Any]) -> list[str]:
+    """Members in the bound perturbation-target universe, with fixture compatibility."""
+    values = gene_set.get("genes_in_target_universe")
+    if values is None:
+        values = gene_set.get("genes_target", [])
+    return sorted(set(str(g) for g in values))
+
+
+def convergence_size_disposition(gene_set: dict[str, Any]) -> dict[str, Any]:
+    """Re-derive whether a set is in the frozen convergence-size domain.
+
+    Size is counted in the perturbation-target universe: those are the possible signature
+    endpoints. Source size/coverage remain separate and are emitted on every set record.
+    """
+    n_members = len(_target_members(gene_set))
+    if n_members < MIN_CONVERGENCE_SET_SIZE:
+        disposition = SIZE_TOO_SMALL
+    elif n_members > MAX_CONVERGENCE_SET_SIZE:
+        disposition = SIZE_TOO_LARGE
+    else:
+        disposition = SIZE_EVALUABLE
+    return {
+        "convergence_size_policy_id": CONVERGENCE_SIZE_POLICY_ID,
+        "min_convergence_set_size": MIN_CONVERGENCE_SET_SIZE,
+        "max_convergence_set_size": MAX_CONVERGENCE_SET_SIZE,
+        "n_genes_in_target_universe": n_members,
+        "convergence_size_disposition": disposition,
+        "convergence_evaluable": disposition == SIZE_EVALUABLE,
+    }
 
 
 def cosine_on_shared(vec_a: dict[str, float],
@@ -194,7 +239,12 @@ def pairwise_within_sets(bundle: dict[str, Any],
     """
     wanted: set[tuple[str, str]] = set()
     for s in bundle["sets"].values():
-        measured = sorted(g for g in s["genes_target"] if g in signatures)
+        # Every set remains emitted by ``converge_sets``, but an out-of-domain set
+        # contributes ZERO pair computations. A giant root cannot consume compute or
+        # manufacture a convergence claim merely because it contains most genes.
+        if not convergence_size_disposition(s)["convergence_evaluable"]:
+            continue
+        measured = sorted(g for g in _target_members(s) if g in signatures)
         for i, a in enumerate(measured):
             for b in measured[i + 1:]:
                 wanted.add((a, b))
@@ -294,30 +344,42 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
 
     for set_id in sorted(bundle["sets"]):
         s = bundle["sets"][set_id]
+        size = convergence_size_disposition(s)
         # B1: a SIGNATURE exists only for a gene that was PERTURBED, so a set's candidate
         # members live in the PERTURBATION-TARGET universe — not the readout universe. The
         # readout universe is the space the signature VECTORS live in (the cosine is taken
         # over readout genes); it is not the space membership is decided in.
-        measured = sorted(g for g in s["genes_target"] if g in signatures)
+        measured = sorted(g for g in _target_members(s) if g in signatures)
         member_set = set(measured)
 
         # THE INDUCED SUBGRAPH: only pairs whose BOTH endpoints are members of this set.
         internal = []
-        for i, a in enumerate(measured):
-            for b in measured[i + 1:]:
-                p = by_pair.get((a, b)) or by_pair.get((b, a))
-                if p is not None:
-                    internal.append(p)
-        supportive = [p for p in internal if p["supportive"]]
+        if size["convergence_evaluable"]:
+            for i, a in enumerate(measured):
+                for b in measured[i + 1:]:
+                    p = by_pair.get((a, b)) or by_pair.get((b, a))
+                    if p is not None:
+                        internal.append(p)
+        supportive = ([p for p in internal if p["supportive"]]
+                      if size["convergence_evaluable"] else [])
         assert all(p["target_a"] in member_set and p["target_b"] in member_set
                    for p in supportive), "an edge escaped the membership restriction"
 
-        components = induced_components(measured, supportive)
+        components = (induced_components(measured, supportive)
+                      if size["convergence_evaluable"] else [])
         best: list[str] = components[0] if components else []
         n_supporting = len(best)
 
-        convergent = n_supporting >= MIN_PERTURBATIONS_FOR_CONVERGENCE
+        convergent = (size["convergence_evaluable"] and
+                      n_supporting >= MIN_PERTURBATIONS_FOR_CONVERGENCE)
         single = len(measured) == 1
+
+        n_source = s.get("n_source_symbols")
+        n_target = size["n_genes_in_target_universe"]
+        target_source_coverage = s.get("target_source_coverage")
+        if target_source_coverage is None and n_source not in (None, 0):
+            target_source_coverage = round(n_target / int(n_source), 6)
+        coverage = genesets.coverage_disposition(target_source_coverage)
 
         out.append({
             "set_id": set_id,
@@ -331,7 +393,13 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             "membership_restriction": MEMBERSHIP_RESTRICTION,
             "support_may_route_through_non_members":
                 SUPPORT_MAY_ROUTE_THROUGH_NON_MEMBERS,
-            "n_genes_in_set": s["n_genes_target"],
+            "n_genes_in_set": s.get("n_genes_target", n_target),
+            "n_source_symbols": n_source,
+            "n_genes_in_target_universe": n_target,
+            "target_source_coverage": target_source_coverage,
+            "global_coverage_disposition": coverage["global_coverage_disposition"],
+            "global_coverage_policy_passed": coverage["global_coverage_policy_passed"],
+            **size,
             "n_measured_perturbations": len(measured),
             "measured_perturbations": measured,
             "n_supporting_perturbations": n_supporting,
@@ -349,10 +417,13 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             # THE RULE. One measured perturbation is one experiment, and calling it a
             # pathway result launders an observation into a mechanism.
             "min_perturbations_for_convergence": MIN_PERTURBATIONS_FOR_CONVERGENCE,
+            "convergence_claim_eligible": size["convergence_evaluable"],
             "convergent": convergent,
             "single_target_support": single,
             "convergence_refused_reason": (
                 None if convergent else
+                size["convergence_size_disposition"]
+                if not size["convergence_evaluable"] else
                 SINGLE_TARGET_SUPPORT if single else
                 "no_measured_perturbation" if not measured else
                 "fewer_than_two_perturbations_converge"),
