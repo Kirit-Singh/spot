@@ -74,7 +74,13 @@ export function PageShell({
           subtitleNode={subtitleNode}
           onClearSelection={onClearSelection}
           onOpenMethods={(section) =>
-            opener.open(`${subtitle} — methods`, methodsProvenance, methodsNotes, methodsManifest, section)
+            opener.open(
+              `${subtitle} — methods & provenance`,
+              methodsProvenance,
+              methodsNotes,
+              methodsManifest,
+              section,
+            )
           }
         />
         <MpaNav active={page} />

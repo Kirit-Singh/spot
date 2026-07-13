@@ -86,6 +86,23 @@ describe('contextual Methods & Provenance drawer', () => {
     ).toBeInTheDocument();
   });
 
+  it('MINOR 6: Drug link states its upstream CD4 source fact (not "unavailable")', () => {
+    goto('/02_page.html');
+    renderStage('drugs', 'Drug link');
+    expect(
+      within(openDrawer()).getByText(/Marson primary-human-CD4 dataset/),
+    ).toBeInTheDocument();
+  });
+
+  it('MINOR 7: the Provenance action opens a neutrally-titled drawer (not "— methods")', () => {
+    goto('/02_page.html');
+    renderStage('targets', 'Targets');
+    const dialog = openDrawer('Provenance');
+    const title = within(dialog).getByRole('heading', { level: 2 }).textContent ?? '';
+    expect(title).toMatch(/— methods & provenance$/); // neutral, not "— methods"
+    expect(title.endsWith('— methods')).toBe(false);
+  });
+
   it('production shows "unavailable" values and never a fixture (values never invented)', () => {
     goto('/02_page.html');
     renderStage('targets', 'Targets');

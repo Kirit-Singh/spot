@@ -57,6 +57,9 @@ export function stageSourceTissue(stage_label: string): string | null {
   if (s.includes('target') || s.includes('pathway')) {
     return 'Primary human CD4 T cells (Marson GWCD4i) — one experimental source, across donor/stimulation conditions; no multi-tissue expression analysis.';
   }
+  if (s.includes('drug')) {
+    return 'Biological input is the Stage-2 program/perturbation result from the Marson primary-human-CD4 dataset; drug evidence comes from separately listed public sources.';
+  }
   if (s.includes('pk') || s.includes('safety')) {
     return 'Organ-system safety groups are shown only from source-backed label evidence, never inferred from tissue expression.';
   }
