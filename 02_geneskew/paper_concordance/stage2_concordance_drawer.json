@@ -1,20 +1,34 @@
 {
   "alters_scores_or_ranks": false,
   "classification": "read_only_diagnostic_non_gating",
-  "drawer_block_id": "spot.stage02.marson_concordance.drawer.v1",
+  "drawer_block_id": "spot.stage02.marson_concordance.drawer.v2",
   "hashes": {
     "authors_code_commit": "848d62fc2b7027f7218d6fc5f5b0c37255dc94af",
-    "concordance_artifact_sha256": "6c32eb084fc05b666b0304e91317bf3693a1fc6a840644df09cfce5ec6c52dc0",
+    "concordance_artifact_sha256": "1529bc664e837f76b4a090bede9382767b1328599ce0f2cef2273ab6c574d46b",
     "de_object_sha256": "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62",
     "preprint_pdf_sha256": "7539856ecfea9a2b70f809c925013b9d54866f006f37bf4b95bc2ce6c27ad890",
-    "program_registry_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
+    "program_registry": {
+      "artifact": "stage01_program_registry_v3.json (ADMITTED Stage-1 v3 release)",
+      "canonical_sha256": "4211ca4c11c74b3d38456d120ad47b4de3966661a3a21bdb506715e9666eb8d6",
+      "raw_sha256": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664",
+      "self_declared_registry_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
+      "self_declared_verifies": true
+    },
     "sign_control_spec_sha256": "6f5886e1b657abcc224720e9d1a270524224941506ef21b52bdac808cb7d4b96"
   },
-  "hpa": "Human Protein Atlas is link-out context only; no HPA value enters any score or rank.",
+  "hpa": "Human Protein Atlas is link-out context only; no HPA value enters any score or rank. (The authors' own tissue analysis is external HPA v25.0/GTEx - Methods p.45.)",
   "locators": [
     {
-      "claim": "blood-derived primary human CD4+ T cells; 4 healthy donors x 3 stimulation conditions; not multi-tissue",
+      "claim": "4 healthy human donors x 3 stimulation conditions",
       "locator": "p.4 (Suppl. Fig 1A)"
+    },
+    {
+      "claim": "blood-derived primary NAIVE human CD4+ T cells (PBMC-enriched leukapheresis / Leukopaks)",
+      "locator": "Methods p.32"
+    },
+    {
+      "claim": "no tissue/organ axis in GWCD4i; tissue specificity is an EXTERNAL HPA v25.0 / GTEx annotation (Tau index)",
+      "locator": "Methods p.45 (Suppl. Fig 13)"
     },
     {
       "claim": "screen significance threshold FDR < 10% (paper inference; spot displays none)",
@@ -42,6 +56,12 @@
     }
   ],
   "methods_text": "Marson preprint concordance (read-only). The paper's claim is a per-cytokine log2FC on regulator knockdown (mRNA, CRISPRi Perturb-seq; FDR-based). The released Stage-2 estimand is a target-masked DE-space program projection, delta_p(X) = mean(panel \\ mask) - mean(control \\ mask), over the SAME released per-gene log2FC. The substrate is shared, so the paper's direction is checked against it exactly; a program delta is NOT a per-cytokine effect, so the two are never equated and no verdict is drawn from the projection. Stage-2 displays no p/q and draws no inference.",
+  "rebind_requirement": {
+    "direct_artifact": "the projection here recomputes the RELEASED formula; it is NOT a read of an admitted Direct run, because none is admitted. A REBIND + RECOMPUTE against the final admitted Direct artifact is REQUIRED before any UI inclusion.",
+    "direct_code_schema_note": "the released Direct run_screen.py consumes panel_ensembl / control_ensembl, which the v3 release registry does not expose (it exposes panel_genes_measured + controls_by_bin); Direct has therefore not itself been rebound to v3, and that rebind is part of the admitted-artifact gate.",
+    "registry": "this artifact is now bound to the ADMITTED Stage-1 v3 release registry (raw/canonical/self recorded above) and delta_p was RE-DERIVED against its panel + binned-control sets",
+    "status": "REQUIRED_BEFORE_UI"
+  },
   "result": {
     "comparable_at_program_level": [
       "IL13 (th2_like)",
@@ -49,7 +69,8 @@
     ],
     "condition_note": "the paper's directional claims are re-stimulation-specific (p.9); no pooled cross-condition ratio is reported",
     "not_comparable": [
-      "IL2 and IL10 are panel members of NO released program, so the Stage-2 estimand says nothing about them",
+      "IL2: readout panel member of NO released program",
+      "IL10: readout panel member of NO released program (it IS a CONTROL-bin gene of tfh_like, so it enters that program's control mean - still not a readout of IL10)",
       "broad TCR/Mediator/SAGA breadth: the released estimand carries no per-cytokine breadth measure",
       "protein readouts: this analysis is mRNA-only"
     ],
@@ -67,5 +88,9 @@
         "n": 19
       }
     }
+  },
+  "supersedes": {
+    "reason": "W17 independent review: the registry pin bound a SUPERSEDED Stage-1 registry, and locator L1 conflated three claims. Both repaired; delta_p RE-DERIVED against the admitted registry (24/24 values changed), not relabelled.",
+    "version": "v1 @ 09a33207"
   }
 }

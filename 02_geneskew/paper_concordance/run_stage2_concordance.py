@@ -25,6 +25,37 @@ MIN_SURVIVING_PANEL = 1      # 02_geneskew/analysis/direct/config.py
 MIN_SURVIVING_CONTROL = 10   # 02_geneskew/analysis/direct/config.py
 
 
+def canonical_sha256(obj) -> str:
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                                     ensure_ascii=True).encode()).hexdigest()
+
+
+def registry_provenance(path: str, reg: dict) -> dict:
+    """Bind the registry by ALL THREE of its hashes, and say which bytes were consumed.
+
+    The superseded snapshot (raw 8356cfb9) shipped a flat ``control_symbols``; the ADMITTED
+    Stage-1 v3 release registry bins controls (``controls_by_bin``) and names its panel
+    ``panel_genes_measured``. A hash swap alone would have been a lie: the panel and control
+    SETS differ, so delta_p had to be re-derived, not relabelled.
+    """
+    self_declared = reg.get("registry_sha256")
+    body = {k: v for k, v in reg.items() if k != "registry_sha256"}
+    return {
+        "path_basename": os.path.basename(path),
+        "schema_version": reg.get("schema_version"),
+        "raw_sha256": sha256(path),
+        "canonical_sha256": canonical_sha256(reg),
+        "self_declared_registry_sha256": self_declared,
+        "self_declared_recomputed": canonical_sha256(body),
+        "self_declared_verifies": (self_declared == canonical_sha256(body)),
+        "panel_field": ("panel_genes_measured" if reg["programs"][0].get(
+            "panel_genes_measured") else "panel_symbols"),
+        "control_field": ("controls_by_bin" if reg["programs"][0].get(
+            "controls_by_bin") else "control_symbols"),
+        "n_programs": len(reg["programs"]),
+    }
+
+
 def sha256(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -128,7 +159,8 @@ def main(argv):
                     for pid in cmp_["programs"]:
                         prog = next(p for p in registry if p["program_id"] == pid)
                         d = projection.program_delta(
-                            row, prog["panel_symbols"], prog["control_symbols"],
+                            row, sorted(sc.panel_genes(prog)),
+                            sorted(sc.control_genes(prog)),
                             de.gene_index, {reg_sym}, MIN_SURVIVING_PANEL,
                             MIN_SURVIVING_CONTROL)
                         entry["stage2_projection"].append(sc.projection_observation(
@@ -148,7 +180,8 @@ def main(argv):
             "preprint_doi": spec["source"]["preprint"]["doi"],
             "de_object_sha256": de_sha, "de_matches_pin": True,
             "authors_code_commit": spec["source"]["authors_code_commit"],
-            "spec_sha256": sha256(a.spec), "registry_sha256": sha256(a.registry),
+            "spec_sha256": sha256(a.spec),
+            "program_registry": registry_provenance(a.registry, reg_raw),
         },
         "estimands": {
             "paper": {"quantity": "per-cytokine log2FC on regulator knockdown",
@@ -159,13 +192,49 @@ def main(argv):
                      "is shared; a program delta is NOT a per-cytokine effect and the two are "
                      "never equated"),
         },
+        # L1 was a SINGLE locator covering three separate claims; p.4 supports only the
+        # donor/condition axes (the word "blood" does not appear on p.4). Split and re-verified.
         "dataset_scope": {
-            "cells": "blood-derived primary human CD4+ T cells (CRISPRi Perturb-seq)",
+            "cells": "primary NAIVE human CD4+ T cells, blood-derived (CRISPRi Perturb-seq)",
             "axes": "4 healthy human donors x 3 stimulation conditions (Rest / Stim8hr / Stim48hr)",
             "multi_tissue": False,
-            "locator": "preprint p.4 (12 pools, four healthy human donors, 3 stimulation conditions; Suppl. Fig 1A)",
-            "hpa": ("Human Protein Atlas is LINK-OUT context only; no HPA value is incorporated "
-                    "into any score or rank"),
+            "locators": [
+                {"claim": "4 healthy human donors x 3 stimulation conditions",
+                 "locator": "p.4 (12 pools of CRISPRi-perturbed cells; Suppl. Fig 1A)",
+                 "verbatim": ("we collected 12 pools of CRISPRi-perturbed cells from four "
+                              "healthy human donors across 3 stimulation conditions")},
+                {"claim": "blood-derived primary naive CD4+ T cells",
+                 "locator": "Methods p.32",
+                 "verbatim": ("Primary naive human CD4+ T cells were isolated from "
+                              "PBMC-enriched leukapheresis products (Leukopaks, STEMCELL "
+                              "Technologies, catalog no. #70500) from healthy donors")},
+                {"claim": "no tissue/organ axis in GWCD4i; tissue specificity is EXTERNAL",
+                 "locator": "Methods p.45 (Tissue-specific gene expression analysis; Suppl. Fig 13)",
+                 "verbatim": ("we utilized bulk RNA-seq data from the Human Protein Atlas (HPA) "
+                              "version 25.0 (based on Ensembl version 109) ... maximum nTPM "
+                              "value reported for each gene between the HPA and "
+                              "Genotype-Tissue Expression (GTEx) datasets")},
+            ],
+            "hpa": ("The authors' own tissue analysis is an EXTERNAL HPA v25.0 / GTEx "
+                    "annotation applied to regulator clusters, not a GWCD4i measurement. In "
+                    "spot, the Human Protein Atlas is LINK-OUT context only; no HPA value is "
+                    "incorporated into any score or rank."),
+        },
+        "rebind_requirement": {
+            "status": "REQUIRED_BEFORE_UI",
+            "registry": ("this artifact is now bound to the ADMITTED Stage-1 v3 release "
+                         "registry (raw/canonical/self recorded above) and delta_p was "
+                         "RE-DERIVED against its panel + binned-control sets"),
+            "direct_artifact": ("the projection here recomputes the RELEASED formula; it is NOT "
+                                "a read of an admitted Direct run, because none is admitted. A "
+                                "REBIND + RECOMPUTE against the final admitted Direct artifact "
+                                "is REQUIRED before any UI inclusion."),
+            "direct_code_schema_note": ("the released Direct run_screen.py consumes "
+                                        "panel_ensembl / control_ensembl, which the v3 release "
+                                        "registry does not expose (it exposes "
+                                        "panel_genes_measured + controls_by_bin); Direct has "
+                                        "therefore not itself been rebound to v3, and that "
+                                        "rebind is part of the admitted-artifact gate."),
         },
         "protein_vs_mrna": {
             "our_analysis": "mRNA only",

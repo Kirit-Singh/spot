@@ -58,10 +58,33 @@ def sign_of(v: Optional[float], eps: float = 1e-9) -> Optional[str]:
     return "zero"
 
 
+def panel_genes(prog: dict[str, Any]) -> set[str]:
+    """Readout panel of a program. Stage-1 v3 release: ``panel_genes_measured``; the
+    superseded registry used ``panel_symbols``. Both are symbol lists."""
+    return set(prog.get("panel_genes_measured") or prog.get("panel_symbols") or [])
+
+
+def control_genes(prog: dict[str, Any]) -> set[str]:
+    """Control baseline of a program. Stage-1 v3 release bins its controls
+    (``controls_by_bin``: bin -> [symbols]); the superseded registry used a flat
+    ``control_symbols``. The projection consumes the FLATTENED control set."""
+    cb = prog.get("controls_by_bin")
+    if isinstance(cb, dict):
+        return {g for b in cb.values() for g in b}
+    return set(prog.get("control_symbols") or [])
+
+
 def programs_containing(cytokine: str, registry: list[dict[str, Any]]) -> list[str]:
-    """Released programs whose PANEL contains this cytokine (symbol join on panel_symbols)."""
-    return [p["program_id"] for p in registry
-            if cytokine in set(p.get("panel_symbols") or [])]
+    """Released programs whose READOUT PANEL contains this cytokine."""
+    return [p["program_id"] for p in registry if cytokine in panel_genes(p)]
+
+
+def programs_with_control_gene(cytokine: str,
+                               registry: list[dict[str, Any]]) -> list[str]:
+    """Programs where the cytokine is a CONTROL-bin gene. It is then NOT a readout, but it
+    DOES enter that program's control mean — so delta_p is not independent of it. Recording
+    this is the difference between 'absent' and 'absent from the panel'."""
+    return [p["program_id"] for p in registry if cytokine in control_genes(p)]
 
 
 def comparability(cytokine: Optional[str], registry: list[dict[str, Any]], *,
@@ -73,11 +96,18 @@ def comparability(cytokine: Optional[str], registry: list[dict[str, Any]], *,
                            "Stage-2 estimand is a single program projection and carries no "
                            "per-cytokine breadth measure")}
     progs = programs_containing(cytokine, registry) if cytokine else []
+    ctrl_progs = programs_with_control_gene(cytokine, registry) if cytokine else []
     if not progs:
+        reason = (f"{cytokine} is not a READOUT PANEL member of ANY released program, so the "
+                  "Stage-2 program estimand reports no effect on it")
+        if ctrl_progs:
+            reason += (f"; it IS a CONTROL-bin gene of {', '.join(ctrl_progs)}, so it enters "
+                       "that program's control mean and delta_p is not independent of it — "
+                       "which is still not a readout of the cytokine")
         return {"tier": TIER_CYTOKINE_ABSENT, "programs": [],
-                "reason": (f"{cytokine} is not a panel member of ANY released program, so the "
-                           "Stage-2 program estimand says nothing about it")}
+                "control_bin_programs": ctrl_progs, "reason": reason}
     return {"tier": TIER_PROJECTION_NOT_EQUIVALENT, "programs": progs,
+            "control_bin_programs": ctrl_progs,
             "reason": (f"{cytokine} is one panel member of {', '.join(progs)}; delta_p is a "
                        "panel mean minus a control mean, so a per-cytokine equivalence is not "
                        "claimed and no verdict is emitted")}

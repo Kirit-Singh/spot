@@ -4,9 +4,25 @@
   "classification": "read_only_diagnostic_non_gating",
   "dataset_scope": {
     "axes": "4 healthy human donors x 3 stimulation conditions (Rest / Stim8hr / Stim48hr)",
-    "cells": "blood-derived primary human CD4+ T cells (CRISPRi Perturb-seq)",
-    "hpa": "Human Protein Atlas is LINK-OUT context only; no HPA value is incorporated into any score or rank",
-    "locator": "preprint p.4 (12 pools, four healthy human donors, 3 stimulation conditions; Suppl. Fig 1A)",
+    "cells": "primary NAIVE human CD4+ T cells, blood-derived (CRISPRi Perturb-seq)",
+    "hpa": "The authors' own tissue analysis is an EXTERNAL HPA v25.0 / GTEx annotation applied to regulator clusters, not a GWCD4i measurement. In spot, the Human Protein Atlas is LINK-OUT context only; no HPA value is incorporated into any score or rank.",
+    "locators": [
+      {
+        "claim": "4 healthy human donors x 3 stimulation conditions",
+        "locator": "p.4 (12 pools of CRISPRi-perturbed cells; Suppl. Fig 1A)",
+        "verbatim": "we collected 12 pools of CRISPRi-perturbed cells from four healthy human donors across 3 stimulation conditions"
+      },
+      {
+        "claim": "blood-derived primary naive CD4+ T cells",
+        "locator": "Methods p.32",
+        "verbatim": "Primary naive human CD4+ T cells were isolated from PBMC-enriched leukapheresis products (Leukopaks, STEMCELL Technologies, catalog no. #70500) from healthy donors"
+      },
+      {
+        "claim": "no tissue/organ axis in GWCD4i; tissue specificity is EXTERNAL",
+        "locator": "Methods p.45 (Tissue-specific gene expression analysis; Suppl. Fig 13)",
+        "verbatim": "we utilized bulk RNA-seq data from the Human Protein Atlas (HPA) version 25.0 (based on Ensembl version 109) ... maximum nTPM value reported for each gene between the HPA and Genotype-Tissue Expression (GTEx) datasets"
+      }
+    ],
     "multi_tissue": false
   },
   "estimands": {
@@ -28,7 +44,18 @@
     "de_object_sha256": "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62",
     "preprint_doi": "10.64898/2025.12.23.696273",
     "preprint_pdf_sha256": "7539856ecfea9a2b70f809c925013b9d54866f006f37bf4b95bc2ce6c27ad890",
-    "registry_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
+    "program_registry": {
+      "canonical_sha256": "4211ca4c11c74b3d38456d120ad47b4de3966661a3a21bdb506715e9666eb8d6",
+      "control_field": "controls_by_bin",
+      "n_programs": 11,
+      "panel_field": "panel_genes_measured",
+      "path_basename": "stage01_program_registry_v3.json",
+      "raw_sha256": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664",
+      "schema_version": "spot.stage01_program_registry.v3",
+      "self_declared_recomputed": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
+      "self_declared_registry_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
+      "self_declared_verifies": true
+    },
     "spec_sha256": "6f5886e1b657abcc224720e9d1a270524224941506ef21b52bdac808cb7d4b96"
   },
   "protein_vs_mrna": {
@@ -39,12 +66,21 @@
     "tier": "not_comparable_protein_modality"
   },
   "read_only": true,
+  "rebind_requirement": {
+    "direct_artifact": "the projection here recomputes the RELEASED formula; it is NOT a read of an admitted Direct run, because none is admitted. A REBIND + RECOMPUTE against the final admitted Direct artifact is REQUIRED before any UI inclusion.",
+    "direct_code_schema_note": "the released Direct run_screen.py consumes panel_ensembl / control_ensembl, which the v3 release registry does not expose (it exposes panel_genes_measured + controls_by_bin); Direct has therefore not itself been rebound to v3, and that rebind is part of the admitted-artifact gate.",
+    "registry": "this artifact is now bound to the ADMITTED Stage-1 v3 release registry (raw/canonical/self recorded above) and delta_p was RE-DERIVED against its panel + binned-control sets",
+    "status": "REQUIRED_BEFORE_UI"
+  },
   "results": [
     {
       "comparability_by_cytokine": {
         "IL10": {
+          "control_bin_programs": [
+            "tfh_like"
+          ],
           "programs": [],
-          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "reason": "IL10 is not a READOUT PANEL member of ANY released program, so the Stage-2 program estimand reports no effect on it; it IS a CONTROL-bin gene of tfh_like, so it enters that program's control mean and delta_p is not independent of it \u2014 which is still not a readout of the cytokine",
           "tier": "not_comparable_cytokine_absent_from_all_panels"
         }
       },
@@ -109,8 +145,11 @@
     {
       "comparability_by_cytokine": {
         "IL10": {
+          "control_bin_programs": [
+            "tfh_like"
+          ],
           "programs": [],
-          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "reason": "IL10 is not a READOUT PANEL member of ANY released program, so the Stage-2 program estimand reports no effect on it; it IS a CONTROL-bin gene of tfh_like, so it enters that program's control mean and delta_p is not independent of it \u2014 which is still not a readout of the cytokine",
           "tier": "not_comparable_cytokine_absent_from_all_panels"
         }
       },
@@ -267,8 +306,11 @@
     {
       "comparability_by_cytokine": {
         "IL10": {
+          "control_bin_programs": [
+            "tfh_like"
+          ],
           "programs": [],
-          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "reason": "IL10 is not a READOUT PANEL member of ANY released program, so the Stage-2 program estimand reports no effect on it; it IS a CONTROL-bin gene of tfh_like, so it enters that program's control mean and delta_p is not independent of it \u2014 which is still not a readout of the cytokine",
           "tier": "not_comparable_cytokine_absent_from_all_panels"
         }
       },
@@ -333,6 +375,7 @@
     {
       "comparability_by_cytokine": {
         "IL21": {
+          "control_bin_programs": [],
           "programs": [
             "tfh_like"
           ],
@@ -356,11 +399,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -0.3918963683234457,
+              "delta_p": -0.4599798411647623,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -384,11 +427,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -1.4291622265730635,
+              "delta_p": -1.5054084386197584,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -412,11 +455,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.5187745352351457,
+              "delta_p": 0.5404678972175165,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -440,6 +483,7 @@
     {
       "comparability_by_cytokine": {
         "IL21": {
+          "control_bin_programs": [],
           "programs": [
             "tfh_like"
           ],
@@ -463,11 +507,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 2.0720533359617135,
+              "delta_p": 2.1684671086083287,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -491,11 +535,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.34511986751020163,
+              "delta_p": 0.5529447053601773,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -519,11 +563,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 1.2463302979123545,
+              "delta_p": 1.3343541284185676,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -547,11 +591,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -0.024630885896663825,
+              "delta_p": -0.04329170150742399,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -575,11 +619,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.9734734004879296,
+              "delta_p": 0.8731789689166313,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -603,11 +647,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.23708416219854128,
+              "delta_p": 0.32204599277938745,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -632,6 +676,7 @@
     {
       "comparability_by_cytokine": {
         "IL21": {
+          "control_bin_programs": [],
           "programs": [
             "tfh_like"
           ],
@@ -655,11 +700,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -0.14062089782416218,
+              "delta_p": -0.11389366907079713,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -683,11 +728,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 1.1928114168018547,
+              "delta_p": 1.1099190268513865,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -711,11 +756,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.4555765317533833,
+              "delta_p": 0.38142934913197674,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -739,11 +784,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -0.5021915752549516,
+              "delta_p": -0.5417077862886736,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -767,11 +812,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.9614638626160914,
+              "delta_p": 0.9393824076441246,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -795,11 +840,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.5074537127459195,
+              "delta_p": 0.4738230025285184,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -824,11 +869,15 @@
     {
       "comparability_by_cytokine": {
         "IL10": {
+          "control_bin_programs": [
+            "tfh_like"
+          ],
           "programs": [],
-          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "reason": "IL10 is not a READOUT PANEL member of ANY released program, so the Stage-2 program estimand reports no effect on it; it IS a CONTROL-bin gene of tfh_like, so it enters that program's control mean and delta_p is not independent of it \u2014 which is still not a readout of the cytokine",
           "tier": "not_comparable_cytokine_absent_from_all_panels"
         },
         "IL21": {
+          "control_bin_programs": [],
           "programs": [
             "tfh_like"
           ],
@@ -897,11 +946,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.1106369682073117,
+              "delta_p": 0.11060542783591641,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -925,11 +974,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.6667882648555882,
+              "delta_p": 0.6616043085579318,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -953,11 +1002,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.6681170878895029,
+              "delta_p": 0.6009029896539115,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -981,11 +1030,15 @@
     {
       "comparability_by_cytokine": {
         "IL10": {
+          "control_bin_programs": [
+            "tfh_like"
+          ],
           "programs": [],
-          "reason": "IL10 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "reason": "IL10 is not a READOUT PANEL member of ANY released program, so the Stage-2 program estimand reports no effect on it; it IS a CONTROL-bin gene of tfh_like, so it enters that program's control mean and delta_p is not independent of it \u2014 which is still not a readout of the cytokine",
           "tier": "not_comparable_cytokine_absent_from_all_panels"
         },
         "IL21": {
+          "control_bin_programs": [],
           "programs": [
             "tfh_like"
           ],
@@ -1054,11 +1107,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -0.29581981664520196,
+              "delta_p": -0.20415617501873115,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -1082,11 +1135,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.3040281669262908,
+              "delta_p": 0.29399158773358813,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -1110,11 +1163,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": 0.6750571452299013,
+              "delta_p": 0.715066912761458,
               "delta_p_sign": "positive",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 93,
+              "n_control_surviving": 134,
               "n_panel_surviving": 3,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "tfh_like",
@@ -1138,8 +1191,9 @@
     {
       "comparability_by_cytokine": {
         "IL2": {
+          "control_bin_programs": [],
           "programs": [],
-          "reason": "IL2 is not a panel member of ANY released program, so the Stage-2 program estimand says nothing about it",
+          "reason": "IL2 is not a READOUT PANEL member of ANY released program, so the Stage-2 program estimand reports no effect on it",
           "tier": "not_comparable_cytokine_absent_from_all_panels"
         }
       },
@@ -1342,6 +1396,7 @@
     {
       "comparability_by_cytokine": {
         "IL13": {
+          "control_bin_programs": [],
           "programs": [
             "th2_like"
           ],
@@ -1365,11 +1420,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -0.9484915570517573,
+              "delta_p": -0.9910808118040858,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 113,
+              "n_control_surviving": 114,
               "n_panel_surviving": 4,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "th2_like",
@@ -1393,11 +1448,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -2.909970789112985,
+              "delta_p": -2.9377714135951294,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 113,
+              "n_control_surviving": 114,
               "n_panel_surviving": 4,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "th2_like",
@@ -1421,11 +1476,11 @@
           },
           "stage2_projection": [
             {
-              "delta_p": -2.138462630003093,
+              "delta_p": -2.1899720986579654,
               "delta_p_sign": "negative",
               "estimand": "delta_p(X) = mean_{g in P_p \\ M_X} d_X,g - mean_{g in C_p \\ M_X} d_X,g   (target-masked DE-space program projection; 02_geneskew/analysis/direct/projection.py)",
               "inference": "none \u2014 production displays no p/q and draws no inference",
-              "n_control_surviving": 113,
+              "n_control_surviving": 114,
               "n_panel_surviving": 4,
               "note": "descriptive only: a program delta is not a per-cytokine effect, so agreement or disagreement with the paper's cytokine sign is NOT a concordance result",
               "program_id": "th2_like",
