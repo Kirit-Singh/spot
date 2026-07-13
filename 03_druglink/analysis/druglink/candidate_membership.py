@@ -180,7 +180,10 @@ def derive_from_view(view: Mapping[str, Any], cid: str) -> dict[str, frozenset[s
     tables = view.get("tables") or {}
     edges = _rows_for(tables.get("target_drug_edges") or [], cid)
     summaries = _rows_for(tables.get("arm_summaries") or [], cid)
-    contexts = _rows_for(tables.get("pathway_context") or [], cid)
+    # `pathway_context` is deliberately NOT read here. It was fetched into a local and then never
+    # used, which is the shape of a check somebody meant to add — and the only thing it could have
+    # added is a pathway-sourced membership, which is precisely what this function must refuse to
+    # grant. Context annotates a candidate the edges already support; it never contributes one.
 
     # MEMBERSHIP COMES FROM THE EDGES. ONLY THE EDGES.
     #

@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 from druglink import run_stage3, stage2_aggregate as sa
 
 
