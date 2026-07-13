@@ -208,6 +208,15 @@ scorer-projection `9621067b→008c1da1`. The Stage-2-bound scorer VIEW / `select
 (`5d1d8c36…` / fixture `4af0fbbb…`), so Stage-2 (audited GO `5694444e`) is unaffected. Every future
 label/copy rename is Tier-2 and free.
 
+**Documented v2-registry carve-out.** One served artifact deliberately retains the *pre-rename* label
+`Checkpoint-high`: the frozen **v2 legacy registry** `01_programs/app/data/stage01_program_registry.json`.
+It is a hash-frozen historical record — bound by `stage01_current.json` `v2_registry.raw_sha256`
+(`8356cfb9…`) and marked `HISTORICAL_NOT_CURRENT` — and is **never UI-rendered**; editing it would break
+that binding, so its label is immutable by design. All ACTIVE/rendered artifacts (seed, page `SHORT` map,
+notebook, v3 registry) use bare `Checkpoint`. The served-artifact stale-label scan
+(`analysis/test_no_stale_labels.py`) encodes this as an explicit allow-list entry and **fails if any OTHER
+served artifact carries the historical label** — the carve-out is a recorded exception, not a silent gap.
+
 ---
 
 ## Task 1: Freeze the program panels with real provenance
