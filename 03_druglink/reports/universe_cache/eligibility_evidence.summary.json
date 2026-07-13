@@ -1,0 +1,16 @@
+{
+  "coverage": {
+    "coverage_denominator_note": "general drug evidence is built over ENSG targets with UNAMBIGUOUS identity and NULL-variant assertions only; symbol-only => unsupported_namespace; shared-accession => ambiguous_identity; variant assertions are preserved but non-rankable; never reported as ENSG coverage",
+    "n_ambiguous_identity": 86,
+    "n_drug_evidence": 505,
+    "n_ensg": 11522,
+    "n_general_drug_assertions": 2227,
+    "n_no_drug_evidence": 10931,
+    "n_symbol_only_unsupported_namespace": 4,
+    "n_targets_total": 11526,
+    "n_variant_specific_assertions": 29
+  },
+  "eligibility_evidence_sha256": "cf5d70884240d2e8ba9c2c5c60a986cf1ec665e73d2ae821d47495dff174167c",
+  "note": "compact summary; full target_eligibility_evidence.json (3.5MB) stays out-of-Git in the host-local cache",
+  "store_id": "b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e"
+}

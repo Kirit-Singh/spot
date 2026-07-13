@@ -1,0 +1,33 @@
+[
+  {
+    "accessed_at_utc": "2026-07-13T06:29:16Z..2026-07-13T07:08:12Z",
+    "acquired_sha256": "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281",
+    "basename": "chembl_37_sqlite.tar.gz",
+    "doi": "10.6019/CHEMBL.database.37",
+    "last_modified": "Fri, 29 May 2026 06:35:28 GMT",
+    "license": "CC BY-SA 3.0",
+    "name": "chembl_sqlite",
+    "publisher_sha256": "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281",
+    "release": "CHEMBL_37",
+    "release_metadata_url": "https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/releases/chembl_37/checksums.txt",
+    "required_attribution": "preserve ChEMBL IDs; display release; cite Mendez 2019 DOI 10.1093/nar/gky1075",
+    "size_bytes": 5764252857,
+    "url": "https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/releases/chembl_37/chembl_37_sqlite.tar.gz"
+  },
+  {
+    "accessed_at_utc": "2026-07-13T06:29:16Z..2026-07-13T07:08:12Z",
+    "acquired_sha256": "0741a54986fa746e36f4377fc316cdc81e65c75aa770c8f22fc26e93f1cc6ca5",
+    "basename": "HUMAN_9606_idmapping.dat.gz",
+    "current_release_is_mutable_note": "current_release path is mutable; bytes pinned by publisher MD5 + acquired SHA-256; immutable archive previous_releases/release-2026_02/ becomes available after the next UniProt release",
+    "last_modified": "Wed, 10 Jun 2026 20:00:00 GMT",
+    "license": "CC BY 4.0",
+    "name": "uniprot_idmapping",
+    "publisher_md5": "7ef6a677d4db949397c3b352c466e499",
+    "release": "2026_02",
+    "release_date": "10-Jun-2026",
+    "release_metadata_url": "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/RELEASE.metalink",
+    "relnotes_url": "https://ftp.uniprot.org/pub/databases/uniprot/current_release/relnotes.txt",
+    "size_bytes": 37842957,
+    "url": "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz"
+  }
+]

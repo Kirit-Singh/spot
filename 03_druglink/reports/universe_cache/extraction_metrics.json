@@ -1,0 +1,51 @@
+{
+  "assertion_counts": {
+    "n_ambiguous_assertion_occurrences": 6,
+    "n_ambiguous_unique_source_rows": 2,
+    "n_general_drug_assertions": 2227,
+    "n_total_stored_occurrences": 2262,
+    "n_unique_source_mechanism_rows": 2258,
+    "n_variant_specific_assertions": 29
+  },
+  "chembl_source_sha256": "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281",
+  "coverage": {
+    "coverage_denominator_note": "general drug evidence is built over ENSG targets with UNAMBIGUOUS identity and NULL-variant assertions only; symbol-only => unsupported_namespace; shared-accession => ambiguous_identity; variant assertions are preserved but non-rankable; never reported as ENSG coverage",
+    "n_ambiguous_identity": 86,
+    "n_drug_evidence": 505,
+    "n_ensg": 11522,
+    "n_general_drug_assertions": 2227,
+    "n_no_drug_evidence": 10931,
+    "n_symbol_only_unsupported_namespace": 4,
+    "n_targets_total": 11526,
+    "n_variant_specific_assertions": 29
+  },
+  "eligibility_counts": {
+    "by_disposition": {
+      "eligible_human_single_protein": 5869,
+      "reject_nonhuman_target_taxon": 5186
+    },
+    "n_eligible": 5869,
+    "n_rejected": 5186,
+    "n_total": 11055
+  },
+  "eligibility_evidence_sha256": "cf5d70884240d2e8ba9c2c5c60a986cf1ec665e73d2ae821d47495dff174167c",
+  "finished_utc": "2026-07-13T08:01:55Z",
+  "manifest_content_sha256": "3af87c37aaed7bd92fe873c59507fa8ed35e86cb8f99a8a110671ec1cf00985f",
+  "n_drug_evidence_targets": 505,
+  "peak_rss_mb": 144.5,
+  "public_source_provenance_sha256": "78f15a72953064ae272d361830697f445b610de44951bb1aec90fa59b49447c9",
+  "sqlite_bytes": 30480314368,
+  "sqlite_name": "chembl_37.db",
+  "started_utc": "2026-07-13T08:00:14Z",
+  "steps": {
+    "build_store_s": 1.6,
+    "extract_tar_s": 95.9,
+    "verify_source_bytes_s": 2.3
+  },
+  "store_id": "b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e",
+  "store_rows_sha256": "b3e7e5c79a7cc8df6526796dcbc745e9576da97d7a6f67d6b48ac80ce1a5b8c6",
+  "uniprot_source_sha256": "0741a54986fa746e36f4377fc316cdc81e65c75aa770c8f22fc26e93f1cc6ca5",
+  "verify_ok": true,
+  "verify_violations": [],
+  "wall_clock_s": 101.0
+}
