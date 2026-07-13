@@ -175,7 +175,14 @@ describe('reviewer landing interaction', () => {
     mountLanding()
     // The root stays a bare wordmark + mark; the credit lives behind the About control.
     expect(document.querySelector('footer')).toBeNull()
-    expect(document.querySelector('#about .credit')).toHaveTextContent('Kirit Singh . 2026')
+    const credit = document.querySelector('#about .credit') as HTMLElement
+    expect(credit).toHaveTextContent('Kirit Singh . 2026')
     expect(document.querySelector('main')).not.toHaveTextContent('Kirit Singh')
+
+    // `.sheet p` (0,1,1) out-specifies a bare `.credit` (0,1,0), so the credit silently
+    // rendered at the body size with no separation. Pin the resolved values.
+    const style = getComputedStyle(credit)
+    expect(style.fontSize).toBe('9px')
+    expect(style.marginTop).toBe('26px')
   })
 })

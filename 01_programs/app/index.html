@@ -241,7 +241,8 @@
     cursor:pointer;
   }
   .close:hover{border-color:var(--accent);color:var(--accent)}
-  .credit{
+  /* Must out-specify `.sheet p` (0,1,1), which otherwise wins over a bare `.credit`. */
+  .sheet .credit{
     margin:26px 0 0;
     text-align:center;
     font-family:var(--mono);
