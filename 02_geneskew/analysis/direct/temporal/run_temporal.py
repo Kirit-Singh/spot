@@ -24,6 +24,7 @@ from typing import Any, Optional
 
 from .. import emit, gate, runid
 from .. import run_screen as rs
+from .. import stage1_v3 as stage1_v3_mod
 from ..hashing import canonical_json, content_hash, sha256_hex
 from . import config, policy, records
 
@@ -170,23 +171,9 @@ def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, An
                           else "temporal_cross_condition_all_released_pairs"),
         "conditions": conds,
         "comparisons": [records.comparison_id(a, b) for a, b in pairs],
-        "stage1_v3": (None if v3 is None else {
-            "schema_version": v3.bound["schema_version"],
-            "selection_id": v3.selection_id,
-            # RE-DERIVED from the contract's own content at bind time, not copied
-            "full_contract_content_sha256": ctx["id_check"][
-                "full_contract_content_sha256"],
-            "selection_biology_sha256": v3.selection_biology_sha256,
-            "analysis_mode": v3.analysis_mode,
-            "from_condition": v3.from_condition,
-            "to_condition": v3.to_condition,
-            "estimator_id": v3.estimator_id,
-            "execution_status": v3.execution_status,
-            "poles": {"A": {"program_id": v3.a.program_id,
-                            "direction": v3.a.direction},
-                      "B": {"program_id": v3.b.program_id,
-                            "direction": v3.b.direction}},
-        }),
+        "stage1_v3": stage1_v3_mod.binding_block(
+            v3, None if v3 is None
+            else ctx["id_check"]["full_contract_content_sha256"]),
         "selection": {
             "selection_id": ctx["selection"].selection_id,
             "question_id": ctx["selection"].question_id,

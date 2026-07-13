@@ -498,7 +498,8 @@ def build_screen(args) -> dict:
         # from a CLEAN checkout: a digest over uncommitted bytes does not identify the
         # commit printed beside it.
         code_identity=code_identity_for(
-            lane, getattr(args, "allow_dirty_tree", False)))
+            lane, getattr(args, "allow_dirty_tree", False)),
+        stage1_v3=stage1_v3.binding_block(ctx.get("v3")))
     run_id, run_sha = runid.run_id_of(binding)
 
     for rows in (screen_rows, mask_rows, guide_rows, donor_rows, contrib_rows):

@@ -85,7 +85,8 @@ def build_run_binding(*, selection, lane: str, stage1_release,
                       support_contract: dict[str, Any],
                       evidence_domain: dict[str, Any],
                       release_gate: dict[str, Any],
-                      code_identity: Optional[dict[str, Any]] = None
+                      code_identity: Optional[dict[str, Any]] = None,
+                      stage1_v3: Optional[dict[str, Any]] = None
                       ) -> dict[str, Any]:
     """Assemble the canonical, timestamp-free content that run_id hashes.
 
@@ -152,6 +153,9 @@ def build_run_binding(*, selection, lane: str, stage1_release,
         # package directory; this identifies the whole Stage-2 tree against a committed
         # history, by a recipe anybody can re-run (`python -m direct.code_digest`).
         "code_identity": code_identity,
+        # WHICH v3 contract drove this run, or None. Emitted either way, so a reader can
+        # tell a v3-driven run from a legacy one without inferring it.
+        "stage1_v3": stage1_v3,
         "environment_lock": env_lock,
     }
 

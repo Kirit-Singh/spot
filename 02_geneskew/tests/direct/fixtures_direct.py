@@ -433,3 +433,8 @@ class RunArgs:
     # test_code_digest.py::test_a_release_lane_REFUSES_a_dirty_tree, and against the real
     # build path in test_a_release_BUILD_refuses_a_dirty_tree below.
     allow_dirty_tree: bool = True
+    # DECLARED, not incidental: an args object that does not define these is refused by
+    # the v3 gate (REFUSE_V3_NOT_WIRED), because a missing flag must never be read as
+    # "no v3 contract supplied".
+    stage1_v3_selection: Optional[str] = None
+    stage1_v3_schema: Optional[str] = None

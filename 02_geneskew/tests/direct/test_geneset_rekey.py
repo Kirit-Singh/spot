@@ -421,3 +421,59 @@ class TestThePathwayLaneRunsOnTheRekeyedSets:
         for name in ("pathway.json", "pathway_provenance.json"):
             with open(os.path.join(res["out_dir"], name)) as fh:
                 assert admission.forbidden_keys(json.load(fh)) == []
+
+
+class TestB1_BOTH_UNIVERSES_ARE_IN_THE_METHOD_HASH:
+    """The round-3 commit CLAIMED both universe ids were bound into the pathway METHOD
+    hash. Only the READOUT id was: `binding_block` never carried
+    `target_universe_sha256`, so two bundles differing ONLY in which population was
+    PERTURBED produced an IDENTICAL method hash.
+
+    The target universe is the space enrichment tests membership in. Two runs that differ
+    in it are running a different method, not merely a different input — so the claim had
+    to become true, not be withdrawn.
+    """
+
+    def _bundle(self, target_sha):
+        return {
+            "schema_version": genesets.SCHEMA_VERSION,
+            "gene_set_release": {"source": "reactome", "release_id": "V97"},
+            "gene_set_license": "CC0-1.0", "gene_set_license_reference": "x",
+            "gene_id_namespace": "ensembl_gene_id",
+            "effect_universe_sha256": "r" * 64,
+            "target_universe_sha256": target_sha,
+            "single_universe_binding": False,
+            "min_set_size": 3, "max_set_size": 500,
+            "canonical_sha256": "c" * 64, "sets": {},
+        }
+
+    def test_the_binding_block_carries_BOTH_universe_ids(self):
+        blk = genesets.binding_block(self._bundle("t" * 64))
+        assert blk["effect_universe_sha256"] == "r" * 64
+        assert blk["target_universe_sha256"] == "t" * 64
+
+    def test_two_bundles_differing_ONLY_in_the_TARGET_universe_hash_DIFFERENTLY(self):
+        from direct import run_pathway
+        from direct.hashing import content_hash
+        a = content_hash(run_pathway.method_block(self._bundle("t" * 64)))
+        b = content_hash(run_pathway.method_block(self._bundle("Z" * 64)))
+        assert a != b, ("the method hash is blind to the target universe — the space "
+                        "enrichment tests membership in")
+
+    def test_the_readout_universe_still_moves_the_method_hash_too(self):
+        from direct import run_pathway
+        from direct.hashing import content_hash
+        base = self._bundle("t" * 64)
+        other = dict(base, effect_universe_sha256="Q" * 64)
+        assert content_hash(run_pathway.method_block(base)) != \
+            content_hash(run_pathway.method_block(other))
+
+    def test_a_real_run_binds_both_into_its_method_hash(self, rekeyed):
+        args, _, gu, tu = rekeyed
+        res = run_pathway.build_pathway(args)
+        with open(os.path.join(res["out_dir"], "pathway_provenance.json")) as fh:
+            prov = json.load(fh)
+        gs = prov["run_binding"]["pathway_method"]["pathway_method"]["gene_sets"]
+        assert gs["effect_universe_sha256"] == gu["sha256"]
+        assert gs["target_universe_sha256"] == tu["sha256"]
+        assert gs["effect_universe_sha256"] != gs["target_universe_sha256"]

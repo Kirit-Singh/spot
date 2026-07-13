@@ -152,6 +152,7 @@ def build_pathway(args) -> dict[str, Any]:
         # M2: the reproducible code-identity tuple; a release lane refuses a dirty tree
         "code_identity": rs.code_identity_for(
             ctx["lane"], getattr(args, "allow_dirty_tree", False)),
+        "stage1_v3": stage1_v3.binding_block(ctx.get("v3")),
         "environment_lock": runid.env_lock_block(args.env_lock),
         # WHAT the records are, by content: a run that emitted different records under
         # the same id would be citing numbers it does not hold.
@@ -235,6 +236,14 @@ def main(argv=None) -> int:
     ap.add_argument("--target-identity-map", default=None)
     ap.add_argument("--donor-crosswalk", default=None)
     ap.add_argument("--env-lock", default=None)
+    ap.add_argument("--stage1-v3-selection", default=None,
+                    help="a Stage-1 v3 selection contract with "
+                         "analysis_mode=within_condition. It IS the selection: the axis is "
+                         "built from ITS poles and its full-contract hash is bound into "
+                         "the run identity. A temporal contract is refused by name.")
+    ap.add_argument("--stage1-v3-schema", default=None,
+                    help="the PINNED v3 JSON schema the contract is validated against; "
+                         "required whenever --stage1-v3-selection is given")
     ap.add_argument("--allow-dirty-tree", action="store_true",
                     help="take a RELEASE-grade run from an uncommitted tree. The digest "
                          "then describes bytes that exist in no commit, so this is "

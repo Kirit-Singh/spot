@@ -413,7 +413,14 @@ def binding_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         "gene_set_license": bundle["gene_set_license"],
         "gene_set_license_reference": bundle["gene_set_license_reference"],
         "gene_id_namespace": bundle["gene_id_namespace"],
+        # BOTH universes (B1). The commit and the matrix CLAIMED both were in the method
+        # hash; only the readout id was. Two bundles differing ONLY in which population
+        # was PERTURBED produced an identical method hash — and the target universe is the
+        # space enrichment tests membership in, so that is a different method, not a
+        # different input. The claim is now true.
         "effect_universe_sha256": bundle["effect_universe_sha256"],
+        "target_universe_sha256": bundle.get("target_universe_sha256"),
+        "single_universe_binding": bundle.get("single_universe_binding"),
         "canonical_sha256": bundle["canonical_sha256"],
         "min_set_size": bundle["min_set_size"],
         "max_set_size": bundle["max_set_size"],

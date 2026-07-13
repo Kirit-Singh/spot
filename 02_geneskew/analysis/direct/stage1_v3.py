@@ -123,6 +123,7 @@ REFUSE_HISTORICAL_GATE = "historical_selectability_is_being_used_as_a_live_gate"
 REFUSE_CONDITIONS = "condition_count_does_not_match_the_analysis_mode"
 
 REFUSE_SELECTION_ID = "selection_id_does_not_derive_from_its_own_canonical_content"
+REFUSE_V3_NOT_WIRED = "entry_point_does_not_define_the_v3_selection_flags"
 
 # THE RULE, published (m2). It was previously declared non-derivable and carried
 # unchecked; an independent audit published the recipe and it is now enforced.
@@ -594,6 +595,36 @@ def bind_axis(sel: V3Selection, release) -> dict[str, Any]:
     return out
 
 
+def binding_block(v3, full_contract_sha256: Optional[str] = None
+                  ) -> Optional[dict[str, Any]]:
+    """WHAT v3 contract this run executed — bound into the run identity, or None.
+
+    ``None`` is the honest legacy answer, and it is emitted: a reader can tell a run that
+    was driven by a v3 contract from one that was not, without inferring it from the shape
+    of some other field.
+    """
+    if v3 is None:
+        return None
+    block = {
+        "schema_version": v3.bound["schema_version"],
+        "selection_id": v3.selection_id,
+        "selection_biology_sha256": v3.selection_biology_sha256,
+        "analysis_mode": v3.analysis_mode,
+        "conditions": list(v3.conditions),
+        "estimator_id": v3.estimator_id,
+        "execution_status": v3.execution_status,
+        "poles": {"A": {"program_id": v3.a.program_id, "direction": v3.a.direction},
+                  "B": {"program_id": v3.b.program_id, "direction": v3.b.direction}},
+        # RE-DERIVED from the contract's own content at bind time, never copied
+        "full_contract_content_sha256": (full_contract_sha256
+                                         or reverify_full_contract_hash(v3.raw)),
+    }
+    if v3.is_temporal:
+        block["from_condition"] = v3.from_condition
+        block["to_condition"] = v3.to_condition
+    return block
+
+
 def load_selection(args, expect_mode: Optional[str] = None):
     """THE ONE VERIFIED TYPED V3 OBJECT, for ANY lane. ``None`` when none was supplied.
 
@@ -607,8 +638,27 @@ def load_selection(args, expect_mode: Optional[str] = None):
     within-condition runner must never silently execute a cross-condition selection or the
     other way round.
     """
-    path = getattr(args, "stage1_v3_selection", None)
-    schema = getattr(args, "stage1_v3_schema", None)
+    # A MISSING attribute is a WIRING BUG, not "no v3 contract".
+    #
+    # This is the exact shape of the defect an independent re-audit found: the Direct and
+    # Pathway CLIs never DEFINED --stage1-v3-selection, so `getattr(args, ..., None)`
+    # resolved to None, the v3 path was silently skipped, and a v3-driven run quietly
+    # became a legacy one. Tests missed it because they called build_*() with a hand-built
+    # args object that DID carry the attribute — argparse was never exercised.
+    #
+    # So "absent" and "not supplied" are now different things. An entry point that does not
+    # define the flags at all is refused loudly; a caller that defines them and leaves them
+    # None is simply not using a v3 contract, which is legitimate.
+    missing = [name for name in ("stage1_v3_selection", "stage1_v3_schema")
+               if not hasattr(args, name)]
+    if missing:
+        raise SelectionV3Error(
+            REFUSE_V3_NOT_WIRED,
+            f"this entry point does not define {missing}; it has not been wired to the v3 "
+            "gate, and a missing flag must never be read as 'no v3 contract supplied'")
+
+    path = args.stage1_v3_selection
+    schema = args.stage1_v3_schema
     if not path:
         return None
     if not schema:

@@ -39,6 +39,14 @@ def main(argv=None):
     ap.add_argument("--donor-crosswalk", default=None,
                     help="explicit Stage-1-donor-label -> release-donor-token map")
     ap.add_argument("--env-lock", default=None)
+    ap.add_argument("--stage1-v3-selection", default=None,
+                    help="a Stage-1 v3 selection contract with "
+                         "analysis_mode=within_condition. It IS the selection: the axis is "
+                         "built from ITS poles and its full-contract hash is bound into "
+                         "the run identity. A temporal contract is refused by name.")
+    ap.add_argument("--stage1-v3-schema", default=None,
+                    help="the PINNED v3 JSON schema the contract is validated against; "
+                         "required whenever --stage1-v3-selection is given")
     ap.add_argument("--allow-dirty-tree", action="store_true",
                     help="take a RELEASE-grade run from an uncommitted tree. The digest "
                          "then describes bytes that exist in no commit, so this is "
