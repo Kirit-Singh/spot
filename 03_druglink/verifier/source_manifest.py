@@ -257,3 +257,100 @@ W2_REPLAY = {
     "variant_undefined_mutation_sentinels": 10,     # variant_id == -1
     "store_rows": 11_526,
 }
+
+
+# --------------------------------------------------------------------------- #
+# FINAL ADMISSION CRITERION — sealed re-audit 1f6008c2, corrected by primary source.
+#
+# I recommended REPLACING the mutable UniProt `current_release` locator with an immutable
+# 2026_02 archive. Checked against the publisher: **no such archive exists.**
+# `previous_releases/` stops at release-2026_01, and `current_release/relnotes.txt` reads
+# "UniProt Release 2026_02". So `current_release/` is where 2026_02 actually lives, and
+# demanding an immutable URL would have been demanding a fabricated one. A locator that is
+# honest about being mutable beats a locator that is stable and wrong.
+#
+# So the criterion is not "replace the URL". It is: keep the truthful locator, and BIND the
+# publisher metadata that proves which release those bytes came from —
+# RELEASE.metalink (size + MD5), relnotes (release + date), checksums, the acquired SHA-256,
+# and the access timestamp. Then a later reader, finding current_release advanced to 2026_03,
+# can still prove what we held.
+#
+# And the provenance file itself must be REOPENED AND HASHED at admission. A manifest that
+# pins a provenance hash while nobody ever opens the file has pinned nothing — the same
+# defect the audit found for the eligibility artifact, one file over.
+# --------------------------------------------------------------------------- #
+PROVENANCE_FILENAME = "source_provenance.public.json"
+GATE_PROVENANCE_DRIFT = "public_source_provenance_hash_drift"
+
+# The publisher metadata that proves the release association, since the URL cannot.
+REQUIRED_RELEASE_METADATA = {
+    "uniprot": ("release", "release_date", "publisher_md5", "size_bytes",
+                "acquired_sha256", "accessed_at_utc",
+                "release_metadata_url", "relnotes_url"),
+    "chembl": ("release", "publisher_sha256", "acquired_sha256", "accessed_at_utc",
+               "release_metadata_url", "doi"),
+}
+
+# `current_release` is TRUTHFUL for 2026_02 — there is no immutable archive to point at.
+UNIPROT_IMMUTABLE_ARCHIVE_EXISTS = False
+
+
+def check_provenance_is_reopened_and_hashed(rep: Report, *, store_root: str,
+                                            manifest: dict[str, Any],
+                                            content_hash_fn: Any) -> None:
+    """Open the provenance file, hash what was read, compare to the manifest's pin.
+
+    A pin nobody checks against the bytes is not a pin.
+    """
+    import json as _json
+    import os
+
+    path = os.path.join(store_root, PROVENANCE_FILENAME)
+    if not os.path.isfile(path):
+        rep.check(f"{PROVENANCE_FILENAME} exists on disk and is loaded for admission",
+                  False, f"not found: {path}")
+        return
+
+    with open(path, "r", encoding="utf-8") as fh:
+        prov = _json.load(fh)
+
+    pinned = (manifest.get("extraction") or {}).get("public_source_provenance_sha256")
+    recomputed = content_hash_fn(prov)
+    rep.check(
+        f"[{GATE_PROVENANCE_DRIFT}] the public source provenance ON DISK re-hashes to the "
+        "manifest's pin (a manifest that pins a hash while nobody opens the file has "
+        "pinned nothing — the same defect the audit found for the eligibility artifact)",
+        pinned is not None and recomputed == pinned,
+        f"on-disk {recomputed[:16]}… vs pinned {str(pinned)[:16]}…")
+
+
+def check_release_metadata_is_bound(rep: Report, provenance: Any) -> None:
+    """The URL cannot prove the release, so the publisher metadata must."""
+    records = provenance if isinstance(provenance, list) else [provenance]
+    by_source = {}
+    for r in records:
+        name = str(r.get("name") or "")
+        key = "uniprot" if "uniprot" in name.lower() else (
+            "chembl" if "chembl" in name.lower() else name)
+        by_source[key] = r
+
+    for source, fields in REQUIRED_RELEASE_METADATA.items():
+        rec = by_source.get(source)
+        if rec is None:
+            rep.check(f"{source} source provenance is present", False, "absent")
+            continue
+        missing = [f for f in fields if not rec.get(f)]
+        rep.check(
+            f"the {source} provenance binds the publisher metadata that PROVES the release "
+            f"({', '.join(fields)}) — the locator alone cannot, and for UniProt it is "
+            "mutable by necessity: there is no immutable 2026_02 archive to point at",
+            not missing, f"missing: {missing}")
+
+    uni = by_source.get("uniprot") or {}
+    rep.check(
+        "the UniProt locator is honest about being mutable (current_release IS where "
+        "2026_02 lives; previous_releases stops at 2026_01, so an 'immutable' URL would be "
+        "a fabricated one — a locator honest about being mutable beats one stable and wrong)",
+        any("mutable" in str(k).lower() or "mutable" in str(v).lower()
+            for k, v in uni.items()),
+        "no mutability note")
