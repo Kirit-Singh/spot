@@ -25,6 +25,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 sys.path.insert(0, os.path.join(_ROOT, "analysis", "direct"))
 sys.path.insert(0, os.path.join(_ROOT, "tests", "direct"))
 
+import fixtures_direct as F  # noqa: E402
 import verify_arm_contract as C  # noqa: E402
 import verify_arm_rules as AR  # noqa: E402
 
@@ -181,6 +182,152 @@ class TestTheEnvelopeValidates:
             C.validate_report({"verdict": "ADMIT"})
 
 
+class TestAReleaseGradeAdmissionMayNotStandOnASampledRecompute:
+    """THE SAMPLE-MODE SEAM. W10 recomputes every base delta under `--recompute all`; under
+    `--recompute sample` it re-derives a DETERMINISTIC HANDFUL of targets (8 by default) and
+    admits on those. Both invocations run the same gate NAMES, so the gate inventory — the
+    thing the execution-completeness profile pins — is identical between them. A sample-mode
+    ADMIT of a production bundle therefore matched the exact production profile and sailed
+    through this adapter: 8 targets checked out of ~11.5k, admitted as if all of them were.
+
+    `recompute_mode` is in the report's bound_artifact, so the adapter can simply READ what it
+    was: a release-grade admission must have re-derived EVERYTHING. This is a downstream
+    ADMISSION rule, not a new native gate — W10's inventory is untouched.
+    """
+
+    def _release_grade(self, lane="production", **bound):
+        r = _synthetic_report()
+        r["bound_artifact"].update(lane=lane, **bound)
+        return _seal(r)
+
+    def test_a_RESEALED_production_report_admitted_on_a_SAMPLE_REFUSES_by_name(self):
+        r = self._release_grade(recompute_mode="sample")
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_a_research_only_report_admitted_on_a_SAMPLE_REFUSES_too(self):
+        r = self._release_grade(lane="research_only", recompute_mode="sample")
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_a_release_grade_report_that_names_NO_recompute_mode_REFUSES(self):
+        # Absence is not "all". A report that does not say how much it re-derived has not
+        # said it re-derived everything, and silence may not be read as the stronger claim.
+        r = self._release_grade()
+        assert "recompute_mode" not in r["bound_artifact"]
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_the_token_is_BYTE_EXACT_not_folded(self):
+        r = self._release_grade(recompute_mode="ALL")
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_the_SAME_report_in_ALL_mode_clears_THIS_rule(self):
+        # It still has to satisfy the exact production profile (this hand-built inventory is
+        # not it) — the point is that the refusal is no longer the sampled-recompute one.
+        r = self._release_grade(recompute_mode="all")
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_GATE_PROFILE
+
+    def test_a_SYNTHETIC_fixture_report_may_still_be_a_sample(self):
+        # A fixture is a test input, not a provenance record. The rule is about what may be
+        # ADMITTED as a release, and nothing ships from the synthetic lane.
+        C.validate_report(self._release_grade(lane="synthetic", recompute_mode="sample"))
+
+
+@pytest.fixture
+def native_release_report(synthetic_run, tmp_path):
+    """A REAL three-condition release report, from the REAL release verifier. Not hand-built.
+
+    The bundle-level rule cannot protect the RELEASE report: it is a different schema, it
+    carries no `lane` (a release IS release-grade), and W1 consumes THIS document. So the
+    subject under test here is the real emitted artifact, mutated and resealed.
+    """
+    import fixtures_v3_release as V3
+    import verify_direct_release as VR
+    from direct import arm_release
+    conds = ("Rest", "Stim8hr", "Stim48hr")
+    prod = synthetic_run(conditions=conds)
+    root = str(tmp_path / "root")
+    stage1 = V3.stage_release(root, conditions=conds)
+    prod.stage1_release, prod.stage1_release_root = stage1, root
+    prod.env_lock, prod.out_root = LOCK, str(tmp_path / "rel")
+    res = arm_release.build_release(prod)
+    argv = ["--release", res["out_dir"], "--de-main", prod.de_main, "--sgrna", prod.sgrna,
+            "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
+            "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
+            "--stage1-v3-release", stage1, "--release-root", root, "--recompute", "all",
+            "--env-lock", LOCK, "--producer-code-root", F.PRODUCER_CODE_ROOT]
+    for flag, attr in (("--source-registry", "source_registry"),
+                       ("--pseudobulk", "pseudobulk")):
+        v = getattr(prod, attr, None)
+        if v:
+            argv += [flag, v]
+    path = str(tmp_path / "release_verification.json")
+    assert VR.main(argv + ["--report", path]) == 0
+    with open(path) as fh:
+        return json.load(fh), res["out_dir"]
+
+
+class TestTheRELEASEReportIsHeldToTheSameRecomputeRule:
+    """W1 consumes the RELEASE report, not the three bundle reports. A rule enforced only on
+    the bundle schema would leave the document that is actually read wide open — and a release
+    verified with `--recompute sample` flows that flag straight down to every per-bundle
+    verification, so the whole release would rest on 8 sampled targets per condition."""
+
+    def test_the_real_ALL_mode_release_report_PASSES_THROUGH(self, native_release_report):
+        report, _ = native_release_report
+        assert report["bound_artifact"]["recompute_mode"] == "all"
+        C.validate_report(report)                       # the honest release: admitted
+
+    def test_a_RESEALED_release_report_admitted_on_a_SAMPLE_REFUSES(
+            self, native_release_report):
+        report, _ = native_release_report
+        report["bound_artifact"]["recompute_mode"] = "sample"
+        _seal(report)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(report)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_a_release_report_that_OMITS_the_recompute_mode_REFUSES(
+            self, native_release_report):
+        # It is a REQUIRED release provenance binding: a release that does not say how much it
+        # re-derived has not said it re-derived everything.
+        report, _ = native_release_report
+        del report["bound_artifact"]["recompute_mode"]
+        _seal(report)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(report)
+        assert exc.value.reason == C.REFUSE_MISSING_PROVENANCE
+
+    def test_the_release_token_is_BYTE_EXACT(self, native_release_report):
+        report, _ = native_release_report
+        report["bound_artifact"]["recompute_mode"] = "ALL"
+        _seal(report)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(report)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_the_sampled_release_is_refused_ON_DISK_too_end_to_end(
+            self, native_release_report, tmp_path):
+        # through the real seam W1 uses: load_and_normalize, from bytes on disk
+        report, release_dir = native_release_report
+        report["bound_artifact"]["recompute_mode"] = "sample"
+        _seal(report)
+        path = str(tmp_path / "resealed.json")
+        with open(path, "w") as fh:
+            json.dump(report, fh)
+        with pytest.raises(C.ContractError) as exc:
+            C.load_and_normalize(path, release_dir)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+
 class TestTheAdversarialFailOpenCasesAreClosed:
     """Every case the adversarial review reproduced on e4cf8b9, each now refused by name.
 
@@ -309,7 +456,8 @@ class TestTheAdversarialFailOpenCasesAreClosed:
                 "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
                 "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
                 "--stage1-v3-release", s1, "--release-root", root, "--recompute", "all",
-                "--env-lock", LOCK, "--report", report_path]
+                "--env-lock", LOCK, "--report", report_path,
+                "--producer-code-root", F.PRODUCER_CODE_ROOT]
         if prod.source_registry:
             argv += ["--source-registry", prod.source_registry]
         if getattr(prod, "pseudobulk", None):
@@ -345,7 +493,8 @@ def real(synthetic_run, tmp_path):
     argv = ["--bundle", bundle, "--de-main", prod.de_main, "--sgrna", prod.sgrna,
             "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
             "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
-            "--condition", prod.condition, "--recompute", "all", "--env-lock", LOCK]
+            "--condition", prod.condition, "--recompute", "all", "--env-lock", LOCK,
+            "--producer-code-root", F.PRODUCER_CODE_ROOT]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):
         v = getattr(prod, attr, None)
@@ -545,6 +694,7 @@ def production_report(synthetic_run, tmp_path):
             "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
             "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
             "--condition", prod.condition, "--recompute", "all", "--env-lock", LOCK,
+            "--producer-code-root", F.PRODUCER_CODE_ROOT,
             "--stage1-v3-release", s1, "--release-root", root,
             "--expect-h5ad-sha256", AR.sha256_file(prod.de_main)]
     if prod.source_registry:
@@ -605,7 +755,7 @@ class TestTheProductionProfileIsExact:
         # silently refusing W10's own production reports
         assert AR.content_sha256(production_report["gate_inventory"]) == \
             C.GATE_PROFILES[C.PROFILE_BUNDLE_PRODUCTION]["gate_inventory_sha256"]
-        assert production_report["n_gates"] == 90
+        assert production_report["n_gates"] == 93
 
 
 class TestTheEmittedBindingValidatesAgainstThePublishedSchemaFile:
@@ -639,7 +789,8 @@ class TestTheEmittedBindingValidatesAgainstThePublishedSchemaFile:
                 "--sgrna", prod.sgrna, "--by-guide", prod.by_guide,
                 "--by-donors", prod.by_donors, "--guide-manifest", prod.guide_manifest,
                 "--registry", prod.registry, "--stage1-v3-release", stage1,
-                "--release-root", root, "--recompute", "all", "--env-lock", LOCK]
+                "--release-root", root, "--recompute", "all", "--env-lock", LOCK,
+                "--producer-code-root", F.PRODUCER_CODE_ROOT]
         for flag, attr in (("--source-registry", "source_registry"),
                            ("--pseudobulk", "pseudobulk")):
             v = getattr(prod, attr, None)
@@ -672,7 +823,8 @@ class TestTheEmittedBindingValidatesAgainstThePublishedSchemaFile:
                 "--sgrna", prod.sgrna, "--by-guide", prod.by_guide,
                 "--by-donors", prod.by_donors, "--guide-manifest", prod.guide_manifest,
                 "--registry", prod.registry, "--stage1-v3-release", stage1,
-                "--release-root", root, "--recompute", "all", "--env-lock", LOCK]
+                "--release-root", root, "--recompute", "all", "--env-lock", LOCK,
+                "--producer-code-root", F.PRODUCER_CODE_ROOT]
         for flag, attr in (("--source-registry", "source_registry"),
                            ("--pseudobulk", "pseudobulk")):
             v = getattr(prod, attr, None)

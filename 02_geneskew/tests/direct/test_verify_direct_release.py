@@ -23,11 +23,11 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "analysis", "direct"))
 
-import fixtures_v3_release as V3  # noqa: E402
-import verify_direct_release as VR  # noqa: E402
-
 # The PRODUCER, and the shared Stage-1 release FIXTURE. Both are driven by the HARNESS only.
 # The verifier itself imports neither: gate_independence proves that against its own source.
+import fixtures_direct as F  # noqa: E402
+import fixtures_v3_release as V3  # noqa: E402
+import verify_direct_release as VR  # noqa: E402
 from direct import arm_release  # noqa: E402
 
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
@@ -61,6 +61,8 @@ def release(synthetic_run, tmp_path):
         "--registry", prod.registry,
         "--stage1-v3-release", stage1, "--release-root", stage1_root,
         "--recompute", "all", "--env-lock", LOCK,
+        # the tree the producer ran from — here, this checkout (see fixtures_direct)
+        "--producer-code-root", F.PRODUCER_CODE_ROOT,
     ]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):

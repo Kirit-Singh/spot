@@ -166,39 +166,186 @@ def gate_condition(doc: dict, prov: dict, rows: list[dict], condition: str,
              f"asked={condition!r}")
 
 
-def gate_code_identity(binding: dict, rep: Report) -> None:
-    """The code digest RE-DERIVED from the tree, and the tree it was taken from."""
-    code = binding.get("code_identity") or {}
-    root = os.path.dirname(os.path.dirname(_HERE))          # 02_geneskew/
-    repo = os.path.dirname(root)
+# THE PRODUCER'S DIGEST RECIPE, RESTATED. Never imported from ``direct.code_digest``: a
+# recipe the checker borrowed from the thing it is checking is a recipe nobody checked, and
+# it would move the instant the producer's constant moved. The ids are restated as LITERALS
+# for the same reason — they name WHICH recipe produced the hash, and an artifact does not get
+# to tell the checker which rules it was checked under.
+CODE_DIGEST_SUFFIXES = (".py", ".json")
+CODE_DIGEST_EXCLUDE_DIRS = frozenset({
+    "__pycache__", ".pytest_cache", ".git", ".ruff_cache", ".mypy_cache",
+    "node_modules", ".ipynb_checkpoints"})
+CODE_DIGEST_LEN = 16
+CODE_DIGEST_ID = "spot.stage02.code_digest.v1"
+CODE_INCLUDE_RULE_ID = "spot.stage02.code_digest.include_rule.py_json_sorted_relpath.v1"
+CODE_BINDING_RULE_ID = (
+    "spot.stage02.code_digest.binding_rule.commit_cleantree_manifest_digest.v1")
+
+
+def _git(repo: str, *args: str) -> Optional[str]:
+    """stdout on success; None if git could not answer. None is NOT the empty string.
+
+    ``status --porcelain`` says "clean" by printing NOTHING, so a helper that folded a
+    failed git call into "" would report a tree it never read as a clean one.
+    """
+    import subprocess
+    try:
+        r = subprocess.run(("git", "-C", repo) + args, capture_output=True, text=True,
+                           timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def code_manifest(root: str, repo: str) -> tuple[str, int]:
+    """(manifest hash, file count) of a code tree: every .py/.json under ``root``,
+    repo-relative. The COUNT is returned because the artifact declares one, and a count the
+    artifact declares is a count nobody checked."""
     files = []
     for base, dirs, names in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in {
-            "__pycache__", ".pytest_cache", ".git", ".ruff_cache", ".mypy_cache",
-            "node_modules", ".ipynb_checkpoints"})
+        dirs[:] = sorted(d for d in dirs if d not in CODE_DIGEST_EXCLUDE_DIRS)
         for name in sorted(names):
-            if name.endswith((".py", ".json")):
+            if name.endswith(CODE_DIGEST_SUFFIXES):
                 path = os.path.join(base, name)
                 files.append({"path": os.path.relpath(path, repo).replace(os.sep, "/"),
                               "sha256": AR.sha256_file(path)})
     files.sort(key=lambda f: f["path"])
-    manifest_sha = AR.content_sha256(files)
+    return AR.content_sha256(files), len(files)
+
+
+def gate_code_identity(binding: dict, producer_code_root: Optional[str],
+                       rep: Report) -> dict:
+    """The code identity, RE-DERIVED from the PRODUCER's tree — never the verifier's own.
+
+    THE DEFECT THIS CLOSES. This gate used to walk the verifier's own package directory and
+    compare the manifest it got to the one the artifact declared. That number is a fact about
+    the checkout the CHECKER is running from, and the run under test was not taken from it.
+    Run the verifier out of the producer's tree and it hashes itself, agrees with itself and
+    admits — the generator signing its own homework by another route. Run it out of any OTHER
+    tree, which is the only independent way to run it, and no honest release can ever be
+    admitted, because the manifest it derives is not the manifest the run bound.
+
+    So the producer's tree is an INPUT to verification, exactly like the H5AD: supplied, named
+    and checked. Three claims must hold before the digest means anything at all —
+
+      * the tree is a git checkout we can actually interrogate;
+      * its HEAD is EXACTLY the commit the run bound (not an ancestor, not a descendant);
+      * its working state is the one the run DECLARED — a run may not call an uncommitted
+        tree clean, and this is the only place that lie can be caught, because a dirty tree
+        and a clean one at the same commit carry the same commit id;
+
+    — and only then is the manifest re-derived from those bytes. On a RELEASE-GRADE lane the
+    root may not BE the verifier's own tree: that is the self-check mode, in which every gate
+    here lines up by construction because the checker is hashing itself. It is refused, not
+    reported. The verifier's OWN identity stays separate (``verifier_code_sha256``): which
+    checker ran is a different question from which code was checked, and one may never stand
+    in for the other.
+
+    Fail-closed: every gate below is EMITTED on every path. A root that is missing does not
+    skip the checks — it fails them, because "we could not check" and "we checked and it was
+    fine" must never reach a reader as the same verdict.
+    """
+    code = binding.get("code_identity") or {}
+    declared_commit = code.get("commit")
+    declared_clean = code.get("clean_tree")
+
+    root = os.path.abspath(str(producer_code_root)) if producer_code_root else None
+    repo = os.path.dirname(root) if root else None
+    head = _git(repo, "rev-parse", "HEAD") if repo and os.path.isdir(root) else None
+    status = _git(repo, "status", "--porcelain") if head is not None else None
+
+    # THE SELF-CHECK MODE. The supplied root IS the tree this verifier is running from. Every
+    # check below would then line up by construction — the checker hashes itself and agrees
+    # with itself — and self-agreement is not independence. For a lane that can SHIP, the two
+    # trees being SEPARATE is the claim, so it is enforced here, not merely reported. The
+    # synthetic lane is exempt by the asymmetry this codebase draws everywhere else (gate
+    # profiles, dirty trees): a fixture is a test input, not a provenance record, and its
+    # harness necessarily drives the producer out of the checkout under test.
+    verifier_tree = os.path.dirname(os.path.dirname(_HERE))          # 02_geneskew/
+    is_verifier_tree = bool(root) and os.path.realpath(root) == os.path.realpath(verifier_tree)
+    release_grade = binding.get("lane") in RELEASE_LANES
+
+    supplied = bool(root) and os.path.isdir(root) and head is not None
+    rep.gate("the PRODUCER's code root is SUPPLIED to the verifier, and it is a git "
+             "checkout — a verifier that hashed its OWN tree would be certifying the "
+             "checkout it happens to be running from, not the one the run was taken from",
+             supplied and not (release_grade and is_verifier_tree),
+             (f"--producer-code-root={producer_code_root!r} is the VERIFIER's own Stage-2 "
+              f"tree ({verifier_tree!r}). A release-grade run must be verified from a "
+              "SEPARATE checkout of the producer's commit: a checker that hashes the tree it "
+              "is running from certifies itself, and every gate below would line up by "
+              "construction."
+              if supplied and release_grade and is_verifier_tree else
+              f"--producer-code-root={producer_code_root!r} is not a git checkout on disk. "
+              "Supply the producer's Stage-2 tree (02_geneskew) at the commit the run bound"))
+
+    rep.gate("the producer tree's git HEAD IS the commit the run bound",
+             supplied and bool(declared_commit) and head == declared_commit,
+             f"bound={declared_commit!r} HEAD={head!r} — the supplied tree is not the tree "
+             "this run was taken from, so its bytes cannot identify this run")
+
+    observed_clean = (status == "") if status is not None else None
+    rep.gate("the producer tree's working state is the one the run DECLARED — a run may not "
+             "call an uncommitted tree clean",
+             observed_clean is not None and observed_clean == declared_clean,
+             f"declared clean_tree={declared_clean!r} observed={observed_clean!r}"
+             + (f" ({len(status.splitlines())} uncommitted path(s))" if status else ""))
+
+    # THE WHOLE BLOCK DESCRIBES THIS TREE, or it describes nothing. `manifest_sha256` binds the
+    # BYTES; every other field is prose the artifact wrote about itself — and downstream READS
+    # and CITES it. A run that hashed 3 files honestly and wrote "n_files: 141" beside the hash
+    # has a provenance record whose numbers a reader would check the tree against. So they are
+    # re-derived from the same walk, under ids restated here, and a lie in any of them refuses
+    # at this gate: one claim, one gate name, no new inventory.
+    manifest_sha, n_files = code_manifest(root, repo) if supplied else (None, None)
+    declared_root = os.path.relpath(root, repo).replace(os.sep, "/") if supplied else None
+    # the producer's dirty-path rule, restated: a porcelain line with a path after column 3
+    n_dirty = len([ln for ln in (status or "").splitlines() if ln[3:]]) \
+        if status is not None else None
+
+    lies = [] if supplied else ["the producer code root was not supplied, so nothing about "
+                                "the declared code identity could be re-derived"]
+    if supplied:
+        for field, declared, derived in (
+                ("manifest_sha256", code.get("manifest_sha256"), manifest_sha),
+                ("digest_id", code.get("digest_id"), CODE_DIGEST_ID),
+                ("include_rule_id", code.get("include_rule_id"), CODE_INCLUDE_RULE_ID),
+                ("binding_rule_id", code.get("binding_rule_id"), CODE_BINDING_RULE_ID),
+                ("digest_root", code.get("digest_root"), declared_root),
+                ("n_files", code.get("n_files"), n_files),
+                ("n_dirty_paths", code.get("n_dirty_paths"), n_dirty)):
+            if declared != derived:
+                lies.append(f"{field}: declared={declared!r} re-derived={derived!r}")
 
     rep.gate("the code manifest hash RE-DERIVES from the tree this run claims",
-             code.get("manifest_sha256") == manifest_sha,
-             f"declared={code.get('manifest_sha256')!r} derived={manifest_sha!r}")
+             not lies,
+             f"{lies} (walked {root!r}, paths relative to {repo!r})")
     rep.gate("the canonical code digest is the manifest hash's own prefix",
-             code.get("canonical_digest") == manifest_sha[:16],
+             manifest_sha is not None
+             and code.get("canonical_digest") == manifest_sha[:CODE_DIGEST_LEN],
              f"declared={code.get('canonical_digest')!r}")
+
     rep.gate("the code tree was CLEAN, or the run says out loud that it was not",
-             code.get("clean_tree") is True
-             or code.get("clean_checkout_required") is False,
-             f"clean_tree={code.get('clean_tree')!r} "
+             declared_clean is True or code.get("clean_checkout_required") is False,
+             f"clean_tree={declared_clean!r} "
              f"clean_checkout_required={code.get('clean_checkout_required')!r}")
+
+    # OBSERVED, not merely declared. The old form asked the artifact whether it was clean; a
+    # release-grade lane must be told by the TREE.
     rep.gate("a release-grade lane REFUSES a dirty tree",
-             not (binding.get("lane") in RELEASE_LANES
-                  and code.get("clean_tree") is not True),
-             "a release-grade run was taken from an uncommitted tree")
+             not (release_grade
+                  and (declared_clean is not True or observed_clean is not True)),
+             f"a release-grade run was taken from an uncommitted tree "
+             f"(declared clean_tree={declared_clean!r}, observed={observed_clean!r})")
+
+    return {"producer_code_commit": head if supplied else None,
+            "producer_code_manifest_sha256": manifest_sha,
+            "producer_code_clean_tree": observed_clean,
+            # WHETHER THE CHECK WAS INDEPENDENT AT ALL. Refused outright above on a
+            # release-grade lane; reported here so a reader of ANY report can see, without
+            # re-running anything, whether the tree hashed as the producer's was the
+            # verifier's own.
+            "producer_code_root_is_the_verifier_tree": is_verifier_tree}
 
 
 def gate_inputs(binding: dict, paths: dict[str, str], rep: Report) -> None:

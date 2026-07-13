@@ -11,6 +11,14 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+# THE TREE THE PRODUCER RAN FROM (--producer-code-root). In these tests the harness drives the
+# real producer out of THIS checkout, so this checkout is the tree the run was taken from and
+# the tree the verifier must be handed. In production they are two different checkouts — which
+# is precisely why the verifier takes the producer's tree as an INPUT rather than assuming its
+# own: see verify_arm_gates.gate_code_identity.
+PRODUCER_CODE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))                                       # 02_geneskew/
+
 from fixtures_evidence import (  # noqa: F401  (the one evidence API, re-exported)
     IDENTITY_METHOD,
     MANIFEST_NAME,

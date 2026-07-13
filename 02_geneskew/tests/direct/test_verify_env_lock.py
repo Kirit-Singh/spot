@@ -43,7 +43,8 @@ def _args(bundle_dir, prod, **over):
             "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
             "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
             "--condition", prod.condition, "--recompute", "all",
-            "--env-lock", LOCK]
+            "--env-lock", LOCK,
+            "--producer-code-root", F.PRODUCER_CODE_ROOT]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):
         value = getattr(prod, attr, None)

@@ -82,6 +82,8 @@ def _verifier_args(bundle_dir, prod, **over):
         "--condition", prod.condition,
         "--recompute", "all",
         "--env-lock", LOCK,
+        # the tree the producer ran from — here, this checkout. NEVER assumed by the verifier.
+        "--producer-code-root", F.PRODUCER_CODE_ROOT,
     ]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--target-identity-map", "target_identity_map"),

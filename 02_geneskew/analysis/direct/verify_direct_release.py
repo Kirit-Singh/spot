@@ -4,7 +4,13 @@ Usage:
     python analysis/direct/verify_direct_release.py --release <dir> \\
         --de-main <h5ad> --sgrna <csv> --guide-manifest <json> \\
         --stage1-v3-release <json> --release-root <dir> \\
+        --producer-code-root <02_geneskew of the producer's checkout> \\
         [--recompute sample|all] [--report <json>]
+
+``--producer-code-root`` is required and is handed to EVERY per-bundle verification: the
+release's "one code identity" claim is only worth something if each bundle's declared identity
+was re-derived from the producer's actual tree. Three bundles agreeing on a digest that nobody
+recomputed are three bundles agreeing on a number.
 
 Exit 0 = ADMIT; 1 = REFUSE. A crash IS a refusal.
 
@@ -240,6 +246,13 @@ def verify(args) -> Report:
     rep.bound = {
         "direct_release_run_id": release.get("direct_release_run_id"),
         "direct_release_sha256": release.get("direct_release_sha256"),
+        # HOW MUCH WAS RE-DERIVED. This flag flows down to EVERY per-bundle verification, so
+        # a release verified in `sample` mode rests on a deterministic handful of targets per
+        # condition — while running the identical gate NAMES, and therefore matching the
+        # identical execution-completeness profile, as one that re-derived all of them. W1
+        # consumes THIS document: a release report that did not say which it was could not be
+        # held to the difference.
+        "recompute_mode": args.recompute,
         "expected_conditions": expected,
         "n_physical_bundles": len(bundles),
         "n_logical_arms": n_logical,

@@ -6,8 +6,8 @@ separated from the adapter logic on purpose — when W10's verifier changes, THI
 P2S's mirror) is what refreshes, and nothing else.
 
 RE-DERIVED, not copied: `W10_VERIFIER_CODE_SHA256` is W10's own `verifier_code_sha256()` over
-its 8 modules at verifier head 3119900 (adapter commit e4cf8b9). A test re-derives it and
-fails if it drifts.
+its 9 modules at the PRODUCER-CODE-ROOT verifier head. A test re-derives it and fails if it
+drifts.
 """
 from __future__ import annotations
 
@@ -20,10 +20,16 @@ PINNED_SOLVER_LOCK_SHA256 = \
 # WHICH CODE ran. Pinned so a WEAKENED FORK — one that keeps the verifier_id string and the
 # spec but ran different, gutted gates — is refused. A resealed report can set every other
 # field to a pleasing value; it cannot make its own code hash to a number it does not know.
-# RE-DERIVED from W10's own recipe at commit e4cf8b9 (verifier head 3119900); it matched.
-# This is a version-locked pin: when W10's verifier changes, refresh it (and P2S's).
+# RE-DERIVED from W10's own recipe (a test re-derives it); this is a version-locked pin, so
+# when W10's verifier changes, refresh it (and P2S's).
+#
+# MOVED by the producer-code-root fix: gate_code_identity now re-derives the code manifest
+# from the PRODUCER's supplied tree — proving its git HEAD is the bound commit and its working
+# state is the declared one — instead of walking the VERIFIER's own checkout. Three verifier
+# modules changed, so the code hash moved with them. Previous pin (pre-fix):
+# 8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f
 W10_VERIFIER_CODE_SHA256 = \
-    "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
+    "e3102f5a65b54a947289159de0d792035712d4d239b7bc264d1c8c4d44d5818f"
 
 # THE GATES THAT MUST HAVE RUN. Pinning the code sha says the report NAMES the right code;
 # this says its gate inventory actually CONTAINS the security-critical checks — so an empty
@@ -46,6 +52,13 @@ REQUIRED_GATES = {
         "the target_identity rows are EXACTLY this bundle's arm target set",
         "every observed_perturbation_modality is EXACTLY CRISPRi_knockdown",
         "the target_identity canonical hash is bound into the run identity",
+        # THE PRODUCER'S CODE TREE. Before the fix these were a walk of the VERIFIER's own
+        # checkout, so a report could carry a code identity nobody had checked against the
+        # tree the run was taken from. They are security-critical: without them, the code
+        # manifest in a report is a number the artifact chose for itself.
+        "the PRODUCER's code root is SUPPLIED to the verifier",
+        "the producer tree's git HEAD IS the commit the run bound",
+        "the code manifest hash RE-DERIVES from the tree this run claims",
     ),
     W10_VERIFIER_ID_RELEASE: (
         "every bundle cites the SAME scorer view as the release",
@@ -68,12 +81,18 @@ REQUIRED_GATES = {
 # RE-DERIVED by a test that re-runs the verifier with the canonical flags, so a deliberate
 # gate change in W10 fails loudly (refresh the profile) rather than silently refusing.
 #
-# The production BUNDLE invocation binds the Stage-1 v3 release, pins the H5AD object and
-# recomputes every target (--stage1-v3-release --expect-h5ad-sha256 --recompute all): 80
-# gates. The RELEASE invocation is 26 and does not vary with the H5AD pin (it flows that to
-# its per-bundle verifications). Fixture/synthetic reports are separately typed and LENIENT:
-# they satisfy the critical-gate SUBSET (REQUIRED_GATES), because a fixture is a test input,
-# not a production provenance record.
+# The production BUNDLE invocation binds the Stage-1 v3 release, pins the H5AD object, supplies
+# the PRODUCER's code root and recomputes every target (--stage1-v3-release --expect-h5ad-sha256
+# --producer-code-root --recompute all): 93 gates. The RELEASE invocation is 28 and does not
+# vary with the H5AD pin or the code root (it flows both to its per-bundle verifications).
+# Fixture/synthetic reports are separately typed and LENIENT: they satisfy the critical-gate
+# SUBSET (REQUIRED_GATES), because a fixture is a test input, not a production provenance
+# record.
+#
+# The bundle profile MOVED (+3 gates, 90 -> 93) with the producer-code-root fix: the code
+# root must now be supplied and be a separate git checkout, its HEAD must be the bound commit,
+# and its working state must be the one the run declared. Previous pin (pre-fix): 90 gates,
+# e6b5da89f1e4e7bf39380318769342cc585630c781c2226fa25b2df8aaf24d45.
 PROFILE_BUNDLE_PRODUCTION = "spot.stage02.direct.bundle.production.v1"
 PROFILE_RELEASE_PRODUCTION = "spot.stage02.direct.release.production.v1"
 PROFILE_BUNDLE_FIXTURE = "spot.stage02.direct.bundle.fixture.v1"
@@ -82,8 +101,8 @@ PROFILE_RELEASE_FIXTURE = "spot.stage02.direct.release.fixture.v1"
 GATE_PROFILES = {
     PROFILE_BUNDLE_PRODUCTION: {
         "gate_inventory_sha256":
-            "e6b5da89f1e4e7bf39380318769342cc585630c781c2226fa25b2df8aaf24d45",
-        "n_gates": 90,
+            "91f15db7ceec71c51fd21fda77c24956dcc6a4de998ef32ca7395e13a13fac6e",
+        "n_gates": 93,
         "match": "exact",
     },
     PROFILE_RELEASE_PRODUCTION: {

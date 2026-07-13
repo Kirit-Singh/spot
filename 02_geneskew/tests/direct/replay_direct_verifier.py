@@ -105,7 +105,8 @@ def bundle_gate(tmp) -> dict:
     argv = ["--bundle", res["out_dir"], "--de-main", args.de_main, "--sgrna", args.sgrna,
             "--by-guide", args.by_guide, "--by-donors", args.by_donors,
             "--guide-manifest", args.guide_manifest, "--registry", args.registry,
-            "--condition", args.condition, "--recompute", "all", "--env-lock", LOCK]
+            "--condition", args.condition, "--recompute", "all", "--env-lock", LOCK,
+            "--producer-code-root", F.PRODUCER_CODE_ROOT]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):
         value = getattr(args, attr, None)
@@ -127,7 +128,7 @@ def release_gate(tmp) -> dict:
             "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
             "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
             "--stage1-v3-release", stage1, "--release-root", root, "--recompute", "all",
-            "--env-lock", LOCK]
+            "--env-lock", LOCK, "--producer-code-root", F.PRODUCER_CODE_ROOT]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):
         value = getattr(prod, attr, None)

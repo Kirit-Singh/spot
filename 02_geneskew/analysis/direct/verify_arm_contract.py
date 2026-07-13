@@ -20,9 +20,10 @@ verifier modules (its canonical mask projection, its hash function) — same lan
 It re-derives and refuses fail-closed: the self-hash (edited-after-citing), the verdict token
 (byte-exact, no fold), an ADMIT carrying failed gates, a self-admission slot, a report not
 from the pinned W10 verifier_id/spec/CODE, an inventory that is not the exact production
-gate-profile (a deleted/added/reordered gate), inconsistent gate counts, every bundle file
-re-hashed from disk, the mask re-derived from masks.parquet, the environment lock against the
-pin, and the condition against the bundle's own provenance.
+gate-profile (a deleted/added/reordered gate), inconsistent gate counts, a release-grade
+admission taken on a SAMPLED recompute, every bundle file re-hashed from disk, the mask
+re-derived from masks.parquet, the environment lock against the pin, and the condition against
+the bundle's own provenance.
 """
 from __future__ import annotations
 
@@ -88,6 +89,9 @@ RELEASE_LANES = ("production", "research_only")
 REQUIRED_RELEASE_PROVENANCE = (
     "direct_release_run_id", "expected_conditions",
     "stage1_scorer_view_canonical_sha256", "solver_lock_sha256", "bundles",
+    # REQUIRED, not optional: a release that does not say how much of itself it re-derived
+    # has not said it re-derived all of it, and silence may not be read as the stronger claim.
+    "recompute_mode",
 )
 
 REFUSE_NOT_A_DOCUMENT = "the_report_is_not_a_json_object"
@@ -125,6 +129,15 @@ AUTHORITATIVE_BUNDLE_FILES = frozenset({
     "verification.json",
 })
 REFUSE_CODE_IDENTITY_DISAGREES = "the_release_bundles_do_not_share_one_code_identity"
+REFUSE_SAMPLED_RECOMPUTE = "a_release_grade_bundle_was_admitted_on_a_sampled_recompute"
+
+# WHAT A RELEASE-GRADE ADMISSION MUST HAVE RE-DERIVED. W10's `--recompute all` re-derives
+# every base delta; `--recompute sample` re-derives a deterministic handful (8 targets) and
+# admits on those. Both run the SAME GATE NAMES, so the gate inventory — and therefore the
+# execution-completeness profile that pins it — cannot tell them apart. The mode itself is in
+# the report's bound_artifact, so it is READ. Byte-exact: "ALL", "" and absence are not "all",
+# and a report that does not say how much it re-derived has not said it re-derived everything.
+RECOMPUTE_MODE_ALL = "all"
 
 
 class ContractError(ValueError):
@@ -271,6 +284,28 @@ def validate_report(report: Any) -> None:
         _refuse(REFUSE_MISSING_PROVENANCE,
                 f"a {bound.get('lane')!r} bundle must name "
                 "stage1_scorer_view_canonical_sha256; it is null")
+
+    # HOW MUCH WAS ACTUALLY RE-DERIVED. Checked BEFORE the profile, because "you admitted a
+    # release on 8 sampled targets" is the specific, actionable refusal and the profile — which
+    # a sample-mode report MATCHES, the gate names being identical in both modes — would never
+    # have caught it at all.
+    #
+    # BOTH SUBJECTS. A BUNDLE is release-grade when its LANE says so. A RELEASE has no lane —
+    # it IS release-grade, there is no other kind — and it is the document W1 actually reads,
+    # so a rule that stopped at the bundle schema would leave the consumed artifact open. The
+    # release verifier flows `--recompute` down to every per-bundle verification, so one
+    # sampled release is three sampled bundles.
+    release_grade = (schema_version == SCHEMA_RELEASE
+                     or (schema_version == SCHEMA_BUNDLE
+                         and bound.get("lane") in RELEASE_LANES))
+    if release_grade and bound.get("recompute_mode") != RECOMPUTE_MODE_ALL:
+        subject = "release" if schema_version == SCHEMA_RELEASE else repr(bound.get("lane"))
+        _refuse(REFUSE_SAMPLED_RECOMPUTE,
+                f"a {subject} bundle/release was admitted with "
+                f"recompute_mode={bound.get('recompute_mode')!r}, not "
+                f"{RECOMPUTE_MODE_ALL!r}: only a deterministic sample of targets had their "
+                "base deltas re-derived from the DE data, and the gate inventory of a sampled "
+                "run is identical to a full one — so nothing downstream could tell them apart")
 
     # EXECUTION-COMPLETENESS PROFILE. A PRODUCTION report must have run EXACTLY the gate
     # inventory its invocation runs — a resealed deletion of ANY gate, even a currently

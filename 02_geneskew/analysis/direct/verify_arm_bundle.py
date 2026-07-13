@@ -4,7 +4,15 @@ Usage:
     python analysis/direct/verify_arm_bundle.py --bundle <dir> \\
         --de-main <h5ad> --sgrna <csv> --guide-manifest <json> \\
         --stage1-v3-release <json> --release-root <dir> \\
+        --producer-code-root <02_geneskew of the producer's checkout> \\
         [--recompute sample|all] [--report <json>]
+
+THE PRODUCER'S CODE TREE IS AN INPUT (``--producer-code-root``), like the H5AD. The code a
+run was taken from is not something a checker can know from where it happens to be installed:
+this verifier re-derives the bound code identity from THAT tree — proving its git HEAD is the
+commit the run bound and its working state is the one the run declared — and never from its
+own checkout. Which checker ran (``verifier_code_sha256``) and what it checked (the producer's
+commit + manifest) are reported as the two separate facts they are.
 
 Exit 0 = ADMIT (every gate passed); 1 = REFUSE (at least one failed, or the verifier could
 not complete). A crash IS a refusal: a checker that fell over has not checked.
@@ -126,7 +134,10 @@ def verify(args) -> Report:
     condition = args.condition or doc.get("condition")
     G.gate_condition(doc, prov, rows, condition, rep)
     G.gate_identity(prov, doc, rows, rep)
-    G.gate_code_identity(binding, rep)
+    # THE PRODUCER's tree, SUPPLIED — never this verifier's own checkout. See
+    # G.gate_code_identity: the code the run was taken from is an input to verification.
+    code_identity = G.gate_code_identity(
+        binding, getattr(args, "producer_code_root", None), rep)
 
     # ---- the admitted set, derived from the bound release ----
     release = None
@@ -203,6 +214,11 @@ def verify(args) -> Report:
 
     rep.bound = {
         "arm_bundle_run_id": prov.get("arm_bundle_run_id"),
+        # THE TWO CODE IDENTITIES, kept apart. `verifier_code_sha256` (in the report head)
+        # is WHICH CHECKER RAN; these are WHAT IT CHECKED — the producer tree's commit and
+        # manifest, re-derived from that tree. A report that ran them together would be
+        # citing the checker's own bytes as the provenance of the run.
+        **code_identity,
         # THE ENVIRONMENT, in the verified identity. Temporal anchors its DiD on these
         # reports, so a report that did not say which environment produced the run would let
         # two arms computed under different solvers be differenced as if they were not.
@@ -265,6 +281,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--release-root", default=None,
                     help="the EXPLICITLY STAGED root the release's component paths resolve "
                          "against; never a machine default")
+    ap.add_argument("--producer-code-root", required=True,
+                    help="the PRODUCER's Stage-2 code tree (the 02_geneskew directory of a "
+                         "git checkout AT THE COMMIT THE RUN BOUND). The code identity is "
+                         "re-derived from THIS tree. It is NOT the verifier's own checkout: "
+                         "hashing the tree the checker runs from certifies the checker, not "
+                         "the run.")
     ap.add_argument("--recompute", choices=("sample", "all"), default="sample",
                     help="'all' is the production mode: every base delta re-derived")
     ap.add_argument("--sample-size", type=int, default=8)
