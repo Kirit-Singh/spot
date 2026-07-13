@@ -474,6 +474,14 @@ def w10_anchor(report_path: str, direct_bundle_dir: str) -> dict[str, Any]:
         "direct_masks_parquet_sha256": file_sha256(
             os.path.join(direct_bundle_dir, "masks.parquet")),
         "direct_contributor_manifest": binding.get("contributor_manifest"),
+        # THE RELEASE THE DIRECT BUNDLE WAS BUILT ON. Carried so the pathway lane can check
+        # its OWN release against the one the arms it is enriching actually came from — an
+        # enrichment computed over a different Stage-1 release than the ranking it enriches is
+        # describing a different experiment, and every hash in it would still agree.
+        "direct_stage1_release_kind":
+            (binding.get("arm_bundle_request") or {}).get("stage1_release_kind"),
+        "direct_stage1_release_hashes":
+            (binding.get("arm_bundle_request") or {}).get("stage1_release_hashes"),
         # Scope, stated rather than implied: this attests the Direct MASK. It does not attest a
         # produced real 60-arm release, and the report says so itself.
         "attests_real_60_arm_release": False,

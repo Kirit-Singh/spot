@@ -103,6 +103,11 @@ def build_pathway_arms(args) -> dict[str, Any]:
     # a 29.5 GiB worst-bundle peak, which is an OOM kill at four concurrent workers on a host
     # with no swap left. One matrix per condition, six tiny references.
     sig_manifest, sig_mat = load_shared_signatures(args, cond)
+    # THE RELEASE CROSS-CHECK. The signatures were anchored to a Direct bundle; that bundle was
+    # built on a Stage-1 release. If this run is on a DIFFERENT release, it is enriching arms
+    # from one experiment with a gene-set universe and scorer view from another — and every
+    # hash in the artifact would still be internally consistent.
+    check_release_matches_direct(ctx["release"], sig_manifest)
     # reconstruct_signatures is the ONLY consumer path: it rebuilds production's exact dicts
     # so convergence.cosine_on_shared runs UNCHANGED, folding left over sorted(shared). A
     # numpy reduction over the dense matrix would agree to ~5e-07 and disagree at the 0.5
@@ -147,6 +152,12 @@ def build_pathway_arms(args) -> dict[str, Any]:
         "scorer_view_sha256": view["scorer_view_sha256"],
         "release_scorer_view_canonical_sha256":
             view["release_scorer_view_canonical_sha256"],
+        # THE STAGE-1 RELEASE IDENTITY, in the pathway run id. A bundle that did not bind the
+        # release it was computed against could be re-attributed to another one, and every
+        # other hash in it would still agree.
+        "stage1_release_kind": ctx["release"].kind,
+        "stage1_release_hashes": dict(ctx["release"].hashes),
+        "stage1_release_root_declared": bool(getattr(args, "stage1_release_root", None)),
         "gene_universe_sha256": gene_universe["sha256"],
         "target_universe_sha256": target_universe["sha256"],
         "n_effect_universe_genes": len(gene_universe["gene_ids"]),
@@ -259,6 +270,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--gene-sets", required=True)
     ap.add_argument("--registry", default=None)
     ap.add_argument("--stage1-release", default=None)
+    # A spot.stage01_v3_release.v1 declares its components by REPO-RELATIVE path; they resolve
+    # under an EXPLICITLY staged root. Without this flag the pathway lane could not consume the
+    # v3 release AT ALL — run_screen refuses one whose root was not stated, and a loader that
+    # guessed the root from the release's own location could be walked into another tree.
+    ap.add_argument("--stage1-release-root", default=None,
+                    help="the staged root a spot.stage01_v3_release.v1 release's component "
+                         "paths resolve under")
     ap.add_argument("--stage1-validation", default=None)
     ap.add_argument("--stage1-gate-spec", default=None)
     ap.add_argument("--de-main", required=True)
@@ -279,6 +297,25 @@ def build_parser() -> argparse.ArgumentParser:
                          "references them and ships no signature bytes of its own.")
     ap.add_argument("--out-root", required=True)
     return ap
+
+
+REFUSE_RELEASE_MISMATCH = "pathway_release_is_not_the_release_the_direct_arms_were_built_on"
+
+
+def check_release_matches_direct(release, sig_manifest: dict[str, Any]) -> None:
+    """The pathway lane's Stage-1 release must BE the one the Direct arms came from."""
+    anchor = sig_manifest.get("direct_mask_anchor") or {}
+    declared = anchor.get("direct_stage1_release_hashes")
+    if not declared:
+        return                       # unanchored signatures: already reported as such
+    mine = dict(release.hashes)
+    if mine != dict(declared):
+        raise gate.GateError(
+            f"[{REFUSE_RELEASE_MISMATCH}] this pathway run is bound to Stage-1 release "
+            f"{sorted(mine.items())[:1]}..., but the Direct arms it enriches were built on "
+            f"{sorted(dict(declared).items())[:1]}.... An enrichment computed over a different "
+            "release than the ranking it enriches describes a different experiment, and every "
+            "hash in it would still agree with itself")
 
 
 def load_shared_signatures(args, cond: str):
