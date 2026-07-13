@@ -619,3 +619,101 @@ def test_two_runs_of_the_SAME_science_share_a_run_id(schema):
     sel = G.validate(emit(), schema)
     assert G.stage2_run_id(_binding(sel)) == G.stage2_run_id(_binding(
         copy.deepcopy(sel)))
+
+
+# --------------------------------------------------------------------------- #
+# THE ARMS ARE DERIVED, NEVER TRUSTED.
+#
+# `doc["arms"]` was read by nobody and checked by nothing: forge every arm key, reseal
+# `full_contract_content_sha256`, and the gate ADMITTED it — while the BoundSelection dropped
+# `arms` entirely, so the forgery travelled downstream as the only copy anyone had. The content
+# hash proves the bytes were not changed IN TRANSIT. It says nothing about whether they were
+# right when they were written.
+# --------------------------------------------------------------------------- #
+class TestTheArmsAreDERIVEDFromTheBiology:
+    def test_a_REAL_539431d_selection_still_ADMITS(self, schema):
+        """The gate must not refuse the authoritative contract."""
+        import fixtures_stage1_contract as S1
+        doc = S1.producer_fixture("temporal_ready")
+        bound = G.validate(doc, schema)
+        assert bound["arms_are_derived_not_declared"] is True
+        assert set(bound["arms"]) == {"away_from_A", "toward_B"}
+
+    def test_the_DERIVED_arms_are_BOUND_into_the_selection(self, schema):
+        bound = G.validate(emit(), schema)
+        away = bound["arms"]["away_from_A"]
+        # keyed on the CHANGE, minted by the SAME module the producers mint with
+        assert away["direct_arm_key"].startswith("direct|")
+        assert away["desired_change"] in ("increase", "decrease")
+
+    def test_a_TEMPORAL_selection_derives_an_ORDERED_pair_key(self, schema):
+        bound = G.validate(
+            emit(mode=G.MODE_TEMPORAL, conditions=["Rest", "Stim48hr"]), schema)
+        t = bound["arms"]["away_from_A"]["temporal_arm_key"]
+        assert t.startswith("temporal|") and t.endswith("|Rest|Stim48hr")
+        # A at the FIRST condition, B at the LAST — the ordered pair, never a set
+        assert bound["arms"]["away_from_A"]["condition"] == "Rest"
+        assert bound["arms"]["toward_B"]["condition"] == "Stim48hr"
+
+    def test_a_WITHIN_selection_derives_NO_temporal_key(self, schema):
+        bound = G.validate(emit(), schema)
+        assert "temporal_arm_key" not in bound["arms"]["away_from_A"]
+
+    @pytest.mark.parametrize("role,field,forged", [
+        ("away_from_A", "direct_arm_key", "direct|FORGED|increase|Rest"),
+        ("toward_B", "direct_arm_key", "direct|OTHER|decrease|Stim48hr"),
+        ("away_from_A", "pathway_arm_key_base", "pathway|FORGED|increase|Rest"),
+    ])
+    def test_a_FORGED_arm_key_is_REFUSED_even_when_RESEALED(self, schema, role, field,
+                                                            forged):
+        """THE PROBE. Forge the key, recompute the full-contract hash: it still refuses."""
+        doc = emit()
+        doc["arms"][role][field] = forged
+        reseal(doc)
+        with pytest.raises(G.SelectionV3Error) as exc:
+            G.validate(doc, schema)
+        assert exc.value.reason == G.REFUSE_ARM_KEY
+
+    def test_a_FORGED_TEMPORAL_arm_key_is_REFUSED_even_when_RESEALED(self, schema):
+        doc = emit(mode=G.MODE_TEMPORAL, conditions=["Rest", "Stim48hr"])
+        doc["arms"]["away_from_A"]["temporal_arm_key"] = "temporal|FORGED|increase|Rest|Rest"
+        reseal(doc)
+        with pytest.raises(G.SelectionV3Error) as exc:
+            G.validate(doc, schema)
+        assert exc.value.reason == G.REFUSE_ARM_KEY
+
+    def test_a_FORGED_desired_change_is_REFUSED(self, schema):
+        """The change is the arm's IDENTITY. Flipping it points at the opposite arm."""
+        doc = emit()
+        doc["arms"]["away_from_A"]["desired_change"] = "increase"
+        reseal(doc)
+        with pytest.raises(G.SelectionV3Error) as exc:
+            G.validate(doc, schema)
+        assert exc.value.reason == G.REFUSE_ARM_FIELD
+
+    def test_an_OMITTED_arm_is_REFUSED(self, schema):
+        """Half a comparison."""
+        doc = emit()
+        del doc["arms"]["toward_B"]
+        reseal(doc)
+        with pytest.raises(G.SelectionV3Error) as exc:
+            G.validate(doc, schema)
+        assert exc.value.reason in (G.REFUSE_SCHEMA, G.REFUSE_ARM_ROLES)
+
+    def test_an_EXTRA_arm_is_REFUSED(self, schema):
+        """An arm nobody asked for. The SCHEMA refuses it first — an earlier gate, and a
+        stronger one; the roles gate stands behind it for anything the schema would admit."""
+        doc = emit()
+        doc["arms"]["third_arm"] = dict(doc["arms"]["away_from_A"], role="third_arm")
+        reseal(doc)
+        with pytest.raises(G.SelectionV3Error) as exc:
+            G.validate(doc, schema)
+        assert exc.value.reason in (G.REFUSE_SCHEMA, G.REFUSE_ARM_ROLES)
+
+    def test_ARMS_MISSING_ENTIRELY_is_REFUSED(self, schema):
+        doc = emit()
+        doc["arms"] = {}
+        reseal(doc)
+        with pytest.raises(G.SelectionV3Error) as exc:
+            G.validate(doc, schema)
+        assert exc.value.reason in (G.REFUSE_SCHEMA, G.REFUSE_ARMS_MISSING)

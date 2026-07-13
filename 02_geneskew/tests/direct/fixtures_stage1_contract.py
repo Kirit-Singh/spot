@@ -160,14 +160,21 @@ DESIRED_CHANGE = {("away_from_A", "high"): "decrease", ("away_from_A", "low"): "
 
 
 def _arm_ref(role, program_id, direction, condition, mode, conditions) -> dict:
+    """The NATIVE arm-key format — with its LANE KIND prefix.
+
+    This fixture minted `prog|change|condition` and omitted the leading `direct|` / `pathway|`
+    / `temporal|`. The real 539431d selections carry it, and so does `arm_keys` (the module the
+    PRODUCERS mint with) — so the fixture was the only thing in the release writing keys that
+    resolve to no arm at all. The arms gate caught it, which is the gate doing its job.
+    """
     dc = DESIRED_CHANGE[(role, direction)]
     ref = {"role": role, "program_id": program_id, "pole_direction": direction,
            "desired_change": dc, "condition": condition,
-           "direct_arm_key": f"{program_id}|{dc}|{condition}",
-           "pathway_arm_key_base": f"{program_id}|{dc}|{condition}"}
+           "direct_arm_key": f"direct|{program_id}|{dc}|{condition}",
+           "pathway_arm_key_base": f"pathway|{program_id}|{dc}|{condition}"}
     if mode == "temporal_cross_condition":
         ref["temporal_arm_key"] = \
-            f"{program_id}|{dc}|{conditions[0]}|{conditions[-1]}"
+            f"temporal|{program_id}|{dc}|{conditions[0]}|{conditions[-1]}"
     return ref
 
 

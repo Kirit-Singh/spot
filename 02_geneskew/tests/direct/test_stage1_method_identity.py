@@ -25,6 +25,7 @@ silence a reader has to interpret.
 from __future__ import annotations
 
 import copy
+import json
 
 import fixtures_stage1_contract as S1
 import pytest
@@ -108,15 +109,26 @@ class TestTheLIMITIsDECLAREDNotSilent:
 
 
 class TestTheTwoHashesAreNEVERCONFLATED:
-    def test_they_are_DIFFERENT_quantities_and_the_gate_does_not_compare_them(self, schema):
-        """The real contract admits even though the two hashes differ. That is the point."""
+    def test_the_gate_ADMITS_WITHOUT_EVER_COMPARING_the_two_hashes(self, schema):
+        """The point is that the gate does not COMPARE them — not that they happen to differ.
+
+        On W20's branch the two values differed, and the test asserted that. On THIS tree they
+        AGREE, because W13 re-pinned Stage-1's emitter to the authoritative temporal method
+        (343f20db…) and this tree carries that very method. Both states are healthy, and the
+        contract admits in both — which is exactly what "never conflated" has to mean. An
+        assertion that they differ would have turned a correct alignment into a failure.
+        """
         doc = S1.producer_fixture("temporal_ready")
         bound = G.validate(doc, schema)          # admits
         declared = bound["estimator_method_identity"]["method_sha256"]
         local = G.estimator_registry()[G.ESTIMATOR_TEMPORAL]["method_sha256"]
+
         assert declared == S1.TEMPORAL_METHOD_SHA256
-        assert declared != local                 # different quantities, by construction
+        assert len(local) == 64
         assert bound["execution_status"] == G.EXECUTION_READY
+
+        # THE INVARIANT: whatever the local hash is, the gate never reads it to decide.
+        assert "method_sha256" not in json.dumps(bound.get("refusals") or [])
 
     def test_the_LOCAL_hash_moves_when_the_CODE_moves_and_the_declared_one_does_not(self):
         """WHY a comparison gate would be wrong, demonstrated rather than argued.
@@ -128,9 +140,10 @@ class TestTheTwoHashesAreNEVERCONFLATED:
         """
         local = G.estimator_registry()[G.ESTIMATOR_TEMPORAL]["method_sha256"]
         assert len(local) == 64
-        # the value Stage-1 minted, and the two historical local values this branch has had:
-        # both differ from it, and they differ from EACH OTHER (the code moved under us).
-        assert local != S1.TEMPORAL_METHOD_SHA256
+        # The value Stage-1 minted. A gate comparing it to the LOCAL code-tree hash would
+        # refuse the authoritative contract every time anyone touched Stage-2 — that is not a
+        # safety property, it is an outage. (On this tree the two agree, because Stage-1 is now
+        # pinned to the very temporal method this tree carries. The gate still must not care.)
         assert S1.TEMPORAL_METHOD_SHA256 == \
             "343f20db53aed3f34f45f6c4adebc2cdf26985ab179b7df264dbd0d02587c4b5"
 

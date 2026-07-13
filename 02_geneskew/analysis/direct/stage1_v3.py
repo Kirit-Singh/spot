@@ -185,6 +185,28 @@ REFUSE_SELECTION_ID = "selection_id_does_not_derive_from_its_own_canonical_conte
 REFUSE_V3_NOT_WIRED = "entry_point_does_not_define_the_v3_selection_flags"
 REFUSE_DEGENERATE_AXIS = "the_two_poles_are_the_same_axis"
 REFUSE_QUESTION_ID = "question_id_does_not_derive_from_the_biology_it_names"
+
+# --------------------------------------------------------------------------- #
+# THE ARMS. DERIVED, never trusted.
+#
+# `doc["arms"]` was read by nobody and checked by nothing: an attacker could replace every
+# arm key with a forged value, reseal `full_contract_content_sha256`, and this gate ADMITTED
+# it — while the BoundSelection dropped `arms` entirely, so the forgery travelled downstream
+# as the only copy anyone had. The content hash proves the bytes were not changed IN TRANSIT;
+# it says nothing about whether they were right when they were written.
+#
+# So the arm keys are DERIVED here, from biology this gate has already proved — program ids,
+# pole directions, the endpoint conditions, and the analysis mode — using the SAME canonical
+# minter the producers use. The declared arms must then match, exactly, or the selection is
+# refused. A selection whose arms are wrong points at the wrong evidence, and every number
+# downstream would be about a different experiment.
+# --------------------------------------------------------------------------- #
+REFUSE_ARMS_MISSING = "the_selection_declares_no_arms"
+REFUSE_ARM_ROLES = "the_declared_arm_roles_are_not_exactly_the_two_this_selection_implies"
+REFUSE_ARM_FIELD = "a_declared_arm_field_does_not_derive_from_the_biology_it_names"
+REFUSE_ARM_KEY = "a_declared_arm_key_does_not_derive_from_the_biology_it_names"
+
+ARMS_RULE_ID = "spot.stage02.stage1_v3.arms_derived_from_validated_biology.v1"
 REFUSE_DUPLICATE_ENDPOINT = "a_cross_condition_comparison_names_one_condition_twice"
 REFUSE_ESTIMATOR_INCOHERENT = "the_estimator_block_contradicts_the_contract_it_rides_on"
 REFUSE_METHOD_IDENTITY_MISSING = "the_estimator_names_a_method_but_binds_no_method_identity"
@@ -264,6 +286,70 @@ def load_schema(path: str) -> dict[str, Any]:
         return json.load(fh)
 
 
+
+
+def derive_arms(doc: dict[str, Any]) -> dict[str, Any]:
+    """THE CANONICAL ARMS, derived from the biology — never read from ``doc["arms"]``.
+
+    Everything here comes from fields this gate proves independently: the pole program ids and
+    directions, the endpoint conditions, and the analysis mode. The keys are minted by the SAME
+    module the producers mint them with (``arm_keys``), so a selection can only resolve to arms
+    that actually exist in the admitted stores.
+
+    Generic over every axis. Nothing about Treg, Th1, or any particular program appears here:
+    a pole is a (program_id, direction, condition) tuple and no tuple is special.
+    """
+    from . import arm_keys as K
+
+    mode = str(doc["analysis_mode"])
+    poles = doc["poles"]
+    conds = [str(c) for c in (doc.get("conditions")
+                              or (doc.get("canonical_content") or {}).get("conditions") or [])]
+
+    # WITHIN: both arms sit at the one condition. TEMPORAL: A at the FIRST, B at the LAST —
+    # the ordered pair, never a set. (`endpoint_rule_id`: a_at_first_b_at_last.)
+    if mode == MODE_TEMPORAL:
+        if len(conds) != 2:
+            _refuse(REFUSE_ARM_FIELD,
+                    f"a temporal selection names {conds}; it is an ORDERED PAIR of conditions")
+        from_condition, to_condition = conds[0], conds[1]
+        condition_of = {K.ROLE_AWAY: from_condition, K.ROLE_TOWARD: to_condition}
+    else:
+        if len(conds) != 1:
+            _refuse(REFUSE_ARM_FIELD,
+                    f"a within-condition selection names {conds}; it is ONE condition")
+        from_condition = to_condition = conds[0]
+        condition_of = {K.ROLE_AWAY: conds[0], K.ROLE_TOWARD: conds[0]}
+
+    pole_of = {K.ROLE_AWAY: "A", K.ROLE_TOWARD: "B"}
+    out: dict[str, Any] = {}
+    for role in K.ROLES:
+        pole = poles[pole_of[role]]
+        program_id = str(pole["program_id"])
+        direction = str(pole["pole_direction"] if "pole_direction" in pole
+                        else pole["direction"])
+        # THE FROZEN MAPPING, re-derived: the pole and the ROLE decide the desired change.
+        # The arm is keyed on the CHANGE — never on the pole, and never on the role.
+        change = K.DESIRED_CHANGE_BY_ROLE_AND_POLE[(role, direction)]
+        condition = condition_of[role]
+
+        arm = {
+            "role": role,
+            "program_id": program_id,
+            "pole_direction": direction,
+            "desired_change": change,
+            "condition": condition,
+            "direct_arm_key": K.direct_arm_key(program_id, change, condition),
+            # the BASE: the full pathway key appends the gene-set source, which the SELECTION
+            # does not choose — every admitted source is resolved against it downstream.
+            "pathway_arm_key_base": "|".join(
+                (K.KIND_PATHWAY, program_id, change, condition)),
+        }
+        if mode == MODE_TEMPORAL:
+            arm["temporal_arm_key"] = K.temporal_arm_key(
+                program_id, change, from_condition, to_condition)
+        out[role] = arm
+    return out
 
 
 def validate(doc: dict[str, Any], schema: dict[str, Any],
@@ -411,6 +497,30 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
                     "effect universe. The contract was minted against a different "
                     "universe than the one this run holds")
 
+    # ---- THE ARMS: DERIVED from the biology, then the DECLARED ones held to them ----
+    derived_arms = derive_arms(doc)
+    declared_arms = doc.get("arms")
+    if not isinstance(declared_arms, dict) or not declared_arms:
+        _refuse(REFUSE_ARMS_MISSING,
+                "this selection declares no arms. A selection that does not say which arms it "
+                "resolves to cannot be pointed at any evidence")
+    if set(declared_arms) != set(derived_arms):
+        _refuse(REFUSE_ARM_ROLES,
+                f"the declared arm roles are {sorted(declared_arms)}; the biology this "
+                f"contract names implies exactly {sorted(derived_arms)}. An omitted arm is "
+                "half a comparison, and an extra one is an arm nobody asked for")
+    for role in sorted(derived_arms):
+        want, got = derived_arms[role], declared_arms[role]
+        for field in sorted(want):
+            if got.get(field) != want[field]:
+                gate = REFUSE_ARM_KEY if field.endswith(("_key", "_key_base")) \
+                    else REFUSE_ARM_FIELD
+                _refuse(gate,
+                        f"arm {role!r}: {field}={got.get(field)!r}, but the biology this "
+                        f"contract names derives {want[field]!r} (rule: {ARMS_RULE_ID}). A "
+                        "forged arm key points the whole selection at different evidence, and "
+                        "resealing the contract hash does not make it true")
+
     # ---- ROUTING. The temporal estimator does not exist, and is not faked ----
     estimator = str(doc["estimator_id"])
     if ESTIMATOR_FOR_MODE[mode] != estimator:
@@ -513,6 +623,13 @@ def bind(doc: dict[str, Any]) -> dict[str, Any]:
         # WHAT WAS ASKED: the ordered endpoints the question_id is taken over.
         "endpoints": endpoints(doc),
         "endpoint_rule_id": ENDPOINT_RULE_ID,
+        # THE ARMS THIS SELECTION RESOLVES TO — the CANONICAL, DERIVED ones. Every consumer
+        # reads these; nothing downstream ever touches `doc["arms"]` again. They were dropped
+        # from the bound selection entirely, which left the forged declaration as the only
+        # copy anybody had.
+        "arms": derive_arms(doc),
+        "arms_rule_id": ARMS_RULE_ID,
+        "arms_are_derived_not_declared": True,
         # ...and the key Stage-2 DOES use for its own results: the biology it actually read.
         "selection_biology_sha256": selection_biology_sha256(doc),
         "biology": selection_biology(doc),
