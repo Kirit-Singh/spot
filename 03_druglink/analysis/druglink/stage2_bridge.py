@@ -448,6 +448,17 @@ def _check_rows(bridge: Mapping[str, Any],
                 "has no CRISPRi sign and can never source a drug edge. Pathway is CONTEXT, and "
                 "context annotates evidence — it never creates it.")
 
+    # NAMED BEFORE THE ROW-BY-ROW GATES. An EMPTY bridge would otherwise be reported as "the
+    # native bytes produce 900 rows the bridge dropped" — true, but it buries the actual fact
+    # under a diff. A clean report over an empty handoff is the most dangerous artifact of all,
+    # and it deserves to be refused as what it is.
+    if not shipped or not native:
+        _refuse(GATE_BRIDGE_ZERO_EVIDENCE,
+                f"the bridge carries {len(shipped)} row(s) against {len(native)} native row(s). "
+                "A bridge with no rows claims nothing, so nothing it claims is false — and a "
+                "clean report over an empty handoff is the most dangerous artifact of all. "
+                "Evidence that is absent is not evidence that is fine.")
+
     orphan = sorted(str(k) for k in keys if k not in native)
     if orphan:
         _refuse(GATE_BRIDGE_ORPHAN_ROW,
@@ -501,12 +512,6 @@ def _check_rows(bridge: Mapping[str, Any],
                 f"{'; '.join(drift[:2])}. The bridge's direction token is a CHECK, never an "
                 "input.")
 
-    if not shipped or not native:
-        _refuse(GATE_BRIDGE_ZERO_EVIDENCE,
-                f"the bridge carries {len(shipped)} row(s) against {len(native)} native row(s). "
-                "A bridge with no rows claims nothing, so nothing it claims is false — and a "
-                "clean report over an empty handoff is the most dangerous artifact of all. "
-                "Evidence that is absent is not evidence that is fine.")
     return {_row_key(r): dict(r) for r in shipped}
 
 

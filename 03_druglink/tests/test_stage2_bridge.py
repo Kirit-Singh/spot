@@ -77,10 +77,13 @@ def test_the_real_shaped_bridge_admits_and_types_the_native_rows(tmp_path):
 
 
 def test_the_binding_a_bundle_publishes_carries_no_path(tmp_path):
+    """An absolute path names a place on one machine, not an artifact — and the REAL bridge's
+    bindings are full of them (``/tmp/proto_…``). None may reach a releasable artifact."""
     binding = _admit(_paths(tmp_path)).binding()
-    flat = json.dumps(binding)
-    assert "/" not in flat.replace("spot.stage02", "").replace("spot.stage03", "")
-    assert not any("path" in k for k in binding)
+    leaks = [f"{k}={v!r}" for k, v in binding.items()
+             if isinstance(v, str) and ("/" in v or os.path.isabs(v))]
+    assert not leaks, f"the bridge binding leaks a filesystem path: {leaks}"
+    assert not [k for k in binding if k == "path" or k.endswith("_path")]
 
 
 # --- Identity, and the separate verifier's admission. ----------------------- #
