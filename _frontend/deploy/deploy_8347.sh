@@ -347,17 +347,20 @@ hygiene_scan "$REL_MANIFEST" "$DEPLOY_MANIFEST"
 say "       release manifest + record emitted ($(wc -l < "$REL_ENTRIES" | tr -d ' ') files: built+preserved-stage1+stage1-data)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9b. Served-manifest consistency — refuse to promote a served tree whose Stage-1 release
-#     ATTESTATION contradicts the bytes actually served (e.g. overlay_release_ok=false / overlay
-#     release_staging_not_served while the v3 overlay is served + required by 01_page.html). This does
-#     NOT regenerate/flip the attestation (that is gen_stage1_t8.py / gen_full_release_verification.py
-#     on the compute host) — it only FAILS CLOSED so a self-contradicting release cannot be promoted.
+# 9b. Served-manifest consistency — refuse to promote a served tree whose Stage-1 gate manifest and
+#     deploy-emitted deployment manifest declare a contradictory deployment state (gate says
+#     app_deployment_ready/overlay_release_ok=false while release_manifest.json declares the app
+#     deployed). Uses the CANONICAL Stage-1 verifier (01_programs/analysis/verify_served_manifests.py,
+#     from the reconcile lane) — one owner, one model; the 0/33 gate is decoupled (frozen historical).
+#     It never regenerates/flips the attestation; it only FAILS CLOSED on a self-contradicting release.
 # ─────────────────────────────────────────────────────────────────────────────
-say "[9b/10] verifying served-manifest consistency (attestation ↔ served bytes)"
-command -v node >/dev/null 2>&1 || die "node required for the served-manifest consistency check"
-node "$SCRIPT_DIR/servedManifestConsistency.mjs" "$TARGET_ROOT" \
-  || die "served Stage-1 manifests contradict the served bytes — regenerate the release attestation on the compute host so overlay/app gates match reality (do NOT promote the contradiction)"
-say "       served attestation consistent with served bytes"
+say "[9b/10] verifying served-manifest consistency (canonical verify_served_manifests.py)"
+command -v python3 >/dev/null 2>&1 || die "python3 required for the served-manifest consistency check"
+VSM="$SPOT_REPO/01_programs/analysis/verify_served_manifests.py"
+[ -f "$VSM" ] || die "canonical served-manifest verifier missing at $VSM — the served checkout lacks the release-manifest reconciliation (merge stage1-release-manifest-reconcile) and is NOT promotable"
+python3 "$VSM" "$TARGET_DATA/stage01_release_manifest.json" "$TARGET_DATA/stage01_current.json" "$REL_MANIFEST" \
+  || die "served Stage-1 manifests declare a contradictory deployment state — reconcile the Stage-1 gate + deployment manifest before promotion (do NOT promote the contradiction)"
+say "       served attestation consistent with the deployment manifest"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. Remote sync (authoritative data + pages) — prove remote == pinned baseline
