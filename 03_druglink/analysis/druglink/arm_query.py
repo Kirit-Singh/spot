@@ -55,8 +55,20 @@ TEMPORAL_ARM_BUNDLE = "spot.stage02_temporal_arm_bundle.v1"
 DIRECT_ARM_BUNDLE = "spot.stage02_direct_arm_bundle.v1"
 ARM_BUNDLE_SCHEMAS = (DIRECT_ARM_BUNDLE, TEMPORAL_ARM_BUNDLE)
 
+# The temporal lanes now have CLEAN HEADS — W5 62fbf8b, W11 61ee45b, W3 71f50f1 — but the
+# independent detached-clone matrix is still RUNNING. A clean head is not a green report:
+# the whole point of the matrix is that the lanes are checked against each other from a
+# fresh clone, and "each lane's own suite passes" is exactly the self-consistency it exists
+# to rule out. So the loader stays SHUT until that report is green, at which point Stage 3
+# binds the exact inventory + root admission + aggregate identities.
+TEMPORAL_HEADS = {"W5": "62fbf8b", "W11": "61ee45b", "W3": "71f50f1"}
+DETACHED_CLONE_MATRIX_GREEN = False          # flipped only by the independent report
+
 PROVISIONAL_SOURCES = {
-    TEMPORAL_ARM_BUNDLE: "W5 agent/stage2-temporal-arms @ cc82599 (W11 admission PENDING)",
+    TEMPORAL_ARM_BUNDLE: (
+        "W5 62fbf8b + W11 61ee45b + W3 71f50f1 — clean heads, but the independent "
+        "detached-clone matrix report is still RUNNING. A clean head is not a green "
+        "report."),
     DIRECT_ARM_BUNDLE: "W18 agent/stage2-direct-v3 (admission PENDING)",
     pb.PATHWAY_ARM_BUNDLE_SCHEMA: "W18/W4 pathway v1 (W4 admission PENDING)",
 }

@@ -226,3 +226,18 @@ def test_a_pathway_hypothesis_carrying_a_measured_rank_is_refused():
 def test_the_two_evidence_classes_are_disjoint():
     assert aq.MEASURED_PERTURBATION != aq.PATHWAY_HYPOTHESIS
     assert set(aq.EVIDENCE_CLASSES) == {aq.MEASURED_PERTURBATION, aq.PATHWAY_HYPOTHESIS}
+
+
+# --------------------------------------------------------------------------- #
+# The temporal loader stays SHUT until the independent matrix is green.
+# --------------------------------------------------------------------------- #
+def test_the_temporal_loader_is_still_gated_on_the_detached_clone_matrix():
+    """W5/W11/W3 have clean heads. That is not the same as a green report.
+
+    Each lane's own suite passing is precisely the self-consistency the cross-lane matrix
+    exists to rule out — the same failure this lane has now met four times (B6, M4b, the
+    temporal verification_ref, and the producer's own `pending` release).
+    """
+    assert aq.DETACHED_CLONE_MATRIX_GREEN is False
+    assert aq.TEMPORAL_HEADS == {"W5": "62fbf8b", "W11": "61ee45b", "W3": "71f50f1"}
+    assert "still RUNNING" in aq.PROVISIONAL_SOURCES[aq.TEMPORAL_ARM_BUNDLE]
