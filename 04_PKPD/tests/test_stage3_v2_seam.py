@@ -281,3 +281,52 @@ def test_every_pin_blocker_is_NAMED_and_actionable():
     assert "verifier.verify_stage3" in joined, "the wrong-verifier hazard is not named"
     assert "DISP_NON_RANKABLE_ASSERTION" in joined, "the stale fixture constant is not named"
     assert len(V2_PIN_BLOCKERS) == 4
+
+
+# ------------------------- the handoff to W16 must never drift from what the code enforces
+
+def test_the_W16_handoff_agrees_with_the_SEAM_and_claims_no_readiness():
+    """A handoff that says something the code does not enforce is worse than no handoff: W16 builds
+    against the document, and the document is the thing nobody re-runs.
+
+    So the doc is checked against the seam constants, and — the part that matters — it is checked
+    for NOT claiming readiness. 24 green seam tests prove the door is shut. They prove nothing about
+    whether Stage 4 can READ a v2 bundle, because no real one exists to read.
+    """
+    import os as _os
+
+    from analysis.stage3_v2_seam import (
+        STAGE2_UPSTREAM_CONTRACT,
+        STAGE3_V2_SCHEMA,
+        V2_PIN_BLOCKERS,
+    )
+
+    path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                         "HANDOFF_STAGE3_V2.md")
+    import re as _re
+
+    with open(path, encoding="utf-8") as fh:
+        # Whitespace-normalised: a phrase must not escape this check merely by falling across a
+        # line wrap. The check is on what the handoff SAYS, not on how it happens to be typeset.
+        doc = _re.sub(r"\s+", " ", fh.read())
+
+    # every blocker the code names, the handoff names
+    assert "drug_annotation.v2.json" in doc
+    assert "underscore" in doc
+    assert "schema-set sha256" in doc
+    assert "verify_stage3" in doc, "the wrong-verifier hazard must be spelled out to W16"
+    assert "DISP_NON_RANKABLE_ASSERTION" in doc
+    assert len(V2_PIN_BLOCKERS) == 4
+
+    # the exact upstream contract, not a paraphrase
+    assert STAGE2_UPSTREAM_CONTRACT["manifest_schema"] in doc
+    assert STAGE2_UPSTREAM_CONTRACT["external_report_schema"] in doc
+    assert "generator_is_not_verifier" in doc
+    assert STAGE3_V2_SCHEMA in doc
+
+    # ...and the v1 concept that must NOT be demanded of v2
+    assert "no `artifact_class`, no `admits` block" in doc
+
+    # THE honest line: a closed door is not a working reader.
+    assert "is not readiness" in doc
+    assert "A skip is not a pass" in doc
