@@ -171,6 +171,47 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     expect(unexpectedHost.status).toBe(503);
   });
 
+  // A same-origin form POST from a page served with Referrer-Policy: no-referrer is a
+  // NAVIGATION, and Chrome sends `Origin: null` (opaque) with no Referer. Only
+  // Sec-Fetch-Site carries the same-origin assertion, and a page cannot forge it.
+  function browserFormPost(code: string, site: string | null = 'same-origin', origin = 'null'): Request {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Origin: origin,
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Dest': 'document',
+    };
+    if (site !== null) headers['Sec-Fetch-Site'] = site;
+    return new Request(`https://${CANONICAL_HOST}/auth`, {
+      method: 'POST',
+      headers,
+      body: new URLSearchParams({ code }),
+    });
+  }
+
+  it('admits a real browser form POST that carries an opaque Origin: null', async () => {
+    const response = await auth(context(browserFormPost(ACCESS_CODE), production));
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('/01_page.html');
+    expect(response.headers.get('Set-Cookie') ?? '').toContain(`${REVIEW_COOKIE}=`);
+  });
+
+  it('refuses an opaque Origin when the browser does not assert same-origin', async () => {
+    for (const site of ['cross-site', 'same-site', 'none', null]) {
+      const response = await auth(context(browserFormPost(ACCESS_CODE, site), production));
+      expect(response.status, String(site)).toBe(303);
+      expect(response.headers.get('Location'), String(site)).toBe('/?access=invalid');
+      expect(response.headers.has('Set-Cookie'), String(site)).toBe(false);
+    }
+  });
+
+  it('still refuses a real but foreign Origin even if Sec-Fetch-Site claims same-origin', async () => {
+    const response = await auth(context(browserFormPost(ACCESS_CODE, 'same-origin', 'https://evil.example'), production));
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('/?access=invalid');
+    expect(response.headers.has('Set-Cookie')).toBe(false);
+  });
+
   it('accepts a pasted code carrying surrounding whitespace', async () => {
     for (const submitted of [` ${ACCESS_CODE}`, `${ACCESS_CODE} `, `  ${ACCESS_CODE}  `, `\t${ACCESS_CODE}\r\n`]) {
       const response = await auth(context(postAuth(submitted), production));

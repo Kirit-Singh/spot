@@ -18,17 +18,35 @@ function invalidAccess(): Response {
   return redirect('/?access=invalid', 303);
 }
 
-// A null expectedOrigin means "match the request's own host" (local dev); otherwise
-// the Origin header must equal the exact expected origin for the active mode.
+// A null expectedOrigin means "match the request's own host" (local dev); otherwise the
+// Origin must equal the exact expected origin for the active mode.
+//
+// A same-origin form POST is a NAVIGATION, and this app serves every response with
+// Referrer-Policy: no-referrer — so the browser sends `Origin: null` (an opaque origin)
+// and no Referer. A strict `origin === expected` check therefore rejects every genuine
+// browser submission while still admitting curl/fetch, which set a real Origin.
+//
+// Sec-Fetch-Site is the reliable signal: it is a forbidden header set by the browser and
+// cannot be forged by a page, and a cross-context submission never gets `same-origin`.
 function sameOrigin(request: Request, expectedOrigin: string | null): boolean {
+  const site = request.headers.get('Sec-Fetch-Site');
   const origin = request.headers.get('Origin');
-  if (!origin) return false;
-  if (expectedOrigin !== null) return origin === expectedOrigin;
-  try {
-    return new URL(origin).hostname === new URL(request.url).hostname;
-  } catch {
-    return false;
+
+  // When the browser states the context, it is authoritative.
+  if (site !== null && site !== 'same-origin') return false;
+
+  // A real Origin must still match; this is what rejects a foreign origin outright.
+  if (origin !== null && origin !== 'null') {
+    if (expectedOrigin !== null) return origin === expectedOrigin;
+    try {
+      return new URL(origin).hostname === new URL(request.url).hostname;
+    } catch {
+      return false;
+    }
   }
+
+  // Opaque or absent Origin: admit only on the browser's own same-origin assertion.
+  return site === 'same-origin';
 }
 
 async function submittedCode(request: Request): Promise<string | null> {
