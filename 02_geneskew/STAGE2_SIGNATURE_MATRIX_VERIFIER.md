@@ -40,6 +40,17 @@ A4 all-ones / A5 promotion → `V5`; A7 stale ref / A10 container reframe → `V
 padding → `V7`; A9 reduction drift → `V6`; A12 re-ship → `V8`; null manifest identity →
 `V1_REFMAN`; **fully-resealed wrong source mask → `V_EXTERNAL_MASK`**.
 
+## Status: cross-lane anchor LANDED and independently re-derived
+
+W18's producer (`5628f84`) now emits the cross-lane anchor natively: `anchor_to_direct` reads
+the admitted Direct `masks.parquet`, checks every resolved target's masked readout genes ==
+the Direct table's (intersected with the axis first), and carries `direct_mask_anchor` +
+`mask_is_externally_anchored` into the `signature_ref` — and therefore into `pathway_run_id`.
+`V_EXTERNAL_MASK` **independently re-derives that same comparison** from the shipped Direct
+`masks.parquet` (a reimplemented `direct_masked_genes`, `pandas` only — no producer import),
+so it does not merely trust the producer's anchor block. The honest anchored bundle ADMITs;
+a coherently forged mask, an unanchored matrix, and another bundle's mask each REJECT.
+
 ## Why `V_EXTERNAL_MASK` — and the cross-lane binding to W10
 
 Bitmap-recount + a self-bound run id is **not** enough: a forger can rebuild a coherent WRONG

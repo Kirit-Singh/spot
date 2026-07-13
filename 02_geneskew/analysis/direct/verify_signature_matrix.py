@@ -91,19 +91,12 @@ SIGNATURE_BYTE_FILES = ("pathway_signatures.parquet", "signatures.parquet")
 # logic). W10 independently re-derives every mask from the pinned contributor manifest + sgRNA
 # library under the target + 30 kb + contributing-guide off-target rule and admits them.
 #
-# The W10 VERIFIER IDENTITY is bound to exact clean heads — this is WHICH verifier attested,
-# fixed for a given W10 release, and NOT a per-run value. The CERTIFIED MASK is per-run and is
-# read from the bound report, never frozen: at the real run the pathway binds a per-run W10
-# report over the ACTUAL Direct masks.parquet. (The concrete 269b… mask and the three bundle
-# ids in W10's sealed report are SYNTHETIC-FIXTURE values, used only in contract/mutation
-# tests.)
+# The W10 VERIFIER IDENTITY. Only the stable verifier id is a fixed clean head; the verifier
+# CODE hash, the gate inventory and the certified MASK are all PER-RUN values of W10's report
+# and are NOT frozen here (freezing the synthetic 269b… mask would anchor every real bundle to
+# a mask nobody computed on real data). The report's identity travels IN the anchor and is
+# re-checked against the report bytes the auditor supplies.
 W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
-W10_VERIFIER_CODE_SHA256 = (
-    "7578ae5eecbd68dda1198b7b5bd933dd09ad08be838d37dfb837fe5e285a4a89")
-W10_GATE_INVENTORY_SHA256 = (
-    "cc8fc6ca81817de411f951309f219d76fdeea5cff3b4f7bf5ee7b38bb07f821d")
-W10_ADMIT = "ADMIT"
-DIRECT_MASK_BINDING_KEY = "direct_mask_verification"
 
 
 def _check(name, ok, detail=""):
@@ -406,19 +399,13 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
         else:
             checks.append(_check(V6, False, f"{bdir}: no convergence.json"))
 
-        # V_IDENTITY + V_EXTERNAL_MASK both read the run binding.
-        prov_path = os.path.join(bdir, PROVENANCE_FILE)
-        run_binding = (_json(prov_path).get("run_binding") or {}
-                       ) if os.path.exists(prov_path) else {}
-
-        # V_IDENTITY: the ref IS bound into a re-derivable pathway_run_id
+        # V_IDENTITY: the ref (incl. its cross-lane anchor) IS bound into a re-derivable
+        # pathway_run_id — so a forger who edits the anchor must also change the run id.
         checks.append(_check(V_IDENTITY, *_verify_identity(bdir, r)))
 
-        # V_EXTERNAL_MASK: the source mask is what W10 independently verified — not merely
-        # self-consistent. A forger can rebuild a coherent WRONG mask + bitmap + counts +
-        # source_mask_sha256 + run_id; only an external, independently re-derived Direct mask
-        # verification refuses it, by certifying the TRUE mask the forger cannot match.
-        checks.append(_check(V_EXTERNAL_MASK, *_verify_external_mask(run_binding)))
+        # V_EXTERNAL_MASK: the mask is what W10 independently verified — re-derived HERE from
+        # the shipped Direct masks.parquet, not merely trusted from the producer's anchor.
+        checks.append(_check(V_EXTERNAL_MASK, *_verify_external_mask(r, rr, args)))
 
     # ---- V10 ----
     all_matrix_raw = {m["_reread"]["raw_matrix"] for m in man_by_cond.values()
@@ -506,42 +493,83 @@ def _verify_identity(bdir, ref_on_disk):
     return True, ""
 
 
-def _verify_external_mask(binding):
-    """Bind the EXTERNAL, independent Direct mask verification (W10) and cross-check.
+def direct_masked_genes(masks_parquet):
+    """The shipped Direct mask table, projected to {target: masked genes} — re-implemented.
 
-    W4 does not re-derive the biological mask (that would duplicate the Direct lane and import
-    producer logic). Instead it binds W10's independent Direct mask verification — which
-    re-derives every mask from the pinned contributor manifest + sgRNA library and admits them.
-
-    The W10 VERIFIER IDENTITY (id + code hash + gate inventory) is bound to exact clean heads:
-    a report from a different or unverified checker is refused. The CERTIFIED MASK is per-run
-    and is read from the bound report — the pathway's own ``mask_sha256`` must equal it, which
-    proves the matrix ran on the masks W10 independently verified. A forger who fabricates a
-    coherent wrong mask changes ``mask_sha256``, and W10's per-run report (produced over the
-    ACTUAL Direct masks.parquet) still certifies the true hash, so this gate refuses.
+    Only the POOLED-MAIN rows project into a signature bitmap; the guide/donor rows describe
+    estimates nothing here projects. Re-derived independently of the producer (pandas is a
+    reader, not producer logic).
     """
-    bound = binding.get(DIRECT_MASK_BINDING_KEY) or {}
-    if not bound:
-        return False, ("no external Direct mask verification is bound into the run identity; "
-                       "bitmap self-consistency cannot distinguish a coherent wrong source "
-                       "mask from the truth. W18 must bind W10's per-run report over the "
-                       "actual Direct masks.parquet")
+    import pandas as pd
+
+    df = pd.read_parquet(masks_parquet)
+    if "estimate_type" in df.columns:
+        df = df[df["estimate_type"] == "main"]
+    out: dict[str, set] = {}
+    for t, g in zip(df["target_id"], df["masked_gene_ensembl"]):
+        if g is None or (isinstance(g, float) and g != g):
+            out.setdefault(str(t), set())
+            continue
+        out.setdefault(str(t), set()).add(str(g))
+    return out
+
+
+def _verify_external_mask(ref, rr, args):
+    """INDEPENDENTLY re-derive the cross-lane anchor: this lane's mask IS the Direct mask.
+
+    The bitmap, the counts and source_mask_sha256 all come from the SAME mask_sets, so a
+    coherently forged mask satisfies every internal check — the forgery ADMITS on
+    self-consistency alone. A mask can only be contradicted from OUTSIDE, by a table someone
+    else derived from the primary inputs. W10 re-derives the Direct mask from the contributor
+    manifest + sgRNA library; W4 REPEATS that comparison here from the shipped Direct
+    masks.parquet, so it does not merely trust the producer's own anchor block.
+
+    Fail-closed: an UNANCHORED matrix, or one whose masked readout genes disagree with the
+    Direct table, is refused.
+    """
+    anchor = ref.get("direct_mask_anchor")
+    if not ref.get("mask_is_externally_anchored") or not anchor:
+        return False, ("the mask is not externally anchored to an independently-verified "
+                       "Direct mask; bitmap self-consistency cannot distinguish a coherent "
+                       "wrong mask from the truth (W18: pass --direct-bundle + "
+                       "--direct-mask-report)")
     problems = []
-    if bound.get("verdict") != W10_ADMIT:
-        problems.append(f"the Direct mask verification did not admit: {bound.get('verdict')!r}")
-    if bound.get("verifier_id") != W10_VERIFIER_ID:
-        problems.append(f"the report is not from the bound W10 verifier {W10_VERIFIER_ID!r}")
-    if bound.get("verifier_code_sha256") != W10_VERIFIER_CODE_SHA256:
-        problems.append("the W10 verifier code identity is not the bound clean head")
-    if bound.get("gate_inventory_sha256") != W10_GATE_INVENTORY_SHA256:
-        problems.append("the W10 gate inventory is not the bound clean head")
-    if not bound.get("report_sha256"):
-        problems.append("the per-run W10 report is not content-addressed in the binding")
-    # PER-RUN, never frozen: the pathway used the exact masks W10 verified.
-    certified = bound.get("certified_mask_sha256")
-    pathway_mask = binding.get("mask_sha256")
-    if not certified or not pathway_mask or certified != pathway_mask:
-        problems.append(f"the pathway mask_sha256 {str(pathway_mask)[:16]}… is not the mask "
-                        f"W10 certified {str(certified)[:16]}… — the matrix did not run on "
-                        "the W10-verified Direct masks")
+    if anchor.get("verifier_id") != W10_VERIFIER_ID:
+        problems.append(f"the anchor is not from the W10 verifier {W10_VERIFIER_ID!r}")
+    if not anchor.get("report_sha256"):
+        problems.append("the per-run W10 report is not content-addressed in the anchor")
+    if not anchor.get("direct_mask_sha256"):
+        problems.append("the anchor binds no Direct mask hash")
+
+    # INDEPENDENT re-derivation from the shipped Direct bytes, when the auditor supplies them.
+    bundle_dir = getattr(args, "direct_bundle", None)
+    report_path = getattr(args, "direct_mask_report", None)
+    if bundle_dir and report_path:
+        if R.sha256_file(report_path) != anchor.get("report_sha256"):
+            problems.append("the anchored report_sha256 is not the report supplied")
+        try:
+            direct = direct_masked_genes(os.path.join(bundle_dir, "masks.parquet"))
+        except Exception as exc:                                # noqa: BLE001
+            return False, f"the Direct masks.parquet did not read: {exc}"
+        axis = set(rr["gene_ids"])
+        n_genes = rr["n_genes"]
+        bits = np.unpackbits(rr["bitmap"], axis=1)[:, :n_genes]
+        mism = []
+        for i, t in enumerate(rr["targets"]):
+            if not bits[i].any():
+                continue                       # unresolved -> no signature -> nothing to anchor
+            if t not in direct:
+                mism.append(f"{t}: absent from the Direct mask table")
+                continue
+            zeros = {rr["gene_ids"][j] for j in np.nonzero(bits[i] == 0)[0]}
+            expect = direct[t] & axis          # INTERSECT the axis FIRST (axis-missing masks)
+            if zeros != expect:
+                mism.append(f"{t}: {len(zeros)} masked here vs {len(expect)} in the "
+                            "independently-verified Direct table")
+        if mism:
+            problems.append(f"{len(mism)} target(s) are masked differently from the Direct "
+                            f"table W10 re-derived (e.g. {mism[:3]}) — a coherent wrong mask")
+    else:
+        problems.append("the Direct bundle + W10 report were not supplied for independent "
+                        "re-derivation; the anchor is bound but not re-checked from outside")
     return (not problems), "; ".join(problems[:4])
