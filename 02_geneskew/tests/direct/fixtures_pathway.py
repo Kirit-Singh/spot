@@ -27,8 +27,15 @@ SOURCE = "fixture"
 
 
 def gene_set_doc(universe: list[str], targets: list[str],
-                 effect_universe_sha256: str) -> dict[str, Any]:
-    """A bundle over the given effect universe. Sets are drawn from real target ids."""
+                 effect_universe_sha256: str,
+                 target_universe_sha256: str | None = None) -> dict[str, Any]:
+    """A bundle over BOTH universes. Sets are drawn from real target ids.
+
+    A1: the loader is FAIL-CLOSED — a bundle that supplies a run with a target universe
+    and declares none is refused. So the fixture declares both, like a real bundle must.
+    When the caller gives no target universe the fixture derives it from the targets it
+    was handed, which is exactly what the real builder does.
+    """
     t = list(targets)
     filler = [g for g in universe if g not in t]
 
@@ -46,19 +53,24 @@ def gene_set_doc(universe: list[str], targets: list[str],
     sets = [{"set_id": sid, "name": name, "genes": genes,
              "n_source_symbols": len(genes), "n_dropped_unmappable": 0}
             for sid, name, genes in raw]
+    from direct.hashing import content_hash
     return {
         "schema_version": genesets.SCHEMA_VERSION,
         "release": {"source": SOURCE, "release_id": RELEASE_ID,
                     "license": genesets.SOURCE_LICENSE[SOURCE]},
         "gene_id_namespace": "ensembl_gene_id",
         "effect_universe_sha256": effect_universe_sha256,
+        "target_universe_sha256": (target_universe_sha256
+                                   or content_hash(sorted(set(targets)))),
         "sets": sets,
     }
 
 
 def write_gene_sets(d: str, universe: list[str], targets: list[str],
-                    effect_universe_sha256: str, mutate=None) -> str:
-    doc = gene_set_doc(universe, targets, effect_universe_sha256)
+                    effect_universe_sha256: str, mutate=None,
+                    target_universe_sha256: str | None = None) -> str:
+    doc = gene_set_doc(universe, targets, effect_universe_sha256,
+                       target_universe_sha256)
     if mutate is not None:
         doc = mutate(doc)
     path = os.path.join(d, "gene_sets.fixture.json")

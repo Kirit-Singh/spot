@@ -27,11 +27,15 @@ def pathway_run(synthetic_run, tmp_path):
     from fixtures_spec import TARGET_GENES, UNIVERSE
 
     def _build(**kwargs):
+        from direct import universe as uni
         args = synthetic_run(**kwargs)
-        # the bundle must be bound to the EXACT effect universe this run computes
+        # A1: the bundle must be bound to the EXACT universes this run computes — BOTH of
+        # them. A bundle that declares one and not the other is refused, fail-closed.
         ctx = rs.prepare(args)
+        tu = uni.target_universe(ctx["identities_by_condition"])
         gs = write_gene_sets(os.path.dirname(args.de_main), UNIVERSE,
-                             list(TARGET_GENES), ctx["gene_universe"]["sha256"])
+                             list(TARGET_GENES), ctx["gene_universe"]["sha256"],
+                             target_universe_sha256=tu["sha256"])
         args.gene_sets = gs
         return args
     return _build

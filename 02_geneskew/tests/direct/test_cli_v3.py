@@ -137,9 +137,12 @@ class TestTheDirectCLIAcceptsAndUSESTheV3Flags:
 class TestThePathwayCLIAcceptsAndUSESTheV3Flags:
     def _argv(self, args):
         from direct import run_screen as rs
+        from direct import universe as uni
         ctx = rs.prepare(args)
+        tu = uni.target_universe(ctx["identities_by_condition"])
         gs = write_gene_sets(os.path.dirname(args.de_main), UNIVERSE, list(TARGET_GENES),
-                             ctx["gene_universe"]["sha256"])
+                             ctx["gene_universe"]["sha256"],
+                             target_universe_sha256=tu["sha256"])
         return _base_argv(args) + ["--gene-sets", gs]
 
     def _latest(self, out_root):

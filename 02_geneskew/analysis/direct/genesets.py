@@ -147,13 +147,68 @@ def coverage_disposition(target_source_coverage: Optional[float]) -> dict[str, A
     }
 
 
+# --------------------------------------------------------------------------- #
+# THE UNIVERSE-BINDING GATES (A1). NAMED, and FAIL-CLOSED.
+#
+# An enrichment statistic is a statement about a set RELATIVE TO a background. The same
+# set against a different background is a different number. So the bundle must DECLARE the
+# two universes it was built against, and both declarations are COMPARED to the universes
+# this run actually holds.
+#
+# The retired code was fail-OPEN twice over:
+#   * the readout check ran only ``if declared is not None and runtime is not None`` — a
+#     bundle that declared nothing sailed through;
+#   * the target universe was not checked AT ALL; and
+#   * the emitted bundle carried the CALLER'S value, so a false declaration was silently
+#     OVERWRITTEN with the truth and the lie left no trace.
+#
+# An independent audit forged ``target_universe_sha256 = "0"*64`` and the loader admitted
+# it, then reported the correct hash back. That is worse than admitting the forgery: it
+# manufactured evidence that the forgery was never there.
+#
+# Now: a bundle that does not declare a universe the run supplies is REFUSED; a declaration
+# that does not match is REFUSED at a gate named for WHICH universe failed; and the bundle
+# carries the DECLARED value — which, by the time it is carried, has been proven equal.
+# --------------------------------------------------------------------------- #
+GATE_EFFECT_UNIVERSE = "gene_set_bundle_effect_universe_binding_mismatch"
+GATE_TARGET_UNIVERSE = "gene_set_bundle_target_universe_binding_mismatch"
+GATE_UNIVERSE_UNDECLARED = "gene_set_bundle_declares_no_universe_binding"
+GATE_NAMESPACE = "gene_set_bundle_namespace_not_admissible"
+UNIVERSE_GATES = (GATE_EFFECT_UNIVERSE, GATE_TARGET_UNIVERSE,
+                  GATE_UNIVERSE_UNDECLARED, GATE_NAMESPACE)
+
+# The TARGET universe is NOT homogeneous Ensembl. The release perturbs 11,522 Ensembl
+# targets and 4 SYMBOL targets (MTRNR2L1, MTRNR2L4, MTRNR2L8, OCLM) whose obs.target_contrast
+# IS the symbol. Their identity is the released key, and an Ensembl id is NEVER inferred
+# from it — the release publishes ENSG-looking estimate keys for three of them that belong
+# to DIFFERENT genes. The mixed namespace is declared, carried, and preserved.
+TARGET_ID_NAMESPACE = "mixed_ensembl_gene_id_and_released_gene_symbol"
+SYMBOL_TARGETS_PRESERVED = ("MTRNR2L1", "MTRNR2L4", "MTRNR2L8", "OCLM")
+NEVER_INFER_ENSEMBL_FROM_RELEASED_KEY = True
+
+UNIVERSE_ROLE = {
+    "effect": "de_readout_signature_vector_space_and_effect_matrix_columns",
+    "target": "perturbation_target_ranked_population_gene_set_membership",
+}
+
+
 class GeneSetError(ValueError):
     """The gene-set bundle is not usable. Refuse; never repair."""
+
+    def __init__(self, message: str, gate: Optional[str] = None):
+        super().__init__(message if gate is None else f"[{gate}] {message}")
+        self.gate = gate
 
 
 def _require(cond: bool, msg: str) -> None:
     if not cond:
         raise GeneSetError(msg)
+
+
+def _gate(cond: bool, gate: str, msg: str) -> None:
+    """A refusal that NAMES which gate it failed. A mutation test can assert on it."""
+    if not cond:
+        raise GeneSetError(msg, gate=gate)
 
 
 def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
@@ -239,14 +294,34 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
              "against an Ensembl-keyed universe overlaps in almost nothing, and the "
              "'no enrichment' it returns is a failed join, not a null result")
 
-    # THE UNIVERSE BINDING. An enrichment statistic is a statement about a set RELATIVE
-    # TO a background; the same set against a different background is a different number.
-    declared = doc.get("effect_universe_sha256")
-    if effect_universe_sha256 is not None and declared is not None:
-        _require(str(declared) == str(effect_universe_sha256),
-                 f"gene-set bundle: it is bound to effect universe {declared!r}, but "
-                 f"this run's universe is {effect_universe_sha256!r}. A bundle computed "
-                 "against another background is not evidence about this one")
+    # ---- THE TWO UNIVERSE BINDINGS (A1). NAMED gates, FAIL-CLOSED. ----
+    # The bundle DECLARES both; both are COMPARED to what this run holds; a mismatch is
+    # refused at a gate named for the universe that failed. The declared value is what the
+    # bundle then carries — a false declaration is never overwritten with the truth, which
+    # would erase the evidence that it was ever false.
+    declared_effect = doc.get("effect_universe_sha256")
+    declared_target = doc.get("target_universe_sha256")
+
+    if effect_universe_sha256 is not None:
+        _gate(declared_effect is not None, GATE_UNIVERSE_UNDECLARED,
+              "gene-set bundle: this run supplies an EFFECT (readout) universe but the "
+              "bundle declares none. A bundle that will not say which background it was "
+              "built against cannot be checked against this one")
+        _gate(str(declared_effect) == str(effect_universe_sha256), GATE_EFFECT_UNIVERSE,
+              f"gene-set bundle: it declares effect universe {str(declared_effect)[:16]}…, "
+              f"but this run's readout universe is {str(effect_universe_sha256)[:16]}…. A "
+              "bundle computed against another background is not evidence about this one")
+
+    if target_universe_sha256 is not None:
+        _gate(declared_target is not None, GATE_UNIVERSE_UNDECLARED,
+              "gene-set bundle: this run supplies a TARGET (perturbation) universe but the "
+              "bundle declares none. The target universe is the space gene-set MEMBERSHIP "
+              "is tested in; an undeclared one cannot be checked")
+        _gate(str(declared_target) == str(target_universe_sha256), GATE_TARGET_UNIVERSE,
+              f"gene-set bundle: it declares target universe {str(declared_target)[:16]}…, "
+              f"but this run's perturbation-target universe is "
+              f"{str(target_universe_sha256)[:16]}…. Membership tested in another "
+              "perturbed population is not evidence about this one")
 
     raw_sets = doc.get("sets")
     _require(isinstance(raw_sets, list) and bool(raw_sets),
@@ -354,9 +429,18 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
         "gene_id_namespace": namespace,
         # BOTH universes, bound and named (B1). A bundle that named only one could be
         # joined against the other without anything noticing.
-        "effect_universe_sha256": effect_universe_sha256,
-        "target_universe_sha256": target_universe_sha256,
+        # THE DECLARED values — proven equal to the runtime universes above. Carrying the
+        # caller's value instead would overwrite a false declaration with the truth.
+        "effect_universe_sha256": (declared_effect if declared_effect is not None
+                                   else effect_universe_sha256),
+        "target_universe_sha256": (declared_target if declared_target is not None
+                                   else target_universe_sha256),
         "single_universe_binding": single_binding,
+        "effect_universe_role": UNIVERSE_ROLE["effect"],
+        "target_universe_role": UNIVERSE_ROLE["target"],
+        "target_id_namespace": TARGET_ID_NAMESPACE,
+        "symbol_targets_preserved": list(SYMBOL_TARGETS_PRESERVED),
+        "never_infer_ensembl_from_released_key": NEVER_INFER_ENSEMBL_FROM_RELEASED_KEY,
         "n_effect_universe_genes": len(readout_universe),
         "n_target_universe_genes": len(targets),
         # B4: the PROSPECTIVE coverage governance, frozen before any result.
@@ -418,8 +502,20 @@ def binding_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         # was PERTURBED produced an identical method hash — and the target universe is the
         # space enrichment tests membership in, so that is a different method, not a
         # different input. The claim is now true.
+        # A1: BOTH universes — hash, SIZE, ROLE and NAMESPACE. All four enter the method
+        # hash, so a run against a different perturbed population, or a bundle that
+        # silently changed what a universe MEANS, cannot keep this method's identity.
         "effect_universe_sha256": bundle["effect_universe_sha256"],
+        "n_effect_universe_genes": bundle.get("n_effect_universe_genes"),
+        "effect_universe_role": bundle.get("effect_universe_role"),
+        "gene_id_namespace_effect": bundle["gene_id_namespace"],
         "target_universe_sha256": bundle.get("target_universe_sha256"),
+        "n_target_universe_genes": bundle.get("n_target_universe_genes"),
+        "target_universe_role": bundle.get("target_universe_role"),
+        "target_id_namespace": bundle.get("target_id_namespace"),
+        "symbol_targets_preserved": bundle.get("symbol_targets_preserved"),
+        "never_infer_ensembl_from_released_key": bundle.get(
+            "never_infer_ensembl_from_released_key"),
         "single_universe_binding": bundle.get("single_universe_binding"),
         "canonical_sha256": bundle["canonical_sha256"],
         "min_set_size": bundle["min_set_size"],
