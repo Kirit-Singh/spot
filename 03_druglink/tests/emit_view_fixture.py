@@ -30,6 +30,7 @@ import selection_fixture as SF                                            # noqa
 from druglink import artifacts_v2 as av2                                  # noqa: E402
 from druglink import bundle_v2 as bv2                                     # noqa: E402
 from druglink import candidates_v2 as cv2                                 # noqa: E402
+from druglink import stage2_aggregate as sa                                   # noqa: E402
 from druglink import selection_v3 as s3                                   # noqa: E402
 from druglink import selection_view as sv                                 # noqa: E402
 from druglink import view_contract as vc                                  # noqa: E402
@@ -39,13 +40,18 @@ OUT = os.path.abspath(os.path.join(_HERE, "..", "selection_view.fixture.v1.json"
 
 def build_view(root: str) -> dict:
     paths = NAF.build(os.path.join(root, "aggregate"))
-    aggregate = NAF.admit(paths)
+    # THE BRIDGE, ADMITTED. The native ranking rows carry no namespace and no modality, so the
+    # aggregate the edge builder consumes is the bridge-TYPED one — never the raw admitted one.
+    native = NAF.admit(paths)
+    bridge = NAF.admit_bridge(paths, native)
+    aggregate = sa.bind_bridge(native, bridge)
     store = load_fixture_store(write_store(os.path.join(root, "store")))
 
     tables = cv2.build(artifact_class="fixture", aggregate=aggregate, store=store)
     report = bv2.bind_report(paths["report"], aggregate)
     tables["provenance"] = bv2.provenance_rows(
-        aggregate=aggregate, store=store, report=report, method=bv2.method_block(store))
+        aggregate=aggregate, store=store, report=report, method=bv2.method_block(store),
+        bridge=bridge)
     document = bv2.build_document(
         artifact_class="fixture", aggregate=aggregate, store=store, report=report,
         table_hashes=av2.table_content_hashes(tables), tables=tables)

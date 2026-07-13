@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Optional
 
 from . import artifact_class as ac
 from . import candidates_v2 as cv2
@@ -324,9 +324,18 @@ def method_block(store: ur.AdmittedStore) -> dict[str, Any]:
 
 def provenance_rows(*, aggregate: sa.AdmittedAggregate, store: ur.AdmittedStore,
                     report: Mapping[str, Any],
-                    method: Mapping[str, Any]) -> list[dict[str, Any]]:
+                    method: Mapping[str, Any],
+                    bridge: Optional[Any] = None) -> list[dict[str, Any]]:
     """One row per artifact this bundle stands on. A binding a reader cannot enumerate is a
-    binding a reader cannot check."""
+    binding a reader cannot check.
+
+    ``bridge`` is the ADMITTED Stage-2 -> Stage-3 bridge (``stage2_bridge.AdmittedBridge``). Every
+    typed identity and modality in this bundle came from it, so a bundle that did not NAME it
+    would be standing on an artifact its own provenance table cannot enumerate. Its three
+    documents are bound separately — the handoff, the SEPARATE verifier's report, and the receipt
+    that joins them to the aggregate — because that is what a reader must re-check, one file at a
+    time. Paths are never bound: they name a place on one machine, not an artifact.
+    """
     rows: list[dict[str, Any]] = [
         {"kind": "stage2_aggregate_manifest", "subject": "aggregate_run_manifest",
          "raw_sha256": aggregate.manifest_raw_sha256,
@@ -370,6 +379,29 @@ def provenance_rows(*, aggregate: sa.AdmittedAggregate, store: ur.AdmittedStore,
              for name, key in (("code_tree", "code_tree_sha256"),
                                ("schema_set", "schemas_sha256"),
                                ("env_lock", "env_lock_sha256"))]
+    if bridge is not None:
+        rows += [
+            {"kind": "stage2_stage3_bridge", "subject": "stage3_bridge",
+             "raw_sha256": bridge.bridge_raw_sha256,
+             "canonical_sha256": bridge.bridge_canonical_sha256,
+             "verifier_id": bridge.verifier_id, "verdict": bridge.verdict,
+             "detail": f"self_hash={bridge.bridge_self_hash}; it ADDED the target namespace and "
+                       "the perturbation modality the native ranking does not carry, and CHANGED "
+                       "no measurement"},
+            {"kind": "stage2_stage3_bridge_report", "subject": "stage3_bridge_verification",
+             "raw_sha256": bridge.report_raw_sha256,
+             "canonical_sha256": bridge.report_canonical_sha256,
+             "verifier_id": bridge.verifier_id, "verdict": bridge.verdict,
+             "detail": "a SEPARATE artifact from a separate verifier; it rebuilt every row from "
+                       "the admitted native bytes rather than reading them"},
+            {"kind": "stage2_stage3_receipt", "subject": "stage2_stage3_receipt",
+             "raw_sha256": bridge.receipt_raw_sha256,
+             "canonical_sha256": bridge.receipt_canonical_sha256,
+             "verifier_id": bridge.verifier_id, "verdict": bridge.verdict,
+             "detail": f"self_hash={bridge.receipt_self_hash}; THE JOIN — it binds the bridge "
+                       "bytes to the aggregate bytes, and an ADMIT that names no bytes is an "
+                       "opinion about some other artifact"},
+        ]
     for row in rows:
         row["provenance_id"] = content_hash(row)[:16]
     return sorted(rows, key=lambda r: (r["kind"], str(r["subject"])))

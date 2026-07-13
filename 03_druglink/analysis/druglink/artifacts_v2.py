@@ -303,14 +303,22 @@ def _refuse_unless_identical(target: str, manifest: Mapping[str, Any]) -> None:
 
 
 def emit(*, output_root: str, artifact_class: str, aggregate: AdmittedAggregate,
-         store: AdmittedStore, report_path: str,
+         store: AdmittedStore, report_path: str, bridge: Optional[Any] = None,
          created_at: Optional[str] = None) -> dict[str, Any]:
-    """Build the v2 evidence set from the ADMITTED inputs and bind it atomically to disk."""
+    """Build the v2 evidence set from the ADMITTED inputs and bind it atomically to disk.
+
+    ``aggregate`` must ALREADY be the bridge-typed one (``stage2_aggregate.bind_bridge``): the
+    native ranking rows carry no namespace and no modality, and the edge builder refuses both by
+    name rather than defaulting them, so an untyped aggregate emits nothing. ``bridge`` is that
+    same admitted bridge, bound into the provenance table so the bundle NAMES the artifact its
+    typed identities came from.
+    """
     ac.require(artifact_class)
     report = bind_report(report_path, aggregate)
     tables = cv2.build(artifact_class=artifact_class, aggregate=aggregate, store=store)
     tables["provenance"] = provenance_rows(
-        aggregate=aggregate, store=store, report=report, method=method_block(store))
+        aggregate=aggregate, store=store, report=report, method=method_block(store),
+        bridge=bridge)
     document = build_document(
         artifact_class=artifact_class, aggregate=aggregate, store=store, report=report,
         table_hashes=table_content_hashes(tables), tables=tables)

@@ -54,6 +54,20 @@ from typing import Any
 
 from . import artifact_class as ac
 from . import stage2_contract as C
+from .bridge_join import (  # noqa: F401  (the JOIN: native measurement + bridge identity)
+    GATE_ARM_IDENTITY_UNRESOLVED,
+    GATE_PATHWAY_ARM_WAS_TYPED,
+    bind as bind_bridge,
+)
+from .stage2_bridge import (  # noqa: F401  (THE bridge consumer; one front door with the gate)
+    BRIDGE_SCHEMA,
+    BRIDGE_VERIFIER_ID,
+    RECEIPT_SCHEMA,
+    TODO_GO_ONLY_TOPOLOGY,
+    AdmittedBridge,
+    Stage2BridgeError,
+    admit_bridge,
+)
 from .stage2_contract import (  # noqa: F401  (the public API; downstream imports it here)
     ADMIT,
     ADMITTED,

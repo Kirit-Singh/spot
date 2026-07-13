@@ -32,11 +32,22 @@ The SCORES are synthetic. The SHAPE is real: the 15-bundle / 300-arm topology th
 DERIVES from the release's own conditions and sources, the bare-``out_dir`` bundle directories,
 the bound ranking files with their retained ``rank: null`` rows, and the semantic self-hash.
 
-The ranking rows carry the typed fields W3's BRIDGE supplies (namespace, modality, modulation,
-phenocopy class) — because the bridge consumer is not wired yet and this fixture stands in for
-the post-bridge bytes. The modulation and phenocopy class are DERIVED from the frozen
-``modality_contract`` tables rather than hand-written, exactly as the bridge derives them, so a
-row here can never declare a direction its own ``arm_value`` does not imply.
+THE RANKING ROWS ARE NATIVE, AND UNTYPED
+----------------------------------------
+They carry EXACTLY ``{target_id, arm_value, evaluable, rank}`` — no namespace, no modality, no
+modulation, no phenocopy class — because that is what Stage-2's real ranking files carry.
+
+This fixture USED to pre-inject those four typed fields and say so in its own docstring ("stands
+in for the post-bridge bytes"). That made every test that stood on it a self-consistent fiction:
+the v2 edge builder refuses a record with no namespace and no modality BY NAME, so a real release
+would have emitted zero edges while the fixture emitted a full bundle, and no test could tell.
+
+The typed fields now come from where they come from in production: a REAL ``stage3_bridge.json``
+(+ its SEPARATE verification report + the receipt that joins them to the aggregate), built by
+:func:`build` and admitted by ``stage2_bridge.admit_bridge``. The modulation and phenocopy class
+are DERIVED from the frozen ``modality_contract`` tables rather than hand-written, exactly as the
+bridge derives them, so a row can never declare a direction its own ``arm_value`` does not imply —
+and :func:`admit_bridged` puts the whole thing through the real gate.
 """
 from __future__ import annotations
 
@@ -59,7 +70,16 @@ SOURCES = sa.PATHWAY_SOURCES
 MANIFEST_NAME = "stage2_run_manifest.json"
 REPORT_NAME = "stage2_aggregate_verification.json"
 RECEIPT_NAME = "stage2_stage3_receipt.json"
+BRIDGE_NAME = "stage3_bridge.json"
+BRIDGE_REPORT_NAME = "stage3_bridge_verification.json"
 STAGE1_NAME = "stage01_v3_release.json"
+
+# Restated from the bridge contract rather than imported from it, so the fixture cannot borrow the
+# code under test to build the very bytes that code is being asked to admit.
+BRIDGE_SCHEMA = "spot.stage02_stage3_bridge.v1"
+BRIDGE_VERIFIER_ID = "spot.stage02.stage3_bridge.independent_verifier.v1"
+BRIDGE_SELF_HASH_FIELD = "bridge_sha256"
+RECEIPT_SELF_HASH_FIELD = "receipt_sha256"
 
 NS_ENSEMBL = mc.W3_NS_ENSEMBL_GENE_ID
 NS_SYMBOL = mc.W3_NS_GENE_SYMBOL
@@ -119,30 +139,90 @@ def _contexts() -> list[tuple[str, str, dict[str, str]]]:
     return out
 
 
+def _arm_value(base: float, change: str) -> float:
+    """Stage 2 PRE-ORIENTS the value to its own arm's desired_change. `increase` is the base;
+    `decrease` is its exact negation (0.0 negates to 0.0, never -0.0)."""
+    return base if change == "increase" else (0.0 if base == 0 else -base)
+
+
 def _measured_records(change: str) -> list[dict[str, Any]]:
-    """The typed ranking rows, post-bridge. The DIRECTION is derived from the SIGN, never
-    declared: a row cannot claim a modulation its own arm_value does not imply."""
-    rows = []
-    for target_id, namespace, base, evaluable, rank in TARGETS:
-        # The arm value is PRE-ORIENTED to its own arm's desired_change by Stage 2. `increase` is
-        # the base; `decrease` is its exact negation (0.0 negates to 0.0, never -0.0).
-        value = base if change == "increase" else (0.0 if base == 0 else -base)
-        sign = mr.observed_sign_state(value, evaluable=evaluable, origin_is_measured=True,
-                                      arm_key="fixture")
-        modulation = mc.MODULATION_FOR[(MODALITY, sign)]
-        rows.append({
-            "target_id": target_id,
-            "target_id_namespace": namespace,
-            "arm_value": value,
-            "evaluable": evaluable,
-            # A RETAINED row with no rank. It stays null all the way to the edge: never 0,
-            # never last, never invented.
-            "rank": rank,
-            "observed_perturbation_modality": MODALITY,
-            "desired_target_modulation": modulation,
-            "phenocopy_class": PHENOCOPY_CLASS_OF[modulation],
-        })
-    return rows
+    """The NATIVE ranking rows: exactly what Stage-2's ranking files carry, and nothing more.
+
+    No namespace and no modality. Those two facts are the BRIDGE's, and a fixture that supplied
+    them here would be testing a release shape that does not exist.
+    """
+    return [{
+        "target_id": target_id,
+        "arm_value": _arm_value(base, change),
+        "evaluable": evaluable,
+        # A RETAINED row with no rank. It stays null all the way to the edge: never 0, never
+        # last, never invented.
+        "rank": rank,
+    } for target_id, _ns, base, evaluable, rank in TARGETS]
+
+
+def _bridge_row(lane: str, program: str, change: str, ctx: dict[str, str],
+                target: tuple) -> dict[str, Any]:
+    """One TYPED bridge row: the identity + the assay the native ranking does not state.
+
+    The direction is RE-DERIVED from the native arm_value under the declared modality — never
+    declared independently — so this fixture cannot ship a row whose own measurement contradicts
+    it, which is exactly the forgery the consumer's sign gate exists to catch.
+    """
+    target_id, namespace, base, evaluable, rank = target
+    value = _arm_value(base, change)
+    sign = mr.observed_sign_state(value, evaluable=evaluable, origin_is_measured=True,
+                                  arm_key="fixture")
+    modulation = mc.MODULATION_FOR[(MODALITY, sign)]
+    return {
+        "schema_version": "spot.stage02_stage3_row.v1",
+        "lane": lane,
+        "arm_key": arm_key(lane, program, change, ctx),
+        "program_id": program,
+        "context": dict(ctx),
+        "target_id": target_id,
+        "target_id_namespace": namespace,
+        "target_symbol": target_id,
+        "target_ensembl": target_id if namespace == NS_ENSEMBL else None,
+        "observed_perturbation_modality": MODALITY,
+        "perturbation_target_effect": "target_transcript_reduced",
+        "program_effect_direction": change,
+        "desired_target_modulation": modulation,
+        "phenocopy_class": PHENOCOPY_CLASS_OF[modulation],
+        # THE NATIVE VALUES, restated IDENTICALLY. The consumer checks all three against the
+        # admitted ranking: the bridge may ADD facts, and may never CHANGE one.
+        "arm_value": value,
+        "evaluable": evaluable,
+        "rank": rank,
+    }
+
+
+def _bridge_context(program: str, change: str, ctx: dict[str, str]) -> dict[str, Any]:
+    """A pathway CONTEXT row: a statement about a GENE SET. No target, no arm value, no modality,
+    no rank — and it says so in fields a consumer reads, not in a docstring it does not."""
+    return {
+        "schema_version": "spot.stage02_stage3_pathway_context.v1",
+        "lane": sa.LANE_PATHWAY,
+        "arm_key": arm_key(sa.LANE_PATHWAY, program, change, ctx),
+        "program_id": program,
+        "context": dict(ctx),
+        "source": ctx["gene_set_source"],
+        "gene_set_id": f"{ctx['gene_set_source']}:FIXTURE_SET_1",
+        "native_set_id_field": "set_id",
+        "enrichment_value": 0.5,
+        "coverage": 0.25,
+        "convergence_ref": "fixture_convergence_ref",
+        "leading_edge": [{"target_id": t, "target_id_namespace": ns,
+                          "joinable": True, "status": "joinable"}
+                         for t, ns, *_ in TARGETS[:3]],
+        "n_leading_edge": 3,
+        "n_leading_edge_joinable": 3,
+        "links_to_targets_via": ["leading_edge", "convergence"],
+        # THE DENIAL, AS A FIELD. An enrichment is not a CRISPRi target row and may never be
+        # matched to a drug as a target.
+        "is_a_crispri_target_row": False,
+        "may_be_matched_to_a_drug_as_a_target": False,
+    }
 
 
 def _pathway_records(source: str) -> list[dict[str, Any]]:
@@ -200,8 +280,16 @@ def _bundle(key: str, lane: str, ctx: dict[str, str], out_dir: str,
 
 
 def build(root: str, *, mutate_manifest=None, mutate_report=None, mutate_receipt=None,
+          mutate_bridge=None, mutate_bridge_report=None,
           reseal: bool = True) -> dict[str, str]:
-    """Materialise the sealed NATIVE release and return the paths Stage 3 admits it from."""
+    """Materialise the sealed NATIVE release + its bridge, and return the paths Stage 3 admits
+    it from.
+
+    Every ``mutate_*`` hook is a COHERENT forgery seam: the document is edited and then RESEALED
+    (its self-hash recomputed), so an attack cannot be caught merely because a hash stopped
+    matching. It has to be caught by a gate that checks the CLAIM against bytes the forger does
+    not own.
+    """
     root = str(root)
     bundles_root = os.path.join(root, "bundles")
 
@@ -270,10 +358,74 @@ def build(root: str, *, mutate_manifest=None, mutate_report=None, mutate_receipt
         mutate_report(report)
     report_path = _write(os.path.join(root, REPORT_NAME), report)
 
-    # THE JOIN. The bridge is not consumed here (its loader is W16's), but the receipt must BIND
-    # one: a receipt that binds only the aggregate would let an ADMIT travel with a handoff it
-    # was never about.
-    bridge = {"schema_version": "spot.stage02_stage3_bridge.v1", "fixture": True}
+    # THE BRIDGE. The typed identity + modality the native ranking does not carry. It is built
+    # over the SAME contexts the bundles were, so every row it ships is one the admitted native
+    # bytes actually produce — and every native row is one it ships.
+    bridge: dict[str, Any] = {
+        "schema_version": BRIDGE_SCHEMA,
+        "rule_id": "spot.stage02.stage3_row.direction_and_namespace.v1",
+        # A PRODUCER DOES NOT ADMIT ITSELF. The real bridge says exactly this, and the consumer
+        # REFUSES one that claims otherwise.
+        "admitted": False,
+        "self_admitted": False,
+        "verdict": "pending_independent_verification",
+        "bindings": {
+            "aggregate": {"manifest": {"raw_sha256": file_sha256(manifest_path),
+                                       "canonical_sha256": stage2_content_sha256(manifest)},
+                          "report": {"raw_sha256": file_sha256(report_path),
+                                     "canonical_sha256": stage2_content_sha256(report)}},
+            "identity_source": {"direct": "target_identity.json",
+                                "temporal": "arm_bundle.json:base_records"},
+            "lane_admissions": {ln: {"admitted": True, "native_verdict": "ADMIT"}
+                                for ln in sa.LANES},
+            "native_bundles": sorted(b["bundle_id"] for b in bundles),
+            "stage1": {"release_canonical_sha256": stage2_content_sha256(stage1)},
+        },
+        "target_rows": [_bridge_row(lane, program, change, ctx, target)
+                        for _key, lane, ctx in _contexts() if lane != sa.LANE_PATHWAY
+                        for program in PROGRAMS
+                        for change in sa.DESIRED_CHANGES
+                        for target in TARGETS],
+        "pathway_contexts": [_bridge_context(program, change, ctx)
+                             for _key, lane, ctx in _contexts() if lane == sa.LANE_PATHWAY
+                             for program in PROGRAMS
+                             for change in sa.DESIRED_CHANGES],
+    }
+    bridge["n_target_rows"] = len(bridge["target_rows"])
+    bridge["n_pathway_contexts"] = len(bridge["pathway_contexts"])
+    if mutate_bridge:
+        mutate_bridge(bridge)
+    if reseal:
+        bridge[BRIDGE_SELF_HASH_FIELD] = stage2_content_sha256(
+            {k: v for k, v in bridge.items() if k != BRIDGE_SELF_HASH_FIELD})
+    bridge_path = _write(os.path.join(root, BRIDGE_NAME), bridge)
+
+    # The SEPARATE bridge verifier's report. It names the BYTES it judged — a verdict that names
+    # no bytes is an opinion about some other artifact.
+    bridge_report: dict[str, Any] = {
+        "verifier_id": BRIDGE_VERIFIER_ID,
+        "generator_is_not_verifier": True,
+        "verdict": sa.ADMIT,
+        "n_failed": 0,
+        "failures": [],
+        "reconstructs_from_admitted_native_bytes": True,
+        "self_hash_alone_is_sufficient": False,
+        "n_rows": len(bridge["target_rows"]),
+        "n_rebuilt": len(bridge["target_rows"]),
+        "n_contexts": len(bridge["pathway_contexts"]),
+        "judged_bridge": {
+            "raw_sha256": file_sha256(bridge_path),
+            "canonical_sha256": stage2_content_sha256(bridge),
+            BRIDGE_SELF_HASH_FIELD: bridge.get(BRIDGE_SELF_HASH_FIELD),
+        },
+    }
+    if mutate_bridge_report:
+        mutate_bridge_report(bridge_report)
+    bridge_report_path = _write(os.path.join(root, BRIDGE_REPORT_NAME), bridge_report)
+
+    # THE JOIN. A receipt that binds only the aggregate would let an ADMIT travel with a handoff
+    # it was never about; one that binds only the bridge would let it travel with a release
+    # nobody cleared. It binds BOTH, by raw AND canonical bytes.
     receipt: dict[str, Any] = {
         "schema_version": "spot.stage02_stage3_receipt.v1",
         "aggregate": {
@@ -282,20 +434,46 @@ def build(root: str, *, mutate_manifest=None, mutate_report=None, mutate_receipt
             "report": {"raw_sha256": file_sha256(report_path),
                        "canonical_sha256": stage2_content_sha256(report)},
         },
-        "bridge": {"raw_sha256": stage2_content_sha256({"raw": bridge}),
+        "bridge": {"raw_sha256": file_sha256(bridge_path),
                    "canonical_sha256": stage2_content_sha256(bridge)},
+        "bridge_report": {"raw_sha256": file_sha256(bridge_report_path),
+                          "canonical_sha256": stage2_content_sha256(bridge_report)},
+        "aggregate_is_immutable": True,
+        "aggregate_was_resealed": False,
     }
     if mutate_receipt:
         mutate_receipt(receipt)
+    if reseal:
+        receipt[RECEIPT_SELF_HASH_FIELD] = stage2_content_sha256(
+            {k: v for k, v in receipt.items() if k != RECEIPT_SELF_HASH_FIELD})
     receipt_path = _write(os.path.join(root, RECEIPT_NAME), receipt)
 
     return {"manifest": manifest_path, "report": report_path, "receipt": receipt_path,
+            "bridge": bridge_path, "bridge_report": bridge_report_path,
             "bundles_root": bundles_root, "stage1_release": stage1_path,
             "manifest_doc": manifest}
 
 
 def admit(paths: dict[str, str]) -> sa.AdmittedAggregate:
-    """The sealed release, through the REAL native admission gate. No shortcut, no fallback."""
+    """The sealed release, through the REAL native admission gate. No shortcut, no fallback.
+
+    The arms this returns carry NATIVE, UNTYPED records — no namespace, no modality. That is what
+    Stage 2 ships, and the v2 edge builder refuses them by name. Use :func:`admit_bridged` to get
+    the aggregate a bundle can actually be built from.
+    """
     return sa.admit_aggregate(manifest_path=paths["manifest"], report_path=paths["report"],
                               bundles_root=paths["bundles_root"],
                               stage1_release_path=paths["stage1_release"])
+
+
+def admit_bridge(paths: dict[str, str], aggregate: sa.AdmittedAggregate) -> sa.AdmittedBridge:
+    """The sealed bridge, through the REAL bridge admission gate."""
+    return sa.admit_bridge(bridge_path=paths["bridge"], report_path=paths["bridge_report"],
+                           receipt_path=paths["receipt"], aggregate=aggregate,
+                           aggregate_report_path=paths["report"])
+
+
+def admit_bridged(paths: dict[str, str]) -> sa.AdmittedAggregate:
+    """The admitted aggregate, TYPED by the admitted bridge — what production actually consumes."""
+    aggregate = admit(paths)
+    return sa.bind_bridge(aggregate, admit_bridge(paths, aggregate))

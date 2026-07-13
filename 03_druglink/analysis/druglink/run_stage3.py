@@ -329,6 +329,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                          "aggregate manifest/report AND the bridge/report by raw + canonical "
                          "bytes. The bridge report alone names no bridge bytes, so an ADMIT "
                          "without the receipt is a verdict about nothing in particular.")
+    ap.add_argument("--selection", default=None,
+                    help="v2 (optional): a Stage-1 v3 selection contract. With it, the run also "
+                         "projects the SELECTION VIEW for that one question and emits the "
+                         "membership receipt (spot.stage03_membership_receipt.v1) that proves "
+                         "the membership gate RAN over those exact bytes. Without it, the run "
+                         "emits the selection-INDEPENDENT bundle only — arms are reusable and a "
+                         "role is assigned at join time, never stored on an arm.")
     ap.add_argument("--artifact-class", required=True,
                     choices=list(ac.ARTIFACT_CLASSES),
                     help="analysis (a real computation) or fixture (synthetic; never "

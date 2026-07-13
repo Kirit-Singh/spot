@@ -24,6 +24,7 @@ from v2_fixture import load_fixture_store, write_store
 from druglink import artifacts_v2 as av2
 from druglink import bundle_v2 as bv2
 from druglink import candidates_v2 as cv2
+from druglink import stage2_aggregate as sa
 from druglink import selection_v3 as s3
 from druglink import selection_view as sv
 
@@ -44,7 +45,11 @@ EMIT_SCRIPT = os.path.join(_HERE, "emit_view_fixture.py")
 def world(tmp_path_factory):
     root = tmp_path_factory.mktemp("selection_view")
     paths = NAF.build(str(root / "aggregate"))
-    aggregate = NAF.admit(paths)
+    # THE BRIDGE, ADMITTED. The native ranking rows carry no namespace and no modality, so the
+    # aggregate the edge builder consumes is the bridge-TYPED one — never the raw admitted one.
+    native = NAF.admit(paths)
+    bridge = NAF.admit_bridge(paths, native)
+    aggregate = sa.bind_bridge(native, bridge)
     store_dir = write_store(str(root / "store"))
     store = load_fixture_store(store_dir)
 
@@ -52,7 +57,7 @@ def world(tmp_path_factory):
     tables["provenance"] = bv2.provenance_rows(
         aggregate=aggregate, store=store,
         report=bv2.bind_report(paths["report"], aggregate),
-        method=bv2.method_block(store))
+        method=bv2.method_block(store), bridge=bridge)
     document = bv2.build_document(
         artifact_class="fixture", aggregate=aggregate, store=store,
         report=bv2.bind_report(paths["report"], aggregate),
