@@ -41,14 +41,61 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ...arm_keys import DESIRED_CHANGES
-from ...hashing import content_hash
+from ...hashing import canonical_json, content_hash, sha256_hex
 from .. import config, estimand
 from . import arm_estimand as est
-from . import arm_programs
+from . import arm_programs, arm_report
 
 SCHEMA_BUNDLE = "spot.stage02_temporal_arm_bundle.v1"
 BUNDLE_KIND = "temporal"
+# The aggregate run-manifest reads ``bundle["lane"]`` and refuses anything not in its LANES.
+# The temporal lane's name is exactly this token — matched, never adapted.
+BUNDLE_LANE = "temporal"
+# Stage-3 (W16) keys its cross-time loader on this exact mode string.
+ANALYSIS_MODE = "temporal_cross_condition"
 BUNDLE_ID_LEN = 16
+
+# THE PHYSICAL CONTRACT FILENAMES. Emitted NATIVELY under these names — never renamed or
+# copied post-hoc — because the aggregate run-manifest and W11's verifier read the shipped
+# bytes at exactly these paths, and W16's loader keys on them.
+BUNDLE_FILENAME = "arm_bundle.json"
+PROVENANCE_FILENAME = "temporal_provenance.json"
+VERIFICATION_FILENAME = "temporal_verification.json"
+
+# EACH arm binds the BYTES its rank/counts are derived from — a bundle-relative ranking
+# file with a raw AND a canonical hash, so an independent verifier can open it and recompute
+# the ranking rather than trust the arm's own summary. This is the aggregate's ARM_BINDING.
+RANKING_SCHEMA = "spot.stage02_temporal_arm_ranking.v1"
+RANKINGS_DIR = "rankings"
+
+
+def ranking_relpath(program_id: str, change: str) -> str:
+    """The BUNDLE-RELATIVE path of one arm's ranking file. Never absolute, never escapes."""
+    return f"{RANKINGS_DIR}/{program_id}__{change}.json"
+
+
+def ranking_object(arm: dict[str, Any]) -> dict[str, Any]:
+    """The ranking an arm actually assigned — the bytes its rank and counts stand on.
+
+    Deliberately reconstructible from the arm alone, so the producer, the emitter and every
+    verifier build the SAME bytes: there is exactly one ranking, and its hash is bound into
+    the arm rather than restated.
+    """
+    return {"schema_version": RANKING_SCHEMA, "arm_key": arm["arm_key"],
+            "ranked": arm["records"]}
+
+
+def ranking_binding(arm: dict[str, Any]) -> dict[str, Any]:
+    """``{path, raw_sha256, canonical_sha256}`` for one arm's ranking file.
+
+    The bytes are canonical, so ``raw`` (the sha of what lands on disk) and ``canonical``
+    (the sha of the parsed content) coincide by construction — both are emitted because the
+    aggregate binds and re-checks each independently.
+    """
+    obj = ranking_object(arm)
+    return {"path": ranking_relpath(arm["program_id"], arm["desired_change"]),
+            "raw_sha256": sha256_hex(canonical_json(obj)),
+            "canonical_sha256": content_hash(obj)}
 
 # The per-endpoint denominators a reader needs in order to know what the support
 # denominators WERE. Enumerated, never projected.
@@ -207,10 +254,16 @@ def base_record(*, program_id: str, target_id: str, from_ep: Optional[TargetEndp
     rec: dict[str, Any] = {
         "base_key": base_key(program_id, target_id),
         "program_id": program_id,
+        # STABLE, NORMALISED target identity — carried HERE (base_records), never on the arm
+        # records that join to it. Stage-3 reads identity from the base record it joins to.
         "target_id": target_id,
         "target_symbol": present.target_symbol,
         "target_ensembl": present.target_ensembl,
         "target_id_namespace": present.target_id_namespace,
+        # the perturbation is a CRISPRi knockdown — the fact Stage-3 needs to read the
+        # modulation orientation. A screen-wide constant, but carried on the record the
+        # consumer joins to; the verifier holds it to exactly this value everywhere.
+        "perturbation_modality": est.PERTURBATION_MODALITY,
         "from_condition": from_condition,
         "to_condition": to_condition,
     }
@@ -244,6 +297,7 @@ def build_bundle(*, from_condition: str, to_condition: str,
                  from_endpoints: list[TargetEndpoint],
                  to_endpoints: list[TargetEndpoint],
                  method: dict[str, Any],
+                 conditions: Optional[list[str]] = None,
                  scorer_view_sha256: Optional[str] = None) -> dict[str, Any]:
     """The complete, deterministic bundle for ONE frozen ordered condition pair.
 
@@ -251,6 +305,12 @@ def build_bundle(*, from_condition: str, to_condition: str,
     its OWN admitted+evaluable population. Deterministic by construction: every collection
     is sorted by a stable key and NO timestamp is carried, so the same inputs re-emit the
     same bytes.
+
+    ``conditions`` is the AUTHORITATIVE condition universe — the Stage-1 v3
+    ``release.selector.conditions``, NOT the temporal batch policy, which is no longer the
+    condition-universe authority. When supplied, the ordered pair MUST be drawn from it: a
+    bundle for a pair the release never named is refused, so a forged or stale condition
+    cannot enter the manifest under a valid-looking key.
     """
     from_condition, to_condition = str(from_condition), str(to_condition)
     if from_condition == to_condition:
@@ -258,6 +318,8 @@ def build_bundle(*, from_condition: str, to_condition: str,
             f"the ordered pair ({from_condition!r} -> {to_condition!r}) is degenerate: a "
             "condition compared with itself has a base delta of exactly 0 for every target "
             "by construction, which is an arithmetic identity and not a measurement")
+    if conditions is not None:
+        arm_programs.require_ordered_pair(conditions, from_condition, to_condition)
     if not admitted:
         raise BundleError("no admitted programs; there is no program axis to build arms on")
 
@@ -287,6 +349,11 @@ def build_bundle(*, from_condition: str, to_condition: str,
     bundle: dict[str, Any] = {
         "schema_version": SCHEMA_BUNDLE,
         "bundle_kind": BUNDLE_KIND,
+        # the aggregate keys on ``lane``; Stage-3 (W16) keys on ``analysis_mode``
+        "lane": BUNDLE_LANE,
+        "analysis_mode": ANALYSIS_MODE,
+        # ``context`` is the ordered pair, read as-is
+        "context": {"from_condition": from_condition, "to_condition": to_condition},
         "bundle_key": bundle_key(from_condition, to_condition),
         "from_condition": from_condition,
         "to_condition": to_condition,
@@ -300,7 +367,19 @@ def build_bundle(*, from_condition: str, to_condition: str,
         "arms": arms,
         "program_admission": arm_programs.admission_block(admitted, scorer_view_sha256),
         "estimand": est.estimand_block(),
+        # the perturbation modality + the SUGGESTIVE modulation rule, stated once
+        "perturbation": est.perturbation_block(),
         "method": dict(method),
+        # WHERE the independent verification lives and WHO signs it — a POINTER, never a
+        # verdict. The verdict is the separate ``temporal_verification.json``, which binds
+        # this bundle's hash; embedding one here would be the self-verdict the aggregate
+        # refuses to admit on.
+        "verification_ref": {
+            "verifier_id": arm_report.VERIFIER_ID,
+            "verification_schema_version": arm_report.SCHEMA_VERIFICATION,
+            "verification_file": VERIFICATION_FILENAME,
+            "provenance_file": PROVENANCE_FILENAME,
+        },
         "bundle_is_pair_agnostic": True,
         "bundle_carries_role_or_pole": False,
     }
@@ -319,19 +398,26 @@ def _arm(*, program_id: str, change: str, from_condition: str, to_condition: str
     records: list[dict[str, Any]] = []
     for target_id in targets:
         base = by_base_key[base_key(program_id, target_id)]
-        value = est.arm_value(base["base_delta"], change)
+        value = est.canonical(est.arm_value(base["base_delta"], change))
         records.append({
+            # the IMMUTABLE join key back to the normalised identity in base_records —
+            # Stage-3 joins on this, never on a symbol. target_id is carried too, so the
+            # join is checkable, but the full identity is not duplicated here.
             "target_id": target_id,
             "base_key": base["base_key"],
-            "arm_value": est.canonical(value),
+            "arm_value": value,
             "evaluable": bool(base["evaluable"]),
             "temporal_status": base["temporal_status"],
+            # what this arm value SUGGESTS for drug linkage under CRISPRi knockdown —
+            # deterministic from the sign, suggestive, re-derivable by the verifier
+            "desired_target_modulation": est.target_modulation(
+                value, evaluable=bool(base["evaluable"])),
             "rank": None,
         })
     est.rank_population(records)
     records.sort(key=lambda r: r["target_id"])   # emission order is never a headline rank
 
-    return {
+    arm = {
         "arm_key": est.arm_key(program_id, change, from_condition, to_condition),
         "program_id": program_id,
         "desired_change": change,
@@ -342,6 +428,9 @@ def _arm(*, program_id: str, change: str, from_condition: str, to_condition: str
         "n_ranked": sum(1 for r in records if r["rank"] is not None),
         "records": records,
     }
+    # bind the BYTES the rank stands on: a bundle-relative ranking file + its two hashes.
+    arm["ranking"] = ranking_binding(arm)
+    return arm
 
 
 def bundle_key(from_condition: str, to_condition: str) -> str:

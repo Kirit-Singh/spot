@@ -76,28 +76,78 @@ def inherited_forbidden_keys(obj: Any) -> list[str]:
     return [hit for hit in comparison_admission.forbidden_keys(obj)
             if hit.rsplit(".", 1)[-1] not in INHERITED_FIREWALL_EXCEPTIONS]
 
+
+# --------------------------------------------------------------------------- #
+# THE PORTABILITY FIREWALL: no machine-local address may enter a shipped artifact.
+#
+# A content-addressed bundle must be BYTE-IDENTICAL on any host. An absolute path, a
+# hostname or a private IP is none of the bundle's business and is not reproducible off the
+# machine that wrote it: it breaks portability AND leaks where the run happened. W11's
+# path-injection reseal — insert ``/home/.../arm_bundle.json`` and recompute the bundle_id
+# so it re-derives — is caught HERE and not by the hash, because this scan runs regardless
+# of whether the content hash is internally consistent.
+# --------------------------------------------------------------------------- #
+_ABSOLUTE_PATH_RE = re.compile(r"^(?:/|~|file://|[A-Za-z]:[\\/])")
+_EMBEDDED_ROOT_RE = re.compile(
+    r"/(?:home|tmp|Users|root|var|mnt|private|opt|etc|proc)/")
+_HOSTNAME_RE = re.compile(r"\b(?:tcedirector|tcefold|localhost)\b", re.IGNORECASE)
+_PRIVATE_IP_RE = re.compile(
+    r"\b(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
+    r"|\b192\.168\.\d{1,3}\.\d{1,3}\b"
+    r"|\b172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b")
+
+
+def is_machine_local(s: str) -> bool:
+    """An absolute/embedded filesystem path, a known hostname, or a private IP address."""
+    return bool(_ABSOLUTE_PATH_RE.match(s) or _EMBEDDED_ROOT_RE.search(s)
+                or _HOSTNAME_RE.search(s) or _PRIVATE_IP_RE.search(s))
+
+
+def machine_local_strings(obj: Any, path: str = "") -> list[str]:
+    """Every machine-local string in a document, at ANY depth, as a dotted path.
+
+    Scans keys and values alike: a leaked path is a value today, but a firewall that only
+    looked at values would miss one that arrived as a key.
+    """
+    hits: list[str] = []
+    if isinstance(obj, str):
+        if is_machine_local(obj):
+            hits.append(path or repr(obj))
+    elif isinstance(obj, dict):
+        for key, value in obj.items():
+            here = f"{path}.{key}" if path else str(key)
+            if is_machine_local(str(key)):
+                hits.append(here)
+            hits.extend(machine_local_strings(value, here))
+    elif isinstance(obj, (list, tuple)):
+        for i, value in enumerate(obj):
+            hits.extend(machine_local_strings(value, f"{path}[{i}]"))
+    return hits
+
+
 BUNDLE_KEYS = frozenset({
-    "schema_version", "bundle_kind", "bundle_key", "bundle_id",
-    "from_condition", "to_condition",
+    "schema_version", "bundle_kind", "lane", "analysis_mode", "context", "bundle_key",
+    "bundle_id", "from_condition", "to_condition",
     "n_programs", "n_desired_changes", "n_arms", "n_targets", "n_base_records",
-    "arm_keys", "base_records", "arms", "program_admission", "estimand", "method",
-    "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
+    "arm_keys", "base_records", "arms", "program_admission", "estimand", "perturbation",
+    "method", "verification_ref", "bundle_is_pair_agnostic", "bundle_carries_role_or_pole",
 })
 
 ARM_KEYS_ALLOWED = frozenset({
     "arm_key", "program_id", "desired_change", "from_condition", "to_condition",
-    "n_targets", "n_evaluable", "n_ranked", "records",
+    "n_targets", "n_evaluable", "n_ranked", "records", "ranking",
 })
 
 ARM_RECORD_KEYS = frozenset({
-    "target_id", "base_key", "arm_value", "evaluable", "temporal_status", "rank",
+    "target_id", "base_key", "arm_value", "evaluable", "temporal_status",
+    "desired_target_modulation", "rank",
 })
 
 _ENDS = ("from", "to")
 BASE_RECORD_KEYS = frozenset(
     {"base_key", "program_id", "target_id", "target_symbol", "target_ensembl",
-     "target_id_namespace", "from_condition", "to_condition", "temporal_status",
-     "evaluable", "base_delta"}
+     "target_id_namespace", "perturbation_modality", "from_condition", "to_condition",
+     "temporal_status", "evaluable", "base_delta"}
     | {f"{e}_{k}" for e in _ENDS for k in
        ("present", "delta", "projection_status", "evaluable", "state", "reasons",
         "released_estimate_id", "base_qc_passed", "base_qc_state", "base_qc_reasons")}
@@ -145,12 +195,19 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     """RE-DERIVE every claim in the bundle from the bundle. Returns a checked report.
 
     Raises ``BundleRejected`` on the first structural refusal; collects every
-    re-derivation failure so a reader sees ALL of them rather than one at a time.
+    re-derivation failure so a reader sees ALL of them rather than one at a time. Records
+    every gate — passed or failed — so the independent report can carry its inventory: an
+    ADMIT that ran no gates is an ADMIT that checked nothing.
     """
+    gates: dict[str, dict[str, Any]] = {}
     failures: list[str] = []
 
     def check(name: str, ok: bool, detail: str = "") -> None:
-        if not ok:
+        # A gate is PASS only if EVERY occurrence passes: the first failure pins it failed.
+        g = gates.setdefault(name, {"gate": name, "status": "pass", "detail": ""})
+        if not ok and g["status"] == "pass":
+            g["status"] = "fail"
+            g["detail"] = detail
             failures.append(f"[{name}] {detail}")
 
     # ---- gate 1: the exact key allowlists ----
@@ -185,6 +242,32 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     check("no_role_pole_pareto_concordance_pair_or_batch_field", not arm_hits,
           f"forbidden keys: {arm_hits}")
 
+    # ---- gate 4: the portability firewall (fail-closed on a resealed path injection) ----
+    local = machine_local_strings(bundle)
+    check("no_machine_local_path_hostname_or_private_address", not local,
+          f"machine-local strings at: {local[:6]}")
+
+    # ---- gate 5: the bundle names the temporal lane / mode the consumers key on ----
+    check("bundle_declares_the_temporal_lane", bundle.get("lane") == ab.BUNDLE_LANE,
+          f"lane is {bundle.get('lane')!r}, not {ab.BUNDLE_LANE!r}")
+    check("bundle_declares_the_temporal_cross_condition_mode",
+          bundle.get("analysis_mode") == ab.ANALYSIS_MODE,
+          f"analysis_mode is {bundle.get('analysis_mode')!r}, not {ab.ANALYSIS_MODE!r}")
+
+    # ---- gate 6: the perturbation modality Stage-3 reads the modulation orientation by ----
+    modality = est.PERTURBATION_MODALITY
+    check("bundle_declares_the_crispri_knockdown_modality",
+          (bundle.get("perturbation") or {}).get("perturbation_modality") == modality,
+          f"bundle perturbation modality is not {modality!r}")
+    check("bundle_states_no_pharmacologic_reversibility_assumed",
+          (bundle.get("perturbation") or {}).get(
+              "pharmacologic_reversibility_assumed") is False,
+          "the modulation rule must not assume pharmacologic reversibility")
+    bad_modality = [b["base_key"] for b in bundle["base_records"]
+                    if b.get("perturbation_modality") != modality]
+    check("every_base_record_carries_the_same_modality", not bad_modality,
+          f"base records with a divergent modality: {bad_modality[:4]}")
+
     # ---- the inventory: n_programs x 2, complete and not invented ----
     programs = bundle["program_admission"]["programs"]
     expected = {est.arm_key(p, c, bundle["from_condition"], bundle["to_condition"])
@@ -215,9 +298,18 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         sign = SIGN[arm["desired_change"]]
         for rec in arm["records"]:
             base = by_base.get(rec["base_key"])
+            # REFERENTIAL INTEGRITY: the arm record joins to EXACTLY ONE base record, and
+            # that base record is about the SAME target. Stage-3 reads identity by this
+            # join, so a dangling or mismatched base_key is a broken identity, not a warning.
+            check("arm_record_joins_to_exactly_one_base_record", base is not None,
+                  f"{key} / {rec['target_id']}: base_key {rec['base_key']!r} resolves to "
+                  "no base record")
             if base is None:
-                failures.append(f"[arm_record_points_at_a_real_base] {rec['base_key']!r}")
                 continue
+            check("arm_record_and_its_base_record_name_the_same_target",
+                  base["target_id"] == rec["target_id"],
+                  f"{key}: arm record target {rec['target_id']!r} joins base record for "
+                  f"{base['target_id']!r}")
             # the VALUE is a sign transform of the ONE base delta. Not a re-estimate.
             b = base["base_delta"]
             want = None if b is None else (0.0 if b == 0 else sign * b)
@@ -229,9 +321,24 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
                   rec["evaluable"] == base["evaluable"],
                   f"{key} / {rec['target_id']}: the two arms of a program share an "
                   "estimate, so they share its evaluability")
+            # the MODULATION orientation re-derives from the sign of the shipped value —
+            # a suggestive claim cannot be asserted out of step with the number it is about.
+            want_mod = est.target_modulation(rec["arm_value"],
+                                             evaluable=bool(rec["evaluable"]))
+            check("desired_target_modulation_rederives_from_the_arm_value",
+                  rec.get("desired_target_modulation") == want_mod,
+                  f"{key} / {rec['target_id']}: modulation "
+                  f"{rec.get('desired_target_modulation')!r} != re-derived {want_mod!r}")
 
         # the RANK re-derives from the SHIPPED values, by the frozen rule
         _check_ranks(arm, check)
+
+        # the RANKING BINDING re-derives from this arm's own ranked list. The aggregate
+        # opens the bound file and recomputes; here the binding is checked against the arm
+        # it claims to summarise, so a hash pointing at some other ranking cannot survive.
+        want_bind = ab.ranking_binding(arm)
+        check("ranking_binding_matches_the_arm", arm.get("ranking") == want_bind,
+              f"{key}: shipped ranking {arm.get('ranking')} != re-derived {want_bind}")
 
     # ---- the bundle id covers the bundle's own content ----
     payload = {k: v for k, v in bundle.items() if k != "bundle_id"}
@@ -240,6 +347,7 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
           f"shipped {bundle['bundle_id']!r}, content hashes to {derived!r}")
 
     return {"admitted": not failures, "failures": failures,
+            "checks": list(gates.values()),
             "n_arms": bundle["n_arms"], "n_base_records": bundle["n_base_records"],
             "bundle_id": bundle["bundle_id"], "bundle_key": bundle["bundle_key"]}
 
@@ -264,3 +372,47 @@ def _check_ranks(arm: dict[str, Any], check) -> None:
           arm["n_ranked"] == len(rankable) and arm["n_evaluable"] == len(rankable),
           f"{arm['arm_key']}: n_ranked={arm['n_ranked']} n_evaluable={arm['n_evaluable']} "
           f"rankable={len(rankable)}")
+
+
+def verify_shipped(out_dir: str) -> dict[str, Any]:
+    """The STANDALONE verifier W11/W16 re-run: read the shipped bytes off disk, re-derive.
+
+    Independent of the producer's in-memory state — it opens ``arm_bundle.json`` and each
+    arm's bound ranking file from disk and checks that what shipped re-derives. A consumer
+    that cannot see a bundle verified is a consumer that refuses it, so this is the entry
+    point that reconstructs the bundle from nothing but its own bytes.
+    """
+    import json
+    import os
+
+    from ...hashing import content_hash, sha256_hex
+
+    path = os.path.join(out_dir, ab.BUNDLE_FILENAME)
+    if not os.path.exists(path):
+        return {"admitted": False, "failures": [f"[no_bundle] {ab.BUNDLE_FILENAME} absent"],
+                "checks": [], "out_dir": out_dir}
+    with open(path, "rb") as fh:
+        bundle = json.loads(fh.read())
+
+    result = verify_bundle(bundle)
+    failures = list(result["failures"])
+
+    # the on-disk ranking files must be present and match the bindings the bundle carries
+    for arm in bundle.get("arms", []):
+        binding = arm.get("ranking") or {}
+        rel = str(binding.get("path", ""))
+        rpath = os.path.join(out_dir, rel)
+        if os.path.isabs(rel) or ".." in rel.split("/") or not os.path.exists(rpath):
+            failures.append(f"[ranking_file_missing_or_not_relative] {rel!r}")
+            continue
+        with open(rpath, "rb") as fh:
+            raw = fh.read()
+        if sha256_hex(raw) != binding.get("raw_sha256") \
+                or content_hash(json.loads(raw)) != binding.get("canonical_sha256"):
+            failures.append(f"[ranking_file_hash_mismatch] {rel!r}")
+
+    result = dict(result)
+    result["failures"] = failures
+    result["admitted"] = not failures
+    result["out_dir"] = out_dir
+    return result

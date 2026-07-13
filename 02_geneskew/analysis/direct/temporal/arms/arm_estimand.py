@@ -114,6 +114,61 @@ RANK_RULE = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# DESIRED-TARGET MODULATION — what the arm value SUGGESTS for drug linkage.
+#
+# The perturbation is a CRISPRi KNOCKDOWN. So a POSITIVE arm value (the knockdown moved the
+# program in the arm's desired direction) SUGGESTS that INHIBITING the target would support
+# that desired change. A NEGATIVE value is OPPOSED: achieving the desired change would
+# require ACTIVATING the target — the opposite of a knockdown — and this screen cannot speak
+# to whether a drug could do that, so pharmacologic reversibility is NOT assumed. A null or
+# unevaluable arm stays ``not_evaluable``.
+#
+# Every one of these is SUGGESTIVE, never confirmatory (the spot firewall: a druggability
+# signal may suggest but never confirm). The value NAMES what it supports; it does not claim
+# it.
+# --------------------------------------------------------------------------- #
+PERTURBATION_MODALITY = "CRISPRi_knockdown"
+MODULATION_RULE_ID = "spot.stage02.temporal.arm.desired_target_modulation.v1"
+
+MOD_NOT_EVALUABLE = "not_evaluable"
+MOD_SUPPORTS_INHIBITION = "supports_target_inhibition"
+MOD_OPPOSED_NEEDS_ACTIVATION = "opposed_would_require_target_activation"
+MOD_NO_RESPONSE = "no_directional_response"
+TARGET_MODULATIONS = (MOD_NOT_EVALUABLE, MOD_SUPPORTS_INHIBITION,
+                      MOD_OPPOSED_NEEDS_ACTIVATION, MOD_NO_RESPONSE)
+
+
+def target_modulation(arm_value: Optional[float], *, evaluable: bool) -> str:
+    """The SUGGESTIVE modulation orientation of one arm value under CRISPRi knockdown.
+
+    Deterministic from the sign of the arm value and the evaluability alone — re-derivable
+    by any verifier from the shipped value, so the orientation cannot be asserted out of
+    step with the number it is about.
+    """
+    if not evaluable or arm_value is None:
+        return MOD_NOT_EVALUABLE
+    if arm_value > 0:
+        return MOD_SUPPORTS_INHIBITION
+    if arm_value < 0:
+        return MOD_OPPOSED_NEEDS_ACTIVATION
+    return MOD_NO_RESPONSE
+
+
+def perturbation_block() -> dict[str, Any]:
+    """The modality and the modulation rule, stated ONCE at bundle scope. Suggestive."""
+    return {
+        "perturbation_modality": PERTURBATION_MODALITY,
+        "modulation_rule_id": MODULATION_RULE_ID,
+        "positive_response_to_knockdown": MOD_SUPPORTS_INHIBITION,
+        "negative_response_to_knockdown": MOD_OPPOSED_NEEDS_ACTIVATION,
+        "null_or_unresolved_response": MOD_NOT_EVALUABLE,
+        "pharmacologic_reversibility_assumed": False,
+        "is_suggestive_not_confirmatory": True,
+        "modulations": list(TARGET_MODULATIONS),
+    }
+
+
 def base_temporal_delta(from_delta: Optional[float],
                         to_delta: Optional[float]) -> Optional[float]:
     """``delta_p(to) - delta_p(from)``. POLE-FREE: no role and no pole may reach this.

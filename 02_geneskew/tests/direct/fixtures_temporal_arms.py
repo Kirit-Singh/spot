@@ -61,16 +61,29 @@ def programs_registry() -> dict[str, dict]:
     return reg
 
 
-class FixtureRelease:
-    """The minimal duck-typed release the producer reads: ``.programs``. Fixture only."""
+class _Selector:
+    """The v3 release selector the producer reads for the condition universe. Fixture only."""
 
-    def __init__(self, programs: dict[str, dict] | None = None):
+    def __init__(self, conditions):
+        self.conditions = list(conditions)
+
+
+class FixtureRelease:
+    """The minimal duck-typed release the producer reads: ``.programs`` + ``.selector``."""
+
+    def __init__(self, programs: dict[str, dict] | None = None, conditions=None):
         self.programs = programs_registry() if programs is None else programs
+        self.selector = _Selector(CONDITIONS if conditions is None else conditions)
 
 
 def admitted():
     from direct.temporal.arms import arm_programs
     return arm_programs.admitted_programs(FixtureRelease())
+
+
+def condition_universe(release=None):
+    from direct.temporal.arms import arm_programs
+    return arm_programs.admitted_conditions(FixtureRelease() if release is None else release)
 
 
 # --------------------------------------------------------------------------- #
@@ -155,12 +168,14 @@ def build(from_condition="FixRest", to_condition="FixStim48", **kw):
     frm = kw.pop("from_endpoints", _UNSET)
     to = kw.pop("to_endpoints", _UNSET)
     meth = kw.pop("method", _UNSET)
+    conds = kw.pop("conditions", _UNSET)
     return arm_bundle.build_bundle(
         from_condition=from_condition, to_condition=to_condition,
         admitted=admitted() if progs is _UNSET else progs,
         from_endpoints=endpoints(from_condition) if frm is _UNSET else frm,
         to_endpoints=endpoints(to_condition) if to is _UNSET else to,
         method=method() if meth is _UNSET else meth,
+        conditions=list(CONDITIONS) if conds is _UNSET else conds,
         scorer_view_sha256=kw.pop("scorer_view_sha256", "a" * 64),
         **kw)
 

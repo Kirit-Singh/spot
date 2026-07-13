@@ -35,6 +35,7 @@ from direct.temporal.arms import (  # noqa: E402
     arm_bundle,
     arm_emit,
     arm_programs,
+    arm_report,
     arm_request,
 )
 from direct.temporal.arms import (
@@ -659,18 +660,21 @@ class TestEmissionAndVerification:
     def test_emit_writes_verifies_and_content_addresses(self, tmp_path):
         b = FX.build()
         addr = arm_emit.emit_bundle(b, str(tmp_path))
-        assert addr["verification"]["admitted"] is True
         assert addr["n_arms"] == 20
-        assert len(addr["raw_sha256"]) == 64 and len(addr["canonical_sha256"]) == 64
-        assert addr["raw_sha256"] == addr["raw_sha256_on_disk"]
-        on_disk = json.loads(open(addr["path_abs"], "rb").read())
+        bundle_addr = addr["files"][arm_emit.BUNDLE_FILENAME]
+        assert len(bundle_addr["raw_sha256"]) == 64
+        assert len(bundle_addr["canonical_sha256"]) == 64
+        # the runtime path is reconstructed by a TEST-ONLY helper, not carried in the address
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        on_disk = json.loads(open(paths[arm_emit.BUNDLE_FILENAME], "rb").read())
         assert on_disk == b
 
     def test_emitting_twice_writes_the_same_bytes(self, tmp_path):
         a = arm_emit.emit_bundle(FX.build(), str(tmp_path / "one"))
         b = arm_emit.emit_bundle(FX.build(), str(tmp_path / "two"))
-        assert a["raw_sha256"] == b["raw_sha256"]
-        assert a["canonical_sha256"] == b["canonical_sha256"]
+        fa, fb = a["files"][arm_emit.BUNDLE_FILENAME], b["files"][arm_emit.BUNDLE_FILENAME]
+        assert fa["raw_sha256"] == fb["raw_sha256"]
+        assert fa["canonical_sha256"] == fb["canonical_sha256"]
         assert a["bundle_id"] == b["bundle_id"]
 
     def test_a_bundle_that_fails_its_verifier_is_not_left_on_disk(self, tmp_path):
@@ -694,6 +698,408 @@ class TestEmissionAndVerification:
     def test_two_bundles_claiming_the_same_ordered_pair_are_refused(self, tmp_path):
         with pytest.raises(arm_emit.EmitRefused, match="same ordered pair"):
             arm_emit.emit_release([FX.build(), FX.build()], str(tmp_path))
+
+
+# =========================================================================== #
+# 10b. THE W3 PHYSICAL FILENAME CONTRACT — EMITTED NATIVELY, NO SHIM
+# =========================================================================== #
+class TestContractFilenames:
+    """W3 aggregate keys on exact filenames; W11 reads the shipped bytes at them. The
+    producer emits them NATIVELY — no rename or copy after the fact."""
+
+    def test_the_three_contract_filenames_are_the_canonical_ones(self):
+        assert arm_emit.BUNDLE_FILENAME == "arm_bundle.json"
+        assert arm_emit.PROVENANCE_FILENAME == "temporal_provenance.json"
+        assert arm_emit.VERIFICATION_FILENAME == "temporal_verification.json"
+
+    def test_emit_writes_the_three_contract_files_at_the_top_of_the_bundle_dir(
+            self, tmp_path):
+        arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        d = tmp_path / arm_emit.bundle_dirname("FixRest", "FixStim48")
+        top = {p.name for p in d.iterdir() if p.is_file()}
+        assert {"arm_bundle.json", "temporal_provenance.json",
+                "temporal_verification.json"} <= top
+
+    def test_no_legacy_arm_prefixed_filename_is_emitted(self, tmp_path):
+        arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        d = tmp_path / arm_emit.bundle_dirname("FixRest", "FixStim48")
+        names = {p.name for p in d.iterdir()}
+        assert "temporal_arm_bundle.json" not in names
+        assert "temporal_arm_verification.json" not in names
+
+    def test_the_release_inventory_names_the_contract_files(self, tmp_path):
+        rel = arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        for b in rel["bundles"]:
+            assert set(b["files"]) == {"arm_bundle.json", "temporal_provenance.json",
+                                       "temporal_verification.json"}
+
+
+# =========================================================================== #
+# 10c. PORTABILITY — NO ABSOLUTE PATH / HOSTNAME / PRIVATE ADDRESS LEAKS
+# =========================================================================== #
+class TestNoMachineLocalLeak:
+    """No absolute path, hostname or private address may appear in the emitted bundle, the
+    verification, or the release inventory — at ANY depth. Portable and content-addressable."""
+
+    def test_the_scanner_is_not_a_rubber_stamp(self):
+        # MUTATION: it must CATCH machine-local strings, nested at any depth...
+        assert arm_admission.machine_local_strings({"x": "/home/tcelab/secret"})
+        assert arm_admission.machine_local_strings({"a": {"b": ["/tmp/leak.json"]}})
+        assert arm_admission.machine_local_strings({"note": "see /mnt/tcenas/x for detail"})
+        assert arm_admission.machine_local_strings({"h": "tcedirector"})
+        assert arm_admission.machine_local_strings({"ip": "192.168.1.7"})
+        assert arm_admission.machine_local_strings({"ip": "127.0.0.1"})
+        assert arm_admission.machine_local_strings({"p": "~/datasets/x"})
+        # ...and must NOT fire on the bundle's real content (ids, hashes, formulae, keys)
+        assert arm_admission.machine_local_strings({
+            "k": "temporal|FIXTURE_PROG_00|increase|FixRest|FixStim48",
+            "sha": "a" * 64, "file": "arm_bundle.json",
+            "formula": "delta_p(X) = mean(panel_p \\ M_X) - mean(control_p \\ M_X)"}) == []
+
+    def test_the_emitted_bundle_bytes_carry_no_machine_local_string(self, tmp_path):
+        paths = arm_emit.resolve_local_paths(
+            str(tmp_path), arm_emit.emit_bundle(FX.build(), str(tmp_path)))
+        on_disk = json.loads(open(paths[arm_emit.BUNDLE_FILENAME], "rb").read())
+        assert arm_admission.machine_local_strings(on_disk) == []
+
+    def test_the_on_disk_provenance_and_verification_carry_no_machine_local_string(
+            self, tmp_path):
+        paths = arm_emit.resolve_local_paths(
+            str(tmp_path), arm_emit.emit_bundle(FX.build(), str(tmp_path)))
+        for fname in (arm_emit.PROVENANCE_FILENAME, arm_emit.VERIFICATION_FILENAME):
+            doc = json.loads(open(paths[fname], "rb").read())
+            assert arm_admission.machine_local_strings(doc) == [], fname
+
+    def test_the_returned_address_has_no_path_abs_field(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        assert "path_abs" not in addr and "verification_path_abs" not in addr
+        assert arm_admission.machine_local_strings(addr) == []
+
+    def test_the_release_inventory_has_no_machine_local_string_at_any_depth(self, tmp_path):
+        rel = arm_emit.emit_release(FX.build_all(), str(tmp_path), expect_n_bundles=6)
+        assert arm_admission.machine_local_strings(rel) == []
+
+    def test_the_inventory_path_fields_are_relative_filenames(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        for fname in addr["files"]:
+            assert not os.path.isabs(fname)
+            assert "/" not in fname     # a bare filename in the bundle directory
+
+
+# =========================================================================== #
+# 10d. FAIL-CLOSED ON AN ABSOLUTE PATH — EVEN WHEN RESEALED
+# =========================================================================== #
+class TestFailClosedOnAbsolutePath:
+    """W11 reseals a path-injection: it inserts an absolute path AND recomputes the
+    bundle_id so the artifact is internally consistent. The absolute-path gate is
+    independent of the hash, so a resealed injection still fails closed."""
+
+    @staticmethod
+    def _reseal(bundle):
+        from direct.hashing import content_hash
+        payload = {k: v for k, v in bundle.items() if k != "bundle_id"}
+        bundle["bundle_id"] = content_hash(payload)[:arm_bundle.BUNDLE_ID_LEN]
+        return bundle
+
+    def test_a_resealed_absolute_path_injection_is_refused(self):
+        b = FX.build()
+        b["method"]["origin"] = "/home/tcelab/worktrees/leak/arm_bundle.json"
+        self._reseal(b)                        # bundle_id now re-derives cleanly
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("absolute" in f or "machine_local" in f for f in report["failures"])
+
+    def test_a_resealed_hostname_injection_is_refused(self):
+        b = FX.build()
+        b["method"]["host"] = "tcefold"
+        self._reseal(b)
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+
+    def test_emit_fails_closed_on_an_absolute_path_and_leaves_nothing(self, tmp_path):
+        b = FX.build()
+        b["method"]["origin"] = "/home/tcelab/leak"
+        self._reseal(b)
+        with pytest.raises(arm_emit.EmitRefused):
+            arm_emit.emit_bundle(b, str(tmp_path))
+        d = tmp_path / arm_emit.bundle_dirname(b["from_condition"], b["to_condition"])
+        assert not (d / arm_emit.BUNDLE_FILENAME).exists()
+
+
+# =========================================================================== #
+# 10e. PROVENANCE + VERIFICATION AS SEPARATE TYPED ARTIFACTS
+# =========================================================================== #
+class TestSeparateTypedArtifacts:
+    """The independent report is a SEPARATE TYPED ARTIFACT. No producer self-verdict is
+    embedded in the bundle, so nothing in the bundle can satisfy aggregate admission on its
+    own — W11 re-derives from the shipped bytes and W3 keys on the separate files."""
+
+    def _load(self, tmp_path, fname):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        return json.loads(open(paths[fname], "rb").read()), addr
+
+    def test_the_bundle_carries_no_embedded_admission_verdict(self):
+        keys = _all_keys(FX.build())
+        for verdict in ("admitted", "verification", "verdict", "admission_result",
+                        "self_verified", "passed"):
+            assert verdict not in keys, f"{verdict!r} embeds a self-verdict in the bundle"
+
+    def test_provenance_is_typed_and_binds_the_bundle_by_content_hash(self, tmp_path):
+        prov, addr = self._load(tmp_path, arm_emit.PROVENANCE_FILENAME)
+        assert prov["schema_version"] == arm_emit.SCHEMA_PROVENANCE
+        assert prov["bundle_id"] == addr["bundle_id"]
+        # it names the bundle FILE and the exact bytes it stands for
+        assert prov["bundle_file"] == arm_emit.BUNDLE_FILENAME
+        assert prov["bundle_raw_sha256"] == \
+            addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"]
+        assert "method" in prov and "program_admission" in prov and "estimand" in prov
+
+    def test_verification_is_a_typed_report_that_binds_the_bundle_it_judged(self, tmp_path):
+        # The exact fields the aggregate's check_report reads (verify_manifest_rules).
+        ver, addr = self._load(tmp_path, arm_emit.VERIFICATION_FILENAME)
+        assert ver["schema_version"] == arm_report.SCHEMA_VERIFICATION
+        assert ver["verifier_id"] == arm_report.VERIFIER_ID
+        assert ver["verdict"] == "admit"
+        assert ver["n_failed"] == 0 and not ver.get("failed_gates")
+        assert ver["fail_closed"] is True
+        assert ver["generator_is_not_verifier"] is True
+        # it BINDS this bundle — an admit that names no bundle can be copied onto any
+        assert ver["bundle_id"] == addr["bundle_id"]
+        assert ver["binds"]["arm_bundle_sha256"] == \
+            addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"]
+        assert ver["binds"]["provenance_sha256"] == \
+            addr["files"][arm_emit.PROVENANCE_FILENAME]["raw_sha256"]
+
+    def test_the_verifier_records_its_pinned_gate_inventory_as_passed(self, tmp_path):
+        ver, _ = self._load(tmp_path, arm_emit.VERIFICATION_FILENAME)
+        passed = {c["gate"] for c in ver["checks"] if c["status"] == "pass"}
+        assert set(arm_report.REQUIRED_GATES) <= passed
+
+    def test_the_report_signs_the_INDEPENDENT_verifier_contract_not_a_self_verifier(self):
+        # The producer references the independent verifier (W11's contract), never a
+        # producer-private self-verifier id.
+        assert arm_report.VERIFIER_ID == "spot.stage02.temporal.arm.independent_verifier.v1"
+        assert "self" not in arm_report.VERIFIER_ID
+
+    def test_the_bundle_verification_ref_points_at_the_independent_contract(self):
+        ref = FX.build()["verification_ref"]
+        assert ref["verifier_id"] == arm_report.VERIFIER_ID
+        assert ref["verification_file"] == arm_emit.VERIFICATION_FILENAME
+        assert ref["provenance_file"] == arm_emit.PROVENANCE_FILENAME
+        # a pointer, not a verdict
+        assert "verdict" not in ref and "admitted" not in ref
+
+
+# =========================================================================== #
+# 10f. RUNTIME PATHS ARE A TEST-ONLY HELPER, OUTSIDE THE RELEASE CONTRACT
+# =========================================================================== #
+class TestRuntimePathsAreOutsideTheContract:
+
+    def test_resolve_local_paths_reconstructs_absolute_paths_on_demand(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        for fname in ("arm_bundle.json", "temporal_provenance.json",
+                      "temporal_verification.json"):
+            assert os.path.isabs(paths[fname]) and os.path.exists(paths[fname])
+
+    def test_the_reconstructed_paths_are_never_stored_in_the_contract(self, tmp_path):
+        # The helper computes them transiently; they are not returned in, or derivable
+        # from, any field of the address that gets serialised.
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        assert arm_admission.machine_local_strings(addr) == []
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        assert arm_admission.machine_local_strings(paths)  # the HELPER output DOES hold them
+
+
+# =========================================================================== #
+# 10g. THE BUNDLE SHAPE THE AGGREGATE READS — lane + per-arm ranking bindings
+# =========================================================================== #
+class TestBundleShapeForAggregate:
+    """run_manifest.bind_bundle reads ``lane``, refuses any pair-derived ordering, and binds
+    EACH arm's ranking as a bundle-relative file (path + raw + canonical sha)."""
+
+    def test_the_bundle_declares_its_lane(self):
+        assert FX.build()["lane"] == "temporal"
+
+    def test_the_bundle_declares_its_ordered_pair_context(self):
+        ctx = FX.build()["context"]
+        assert ctx == {"from_condition": "FixRest", "to_condition": "FixStim48"}
+
+    def test_every_arm_binds_a_ranking_file_with_path_and_two_hashes(self):
+        for arm in FX.build()["arms"]:
+            b = arm["ranking"]
+            assert set(b) == {"path", "raw_sha256", "canonical_sha256"}
+            assert not os.path.isabs(b["path"]) and ".." not in b["path"].split("/")
+            assert len(b["raw_sha256"]) == 64 and len(b["canonical_sha256"]) == 64
+
+    def test_the_ranking_files_exist_on_disk_and_match_their_bound_hashes(self, tmp_path):
+        from direct.hashing import content_hash, file_sha256
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        d = tmp_path / arm_emit.bundle_dirname("FixRest", "FixStim48")
+        for arm in FX.build()["arms"]:
+            b = arm["ranking"]
+            p = d / b["path"]
+            assert p.exists()
+            assert file_sha256(str(p)) == b["raw_sha256"]
+            assert content_hash(json.loads(p.read_bytes())) == b["canonical_sha256"]
+        assert addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"]
+
+    def test_the_ranking_file_holds_the_same_ranked_list_as_the_arm(self, tmp_path):
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        paths = arm_emit.resolve_local_paths(str(tmp_path), addr)
+        d = os.path.dirname(paths[arm_emit.BUNDLE_FILENAME])
+        for arm in FX.build()["arms"]:
+            ranking = json.loads(open(os.path.join(d, arm["ranking"]["path"])).read())
+            assert ranking["arm_key"] == arm["arm_key"]
+            assert ranking["ranked"] == arm["records"]
+
+    def test_a_tampered_ranking_binding_does_not_survive_the_verifier(self):
+        b = FX.build()
+        b["arms"][0]["ranking"]["canonical_sha256"] = "0" * 64
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("ranking" in f for f in report["failures"])
+
+    def test_no_pair_derived_ordering_key_appears_in_the_bundle(self):
+        # The aggregate refuses pareto/concordance/joint_order/combined_score/etc.
+        keys = _all_keys(FX.build())
+        for bad in ("pareto", "concordance", "joint_order", "joint_ordering",
+                    "combined_score", "balanced_skew", "weighted_score",
+                    "composite_score", "headline_rank"):
+            assert not any(bad in k.lower() for k in keys), bad
+
+
+# =========================================================================== #
+# 10g2. THE STAGE-3 CONSUMER CONTRACT — identity join, modality, modulation
+# =========================================================================== #
+class TestStage3ConsumerContract:
+    """Stage-3 (W16) needs stable target identity + a suggestive modulation orientation,
+    joined by an IMMUTABLE base_key. Identity lives once in base_records; arm records carry
+    only the join key; the bundle proves referential integrity."""
+
+    def test_identity_lives_in_base_records_not_duplicated_on_arm_records(self):
+        b = FX.build()
+        for rec in b["arms"][0]["records"]:
+            # the arm record carries the JOIN KEY, never the full identity
+            assert set(rec) == {"target_id", "base_key", "arm_value", "evaluable",
+                                "temporal_status", "desired_target_modulation", "rank"}
+            assert "target_symbol" not in rec and "target_ensembl" not in rec
+
+    def test_base_records_carry_stable_identity_and_provenance(self):
+        rec = FX.build()["base_records"][0]
+        for f in ("target_id", "target_symbol", "target_ensembl", "target_id_namespace",
+                  "from_released_estimate_id", "to_released_estimate_id",
+                  "perturbation_modality"):
+            assert f in rec
+        # the upstream ontarget QC provenance Stage-3 needs, per endpoint
+        assert rec["from_qc_ontarget_significant"] is not None
+        assert rec["to_qc_ontarget_significant"] is not None
+
+    def test_every_arm_record_joins_to_exactly_one_base_record(self):
+        b = FX.build()
+        by_key = {r["base_key"]: r for r in b["base_records"]}
+        assert len(by_key) == len(b["base_records"])          # base_key is unique
+        for arm in b["arms"]:
+            for rec in arm["records"]:
+                base = by_key.get(rec["base_key"])
+                assert base is not None and base["target_id"] == rec["target_id"]
+
+    def test_a_dangling_base_key_does_not_survive_the_verifier(self):
+        b = FX.build()
+        b["arms"][0]["records"][0]["base_key"] = "GHOST|GHOST"
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("base_record" in f for f in report["failures"])
+
+    def test_the_perturbation_modality_is_crispri_knockdown(self):
+        b = FX.build()
+        assert b["perturbation"]["perturbation_modality"] == "CRISPRi_knockdown"
+        assert all(r["perturbation_modality"] == "CRISPRi_knockdown"
+                   for r in b["base_records"])
+
+    def test_the_modulation_rule_does_not_assume_reversibility(self):
+        assert FX.build()["perturbation"]["pharmacologic_reversibility_assumed"] is False
+        assert FX.build()["perturbation"]["is_suggestive_not_confirmatory"] is True
+
+    def test_a_positive_response_to_knockdown_supports_inhibition(self):
+        # positive arm value = knockdown moved the program the DESIRED way -> inhibiting
+        # the target supports it (SUGGESTIVE).
+        assert est.target_modulation(0.4, evaluable=True) == "supports_target_inhibition"
+
+    def test_a_negative_response_is_opposed_and_would_need_activation(self):
+        assert est.target_modulation(-0.4, evaluable=True) == \
+            "opposed_would_require_target_activation"
+
+    def test_null_or_unevaluable_modulation_stays_not_evaluable(self):
+        assert est.target_modulation(None, evaluable=True) == "not_evaluable"
+        assert est.target_modulation(0.4, evaluable=False) == "not_evaluable"
+
+    def test_every_arm_record_modulation_rederives_from_its_value(self):
+        for arm in FX.build()["arms"]:
+            for rec in arm["records"]:
+                assert rec["desired_target_modulation"] == est.target_modulation(
+                    rec["arm_value"], evaluable=rec["evaluable"])
+
+    def test_a_forged_modulation_orientation_does_not_survive(self):
+        b = FX.build()
+        for rec in b["arms"][0]["records"]:
+            if rec["desired_target_modulation"] == "supports_target_inhibition":
+                rec["desired_target_modulation"] = "opposed_would_require_target_activation"
+                break
+        report = arm_admission.verify_bundle(b)
+        assert report["admitted"] is False
+        assert any("modulation" in f for f in report["failures"])
+
+
+# =========================================================================== #
+# 10h. IT READS GREEN AGAINST THE REAL AGGREGATE CONTRACT (W3 / W11)
+# =========================================================================== #
+_RUNMANIFEST = "/home/tcelab/worktrees/spot-stage2-runmanifest/02_geneskew/analysis"
+
+# The real aggregate reader lives in ITS OWN `direct` package, which collides on sys.path
+# with ours. So the cross-contract proof runs in a SUBPROCESS whose only relevant path is
+# the run-manifest analysis dir: it reads the bytes THIS producer wrote and admits them with
+# the REAL bind_bundle + check_report — the literal "W11 reads it green" bar.
+_CROSS_CHECK = r'''
+import json, os, sys
+out_dir, bundle_id, arm_raw, prov_raw, verifier_id, schema, gates = sys.argv[1:8]
+from direct import run_manifest
+from direct import verify_manifest_rules as R
+bound = run_manifest.bind_bundle(out_dir)
+assert bound["lane"] == "temporal", bound["lane"]
+assert len(bound["arm_keys"]) == 20, len(bound["arm_keys"])
+assert bound["bundle_id"] == bundle_id, (bound["bundle_id"], bundle_id)
+report = json.load(open(os.path.join(out_dir, "temporal_verification.json")))
+pin = {"temporal": {"verifier_id": verifier_id, "schema_version": schema,
+                    "required_gates": gates.split(",")}}
+bad = R.check_report(report, "temporal", bundle_id, pin, arm_raw, prov_raw)
+assert bad == [], bad
+print("GREEN")
+'''
+
+
+class TestReadsGreenAgainstTheRealAggregate:
+    """W11/W3 read the SHIPPED BYTES this producer wrote and admit them. Skips cleanly when
+    the run-manifest worktree is not checked out."""
+
+    def test_the_real_aggregate_binds_and_admits_the_shipped_bytes(self, tmp_path):
+        import subprocess
+        if not os.path.isdir(_RUNMANIFEST):
+            pytest.skip("run-manifest worktree not available for cross-contract proof")
+        addr = arm_emit.emit_bundle(FX.build(), str(tmp_path))
+        out_dir = os.path.dirname(
+            arm_emit.resolve_local_paths(str(tmp_path), addr)[arm_emit.BUNDLE_FILENAME])
+        proc = subprocess.run(
+            [sys.executable, "-c", _CROSS_CHECK, out_dir, addr["bundle_id"],
+             addr["files"][arm_emit.BUNDLE_FILENAME]["raw_sha256"],
+             addr["files"][arm_emit.PROVENANCE_FILENAME]["raw_sha256"],
+             arm_report.VERIFIER_ID, arm_report.SCHEMA_VERIFICATION,
+             ",".join(arm_report.REQUIRED_GATES)],
+            env={**os.environ, "PYTHONPATH": _RUNMANIFEST},
+            capture_output=True, text=True)
+        assert proc.returncode == 0 and "GREEN" in proc.stdout, \
+            f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
 
 
 # =========================================================================== #

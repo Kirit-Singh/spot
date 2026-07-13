@@ -1,42 +1,48 @@
 """Emit ONE content-addressed temporal arm bundle per frozen ordered condition pair.
 
-DETERMINISTIC BY CONSTRUCTION
-----------------------------
-The bytes are canonical JSON — sorted keys, compact separators, no NaN — and the bundle
-carries NO timestamp, NO hostname and NO path. Rebuilding from the same inputs therefore
-re-emits the SAME BYTES, which is what lets the bundle be content-addressed at all: an
-artifact whose identity moved every time it was rebuilt could not be referenced by it.
+THE PHYSICAL CONTRACT, EMITTED NATIVELY
+---------------------------------------
+Each ordered-pair bundle directory carries, under names the aggregate run-manifest and
+W11's verifier read directly — no rename, no post-hoc copy, no shim:
 
-TWO HASHES, AND THEY ARE DIFFERENT QUESTIONS
---------------------------------------------
-``raw_sha256``       the sha256 of the bytes ON DISK. What a downstream stage pins, and
-                     what an integrity gate re-reads and compares. It answers: are these
-                     the bytes that were admitted?
-``canonical_sha256`` the sha256 of the canonical form of the PARSED content. Key order is
-                     not content, so a re-serialised bundle is the same bundle. It answers:
-                     is this the same CLAIM?
+    arm_bundle.json            the reusable-arm inventory (base records + arms + rankings)
+    temporal_provenance.json   what produced it, binding the bundle by content hash
+    temporal_verification.json the INDEPENDENT verifier's typed report, binding the bundle
+    rankings/<program>__<change>.json   the bytes each arm's rank/counts stand on
 
-Both ship. A single hash would conflate "these bytes changed" with "this claim changed",
-and a reader chasing a mismatch could not tell which had happened.
+PORTABLE BY CONSTRUCTION
+------------------------
+The bytes are canonical JSON with NO timestamp, NO hostname and NO absolute path. Every
+path a shipped artifact carries is BUNDLE-RELATIVE, so the bundle is byte-identical on any
+host and can be content-addressed at all. Absolute paths, hostnames and private addresses
+are refused at any depth — W11's resealed path-injection fails closed here, because the
+portability firewall runs inside the verifier regardless of whether the content hash is
+internally consistent.
 
-THE VERIFICATION IS RUN ON WHAT LANDED
---------------------------------------
-``emit_bundle`` writes, then READS THE FILE BACK OFF DISK and verifies the parsed bytes.
-It does not verify the in-memory object it just serialised — that object is not the
-artifact, and a truncated or partially-written file would have passed a check made against
-it while shipping something nobody could re-derive.
+VERIFIED ON WHAT LANDED, BY A SEPARATE VERIFIER
+-----------------------------------------------
+``emit_bundle`` writes, then READS THE FILES BACK OFF DISK and hands them to
+``arm_admission`` — a module structurally separate from the one that built them, which
+re-derives every claim from the shipped bytes. A bundle that fails is removed whole: no
+provenance and no verification report are left on disk beside an artifact that did not earn
+them. The verdict lives only in the separate report, never embedded in the bundle.
 """
 from __future__ import annotations
 
+import json
 import os
+import shutil
 from typing import Any, Optional
 
-from ...hashing import canonical_json, content_hash, file_sha256, sha256_hex
-from . import arm_admission, arm_bundle
+from ...hashing import canonical_json, content_hash, sha256_hex
+from . import arm_admission, arm_bundle, arm_provenance, arm_report
 
-BUNDLE_FILENAME = "temporal_arm_bundle.json"
-VERIFICATION_FILENAME = "temporal_arm_verification.json"
-SCHEMA_VERIFICATION = "spot.stage02_temporal_arm_verification.v1"
+BUNDLE_FILENAME = arm_bundle.BUNDLE_FILENAME
+PROVENANCE_FILENAME = arm_bundle.PROVENANCE_FILENAME
+VERIFICATION_FILENAME = arm_bundle.VERIFICATION_FILENAME
+SCHEMA_PROVENANCE = arm_provenance.SCHEMA_PROVENANCE
+SCHEMA_VERIFICATION = arm_report.SCHEMA_VERIFICATION
+SCHEMA_ADDRESS = "spot.stage02_temporal_arm_release_address.v1"
 
 
 class EmitRefused(ValueError):
@@ -53,71 +59,133 @@ def bundle_bytes(bundle: dict[str, Any]) -> bytes:
     return canonical_json(bundle).encode("utf-8")
 
 
+def _write(path: str, obj: Any) -> tuple[bytes, str]:
+    """Write canonical bytes; return ``(bytes, raw_sha256)``."""
+    raw = canonical_json(obj).encode("utf-8")
+    with open(path, "wb") as fh:
+        fh.write(raw)
+    return raw, sha256_hex(raw)
+
+
+def _refuse_machine_local(obj: Any, what: str) -> None:
+    """Fail-closed if a to-be-shipped document carries any machine-local address."""
+    hits = arm_admission.machine_local_strings(obj)
+    if hits:
+        raise EmitRefused(
+            f"the {what} carries machine-local string(s) {hits[:6]}; a shipped artifact "
+            "must be portable and content-addressable, and an absolute path or hostname is "
+            "neither reproducible off this host nor anybody's business downstream")
+
+
 def emit_bundle(bundle: dict[str, Any], out_root: str) -> dict[str, Any]:
-    """Write one bundle, verify what LANDED, and return its content addresses.
+    """Write one bundle's four artifact kinds, verify what LANDED, return relative addresses.
 
-    The verifier runs on the re-read bytes. If it refuses, ``EmitRefused`` is raised and no
-    verification record is written: an artifact that failed its own admission must not be
-    left on disk next to a report saying it passed.
+    Fail-closed: if the independent verifier refuses the shipped bytes, the whole bundle
+    directory is removed and ``EmitRefused`` is raised — no provenance and no verification
+    report survive beside a bundle that did not pass.
     """
-    import json
-
     out_dir = os.path.join(out_root,
                            bundle_dirname(bundle["from_condition"],
                                           bundle["to_condition"]))
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, BUNDLE_FILENAME)
+    try:
+        _emit_into(bundle, out_dir)
+    except Exception:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise
+    return _address(bundle, out_dir)
 
-    with open(path, "wb") as fh:
+
+def _emit_into(bundle: dict[str, Any], out_dir: str) -> None:
+    os.makedirs(os.path.join(out_dir, arm_bundle.RANKINGS_DIR), exist_ok=True)
+
+    # 1. the per-arm ranking files — the BYTES each arm's rank and counts stand on
+    for arm in bundle["arms"]:
+        obj = arm_bundle.ranking_object(arm)
+        _write(os.path.join(out_dir, arm["ranking"]["path"]), obj)
+
+    # 2. the arm inventory
+    _refuse_machine_local(bundle, "arm bundle")
+    bundle_path = os.path.join(out_dir, BUNDLE_FILENAME)
+    with open(bundle_path, "wb") as fh:
         fh.write(bundle_bytes(bundle))
 
-    # READ BACK. The subject of the verification is what is on disk, never what we held.
-    with open(path, "rb") as fh:
-        raw = fh.read()
-    shipped = json.loads(raw)
-
-    report = arm_admission.verify_bundle(shipped)
-    if not report["admitted"]:
-        os.remove(path)
+    # 3. VERIFY WHAT LANDED — read back, re-derive from the shipped bytes off disk.
+    result = arm_admission.verify_shipped(out_dir)
+    if not result["admitted"]:
         raise EmitRefused(
             f"the emitted bundle {bundle['bundle_key']!r} did not survive its own "
-            f"verifier and was removed: {report['failures']}")
+            f"verifier: {result['failures'][:8]}")
 
+    with open(bundle_path, "rb") as fh:
+        arm_raw = sha256_hex(fh.read())
+
+    # 4. provenance — binds the arm inventory by hash
+    prov = arm_provenance.build_provenance(bundle, bundle_file=BUNDLE_FILENAME,
+                                           bundle_raw_sha256=arm_raw)
+    _refuse_machine_local(prov, "provenance")
+    _, prov_raw = _write(os.path.join(out_dir, PROVENANCE_FILENAME), prov)
+
+    # 5. the INDEPENDENT report — binds the bundle AND the provenance it judged
+    report = arm_report.build_report(result, bundle_id=bundle["bundle_id"],
+                                     arm_bundle_sha256=arm_raw, provenance_sha256=prov_raw)
+    _refuse_machine_local(report, "verification report")
+    _write(os.path.join(out_dir, VERIFICATION_FILENAME), report)
+
+
+def _address(bundle: dict[str, Any], out_dir: str) -> dict[str, Any]:
+    """The RELATIVE content address of an emitted bundle. No absolute path, at any depth.
+
+    ``dir`` and every key of ``files`` are bundle-relative; a test or a local caller that
+    needs a runtime absolute path reconstructs it with ``resolve_local_paths`` — which lives
+    OUTSIDE this contract precisely so a machine-local path can never enter it.
+    """
+    files: dict[str, dict[str, str]] = {}
+    for fname in (BUNDLE_FILENAME, PROVENANCE_FILENAME, VERIFICATION_FILENAME):
+        with open(os.path.join(out_dir, fname), "rb") as fh:
+            raw = fh.read()
+        files[fname] = {"raw_sha256": sha256_hex(raw),
+                        "canonical_sha256": content_hash(json.loads(raw))}
     address = {
-        "schema_version": SCHEMA_VERIFICATION,
-        "bundle_key": shipped["bundle_key"],
-        "bundle_id": shipped["bundle_id"],
-        "from_condition": shipped["from_condition"],
-        "to_condition": shipped["to_condition"],
-        "path": BUNDLE_FILENAME,
-        "raw_sha256": sha256_hex(raw),
-        "canonical_sha256": content_hash(shipped),
-        "n_arms": shipped["n_arms"],
-        "n_programs": shipped["n_programs"],
-        "n_targets": shipped["n_targets"],
-        "n_base_records": shipped["n_base_records"],
-        "arm_keys": list(shipped["arm_keys"]),
-        "verification": report,
+        "schema_version": SCHEMA_ADDRESS,
+        "lane": bundle["lane"],
+        "analysis_mode": bundle["analysis_mode"],
+        "bundle_key": bundle["bundle_key"],
+        "bundle_id": bundle["bundle_id"],
+        "from_condition": bundle["from_condition"],
+        "to_condition": bundle["to_condition"],
+        "dir": bundle_dirname(bundle["from_condition"], bundle["to_condition"]),
+        "files": files,
+        "n_arms": bundle["n_arms"],
+        "n_programs": bundle["n_programs"],
+        "n_targets": bundle["n_targets"],
+        "n_base_records": bundle["n_base_records"],
+        "arm_keys": list(bundle["arm_keys"]),
+        "verdict": "admit",
     }
-    vpath = os.path.join(out_dir, VERIFICATION_FILENAME)
-    with open(vpath, "wb") as fh:
-        fh.write(canonical_json(address).encode("utf-8"))
-
-    address["path_abs"] = path
-    address["verification_path_abs"] = vpath
-    address["raw_sha256_on_disk"] = file_sha256(path)
+    _refuse_machine_local(address, "release address")
     return address
+
+
+def resolve_local_paths(out_root: str, address: dict[str, Any]) -> dict[str, str]:
+    """TEST/LOCAL-ONLY: reconstruct the absolute paths of a bundle's files ON DEMAND.
+
+    Deliberately OUTSIDE the release contract. Absolute paths are machine-local and must
+    never enter a shipped or returned artifact, so they are never stored — they are computed
+    transiently, here, from ``out_root`` plus the relative ``dir`` the address carries. The
+    return value is not serialisable into any contract; it is for a caller standing on this
+    machine, right now.
+    """
+    d = os.path.join(out_root, address["dir"])
+    return {fname: os.path.join(d, fname) for fname in address["files"]}
 
 
 def emit_release(bundles: list[dict[str, Any]], out_root: str,
                  expect_n_bundles: Optional[int] = None) -> dict[str, Any]:
     """Emit every ordered-pair bundle, and account for the release as a whole.
 
-    The inventory is DERIVED from the bundles that were actually emitted — the arm count is
-    a consequence of the program axis and the ordered pairs, never a constant typed in
-    here. ``expect_n_bundles`` is an optional completeness assertion for a caller that
-    knows the topology it asked for; it is not a default, and nothing is inferred when it
-    is absent.
+    The inventory is DERIVED from the bundles that were actually emitted, and it is
+    RELATIVE-ONLY: no absolute path, hostname or private address enters the returned release
+    object, which a caller may serialise into a run manifest.
     """
     addresses = [emit_bundle(b, out_root) for b in
                  sorted(bundles, key=lambda b: b["bundle_key"])]
@@ -140,13 +208,18 @@ def emit_release(bundles: list[dict[str, Any]], out_root: str,
             "A partial release cannot satisfy completeness, and a short bundle set that "
             "reported success would be indistinguishable from a whole one")
 
-    return {
+    release = {
+        "schema_version": SCHEMA_ADDRESS,
         "n_bundles": len(addresses),
         "n_logical_arms": len(arm_keys),
         "bundles": addresses,
         "arm_keys": sorted(arm_keys),
     }
+    _refuse_machine_local(release, "release inventory")
+    return release
 
 
-__all__ = ["BUNDLE_FILENAME", "VERIFICATION_FILENAME", "EmitRefused", "bundle_bytes",
-           "bundle_dirname", "emit_bundle", "emit_release", "arm_bundle"]
+__all__ = ["BUNDLE_FILENAME", "PROVENANCE_FILENAME", "VERIFICATION_FILENAME",
+           "SCHEMA_PROVENANCE", "SCHEMA_VERIFICATION", "SCHEMA_ADDRESS", "EmitRefused",
+           "bundle_bytes", "bundle_dirname", "emit_bundle", "emit_release",
+           "resolve_local_paths", "arm_bundle"]

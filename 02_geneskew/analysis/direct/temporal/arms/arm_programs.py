@@ -95,6 +95,62 @@ def admitted_programs(release: Any) -> dict[str, dict[str, Any]]:
     return admitted
 
 
+def admitted_conditions(release: Any) -> list[str]:
+    """The authoritative condition universe, from the bound v3 ``release.selector.conditions``.
+
+    DERIVED and SORTED, so the universe is order-canonical: reordering the release's own
+    condition list cannot change which comparisons are valid. The batch policy is not
+    consulted — a confound diagnostic is not an authority on which conditions the release
+    ships, and letting it be one was exactly the round-4 defect this removes.
+    """
+    selector = getattr(release, "selector", None)
+    conditions = None
+    if selector is not None:
+        conditions = (selector.get("conditions") if isinstance(selector, dict)
+                      else getattr(selector, "conditions", None))
+    if conditions is None and isinstance(release, dict):
+        conditions = (release.get("selector") or {}).get("conditions")
+    if not conditions:
+        raise ProgramAdmissionError(
+            "the bound release names no selector.conditions; the temporal condition "
+            "universe is derived from the v3 release, never from the batch policy, and a "
+            "run whose conditions came from an unnamed source cannot be reproduced")
+    derived = sorted({str(c) for c in conditions})
+    if len(derived) != len(list(conditions)):
+        raise ProgramAdmissionError(
+            f"release.selector.conditions {list(conditions)} contains a duplicate; the "
+            "condition universe must be a set of distinct conditions")
+    return derived
+
+
+def ordered_pairs(conditions: list[str]) -> list[tuple[str, str]]:
+    """Every ordered pair over the condition universe. Sorted; order-canonical."""
+    c = sorted({str(x) for x in conditions})
+    return [(a, b) for a in c for b in c if a != b]
+
+
+def require_ordered_pair(conditions: list[str], from_condition: str,
+                         to_condition: str) -> None:
+    """Refuse an ordered pair the authoritative condition universe does not contain.
+
+    A forged endpoint (a condition the release never named) or a pair missing an endpoint
+    is refused BY NAME. Reordering the release's condition list does not change the answer:
+    the universe is derived as a sorted set before the pair is checked.
+    """
+    universe = sorted({str(c) for c in conditions})
+    frm, to = str(from_condition), str(to_condition)
+    missing = [c for c in (frm, to) if c not in universe]
+    if missing:
+        raise ProgramAdmissionError(
+            f"ordered pair ({frm} -> {to}) names condition(s) {missing} that are not in the "
+            f"authoritative universe {universe}. The condition universe is the v3 "
+            "release.selector.conditions; a pair outside it was built against a condition "
+            "the release does not ship")
+    if frm == to:
+        raise ProgramAdmissionError(
+            f"ordered pair ({frm} -> {to}) compares a condition with itself")
+
+
 def require_program(admitted: dict[str, dict[str, Any]], program_id: str) -> None:
     """Refuse a program the bound release did not admit. Never guess a near match."""
     if str(program_id) not in admitted:
