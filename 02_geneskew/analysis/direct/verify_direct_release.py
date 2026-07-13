@@ -246,12 +246,12 @@ def verify(args) -> Report:
     rep.bound = {
         "direct_release_run_id": release.get("direct_release_run_id"),
         "direct_release_sha256": release.get("direct_release_sha256"),
-        # HOW MUCH WAS RE-DERIVED. This flag flows down to EVERY per-bundle verification, so
-        # a release verified in `sample` mode rests on a deterministic handful of targets per
-        # condition — while running the identical gate NAMES, and therefore matching the
-        # identical execution-completeness profile, as one that re-derived all of them. W1
-        # consumes THIS document: a release report that did not say which it was could not be
-        # held to the difference.
+        # HOW MUCH WAS RE-DERIVED. This flag flows down to EVERY per-bundle verification, so a
+        # release verified in `sample` mode rests on a deterministic handful of targets per
+        # condition. Nothing else in THIS report records that: the release-level gate names do
+        # not mention the mode, so the gate inventory of a sampled release reads exactly like a
+        # full one. W1 consumes this document, and a report that did not say how much it
+        # re-derived could not be held to the difference by anyone downstream.
         "recompute_mode": args.recompute,
         "expected_conditions": expected,
         "n_physical_bundles": len(bundles),

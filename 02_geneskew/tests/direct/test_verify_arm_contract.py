@@ -183,16 +183,19 @@ class TestTheEnvelopeValidates:
 
 
 class TestAReleaseGradeAdmissionMayNotStandOnASampledRecompute:
-    """THE SAMPLE-MODE SEAM. W10 recomputes every base delta under `--recompute all`; under
-    `--recompute sample` it re-derives a DETERMINISTIC HANDFUL of targets (8 by default) and
-    admits on those. Both invocations run the same gate NAMES, so the gate inventory — the
-    thing the execution-completeness profile pins — is identical between them. A sample-mode
-    ADMIT of a production bundle therefore matched the exact production profile and sailed
-    through this adapter: 8 targets checked out of ~11.5k, admitted as if all of them were.
+    """THE SAMPLE-MODE RULE. W10 re-derives every base delta under `--recompute all`; under
+    `--recompute sample` it re-derives a DETERMINISTIC HANDFUL (8 targets) and admits on those.
+    A release-grade admission must have re-derived ALL of them, and must SAY so — explicitly,
+    in typed provenance (`bound_artifact.recompute_mode`), which is what this rule requires.
 
-    `recompute_mode` is in the report's bound_artifact, so the adapter can simply READ what it
-    was: a release-grade admission must have re-derived EVERYTHING. This is a downstream
-    ADMISSION rule, not a new native gate — W10's inventory is untouched.
+    The requirement is INDEPENDENT of the gate inventory, and deliberately so: a sampled BUNDLE
+    report has its own internally valid inventory (its recompute gate NAMES the mode: "the
+    recomputation actually covered rows (sample mode)"), so it would be refused only as a
+    generic profile mismatch — a true refusal that does not say what is actually wrong. And a
+    sampled RELEASE report's inventory is indistinguishable from a full one, its gate names
+    being mode-independent. Neither is asked to prove the claim; the report states it.
+
+    A downstream ADMISSION rule, not a new native gate — W10's inventory is untouched.
     """
 
     def _release_grade(self, lane="production", **bound):
@@ -242,8 +245,9 @@ class TestAReleaseGradeAdmissionMayNotStandOnASampledRecompute:
 
 
 @pytest.fixture
-def native_release_report(synthetic_run, tmp_path):
-    """A REAL three-condition release report, from the REAL release verifier. Not hand-built.
+def native_release_report_at(synthetic_run, tmp_path):
+    """A REAL three-condition release report, from the REAL release verifier, at a CHOSEN
+    recompute mode. Not hand-built.
 
     The bundle-level rule cannot protect the RELEASE report: it is a different schema, it
     carries no `lane` (a release IS release-grade), and W1 consumes THIS document. So the
@@ -252,34 +256,46 @@ def native_release_report(synthetic_run, tmp_path):
     import fixtures_v3_release as V3
     import verify_direct_release as VR
     from direct import arm_release
-    conds = ("Rest", "Stim8hr", "Stim48hr")
-    prod = synthetic_run(conditions=conds)
-    root = str(tmp_path / "root")
-    stage1 = V3.stage_release(root, conditions=conds)
-    prod.stage1_release, prod.stage1_release_root = stage1, root
-    prod.env_lock, prod.out_root = LOCK, str(tmp_path / "rel")
-    res = arm_release.build_release(prod)
-    argv = ["--release", res["out_dir"], "--de-main", prod.de_main, "--sgrna", prod.sgrna,
-            "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
-            "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
-            "--stage1-v3-release", stage1, "--release-root", root, "--recompute", "all",
-            "--env-lock", LOCK, "--producer-code-root", F.PRODUCER_CODE_ROOT]
-    for flag, attr in (("--source-registry", "source_registry"),
-                       ("--pseudobulk", "pseudobulk")):
-        v = getattr(prod, attr, None)
-        if v:
-            argv += [flag, v]
-    path = str(tmp_path / "release_verification.json")
-    assert VR.main(argv + ["--report", path]) == 0
-    with open(path) as fh:
-        return json.load(fh), res["out_dir"]
+
+    def _build(mode="all"):
+        conds = ("Rest", "Stim8hr", "Stim48hr")
+        prod = synthetic_run(conditions=conds)
+        root = str(tmp_path / f"root_{mode}")
+        stage1 = V3.stage_release(root, conditions=conds)
+        prod.stage1_release, prod.stage1_release_root = stage1, root
+        prod.env_lock, prod.out_root = LOCK, str(tmp_path / f"rel_{mode}")
+        res = arm_release.build_release(prod)
+        argv = ["--release", res["out_dir"], "--de-main", prod.de_main, "--sgrna", prod.sgrna,
+                "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
+                "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
+                "--stage1-v3-release", stage1, "--release-root", root, "--recompute", mode,
+                "--env-lock", LOCK, "--producer-code-root", F.PRODUCER_CODE_ROOT]
+        for flag, attr in (("--source-registry", "source_registry"),
+                           ("--pseudobulk", "pseudobulk")):
+            v = getattr(prod, attr, None)
+            if v:
+                argv += [flag, v]
+        path = str(tmp_path / f"release_verification_{mode}.json")
+        assert VR.main(argv + ["--report", path]) == 0
+        with open(path) as fh:
+            return json.load(fh), res["out_dir"]
+    return _build
+
+
+@pytest.fixture
+def native_release_report(native_release_report_at):
+    return native_release_report_at("all")
 
 
 class TestTheRELEASEReportIsHeldToTheSameRecomputeRule:
     """W1 consumes the RELEASE report, not the three bundle reports. A rule enforced only on
     the bundle schema would leave the document that is actually read wide open — and a release
     verified with `--recompute sample` flows that flag straight down to every per-bundle
-    verification, so the whole release would rest on 8 sampled targets per condition."""
+    verification, so the whole release would rest on 8 sampled targets per condition.
+
+    This is the subject where the inventory genuinely cannot help: no release-level gate name
+    mentions the mode (see the regression below), so a sampled release report is inventory-
+    identical to a full one. The bound `recompute_mode` is the only witness there is."""
 
     def test_the_real_ALL_mode_release_report_PASSES_THROUGH(self, native_release_report):
         report, _ = native_release_report
@@ -676,35 +692,88 @@ def _stage_v3(prod, root):
 
 
 @pytest.fixture
-def production_report(synthetic_run, tmp_path):
+def production_report_at(synthetic_run, tmp_path):
     """A native report carrying the full PRODUCTION gate inventory (stage1 release bound,
-    H5AD pinned, recompute all). Built on a synthetic bundle — the gate NAMES are
+    H5AD pinned), at a CHOSEN recompute mode. Built on a synthetic bundle — the gate NAMES are
     flag-determined and data/lane-independent — then relabelled to the production lane so it
     selects the exact production profile."""
     import fixtures_direct as F
     import verify_arm_bundle as VB
     from direct import run_arms
-    prod = synthetic_run()
-    prod.condition, prod.env_lock = F.CONDITION, LOCK
-    prod.out_root = str(tmp_path / "arms")
-    res = run_arms.build_bundle(prod)
-    root = str(tmp_path / "root")
-    s1 = _stage_v3(prod, root)
-    argv = ["--bundle", res["out_dir"], "--de-main", prod.de_main, "--sgrna", prod.sgrna,
-            "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
-            "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
-            "--condition", prod.condition, "--recompute", "all", "--env-lock", LOCK,
-            "--producer-code-root", F.PRODUCER_CODE_ROOT,
-            "--stage1-v3-release", s1, "--release-root", root,
-            "--expect-h5ad-sha256", AR.sha256_file(prod.de_main)]
-    if prod.source_registry:
-        argv += ["--source-registry", prod.source_registry]
-    if getattr(prod, "pseudobulk", None):
-        argv += ["--pseudobulk", prod.pseudobulk]
-    report = VB.verify(VB.build_parser().parse_args(argv)).doc()
-    # relabel to the production lane so the profile selector picks the exact production profile
-    report["bound_artifact"]["lane"] = "production"
-    return _seal(report)
+
+    def _build(mode="all"):
+        prod = synthetic_run()
+        prod.condition, prod.env_lock = F.CONDITION, LOCK
+        prod.out_root = str(tmp_path / f"arms_{mode}")
+        res = run_arms.build_bundle(prod)
+        root = str(tmp_path / f"root_{mode}")
+        s1 = _stage_v3(prod, root)
+        argv = ["--bundle", res["out_dir"], "--de-main", prod.de_main, "--sgrna", prod.sgrna,
+                "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
+                "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
+                "--condition", prod.condition, "--recompute", mode, "--env-lock", LOCK,
+                "--producer-code-root", F.PRODUCER_CODE_ROOT,
+                "--stage1-v3-release", s1, "--release-root", root,
+                "--expect-h5ad-sha256", AR.sha256_file(prod.de_main)]
+        if prod.source_registry:
+            argv += ["--source-registry", prod.source_registry]
+        if getattr(prod, "pseudobulk", None):
+            argv += ["--pseudobulk", prod.pseudobulk]
+        report = VB.verify(VB.build_parser().parse_args(argv)).doc()
+        # relabel to the production lane so the profile selector picks the exact profile
+        report["bound_artifact"]["lane"] = "production"
+        return _seal(report)
+    return _build
+
+
+@pytest.fixture
+def production_report(production_report_at):
+    return production_report_at("all")
+
+
+class TestTheGateInventoryIsNotAWitnessToHowMuchWasRECOMPUTED:
+    """The correction. It is tempting to say a sampled run and a full one are indistinguishable
+    by their gate inventories, and to lean the sample rule on that. It is not true, and it is
+    not true in DIFFERENT ways for the two subjects — so the rule leans on neither. These pin
+    the real behaviour, measured from native reports, against the wording drifting back.
+    """
+
+    def test_a_sampled_BUNDLE_report_has_its_OWN_valid_inventory_not_the_profiles(
+            self, production_report_at):
+        sampled = production_report_at("sample")
+        full = production_report_at("all")
+        # the recompute gate NAMES the mode, so the two inventories genuinely differ...
+        assert any("(sample mode)" in g for g in sampled["gate_inventory"])
+        assert any("(all mode)" in g for g in full["gate_inventory"])
+        assert sampled["gate_inventory_sha256"] != full["gate_inventory_sha256"]
+        # ...and the sampled one is INTERNALLY valid — it just is not the pinned all-target
+        # production profile. On the inventory alone it would refuse as a generic mismatch.
+        assert sampled["gate_inventory_sha256"] == AR.content_sha256(
+            sampled["gate_inventory"])
+        assert full["gate_inventory_sha256"] == \
+            C.GATE_PROFILES[C.PROFILE_BUNDLE_PRODUCTION]["gate_inventory_sha256"]
+
+    def test_the_sampled_BUNDLE_refuses_by_the_RECOMPUTE_reason_not_the_profile_one(
+            self, production_report_at):
+        # the point of checking the mode first: the refusal says what is actually wrong
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(production_report_at("sample"))
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
+
+    def test_a_sampled_RELEASE_report_is_inventory_IDENTICAL_to_a_full_one(
+            self, native_release_report_at):
+        # the subject where the inventory cannot help even in principle: no release-level gate
+        # name mentions the mode, so the profile sees the same 28 gates either way. Only the
+        # bound recompute_mode distinguishes them.
+        sampled, _ = native_release_report_at("sample")
+        full, _ = native_release_report_at("all")
+        assert sampled["gate_inventory"] == full["gate_inventory"]
+        assert sampled["gate_inventory_sha256"] == full["gate_inventory_sha256"] == \
+            C.GATE_PROFILES[C.PROFILE_RELEASE_PRODUCTION]["gate_inventory_sha256"]
+        assert sampled["bound_artifact"]["recompute_mode"] == "sample"
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(sampled)
+        assert exc.value.reason == C.REFUSE_SAMPLED_RECOMPUTE
 
 
 class TestTheProductionProfileIsExact:

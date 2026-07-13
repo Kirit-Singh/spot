@@ -133,10 +133,21 @@ REFUSE_SAMPLED_RECOMPUTE = "a_release_grade_bundle_was_admitted_on_a_sampled_rec
 
 # WHAT A RELEASE-GRADE ADMISSION MUST HAVE RE-DERIVED. W10's `--recompute all` re-derives
 # every base delta; `--recompute sample` re-derives a deterministic handful (8 targets) and
-# admits on those. Both run the SAME GATE NAMES, so the gate inventory — and therefore the
-# execution-completeness profile that pins it — cannot tell them apart. The mode itself is in
-# the report's bound_artifact, so it is READ. Byte-exact: "ALL", "" and absence are not "all",
-# and a report that does not say how much it re-derived has not said it re-derived everything.
+# admits on those.
+#
+# This is required INDEPENDENTLY, and it does not lean on the gate inventory to catch it. The
+# inventory is not a reliable witness to how much was re-derived, in either direction:
+#
+#   * a BUNDLE report names the mode inside a gate ("the recomputation actually covered rows
+#     (sample mode)"), so a sampled bundle has its OWN internally valid inventory — just not
+#     the pinned all-target production one. It would surface as a generic profile mismatch: a
+#     true refusal, with a reason that does not say what is actually wrong;
+#   * a RELEASE report's gate names do not mention the mode at all, so its inventory is the
+#     SAME under both — the profile cannot see the difference there even in principle.
+#
+# So the mode is READ from bound_artifact and required to be exactly "all". Byte-exact: "ALL",
+# "" and absence are not "all", and a report that does not say how much it re-derived has not
+# said it re-derived everything. Typed provenance, not an inference from a hash.
 RECOMPUTE_MODE_ALL = "all"
 
 
@@ -285,10 +296,10 @@ def validate_report(report: Any) -> None:
                 f"a {bound.get('lane')!r} bundle must name "
                 "stage1_scorer_view_canonical_sha256; it is null")
 
-    # HOW MUCH WAS ACTUALLY RE-DERIVED. Checked BEFORE the profile, because "you admitted a
-    # release on 8 sampled targets" is the specific, actionable refusal and the profile — which
-    # a sample-mode report MATCHES, the gate names being identical in both modes — would never
-    # have caught it at all.
+    # HOW MUCH WAS ACTUALLY RE-DERIVED. Checked BEFORE the profile so the refusal NAMES the
+    # defect. A sampled bundle would otherwise surface as a generic "your inventory is not the
+    # profile" — true, but it does not tell the reader that the admission stood on 8 targets;
+    # and a sampled RELEASE would not surface at all, its gate names being mode-independent.
     #
     # BOTH SUBJECTS. A BUNDLE is release-grade when its LANE says so. A RELEASE has no lane —
     # it IS release-grade, there is no other kind — and it is the document W1 actually reads,
@@ -304,8 +315,9 @@ def validate_report(report: Any) -> None:
                 f"a {subject} bundle/release was admitted with "
                 f"recompute_mode={bound.get('recompute_mode')!r}, not "
                 f"{RECOMPUTE_MODE_ALL!r}: only a deterministic sample of targets had their "
-                "base deltas re-derived from the DE data, and the gate inventory of a sampled "
-                "run is identical to a full one — so nothing downstream could tell them apart")
+                "base deltas re-derived from the DE data. A release-grade admission must "
+                "re-derive ALL of them, and it must SAY so in typed provenance — the report's "
+                "own gate inventory is not asked to prove it")
 
     # EXECUTION-COMPLETENESS PROFILE. A PRODUCTION report must have run EXACTLY the gate
     # inventory its invocation runs — a resealed deletion of ANY gate, even a currently

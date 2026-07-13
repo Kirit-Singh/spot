@@ -29,7 +29,7 @@ PINNED_SOLVER_LOCK_SHA256 = \
 # modules changed, so the code hash moved with them. Previous pin (pre-fix):
 # 8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f
 W10_VERIFIER_CODE_SHA256 = \
-    "e3102f5a65b54a947289159de0d792035712d4d239b7bc264d1c8c4d44d5818f"
+    "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174"
 
 # THE GATES THAT MUST HAVE RUN. Pinning the code sha says the report NAMES the right code;
 # this says its gate inventory actually CONTAINS the security-critical checks — so an empty
