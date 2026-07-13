@@ -627,26 +627,75 @@ def lane_p2s(cfg):
     lane_p2s_runtime(cfg)
 
 
+def verify_lanes(cfg):
+    """Phase E — the external temporal (W11) + pathway (W4) INDEPENDENT admissions must exist
+    before aggregate. Producers write PENDING lane inventories (`release_inventory --lane`); the
+    pinned external verifier checkouts admit them; `run_release` requires each admitted. The
+    primary aggregate cannot complete without these — and needs NO P2S."""
+    _phase("E lane admissions (external temporal/pathway)")
+    if DRY:
+        print("=== PHASE E: release_inventory --lane {temporal,pathway} (PENDING) → external "
+              "W11/W4 admissions → {temporal,pathway}_arm_external_admission.json")
+        for lane in ("temporal", "pathway"):
+            print(f"=== REQUIRES {os.path.join(cfg.out, lane + '_arm_external_admission.json')}")
+        return
+    for lane in ("temporal", "pathway"):
+        run(f"inventory:{lane}",
+            _py("release_inventory", "--lane", lane, "--bundles-root", cfg.out,
+                "--release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
+                "--env-lock", cfg.env_lock),
+            produces=[f"{lane}:inventory"])
+    outs = []
+    for lane in ("temporal", "pathway"):
+        adm = os.path.join(cfg.out, f"{lane}_arm_external_admission.json")
+        if not os.path.isfile(adm):
+            raise SchedulerError(
+                f"REFUSED: aggregate requires the external {lane} admission {adm} — run the pinned "
+                f"{lane} verifier checkout to admit the {lane} release before aggregate")
+        outs.append(adm)
+    _write_receipt(cfg, "E.lane_admissions", argv=["phase-e-lane-admissions"], inputs=[],
+                   outputs=outs, prereqs=["D.temporal", "D.pathway"])
+
+
+def _expect_pins(cfg):
+    """run_release EXPECT_* pins DERIVED from the run-identity manifest, REQUIRED non-empty —
+    never empty environment defaults."""
+    m = json.load(open(identity_path(cfg)))
+    def raw(v):
+        return str(v).split(":", 1)[-1] if v else ""
+    pins = {"env": raw(m.get("env_lock_sha256")), "release": raw(m.get("stage1", {}).get("release")),
+            "gene_sets": content_sha256(m.get("gene_sets", {})),
+            "verifiers": content_sha256(m.get("verifier_pins", {})),
+            "code": raw(m.get("code_identity"))}
+    missing = [k for k, v in pins.items() if not v]
+    if missing:
+        raise SchedulerError(f"aggregate: EXPECT_* pins not bound in the run identity: {missing}")
+    return pins
+
+
 def lane_aggregate(cfg):
-    _phase("F aggregate (run_release --verify + external admission)")
+    _phase("F aggregate (run_release --out FILE --verify + separate admission report)")
     require_admitted_direct(cfg)
-    out = os.path.join(cfg.out, "aggregate")
-    run("aggregate:run_release",
-        _py("run_release", "--bundles-root", cfg.out, "--release", cfg.stage1_release,
-            "--release-root", cfg.stage1_release_root, "--env-lock", cfg.env_lock,
-            "--expect-env-lock-sha256", os.environ.get("EXPECT_ENV_LOCK_SHA256", ""),
-            "--expect-release-sha256", os.environ.get("EXPECT_RELEASE_SHA256", ""),
-            "--expect-gene-sets", os.environ.get("EXPECT_GENE_SETS", ""),
-            "--expect-verifiers", os.environ.get("EXPECT_VERIFIERS", ""),
-            "--expected-code-identity", os.environ.get("EXPECTED_CODE_IDENTITY", ""),
-            "--out", out, "--verify"),
+    p = ({"env": "<id>", "release": "<id>", "gene_sets": "<id>", "verifiers": "<id>", "code": "<id>"}
+         if DRY else _expect_pins(cfg))
+    manifest = os.path.join(cfg.out, "stage2_run_manifest.json")
+    report = os.path.join(cfg.out, "stage2_aggregate_verification.json")
+    argv = _py("run_release", "--bundles-root", cfg.out, "--release", cfg.stage1_release,
+               "--release-root", cfg.stage1_release_root, "--env-lock", cfg.env_lock,
+               "--expect-env-lock-sha256", p["env"], "--expect-release-sha256", p["release"],
+               "--expect-gene-sets", p["gene_sets"], "--expect-verifiers", p["verifiers"],
+               "--expected-code-identity", p["code"],
+               "--out", manifest, "--verify-report", report, "--verify")
+    run("aggregate:run_release", argv,
         consumes=["direct:root", "temporal:root", "pathway:root"],
-        produces=["aggregate:topology_manifest"])
-    _write_receipt(cfg, "F.aggregate", argv=["run_release", "--verify"], inputs=[],
-                   outputs=[out], prereqs=["C.direct_admitted", "D.temporal", "D.pathway"],
-                   extra={"exports": {"manifest": os.path.join(out, "run_manifest.json"),
-                                      "report": os.path.join(out, "aggregate_admission.json"),
-                                      "bundles_root": cfg.out, "stage1_release": cfg.stage1_release}})
+        produces=["aggregate:topology_manifest", "aggregate:admission"])
+    # aggregate PRODUCER receipt (the manifest) distinct from the independent ADMISSION receipt
+    _write_receipt(cfg, "F.aggregate_manifest", argv=argv, inputs=[], outputs=[manifest],
+                   prereqs=["C.direct_admitted", "E.lane_admissions"])
+    _write_receipt(cfg, "F.aggregate_admission", argv=argv, inputs=[manifest], outputs=[report],
+                   prereqs=["F.aggregate_manifest"],
+                   extra={"stage3_handoff": {"manifest": manifest, "report": report,
+                                             "bundles_root": cfg.out, "stage1_release": cfg.stage1_release}})
 
 
 def lane_downstream(cfg):
@@ -693,8 +742,11 @@ def main(argv=None):
             return 3
         verify_direct_gate(cfg)
         lane_downstream(cfg)
-        lane_p2s(cfg)
-        lane_aggregate(cfg)
+        verify_lanes(cfg)          # Phase E: external temporal(W11)/pathway(W4) admissions
+        lane_aggregate(cfg)        # Phase F: primary aggregate — NO P2S in the primary chain
+        # P2S is a SEPARATE secondary lane (its own env/code/method identity + admission),
+        # invoked independently via the `p2s` subcommand AFTER the primary run. Its absence must
+        # never make the primary aggregate incomplete or change Direct bytes/ranks.
     return 0
 
 
