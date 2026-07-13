@@ -216,6 +216,8 @@
             "type": "object"
           },
           "coverage": {
+            "maximum": 1,
+            "minimum": 0,
             "type": [
               "number",
               "null"
@@ -540,6 +542,13 @@
             ],
             "type": "object"
           },
+          "n_dropped_unmappable": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "n_genes_in_set": {
             "minimum": 1,
             "type": "integer"
@@ -547,6 +556,13 @@
           "n_genes_in_universe": {
             "minimum": 0,
             "type": "integer"
+          },
+          "n_source_symbols": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "schema_version": {
             "const": "spot.stage02_pathway_record.v1"
@@ -590,6 +606,14 @@
           },
           "set_name": {
             "type": "string"
+          },
+          "source_coverage": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -606,7 +630,10 @@
           "enrichment",
           "convergence",
           "science_evidence_refs",
-          "science_may_change_primary_ranks"
+          "science_may_change_primary_ranks",
+          "n_source_symbols",
+          "n_dropped_unmappable",
+          "source_coverage"
         ],
         "type": "object"
       },

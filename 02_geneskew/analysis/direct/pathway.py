@@ -138,6 +138,15 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
             "n_genes_in_set": s["n_genes"],
             "n_genes_in_universe": s["n_genes_in_universe"],
             "coverage": s["coverage"],
+            # THE RE-KEYING DENOMINATOR. For a bundle re-keyed symbol -> Ensembl, the
+            # members that could not be mapped were already removed, so `coverage` above
+            # is 1.0 by construction. `source_coverage` is the fraction of the genes the
+            # pathway ORIGINALLY NAMED that this experiment could actually measure — the
+            # number a reader needs before believing anything about this set. Null for a
+            # bundle that was never re-keyed; an absent loss is not a zero loss.
+            "n_source_symbols": s["n_source_symbols"],
+            "n_dropped_unmappable": s["n_dropped_unmappable"],
+            "source_coverage": s["source_coverage"],
             # BOTH lines, side by side. Never fused.
             "enrichment": {arm: _enrichment_block(per_arm[arm][set_id])
                            for arm in config.ARMS},

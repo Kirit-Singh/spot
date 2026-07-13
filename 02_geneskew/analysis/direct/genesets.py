@@ -189,7 +189,25 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
                  f"gene-set bundle: duplicate set_id {set_id!r}; two sets under one id "
                  "cannot both be cited")
         genes = [str(g) for g in (s.get("genes") or [])]
-        _require(bool(genes), f"gene-set bundle: set {set_id!r} names no genes")
+        # A set with NO genes is normally malformed. There is exactly one honest way for it
+        # to happen: a RE-KEYED set (symbol -> Ensembl) that named genes and had none of
+        # them survive, because this experiment measured none of them. That is a real,
+        # informative state — "this pathway could never have been tested here" — and the
+        # lane emits it rather than deleting it, for the same reason it emits every other
+        # untestable set: a pathway missing from the table is indistinguishable from one
+        # that was tested and found nothing.
+        #
+        # It must SAY that is what it is. An empty set that declares no source symbols is
+        # still refused: silence is not an explanation.
+        rekeyed_to_empty = (not genes
+                            and int(s.get("n_source_symbols") or 0) > 0
+                            and int(s.get("n_dropped_unmappable") or 0)
+                            == int(s.get("n_source_symbols") or 0))
+        _require(bool(genes) or rekeyed_to_empty,
+                 f"gene-set bundle: set {set_id!r} names no genes. A set may be empty ONLY "
+                 "if it was re-keyed and declares that every one of its source symbols was "
+                 "unmappable (n_source_symbols > 0, n_dropped_unmappable == "
+                 "n_source_symbols); an empty set that explains nothing is malformed")
         _require(len(set(genes)) == len(genes),
                  f"gene-set bundle: set {set_id!r} lists a gene twice; a duplicated gene "
                  "would be double-counted by every statistic over the set")
@@ -197,6 +215,16 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
         # Genes absent from the effect universe were never MEASURABLE in this run. They
         # are reported as coverage — never imputed, and never read as evidence of absence.
         measured = sorted(g for g in genes if g in universe) if universe else []
+
+        # THE RE-KEYING LOSS, carried through (never collapsed away).
+        #
+        # A bundle re-keyed from symbols to Ensembl (``geneset_build.py``) has ALREADY
+        # dropped the members it could not map, so ``coverage`` above would come back 1.0
+        # for every set — a pathway record would then look perfectly covered while most of
+        # the pathway was never measured. These fields are the honest denominator: how many
+        # genes the set ORIGINALLY named, and how many of them this experiment could see.
+        n_source = s.get("n_source_symbols")
+        n_dropped = s.get("n_dropped_unmappable")
         sets[set_id] = {
             "set_id": set_id,
             "name": str(s.get("name") or set_id),
@@ -204,7 +232,16 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
             "n_genes": len(genes),
             "genes_in_universe": measured,
             "n_genes_in_universe": len(measured),
-            "coverage": (round(len(measured) / len(genes), 6) if universe else None),
+            # None, not 0.0, for a set with no members: a coverage of zero would claim the
+            # ratio was computed and came out empty, and there is no ratio to compute.
+            "coverage": (round(len(measured) / len(genes), 6)
+                         if (universe and genes) else None),
+            # None for a bundle that was never re-keyed (it named Ensembl ids to begin
+            # with) — an absent loss is not a zero loss, and it does not pretend to be.
+            "n_source_symbols": (None if n_source is None else int(n_source)),
+            "n_dropped_unmappable": (None if n_dropped is None else int(n_dropped)),
+            "source_coverage": (round(len(measured) / int(n_source), 6)
+                                if n_source else None),
         }
 
     return {
