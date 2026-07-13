@@ -39,6 +39,24 @@ def _v_pathway_base(pid, dc, cond):
 def _v_temporal_key(pid, dc, frm, to):
     return "temporal|" + "|".join((pid, dc, frm, to))
 
+
+# generator != verifier: the AUTHORITATIVE Stage-2 temporal estimator IDENTITY, re-stated here from the
+# INDEPENDENT re-derivation on spot-stage2-temporal-arms @ 276a9ad (stage1_v3.estimator_registry() ->
+# temporal.arms.config.method_sha256(), the GENERIC estimand identity — no batch/code-tree material). An
+# available temporal contract must bind EXACTLY this identity; a resealed contract naming any other
+# method_sha256 (or a drifted identity field) is REFUSED here (mirrors Stage-2's fail-closed admission gate).
+_V_TEMPORAL_ESTIMATOR = {
+    "estimator_id": "temporal_cross_condition_v1",
+    "analysis_mode": "temporal_cross_condition",
+    "method_id": "spot.stage02.temporal_cross_condition.v1",
+    "method_version": "stage2-temporal-cross-condition-v1-did-on-program-projections",
+    "estimand_id": "spot.stage02.temporal.estimand.population_program_projection_shift.v1",
+    "estimand_level": "population",
+    "estimand_is_per_cell_fate": False,
+    "inference_status": "not_calibrated",
+    "method_sha256": "343f20db53aed3f34f45f6c4adebc2cdf26985ab179b7df264dbd0d02587c4b5",
+}
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ANALYSIS = os.path.dirname(HERE)
 PROGRAMS = os.path.dirname(ANALYSIS)
@@ -114,12 +132,28 @@ def verify_contract(contract, data_dir=DATA):
         ms = e.get("method_sha256")
         if not (isinstance(ms, str) and len(ms) == 64):
             reasons.append("an available temporal estimator must bind a 64-hex method_sha256 (a word cannot pass)")
+        # EXACT-match the authoritative Stage-2 temporal identity (method_sha256 + every identity field): a
+        # resealed contract carrying a stale/forged method identity is refused downstream (Stage-2's gate too).
+        for k, want in _V_TEMPORAL_ESTIMATOR.items():
+            if e.get(k) != want:
+                reasons.append(f"temporal estimator identity mismatch: {k}={e.get(k)!r} != authoritative "
+                               f"{want!r} (resealed/stale method identity refused downstream)")
     if est_status == "not_implemented" and "method_sha256" in e:
         reasons.append("a not_implemented estimator must NOT name a method (relabelling != existence)")
 
     # ---- 5) POLE IDENTITY = (program, pole, condition); ARMS re-derive with desired_change keying ----
     a, b = cc.get("A") or {}, cc.get("B") or {}
     conds = cc.get("conditions") or []
+    # question_id: BIOLOGY-ONLY ordered-question identity, re-derived from the two poles + analysis_mode (NO
+    # method/input binding). A tampered/reforged question_id (or a biology edit) fails to rederive here.
+    if conds:
+        qc = {"A": {"program_id": a.get("program_id"), "direction": a.get("direction"), "condition": conds[0]},
+              "B": {"program_id": b.get("program_id"), "direction": b.get("direction"), "condition": conds[-1]},
+              "analysis_mode": mode}
+        want_qid = hashlib.sha256(canonical.canonical_json(qc).encode()).hexdigest()[:16]
+        if contract.get("question_id") != want_qid:
+            reasons.append("question_id does not rederive from the biology-only ordered question "
+                           "(A/B program+direction+condition + analysis_mode)")
     # refuse ONLY when program+pole+condition are all identical -> within-condition same program+direction.
     # (a temporal comparison of the same program+pole at DIFFERENT timepoints is valid and must be admitted)
     if (a.get("program_id") == b.get("program_id") and a.get("direction") == b.get("direction")

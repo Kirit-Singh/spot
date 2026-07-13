@@ -7,10 +7,15 @@ import fs from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const REPO = '/Users/kiritsingh/spot';
+const REPO = new URL('.', import.meta.url).pathname.replace(/\/01_programs\/analysis\/$/, '');  // portable; no machine path
 const PAGE = REPO + '/01_programs/app/01_page.html';
 const DATA = REPO + '/01_programs/app/data';
 const BRIDGE = REPO + '/01_programs/analysis/stage2_bridge';
+// Hard guard: page + emitter MUST be this test's OWN git worktree, never a hardcoded primary checkout — else
+// the test silently reads a stale tree and browser/Python agree only because BOTH are the wrong (old) files.
+const GIT_TOP = fs.realpathSync(execFileSync('git', ['-C', REPO, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim());
+if (fs.realpathSync(REPO) !== GIT_TOP) throw new Error(`test must run against its own worktree: REPO=${REPO} git_top=${GIT_TOP}`);
+if (!fs.existsSync(PAGE)) throw new Error(`resolved PAGE not found under the current worktree: ${PAGE}`);
 const html = fs.readFileSync(PAGE, 'utf8');
 
 function extract(sig) {
@@ -71,7 +76,9 @@ for (const [name, s, conds] of CASES) {
   const py = pyContract(regByField[s.af].program_id, s.ad, regByField[s.bf].program_id, s.bd, conds);
   const checks = {
     selection_id: browser.selection_id === py.selection_id,
-    full_hash: browser.full_contract_content_sha256 === py.full_contract_content_sha256,   // byte-equal incl. arms
+    question_id: browser.question_id === py.question_id && /^[0-9a-f]{16}$/.test(browser.question_id)
+                 && browser.question_id !== browser.selection_id,   // biology-only id, browser==emitter, distinct
+    full_hash: browser.full_contract_content_sha256 === py.full_contract_content_sha256,   // byte-equal incl. arms + question_id
     execution_status: browser.execution_status === py.execution_status,
     schema_v3: browser.schema_version === 'spot.stage01_selection.v3',
     // pair expressed as two independent per-program arm references (away_from_A on A, toward_B on B)

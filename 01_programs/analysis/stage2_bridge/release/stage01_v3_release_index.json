@@ -1,7 +1,7 @@
 {
   "schema": "spot.stage01_v3_release_index.v1",
   "release_bundle": "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json",
-  "release_self_release_sha256": "182510e37415f70d892a0f0cd8a66952fbbd344ed0207e6bb1bb711c0c8eb6f1",
+  "release_self_release_sha256": "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11",
   "selection_schema": "01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json",
   "registry": "01_programs/app/data/stage01_program_registry_v3.json",
   "materializer": "stage2_bridge/emit_selection_contract.build_contract",
@@ -63,7 +63,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "3b91b68db608787c",
-      "full_contract_content_sha256": "00e74756c459f4fb5b2ffa06b4233816fa93777ca2ab34a2528e3c44cddcd06e"
+      "full_contract_content_sha256": "e8ffd7229885b98486846dc16e6acbb7b14c01a41c2fdbf71ef5a78506ddfb15"
     },
     {
       "matrix_var": "SEL_WITHIN_Stim8hr",
@@ -105,7 +105,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "bebd3016a77f7ab7",
-      "full_contract_content_sha256": "12663e1cdc0e1e8aa1128613d2c006d746e8c08b730fdac05734bdeb4805e820"
+      "full_contract_content_sha256": "e59f9bc4a93dbb0e5c140444c7445dc61cfc89bb5af61a531a0df2ad04ccfa1f"
     },
     {
       "matrix_var": "SEL_WITHIN_Stim48hr",
@@ -147,7 +147,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "4af0fbbbd3f7dd04",
-      "full_contract_content_sha256": "be5d7ec3cad59dbbd1d57478ad7347a09ba6395056697d51a967e38513b00403"
+      "full_contract_content_sha256": "94c33898a11712e79a23caae0a3a7ad8f997ad29cadae70db9d79ab4ee45566c"
     },
     {
       "matrix_var": "SEL_TEMPORAL_Rest_Stim8hr",
@@ -192,7 +192,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "2ae96d15809efdd0",
-      "full_contract_content_sha256": "5f4785cb017bff16831241241b23c14d0f04ca87d76cc59dc8cd48ce6bde1053"
+      "full_contract_content_sha256": "f5987f73565a67f123415fa154a42b0cf5b16823c0b90ad0c49c05084bdbbd2d"
     },
     {
       "matrix_var": "SEL_TEMPORAL_Stim8hr_Rest",
@@ -237,7 +237,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "2115b577e03b8a02",
-      "full_contract_content_sha256": "34d44350f91ff2d73483b63506e7e0de4567ca47966dde0828b15d80d8e7ef85"
+      "full_contract_content_sha256": "8965553dbe7435f8e95aa8271ee44f66ef1ed935da6c2af117bb924856330ebb"
     },
     {
       "matrix_var": "SEL_TEMPORAL_Rest_Stim48hr",
@@ -282,7 +282,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "4c219f69ff07eb73",
-      "full_contract_content_sha256": "c4a30df1f7e0bbc083061f7278babbd5f96fecd6ed7429524a12703040322106"
+      "full_contract_content_sha256": "556d7fd098c45512cb20d149d983f839ef8cfd025f14b6e6bdb15153ad11f39d"
     },
     {
       "matrix_var": "SEL_TEMPORAL_Stim48hr_Rest",
@@ -327,7 +327,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "014a48a627b328c8",
-      "full_contract_content_sha256": "d6345d08ec0ccef842208a18d073b00e4c951175fa84fb5267f253424f628a23"
+      "full_contract_content_sha256": "764e2f44ab888ca5899e46a575587802fc3f36763c9621ff422e5fde920264de"
     },
     {
       "matrix_var": "SEL_TEMPORAL_Stim8hr_Stim48hr",
@@ -372,7 +372,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "7a77f6b314b9c0f3",
-      "full_contract_content_sha256": "ff9abf2344dea3781b23457b49972ddbcba7bbf2289e755fb69f0ae6c6a604d9"
+      "full_contract_content_sha256": "e089049f9aaeace025c837fadc33769b638b5db48825bff045083835282b6d9e"
     },
     {
       "matrix_var": "SEL_TEMPORAL_Stim48hr_Stim8hr",
@@ -417,7 +417,7 @@
       "execution_status": "ready",
       "estimator_status": "available",
       "selection_id": "ccf390b76f2f0d27",
-      "full_contract_content_sha256": "ddad5e51a3f828219f0890bf19c2b41a318c392d0128d99fa6d5d825bd12d1e6"
+      "full_contract_content_sha256": "8d8ccf99904655d8034c328e8be6521d247d72b1786223b2bf95498ef7f83dbb"
     }
   ]
 }

@@ -833,9 +833,13 @@ async function computeContrast(){
   let exec; if(nc.mode==='temporal_cross_condition'&&est.status!=='available')exec='awaiting_estimator';
   else if(aAv&&bAv)exec='ready'; else exec='refused';
   const cc=canonicalContent(),selFull=await sha256hex(canonicalJSON(cc));
+  // question_id: BIOLOGY-ONLY ordered-question identity (poles' program/direction/condition + analysis_mode;
+  // NO method/input binding), stable across method/registry/source revisions. Mirrors emit_selection_contract.
+  const qc={A:{program_id:A.program_id,direction:axisA.direction,condition:nc.ordered[0]},B:{program_id:B.program_id,direction:axisB.direction,condition:nc.ordered[nc.ordered.length-1]},analysis_mode:nc.mode};
+  const qid=(await sha256hex(canonicalJSON(qc))).slice(0,16);
   const contract={schema_version:'spot.stage01_selection.v3',selection_origin:'user_selected',
     execution_status:exec,analysis_mode:nc.mode,estimator_id:est.id,estimator_status:est.status,estimator:est.binding,
-    selection_id:selFull.slice(0,16),selection_full_sha256:selFull,canonical_content:cc,
+    selection_id:selFull.slice(0,16),selection_full_sha256:selFull,question_id:qid,canonical_content:cc,
     poles:{A:pA,B:pB},
     arms:{away_from_A:_armRef('away_from_A',A.program_id,axisA.direction,nc.ordered[0],nc.mode,nc.ordered),toward_B:_armRef('toward_B',B.program_id,axisB.direction,nc.ordered[nc.ordered.length-1],nc.mode,nc.ordered)},
     trust_bindings:BUNDLE.trust_bindings,provenance_bindings:BUNDLE.provenance_bindings,
