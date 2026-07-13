@@ -100,6 +100,34 @@ BITMAP_RULE = (
     "mask lives in the 11,526-gene target universe and the axis is the 10,282-gene readout "
     "universe, so a real mask can miss the axis entirely")
 
+# --------------------------------------------------------------------------- #
+# THE CROSS-LANE ANCHOR. Without it, everything this module checks is self-consistency.
+#
+# The bitmap, the counts and source_mask_sha256 are all derived from the SAME mask_sets. So a
+# forged-but-plausible biological mask, resealed, satisfies every one of them: the zeros still
+# equal the (forged) mask INTERSECT axis, the counts still agree, the run id still re-derives.
+# Demonstrated, not assumed — the forgery ADMITTED.
+#
+# A mask can only be contradicted from OUTSIDE. The Direct lane's mask table is independently
+# re-derived by W10 from the contributor manifest and the sgRNA library, under the exact
+# target + 30kb-neighbour + contributing-guide off-target rule, and its canonical table is
+# shuffle-invariant (DIRECT_MASK_VERIFICATION_REPORT.md, 48ff889b). So the pathway lane's mask
+# is checked AGAINST THE SHIPPED DIRECT BYTES: same masks, or nothing ships.
+#
+# The comparison is a DERIVATION, not a hash equality — the two lanes canonicalize the same
+# fact differently (Direct: a row table over 14 identity columns; here: per-target gene sets).
+# Project the Direct rows to {target: masked genes}, intersect with the READOUT AXIS, and
+# compare to this bitmap's ZERO bits. Intersecting first is load-bearing: 1,217-1,243 resolved
+# targets per condition have a real mask that misses the axis entirely, and comparing before
+# the intersection would fire on honest output.
+# --------------------------------------------------------------------------- #
+ANCHOR_RULE_ID = "spot.stage02.signature.mask_anchored_to_independently_verified_direct.v1"
+ANCHOR_RULE = (
+    "the bitmap's zero bits per target equal the SHIPPED Direct mask table, projected to "
+    "{target: masked genes} and intersected with the readout axis; the Direct table is the one "
+    "an independent verifier re-derived from the contributor manifest and the sgRNA library")
+MAIN_ESTIMATE_TYPE = "main"
+
 DISPOSITION_UNRESOLVED = "unresolved_no_signature"
 DISPOSITION_MASKED_READOUT = "resolved_masked_readout_genes"
 DISPOSITION_NO_MASKED_READOUT = "resolved_no_masked_readout_gene"
@@ -113,6 +141,9 @@ REFUSE_RESOLVED_ROW_UNMASKED = "REFUSE_RESOLVED_ROW_UNMASKED"
 REFUSE_BITMAP_NOT_MASK_INTERSECTION = "REFUSE_BITMAP_NOT_MASK_INTERSECTION"
 REFUSE_RESOLVED_SOURCE_MASK_EMPTY = "REFUSE_RESOLVED_SOURCE_MASK_EMPTY"
 REFUSE_MANIFEST_IDENTITY_ABSENT = "REFUSE_MANIFEST_IDENTITY_ABSENT"
+REFUSE_DIRECT_MASK_ANCHOR_ABSENT = "REFUSE_DIRECT_MASK_ANCHOR_ABSENT"
+REFUSE_DIRECT_MASK_MISMATCH = "REFUSE_DIRECT_MASK_MISMATCH"
+REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE = "REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE"
 REFUSE_PADDING_BITS = "REFUSE_PADDING_BITS"
 REFUSE_NONFINITE_UNDECLARED = "REFUSE_NONFINITE_UNDECLARED"
 REFUSE_MASK_ARTIFACT_ABSENT = "REFUSE_MASK_ARTIFACT_ABSENT"
@@ -299,6 +330,146 @@ def build(*, condition: str, main: dict[str, Any],
     }
 
 
+def direct_masked_genes(masks_parquet: str) -> dict[str, set]:
+    """The SHIPPED Direct mask table, projected to {target: masked genes}.
+
+    Only the POOLED-MAIN estimate's rows project into a signature bitmap. The guide and donor
+    rows describe estimates nothing here projects, and folding them in would make every target
+    look over-masked.
+    """
+    import pandas as pd
+
+    df = pd.read_parquet(masks_parquet)
+    if "estimate_type" in df.columns:
+        df = df[df["estimate_type"] == MAIN_ESTIMATE_TYPE]
+    out: dict[str, set] = {}
+    for t, g in zip(df["target_id"], df["masked_gene_ensembl"]):
+        if g is None or (isinstance(g, float) and g != g):
+            out.setdefault(str(t), set())          # an UNRESOLVED mask row: no masked gene
+            continue
+        out.setdefault(str(t), set()).add(str(g))
+    return out
+
+
+def anchor_to_direct(built: dict[str, Any], gene_ids: list[str],
+                     direct_masked: dict[str, set]) -> dict[str, Any]:
+    """REFUSE unless this lane's mask IS the independently-verified Direct mask.
+
+    The one check in this module that a forged mask cannot satisfy by being consistent with
+    itself, because the thing it is compared to was derived by somebody else from the primary
+    inputs.
+    """
+    axis = set(gene_ids)
+    n_genes = built["n_genes"]
+    bits = np.unpackbits(built["bitmap"], axis=1)[:, :n_genes]
+
+    mismatched: list[str] = []
+    checked = 0
+    for i, t in enumerate(built["target_ids"]):
+        if built["dispositions"][t] == DISPOSITION_UNRESOLVED:
+            continue                     # no signature; the Direct table has no mask to compare
+        if t not in direct_masked:
+            mismatched.append(f"{t}: absent from the Direct mask table")
+            continue
+        zeros = {gene_ids[j] for j in np.nonzero(bits[i] == 0)[0]}
+        expect = direct_masked[t] & axis          # INTERSECT FIRST. See ANCHOR_RULE.
+        if zeros != expect:
+            mismatched.append(
+                f"{t}: {len(zeros)} masked readout genes here, {len(expect)} in the "
+                "independently-verified Direct table")
+        checked += 1
+
+    if mismatched:
+        _refuse(REFUSE_DIRECT_MASK_MISMATCH,
+                f"{len(mismatched)} target(s) are masked differently from the Direct table an "
+                f"independent verifier re-derived (e.g. {mismatched[:3]}). A mask that only "
+                "agrees with itself is not evidence: this artifact and the Direct bundle claim "
+                "to have masked the same experiment")
+
+    return {
+        "anchor_rule_id": ANCHOR_RULE_ID,
+        "anchor_rule": ANCHOR_RULE,
+        "n_targets_anchored": checked,
+        "masked_readout_sha256": content_hash({
+            t: sorted({gene_ids[j] for j in np.nonzero(bits[i] == 0)[0]})
+            for i, t in enumerate(built["target_ids"])
+            if built["dispositions"][t] != DISPOSITION_UNRESOLVED}),
+    }
+
+
+def w10_anchor(report_path: str, direct_bundle_dir: str) -> dict[str, Any]:
+    """Bind the PER-RUN W10 report over the ACTUAL Direct bundle. PARAMETRIC, never frozen.
+
+    Nothing here hard-codes a hash. The report's mask_sha256 and its bundle ids are values OF A
+    RUN — the ones in the synthetic report are fixture values, and freezing one into production
+    would anchor every real bundle to a mask nobody computed on real data. So the report is read
+    at run time, the Direct bundle is read at run time, and the two are required to be ABOUT
+    EACH OTHER: the mask the report certifies must be the mask the bundle bound.
+
+    What IS stable, and is bound as identity rather than as data: the verifier id, its code hash
+    and its gate-inventory hash. Those say WHO checked and WITH WHAT — and they are the same
+    whether the run is synthetic or real.
+    """
+    import re
+
+    if not os.path.exists(report_path):
+        _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
+                f"no W10 Direct mask report at {os.path.basename(report_path)!r}. The pathway "
+                "mask is self-consistent by construction; without an external re-derivation to "
+                "contradict it, a coherently forged mask is indistinguishable from a real one")
+    with open(report_path) as fh:
+        body = fh.read()
+
+    def _one(pattern, what):
+        m = re.search(pattern, body)
+        if not m:
+            _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
+                    f"the W10 report does not state its {what}; a report that does not say "
+                    "what it certified certifies nothing")
+        return m.group(1)
+
+    certified_mask = _one(r"bound mask_sha256\s*:\s*([0-9a-f]{64})", "certified mask_sha256")
+    verifier_id = _one(r"verifier_id\s+(\S+)", "verifier_id")
+    verifier_code = _one(r"verifier_code_sha256\s+([0-9a-f]{64})", "verifier_code_sha256")
+    gate_inventory = _one(r"gate_inventory_sha256\s+([0-9a-f]{64})", "gate_inventory_sha256")
+
+    prov_path = os.path.join(direct_bundle_dir, "provenance.json")
+    if not os.path.exists(prov_path):
+        _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
+                f"no Direct bundle provenance at {prov_path!r}; the mask cannot be anchored to "
+                "a bundle that is not there")
+    with open(prov_path) as fh:
+        direct_prov = json.load(fh)
+    binding = direct_prov["run_binding"]
+    bundle_mask = binding.get("mask_sha256")
+
+    # THE CORRESPONDENCE CHECK. A report about a DIFFERENT Direct bundle is not a check of this
+    # one, and it is the easiest anchor to fake: hand over a genuine, green report for some
+    # other run.
+    if certified_mask != bundle_mask:
+        _refuse(REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE,
+                f"the W10 report certifies mask {certified_mask[:16]}... but this Direct bundle "
+                f"bound {str(bundle_mask)[:16]}.... A green report about another run is not a "
+                "verification of this one")
+
+    return {
+        # WHO checked, and with what. Stable identity — the same synthetic or real.
+        "verifier_id": verifier_id,
+        "verifier_code_sha256": verifier_code,
+        "gate_inventory_sha256": gate_inventory,
+        # WHAT was checked. PER-RUN, read from the bytes in front of us.
+        "report_sha256": file_sha256(report_path),
+        "direct_mask_sha256": bundle_mask,
+        "direct_arm_bundle_run_id": direct_prov.get("arm_bundle_run_id"),
+        "direct_masks_parquet_sha256": file_sha256(
+            os.path.join(direct_bundle_dir, "masks.parquet")),
+        "direct_contributor_manifest": binding.get("contributor_manifest"),
+        # Scope, stated rather than implied: this attests the Direct MASK. It does not attest a
+        # produced real 60-arm release, and the report says so itself.
+        "attests_real_60_arm_release": False,
+    }
+
+
 def values_sha256(values: np.ndarray) -> str:
     """The PRECISION-BEARING digest: the row-major little-endian float64 buffer.
 
@@ -447,6 +618,10 @@ def write(built: dict[str, Any], *, out_root: str, gene_axis: dict[str, Any],
                  "bits_sha256": b_sha},
         "sources": dict(sources),
         "mask_rule_id": MASK_RULE_ID,
+        # WHOSE independent re-derivation this mask was checked against, and over WHICH Direct
+        # bundle. Absent means UNANCHORED, and absent says so — it is not defaulted to a green.
+        "direct_mask_anchor": built.get("direct_mask_anchor"),
+        "mask_is_externally_anchored": built.get("direct_mask_anchor") is not None,
         "all_values_finite": built["all_values_finite"],
     }
     # The manifest's CONTENT hash goes INSIDE the manifest, so the shipped file carries its own
@@ -575,6 +750,11 @@ def signature_ref(*, manifest: dict[str, Any], condition: str, source: str,
         #   n_resolved_no_masked_readout_gene = #{resolved targets whose mask misses the axis}
         # The last two are independent statements of one fact and must agree.
         "bitmap_rule_id": manifest["bitmap_rule_id"],
+        # THE CROSS-LANE ANCHOR, carried into the bundle's run identity. `False` here is a
+        # STATE, not a gap: an unanchored mask is self-consistent and nothing more, and the
+        # bundle says so rather than leaving a reader to assume it was checked.
+        "mask_is_externally_anchored": manifest["mask_is_externally_anchored"],
+        "direct_mask_anchor": manifest["direct_mask_anchor"],
         "n_unresolved_no_signature": manifest["n_unresolved_no_signature"],
         "n_resolved_all_ones": manifest["n_resolved_all_ones"],
         "n_resolved_no_masked_readout_gene":
@@ -660,6 +840,22 @@ def build_condition(args, cond: str, out_root: str) -> dict[str, Any]:
     mask_sets = mask_sets_for_condition(args, cond, main)
     built = build(condition=cond, main=main, mask_sets=mask_sets, gene_ids=gene_ids)
 
+    # THE CROSS-LANE ANCHOR. Everything above is self-consistency; this is the only check a
+    # coherently forged mask cannot satisfy, because it is compared to a table somebody else
+    # derived from the primary inputs.
+    bundle_dir = getattr(args, "direct_bundle", None)
+    report = getattr(args, "direct_mask_report", None)
+    if bundle_dir and report:
+        anchor = w10_anchor(report, bundle_dir)
+        anchor.update(anchor_to_direct(
+            built, gene_ids,
+            direct_masked_genes(os.path.join(bundle_dir, "masks.parquet"))))
+        built["direct_mask_anchor"] = anchor
+    elif bundle_dir or report:
+        _refuse(REFUSE_DIRECT_MASK_ANCHOR_ABSENT,
+                "--direct-bundle and --direct-mask-report go together: a bundle with no report "
+                "is unverified, and a report with no bundle is about nothing")
+
     axis = write_gene_axis(out_root, gene_ids)
     return write(built, out_root=out_root, gene_axis=axis,
                  sources={
@@ -684,6 +880,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--source-registry", default=None)
     ap.add_argument("--target-identity-map", default=None)
     ap.add_argument("--env-lock", default=None)
+    ap.add_argument("--direct-bundle", default=None,
+                    help="the ADMITTED Direct arm bundle for this condition. Its shipped "
+                         "masks.parquet is the external referent this lane's mask is checked "
+                         "against.")
+    ap.add_argument("--direct-mask-report", default=None,
+                    help="the PER-RUN W10 external Direct mask report over that bundle. Never "
+                         "a frozen one: a report about another run is not a check of this one.")
     ap.add_argument("--out-root", required=True)
     return ap
 

@@ -94,6 +94,14 @@ class TestThePhysicalContract:
         assert len(ref["source_mask_sha256"]) == 64
         assert doc["method"]["bitmap_rule_id"] == ref["bitmap_rule_id"]
 
+    def test_the_CROSS_LANE_ANCHOR_state_is_bound_into_the_run_identity(self, built):
+        # an unanchored mask is self-consistency and nothing more; the bundle must SAY so
+        # rather than let a reader assume the mask was externally checked
+        _, _, prov, _ = built
+        ref = prov["run_binding"]["signature_ref"]
+        assert "mask_is_externally_anchored" in ref
+        assert "direct_mask_anchor" in ref
+
     def test_the_two_all_ones_counts_AGREE_in_the_binding(self, built):
         _, _, prov, _ = built
         ref = prov["run_binding"]["signature_ref"]

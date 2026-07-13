@@ -386,3 +386,157 @@ class TestTheManifestBindsWhatItStandsOn:
             shipped = json.load(fh)
         assert shipped["matrix"]["values_sha256"] == m["matrix"]["values_sha256"]
         assert shipped["mask"]["bits_sha256"] == m["mask"]["bits_sha256"]
+
+
+class TestTheCrossLaneAnchor:
+    """The ONLY check a coherently forged mask cannot satisfy.
+
+    The bitmap, the counts and `source_mask_sha256` all derive from the SAME mask_sets, so a
+    forged-but-plausible biological mask, resealed, satisfies every one of them: the zeros still
+    equal the (forged) mask INTERSECT axis, the counts still agree, the run id still re-derives.
+    That was demonstrated, not assumed — the forgery ADMITTED.
+
+    A mask can only be contradicted from OUTSIDE, by a table somebody else derived from the
+    primary inputs. W10 re-derives the Direct mask from the contributor manifest and the sgRNA
+    library and its canonical table is shuffle-invariant (DIRECT_MASK_VERIFICATION_REPORT.md).
+
+    NOTHING here is frozen into production: the report's mask_sha256 and bundle ids are values
+    OF A RUN. They are fixture values in this file and appear nowhere in the producer.
+    """
+
+    def _direct(self, tmp_path, mask_sets, gene_ids, mask_sha="a" * 64, run_id="dir123"):
+        """A stand-in for an ADMITTED Direct bundle: masks.parquet + provenance.json."""
+        import pandas as pd
+        d = tmp_path / "direct"
+        d.mkdir(exist_ok=True)
+        rows = []
+        for t, ms in mask_sets.items():
+            if ms is None:
+                rows.append({"estimate_type": "main", "target_id": t,
+                             "masked_gene_ensembl": None, "mask_reason": "mask_unresolved"})
+                continue
+            for g in sorted(ms):
+                rows.append({"estimate_type": "main", "target_id": t,
+                             "masked_gene_ensembl": g, "mask_reason": "target"})
+        pd.DataFrame(rows).to_parquet(d / "masks.parquet")
+        (d / "provenance.json").write_text(json.dumps({
+            "arm_bundle_run_id": run_id,
+            "run_binding": {"mask_sha256": mask_sha,
+                            "contributor_manifest": {"status": "bound"}},
+        }))
+        return str(d)
+
+    def _report(self, tmp_path, mask_sha="a" * 64, name="report.md"):
+        """A stand-in W10 report. The SHAPE is what the producer parses; the VALUES are a run's."""
+        p = tmp_path / name
+        p.write_text(
+            "| Verifier id | `spot.stage02.direct.arm_bundle.verifier.v1` |\n"
+            f"bound mask_sha256           : {mask_sha}\n"
+            "verifier_id           spot.stage02.direct.arm_bundle.verifier.v1\n"
+            f"verifier_code_sha256  {'b' * 64}\n"
+            f"gate_inventory_sha256 {'c' * 64}\n")
+        return str(p)
+
+    def _masks_and_axis(self, emitted):
+        args, _, _, _ = emitted
+        main = io_data.load_main(args.de_main, "StimX")
+        gene_ids = [str(g) for g in main["gene_ids"]]
+        return args, main, gene_ids, sm.mask_sets_for_condition(args, "StimX", main)
+
+    def test_the_HONEST_mask_is_ANCHORED_and_admits(self, emitted, tmp_path):
+        args, main, gene_ids, ms = self._masks_and_axis(emitted)
+        args.direct_bundle = self._direct(tmp_path, ms, gene_ids)
+        args.direct_mask_report = self._report(tmp_path)
+        m = sm.build_condition(args, "StimX", str(tmp_path / "out"))
+
+        assert m["mask_is_externally_anchored"] is True
+        a = m["direct_mask_anchor"]
+        assert a["verifier_id"] == "spot.stage02.direct.arm_bundle.verifier.v1"
+        assert a["n_targets_anchored"] > 0
+        assert a["attests_real_60_arm_release"] is False
+
+    def test_an_AXIS_MISSING_mask_does_NOT_trip_the_anchor(self, emitted, tmp_path):
+        """The 1,217-1,243 targets whose REAL mask misses the readout axis entirely.
+
+        Both lanes hold the same mask; it simply has no readout gene in it. The anchor must
+        INTERSECT WITH THE AXIS BEFORE COMPARING — otherwise it fires on honest output and the
+        gate becomes a bug that looks like rigour.
+        """
+        args, main, gene_ids, honest = self._masks_and_axis(emitted)
+        victim = next(t for t, v in honest.items() if v)
+        off_axis = {"ENSG_OFF_AXIS_1", "ENSG_OFF_AXIS_2"}
+        same = dict(honest, **{victim: off_axis})       # the SAME mask on BOTH sides
+
+        built = sm.build(condition="StimX", main=main, mask_sets=same, gene_ids=gene_ids)
+        assert built["dispositions"][victim] == sm.DISPOSITION_NO_MASKED_READOUT
+
+        anchor = sm.anchor_to_direct(                    # must NOT refuse
+            built, gene_ids,
+            sm.direct_masked_genes(
+                os.path.join(self._direct(tmp_path, same, gene_ids), "masks.parquet")))
+        assert anchor["n_targets_anchored"] > 0
+
+    def test_THE_FULLY_RESEALED_WRONG_SOURCE_MASK_IS_REFUSED(self, emitted, tmp_path):
+        """THE ATTACK. A plausible forged mask, resealed so everything internal agrees."""
+        args, main, gene_ids, honest = self._masks_and_axis(emitted)
+        victim = next(t for t, v in honest.items() if v)
+        forged = dict(honest, **{victim: {gene_ids[5], gene_ids[6]}})
+
+        # it is INTERNALLY PERFECT: build() admits it, and every internal gate is satisfied
+        built = sm.build(condition="StimX", main=main, mask_sets=forged, gene_ids=gene_ids)
+        assert built["n_resolved_all_ones"] == built["n_resolved_no_masked_readout_gene"]
+
+        # ...and it dies against the mask an independent verifier derived from the primary inputs
+        with pytest.raises(sm.SignatureMatrixError) as exc:
+            sm.anchor_to_direct(built, gene_ids,
+                                sm.direct_masked_genes(
+                                    os.path.join(self._direct(tmp_path, honest, gene_ids),
+                                                 "masks.parquet")))
+        assert exc.value.gate == sm.REFUSE_DIRECT_MASK_MISMATCH
+        assert victim in str(exc.value)
+
+    def test_the_forged_mask_passes_EVERY_INTERNAL_GATE_which_is_the_point(self, emitted,
+                                                                          tmp_path):
+        # if it failed an internal gate the attack would prove nothing about the anchor
+        args, main, gene_ids, honest = self._masks_and_axis(emitted)
+        victim = next(t for t, v in honest.items() if v)
+        forged = dict(honest, **{victim: {gene_ids[5], gene_ids[6]}})
+        built = sm.build(condition="StimX", main=main, mask_sets=forged, gene_ids=gene_ids)
+        axis = sm.write_gene_axis(str(tmp_path / "f"), gene_ids)
+        m = sm.write(built, out_root=str(tmp_path / "f"), gene_axis=axis,
+                     sources={"de_main_sha256": "x", "guide_manifest_sha256": "y",
+                              "sgrna_sha256": "z"},
+                     readout_universe_sha256="u")
+        assert m["source_mask_sha256"]          # resealed, and self-consistent throughout
+        assert m["n_resolved_all_ones"] == m["n_resolved_no_masked_readout_gene"]
+        assert m["mask_is_externally_anchored"] is False   # and it says so
+
+    def test_a_GENUINE_report_about_ANOTHER_BUNDLE_is_REFUSED(self, emitted, tmp_path):
+        # the easiest anchor to fake: hand over a real, green report for a different run
+        args, main, gene_ids, ms = self._masks_and_axis(emitted)
+        args.direct_bundle = self._direct(tmp_path, ms, gene_ids, mask_sha="a" * 64)
+        args.direct_mask_report = self._report(tmp_path, mask_sha="d" * 64)  # another run
+        with pytest.raises(sm.SignatureMatrixError) as exc:
+            sm.build_condition(args, "StimX", str(tmp_path / "out"))
+        assert exc.value.gate == sm.REFUSE_W10_REPORT_IS_ABOUT_ANOTHER_BUNDLE
+
+    def test_a_MISSING_report_is_REFUSED_not_defaulted_to_green(self, emitted, tmp_path):
+        args, main, gene_ids, ms = self._masks_and_axis(emitted)
+        args.direct_bundle = self._direct(tmp_path, ms, gene_ids)
+        args.direct_mask_report = str(tmp_path / "nope.md")
+        with pytest.raises(sm.SignatureMatrixError) as exc:
+            sm.build_condition(args, "StimX", str(tmp_path / "out"))
+        assert exc.value.gate == sm.REFUSE_DIRECT_MASK_ANCHOR_ABSENT
+
+    def test_UNANCHORED_says_so_rather_than_implying_a_green(self, emitted):
+        _, _, _, m = emitted
+        assert m["mask_is_externally_anchored"] is False
+        assert m["direct_mask_anchor"] is None
+
+    def test_NO_synthetic_hash_is_frozen_into_the_PRODUCER(self):
+        # the report's mask_sha256 and bundle ids are values OF A RUN. Freezing one would anchor
+        # every real bundle to a mask nobody computed on real data.
+        import inspect
+        src = inspect.getsource(sm)
+        for fixture_value in ("269b4278", "34af6e8c", "8c070512", "7410105a"):
+            assert fixture_value not in src
