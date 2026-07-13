@@ -1,6 +1,6 @@
 # Stage-2 ← Stage-1 consumer repair (W-consumer-v3)
 
-**Branch** `agent/stage2-stage1-consumer-v3` · **commit** `b4981cdd2deb056232531bf3f32c614a867f2d20`
+**Branch** `agent/stage2-stage1-consumer-v3` · **commits** `b4981cd` (consumer repair) · `2044da8` (method identity + tuple space)
 · **base** `9bd5895` · **Stage-1 contract** `539431dd8d87a3d763fb69ab44ed44bc98631d5a`
 (branch `stage1-temporal-estimator-repair`). Coordinated by the orchestrator.
 
@@ -65,13 +65,14 @@ different times is refused — is **inverted**; it contradicted its own module d
 
 ## Test counts
 
-Full Stage-2: **1823 passed, 4 skipped, 0 failed** (baseline at `9bd5895`: 1770 / 4 / 0).
-**+53 tests, no regressions, and no pre-existing failures** — the 4 skips are the same
-pre-existing opt-in ones (`test_manifest_build`, `test_release_integration`).
+Full Stage-2: **1870 passed, 4 skipped, 0 failed** (baseline at `9bd5895`: 1770 / 4 / 0).
+**+100 tests, no regressions, and no pre-existing failures** — the 4 skips are the same
+pre-existing opt-in ones (`test_manifest_build`, `test_release_integration`). `ruff` clean.
 
-Focused: `test_stage1_v3` 49 · `test_stage1_question_id` 37 · `test_verify_identity_v3` 11 ·
-`test_stage1_v3_selection_id` 10 · `test_v3_axis_identity` 15 · `test_stage1_release_v3` 25 ·
-`test_temporal_v3` 13 · `test_cli_v3` 19 · `test_preflight_v3_parity` 17 · `test_stage1_interop` 15.
+Focused: `test_stage1_v3` 49 · `test_stage1_question_id` 37 · `test_stage1_tuple_space` 31 ·
+`test_stage1_method_identity` 16 · `test_verify_identity_v3` 11 · `test_stage1_v3_selection_id` 10 ·
+`test_v3_axis_identity` 15 · `test_stage1_release_v3` 25 · `test_temporal_v3` 13 · `test_cli_v3` 19 ·
+`test_preflight_v3_parity` 17 · `test_stage1_interop` 15.
 
 Four independent implementations of the question_id recipe agree: the gate, a literal
 re-implementation, `jq -cS | sha256sum` (out of process), and the verifier's own derivation —
@@ -93,27 +94,64 @@ identical. **The run id moves** because the run binding now carries the contract
 and endpoints — that is the repair, not a side effect. Editing `stage1_v3.py` also moves
 `code_tree_sha256`, which feeds the same id. No production run was launched.
 
-## ESCALATION — the temporal method hash does not match, and I did not force it to
+## The method identity: bound, preserved, never conflated (orchestrator decision, applied)
 
-Stage-1's contract declares `estimator.method_sha256 = 343f20db…`, which its own comment says is
-the **estimand-identity** hash (content hash of the estimand block), *"NOT a code-tree or
-batch/confound policy hash"*, re-derived from `spot-stage2-temporal-arms @ 276a9ad`.
+Two different hashes wear the name `method_sha256`, and they are **not** the same quantity:
 
-On **this** branch there is no `temporal/arms` package, and `stage1_v3.estimator_registry()`
-returns `4aac8881…` — a code-tree + batch-policy hash. The two measure different things, and
-this branch cannot re-derive Stage-1's value.
+| | what it is | who mints it |
+|---|---|---|
+| `contract.estimator.method_sha256` = `343f20db…` | Stage-1's **estimand-identity** hash — *what* is estimated. Stage-1 states it is *"NOT a code-tree or batch/confound policy hash"* | externally bound, from `spot-stage2-temporal-arms@276a9ad` |
+| `estimator_registry()[…]["method_sha256"]` | an **implementation** binding over code trees + frozen batch policy — *which code* runs | this branch |
 
-Gating on equality would **fail-closed on the authoritative contract** and make the required
-positive temporal fixture impossible — a false refusal is as damaging as a false admission. So
-the declared method identity is **bound and carried** into `bind()` so any verifier can compare
-it against the method Stage-2 actually executes, the *enum coherence* of the estimator block **is**
-enforced, and the divergence is raised here rather than papered over. **This needs an orchestrator
-decision**: either Stage-1 re-pins to the temporal method this lane ships, or the `temporal/arms`
-lane lands here and the two are reconciled — at which point the equality gate should be added.
+**They are never compared.** A gate on equality would refuse the authoritative contract — and
+because the code-tree hash moves on *every* Stage-2 edit (this repair moved it,
+`4aac8881…` → `91da96bd…`), it would break the contract whenever anyone touched the code. That
+is not a safety property; it is an outage. `test_the_LOCAL_hash_moves_when_the_CODE_moves…`
+demonstrates it rather than arguing it.
+
+The declared identity is therefore:
+- **verified and preserved through the fully verified Stage-1 bytes** — the contract's own
+  re-derived `full_contract_content_sha256`, the pinned `f810` schema, the admitted `539431dd`
+  release. Editing it in flight breaks the content hash (tested);
+- carried verbatim into `bind()` and **into the run identity** (`binding_block`), so a run
+  cannot be re-attributed to another method and Stage-3 receives it;
+- **labelled**, in machine-readable form, so the limit travels with the value rather than
+  living in a comment: `identity_kind=stage1_estimand_identity_hash`,
+  `is_not=stage2_implementation_code_tree_hash`, `rederived_by_stage2_direct=false`,
+  `rederivation_owner=spot.stage02.temporal.producer_verifier.W5_W11`,
+  `anchored_by=[full_contract_content_sha256, selection_schema_sha256, admitted_stage1_v3_release]`.
+  (Same *bound-as-declared* pattern the release loader already uses for the scorer projection hash.)
+
+Re-deriving the **implementation-code** binding is left to the temporal producer/verifier
+(**W5/W11**) and is explicitly out of scope here. The one check that can be made *without*
+conflating the two is enforced: an estimator that **names** a method must **bind** one
+(`REFUSE_METHOD_IDENTITY_MISSING`) — Stage-1's own words, *a contract naming no method hash has
+admitted a word*. It is generic over any estimator, so the next one inherits it.
+
+## The tuple space is walked, not sampled
+
+`test_stage1_tuple_space.py` enumerates the cross-product rather than picking examples:
+
+- **within_condition** — all 108 tuples (3 programs × 2 directions, squared, × 3 conditions):
+  **90 admit, 18 refuse** (exactly the identical-endpoint cases);
+- **temporal** — all **216** ordered tuples **admit**. *Nothing* in that space is degenerate:
+  the conditions differ, so the endpoints differ, whatever the programs and directions say;
+- **300** tuples over the **ten programs the authoritative release actually admits**, read from
+  its selector rather than retyped;
+- all **306** admitted questions get a **distinct, re-derivable** `question_id` (injective over
+  the space), and `Rest→Stim48hr` ≠ `Stim48hr→Rest`;
+- every **impossible** tuple refuses **by its own typed reason**: identical endpoint, a
+  condition compared with itself, a condition count contradicting the mode, a
+  direction/condition/mode outside its enum, a borrowed estimator, an incoherent estimator
+  block, a named method with no bound identity.
+
+Program ids are policed by the **effect universe**, not the schema (they are free strings
+there) — so that is asserted where the check actually lives, not where it would look tidier.
 
 ## Debt (flagged, not silently fixed)
 
-`stage1_v3.py` is 979 lines (793 at base) against the ≤500-line rule — a pre-existing breach I
-have grown. The natural split is the id/endpoint derivations (`question_id`, `selection_id`,
-endpoints, the published rules) into `stage1_v3_ids.py`. I did not do it here: it would balloon
-the diff an independent verifier must check, and CLAUDE.md says never reorganize silently.
+`stage1_v3.py` is now 1092 lines (793 at base) against the ≤500-line rule — a pre-existing
+breach I have grown. The natural split is the identity derivations (`question_id`,
+`selection_id`, endpoints, the declared method identity, and their published rules) into
+`stage1_v3_ids.py`. I did not do it here: it would balloon the diff an independent verifier must
+check, and CLAUDE.md says never reorganize silently. **Recommend it as the next small change.**
