@@ -31,6 +31,7 @@ import type { SelectionV3 } from '../adapters/selectionV3Adapter';
 import { unavailableManifest } from '../domain/methodsManifest';
 import type { StageMethodsManifest } from '../domain/methodsManifest';
 import { buildStageMethodsManifest } from './stageMethods';
+import { loadProgramLabels, programLabel } from './programLabels';
 import { StatePill } from '../shell/chips';
 import { renderRouteReal } from './renderReal';
 import type { RealRouteResolution } from './renderReal';
@@ -68,11 +69,12 @@ function PendingArtifact({ resolving }: { resolving: boolean }) {
   );
 }
 
-/** Header contrast from a fully-verified v3 selection (program_ids as labels; v3 carries no label). */
-function contrastFromV3(sel: SelectionV3): Stage1Selection {
+/** Header contrast from a fully-verified v3 selection, with Tier-2 display labels resolved from the
+ *  Stage-1 display registry (never a raw program_id when the registry names it; v3 carries no label). */
+export function contrastFromV3(sel: SelectionV3, labels: Map<string, string>): Stage1Selection {
   return {
-    program_a: { display_label: sel.A.program_id, direction: sel.A.direction },
-    program_b: { display_label: sel.B.program_id, direction: sel.B.direction },
+    program_a: { display_label: programLabel(labels, sel.A.program_id), direction: sel.A.direction },
+    program_b: { display_label: programLabel(labels, sel.B.program_id), direction: sel.B.direction },
     analysis_condition: sel.conditions[0],
   };
 }
@@ -82,6 +84,7 @@ interface ProdState {
   selection: SelectionV3 | null; // verified v3 (null → prompt); NEVER an unverified/forged contract
   manifest: StageMethodsManifest | null; // real per-tab method-definition manifest
   real: RealRouteResolution | null; // admitted route-discriminated artifact (admission-gated) or null
+  labels: Map<string, string>; // program_id → Tier-2 display label (from the Stage-1 display registry)
 }
 
 export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandProps) {
@@ -90,29 +93,32 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
     selection: null,
     manifest: null,
     real: null,
+    labels: new Map(),
   });
 
   useEffect(() => {
     let cancelled = false;
     setProd((p) => ({ ...p, loading: true }));
     (async () => {
-      const [selection, manifest, real] = await Promise.all([
+      const [selection, manifest, real, labels] = await Promise.all([
         readStage1SelectionV3().catch(() => null), // fail-closed: forged/absent v3 → null
         buildStageMethodsManifest(page).catch(() => null), // real, admission-independent (canonical label)
         (loadRealArtifact ? Promise.resolve(loadRealArtifact(page)) : Promise.resolve(null)).catch(() => null),
+        loadProgramLabels().catch(() => new Map<string, string>()), // Tier-2 display labels (display-only)
       ]);
       if (cancelled) return;
       // ADMISSION gate: a temporal artifact renders ONLY when admission === 'admitted'.
       const admitted = real && real.admission === 'admitted' ? real : null;
-      setProd({ loading: false, selection, manifest, real: admitted });
+      setProd({ loading: false, selection, manifest, real: admitted, labels });
     })();
     return () => {
       cancelled = true;
     };
   }, [page, loadRealArtifact]);
 
-  // Header contrast: production → the VERIFIED v3 ONLY (never a forged or synthetic contrast).
-  const contrast = prod.selection ? contrastTitle(contrastFromV3(prod.selection)) : null;
+  // Header contrast: production → the VERIFIED v3 ONLY (never a forged or synthetic contrast), with
+  // Tier-2 display labels resolved from the registry (never a raw program_id when the registry names it).
+  const contrast = prod.selection ? contrastTitle(contrastFromV3(prod.selection, prod.labels)) : null;
   const headerTitle = contrast ?? NO_SELECTION_TITLE;
   const headerNode = contrast ? undefined : (
     <>
