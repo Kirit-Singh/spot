@@ -91,9 +91,9 @@ function PathwayArmTable({ arm, context }: { arm: CompactPathwayArm; context: st
 
 export function renderCompactTargets(
   view: CompactStage2SelectionView,
-  labels?: Map<string, string>,
+  display?: { labels?: Map<string, string>; poleDirections?: Partial<Record<'A' | 'B', string>> },
 ): React.ReactNode {
-  return <TargetsCanvas view={view} labels={labels} />;
+  return <TargetsCanvas view={view} labels={display?.labels} poleDirections={display?.poleDirections} />;
 }
 
 export function renderCompactPathways(view: CompactStage2SelectionView): React.ReactNode {

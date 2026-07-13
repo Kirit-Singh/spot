@@ -113,6 +113,11 @@ export function conditionLabel(condition: string): string {
   return COND[condition] ?? condition.toLowerCase();
 }
 
+/** The header's direction vocabulary (high → hi, low → lo), for the same reason. */
+export function directionLabel(direction: string): string {
+  return DIR[direction] ?? direction;
+}
+
 function pole(p: Pole | undefined, cond: string): string {
   const label = p?.display_label ?? '—';
   const dir = p?.direction ? (DIR[p.direction] ?? p.direction) : '';

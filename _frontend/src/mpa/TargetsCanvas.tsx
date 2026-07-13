@@ -312,7 +312,7 @@ function TransitionArrows({ from, to, down = false }: { from: string; to: string
   return (
     <span
       aria-label={`from ${from} to ${to}`}
-      className={`pointer-events-none flex select-none text-[13px] leading-none text-muted ${
+      className={`pointer-events-none flex select-none text-[20px] leading-none text-muted ${
         down ? 'flex-row justify-center gap-6' : 'h-full flex-col items-center justify-between'
       }`}
     >
@@ -328,9 +328,12 @@ function TransitionArrows({ from, to, down = false }: { from: string; to: string
 export function TargetsCanvas({
   view,
   labels = new Map<string, string>(),
+  poleDirections,
 }: {
   view: CompactStage2SelectionView;
   labels?: Map<string, string>;
+  /** The direction each pole was selected at (hi / lo), as the page header states it. */
+  poleDirections?: Partial<Record<'A' | 'B', string>>;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
@@ -358,6 +361,7 @@ export function TargetsCanvas({
                 facet={facet}
                 programLabel={name(facet.program_id)}
                 condition={facetCondition(facet)}
+                poleDirection={poleDirections?.[facet.role]}
                 activeId={activeId}
                 pinnedId={pinned}
                 bothArmIds={bothArmIds}

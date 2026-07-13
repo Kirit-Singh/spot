@@ -165,6 +165,8 @@ export interface EffectRankPlotProps {
   programLabel?: string;
   /** This pole's own condition, in the page header's vocabulary (rest / 8 hr / 48 hr). */
   condition?: string;
+  /** This pole's selected direction, in the page header's vocabulary (hi / lo). */
+  poleDirection?: string;
   /** Gene currently hovered or pinned anywhere on the canvas (may belong to the other facet). */
   activeId?: string | null;
   pinnedId?: string | null;
@@ -180,6 +182,7 @@ export function EffectRankPlot({
   facet,
   programLabel,
   condition,
+  poleDirection,
   activeId = null,
   pinnedId = null,
   bothArmIds = EMPTY,
@@ -201,10 +204,14 @@ export function EffectRankPlot({
 
   const active = points.find((p) => p.id === activeId) ?? null;
 
-  // Labels: top five per direction, and only ever a verified frozen symbol (never an id).
+  // Labels: the top five per direction, PLUS the hovered gene AND the pinned one. A pin has to
+  // survive hovering something else — otherwise the target you deliberately kept goes back to being
+  // an anonymous dot the moment the cursor moves. Only ever a verified frozen symbol, never an id.
+  // Point EMPHASIS remains bound to top-five rank, independent of labelling.
+  const named = (p: PlotPoint) => p.id === activeId || p.id === pinnedId;
   const labels = layoutLabels(
     points
-      .filter((p) => isTopFive(p) && p.symbol.trim() !== '')
+      .filter((p) => (isTopFive(p) || named(p)) && p.symbol.trim() !== '')
       .map((p) => ({ id: p.id, text: p.symbol, px: x(p.shift), py: y(p.evidence), side: p.side })),
     { left: M.left + 2, right: W - M.right - 2, top: M.top, bottom: M.top + plotH },
   );
@@ -220,6 +227,7 @@ export function EffectRankPlot({
             stays in the accessible name, not on the card */}
         <span className="text-[13.5px] font-semibold text-ink">
           {programLabel ?? facet.program_id}
+          {poleDirection && <span className="text-ink-2"> {poleDirection}</span>}
           {condition && <span className="font-normal text-ink-2"> ({condition})</span>}
         </span>
         <span className="ml-auto">
@@ -263,20 +271,10 @@ export function EffectRankPlot({
             Signed program shift
           </text>
           {/* which way each half of the axis runs — the reconstructed sign, spelled out */}
-          <text
-            x={x(-xAxis.bound / 2)}
-            y={H - 5}
-            textAnchor="middle"
-            className="fill-muted text-[11px]"
-          >
+          <text x={M.left} y={H - 5} textAnchor="start" className="fill-muted text-[11px]">
             ← decreasing
           </text>
-          <text
-            x={x(xAxis.bound / 2)}
-            y={H - 5}
-            textAnchor="middle"
-            className="fill-muted text-[11px]"
-          >
+          <text x={W - M.right} y={H - 5} textAnchor="end" className="fill-muted text-[11px]">
             increasing →
           </text>
           <text
@@ -291,7 +289,8 @@ export function EffectRankPlot({
               stay visible, and they win the pointer when neighbouring points overlap. */}
           {[...points].sort((a, b) => b.rank - a.rank).map((p) => {
             const top = isTopFive(p);
-            const on = p.id === activeId;
+            const on = named(p);
+            const isPinned = p.id === pinnedId;
             const both = bothArmIds.has(p.id);
             const increase = p.side === 'increase';
             const fill = both
@@ -330,7 +329,7 @@ export function EffectRankPlot({
                     r={6.5}
                     fill="none"
                     stroke="#3E7D8C"
-                    strokeWidth={1.2}
+                    strokeWidth={isPinned ? 1.8 : 1.2}
                   />
                 )}
                 <circle
@@ -355,7 +354,9 @@ export function EffectRankPlot({
               x={l.x}
               y={l.y}
               textAnchor={l.anchor}
-              className={`text-[11px] font-medium ${l.id === activeId ? 'fill-accent' : 'fill-ink'}`}
+              className={`text-[11px] font-medium ${
+                l.id === activeId || l.id === pinnedId ? 'fill-accent' : 'fill-ink'
+              }`}
               pointerEvents="none"
             >
               {l.text}

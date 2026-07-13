@@ -65,6 +65,26 @@ describe('EffectRankPlot', () => {
     expect(decrease[decrease.length - 1]).toBeLessThan(decrease[0]);
   });
 
+  it('names the active gene on the map, even when it ranks below the labelled top five', () => {
+    // DOWN6 is rank 6: unlabelled by default, so pinning it would otherwise leave an anonymous dot
+    const idle = render(<EffectRankPlot facet={facet} />);
+    const textOf = (c: HTMLElement) => [...c.querySelectorAll('svg text')].map((n) => n.textContent);
+    expect(textOf(idle.container)).not.toContain('DOWN6');
+    cleanup();
+
+    const active = render(<EffectRankPlot facet={facet} activeId="ENSG10000000006" pinnedId="ENSG10000000006" />);
+    expect(textOf(active.container)).toContain('DOWN6');
+    // …and labelling it does not promote it: emphasis still follows top-five rank
+    expect(textOf(active.container)).not.toContain('DOWN7');
+  });
+
+  it('states the pole the way the page header does — label, direction, condition', () => {
+    const { container } = render(
+      <EffectRankPlot facet={facet} programLabel="Activated" poleDirection="hi" condition="8 hr" />,
+    );
+    expect(container.querySelector('header')?.textContent).toContain('Activated hi (8 hr)');
+  });
+
   it('reserves the detail card whether or not a gene is active, so hovering cannot reflow the page', () => {
     // If the card collapsed when idle, hovering a table row would grow the facet, push the table
     // down, slide the row out from under the cursor and un-hover it — a flicker loop.
