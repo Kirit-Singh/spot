@@ -117,6 +117,7 @@ class Cfg:
             "DIRECT_VERIFIER_DIR",
             "/home/tcelab/worktrees/spot-stage2-direct-verifier/02_geneskew/analysis/direct")
         self.p2s_scores = os.environ.get("P2S_SCORES", P2S_SCORES_DEFAULT)
+        self.p2s_env_lock = os.environ.get("P2S_ENV_LOCK", "")   # W15's SECOND env lock (P2S runtime)
 
 
 # ---- run-identity manifest (Phase A) ----------------------------------------------------
@@ -164,6 +165,7 @@ def build_run_identity(cfg: Cfg) -> dict:
             "scores_full": cfg.p2s_scores,          # W15 preparer input (NOT a --cells NPZ)
             "scores_raw_sha256": P2S_SCORES_RAW_SHA256,
             "scores_canonical_sha256": P2S_SCORES_CANONICAL_SHA256,
+            "p2s_env_lock": (h(cfg.p2s_env_lock) if cfg.p2s_env_lock else None),  # SECOND env lock
             "status": "typed_pending_w15_preparer",
             "forbid_40k_overlay": True,
         },
@@ -414,25 +416,48 @@ def lane_pathway(cfg):
                    outputs=[os.path.join(cfg.out, "pathway")], prereqs=["D.step0"])
 
 
-def lane_p2s(cfg):
-    """P2S optional secondary lane — TYPED PENDING, not runnable, until W15 publishes its
-    production preparation CLI. `run_p2s_arms --cells` requires a PREPARED per-condition NPZ
-    (barcodes/donors/gene_ids/expr/score__<program_id>) that W15's preparer builds by barcode-
-    joining the staged 396k-row `stage01_scores_full.parquet` (pinned in the run identity) to the
-    condition-specific NTC expression matrix — NEVER the 40k overlay. The eventual run also needs
-    the real per-condition effects.parquet, admitted masks.parquet, and eligible.parquet. The raw
-    parquet is NOT a valid --cells input, so this lane emits a typed-pending state and does not run."""
-    _phase("D p2s (optional secondary — TYPED PENDING: W15 preparer CLI not yet published)")
+# --- P2S: two-phase optional secondary lane, a CLEAN HOOK for W15 (TYPED PENDING) -----------
+# W15 fills the two hooks below once its tested preparer + runtime CLIs are published. The
+# scheduler already sequences them after admitted Direct and binds a SECOND env lock
+# (P2S_ENV_LOCK) distinct from the Stage-2 solver lock. Until then both are typed-pending and
+# do not run. The raw stage01_scores_full.parquet is a preparer INPUT, never a --cells NPZ; and
+# NEVER the 40k overlay.
+def lane_p2s_prepare(cfg):
+    """W15 PREP hook: barcode-join the staged 396k `stage01_scores_full.parquet` (pinned in the
+    run identity) to the condition-specific NTC expression matrix -> prepared per-condition NPZ
+    (barcodes/donors/gene_ids/expr/score__<program_id>) + effects.parquet + admitted masks.parquet
+    + eligible.parquet. Typed-pending until W15's preparer CLI + handoff are published."""
+    _phase("D p2s-prepare (W15 hook — TYPED PENDING)")
     require_admitted_direct(cfg)
     if DRY:
-        print("=== P2S TYPED-PENDING: run_p2s_arms needs W15's prepared per-condition NPZ "
-              "(barcode-joined 396k scores x NTC matrix) + effects/masks/eligible; not runnable")
+        print("=== P2S-PREPARE TYPED-PENDING (W15 hook): scores x NTC -> prepared NPZ + "
+              "effects/masks/eligible; preparer CLI not yet published; never the 40k overlay")
         return
     for cond in CONDITIONS:
-        _write_receipt(cfg, f"D.p2s.{cond}", argv=["p2s-pending"], inputs=[], outputs=[],
-                       prereqs=["C.direct_admitted"],
-                       extra={"status": "typed_pending_w15_preparer",
-                              "forbid_40k_overlay": True})
+        _write_receipt(cfg, f"D.p2s_prepare.{cond}", argv=["p2s-prepare-pending"], inputs=[],
+                       outputs=[], prereqs=["C.direct_admitted"],
+                       extra={"status": "typed_pending_w15_preparer", "forbid_40k_overlay": True})
+
+
+def lane_p2s_runtime(cfg):
+    """W15 RUNTIME hook: `run_p2s_arms` per admitted condition on the PREPARED inputs, under the
+    SECOND env lock (P2S_ENV_LOCK). Separately admitted; Direct bytes/ranks unchanged whether it
+    runs or not. Typed-pending until prepare lands."""
+    _phase("D p2s-runtime (W15 hook — TYPED PENDING)")
+    require_admitted_direct(cfg)
+    if DRY:
+        print("=== P2S-RUNTIME TYPED-PENDING (W15 hook): run_p2s_arms needs the prepared NPZ + "
+              "the second env lock P2S_ENV_LOCK; not runnable until prepare is published")
+        return
+    for cond in CONDITIONS:
+        _write_receipt(cfg, f"D.p2s_runtime.{cond}", argv=["p2s-runtime-pending"], inputs=[],
+                       outputs=[], prereqs=[f"D.p2s_prepare.{cond}"],
+                       extra={"status": "typed_pending_w15_runtime"})
+
+
+def lane_p2s(cfg):
+    lane_p2s_prepare(cfg)
+    lane_p2s_runtime(cfg)
 
 
 def lane_aggregate(cfg):
