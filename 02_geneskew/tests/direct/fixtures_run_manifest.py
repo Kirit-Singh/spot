@@ -46,6 +46,10 @@ ORIGINS = {
 FIXTURE_SETS = {"FIXTURE-SET-1": ["treg_like", "th1_like", "tfh_like"],
                 "FIXTURE-SET-2": ["diff_naive", "diff_memory"]}
 
+# A member of FIXTURE-SET-1 that every arm RETAINS with rank null (W5 semantics). It is in
+# the rows and not in the ranking, so it is never a hit.
+UNRANKABLE_MEMBER = "tfh_like"
+
 
 def _git_show(ref: str) -> bytes:
     out = subprocess.run(["git", "-C", REPO, "show", ref],
@@ -193,17 +197,29 @@ def _inputs() -> list[dict[str, Any]]:
 
 
 def _ranking(program: str, dc: str, ctx: dict) -> dict[str, Any]:
-    """A FIXTURE arm ranking: target ids, canonical scores, ranks, evaluable flags."""
-    targets = FIXTURE_SETS["FIXTURE-SET-1"] + FIXTURE_SETS["FIXTURE-SET-2"] + ["OTHER_1"]
+    """A FIXTURE arm ranking in W5's NATIVE shape: ``records``, with RETAINED rows.
+
+    ``UNRANKABLE_MEMBER`` is a member of FIXTURE-SET-1 that is retained with ``rank: null``
+    — exactly what W5 emits for a target it could not evaluate. It must NOT count as a hit:
+    counting rows instead of ranks would inflate every hit count by the targets the arm was
+    least able to say anything about.
+    """
+    ranked = ([t for t in FIXTURE_SETS["FIXTURE-SET-1"] if t != UNRANKABLE_MEMBER]
+              + FIXTURE_SETS["FIXTURE-SET-2"] + ["OTHER_1"])
     sign = 1.0 if dc == INCREASE else -1.0
+    records = [{"target_id": t, "arm_value": sign * (len(ranked) - i),
+                "evaluable": True, "rank": i + 1}
+               for i, t in enumerate(ranked)]
+    # RETAINED, never dropped: present in the rows, absent from the ranking.
+    records.append({"target_id": UNRANKABLE_MEMBER, "arm_value": None,
+                    "evaluable": False, "rank": None})
+    records.sort(key=lambda r: r["target_id"])
     return {
         "fixture": True,
-        "arm_key": "|".join(["", program, dc]).strip("|"),
         "context": ctx,
-        "ranked": [{"target_id": t, "score": sign * (len(targets) - i),
-                    "rank": i + 1, "evaluable": True}
-                   for i, t in enumerate(targets)],
-        "n_ranked": len(targets),
+        "records": records,
+        "n_targets": len(records),
+        "n_ranked": sum(1 for r in records if r["rank"] is not None),
     }
 
 
@@ -285,7 +301,8 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
             "ranking": _binding(out_dir, rel, ranking),
         }
         if lane == "pathway":
-            ranked = {r["target_id"] for r in ranking["ranked"]}
+            ranked = {r["target_id"] for r in ranking["records"]
+                      if r["rank"] is not None}
             arm["convergence_id"] = convergence_id
             # Declared AND reconstructible: the verifier recomputes this from the bound
             # membership and ranking bytes and refuses a declaration that disagrees.

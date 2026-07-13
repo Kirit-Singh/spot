@@ -51,7 +51,11 @@ from .arm_topology import (
 )
 from .hashing import content_hash, file_sha256
 
-SCHEMA_VERSION = "spot.stage02_run_manifest.v2_reusable_arms"
+SCHEMA_VERSION = "spot.stage02_run_manifest.v3_topology_only"
+
+# The producer states the TOPOLOGY. It never states the ADMISSION.
+ADMISSION_PENDING = "pending_independent_aggregate_admission"
+ADMISSION_RULE_ID = "spot.stage02.run_manifest.admission.independent_only.v1"
 MANIFEST_ID = "spot.stage02.run_manifest.v2"
 FROZEN_ADDENDUM_SHA256 = (
     "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
@@ -205,14 +209,14 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
     for b in bundles:
         filled[b["lane"]] += b["arm_keys"]
 
-    per_lane, complete = {}, True
+    per_lane, topology_complete = {}, True
     for lane in LANES:
         want, got = set(slots[lane]), filled[lane]
         missing = sorted(want - set(got))
         unexpected = sorted(set(got) - want)
         duplicated = sorted({k for k in got if got.count(k) > 1})
         ok = not missing and not unexpected and not duplicated
-        complete = complete and ok
+        topology_complete = topology_complete and ok
         per_lane[lane] = {
             "n_expected_slots": len(want),
             "n_filled_slots": len(set(got) & want),
@@ -227,15 +231,15 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
     ids = [b["bundle_id"] for b in bundles]
     dupe_ids = sorted({i for i in ids if ids.count(i) > 1})
     if dupe_ids:
-        complete = False
+        topology_complete = False
 
-    if not complete and not allow_partial:
+    if not topology_complete and not allow_partial:
         raise RunManifestError(
-            "this is a PARTIAL run: "
+            "this run's TOPOLOGY is incomplete: "
             f"{ {lane: per_lane[lane]['lane_complete'] for lane in LANES} }, duplicate "
-            f"bundle ids {dupe_ids}. A partial run MAY be manifested — pass "
-            "--allow-partial — but it is never silently called complete, and it is never "
-            "release-admissible")
+            f"bundle ids {dupe_ids}. It MAY be manifested — pass --allow-partial — but it "
+            "is never silently called complete. (Note that a COMPLETE topology is still "
+            "not an admission: see 'admission'.)")
 
     doc: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -279,8 +283,28 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, An
         "pair_derived_views": PAIR_DERIVED_VIEW_POLICY,
         "emits_p_q_or_fdr": False,
         "upstream_significance_gate": config.UPSTREAM_SIGNIFICANCE_GATE,
-        "complete": complete,
-        "release_admissible": complete,
+        # ---- TOPOLOGY ONLY. THE PRODUCER DOES NOT ADMIT ITS OWN RUN. ---- #
+        # This says every expected arm slot is filled exactly once by a distinct bundle.
+        # It says NOTHING about whether those bundles were independently verified, whether
+        # their lane reports are typed admissions from the pinned verifiers, or whether
+        # they bind one selection. A run can be perfectly shaped and still be nonsense.
+        "topology_complete": topology_complete,
+        "topology_complete_is_an_admission": False,
+        # ---- RELEASE ADMISSION IS NOT THE PRODUCER'S TO GRANT ---- #
+        # It used to be set from the topology alone, so a run whose lane reports were bare
+        # verdict strings, or which bound inconsistent selections, was stamped
+        # release_admissible=true HERE and only refused later by the external verifier. A
+        # generator that admits its own output is the exact failure this lane exists to
+        # close, so it no longer has an opinion: admission is granted, if at all, by the
+        # SEPARATE independent aggregate admission report (verify_run_manifest).
+        "release_admissible": None,
+        "admission": {
+            "status": ADMISSION_PENDING,
+            "granted_by": None,
+            "rule_id": ADMISSION_RULE_ID,
+            "producer_may_declare_admission": False,
+            "granted_only_by": "spot.stage02.run_manifest.verifier.v1",
+        },
         "bundles": sorted(bundles, key=lambda b: (b["lane"], b["bundle_id"])),
     }
     # The self-hash is over the manifest's CONTENT, excluding the timestamp and itself.
@@ -324,7 +348,7 @@ def main(argv=None) -> int:
                 allow_partial=args.allow_partial)
     print(json.dumps({k: v for k, v in doc.items() if k != "bundles"},
                      indent=2, sort_keys=True, default=str))
-    return 0 if doc["complete"] else 1
+    return 0 if doc["topology_complete"] else 1
 
 
 if __name__ == "__main__":

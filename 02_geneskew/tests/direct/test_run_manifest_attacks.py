@@ -31,16 +31,20 @@ def _manifest(tmp_path, run, name="manifest.json", allow_partial=False):
                        "manifest_sha256": "0" * 64, "canonical_digest": "0" * 16})
 
 
-def _forge_complete(path):
-    """What a forger with repo access does: declare it complete and RE-SEAL the hash."""
+def _reseal(path, **fields):
+    """What a forger with repo access does: edit the manifest and RE-SEAL its self-hash."""
     doc = json.load(open(path))
-    doc["complete"] = True
-    doc["release_admissible"] = True
+    doc.update(fields)
     doc["manifest_sha256"] = content_hash(
         {k: v for k, v in doc.items() if k not in ("created_at", "manifest_sha256")})
     with open(path, "w") as fh:
         json.dump(doc, fh, indent=2, sort_keys=True)
     return path
+
+
+def _forge_complete(path):
+    """Claim a complete TOPOLOGY. (Admission is a separate claim — see the class below.)"""
+    return _reseal(path, topology_complete=True)
 
 
 def _verify(run, manifest_path, expect_release_sha256=None):
@@ -510,6 +514,196 @@ class TestBatchCommentaryIsRefusedByTheVerifierToo:
         assert V.G_NO_BATCH in doc["failed_gates"]
 
 
+class TestRetainedRowsAreNotRanks:
+    """W5 RETAINS every target with ``rank: null`` when it is not rankable.
+
+    So "in the rows" is not "in the ranking". Counting rows instead of non-null ranks
+    would inflate every hit count by exactly the targets the arm could NOT evaluate — the
+    ones least entitled to support a claim — and the inflated number would look like
+    ordinary evidence.
+    """
+
+    def test_a_RETAINED_but_UNRANKED_member_is_not_a_hit(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        inv = json.load(open(os.path.join(run["pathway"][0], "arm_bundle.json")))
+        arm = inv["arms"][0]
+        ranking = json.load(open(os.path.join(run["pathway"][0],
+                                              arm["ranking"]["path"])))
+
+        # the member IS in the rows...
+        rows = {r["target_id"] for r in ranking["records"]}
+        assert F.UNRANKABLE_MEMBER in rows
+        # ...retained with rank null...
+        assert next(r for r in ranking["records"]
+                    if r["target_id"] == F.UNRANKABLE_MEMBER)["rank"] is None
+        # ...and FIXTURE-SET-1 has 3 members, of which only 2 are ranked
+        assert len(F.FIXTURE_SETS["FIXTURE-SET-1"]) == 3
+        assert arm["n_hits_by_set"]["FIXTURE-SET-1"] == 2
+
+    def test_counting_the_RETAINED_row_as_a_hit_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        # the producer claims all 3 members of the set — i.e. it counted rows, not ranks
+        _patch(run["pathway"][0], "arm_bundle.json",
+               lambda d: d["arms"][0]["n_hits_by_set"].update({"FIXTURE-SET-1": 3}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_RECONSTRUCT in doc["failed_gates"]
+
+    def test_an_n_ranked_that_counts_ROWS_instead_of_RANKS_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        rows = len(json.load(open(os.path.join(d, inv["arms"][0]["ranking"]["path"])))
+                   ["records"])
+        _patch(d, "arm_bundle.json",
+               lambda doc: doc["arms"][0].update({"n_ranked": rows}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_RECONSTRUCT in doc["failed_gates"]
+
+    def test_a_BOUND_ranking_that_does_not_EXIST_is_never_bound(self, tmp_path):
+        # "never bind nonexistent files": the producer refuses rather than recording a
+        # path to bytes that are not there
+        run = F.complete_run(tmp_path)
+        d = run["direct"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        os.remove(os.path.join(d, inv["arms"][0]["ranking"]["path"]))
+        with pytest.raises(run_manifest.RunManifestError, match="not in the bundle"):
+            run_manifest.bind_bundle(d)
+
+
+class TestTheProducerMayNotAdmitItsOwnRun:
+    """The audit's blocker: `complete` + `release_admissible` were set from the TOPOLOGY.
+
+    A correctly-shaped run is not a verified one, and the shape is all the producer can
+    see. So a run whose lane reports were bare verdict strings, or which bound inconsistent
+    selections, was stamped release_admissible=TRUE by the thing that produced it — and only
+    refused later by the external verifier. Anything reading the manifest in between would
+    have read an admission that nobody granted.
+    """
+
+    def test_the_producer_emits_TOPOLOGY_ONLY_and_never_admits(self, tmp_path):
+        doc = _manifest(tmp_path, F.complete_run(tmp_path))
+        assert doc["topology_complete"] is True          # the shape is right...
+        assert doc["release_admissible"] is not True     # ...and that is NOT an admission
+        assert doc["admission"]["status"] == "pending_independent_aggregate_admission"
+        assert doc["admission"]["granted_by"] is None
+        assert doc["admission"]["producer_may_declare_admission"] is False
+        assert doc["topology_complete_is_an_admission"] is False
+
+    def test_a_TOPOLOGY_COMPLETE_but_UNVERIFIED_run_is_PENDING(self, tmp_path):
+        # the exact fixture the audit named: every slot filled, nothing verified yet
+        run = F.complete_run(tmp_path)
+        doc = json.load(open(_manifest(tmp_path, run)["path"]))
+        assert doc["topology_complete"] is True
+        assert doc["release_admissible"] is not True
+        assert doc["admission"]["granted_by"] is None
+
+    def test_ONLY_the_separate_verifier_can_admit(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        report = _verify(run, _manifest(tmp_path, run)["path"])
+        assert report["verdict"] == V.R.ADMIT, report["failed_gates"]
+        assert report["release_admissible"] is True
+        assert report["admission"]["granted_by"] == V.VERIFIER_ID
+        assert report["admission"]["topology_complete_is_an_admission"] is False
+
+    def test_a_BARE_VERDICT_report_is_topology_complete_but_NOT_admitted(self, tmp_path):
+        # the incomplete bare-verdict fixture: shape perfect, admission refused
+        run = F.complete_run(tmp_path)
+        with open(os.path.join(run["direct"][0], "verification.json"), "w") as fh:
+            json.dump({"verdict": "admit"}, fh)
+        doc = _manifest(tmp_path, run)
+
+        assert doc["topology_complete"] is True          # the producer sees only shape...
+        assert doc["release_admissible"] is not True
+
+        report = _verify(run, doc["path"])               # ...and the verifier refuses
+        assert report["verdict"] == V.R.REJECT
+        assert report["release_admissible"] is False
+        assert V.G_VERDICT in report["failed_gates"]
+
+    def test_an_INCONSISTENT_SELECTION_run_is_topology_complete_but_NOT_admitted(
+            self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["pathway"][2], "pathway_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"release_canonical_sha256": "c" * 64}))
+        doc = _manifest(tmp_path, run)
+
+        assert doc["topology_complete"] is True
+        assert doc["release_admissible"] is not True
+
+        report = _verify(run, doc["path"])
+        assert report["verdict"] == V.R.REJECT
+        assert report["release_admissible"] is False
+        assert V.G_SELECTION in report["failed_gates"]
+
+    def test_a_manifest_that_SELF_DECLARES_admission_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = _reseal(_manifest(tmp_path, run)["path"], release_admissible=True)
+        doc = _verify(run, path)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_NO_SELF_ADMISSION in doc["failed_gates"]
+
+    def test_a_manifest_that_resurrects_the_old_complete_flag_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = _reseal(_manifest(tmp_path, run)["path"], complete=True)
+        doc = _verify(run, path)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_NO_SELF_ADMISSION in doc["failed_gates"]
+
+
+class TestOneNativeFilenameSet:
+    """The legacy ``temporal_arm_*`` names are not the native set and are refused.
+
+    Native (W5): ``arm_bundle.json``, ``temporal_provenance.json``,
+    ``temporal_verification.json``, ``rankings/*.json``.
+    """
+
+    def test_the_LEGACY_temporal_arm_names_are_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        os.rename(os.path.join(d, "arm_bundle.json"),
+                  os.path.join(d, "temporal_arm_bundle.json"))
+        os.rename(os.path.join(d, "temporal_verification.json"),
+                  os.path.join(d, "temporal_arm_verification.json"))
+        with pytest.raises(run_manifest.RunManifestError):
+            run_manifest.bind_bundle(d)
+
+    def test_the_native_set_is_what_a_bundle_actually_ships(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        shipped = set(os.listdir(run["temporal"][0]))
+        assert {"arm_bundle.json", "temporal_provenance.json",
+                "temporal_verification.json", "rankings"} <= shipped
+        assert not any(f.startswith("temporal_arm_") for f in shipped)
+
+
+class TestTheAdmissionMustComeFromTheINDEPENDENTVerifier:
+    def test_a_PRODUCER_SELF_VERIFICATION_id_is_REJECTED(self, tmp_path):
+        # the producer's own `spot.stage02.temporal_arm.verifier.v1` is not the independent
+        # verifier contract, and a bundle may not admit itself
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_verification.json",
+               lambda d: d.update({"verifier_id": "spot.stage02.temporal_arm.verifier.v1"}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+    def test_a_report_that_admits_ITSELF_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["direct"][0], "verification.json",
+               lambda d: d.update({"generator_is_not_verifier": False}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+
 class TestTheVerifierIsIndependentOfTheProducer:
     """generator != verifier. Enforced, not intended."""
 
@@ -560,8 +754,7 @@ def test_the_verifier_does_not_take_the_TOPOLOGY_from_the_manifest_it_audits(tmp
     doc = json.load(open(path))
     doc["conditions"] = run["conditions"][:1]        # "the run was only ever one condition"
     doc["gene_set_sources"] = ["Reactome"]
-    doc["complete"] = True
-    doc["release_admissible"] = True
+    doc["topology_complete"] = True
     doc["manifest_sha256"] = content_hash(
         {k: v for k, v in doc.items() if k not in ("created_at", "manifest_sha256")})
     with open(path, "w") as fh:

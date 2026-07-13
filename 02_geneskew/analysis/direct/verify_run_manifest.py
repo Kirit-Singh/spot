@@ -96,8 +96,8 @@ G_PAIR_VIEW = "no_pair_derived_ordering_is_stored_in_a_reusable_arm_bundle"
 G_COMBINED = "no_combined_balanced_weighted_or_hidden_cross_arm_score_or_order"
 G_NO_PQ = "no_p_q_or_FDR_field_is_produced_by_spot_at_any_depth"
 G_SELF_HASH = "the_aggregate_manifest_sha256_recomputes_from_its_own_content"
-G_COMPLETE = "complete_is_true_only_when_every_slot_is_filled_exactly_once"
-G_ADMISSIBLE = "a_partial_run_is_never_release_admissible"
+G_COMPLETE = "topology_complete_is_true_only_when_every_slot_is_filled_exactly_once"
+G_NO_SELF_ADMISSION = "the_PRODUCER_never_self_declares_release_admission"
 
 
 def _one(rep, pairs, gate, what):
@@ -270,10 +270,18 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
                     f"{key}: binds scorer projection "
                     f"{str(a.get('program_projection_sha256'))[:16]}; the canonical record "
                     f"of {pid} in the staged view hashes to {str(projection[pid])[:16]}")
-            # (f) RECONSTRUCT the hit counts from the bound bytes. Never read them.
+            # (f) RECONSTRUCT the counts from the bound bytes. Never read them.
+            ranking = R.load_json(os.path.join(
+                path, (a.get("ranking") or {}).get("path", "")))
+            # RETAINED-ROW semantics (W5): every target stays in the rows with rank null
+            # when it is not rankable, so n_ranked is a count of RANKS, not of rows.
+            if a.get("n_ranked") is not None and \
+                    int(a["n_ranked"]) != R.n_ranked(ranking):
+                bad_hits.append(
+                    f"{key}: declares n_ranked={a.get('n_ranked')}, but the bound ranking "
+                    f"carries {R.n_ranked(ranking)} non-null ranks over "
+                    f"{len(R.arm_records(ranking))} retained rows")
             if lane == R.LANE_PATHWAY:
-                ranking = R.load_json(os.path.join(
-                    path, (a.get("ranking") or {}).get("path", "")))
                 recomputed_hits = R.reconstruct_hits(membership, ranking)
                 claimed_hits = {str(k): int(v) for k, v in
                                 (a.get("n_hits_by_set") or {}).items()}
@@ -417,18 +425,50 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
              "the manifest carries or permits a combined cross-arm objective")
 
     truly = all_ok and not dupe_ids and n_filled == n_want
-    rep.gate(G_COMPLETE, bool(manifest.get("complete")) == truly,
-             f"the manifest declares complete={manifest.get('complete')}; "
-             f"{n_filled}/{n_want} slots are filled exactly once, so complete={truly}")
-    rep.gate(G_ADMISSIBLE, bool(manifest.get("release_admissible")) is truly,
-             "a partial run declared itself release-admissible")
+    rep.gate(G_COMPLETE, bool(manifest.get("topology_complete")) == truly,
+             f"the manifest declares topology_complete="
+             f"{manifest.get('topology_complete')}; {n_filled}/{n_want} slots are filled "
+             f"exactly once, so topology_complete={truly}")
 
-    return rep.doc(
+    # THE PRODUCER MAY NOT ADMIT ITS OWN RUN.
+    #
+    # It used to set release_admissible from the topology alone, so a run whose lane
+    # reports were bare verdict strings, or which bound inconsistent selections, was
+    # stamped admissible by the thing that produced it and only refused later, here. A
+    # correctly-shaped run is not a verified one, and the shape is all the producer can
+    # see. So a manifest arriving with an admission already granted is refused outright —
+    # whatever else is true of it.
+    admission = manifest.get("admission") or {}
+    rep.gate(G_NO_SELF_ADMISSION,
+             manifest.get("release_admissible") is not True
+             and manifest.get("complete") is not True
+             and admission.get("granted_by") in (None, VERIFIER_ID)
+             and manifest.get("topology_complete_is_an_admission") is not True,
+             f"the manifest declares release_admissible="
+             f"{manifest.get('release_admissible')!r} / complete="
+             f"{manifest.get('complete')!r} / admission.granted_by="
+             f"{admission.get('granted_by')!r}. A correctly-shaped run is not a verified "
+             "one, and the shape is all the producer can see")
+
+    doc = rep.doc(
         VERIFIER_ID, SCHEMA_VERSION,
         manifest_sha256=claimed, manifest_sha256_recomputed=recomputed,
         n_bundles=len(bundles), n_arm_slots=n_filled, n_expected_arm_slots=n_want,
         programs=programs, conditions=conditions, gene_set_sources=sources,
         selection_capacity=R.selection_capacity(len(programs), len(conditions)))
+    # ---- THE ADMISSION. Granted HERE, by this independent report, or not at all. ---- #
+    # The manifest says what SHAPE the run has. This says whether it may be released: every
+    # native lane report typed and admitted by its pinned verifier, one selection, one
+    # checkout, every slot filled exactly once.
+    doc["topology_complete"] = truly
+    doc["release_admissible"] = doc["verdict"] == R.ADMIT
+    doc["admission"] = {
+        "status": ("admitted" if doc["verdict"] == R.ADMIT
+                   else "refused_by_independent_aggregate_admission"),
+        "granted_by": VERIFIER_ID,
+        "topology_complete_is_an_admission": False,
+    }
+    return doc
 
 
 def main(argv=None) -> int:

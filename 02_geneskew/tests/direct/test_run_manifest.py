@@ -88,7 +88,7 @@ class TestTheTopology:
     def test_a_complete_run_is_300_arm_slots_over_15_bundles(self, tmp_path):
         run = F.complete_run(tmp_path)
         doc = _build(tmp_path, run)
-        assert doc["complete"] is True
+        assert doc["topology_complete"] is True
         assert doc["n_expected_arm_slots"] == doc["n_bound_arm_slots"] == 300
         assert doc["n_bundles"] == doc["n_expected_bundles"] == 15
         assert {lane: doc["per_lane"][lane]["n_expected_slots"] for lane in T.LANES} == {
@@ -260,7 +260,7 @@ class TestAPartialRunIsVisiblyPartial:
     def test_a_missing_bundle_REFUSES_to_be_called_complete(self, tmp_path):
         run = F.complete_run(tmp_path)
         run["pathway"] = run["pathway"][:-1]
-        with pytest.raises(T.RunManifestError, match="PARTIAL"):
+        with pytest.raises(T.RunManifestError, match="TOPOLOGY is incomplete"):
             _build(tmp_path, run)
 
     def test_a_partial_run_MAY_be_manifested_but_is_NEVER_release_admissible(
@@ -268,8 +268,8 @@ class TestAPartialRunIsVisiblyPartial:
         run = F.complete_run(tmp_path)
         run["pathway"] = run["pathway"][:-1]
         doc = _build(tmp_path, run, allow_partial=True)
-        assert doc["complete"] is False
-        assert doc["release_admissible"] is False
+        assert doc["topology_complete"] is False
+        assert doc["release_admissible"] is not True
         assert doc["per_lane"]["pathway"]["n_filled_slots"] == 100
         assert len(doc["per_lane"]["pathway"]["missing_slots"]) == 20
 
@@ -281,7 +281,7 @@ class TestAPartialRunIsVisiblyPartial:
                        run["staged"],
                        arms_for=[("treg_like", T.DECREASE), ("th1_like", T.INCREASE)])
         doc = _build(tmp_path, run, allow_partial=True)
-        assert doc["complete"] is False
+        assert doc["topology_complete"] is False
 
 
 class TestItIsAnIndexAndSaysSo:

@@ -73,7 +73,21 @@ BUNDLE_FILES = {
 # plus the DE-readout universe its convergence stands on. Each is a bundle-relative path
 # with a raw AND a canonical hash, so a verifier can open it and recompute.
 # --------------------------------------------------------------------------- #
+# THE RANKING ARTIFACT (``rankings/<program>__<desired_change>.json``), per arm.
+#
+# Shape: ``{"records": [{"target_id", "arm_value", "evaluable", "rank"}, ...]}`` — W5's
+# native rows, the same ones nested in ``arm_bundle.json``.
+#
+# RETAINED-ROW SEMANTICS: every target is RETAINED with ``rank: null`` when it is not
+# rankable. So "in the ranking" is NOT "in the rows". A consumer that counted rows instead
+# of non-null ranks would inflate every hit count by exactly the targets the arm could not
+# evaluate — the ones least entitled to support a claim. ``n_ranked`` is a count of RANKS.
+#
+# These files are BOUND (path + raw + canonical hash) and the aggregate REFUSES a bundle
+# whose bound ranking is absent — it never binds a file that is not there.
 ARM_BINDING = "ranking"                       # every arm, every lane
+ARM_RANKING_DIR = "rankings"
+ARM_RANKING_ROWS = "records"                  # ``ranked`` accepted as an alias
 BUNDLE_BINDINGS = {
     LANE_DIRECT: (),
     LANE_TEMPORAL: (),

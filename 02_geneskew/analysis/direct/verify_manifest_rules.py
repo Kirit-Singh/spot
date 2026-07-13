@@ -376,12 +376,35 @@ def selection_capacity(n_programs: int, n_conditions: int) -> dict[str, int]:
 # --------------------------------------------------------------------------- #
 # RECONSTRUCTION. A declared count is not evidence.
 # --------------------------------------------------------------------------- #
-def ranked_target_ids(ranking: Any) -> list[str]:
-    """The target ids an arm actually RANKED, from the bound ranking bytes."""
+def arm_records(ranking: Any) -> list[dict]:
+    """The rows of a bound ranking artifact, whatever the producer calls the list.
+
+    W5's native shape is ``records`` (the same rows nested in ``arm_bundle.json``);
+    ``ranked`` is accepted as an alias. A reader that knew only one of them would silently
+    see an empty ranking and count zero hits — which looks exactly like a real null result.
+    """
     if not isinstance(ranking, dict):
         return []
-    return [str(r.get("target_id")) for r in (ranking.get("ranked") or [])
+    rows = ranking.get("records")
+    if rows is None:
+        rows = ranking.get("ranked")
+    return [r for r in (rows or []) if isinstance(r, dict)]
+
+
+def ranked_target_ids(ranking: Any) -> list[str]:
+    """The target ids an arm actually RANKED. RETAINED-ROW semantics (W5).
+
+    Every target is RETAINED in the rows, with ``rank: null`` when it is not rankable. So
+    "in the ranking" is not "in the rows": a member that was retained but never ranked is
+    NOT a hit, and counting rows instead of ranks would inflate every hit count by exactly
+    the targets the arm could not evaluate — the ones least entitled to support a claim.
+    """
+    return [str(r.get("target_id")) for r in arm_records(ranking)
             if r.get("rank") is not None]
+
+
+def n_ranked(ranking: Any) -> int:
+    return len(ranked_target_ids(ranking))
 
 
 def members_by_set(membership: Any) -> dict[str, set]:
