@@ -71,7 +71,14 @@ PYTHONPATH=analysis python -m verifier.verify_stage3_v2 \
   --bundle <OUT>/drug_annotation.v2.json  --artifact-class analysis  ... (same inputs)
 ```
 
-**`<W3>` is the only unknown.** Everything else is staged and verified.
+**`<W3>` is not the only unknown.** The universe store, the aggregate admission chain and the CLI
+surface are staged and verified — but the BRIDGE CONSUMER does not exist, so this command cannot
+reach emission even with `<W3>` filled in. Two things are outstanding, not one:
+
+| | |
+|---|---|
+| Stage-3 must build | `stage2_aggregate.admit_bridge` — rehash bridge/report/receipt, validate the receipt join, cross-bind to the admitted aggregate, verify every bridge row against the native bundle bytes, re-derive the sign, hand typed rows to the emitter |
+| W3 must commit | `stage3_bridge.json` + `stage3_bridge_verification.json` + `stage2_stage3_receipt.json` |
 
 ## What it refuses today — and note WHERE it refuses
 
