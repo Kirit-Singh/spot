@@ -95,6 +95,11 @@ GATE_TYPED_STATE_NOT_THE_EVIDENCE = \
     "an_arms_typed_evidence_state_is_not_the_state_its_edges_carry"
 GATE_ROLE_ON_A_ROW_NOT_THE_SELECTIONS = \
     "a_row_carries_selection_roles_that_are_not_the_roles_this_selection_assigns_its_arm"
+GATE_STALE_VOCABULARY = \
+    "the_view_was_sealed_under_a_membership_rule_that_is_not_the_one_now_in_force"
+GATE_TYPED_COLUMN_WRONG = \
+    "an_active_arm_is_not_in_exactly_the_typed_column_its_edges_evidence_state_maps_to"
+GATE_DUPLICATE_SUMMARY = "two_arm_summaries_claim_one_candidate_and_arm"
 GATE_FOREIGN_PATHWAY_CONTEXT = \
     "a_shown_candidate_carries_pathway_context_the_selection_does_not_name"
 GATE_ROLE_NOT_THE_SELECTIONS = \
@@ -229,6 +234,7 @@ def check_view_membership(view: Mapping[str, Any]) -> None:
                 "the view names no gene arm keys, so nothing it shows can be proved to belong to "
                 "it. Displaying anything here would be displaying it under no question at all")
 
+    check_vocabulary_is_current(view)
     _check_selection_coherence(view, selected_arms)
 
     for cand in ((view.get("tables") or {}).get("candidates") or []):
@@ -245,6 +251,7 @@ def check_view_membership(view: Mapping[str, Any]) -> None:
                     "evidence in.")
 
         _reconcile(view, cid, selected_arms)
+        _check_typed_columns(view, cand, cid)
 
         by_origin = cand.get("view_arm_keys_by_origin") or {}
         shown_gene = _keys(k for o, ks in by_origin.items() if str(o) in GENE_ORIGINS
@@ -296,8 +303,70 @@ def check_view_membership(view: Mapping[str, Any]) -> None:
                     "carries with it.")
 
 
-# STATE_FOR_FIELD: the typed column an arm belongs in, given the state its EDGES carry.
+# The typed column an arm belongs in, given the state its EDGES carry.
+#
+# This map was DECLARED and NEVER USED — so an active arm could be moved from
+# `observed_perturbation_arm_keys` to `inverse_direction_hypothesis_arm_keys` and the gate admitted
+# it. A dead map that looks like a check is worse than no map: it makes the reader believe the
+# column is verified. `_check_typed_columns` now uses it.
 STATE_TO_FIELD: dict[str, str] = {state: field for field, state in MEMBERSHIP_FOR_STATE.items()}
+
+
+def _check_typed_columns(view: Mapping[str, Any], cand: Mapping[str, Any], cid: str) -> None:
+    """Each active arm sits in EXACTLY the typed column its edges' evidence state maps to — and in
+    none of the other four. Moving an unchanged arm between columns changes what the drug is being
+    said to DO, while the arm set and every hash stay exactly as they were."""
+    edges = _rows_for((view.get("tables") or {}).get("target_drug_edges") or [], cid)
+    by_arm: dict[str, set[str]] = {}
+    for e in edges:
+        by_arm.setdefault(str(e["arm_key"]), set()).add(str(e.get("directional_evidence_status")))
+
+    for arm, states in sorted(by_arm.items()):
+        state = wf.summary_state(states) if hasattr(wf, "summary_state") else sorted(states)[0]
+        want = STATE_TO_FIELD.get(state)
+        if want is None:
+            continue
+        for field in TYPED_MEMBERSHIP_FIELDS:
+            present = arm in _keys(cand.get(field) or [])
+            if field == want and not present:
+                _refuse(GATE_TYPED_COLUMN_WRONG,
+                        f"candidate {cid!r} arm {arm!r} carries edge state {state!r}, so it belongs "
+                        f"in {want!r} — and it is not there.")
+            if field != want and present:
+                _refuse(GATE_TYPED_COLUMN_WRONG,
+                        f"candidate {cid!r} arm {arm!r} carries edge state {state!r} (column "
+                        f"{want!r}), but it is ALSO listed in {field!r}. Moving an unchanged arm "
+                        "between typed columns changes what the drug is said to DO, while the arm "
+                        "set and every hash stay exactly as they were.")
+
+
+def check_vocabulary_is_current(view: Mapping[str, Any]) -> None:
+    """The view must have been sealed under the rule NOW IN FORCE.
+
+    The published fixture carried `selection_view_vocabulary_digest` from an OLDER rule and
+    `validate` passed — so a view sealed under a weaker membership rule was indistinguishable from
+    one sealed under this one. Binding the rule into the identity is worthless if nobody checks the
+    binding.
+    """
+    from . import selection_view as sv
+    from .hashing import content_hash
+
+    # ONE PATH, THE PRODUCER'S. `view.store.selection_view_vocabulary_digest` is where the producer
+    # writes it. Reading `admission` or the top level with a fallback would (a) invent a
+    # schema-invalid field and (b) let the REAL digest stay stale in `store` while a fresh copy
+    # elsewhere satisfied the check — a fallback that reads whichever copy agrees with you is not a
+    # check at all.
+    claimed = (view.get("store") or {}).get("selection_view_vocabulary_digest")
+    if claimed is None:
+        _refuse(GATE_STALE_VOCABULARY,
+                "the view carries no store.selection_view_vocabulary_digest, so it cannot be shown "
+                "to have been sealed under the membership rule now in force")
+    current = content_hash(sv.vocabularies())
+    if str(claimed) != current:
+        _refuse(GATE_STALE_VOCABULARY,
+                f"the view was sealed under vocabulary {str(claimed)[:16]}…, but the rule now in "
+                f"force hashes to {current[:16]}…. A view sealed under a WEAKER membership rule "
+                "must not be indistinguishable from one sealed under this one.")
 
 
 def _reconcile(view: Mapping[str, Any], cid: str, selected_arms: Mapping[str, Any]) -> None:
@@ -325,6 +394,10 @@ def _reconcile(view: Mapping[str, Any], cid: str, selected_arms: Mapping[str, An
                     f"candidate {cid!r} has {len(group)} edge(s) in {arm!r} and NO arm_summary "
                     "reconciling them. Presence was checked in one direction only, so deleting "
                     "every summary passed.")
+        if len(rows) != 1:
+            _refuse(GATE_DUPLICATE_SUMMARY,
+                    f"candidate {cid!r} arm {arm!r} has {len(rows)} arm_summaries. Exactly one "
+                    "summary summarises one arm; two let a consumer pick whichever agrees with it.")
         summary = rows[0]
 
         # THE TYPED STATE IS THE EVIDENCE'S, not the summary's claim.

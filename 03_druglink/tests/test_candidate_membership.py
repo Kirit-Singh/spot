@@ -283,3 +283,67 @@ def test_weakening_the_rule_MOVES_the_view_identity():
     with mock.patch.object(cm, "MEMBERSHIP_RULE_ID", "spot.stage03.candidate_membership.WEAK.v9"):
         after = content_hash(sv.vocabularies())
     assert before != after
+
+
+# --------------------------------------------------------------------------- #
+# THE TYPED COLUMN IS THE EVIDENCE'S. And the view must be sealed under THIS rule.
+# --------------------------------------------------------------------------- #
+def _active_arms(view, cid):
+    return sorted({e["arm_key"] for e in view["tables"]["target_drug_edges"]
+                   if e["candidate_id"] == cid})
+
+
+def test_moving_an_ACTIVE_arm_between_typed_columns_is_REFUSED(view):
+    """`STATE_TO_FIELD` was declared and never used, so this passed. A dead map that looks like a
+    check is worse than no map — it makes the reader believe the column is verified.
+
+    Moving an unchanged arm from observed to inverse changes what the drug is said to DO, while the
+    arm set and every hash stay exactly as they were.
+    """
+    bad = copy.deepcopy(view)
+    c = _cands(bad)[0]
+    active = _active_arms(bad, c["candidate_id"])
+    assert active, "non-vacuity: the candidate must have active arms"
+    arm = active[0]
+    for field in cm.TYPED_MEMBERSHIP_FIELDS:
+        if arm in (c.get(field) or []):
+            c[field].remove(arm)
+            break
+    else:
+        pytest.fail("the active arm is in no typed column at all")
+    c["inverse_direction_hypothesis_arm_keys"].append(arm)
+
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_TYPED_COLUMN_WRONG
+
+
+def test_a_view_sealed_under_a_STALE_membership_rule_is_REFUSED(view):
+    """Binding the rule into the identity is worthless if nobody checks the binding. The published
+    fixture carried a vocabulary digest from an older rule and `validate` passed — so a view sealed
+    under a WEAKER rule was indistinguishable from one sealed under this one."""
+    bad = copy.deepcopy(view)
+    # THE PRODUCER'S PATH, and only it. A fallback that reads `admission` or the top level would
+    # let the REAL digest stay stale in `store` while a fresh copy elsewhere satisfied the check —
+    # a check that reads whichever copy agrees with it is not a check.
+    bad["store"]["selection_view_vocabulary_digest"] = "9e4992be" + "0" * 56
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_STALE_VOCABULARY
+
+
+def test_a_view_with_NO_store_vocabulary_digest_is_REFUSED(view):
+    bad = copy.deepcopy(view)
+    bad["store"].pop("selection_view_vocabulary_digest", None)
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_STALE_VOCABULARY
+
+
+def test_TWO_summaries_for_one_candidate_and_arm_is_REFUSED(view):
+    """Two summaries let a consumer pick whichever one agrees with it."""
+    bad = copy.deepcopy(view)
+    bad["tables"]["arm_summaries"].append(dict(bad["tables"]["arm_summaries"][0]))
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_DUPLICATE_SUMMARY

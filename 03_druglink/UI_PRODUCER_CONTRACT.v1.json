@@ -1,8 +1,9 @@
 {
   "authoritative_paths": {
-    "global_store_bundle": "<OUT>/s3_<id>/drug_annotation.v2.json  (+ 8 parquet tables)",
-    "published_example_view": "03_druglink/selection_view.fixture.v1.json",
-    "selection_view": "<OUT>/selection_view.<view_id>.json"
+    "global_store_bundle": "03_druglink/<output-root>/s3_<bundle_id>/drug_annotation.v2.json",
+    "published_example_receipt": "03_druglink/membership_receipt.fixture.v1.json (fixture)",
+    "published_example_view": "03_druglink/selection_view.fixture.v1.json (artifact_class=fixture, NOT production)",
+    "selection_view": "03_druglink/<output-root>/selection_view.<view_id>.json"
   },
   "candidate_typed_fields": [
     "arm_keys",
@@ -12,8 +13,8 @@
     "pathway_hypothesis_arm_keys",
     "unresolved_arm_keys"
   ],
-  "consumer_verification_entry_point": "druglink.view_contract.validate(view)",
-  "contract_sha256": "78b6f31a9a56abfc76a1b869cbc8823d8be216086ad8986015699ea10ea05384",
+  "consumer_verification_entry_point": "druglink.view_contract.validate(view)  # schema+rows+seal+membership_v2+browser",
+  "contract_sha256": "bbaf18fbae8053598bbf03e8ffa949d969b78d4ad442e3ac1f1a5d52b35820cb",
   "evidence_rows": {
     "arm_summaries": [
       "candidate_id",
@@ -47,11 +48,14 @@
     "a_shown_candidate_lost_an_arm_the_selection_gives_it",
     "a_shown_candidates_roles_are_not_the_roles_this_selection_assigns_its_arms",
     "a_target_drug_edge_has_no_arm_summary_reconciling_it",
+    "an_active_arm_is_not_in_exactly_the_typed_column_its_edges_evidence_state_maps_to",
     "an_arm_summary_claims_an_arm_no_target_drug_edge_supports",
     "an_arm_summary_does_not_reconcile_with_the_edges_it_summarises",
     "an_arms_typed_evidence_state_is_not_the_state_its_edges_carry",
     "the_selections_ordered_endpoints_are_not_the_ordered_contexts_of_its_arms",
-    "the_view_names_no_selected_arm_keys_so_nothing_can_belong_to_it"
+    "the_view_names_no_selected_arm_keys_so_nothing_can_belong_to_it",
+    "the_view_was_sealed_under_a_membership_rule_that_is_not_the_one_now_in_force",
+    "two_arm_summaries_claim_one_candidate_and_arm"
   ],
   "identity_rules": {
     "membership_rule_bound_into": "selection_view.vocabularies() -> hashed into every view id",
@@ -99,6 +103,13 @@
   "ordered_roles": {
     "A": "away_from_A (conditions[0])",
     "B": "toward_B (conditions[-1])"
+  },
+  "receipt": {
+    "example_receipt": "membership_receipt.fixture.v1.json",
+    "example_receipt_sha256": "520d634fc472e2296844013d24b8b9355d646d77f998ac5a317e473099f68eb0",
+    "generator_is_not_verifier": true,
+    "schema": "spot.stage03_membership_receipt.v1",
+    "verifier_id": "spot.stage03.candidate_membership.verifier.v2"
   },
   "schema_version": "spot.stage03_ui_producer_contract.v1",
   "selected_arms_fields": [
