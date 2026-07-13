@@ -63,6 +63,13 @@ def _nan_to_none(x: Any) -> Any:
     return None if x is None or (isinstance(x, float) and x != x) else x
 
 
+def _int_or_none(x: Any) -> Optional[int]:
+    """A survivor COUNT: None when null/NaN, else the integer form (parquet widens it to
+    float). A NaN count would otherwise reach the content hash, which JSON refuses."""
+    x = _nan_to_none(x)
+    return None if x is None else int(x)
+
+
 def _read_json(path: str, gate: str) -> dict[str, Any]:
     try:
         with open(path) as fh:
@@ -198,11 +205,14 @@ def _base_by_target(rows: list[dict[str, Any]]) -> dict[str, dict[str, dict[str,
             raise DirectSourceError(
                 "DUPLICATE_MISMATCH", f"{program_id}|{target_id}: increase.value {iv!r} and "
                 f"decrease.value {dv!r} are not exact negations")
+        # survivor COUNTS round-trip through parquet as floats and are NaN on the same rows a
+        # null base_delta has (an unavailable projection). Normalise NaN -> None and restore the
+        # integer form, or a NaN count reaches the content hash and JSON refuses it.
         base.setdefault(target_id, {})[program_id] = {
             "delta": ibd,
             "status": inc.get("projection_status"),
-            "n_panel_surviving": inc.get("n_panel_surviving"),
-            "n_control_surviving": inc.get("n_control_surviving"),
+            "n_panel_surviving": _int_or_none(inc.get("n_panel_surviving")),
+            "n_control_surviving": _int_or_none(inc.get("n_control_surviving")),
             "base_state": inc.get("base_state"),
             "base_passed": inc.get("base_passed"),
         }

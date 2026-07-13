@@ -1817,6 +1817,32 @@ class TestProductionCLIFromDirectBundles:
             assert es["endpoint_source"] == "two_admitted_direct_all_arm_bundles"
             assert es["from_direct_bundle_id"] and es["to_direct_bundle_id"]
 
+    def test_a_target_with_an_unavailable_projection_NaN_emits_cleanly(self, tmp_path):
+        # Real Direct bundles carry a NaN base_delta AND NaN survivor counts on every target
+        # whose projection is unavailable (~2780 rows in the real Rest bundle). Those must
+        # normalise to null — a NaN reaching content_hash makes JSON refuse the whole bundle.
+        from direct.temporal.arms import run_temporal_arms
+        if not os.path.exists(_AUTH_LOCK):
+            pytest.skip("authoritative Stage-2 solver lock not staged")
+
+        def unavailable(rows):
+            for r in rows:                       # null one target on BOTH arms, all programs
+                if r["target_id"] == FX.TARGETS[0]:
+                    r["base_delta"] = None
+                    r["value"] = None
+                    r["n_panel_surviving"] = None
+                    r["n_control_surviving"] = None
+        vp, rp = self._view_release(tmp_path)
+        out = str(tmp_path / "out")
+        rc = run_temporal_arms.main(
+            ["--stage1-view", vp, "--stage1-release", rp]
+            + self._direct_args(tmp_path, tamper=unavailable)
+            + ["--env-lock", _AUTH_LOCK, "--conditions", "FixRest,FixStim8,FixStim48",
+               "--out-root", out, "--all-pairs"])
+        assert rc == 0                           # emitted, no NaN/JSON crash
+        man = json.loads(open(os.path.join(out, "temporal_arm_release.json")).read())
+        assert man["n_bundles"] == 6 and man["n_logical_arms"] == 120
+
     def test_THREE_HEAD_the_cli_release_passes_W5_then_W11_then_W3(self, tmp_path):
         """The DETACHED three-head replay on the REAL production path. HEAD W5: the CLI
         differences two admitted Direct all-arm bundles per ordered pair into the six-bundle
