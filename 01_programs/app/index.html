@@ -1,5 +1,208 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=/01_page.html">
-<title>spot · Stage-1 — CD4 transcriptional programs</title>
-<p>Redirecting to the <a href="/01_page.html">spot Stage-1 CD4 workbench</a>…</p>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>spot</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23FAF9F7'/%3E%3Ccircle cx='8' cy='8' r='4.6' fill='%233E7D8C'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#FAF9F7;
+    --surface:#FFFFFF;
+    --line:#E7E3DC;
+    --ink:#1E1B16;
+    --muted:#8A8172;
+    --accent:#3E7D8C;
+    --serif:'Newsreader','Iowan Old Style','Palatino Linotype',Georgia,serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{height:100%;color-scheme:light}
+  body{
+    min-height:100%;
+    min-height:100dvh;
+    margin:0;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    padding:max(24px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter Tight',system-ui,-apple-system,sans-serif;
+  }
+  .landing{width:100%;display:grid;place-items:center}
+  .lockup{position:relative;display:flex;align-items:flex-end;justify-content:center}
+  h1{
+    margin:0;
+    font-family:var(--serif);
+    font-size:clamp(58px,13vw,84px);
+    font-weight:500;
+    line-height:.82;
+    letter-spacing:-.045em;
+  }
+  details{position:static;margin:0 0 -8px 2px}
+  summary{
+    width:48px;
+    height:48px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    cursor:pointer;
+    list-style:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::marker{content:''}
+  summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .mark{
+    width:21px;
+    height:21px;
+    display:block;
+    transition:transform 140ms ease;
+  }
+  summary:hover .mark,details[open] .mark{transform:scale(1.1)}
+  .mark svg{width:100%;height:100%;display:block}
+  .panel{
+    position:absolute;
+    top:calc(100% + 22px);
+    left:50%;
+    width:min(272px,calc(100vw - 40px));
+    transform:translateX(-50%);
+    animation:reveal 140ms ease-out both;
+  }
+  .access-form{margin:0}
+  .control{
+    height:44px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 44px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    border-radius:9px;
+    background:var(--surface);
+    box-shadow:0 2px 9px rgba(30,27,22,.12);
+  }
+  input{
+    min-width:0;
+    border:0;
+    outline:0;
+    padding:0 13px;
+    background:transparent;
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:16px;
+    line-height:1;
+  }
+  input::placeholder{color:var(--muted);opacity:1}
+  input[aria-invalid="true"]{box-shadow:inset 0 0 0 1.5px var(--muted)}
+  .submit{
+    border:0;
+    border-left:1px solid var(--line);
+    background:var(--surface);
+    color:var(--accent);
+    font-family:var(--mono);
+    font-size:19px;
+    line-height:1;
+    cursor:pointer;
+  }
+  .submit:hover{background:var(--accent);color:var(--surface)}
+  input:focus-visible,.submit:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+  .status{
+    min-height:16px;
+    margin:7px 2px 0;
+    color:var(--muted);
+    font-family:var(--mono);
+    font-size:10.5px;
+    line-height:1.4;
+    text-align:left;
+  }
+  .sr-only{
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+  @keyframes reveal{
+    from{opacity:0;transform:translate(-50%,-5px)}
+    to{opacity:1;transform:translate(-50%,0)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .mark{transition:none}
+    .panel{animation:none}
+  }
+  @media (forced-colors:active){
+    .control{border-color:CanvasText;box-shadow:none}
+    .mark circle{fill:ButtonText}
+  }
+</style>
+</head>
+<body>
+<main class="landing">
+  <div class="lockup">
+    <h1>spot</h1>
+    <details id="reviewer-access">
+      <summary aria-label="Open reviewer access">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" focusable="false">
+            <rect width="16" height="16" rx="4" fill="#FAF9F7"/>
+            <circle cx="8" cy="8" r="4.6" fill="#3E7D8C"/>
+          </svg>
+        </span>
+      </summary>
+      <div class="panel">
+        <form class="access-form" method="post" action="/auth">
+          <label class="sr-only" for="access-code">Access code</label>
+          <div class="control">
+            <input id="access-code" name="code" type="password" autocomplete="current-password" placeholder="access code" required aria-describedby="access-status">
+            <button class="submit" type="submit" aria-label="Open spot">&#8594;</button>
+          </div>
+          <p class="status" id="access-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </details>
+  </div>
+</main>
+<script>
+  (()=>{
+    const disclosure=document.querySelector('#reviewer-access');
+    const summary=disclosure.querySelector('summary');
+    const input=document.querySelector('#access-code');
+    const status=document.querySelector('#access-status');
+    const syncExpanded=()=>summary.setAttribute('aria-expanded',String(disclosure.open));
+
+    disclosure.addEventListener('toggle',()=>{
+      syncExpanded();
+      if(disclosure.open)requestAnimationFrame(()=>input.focus());
+    });
+    syncExpanded();
+
+    disclosure.addEventListener('keydown',(event)=>{
+      if(event.key==='Escape'&&disclosure.open){
+        disclosure.open=false;
+        summary.focus();
+      }
+    });
+
+    input.addEventListener('input',()=>{
+      input.removeAttribute('aria-invalid');
+      status.textContent='';
+    });
+
+    const url=new URL(window.location.href);
+    if(url.searchParams.get('access')==='invalid'){
+      disclosure.open=true;
+      input.setAttribute('aria-invalid','true');
+      status.textContent='Code not recognized.';
+      url.searchParams.delete('access');
+      history.replaceState(null,'',url.pathname+url.search+url.hash);
+      requestAnimationFrame(()=>input.focus());
+    }
+  })();
+</script>
+</body>
+</html>
