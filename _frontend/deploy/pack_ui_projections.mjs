@@ -245,23 +245,37 @@ function nativeToStage2Bundle(nat, path) {
   if ('arms' in nat) out.arms = arrToObj(nat.arms, 'arm_key', `${path}.arms`);
   return out; // arm.records stays a native array (the browser NativeTemporalArm expects an array)
 }
+function mapNativeBundles(nat, path) {
+  if (nat === undefined || nat === null) return {};
+  nObj(nat, path);
+  const out = {};
+  for (const k of Object.keys(nat)) out[k] = nativeToStage2Bundle(nat[k], `${path}.${k}`);
+  return out;
+}
+// Pack-time completeness: the COMPLETE generic release must carry every Direct condition bundle, every
+// ORDERED temporal pair, and every (condition, source) pathway bundle — refuse to emit an incomplete one.
+function assertStage2Complete(conds, sources, direct, temporal, pathway) {
+  for (const c of conds) if (!(c in direct)) fail(`stage-2 incomplete: missing Direct bundle for condition "${c}"`);
+  for (const from of conds) for (const to of conds) {
+    if (from !== to && !(`${from}__${to}` in temporal)) fail(`stage-2 incomplete: missing temporal bundle "${from}__${to}"`);
+  }
+  for (const c of conds) for (const s of sources) if (!(`${c}|${s}` in pathway)) fail(`stage-2 incomplete: missing pathway bundle "${c}|${s}"`);
+}
 function nativeToStage2Projection(nat, route) {
   nObj(nat, 'stage2 native aggregate');
-  let pathwayByContext = null;
-  if (nat.pathwayByContext != null) {
-    nObj(nat.pathwayByContext, 'stage2 native.pathwayByContext');
-    pathwayByContext = {};
-    for (const k of Object.keys(nat.pathwayByContext)) pathwayByContext[k] = nativeToStage2Bundle(nat.pathwayByContext[k], `stage2 native.pathwayByContext.${k}`);
-  }
+  const release_conditions = nStrList(nat.release_conditions, 'stage2 native.release_conditions');
+  const pathway_sources = nStrList(nat.pathway_sources, 'stage2 native.pathway_sources');
+  const pathway_source = nStr(nat.pathway_source, 'stage2 native.pathway_source');
+  const directByCondition = mapNativeBundles(nat.directByCondition, 'stage2 native.directByCondition');
+  const temporalByPair = mapNativeBundles(nat.temporalByPair, 'stage2 native.temporalByPair');
+  const pathwayByContext = mapNativeBundles(nat.pathwayByContext, 'stage2 native.pathwayByContext');
+  assertStage2Complete(release_conditions, pathway_sources, directByCondition, temporalByPair, pathwayByContext);
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route,
     run_id: nStr(nat.run_id, 'stage2 native.run_id'),
     analysis_mode: nStr(nat.analysis_mode, 'stage2 native.analysis_mode'),
-    pathway_source: nStr(nat.pathway_source, 'stage2 native.pathway_source'),
-    release_conditions: nStrList(nat.release_conditions, 'stage2 native.release_conditions'),
-    direct: nativeToStage2Bundle(nat.direct, 'stage2 native.direct'),
-    temporal: nativeToStage2Bundle(nat.temporal, 'stage2 native.temporal'),
-    pathwayByContext,
+    release_conditions, pathway_sources, pathway_source,
+    directByCondition, temporalByPair, pathwayByContext,
   };
 }
 

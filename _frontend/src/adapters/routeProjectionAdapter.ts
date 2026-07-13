@@ -9,6 +9,7 @@
 // adapters, which already enforce the namespace firewall.
 
 import type { ResolvedBundles } from '../repository/joinResolver';
+import type { SelectionV3 } from './selectionV3Adapter';
 import type { Stage3Candidate, Stage3UiArtifact } from '../domain/stage3UiArtifact';
 import { STAGE3_UI_ARTIFACT_SCHEMA } from '../domain/stage3UiArtifact';
 import type { Stage4Candidate, Stage4Lanes, Stage4UiArtifact } from '../domain/stage4UiArtifact';
@@ -43,18 +44,46 @@ function assertProductionEnvelope(raw: Record<string, unknown>): void {
   }
 }
 
-// ── Stage-2 (Targets / Pathways) ──────────────────────────────────────────────
+// ── Stage-2 (Targets / Pathways) — the COMPLETE generic release ────────────────
+// The projection carries the WHOLE release: one Direct bundle per condition, one temporal bundle per
+// ORDERED condition pair, and one pathway bundle per (condition, source). Completeness (every expected
+// slot present) is validated up-front; the requested programs/conditions are selected at JOIN time from
+// this complete set. Individual bundles are parsed LAZILY (only the selected slot) via resolveStage2Bundles
+// — so a missing slot FAILS completeness here and never silently renders empty.
 export interface Stage2Projection {
   run_id: string; // the admitted Stage-2 run id (must match results/current.json chain.stage2_run_id)
   analysis_mode: 'within_condition' | 'temporal_cross_condition';
-  pathway_source: string;
-  release_conditions: string[];
-  bundles: ResolvedBundles;
+  release_conditions: string[]; // the release's condition axis (e.g. Rest / Stim8hr / Stim48hr)
+  pathway_sources: string[]; // the release's pathway sources (e.g. reactome / go_bp)
+  pathway_source: string; // the active source for the view (∈ pathway_sources)
+  directByCondition: Record<string, unknown>; // raw per-condition Direct bundles (parsed lazily)
+  temporalByPair: Record<string, unknown>; // raw per ORDERED "<from>__<to>" temporal bundles
+  pathwayByContext: Record<string, unknown>; // raw per "<condition>|<source>" pathway bundles
+}
+
+/** Expected slot keys for a complete release, derived from the condition axis + pathway sources. */
+export function expectedStage2Slots(conditions: string[], sources: string[]) {
+  const pairs: string[] = [];
+  for (const from of conditions) for (const to of conditions) if (from !== to) pairs.push(`${from}__${to}`);
+  const pathways: string[] = [];
+  for (const c of conditions) for (const s of sources) pathways.push(`${c}|${s}`);
+  return { direct: [...conditions], temporal: pairs, pathway: pathways };
+}
+
+function rawMap(v: unknown, path: string): Record<string, unknown> {
+  if (!isObject(v)) fail('malformed', `${path} must be an object`);
+  return v;
+}
+function requireSlots(map: Record<string, unknown>, keys: string[], path: string): void {
+  for (const k of keys) {
+    if (!(k in map) || !isObject(map[k])) fail('incomplete_release', `${path} is missing the "${k}" slot — the release is not complete (never render empty)`);
+  }
 }
 
 /**
- * Parse the compact Stage-2 projection. Arm bundles are delegated to the production adapters
- * (namespace-firewalled). The loader resolves the JoinedView from these bundles + the stored selection.
+ * Parse + COMPLETENESS-validate the compact Stage-2 projection. Every expected Direct / temporal /
+ * pathway slot must be present; a missing slot fails `incomplete_release`. Bundles are stored raw and
+ * parsed lazily by resolveStage2Bundles at selection time (namespace-firewalled to production).
  */
 export function parseStage2Projection(raw: unknown): Stage2Projection {
   if (!isObject(raw)) fail('malformed', 'stage-2 projection must be an object');
@@ -70,20 +99,49 @@ export function parseStage2Projection(raw: unknown): Stage2Projection {
   if (analysis_mode !== 'within_condition' && analysis_mode !== 'temporal_cross_condition') {
     fail('malformed', `analysis_mode "${analysis_mode}" invalid`);
   }
-  const pathway_source = str(raw.pathway_source, 'pathway_source');
   const release_conditions = strList(raw.release_conditions, 'release_conditions');
+  const pathway_sources = strList(raw.pathway_sources, 'pathway_sources');
+  if (release_conditions.length === 0 || pathway_sources.length === 0) fail('malformed', 'release_conditions + pathway_sources required');
+  const pathway_source = str(raw.pathway_source, 'pathway_source');
+  if (!pathway_sources.includes(pathway_source)) fail('malformed', `pathway_source "${pathway_source}" not in pathway_sources`);
 
-  const direct = raw.direct == null ? null : parseDirectArmBundle(raw.direct, PROD);
-  const temporal = raw.temporal == null ? null : parseNativeTemporalArmBundle(raw.temporal, PROD);
-  const pathwayByContext: Record<string, PathwayArmBundle | null> = {};
-  if (raw.pathwayByContext != null) {
-    if (!isObject(raw.pathwayByContext)) fail('malformed', 'pathwayByContext must be an object');
-    for (const key of Object.keys(raw.pathwayByContext)) {
-      const b = raw.pathwayByContext[key];
-      pathwayByContext[key] = b == null ? null : parsePathwayArmBundle(b, PROD);
-    }
+  const directByCondition = rawMap(raw.directByCondition, 'directByCondition');
+  const temporalByPair = rawMap(raw.temporalByPair, 'temporalByPair');
+  const pathwayByContext = rawMap(raw.pathwayByContext, 'pathwayByContext');
+
+  const slots = expectedStage2Slots(release_conditions, pathway_sources);
+  requireSlots(directByCondition, slots.direct, 'directByCondition');
+  requireSlots(temporalByPair, slots.temporal, 'temporalByPair');
+  requireSlots(pathwayByContext, slots.pathway, 'pathwayByContext');
+
+  return { run_id, analysis_mode, release_conditions, pathway_sources, pathway_source, directByCondition, temporalByPair, pathwayByContext };
+}
+
+/**
+ * Select the requested slice of the complete release for a selection + parse ONLY those bundles
+ * (production-firewalled). within_condition → the condition's Direct bundle; temporal → the ordered
+ * "<from>__<to>" temporal bundle. Pathway contexts for the selected condition(s) at the active source
+ * are parsed too. Returns null if the requested slot is absent (refuse, never render empty).
+ */
+export function resolveStage2Bundles(proj: Stage2Projection, selection: SelectionV3): ResolvedBundles | null {
+  const src = proj.pathway_source;
+  const conds = selection.analysis_mode === 'within_condition'
+    ? [selection.conditions[0]]
+    : [selection.conditions[0], selection.conditions[1]];
+  const pathwayByContext: Record<string, PathwayArmBundle> = {};
+  for (const c of conds) {
+    const rawPw = proj.pathwayByContext[`${c}|${src}`];
+    if (rawPw == null) return null;
+    pathwayByContext[`${c}|${src}`] = parsePathwayArmBundle(rawPw, PROD);
   }
-  return { run_id, analysis_mode, pathway_source, release_conditions, bundles: { direct, temporal, pathwayByContext } };
+  if (selection.analysis_mode === 'within_condition') {
+    const rawDirect = proj.directByCondition[selection.conditions[0]];
+    if (rawDirect == null) return null;
+    return { direct: parseDirectArmBundle(rawDirect, PROD), pathwayByContext };
+  }
+  const rawTemporal = proj.temporalByPair[`${selection.conditions[0]}__${selection.conditions[1]}`];
+  if (rawTemporal == null) return null;
+  return { temporal: parseNativeTemporalArmBundle(rawTemporal, PROD), pathwayByContext };
 }
 
 // ── Stage-3 (Drugs) ───────────────────────────────────────────────────────────

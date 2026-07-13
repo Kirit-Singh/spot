@@ -18,6 +18,7 @@ export type AdapterErrorCode =
   | 'arm_key_mismatch'
   | 'legacy_pair_shape'
   | 'convergence_ref_mismatch'
+  | 'incomplete_release'
   | 'malformed';
 
 export class AdapterError extends Error {

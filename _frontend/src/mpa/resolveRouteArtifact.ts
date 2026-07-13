@@ -18,7 +18,7 @@ import type { RealRouteResolution } from './renderReal';
 import type { SelectionV3 } from '../adapters/selectionV3Adapter';
 import { parseUiResultsCurrent } from '../adapters/uiResultsCurrentAdapter';
 import { mergeAdmittedManifest, parseUiReleaseManifest } from '../adapters/uiReleaseManifestAdapter';
-import { parseDrugsProjection, parsePkSafetyProjection, parseStage2Projection } from '../adapters/routeProjectionAdapter';
+import { parseDrugsProjection, parsePkSafetyProjection, parseStage2Projection, resolveStage2Bundles } from '../adapters/routeProjectionAdapter';
 import { resultRouteKeyForPage } from '../domain/uiResultsCurrent';
 import { resolveJoinedView } from '../repository/joinResolver';
 import { canonicalJson, sha256Hex } from '../stage1/canonical';
@@ -198,13 +198,16 @@ export async function loadProductionProjection(
       if (artifact.scorecard_set_id !== chain.stage4_scorecard_set_id) return null;
       return { kind: 'stage4', artifact };
     }
-    // Stage-2 (targets | pathways): resolve the view from the admitted bundles + the stored selection
-    // (selection + release binding already verified above).
+    // Stage-2 (targets | pathways): the projection carries the COMPLETE release (all Direct / temporal /
+    // pathway slots — completeness enforced in parseStage2Projection); select the requested slice at join
+    // time from the admitted bundles + the stored selection (selection + release binding verified above).
     const proj = parseStage2Projection(raw);
     if (proj.run_id !== chain.stage2_run_id) return null; // chain: this projection is not the admitted run
     if (proj.analysis_mode !== selection.analysis_mode) return null; // fail closed on mode mismatch
-    const view = resolveJoinedView(selection, proj.bundles, proj.pathway_source, proj.release_conditions);
-    return { kind: 'stage2', view, bundles: proj.bundles };
+    const bundles = resolveStage2Bundles(proj, selection);
+    if (!bundles) return null; // requested condition/pair not in the release → refuse (never render empty)
+    const view = resolveJoinedView(selection, bundles, proj.pathway_source, proj.release_conditions);
+    return { kind: 'stage2', view, bundles };
   } catch {
     return null; // strict-parse rejection / view-resolution failure → unbound
   }

@@ -48,11 +48,25 @@ function pksafetyRaw() {
     },
   };
 }
+const CONDS = ['Rest', 'Stim8hr', 'Stim48hr'];
+const SOURCES = ['reactome', 'go_bp'];
+/** Complete placeholder release: all 3 Direct + 6 ordered temporal + 6 pathway slots present. */
+function completeMaps() {
+  const direct: Record<string, unknown> = {};
+  const temporal: Record<string, unknown> = {};
+  const pathway: Record<string, unknown> = {};
+  for (const c of CONDS) direct[c] = { _slot: c };
+  for (const f of CONDS) for (const t of CONDS) if (f !== t) temporal[`${f}__${t}`] = { _slot: `${f}__${t}` };
+  for (const c of CONDS) for (const s of SOURCES) pathway[`${c}|${s}`] = { _slot: `${c}|${s}` };
+  return { direct, temporal, pathway };
+}
 function stage2Raw() {
+  const m = completeMaps();
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route: 'targets',
-    run_id: 'run_1', analysis_mode: 'within_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'],
-    direct: null, temporal: null, pathwayByContext: null,
+    run_id: 'run_1', analysis_mode: 'within_condition',
+    release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome',
+    directByCondition: m.direct, temporalByPair: m.temporal, pathwayByContext: m.pathway,
   };
 }
 
@@ -101,12 +115,25 @@ describe('parsePkSafetyProjection — strict', () => {
   });
 });
 
-describe('parseStage2Projection — strict envelope', () => {
-  it('parses a valid stage-2 projection (empty bundles)', () => {
+describe('parseStage2Projection — complete generic release', () => {
+  it('accepts a complete release (3 Direct + 6 ordered temporal + 6 pathway slots)', () => {
     const p = parseStage2Projection(stage2Raw());
     expect(p.analysis_mode).toBe('within_condition');
     expect(p.pathway_source).toBe('reactome');
-    expect(p.bundles.direct).toBeNull();
+    expect(Object.keys(p.directByCondition).sort()).toEqual(['Rest', 'Stim48hr', 'Stim8hr']);
+    expect(Object.keys(p.temporalByPair).length).toBe(6);
+    expect(Object.keys(p.pathwayByContext).length).toBe(6);
+  });
+  it('#2 completeness: a missing Direct/temporal/pathway slot FAILS (never renders empty)', () => {
+    const m = completeMaps();
+    delete m.direct.Stim48hr; // missing a Direct condition bundle
+    expect(() => parseStage2Projection({ ...stage2Raw(), directByCondition: m.direct })).toThrow(/incomplete_release|missing/);
+    const m2 = completeMaps();
+    delete m2.temporal['Rest__Stim8hr']; // missing an ordered temporal pair
+    expect(() => parseStage2Projection({ ...stage2Raw(), temporalByPair: m2.temporal })).toThrow(/incomplete_release|missing/);
+    const m3 = completeMaps();
+    delete m3.pathway['Rest|go_bp']; // missing a (condition, source) pathway bundle
+    expect(() => parseStage2Projection({ ...stage2Raw(), pathwayByContext: m3.pathway })).toThrow(/incomplete_release|missing/);
   });
   it('rejects unknown schema / wrong route / invalid mode', () => {
     expect(() => parseStage2Projection({ ...stage2Raw(), schema_version: 'x' })).toThrow(AdapterError);

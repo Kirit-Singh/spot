@@ -7,7 +7,21 @@
 import { describe, expect, it } from 'vitest';
 import { loadProductionProjection, resolveRouteArtifact } from '../resolveRouteArtifact';
 import type { RouteLoaderDeps } from '../resolveRouteArtifact';
+import { parseStage2Projection } from '../../adapters/routeProjectionAdapter';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
+
+const CONDS = ['Rest', 'Stim8hr', 'Stim48hr'];
+const SOURCES = ['reactome', 'go_bp'];
+/** Complete placeholder Stage-2 release: all 3 Direct + 6 ordered temporal + 6 pathway slots. */
+function completeStage2Maps() {
+  const directByCondition: Record<string, unknown> = {};
+  const temporalByPair: Record<string, unknown> = {};
+  const pathwayByContext: Record<string, unknown> = {};
+  for (const c of CONDS) directByCondition[c] = { _slot: c };
+  for (const f of CONDS) for (const t of CONDS) if (f !== t) temporalByPair[`${f}__${t}`] = { _slot: `${f}__${t}` };
+  for (const c of CONDS) for (const s of SOURCES) pathwayByContext[`${c}|${s}`] = { _slot: `${c}|${s}` };
+  return { directByCondition, temporalByPair, pathwayByContext };
+}
 
 // Untyped Node ESM packager — imported at runtime; `string`-typed specifier keeps tsc from resolving it.
 interface Packager {
@@ -47,8 +61,9 @@ const pksafetyNative = {
   candidates: [{ candidate_id: 'cand-1', active_moiety: 'Examplib', target: 'T1', mechanism: 'inhibitor', production_eligible: null, lanes: { delivery: 'oral', safety: null } }],
 };
 const stage2Native = {
-  run_id: 'run_1', analysis_mode: 'within_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'],
-  direct: null, temporal: null, pathwayByContext: null,
+  run_id: 'run_1', analysis_mode: 'within_condition',
+  release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome',
+  ...completeStage2Maps(),
 };
 
 const spec = {
@@ -99,13 +114,18 @@ describe('packager → browser loader round-trip (native fixtures)', () => {
     expect(art?.candidates[0].production_eligible).toBeNull();
   });
 
-  it('Targets (Stage-2): derived projection content-verifies + resolves the view for the selection', async () => {
-    const { pack } = await importPack();
-    const { tree } = pack(spec);
-    const res = await resolveRouteArtifact('targets', deps(withinSelection, tree));
-    expect(res?.route).toBe('targets');
-    expect(res && res.route === 'targets' ? res.view.mode : null).toBe('within_condition');
-    expect(res?.manifest?.methods.reproduce_command).toBe('spot repro targets');
+  it('Targets (Stage-2): packager emits the COMPLETE generic release the adapter accepts (all slots)', async () => {
+    const { pack, deriveCompactProjection } = await importPack();
+    // #2 completeness: the derived projection carries the whole release (3 Direct + 6 temporal + 6 pathway)
+    const parsed = parseStage2Projection(deriveCompactProjection('targets', stage2Native));
+    expect(parsed.release_conditions).toEqual(CONDS);
+    expect(Object.keys(parsed.directByCondition).sort()).toEqual(['Rest', 'Stim48hr', 'Stim8hr']);
+    expect(Object.keys(parsed.temporalByPair).length).toBe(6);
+    expect(Object.keys(parsed.pathwayByContext).length).toBe(6);
+    // and it round-trips through the packager (served projection present + content-addressed)
+    const { tree, current } = pack(spec);
+    expect(tree['stage02/targets.ui.json']).toBeTruthy();
+    expect((current as { chain: { stage2_run_id: string } }).chain.stage2_run_id).toBe('run_1');
   });
 
   it('a corrupted served projection byte fails the content hash → route unbound', async () => {
@@ -153,13 +173,13 @@ describe('packager: derives from native, never invents run metadata', () => {
   });
   it('derives Stage-2 objects from native base_records[]/arms[] arrays (values unchanged)', async () => {
     const { deriveCompactProjection } = await importPack();
-    const compact = deriveCompactProjection('targets', {
-      run_id: 'run_1', analysis_mode: 'temporal_cross_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim48hr'],
-      temporal: { bundle_id: 'b1', base_records: [{ base_key: 'k1', target_symbol: 'GENE1' }], arms: [{ arm_key: 'a1', records: [{ base_key: 'k1', arm_value: -0.1 }] }] },
-    });
-    expect(compact.temporal.base_records.k1).toEqual({ base_key: 'k1', target_symbol: 'GENE1' }); // array → object keyed by base_key
-    expect(compact.temporal.arms.a1.arm_key).toBe('a1');
-    expect(Array.isArray(compact.temporal.arms.a1.records)).toBe(true); // arm.records stays a native array
+    const maps = completeStage2Maps();
+    maps.temporalByPair['Rest__Stim8hr'] = { bundle_id: 'b1', base_records: [{ base_key: 'k1', target_symbol: 'SYM1' }], arms: [{ arm_key: 'a1', records: [{ base_key: 'k1', arm_value: -0.1 }] }] };
+    const compact = deriveCompactProjection('targets', { run_id: 'run_1', analysis_mode: 'temporal_cross_condition', release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome', ...maps });
+    const t = compact.temporalByPair['Rest__Stim8hr'];
+    expect(t.base_records.k1).toEqual({ base_key: 'k1', target_symbol: 'SYM1' }); // array → object keyed by base_key
+    expect(t.arms.a1.arm_key).toBe('a1');
+    expect(Array.isArray(t.arms.a1.records)).toBe(true); // arm.records stays a native array
   });
 
   it('#6 chain: refuses drugs upstream_stage2_run != stage-2 run_id at pack time (receipt A + data B)', async () => {
@@ -177,5 +197,14 @@ describe('packager: derives from native, never invents run metadata', () => {
     cur.chain.stage2_run_id = 'run_TAMPERED';
     const tampered = { ...tree, 'current.json': JSON.stringify(cur) };
     expect(await resolveRouteArtifact('drugs', deps(withinSelection, tampered))).toBeNull();
+  });
+
+  it('#2 completeness: packager refuses an INCOMPLETE Stage-2 release (missing a temporal pair)', async () => {
+    const { pack } = await importPack();
+    const maps = completeStage2Maps();
+    delete (maps.temporalByPair as Record<string, unknown>)['Stim8hr__Stim48hr'];
+    const incomplete = { run_id: 'run_1', analysis_mode: 'within_condition', release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome', ...maps };
+    const bad = { ...spec, routes: { targets: { native: incomplete, receipt: receipt('targets') } } };
+    expect(() => pack(bad)).toThrow(/incomplete|missing (temporal|Direct|pathway)/);
   });
 });
