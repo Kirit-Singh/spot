@@ -73,6 +73,14 @@ export function resolveCompactStage2Selection(
       pathway_context: 'condition_matched',
       geneArmA: targetArm(projection, directArmKey(selection.A.program_id, changeA, condition), 'direct'),
       geneArmB: targetArm(projection, directArmKey(selection.B.program_id, changeB, condition), 'direct'),
+      effectRankFacets: [
+        { role: 'A', program_id: selection.A.program_id,
+          increase: targetArm(projection, directArmKey(selection.A.program_id, 'increase', condition), 'direct'),
+          decrease: targetArm(projection, directArmKey(selection.A.program_id, 'decrease', condition), 'direct') },
+        { role: 'B', program_id: selection.B.program_id,
+          increase: targetArm(projection, directArmKey(selection.B.program_id, 'increase', condition), 'direct'),
+          decrease: targetArm(projection, directArmKey(selection.B.program_id, 'decrease', condition), 'direct') },
+      ],
       pathwayArmA: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, condition, source)),
       pathwayArmB: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, condition, source)),
     };
@@ -89,6 +97,14 @@ export function resolveCompactStage2Selection(
     pathway_context: 'endpoint_pathway_context',
     geneArmA: targetArm(projection, temporalArmKey(selection.A.program_id, changeA, from, to), 'temporal'),
     geneArmB: targetArm(projection, temporalArmKey(selection.B.program_id, changeB, from, to), 'temporal'),
+    effectRankFacets: [
+      { role: 'A', program_id: selection.A.program_id,
+        increase: targetArm(projection, temporalArmKey(selection.A.program_id, 'increase', from, to), 'temporal'),
+        decrease: targetArm(projection, temporalArmKey(selection.A.program_id, 'decrease', from, to), 'temporal') },
+      { role: 'B', program_id: selection.B.program_id,
+        increase: targetArm(projection, temporalArmKey(selection.B.program_id, 'increase', from, to), 'temporal'),
+        decrease: targetArm(projection, temporalArmKey(selection.B.program_id, 'decrease', from, to), 'temporal') },
+    ],
     pathwayArmA: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, from, source)),
     pathwayArmB: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, to, source)),
   };

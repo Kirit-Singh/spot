@@ -68,10 +68,12 @@ function nullableStr(v: unknown, path: string): string | null {
 
 function targetRow(v: unknown, path: string): CompactTargetRow {
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
-  exactKeys(v, ['arm_value', 'rank', 'target_id'], path);
+  exactKeys(v, ['arm_value', 'rank', 'target_id', 'target_symbol'], path);
   const rank = uint(v.rank, `${path}.rank`);
   if (rank < 1) fail('malformed', `${path}.rank must be >= 1`);
-  return { target_id: nonempty(v.target_id, `${path}.target_id`), rank, arm_value: nullableNum(v.arm_value, `${path}.arm_value`) };
+  return { target_id: nonempty(v.target_id, `${path}.target_id`),
+    target_symbol: nullableStr(v.target_symbol, `${path}.target_symbol`),
+    rank, arm_value: nullableNum(v.arm_value, `${path}.arm_value`) };
 }
 
 function pathwayRow(v: unknown, path: string): CompactPathwayRow {

@@ -8,6 +8,8 @@ export const PROGRAMS = ['prog_alpha', 'prog_beta'] as const;
 export const CHANGES = ['increase', 'decrease'] as const;
 
 const sourceHash = (seed: string) => (seed.length % 16).toString(16).repeat(64);
+const targetId = (program: string, change: string, index: number, temporal = false) =>
+  `ENSG${String(10_000_000_000 + (program === 'prog_alpha' ? 100 : 200) + (change === 'increase' ? 10 : 20) + index + (temporal ? 1000 : 0))}`;
 
 export async function compactProjectionRaw() {
   const arms: Record<string, unknown> = {};
@@ -21,7 +23,8 @@ export async function compactProjectionRaw() {
         lane: 'direct', arm_key: key, context: { condition }, source_bundle: rel,
         n_rows_total: 3, n_evaluable: 2, n_ranked: 2, n_emitted: 2, cap: 100,
         is_a_prefix: false,
-        rows: [{ target_id: `${program}-${change}-1`, rank: 1, arm_value: 0.5 }, { target_id: `${program}-${change}-2`, rank: 2, arm_value: null }],
+        rows: [{ target_id: targetId(program, change, 1), target_symbol: `${program.toUpperCase()}_${change.toUpperCase()}_1`, rank: 1, arm_value: 0.5 },
+          { target_id: targetId(program, change, 2), target_symbol: `${program.toUpperCase()}_${change.toUpperCase()}_2`, rank: 2, arm_value: null }],
       };
     }
   }
@@ -34,7 +37,8 @@ export async function compactProjectionRaw() {
         lane: 'temporal', arm_key: key, context: { from_condition: from, to_condition: to }, source_bundle: rel,
         n_rows_total: 2, n_evaluable: 2, n_ranked: 2, n_emitted: 2, cap: 100,
         is_a_prefix: false,
-        rows: [{ target_id: `${program}-${from}-${to}-1`, rank: 1, arm_value: -0.25 }, { target_id: `${program}-${from}-${to}-2`, rank: 2, arm_value: 0.1 }],
+        rows: [{ target_id: targetId(program, change, 1, true), target_symbol: `${program.toUpperCase()}_${change.toUpperCase()}_TEMP_1`, rank: 1, arm_value: 0.25 },
+          { target_id: targetId(program, change, 2, true), target_symbol: `${program.toUpperCase()}_${change.toUpperCase()}_TEMP_2`, rank: 2, arm_value: 0.1 }],
       };
     }
   }

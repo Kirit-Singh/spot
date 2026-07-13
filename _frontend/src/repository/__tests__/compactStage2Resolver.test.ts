@@ -34,6 +34,10 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
     const view = resolveCompactStage2Selection(projection, metadata, selection('within_condition', [condition], 'prog_beta', 'low', 'prog_alpha', 'low'));
     expect(view.geneArmA.arm_key).toBe(directArmKey('prog_beta', 'increase', condition));
     expect(view.geneArmB.arm_key).toBe(directArmKey('prog_alpha', 'decrease', condition));
+    expect(view.effectRankFacets[0].program_id).toBe('prog_beta');
+    expect(view.effectRankFacets[0].increase.arm_key).toBe(directArmKey('prog_beta', 'increase', condition));
+    expect(view.effectRankFacets[0].decrease.arm_key).toBe(directArmKey('prog_beta', 'decrease', condition));
+    expect(view.effectRankFacets[1].program_id).toBe('prog_alpha');
     expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', condition, 'reactome'));
     expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', condition, 'reactome'));
     expect(view.pathway_context).toBe('condition_matched');
@@ -45,6 +49,8 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
     const view = resolveCompactStage2Selection(projection, metadata, selection('temporal_cross_condition', [from, to]));
     expect(view.geneArmA.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
     expect(view.geneArmB.arm_key).toBe(temporalArmKey('prog_beta', 'increase', from, to));
+    expect(view.effectRankFacets[0].increase.arm_key).toBe(temporalArmKey('prog_alpha', 'increase', from, to));
+    expect(view.effectRankFacets[0].decrease.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
     expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', from, 'reactome'));
     expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', to, 'reactome'));
     expect(view.pathway_context).toBe('endpoint_pathway_context');

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
 import { parseCompactStage2Projection } from '../../adapters/compactStage2ProjectionAdapter';
@@ -27,18 +27,37 @@ async function view() {
 }
 
 describe('compact Stage-2 route rendering', () => {
-  it('renders only producer target fields plus prefix/count metadata', async () => {
+  it('renders two separate effect-rank facets plus the producer target tables', async () => {
     const v = await view();
     render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
     const canvas = screen.getByTestId('canvas');
     expect(canvas.querySelector('[data-route="targets"]')).toBeTruthy();
     expect(within(canvas).getAllByText('rank')).toHaveLength(2);
-    expect(within(canvas).getAllByText('target')).toHaveLength(2);
+    expect(within(canvas).getAllByText('symbol')).toHaveLength(2);
+    expect(within(canvas).getAllByText('ensembl')).toHaveLength(2);
     expect(within(canvas).getAllByText('2 shown')).toHaveLength(2);
     expect(within(canvas).getAllByText('2 ranked')).toHaveLength(2);
-    expect(canvas.textContent).toContain('prog_alpha-decrease-1');
-    expect(canvas.textContent).toContain('prog_beta-decrease-1');
-    expect(canvas.textContent).not.toMatch(/symbol|ensembl|disposition|status|combined|balanced|p[_ -]?value|q[_ -]?value/i);
+    expect(canvas.querySelectorAll('section[aria-label$="effect-rank facet"]')).toHaveLength(2);
+    expect(within(canvas).getAllByText('Signed program shift')).toHaveLength(2);
+    expect(within(canvas).getAllByText('Rank evidence −log10(rank/N)')).toHaveLength(2);
+    expect(canvas.textContent).toContain('PROG_ALPHA_DECREASE_1');
+    expect(canvas.textContent).toContain('PROG_BETA_DECREASE_1');
+    expect(canvas.textContent).not.toMatch(/disposition|status|combined|balanced|p[_ -]?value|q[_ -]?value|significance/i);
+  });
+
+  it('labels the top signed points and exposes exact hover fields plus an official ENSG HPA link', async () => {
+    const v = await view();
+    render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
+    const canvas = screen.getByTestId('canvas');
+    const point = within(canvas).getByRole('link', { name: /PROG_ALPHA_INCREASE_1, increase/ });
+    fireEvent.focus(point);
+    expect(canvas.textContent).toContain('signed shift 0.5');
+    expect(canvas.textContent).toContain('rank 1/2');
+    expect(canvas.textContent).toContain('rank evidence 0.301');
+    const hpa = within(canvas).getAllByRole('link', { name: /HPA/ })[0];
+    expect(hpa).toHaveAttribute('href', 'https://www.proteinatlas.org/ENSG10000000111');
+    expect(hpa).toHaveAttribute('target', '_blank');
+    expect(hpa).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
   it('omits the optional arm-value column when the producer supplied no values', async () => {

@@ -12,6 +12,8 @@ export type CompactLane = 'direct' | 'temporal' | 'pathway';
 
 export interface CompactTargetRow {
   target_id: string;
+  /** Frozen symbol from the projection's bound Stage-1 effect-universe crosswalk; null if unmapped. */
+  target_symbol: string | null;
   rank: number;
   arm_value: number | null;
 }
@@ -136,7 +138,16 @@ export interface CompactStage2SelectionView {
   pathway_context: 'condition_matched' | 'endpoint_pathway_context';
   geneArmA: CompactTargetArm;
   geneArmB: CompactTargetArm;
+  /** Both signed directions for each selected program, kept in two separate program facets. */
+  effectRankFacets: [CompactEffectRankFacet, CompactEffectRankFacet];
   /** Null on the targets route so an admitted Direct/Temporal release can render before Pathway lands. */
   pathwayArmA: CompactPathwayArm | null;
   pathwayArmB: CompactPathwayArm | null;
+}
+
+export interface CompactEffectRankFacet {
+  role: 'A' | 'B';
+  program_id: string;
+  increase: CompactTargetArm;
+  decrease: CompactTargetArm;
 }

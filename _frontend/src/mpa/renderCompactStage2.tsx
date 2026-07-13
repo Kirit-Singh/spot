@@ -9,6 +9,7 @@ import type {
   CompactTargetArm,
 } from '../domain/compactStage2Projection';
 import { StatePill } from '../shell/chips';
+import { EffectRankPlot } from './EffectRankPlot';
 
 const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
 const TD = 'px-2 py-1 font-mono text-[10.5px] text-ink-2';
@@ -57,7 +58,8 @@ function GeneArmTable({ arm }: { arm: CompactTargetArm }) {
           <thead>
             <tr>
               <th className={TH}>rank</th>
-              <th className={TH}>target</th>
+              <th className={TH}>symbol</th>
+              <th className={TH}>ensembl</th>
               {showValue && <th className={TH}>arm value</th>}
             </tr>
           </thead>
@@ -65,6 +67,7 @@ function GeneArmTable({ arm }: { arm: CompactTargetArm }) {
             {arm.rows.map((row) => (
               <tr key={`${row.target_id}:${row.rank}`} className="border-t border-line">
                 <td className={TD}>{row.rank}</td>
+                <td className={TD}>{row.target_symbol ?? '—'}</td>
                 <td className={TD}>{row.target_id}</td>
                 {showValue && <td className={TD}>{value(row.arm_value)}</td>}
               </tr>
@@ -138,6 +141,9 @@ export function renderCompactTargets(view: CompactStage2SelectionView): React.Re
   return (
     <div data-real-canvas data-route="targets" className={CANVAS}>
       <ReleaseStrip view={view} />
+      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2">
+        {view.effectRankFacets.map((facet) => <EffectRankPlot key={facet.role} facet={facet} />)}
+      </div>
       <GeneArmTable arm={view.geneArmA} />
       <GeneArmTable arm={view.geneArmB} />
     </div>
