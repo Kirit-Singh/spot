@@ -120,3 +120,34 @@ class TestAnIncompleteOrDuplicatedGridIsREFUSED:
         with pytest.raises(PR.PathwayReleaseError) as exc:
             PR.build_release([], str(tmp_path))
         assert exc.value.reason == PR.REFUSE_NO_BUNDLES
+
+
+class TestThePathwayLaneDeclaresITSOWNAdmissionSchema:
+    """It declared TEMPORAL's — and that string is what decides which contract a report must
+    satisfy. A pathway release demanding a temporal report would be admitted by a report that
+    says, in its own schema field, that it is about a different lane's bytes."""
+
+    def test_the_required_report_schema_is_the_PATHWAY_one(self):
+        from direct import pathway_release
+        assert (pathway_release.REQUIRED_REPORT_SCHEMA
+                == "spot.stage02_pathway_arm_external_admission.v1")
+        assert "temporal" not in pathway_release.REQUIRED_REPORT_SCHEMA
+
+    def test_every_lane_has_a_DISTINCT_admission_schema(self):
+        from direct import verify_release_envelope as E
+        schemas = E.ADMISSION_SCHEMA_OF
+        assert len(set(schemas.values())) == len(schemas)     # no two lanes share one
+        assert schemas["pathway"] == "spot.stage02_pathway_arm_external_admission.v1"
+        assert schemas["temporal"] == "spot.stage02_temporal_arm_external_admission.v1"
+
+    def test_the_lane_ADAPTER_and_the_PRODUCER_agree(self):
+        """The producer says which report it requires; the aggregate says which it accepts.
+        If those two strings ever differ, the lane can never be admitted at all."""
+        from direct import pathway_release
+        from direct.verify_lane_admission import NATIVE
+        assert (NATIVE["pathway"]["schema_version"]
+                == pathway_release.REQUIRED_REPORT_SCHEMA)
+
+    def test_a_TEMPORAL_report_may_not_admit_the_PATHWAY_lane(self):
+        from direct import verify_release_envelope as E
+        assert E.ADMISSION_SCHEMA_OF["pathway"] != E.ADMISSION_SCHEMA_OF["temporal"]

@@ -21,6 +21,14 @@ from __future__ import annotations
 ARM_KEY_FIELD = {"direct": "arm_key", "temporal": "arm_key",
                  "pathway": "pathway_arm_key"}
 
+# EACH LANE'S OWN external-admission schema. They all said `_temporal_`, and that string is
+# what decides which contract a report must satisfy.
+EXTERNAL_ADMISSION_SCHEMA_OF = {
+    "direct": "spot.stage02_direct_release_verification.v1",
+    "temporal": "spot.stage02_temporal_arm_external_admission.v1",
+    "pathway": "spot.stage02_pathway_arm_external_admission.v1",
+}
+
 import hashlib
 import json
 import os
@@ -600,7 +608,7 @@ def write_external_admission(run: dict, release_id=None, verdict="ADMIT",
     inv = json.load(open(inv_path))
     doc = {
         "fixture": True,
-        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "schema_version": EXTERNAL_ADMISSION_SCHEMA_OF[lane],
         "verifier_id": NATIVE_ADMISSION[lane]["verifier_id"]
                        if lane != "direct" else LANE_VERIFIERS[lane]["verifier_id"],
         "verdict": verdict,
@@ -648,13 +656,14 @@ NATIVE_ADMISSION = {
     },
     "temporal": {
         "file": "temporal_arm_external_admission.json",
-        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "schema_version": EXTERNAL_ADMISSION_SCHEMA_OF["temporal"],
         "verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
         "self_hash_field": "report_id", "excludes": ("report_id",),
     },
     "pathway": {
         "file": "pathway_arm_external_admission.json",
-        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        # THE PATHWAY LANE'S OWN schema. It said `_temporal_`.
+        "schema_version": EXTERNAL_ADMISSION_SCHEMA_OF["pathway"],
         "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
         "self_hash_field": "report_id", "excludes": ("report_id",),
     },

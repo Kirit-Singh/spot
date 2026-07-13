@@ -39,7 +39,11 @@ TOPOLOGY_RULE_ID = (
 # admission report schema the aggregate reads (the shared external-admission report schema,
 # as temporal and the lane-admission adapter already use).
 REQUIRED_VERIFIER_ID = "spot.stage02.pathway.arm.independent_verifier.v1"
-REQUIRED_REPORT_SCHEMA = "spot.stage02_temporal_arm_external_admission.v1"
+# THE PATHWAY LANE'S OWN external-admission schema. It said `_temporal_`, which is not a
+# cosmetic slip: the aggregate's lane adapter reads this string to decide WHICH CONTRACT a
+# report must satisfy, so a pathway release demanding a TEMPORAL report would be admitted by
+# a temporal verifier's envelope — a report about a different lane's bytes entirely.
+REQUIRED_REPORT_SCHEMA = "spot.stage02_pathway_arm_external_admission.v1"
 
 # The pathway bundle's on-disk top files (the ones that are JSON and CAN be canonically
 # hashed). Only those PRESENT are inventoried — a real W4 bundle and a fixture may differ,

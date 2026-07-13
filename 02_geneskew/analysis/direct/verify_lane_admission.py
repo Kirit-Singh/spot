@@ -77,7 +77,10 @@ NATIVE = {
     },
     "pathway": {
         "file": "pathway_arm_external_admission.json",
-        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        # THE PATHWAY LANE'S OWN schema. It said `_temporal_` — and this field is what decides
+        # which contract a report must satisfy, so the pathway lane was accepting a report
+        # that declared itself to be about the temporal lane's bytes.
+        "schema_version": "spot.stage02_pathway_arm_external_admission.v1",
         "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
         "admit_token": "ADMIT",
         "self_hash_field": "report_id",
