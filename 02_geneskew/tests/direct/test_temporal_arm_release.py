@@ -44,8 +44,8 @@ class TestTheReleaseShapeIsGated:
     def test_a_forged_schema_version_is_refused(self, tmp_path):
         root = FX.stage_release(
             tmp_path,
-            mutate_release=lambda d: d.update({"schema_version": "spot.made_up.v9"}))
-        with pytest.raises(release.ReleaseRefused, match="schema_version"):
+            mutate_release=lambda d: d.update({"schema": "spot.made_up.v9"}))
+        with pytest.raises(release.ReleaseRefused, match="schema"):
             release.load_release(root)
 
     def test_an_artifacts_block_beside_components_is_still_the_legacy_shape(self, tmp_path):
@@ -66,7 +66,7 @@ class TestTheReleaseRootIsStagedExplicitly:
             tmp_path,
             mutate_release=lambda d: d["components"]["scorer_view"].update(
                 {"path": "/Fixture/Machine/spot/scorer_view.json"}))
-        with pytest.raises(release.ReleaseRefused, match="absolute|relative"):
+        with pytest.raises(release.ReleaseRefused, match="absolute|relative|resolve"):
             release.load_release(root)
 
     def test_a_component_path_that_escapes_the_root_is_refused(self, tmp_path):
@@ -238,12 +238,30 @@ class TestTheScorerBindingHashes:
         view = json.loads(open(os.path.join(root, "scorer_view.json")).read())
         assert rel.scorer_view_sha256 == canonical.content_hash(view)
 
-    def test_the_scorer_projection_is_the_admitted_program_axis_only(self, tmp_path):
-        rel = release.load_release(FX.stage_release(tmp_path))
-        proj = release.scorer_projection(rel.scorer_view)
-        assert proj["n_programs"] == len(FX.PORTABLE_IDS)
-        assert [p["program_id"] for p in proj["programs"]] == sorted(FX.PORTABLE_IDS)
-        assert rel.scorer_projection_sha256 == canonical.content_hash(proj)
+    def test_the_scorer_projection_is_STAGE_1s_registry_projection(self, tmp_path):
+        """It is not an invention of this lane. Stage-1 projects its PROGRAM REGISTRY, strips
+        the fields that do not feed scoring — provenance, rationale, and display-only labels —
+        and hashes that. The display-only strip is the point of the rule: a cosmetic relabel
+        must never move the scorer-core invariant, or every lane pinned to it would
+        re-verify for a reason that has nothing to do with the science."""
+        root = FX.stage_release(tmp_path)
+        rel = release.load_release(root)
+        with open(os.path.join(root, "registry_v3.json")) as fh:
+            registry = json.load(fh)
+        assert rel.scorer_projection_sha256 == canonical.content_hash(
+            release.registry_scorer_projection(registry))
+        assert "display_label" in release.SCORER_PROJECTION_PROV_PROG
+
+    def test_a_cosmetic_relabel_does_NOT_move_the_scorer_projection(self, tmp_path):
+        """The invariant the strip exists to protect."""
+        root = FX.stage_release(tmp_path)
+        before = release.load_release(root).scorer_projection_sha256
+        with open(os.path.join(root, "registry_v3.json")) as fh:
+            registry = json.load(fh)
+        registry["programs"][0]["display_label"] = "A Prettier Name"
+        assert release.registry_scorer_projection(registry)
+        after = canonical.content_hash(release.registry_scorer_projection(registry))
+        assert after == before
 
     def test_touching_an_admitted_panel_moves_the_projection_hash(self, tmp_path):
         a = release.load_release(FX.stage_release(tmp_path / "a"))
@@ -266,3 +284,138 @@ class TestTheScorerBindingHashes:
         must never silently pass."""
         assert release.FROZEN_SCORER_VIEW_SHA256_PREFIX == "5d1d8c36"
         assert release.FROZEN_SCORER_PROJECTION_SHA256_PREFIX == "008c1da1"
+
+
+# --------------------------------------------------------------------------- #
+# THE ACTUAL STAGE-1 RELEASE. Not a fixture of it — the bytes Stage-1 ships.
+# --------------------------------------------------------------------------- #
+_STAGE1_COMMIT = "539431d"
+_STAGE1_RELEASE = "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json"
+
+
+def _repo():
+    return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "..", "..", ".."))
+
+
+def _has_stage1():
+    import subprocess
+    return subprocess.run(("git", "-C", _repo(), "cat-file", "-e",
+                           f"{_STAGE1_COMMIT}:{_STAGE1_RELEASE}"),
+                          capture_output=True).returncode == 0
+
+
+@pytest.fixture(scope="module")
+def stage1_checkout(tmp_path_factory):
+    """A CLEAN detached checkout of Stage-1's release commit. Its bytes, unmodified."""
+    import subprocess
+
+    if not _has_stage1():
+        pytest.skip("the Stage-1 release commit is not in this repository")
+    path = str(tmp_path_factory.mktemp("stage1") / "checkout")
+    subprocess.run(("git", "-C", _repo(), "worktree", "add", "--detach", path,
+                    _STAGE1_COMMIT), capture_output=True, check=True)
+    yield path
+    subprocess.run(("git", "-C", _repo(), "worktree", "remove", "--force", path),
+                   capture_output=True)
+
+
+class TestTheREALStage1Release:
+    """The bytes Stage-1 actually ships, loaded exactly as they are.
+
+    The correct response to native bytes that do not match an assumption is to fix the
+    assumption — never to translate the bytes. A verifier that admitted a rewritten copy would
+    have verified something nobody shipped.
+    """
+
+    def test_the_native_release_loads_and_every_declared_hash_RE_DERIVES(
+            self, stage1_checkout):
+        rel = release.load_release(os.path.join(stage1_checkout, _STAGE1_RELEASE))
+
+        # its own identity, by its own declared rule
+        assert rel.self_release_sha256 == (
+            "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11")
+        assert rel.release_self_sha256 == (
+            "0c336546db10746bba1569ccc6bef7dedf9679effd24e17d0c07a5ab04dbef73")
+
+        # the scorer identity — RE-DERIVED from the registry it binds, not read off the release
+        assert rel.scorer_view_sha256.startswith("5d1d8c36")
+        assert rel.scorer_projection_sha256 == (
+            "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85")
+
+        # the topology the temporal lane stands on
+        assert list(rel.conditions) == ["Rest", "Stim8hr", "Stim48hr"]
+        assert len(rel.ordered_pairs) == 6
+        assert rel.n_admitted_programs == 10
+        assert rel.n_logical_arms == 120
+
+    def test_the_release_is_read_under_its_NATIVE_name_and_key(self, stage1_checkout):
+        """``stage01_v3_release.json``, and ``schema`` — not ``release.json`` / ``schema_version``.
+        Looking for the wrong name reports a missing release for one entirely present, which
+        is exactly what the real run did."""
+        with open(os.path.join(stage1_checkout, _STAGE1_RELEASE)) as fh:
+            doc = json.load(fh)
+        assert release.RELEASE_FILENAME == "stage01_v3_release.json"
+        assert release.SCHEMA_KEY == "schema"
+        assert doc["schema"] == "spot.stage01_v3_release.v1"
+        assert "schema_version" not in doc
+
+    def test_a_component_staged_OUTSIDE_the_repo_is_bound_not_refused(self, stage1_checkout):
+        """One component names a ``location`` and its hashes, not a path. It is a BINDING that
+        this verifier cannot open — refusing it would refuse the release, and inventing a path
+        for it would invent the very thing the hash exists to pin."""
+        with open(os.path.join(stage1_checkout, _STAGE1_RELEASE)) as fh:
+            doc = json.load(fh)
+        offrepo = [n for n, c in doc["components"].items() if "path" not in c]
+        assert offrepo == ["scores_parquet"]
+        assert doc["components"]["scores_parquet"]["raw_sha256_staged"]
+        release.load_release(os.path.join(stage1_checkout, _STAGE1_RELEASE))   # loads
+
+    def test_the_WRONG_FILENAME_is_refused_by_name(self, stage1_checkout, tmp_path):
+        import shutil
+
+        src = os.path.join(stage1_checkout, _STAGE1_RELEASE)
+        d = str(tmp_path / "wrong")
+        os.makedirs(d)
+        shutil.copy(src, os.path.join(d, "release.json"))     # the name W11 used to expect
+        with pytest.raises(release.ReleaseRefused, match="stage01_v3_release.json"):
+            release.load_release(d)
+
+    def test_the_WRONG_SCHEMA_KEY_is_refused(self, stage1_checkout, tmp_path):
+        with open(os.path.join(stage1_checkout, _STAGE1_RELEASE)) as fh:
+            doc = json.load(fh)
+        doc["schema_version"] = doc.pop("schema")             # the key W11 used to expect
+        d = str(tmp_path / "key")
+        os.makedirs(d)
+        with open(os.path.join(d, release.RELEASE_FILENAME), "w") as fh:
+            json.dump(doc, fh)
+        with pytest.raises(release.ReleaseRefused, match="schema"):
+            release.load_release(d, content_root=stage1_checkout)
+
+    def test_a_MUTATED_release_whose_self_hash_no_longer_follows_is_refused(
+            self, stage1_checkout, tmp_path):
+        """A release whose id does not follow its content can be edited and keep its name."""
+        with open(os.path.join(stage1_checkout, _STAGE1_RELEASE)) as fh:
+            doc = json.load(fh)
+        doc["method_version"] = "tampered"                    # the id is now stale
+        d = str(tmp_path / "self")
+        os.makedirs(d)
+        with open(os.path.join(d, release.RELEASE_FILENAME), "w") as fh:
+            json.dump(doc, fh)
+        with pytest.raises(release.ReleaseRefused, match="self_release_sha256"):
+            release.load_release(d, content_root=stage1_checkout)
+
+    def test_a_release_declaring_a_scorer_projection_its_registry_does_not_yield_is_refused(
+            self, stage1_checkout, tmp_path):
+        with open(os.path.join(stage1_checkout, _STAGE1_RELEASE)) as fh:
+            doc = json.load(fh)
+        doc["registry_scorer_projection_sha256"] = "0" * 64
+        doc.pop("self_release_sha256")
+        doc["self_release_sha256"] = canonical.content_hash(doc)   # resealed
+        d = str(tmp_path / "proj")
+        os.makedirs(d)
+        with open(os.path.join(d, release.RELEASE_FILENAME), "w") as fh:
+            json.dump(doc, fh)
+        with pytest.raises(release.ReleaseRefused,
+                           match="registry_scorer_projection_sha256"):
+            release.load_release(d, content_root=stage1_checkout)

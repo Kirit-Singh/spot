@@ -50,6 +50,7 @@ RUN_ID_LEN = 16
 
 
 def verify_release(*, release_root: str, bundle_root: str,
+                   content_root: Optional[str] = None,
                    expect_conditions: Optional[Any] = None,
                    expect_scorer_view_prefix: Optional[str] = None,
                    expect_scorer_projection_prefix: Optional[str] = None,
@@ -73,7 +74,7 @@ def verify_release(*, release_root: str, bundle_root: str,
     f = Failures()
 
     try:
-        bound = release_mod.load_release(release_root)
+        bound = release_mod.load_release(release_root, content_root=content_root)
     except release_mod.ReleaseRefused as exc:
         f.check("release_shape_is_the_current_stage1_v3_release", False, "release",
                 str(exc))

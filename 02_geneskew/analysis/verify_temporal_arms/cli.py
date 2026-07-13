@@ -33,9 +33,14 @@ def main(argv=None) -> int:
         description="Independent verifier for the Stage-2 reusable temporal ARM release "
                     "(population-level difference-in-differences on program projections; "
                     "NOT per-cell fate, NOT lineage tracing)")
-    ap.add_argument("--stage1-release-root", default=None,
-                    help="the EXPLICITLY STAGED Stage-1 v3 release root. Component paths "
-                         "resolve against it; there is no machine default.")
+    ap.add_argument("--stage1-release-root", default=None, metavar="PATH",
+                    help="the NATIVE Stage-1 v3 release — the directory holding "
+                         "stage01_v3_release.json, or the file itself. Its bytes are read as "
+                         "Stage-1 ships them; no alias, no translated copy.")
+    ap.add_argument("--stage1-content-root", default=None, metavar="DIR",
+                    help="where the release's REPO-RELATIVE component paths resolve. When "
+                         "omitted it is discovered by walking up from the release and PROVED "
+                         "by requiring every in-repo component to exist under it.")
     ap.add_argument("--bundle-root", default=None,
                     help="the root the six ordered-pair temporal arm bundles were emitted "
                          "under")
@@ -156,6 +161,7 @@ def main(argv=None) -> int:
 
     report = verify.verify_release(
         release_root=args.stage1_release_root,
+        content_root=args.stage1_content_root,
         bundle_root=args.bundle_root,
         expect_conditions=args.expect_conditions,
         expect_scorer_view_prefix=args.expect_scorer_view_prefix,

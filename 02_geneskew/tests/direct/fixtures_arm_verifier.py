@@ -50,7 +50,7 @@ VIEW_SCHEMA = "spot.stage01_stage2_registry_view.v1"
 VIEW_KIND = "stage2_registry_view"
 LEGACY_RELEASE_SCHEMA = "spot.stage01_release_manifest.v1"
 
-RELEASE_FILENAME = "release.json"
+RELEASE_FILENAME = "stage01_v3_release.json"
 SCORER_VIEW_FILENAME = "scorer_view.json"
 
 
@@ -99,13 +99,16 @@ def scorer_view(*, break_panel_of: Optional[str] = None,
     }
 
 
-def _component(root: str, name: str, doc: dict[str, Any]) -> dict[str, Any]:
+def _component(root: str, name: str, doc: dict[str, Any], role: str) -> dict[str, Any]:
+    """A NATIVE component entry: repo-relative path, raw + canonical_content hashes, role."""
+    from verify_temporal_arms import release as R
+
     path = os.path.join(root, name)
     raw = canonical.canonical_json(doc).encode("utf-8")
     with open(path, "wb") as fh:
         fh.write(raw)
-    return {"path": name, "raw_sha256": canonical.sha256_hex(raw),
-            "canonical_sha256": canonical.content_hash(doc)}
+    return {"path": name, "role": role, "raw_sha256": canonical.sha256_hex(raw),
+            "canonical_content_sha256": R.canonical_content_sha256(doc)}
 
 
 def stage_release(root, *, mutate_release: Optional[Callable] = None,
@@ -120,25 +123,44 @@ def stage_release(root, *, mutate_release: Optional[Callable] = None,
     root = str(root)
     os.makedirs(root, exist_ok=True)
 
+    from verify_temporal_arms import release as R
+
     view = scorer_view(break_panel_of=break_panel_of, extra_panel_gene=extra_panel_gene,
                        reverse_panel_of=reverse_panel_of,
                        flip_extra_field_of=flip_extra_field_of)
+    registry = {"schema_version": "spot.stage01_program_registry.v3",
+                "programs": [dict(p) for p in view["programs"]],
+                "sensitivity_lanes": []}
+
     components: dict[str, Any] = {}
     if not drop_scorer_view:
-        components[scorer_component_name] = _component(root, SCORER_VIEW_FILENAME, view)
+        components[scorer_component_name] = _component(
+            root, SCORER_VIEW_FILENAME, view, R.ROLE_SCORER_VIEW)
     if duplicate_scorer_view:
-        components["second_view"] = _component(root, "scorer_view_copy.json", view)
-    # A component that is NOT the scorer view, so discovery has to go by schema and not
+        components["second_view"] = _component(
+            root, "scorer_view_copy.json", view, R.ROLE_SCORER_VIEW)
+    components["registry_v3"] = _component(
+        root, "registry_v3.json", registry, R.ROLE_PROGRAM_REGISTRY)
+    # A component that is NOT the scorer view, so discovery has to go by schema/role and not
     # by a key name somebody chose.
     components["effect_universe"] = _component(
         root, "effect_universe.json",
         {"schema_version": "spot.stage01_effect_universe.v1",
-         "universe_id": "FIXTURE_UNIVERSE", "n_genes": len(P.GENES)})
+         "universe_id": "FIXTURE_UNIVERSE", "n_genes": len(P.GENES)},
+        "effect_universe_target_space")
+    # ...and one staged OUT of the repo: bound by hash, with no path to open.
+    components["scores_parquet"] = {
+        "role": "continuous_program_scores_396k", "location": "staged_off_repo",
+        "raw_sha256_staged": "f" * 64, "canonical_content_sha256": "e" * 64}
 
     admitted = sorted(p["program_id"] for p in view["programs"] if p["base_portable"])
     doc: dict[str, Any] = {
-        "schema_version": RELEASE_SCHEMA,
+        # NATIVE: the key is "schema", not "schema_version"
+        "schema": RELEASE_SCHEMA,
         "method_version": "fixture-stage1-v3",
+        "registry_scorer_view_canonical_sha256": canonical.content_hash(view),
+        "registry_scorer_projection_sha256": canonical.content_hash(
+            R.registry_scorer_projection(registry)),
         "selector": {
             "conditions": list(CONDITIONS),
             "admitted_programs": admitted,
@@ -147,6 +169,9 @@ def stage_release(root, *, mutate_release: Optional[Callable] = None,
     }
     if mutate_release is not None:
         mutate_release(doc)
+    # the release's own id follows its content — W20's rule, applied here
+    doc.pop("self_release_sha256", None)
+    doc["self_release_sha256"] = canonical.content_hash(doc)
     with open(os.path.join(root, RELEASE_FILENAME), "wb") as fh:
         fh.write(canonical.canonical_json(doc).encode("utf-8"))
     return root
@@ -154,7 +179,7 @@ def stage_release(root, *, mutate_release: Optional[Callable] = None,
 
 def as_legacy_manifest(doc: dict[str, Any]) -> None:
     """Turn the staged release into the LEGACY manifest shape it must refuse."""
-    doc["schema_version"] = LEGACY_RELEASE_SCHEMA
+    doc["schema"] = LEGACY_RELEASE_SCHEMA
     doc["artifacts"] = doc.pop("components")
     doc.pop("selector", None)
 

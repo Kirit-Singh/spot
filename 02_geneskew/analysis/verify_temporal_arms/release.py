@@ -1,62 +1,38 @@
-"""THE BOUND STAGE-1 v3 RELEASE: the program axis and the condition universe, DERIVED.
+"""THE BOUND STAGE-1 v3 RELEASE — read exactly as Stage-1 ships it.
 
-WHICH SHAPE, AND WHY THE OTHER ONE IS REFUSED BY NAME
-----------------------------------------------------
-The CURRENT release is ``spot.stage01_v3_release.v1``: a ``selector`` (what Stage-2 may
-use) and ``components`` (the files, each pinned by hash). The LEGACY manifest was
-``spot.stage01_release_manifest.v1`` with an ``artifacts`` block. They are different
-claims, and a Stage-2 lane that quietly accepted whichever one it found would bind to
-whichever happened to be lying around. So the legacy shape is refused BY NAME, at a named
-gate, and an ``artifacts`` block appearing beside ``components`` is still the legacy shape.
+THE NATIVE BYTES, AND WHY THEY ARE NOT TRANSLATED
+-------------------------------------------------
+The release is ``stage01_v3_release.json``. It keys its schema under ``schema``. Its component
+paths are REPO-RELATIVE, one component is staged outside the repository and bound by hash
+alone, and it declares its own id under ``self_release_sha256``.
 
-WHERE THE FILES ARE
--------------------
-Against an EXPLICITLY STAGED release root, passed in by the caller. Never a machine
-default, never a path baked into this module, and never a path read out of the release
-itself: an absolute or upward-escaping component path is refused, because a release that
-can point Stage-2 anywhere on the filesystem is not a binding.
+None of that is negotiable and none of it is aliased. A verifier that accepted a rewritten
+copy, or tolerated the old key "just in case", would be verifying something nobody shipped —
+and the run that exposed this REJECTED for a missing ``release.json`` while the real release
+sat beside it, entirely present. The correct response to native bytes that do not match an
+assumption is to fix the assumption.
+
+WHAT IS RE-DERIVED, NOT READ
+----------------------------
+The release's own id (by its declared rule), every in-repo component's raw and canonical
+content hash, the admitted program axis (from ``base_portable`` in the view it binds), the
+condition universe and its ORDER, and the scorer identity — the view's canonical hash AND the
+registry scorer projection, computed by Stage-1's own rule from the registry the release
+binds. Whether the release's declared scorer identity follows from its own registry is exactly
+the question, and reading the number it advertises would not answer it.
 
 THE PROGRAM AXIS IS DERIVED, NOT READ
 -------------------------------------
-The executable scorer view (``spot.stage01_stage2_registry_view.v1``) carries
-``base_portable`` on each program and NOTHING ELSE that names the portable set: there is
-no ``base_portable_programs`` list, no ``base_portability_source_field``, no ``view_id``
-and no per-program ``method_hash``. So:
-
-    an ADMITTED program is one the view declares ``base_portable = true`` and for which it
-    ships a non-empty ``panel_ensembl`` AND ``control_ensembl``
-
-and the COUNT falls out of that. The derived set is then compared with the release's own
-``selector.admitted_programs`` — two independent statements of the same fact, and a
+An ADMITTED program is one the view declares ``base_portable = true`` and ships a non-empty
+panel and control for; the COUNT falls out. That derived set is then compared with the
+release's own ``selector.admitted_programs`` — two independent statements of one fact, and a
 disagreement is fatal rather than resolved in favour of either.
 
-A base-portable program with no projectable axis is REFUSED, not skipped: skipping it
-leaves a complete-LOOKING bundle with an arm missing from it.
-
-TWO BINDING HASHES, TWO DIFFERENT QUESTIONS
--------------------------------------------
-``scorer_view_sha256``        the canonical hash of the WHOLE view. "Is this the same
-                              release?" Everything in the view moves it.
-``scorer_projection_sha256``  the canonical hash of the ADMITTED PROGRAM AXIS only — each
-                              admitted program projected to exactly the fields an arm
-                              depends on. "Is this the same program axis?" A change to a
-                              non-portable program does not move it, and should not: it
-                              cannot change an arm.
-
-A per-program identity, where one is needed, is an independently hashed canonical
-PROJECTION RECORD of the program — because the view ships no per-program hash to read.
-
-THE CONDITION UNIVERSE IS THE RELEASE'S, NOT A POLICY FILE'S
-------------------------------------------------------------
-``selector.conditions`` is the authority. The ordered pairs are DERIVED from it — n
-conditions give n*(n-1) ordered pairs — so "six" is a consequence of a three-condition
-release and never a constant. This module names no condition and no program: one that did
-would confirm the topology it was told to expect instead of the one that shipped.
-
-The list is ORDERED, and the order is CONTENT: it is the time axis. A release that
-reordered it would ship the same ordered pairs while telling every reader a different story
-about which way time runs, so ``require_conditions`` refuses a reordering against a pinned
-universe.
+THE CONDITION UNIVERSE IS THE RELEASE'S
+---------------------------------------
+``selector.conditions``, and its ORDER is content: it is the time axis. n conditions give
+n*(n-1) ordered pairs, so "six" is a consequence of a three-condition release and never a
+constant. This module names no condition and no program.
 """
 from __future__ import annotations
 
@@ -67,46 +43,57 @@ from typing import Any, Optional
 
 from . import rules
 from .canonical import content_hash, file_sha256, sha256_hex
+from .stage1_rules import (  # noqa: F401  (re-exported: one import site for a caller)
+    ROLE_PROGRAM_REGISTRY,
+    ROLE_SCORER_VIEW,
+    SCORER_PROJECTION_ID,
+    SCORER_PROJECTION_PROV_PROG,
+    SCORER_PROJECTION_PROV_TOP,
+    SELF_HASH_FIELDS,
+    canonical_content_sha256,
+    registry_scorer_projection,
+)
 
 RELEASE_SCHEMA = "spot.stage01_v3_release.v1"
 LEGACY_RELEASE_SCHEMA = "spot.stage01_release_manifest.v1"
 SCORER_VIEW_SCHEMA = "spot.stage01_stage2_registry_view.v1"
 
-RELEASE_FILENAME = "release.json"
+# The flag the scorer view carries. Named once.
 PORTABLE_FLAG = "base_portable"
 
-PROGRAM_PROJECTION_ID = "spot.stage02.temporal.arm.program_projection.v1"
-SCORER_PROJECTION_ID = "spot.stage02.temporal.arm.scorer_projection.admitted_axis.v1"
+
+# THE NATIVE STAGE-1 RELEASE. Its own filename, its own key, its own root convention.
+#
+# The release declares its schema under ``schema`` — NOT ``schema_version`` — and its
+# component paths are REPO-RELATIVE, not relative to the file that names them. Reading it any
+# other way is reading a release that does not exist: the correct response to native bytes
+# that do not match an assumption is to fix the assumption, never to translate the bytes. An
+# alias or a rewritten copy would mean the thing verified is not the thing that shipped.
+RELEASE_FILENAME = "stage01_v3_release.json"
+SCHEMA_KEY = "schema"
+SELF_HASH_FIELD = "self_release_sha256"
+
+# W20's own rule, restated: the canonical hash of the document excluding its own id field.
+SELF_HASH_RULE = "sha256(canonical JSON excluding self_release_sha256)"
+
+# The component hash fields the native release actually carries.
+COMPONENT_RAW = "raw_sha256"
+COMPONENT_CANON = "canonical_content_sha256"
 
 ADMISSION_RULE_ID = "spot.stage02.temporal.arm.program_admission.base_portable.v1"
 
-# THE FROZEN RELEASE'S OWN VALUES, from the authoritative inspection of the Stage-1 v3
-# release at 55899ac. They are recorded so a production caller can PIN them — they are not
-# applied by default and there is no default: a pin nobody supplied must never silently
-# pass, and this repository ships no release to check them against.
+# THE FROZEN RELEASE'S OWN VALUES. No longer an "authoritative inspection" taken on trust:
+# ``TestTheREALStage1Release`` loads the actual release and RE-DERIVES both, so these are now
+# measured, not declared. They remain here as the pins a production caller may supply.
 FROZEN_SCORER_VIEW_SHA256_PREFIX = "5d1d8c36"
 FROZEN_SCORER_PROJECTION_SHA256_PREFIX = "008c1da1"
-FROZEN_RELEASE_SELF_SHA256_PREFIX = "125ebfc"
+FROZEN_RELEASE_SELF_SHA256_PREFIX = "2262430"
 
-# THE PER-PROGRAM PROJECTION IDENTITY. Specified HERE because the scorer view ships no
-# per-program hash to read: each admitted program is projected to exactly the fields an arm
-# depends on, hashed, and the sorted list of those hashes is hashed again. Stated as a rule
-# so the producer and the verifier compute the SAME number rather than two numbers that
-# happen to agree today.
-# THE CANONICAL PER-PROGRAM RULE. Stage-1 is authoritative, and this is its rule, restated
-# and IMPLEMENTED AGAIN here rather than copied across lanes:
-#
-#   from the bound stage01_stage2_registry_view, take the records with base_portable = true;
-#   for each, the value is SHA-256 of the canonical JSON of the ENTIRE program record
-#   EXACTLY as Stage-1 emitted it — object keys canonically sorted, ARRAY ORDER PRESERVED.
-#
-# The whole record, not a projection of it: a four-field summary would hash the same after
-# Stage-1 changed a field the summary never looked at, and the map would keep vouching for a
-# program it no longer describes.
-#
-# ARRAY ORDER IS PRESERVED, NOT SORTED. A panel is an ordered list as Stage-1 emitted it;
-# sorting it before hashing would make a reordered panel hash identical to the original, and
-# a reordering is a different record.
+# THE PER-PROGRAM PROJECTION IDENTITY — Stage-1's rule: the sha256 of the canonical JSON of
+# the ENTIRE program record as emitted, keys sorted, ARRAY ORDER PRESERVED, for exactly the
+# base_portable records. The whole record, because a summary hashes the same after Stage-1
+# changes a field it never looked at; order preserved, because a reordering is a different
+# record and sorting first would hide it.
 PER_PROGRAM_PROJECTION_RULE_ID = (
     "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1")
 PER_PROGRAM_PROJECTION_RULE = (
@@ -129,6 +116,9 @@ class ReleaseRefused(ValueError):
 class BoundRelease:
     """A proved Stage-1 v3 release. Every field here was DERIVED, not believed."""
     release_root: str
+    release_path: str
+    content_root: str
+    self_release_sha256: str
     schema_version: str
     method_version: str
     conditions: tuple[str, ...]
@@ -183,7 +173,11 @@ def _refuse(cond: bool, msg: str) -> None:
 
 
 def _resolve(root: str, rel_path: Any, what: str) -> str:
-    """Resolve a component path INSIDE the staged root. Absolute or escaping is refused."""
+    """Resolve a component path INSIDE the content root. Absolute or escaping is refused.
+
+    The native release's component paths are REPO-RELATIVE — they resolve against the content
+    root, not against the directory that happens to hold the release file.
+    """
     p = str(rel_path or "")
     _refuse(bool(p), f"component {what!r} declares no path")
     _refuse(not os.path.isabs(p) and not (len(p) > 1 and p[1] == ":"),
@@ -198,11 +192,27 @@ def _resolve(root: str, rel_path: Any, what: str) -> str:
 
 
 def _load_component(root: str, name: str, entry: Any) -> dict[str, Any]:
+    """One component. IN-REPO ones are reopened and rehashed; OUT-OF-REPO ones are bound.
+
+    A component staged outside the repository names a ``location`` and its hashes, not a
+    path. It is still a BINDING — it just is not a file this verifier can open. What it may
+    NOT be is unbound: a component that declares neither a path nor a hash names nothing.
+    """
     _refuse(isinstance(entry, dict), f"component {name!r} is malformed")
+
+    if not entry.get("path"):
+        staged = str(entry.get("raw_sha256_staged") or entry.get(COMPONENT_RAW) or "")
+        canon = str(entry.get(COMPONENT_CANON) or "")
+        _refuse(bool(staged or canon),
+                f"component {name!r} is staged outside the repository and declares no hash. "
+                "A component bound by neither a path nor a hash names nothing at all")
+        return {"name": name, "path": None, "raw_sha256": staged or canon,
+                "role": entry.get("role"), "in_repo": False, "doc": None}
+
     path = _resolve(root, entry.get("path"), name)
     raw = file_sha256(path)
 
-    declared_raw = str(entry.get("raw_sha256", "") or "").lower()
+    declared_raw = str(entry.get(COMPONENT_RAW, "") or "").lower()
     if declared_raw:
         _refuse(raw == declared_raw,
                 f"component {name!r} raw_sha256 does not match its bytes on disk "
@@ -212,14 +222,15 @@ def _load_component(root: str, name: str, entry: Any) -> dict[str, Any]:
     if path.endswith(".json"):
         with open(path) as fh:
             doc = json.load(fh)
-        declared_canon = str(entry.get("canonical_sha256", "") or "").lower()
-        derived = content_hash(doc)
+        declared_canon = str(entry.get(COMPONENT_CANON, "") or "").lower()
+        derived = canonical_content_sha256(doc)
         if declared_canon:
             _refuse(derived == declared_canon,
                     f"component {name!r} canonical content does not match its declared "
-                    f"canonical_sha256 (declared {declared_canon}, independently derived "
+                    f"{COMPONENT_CANON} (declared {declared_canon}, independently derived "
                     f"{derived})")
-    return {"name": name, "path": path, "raw_sha256": raw, "doc": doc}
+    return {"name": name, "path": path, "raw_sha256": raw, "role": entry.get("role"),
+            "in_repo": True, "doc": doc}
 
 
 def program_projection(prog: dict[str, Any]) -> dict[str, Any]:
@@ -281,27 +292,69 @@ def _derive_admitted(view: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return admitted
 
 
-def load_release(release_root: str, filename: str = RELEASE_FILENAME) -> BoundRelease:
-    """Load and PROVE the bound Stage-1 v3 release from an EXPLICITLY STAGED root."""
-    root = os.path.abspath(str(release_root))
-    _refuse(os.path.isdir(root),
-            f"the staged release root {os.path.basename(root)!r} is not a directory. The "
-            "root is passed in, never defaulted: a verifier that guessed one would bind to "
-            "whatever release happened to be on the machine that ran it")
-    path = os.path.join(root, filename)
-    _refuse(os.path.exists(path), f"no {filename!r} in the staged release root")
-    with open(path) as fh:
-        doc = json.load(fh)
+def _find_content_root(release_path: str, components: dict[str, Any]) -> Optional[str]:
+    """WHERE the repo-relative component paths resolve. Discovered, then PROVED.
+
+    The release names its components relative to the repository, so the root is an ancestor
+    of the release file. It is not guessed: the first ancestor under which EVERY component
+    exists is taken, and if no ancestor resolves all of them the release is refused rather
+    than half-loaded.
+    """
+    # Only the IN-REPO components have a path. One component (the scores parquet) is staged
+    # OUT of the repo and is bound by hash alone — it names a ``location``, not a path. It
+    # cannot be resolved here and must not be: refusing it would refuse the release, and
+    # inventing a path for it would be inventing the very thing the hash exists to pin.
+    rels = [str((e or {}).get("path") or "") for e in components.values()
+            if (e or {}).get("path")]
+    if not rels:
+        return None
+    here = os.path.dirname(os.path.abspath(release_path))
+    while True:
+        if all(os.path.exists(os.path.join(here, r)) for r in rels):
+            return here
+        parent = os.path.dirname(here)
+        if parent == here:
+            return None
+        here = parent
+
+
+def load_release(release_root: str, filename: str = RELEASE_FILENAME,
+                 content_root: Optional[str] = None) -> BoundRelease:
+    """Load and PROVE the NATIVE Stage-1 v3 release, exactly as Stage-1 ships it.
+
+    ``release_root`` is the directory holding ``stage01_v3_release.json``, or the file itself.
+    ``content_root`` is where its REPO-RELATIVE component paths resolve; when omitted it is
+    discovered by walking up from the release and PROVED by requiring every component to exist
+    under it.
+    """
+    rr = os.path.abspath(str(release_root))
+    path = rr if os.path.isfile(rr) else os.path.join(rr, filename)
+    _refuse(os.path.exists(path),
+            f"no {filename!r} at {os.path.basename(rr)!r}. The native Stage-1 v3 release is "
+            f"{RELEASE_FILENAME!r}; a verifier that looked for another name would report a "
+            "missing release for one that is entirely present")
+
+    with open(path, "rb") as fh:
+        raw_bytes = fh.read()
+    doc = json.loads(raw_bytes)
 
     # ---- gate: the release SHAPE. The legacy manifest is refused BY NAME. ----
-    declared = str(doc.get("schema_version", ""))
+    #
+    # ONLY ``schema``. Accepting ``schema_version`` as a fallback would be an ALIAS — a quiet
+    # tolerance for a shape Stage-1 does not ship — and the point of reading native bytes is
+    # that what gets verified is what got released. A document that keys its schema the old
+    # way is not the native release, however similar it looks.
+    legacy_key = doc.get("schema_version")
+    _refuse(legacy_key is None,
+            f"the release keys its schema under 'schema_version'; the native Stage-1 v3 "
+            f"release keys it under {SCHEMA_KEY!r}. This is not the release Stage-1 ships, "
+            "and this lane does not translate it into one")
+    declared = str(doc.get(SCHEMA_KEY) or "")
     _refuse("artifacts" not in doc and declared != LEGACY_RELEASE_SCHEMA,
             f"this is the LEGACY Stage-1 release shape ({LEGACY_RELEASE_SCHEMA!r}, with an "
-            f"'artifacts' block). Stage-2 binds the CURRENT release {RELEASE_SCHEMA!r} "
-            "(selector + components); the two are different claims and accepting whichever "
-            "one is present would bind to whichever one happened to be lying around")
+            f"'artifacts' block). Stage-2 binds the CURRENT release {RELEASE_SCHEMA!r}")
     _refuse(declared == RELEASE_SCHEMA,
-            f"release schema_version must be {RELEASE_SCHEMA!r}, got {declared!r}")
+            f"release {SCHEMA_KEY!r} must be {RELEASE_SCHEMA!r}, got {declared!r}")
 
     selector = doc.get("selector")
     _refuse(isinstance(selector, dict), "the release ships no 'selector'")
@@ -309,38 +362,73 @@ def load_release(release_root: str, filename: str = RELEASE_FILENAME) -> BoundRe
     _refuse(isinstance(components, dict) and bool(components),
             "the release ships no 'components'")
 
+    # ---- THE RELEASE'S OWN IDENTITY, re-derived by its own declared rule ----
+    declared_self = str(doc.get(SELF_HASH_FIELD) or "")
+    derived_self = content_hash({k: v for k, v in doc.items() if k != SELF_HASH_FIELD})
+    _refuse(bool(declared_self),
+            f"the release declares no {SELF_HASH_FIELD!r}; a release that cannot name itself "
+            "cannot be shown to be the one that was bound")
+    _refuse(declared_self == derived_self,
+            f"the release's {SELF_HASH_FIELD} is {declared_self[:16]}…, but its own content "
+            f"hashes to {derived_self[:16]}… ({SELF_HASH_RULE}). A release whose id does not "
+            "follow its content can be edited and keep its name")
+
+    root = os.path.abspath(str(content_root)) if content_root \
+        else _find_content_root(path, components)
+    _refuse(bool(root),
+            "the release's component paths are REPO-RELATIVE and no ancestor of the release "
+            "resolves all of them. The content root is proved, never guessed")
+
     loaded = {name: _load_component(root, name, entry)
               for name, entry in sorted(components.items())}
 
-    # ---- gate: the scorer view is found by its OWN schema, not by a key name ----
     views = [c for c in loaded.values()
              if isinstance(c["doc"], dict)
              and str(c["doc"].get("schema_version", "")) == SCORER_VIEW_SCHEMA]
     _refuse(len(views) == 1,
             f"the release must ship exactly one {SCORER_VIEW_SCHEMA!r} component; it ships "
             f"{len(views)}. The view is found BY ITS SCHEMA, because a key name is a label "
-            "somebody chose and two views would mean picking one")
+            "somebody chose")
     view = views[0]["doc"]
 
     admitted = _derive_admitted(view)
 
-    # ---- gate: the DERIVED axis must equal the release's OWN selector ----
+    # THE SCORER PROJECTION IS STAGE-1'S, AND IT IS RE-DERIVED FROM THE REGISTRY THE RELEASE
+    # BINDS — never read off the number the release declares. Whether the release's own
+    # registry projects to the hash it advertises is exactly the question.
+    registries = [c["doc"] for name, c in loaded.items()
+                  if c.get("role") == ROLE_PROGRAM_REGISTRY and isinstance(c["doc"], dict)]
+    _refuse(len(registries) == 1,
+            f"the release must bind exactly one {ROLE_PROGRAM_REGISTRY!r} component; it binds "
+            f"{len(registries)}. The scorer projection is a projection OF the registry, and a "
+            "registry found by guessing at its shape is whatever happened to look like one")
+    registry = registries[0]
+    projection = content_hash(registry_scorer_projection(registry))
+
+    declared_proj = str(doc.get("registry_scorer_projection_sha256") or "")
+    _refuse(not declared_proj or declared_proj == projection,
+            f"the release declares registry_scorer_projection_sha256 {declared_proj[:16]}…, "
+            f"but its own registry projects to {projection[:16]}…. A release whose declared "
+            "scorer identity does not follow from its own registry is naming an axis it does "
+            "not ship")
+
+    declared_view = str(doc.get("registry_scorer_view_canonical_sha256") or "")
+    _refuse(not declared_view or declared_view == content_hash(view),
+            f"the release declares registry_scorer_view_canonical_sha256 "
+            f"{declared_view[:16]}…, but the view it binds hashes to "
+            f"{content_hash(view)[:16]}…")
+
     declared_admitted = selector.get("admitted_programs")
     _refuse(isinstance(declared_admitted, list) and bool(declared_admitted),
-            "selector.admitted_programs is absent; the derived program axis has nothing to "
-            "be checked against, and one statement of a fact is not a check")
+            "selector.admitted_programs is absent; one statement of a fact is not a check")
     _refuse(sorted(admitted) == sorted(str(p) for p in declared_admitted),
             "the program axis DERIVED from base_portable disagrees with the release's own "
             f"selector.admitted_programs: derived {sorted(admitted)}, declared "
-            f"{sorted(str(p) for p in declared_admitted)}. Two independent statements of "
-            "the same fact disagree; neither is preferred and the release is refused")
+            f"{sorted(str(p) for p in declared_admitted)}")
 
-    # ---- gate: the condition universe, from the release ----
     conditions = selector.get("conditions")
     _refuse(isinstance(conditions, list) and bool(conditions),
-            "selector.conditions is absent; the condition universe is the RELEASE's, and a "
-            "temporal lane that took it from a policy file would compute a time axis the "
-            "release never released")
+            "selector.conditions is absent; the condition universe is the RELEASE's")
     conds = tuple(str(c) for c in conditions)
     try:
         pairs = tuple(rules.ordered_pairs(conds))
@@ -348,7 +436,10 @@ def load_release(release_root: str, filename: str = RELEASE_FILENAME) -> BoundRe
         raise ReleaseRefused(f"selector.conditions: {exc}") from exc
 
     return BoundRelease(
-        release_root=root,
+        release_root=os.path.dirname(path),
+        release_path=path,
+        content_root=root,
+        self_release_sha256=declared_self,
         schema_version=declared,
         method_version=str(doc.get("method_version", "")),
         conditions=conds,
@@ -358,7 +449,7 @@ def load_release(release_root: str, filename: str = RELEASE_FILENAME) -> BoundRe
         scorer_view_programs=dict(admitted),
         scorer_view_sha256=content_hash(view),
         scorer_view_raw_sha256=views[0]["raw_sha256"],
-        scorer_projection_sha256=content_hash(scorer_projection(view)),
+        scorer_projection_sha256=projection,
         program_projection_sha256={pid: content_hash(program_projection(prog))
                                    for pid, prog in admitted.items()},
         per_program_projection_sha256=content_hash(
