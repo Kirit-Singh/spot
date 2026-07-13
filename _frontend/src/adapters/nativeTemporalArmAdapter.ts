@@ -172,3 +172,26 @@ export function nativeTemporalAdmission(b: NativeTemporalArmBundle): {
     external_admission: 'pending',
   };
 }
+
+/** Source-resolution inputs (report a12f7eee): W5's temporal_arm_release.json + W11's SEPARATE
+ *  temporal_verification.json. W5 producer preflight/pending inventory is NOT admitted data. */
+export interface TemporalAdmissionInputs {
+  w5_release?: { release_id?: string | null; release_sha256?: string | null } | null;
+  w11_verification?: { verdict?: string | null; admits_release?: string | null } | null;
+}
+
+/**
+ * A temporal bundle is ADMITTED for rendering ONLY when W5's `temporal_arm_release.json` AND
+ * W11's separate `temporal_verification.json` (verdict ADMIT, binding that EXACT release) both
+ * bind. Otherwise `pending` — the UI shows a compact neutral not-generated/pending state (never
+ * an editorial banner) and never renders producer preflight as results.
+ */
+export function resolveTemporalAdmission(inputs: TemporalAdmissionInputs): 'admitted' | 'pending' {
+  const rel = inputs.w5_release;
+  const ver = inputs.w11_verification;
+  if (!rel || !ver) return 'pending';
+  const relId = rel.release_sha256 ?? rel.release_id ?? null;
+  if (!relId) return 'pending';
+  if (ver.verdict !== 'ADMIT') return 'pending';
+  return ver.admits_release === relId ? 'admitted' : 'pending';
+}

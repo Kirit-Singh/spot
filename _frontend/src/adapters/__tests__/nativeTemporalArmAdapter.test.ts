@@ -10,6 +10,7 @@ import {
   getNativeTemporalArm,
   nativeTemporalIdentity,
   nativeTemporalAdmission,
+  resolveTemporalAdmission,
 } from '../nativeTemporalArmAdapter';
 import { fixtureProvenance } from '../../fixtures/synthetic';
 
@@ -101,5 +102,19 @@ describe('parseNativeTemporalArmBundle — W5 native shape', () => {
     const evil = clone(native());
     evil.arms[ARM].records[0].desired_target_modulation = 'decrease'; // Direct vocab, not native
     expectCode(() => parseNativeTemporalArmBundle(evil, 'fixture'), 'malformed');
+  });
+});
+
+describe('resolveTemporalAdmission — requires W5 release + W11 ADMIT of that exact release', () => {
+  const rel = { release_sha256: 'r'.repeat(64) };
+  it('admits only when both bind the same release', () => {
+    expect(resolveTemporalAdmission({ w5_release: rel, w11_verification: { verdict: 'ADMIT', admits_release: 'r'.repeat(64) } })).toBe('admitted');
+  });
+  it('pending when W11 verification is absent (producer preflight is not admitted data)', () => {
+    expect(resolveTemporalAdmission({ w5_release: rel, w11_verification: null })).toBe('pending');
+  });
+  it('pending when W11 does not ADMIT or binds a different release', () => {
+    expect(resolveTemporalAdmission({ w5_release: rel, w11_verification: { verdict: 'REJECT', admits_release: 'r'.repeat(64) } })).toBe('pending');
+    expect(resolveTemporalAdmission({ w5_release: rel, w11_verification: { verdict: 'ADMIT', admits_release: 'x'.repeat(64) } })).toBe('pending');
   });
 });
