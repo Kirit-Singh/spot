@@ -13,7 +13,11 @@ WHAT IS AND IS NOT AVAILABLE, and why the distinction is the whole point:
                                               openFDA label sections      -> REAL, sourced
     clogd, pka_most_basic                     IN NO CACHED SOURCE         -> null, not_evaluated
     CNS-MPO composite                         needs clogd + pka           -> not_evaluated
-    brain exposure (Kp,uu / CSF)              IN NO CACHED SOURCE         -> null, not_evaluated
+    brain exposure (Kp,uu / CSF)              NOT EXTRACTED FROM THESE    -> null, not_evaluated
+
+`not_extracted_not_available_in_current_sources` is deliberately narrow. Stage 4 has not read the
+literature and cannot say a measurement does not exist; it can only say what it extracted from the
+responses cached in this run. Those are different claims and only the second one is ours to make.
 
 CNS-MPO IS NOT REPORTED. Two of its six inputs (cLogD7.4 and the most-basic pKa) are in none of the
 cached public sources. A composite computed from four of six is not a CNS-MPO score with two fields
@@ -71,7 +75,13 @@ def _sha256_file(path: str) -> str:
 
 
 def _provenance(req: dict[str, Any]) -> dict[str, Any]:
-    """What a reader needs to fetch these exact bytes again and check we read them right."""
+    """What a reader needs to re-fetch these exact bytes and check we read them right.
+
+    The public SOURCE URL stays — it is the whole point, and it is not a machine path. What is gone
+    is anything that names THIS filesystem: a served document that discloses where a machine keeps
+    its files has told the reader nothing useful about the science and something true about the box.
+    `cache_relpath` is relative to the prefetch root and is kept; the root itself is in the sidecar.
+    """
     return {
         "source_url": req.get("url"),
         "canonical_query": req.get("canonical_query"),
@@ -81,7 +91,7 @@ def _provenance(req: dict[str, Any]) -> dict[str, Any]:
         "http_status": req.get("http_status"),
         "license_or_terms_url": req.get("license_or_terms_url"),
         "release_or_last_updated": req.get("release_or_last_updated"),
-        "cache_relpath": req.get("cache_relpath"),
+        "cache_relpath": req.get("cache_relpath"),      # relative to the prefetch root, by design
     }
 
 
@@ -222,14 +232,22 @@ def _brain_penetrance(pk: dict[str, Any]) -> dict[str, Any]:
     return {
         "assessment": "unknown",
         "assessment_state": "not_evaluated",
-        "basis": "no_measured_human_cns_exposure",
-        "reason": ("no cached public source reports a human CSF concentration, an unbound brain "
-                   "concentration, a Kp,uu or a brain:plasma ratio for this moiety. Physicochemical "
-                   "properties are properties of the molecule, not observations of the brain: they "
-                   "may SUGGEST penetrance and can never confirm it, and no assessment is derived "
-                   "from them here."),
-        "measured_exposure": {field: {"value": None, "state": "not_evaluated"}
-                              for field in MEASURED_EXPOSURE_FIELDS},
+        # WHAT WE DID, not a claim about the world. "No source reports this" would be an assertion
+        # about the whole literature, which Stage 4 has not read and cannot make. What is true is
+        # narrower and checkable: no such structured value was EXTRACTED from the sources cached in
+        # this run. A measured Kp,uu may well exist in a paper nobody here fetched.
+        "basis": "not_extracted_not_available_in_current_sources",
+        "reason": ("no structured human CSF concentration, unbound brain concentration, Kp,uu or "
+                   "brain:plasma ratio was extracted from the sources cached in this run "
+                   "(PubChem properties, openFDA label, DailyMed SPL, RxNorm). This is a statement "
+                   "about what was extracted here, NOT a claim that no such measurement exists. "
+                   "Physicochemical properties are properties of the molecule, not observations of "
+                   "the brain: they may SUGGEST penetrance and can never confirm it, and no "
+                   "assessment is derived from them."),
+        "measured_exposure": {
+            field: {"value": None, "state": "not_evaluated",
+                    "reason": "not_extracted_from_the_sources_cached_in_this_run"}
+            for field in MEASURED_EXPOSURE_FIELDS},
         "physicochemical_proxies": proxies,
         "proxies_are_suggestive_never_confirmatory": True,
         "assessment_is_not_derived_from_proxies": True,
@@ -292,9 +310,12 @@ def build(prefetch_root: str, stage3_source: Optional[dict[str, Any]] = None,
 
     doc: dict[str, Any] = {
         "schema_id": COMPACT_SCHEMA,
+        # ARTIFACT ROLE + NAME + HASH. Never a path on this machine — the exact paths live in the
+        # internal sidecar, which is not served.
         "evidence_source": {
-            "prefetch_receipt": receipt_path,
-            "prefetch_receipt_content_sha256": receipt.get("content_sha256"),
+            "artifact_role": "stage4_prefetch_receipt",
+            "artifact_name": "prefetch_receipt.json",
+            "content_sha256": receipt.get("content_sha256"),
             "bound_to": receipt.get("bound_to"),
             "artifact_class": "prefetch_only",
         },
