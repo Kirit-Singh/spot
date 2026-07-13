@@ -94,6 +94,9 @@
                   "non_evaluable_set_too_large"
                 ]
               },
+              "convergence_size_basis": {
+                "const": "pathway_members_intersect_perturbation_target_universe_intersect_available_perturbation_signature_targets"
+              },
               "convergence_size_policy_id": {
                 "const": "spot.stage02.pathway.convergence_size_governance.prospective.v1"
               },
@@ -134,6 +137,10 @@
                 "type": "integer"
               },
               "n_measured_perturbations": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "n_measured_convergence_endpoints": {
                 "minimum": 0,
                 "type": "integer"
               },
@@ -203,8 +210,10 @@
               "convergence_claim_eligible",
               "convergence_evaluable",
               "convergence_size_policy_id",
+              "convergence_size_basis",
               "max_convergence_set_size",
               "convergence_size_disposition",
+              "n_measured_convergence_endpoints",
               "n_measured_perturbations",
               "measured_perturbations",
               "n_supporting_perturbations",

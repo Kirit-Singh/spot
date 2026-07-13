@@ -94,16 +94,24 @@ def _size_bundle(n: int, set_id: str = "GO:SIZE") -> dict:
 
 
 def test_convergence_size_boundary_is_inclusive_at_500_and_refuses_501():
-    one_member = convergence.convergence_size_disposition(_size_bundle(1)["sets"]["GO:SIZE"])
-    at_boundary = convergence.convergence_size_disposition(_size_bundle(500)["sets"]["GO:SIZE"])
-    over_boundary = convergence.convergence_size_disposition(_size_bundle(501)["sets"]["GO:SIZE"])
+    one = _size_bundle(1)["sets"]["GO:SIZE"]
+    at = _size_bundle(500)["sets"]["GO:SIZE"]
+    over = _size_bundle(501)["sets"]["GO:SIZE"]
+    one_member = convergence.convergence_size_disposition(
+        one, {"T00000": {}})
+    at_boundary = convergence.convergence_size_disposition(
+        at, {f"T{i:05d}": {} for i in range(500)})
+    over_boundary = convergence.convergence_size_disposition(
+        over, {f"T{i:05d}": {} for i in range(501)})
 
     # Max-only policy: do not import enrichment's >=3 rule or rewrite the existing
     # single-target refusal semantics while fixing giant roots.
     assert one_member["convergence_evaluable"] is True
     assert at_boundary["convergence_evaluable"] is True
+    assert at_boundary["n_measured_convergence_endpoints"] == 500
     assert at_boundary["convergence_size_disposition"] == convergence.SIZE_EVALUABLE
     assert over_boundary["convergence_evaluable"] is False
+    assert over_boundary["n_measured_convergence_endpoints"] == 501
     assert over_boundary["convergence_size_disposition"] == convergence.SIZE_TOO_LARGE
 
 
@@ -112,7 +120,7 @@ def test_giant_go_root_emits_coverage_but_generates_no_pairs(monkeypatch):
     # bundle. Its presence must be visible, but it cannot make ~54M pair calls or a claim.
     n_root = 10_371
     bundle = _size_bundle(n_root, "GO:0008150")
-    signatures = {"T00000": _vec(0.0), "T00001": _vec(0.1)}
+    signatures = {f"T{i:05d}": _vec(i / 10.0) for i in range(501)}
 
     def forbidden_cosine(*_args, **_kwargs):
         raise AssertionError("an oversized set attempted a pair computation")
@@ -127,6 +135,7 @@ def test_giant_go_root_emits_coverage_but_generates_no_pairs(monkeypatch):
     assert record["set_id"] == "GO:0008150"
     assert record["n_source_symbols"] == n_root
     assert record["n_genes_in_target_universe"] == n_root
+    assert record["n_measured_convergence_endpoints"] == 501
     assert record["target_source_coverage"] == 1.0
     assert record["convergence_evaluable"] is False
     assert record["convergence_claim_eligible"] is False
@@ -140,7 +149,7 @@ def test_giant_go_root_emits_coverage_but_generates_no_pairs(monkeypatch):
 
 def test_size_policy_and_limits_are_bound_into_artifact_and_hash():
     bundle = _size_bundle(501)
-    signatures = {"T00000": _vec(0.0), "T00001": _vec(0.1)}
+    signatures = {f"T{i:05d}": _vec(i / 10.0) for i in range(501)}
     doc = pathway_arms.convergence_artifact(
         bundle=bundle, signatures=signatures, condition="Rest", source="go_bp",
         readout_universe_sha256="b" * 64)
@@ -148,6 +157,7 @@ def test_size_policy_and_limits_are_bound_into_artifact_and_hash():
     assert doc["schema_version"] == "spot.stage02_pathway_convergence.v2"
     assert doc["convergence_method_id"] == convergence.METHOD_ID
     assert doc["convergence_size_policy_id"] == convergence.CONVERGENCE_SIZE_POLICY_ID
+    assert doc["convergence_size_basis"] == convergence.CONVERGENCE_SIZE_BASIS
     assert doc["max_convergence_set_size"] == 500
     assert doc["n_convergence_evaluable_sets"] == 0
     assert doc["n_convergence_non_evaluable_sets"] == 1
@@ -157,3 +167,32 @@ def test_size_policy_and_limits_are_bound_into_artifact_and_hash():
     mutated["max_convergence_set_size"] = 501
     mutated.pop("convergence_sha256")
     assert content_hash(mutated) != doc["convergence_sha256"]
+
+
+def test_target_absent_from_readout_membership_remains_a_signature_endpoint():
+    # Convergence endpoints are perturbed targets. The readout universe is the coordinate
+    # axis inside each vector, not a second membership filter on the perturbation target.
+    off_readout = "TARGET_WITH_SIGNATURE_NOT_IN_PATHWAY_READOUT_MEMBERS"
+    on_readout = "TARGET_IN_BOTH_UNIVERSES"
+    bundle = {"sets": {"P:OFFREADOUT": {
+        "name": "two target members",
+        "genes_target": [off_readout, on_readout],
+        "genes_in_target_universe": [off_readout, on_readout],
+        "n_genes_target": 2,
+        "n_genes_in_target_universe": 2,
+        "genes_readout": [on_readout],
+        "genes_in_universe": [on_readout],
+        "n_genes_in_universe": 1,
+        "n_source_symbols": 2,
+        "target_source_coverage": 1.0,
+        "readout_source_coverage": 0.5,
+    }}}
+    signatures = {off_readout: _vec(0.0), on_readout: _vec(0.1)}
+    pairs = convergence.pairwise_within_sets(bundle, signatures)
+    record = convergence.converge_sets(bundle, signatures, pairs)[0]
+
+    assert record["n_genes_in_readout_universe"] == 1
+    assert record["n_genes_in_target_universe"] == 2
+    assert record["n_measured_convergence_endpoints"] == 2
+    assert record["measured_perturbations"] == sorted([off_readout, on_readout])
+    assert record["convergent"] is True

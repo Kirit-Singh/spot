@@ -105,6 +105,9 @@ ROUNDING_RULE = "half_even_6dp"
 # preserved separately; the enrichment lane's MIN_SET_SIZE=3 is not imported here.
 CONVERGENCE_SIZE_POLICY_ID = (
     "spot.stage02.pathway.convergence_size_governance.prospective.v1")
+CONVERGENCE_SIZE_BASIS = (
+    "pathway_members_intersect_perturbation_target_universe_intersect_available_"
+    "perturbation_signature_targets")
 MAX_CONVERGENCE_SET_SIZE = genesets.MAX_SET_SIZE
 SIZE_EVALUABLE = "evaluable"
 SIZE_TOO_LARGE = "non_evaluable_set_too_large"
@@ -134,21 +137,28 @@ def _target_members(gene_set: dict[str, Any]) -> list[str]:
     return sorted(set(str(g) for g in values))
 
 
-def convergence_size_disposition(gene_set: dict[str, Any]) -> dict[str, Any]:
+def convergence_size_disposition(
+        gene_set: dict[str, Any], signatures: dict[str, dict[str, float]]) -> dict[str, Any]:
     """Re-derive whether a set is in the frozen convergence-size domain.
 
-    Size is counted in the perturbation-target universe: those are the possible signature
-    endpoints. Source size/coverage remain separate and are emitted on every set record.
+    The induced graph's endpoints are perturbation targets with an available signature.
+    The DE-readout universe supplies the coordinates *inside* each signature; it is not the
+    endpoint membership universe. Both the conservative target-universe count and the
+    actual condition-specific endpoint count are emitted for independent reconstruction.
     """
-    n_members = len(_target_members(gene_set))
-    if n_members > MAX_CONVERGENCE_SET_SIZE:
+    target_members = _target_members(gene_set)
+    n_target_members = len(target_members)
+    n_endpoints = sum(1 for gene in target_members if gene in signatures)
+    if n_endpoints > MAX_CONVERGENCE_SET_SIZE:
         disposition = SIZE_TOO_LARGE
     else:
         disposition = SIZE_EVALUABLE
     return {
         "convergence_size_policy_id": CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": CONVERGENCE_SIZE_BASIS,
         "max_convergence_set_size": MAX_CONVERGENCE_SET_SIZE,
-        "n_genes_in_target_universe": n_members,
+        "n_genes_in_target_universe": n_target_members,
+        "n_measured_convergence_endpoints": n_endpoints,
         "convergence_size_disposition": disposition,
         "convergence_evaluable": disposition == SIZE_EVALUABLE,
     }
@@ -239,7 +249,7 @@ def pairwise_within_sets(bundle: dict[str, Any],
         # Every set remains emitted by ``converge_sets``, but an out-of-domain set
         # contributes ZERO pair computations. A giant root cannot consume compute or
         # manufacture a convergence claim merely because it contains most genes.
-        if not convergence_size_disposition(s)["convergence_evaluable"]:
+        if not convergence_size_disposition(s, signatures)["convergence_evaluable"]:
             continue
         measured = sorted(g for g in _target_members(s) if g in signatures)
         for i, a in enumerate(measured):
@@ -341,7 +351,7 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
 
     for set_id in sorted(bundle["sets"]):
         s = bundle["sets"][set_id]
-        size = convergence_size_disposition(s)
+        size = convergence_size_disposition(s, signatures)
         # B1: a SIGNATURE exists only for a gene that was PERTURBED, so a set's candidate
         # members live in the PERTURBATION-TARGET universe — not the readout universe. The
         # readout universe is the space the signature VECTORS live in (the cosine is taken
@@ -394,6 +404,8 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             "n_source_symbols": n_source,
             "n_genes_in_target_universe": n_target,
             "target_source_coverage": target_source_coverage,
+            "n_genes_in_readout_universe": s.get("n_genes_in_universe"),
+            "readout_source_coverage": s.get("readout_source_coverage"),
             "global_coverage_disposition": coverage["global_coverage_disposition"],
             "global_coverage_policy_passed": coverage["global_coverage_policy_passed"],
             **size,
