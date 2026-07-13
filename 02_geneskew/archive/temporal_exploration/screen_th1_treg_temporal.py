@@ -7,7 +7,10 @@ REG="/home/tcelab/spot_stage2/reg/stage01_program_registry.json"
 DE="/home/tcelab/datasets/marson2025_gwcd4_perturbseq/GWCD4i.DE_stats.h5ad"
 SGRNA="/home/tcelab/datasets/marson2025_gwcd4_perturbseq/suppl_tables/sgrna_library_metadata.suppl_table.csv"
 OUT="/home/tcelab/spot_stage2/work/temporal"; os.makedirs(OUT, exist_ok=True)
-programs, registry_sha, reg = io_data.load_registry(REG)
+# load_registry returns a FOUR-key dict; this used to unpack it into three names and raise.
+# The bound hash is the DERIVED file_sha256, never the registry's self-declared one.
+_registry = io_data.load_registry(REG)
+programs, registry_sha = _registry["programs"], _registry["file_sha256"]
 A, B = programs["th1_like"], programs["treg_like"]
 pa={"panel":A["panel_ensembl"],"control":A["control_ensembl"],"sign":+1}
 pb={"panel":B["panel_ensembl"],"control":B["control_ensembl"],"sign":+1}

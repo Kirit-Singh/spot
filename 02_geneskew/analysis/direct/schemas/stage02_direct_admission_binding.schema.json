@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot/stage02/direct/schemas/stage02_direct_admission_binding.schema.json",
+  "title": "Stage-2 Direct normalized admission binding (spot.stage02.direct_admission_binding.v1)",
+  "description": "The NORMALIZED binding a neutral adapter DERIVES from the immutable native W10 admission report plus the Direct bundle/release on disk. The native report stays the SOLE admission source and is not mutated; this binding is what Step0, temporal, P2S, pathway and W3's aggregate manifest all read through one seam. Every value was independently RE-DERIVED by the adapter from bytes on disk. A release subject additionally carries the cross-pins W3's aggregate binds: release_canonical_sha256, scorer_view_sha256, direct_bundle_ids, code_identity, and the native report path + raw sha.",
+  "type": "object",
+  "required": [
+    "binding_schema",
+    "source_report_sha256",
+    "source_report_schema",
+    "subject_kind",
+    "native_verdict",
+    "disposition",
+    "verifier_id",
+    "verifier_code_sha256",
+    "spec_sha256",
+    "bundle_id",
+    "condition",
+    "lane",
+    "solver_lock_sha256",
+    "scorer_view_sha256",
+    "stage1_scorer_view_canonical_sha256",
+    "arm_rows_sha256",
+    "mask_sha256",
+    "release_id",
+    "release_canonical_sha256",
+    "direct_bundle_ids",
+    "code_identity",
+    "w10_report",
+    "w10_report_raw_sha256",
+    "direct_bundle_sha256",
+    "bundle_verified_on_disk",
+    "n_failed",
+    "binding_sha256"
+  ],
+  "properties": {
+    "binding_schema": {"const": "spot.stage02.direct_admission_binding.v1"},
+    "source_report_sha256": {"type": "string", "minLength": 64, "description": "The native report's report_sha256, RE-DERIVED by the adapter from the report body."},
+    "source_report_schema": {"enum": ["spot.stage02_direct_arm_bundle_verification.v1", "spot.stage02_direct_release_verification.v1"]},
+    "subject_kind": {"enum": ["bundle", "release"]},
+    "native_verdict": {"enum": ["ADMIT", "REFUSE"], "description": "The native token, carried VERBATIM. Never case-folded."},
+    "disposition": {"enum": ["admitted", "refused"], "description": "The aggregate's disposition, mapped byte-exactly from the native token."},
+    "verifier_id": {"type": "string", "description": "spot.stage02.direct.arm_bundle.verifier.v1 for a bundle; spot.stage02.direct.release.verifier.v1 for a release."},
+    "verifier_code_sha256": {"type": "string", "minLength": 64},
+    "spec_sha256": {"type": "string"},
+    "bundle_id": {"type": ["string", "null"], "description": "Non-null for a bundle subject; null for a release."},
+    "release_id": {"type": ["string", "null"], "description": "The direct_release_run_id. Non-null for a release subject; null for a bundle."},
+    "condition": {"type": ["string", "null"]},
+    "lane": {"type": ["string", "null"]},
+    "solver_lock_sha256": {"type": "string", "description": "The environment/solver lock, re-confirmed against the hard pin. (W3's env_lock_sha256 aligns to THIS field name.)"},
+    "scorer_view_sha256": {"type": "string", "minLength": 64, "description": "The Stage-2 scorer view the arms were projected under; the same view for every bundle in a release."},
+    "stage1_scorer_view_canonical_sha256": {"type": ["string", "null"], "description": "Non-null for a release-lane bundle and for a release subject; null for a synthetic-lane bundle."},
+    "registry_scorer_projection_sha256": {"type": ["string", "null"]},
+    "arm_rows_sha256": {"type": ["string", "null"], "description": "The bundle's arm-rows hash. Non-null for a bundle subject; null for a release, whose arm rows live in its per-bundle members."},
+    "mask_sha256": {"type": ["string", "null"], "description": "RE-DERIVED by the adapter from the bundle's masks.parquet, cross-checked against the bundle's own provenance. null when the bundle was not verified on disk, or for a release subject."},
+    "release_canonical_sha256": {"type": ["string", "null"], "description": "The Direct release document self-hash (direct_release_sha256). Non-null for a release subject; null for a bundle."},
+    "direct_bundle_ids": {"type": ["array", "null"], "items": {"type": "string"}, "description": "The admitted per-condition arm_bundle_run_id (exactly 3). Non-null for a release subject; null for a bundle."},
+    "code_identity": {"type": ["string", "null"], "description": "The ONE code identity (canonical_digest) all the release's bundles were built under, RE-DERIVED by the adapter from each bundle's provenance. Non-null for a release verified with its directory (--bundle=<release dir>)."},
+    "w10_report": {"type": ["string", "null"], "description": "Path to the native W10 report this binding was derived from. Non-null for a release subject (the scheduler passes --report)."},
+    "w10_report_raw_sha256": {"type": ["string", "null"], "description": "sha256 of the native W10 report file's raw bytes. Non-null for a release subject."},
+    "direct_bundle_sha256": {"type": "object", "description": "Every shipped bundle file, RE-HASHED from disk by the adapter. Empty when the bundle was not verified on disk (or for a release subject)."},
+    "bundle_verified_on_disk": {"type": "boolean"},
+    "n_failed": {"type": "integer", "minimum": 0},
+    "binding_sha256": {"type": "string", "minLength": 64, "description": "sha256 over this binding without this field. Self-hashed, so a normalized value cannot be edited after it is cited."}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"subject_kind": {"const": "bundle"}}},
+      "then": {"properties": {
+        "bundle_id": {"type": "string"},
+        "condition": {"type": "string"},
+        "lane": {"type": "string"},
+        "arm_rows_sha256": {"type": "string"},
+        "scorer_view_sha256": {"type": "string"}
+      }}
+    },
+    {
+      "if": {"properties": {"subject_kind": {"const": "release"}}},
+      "then": {"properties": {
+        "release_id": {"type": "string"},
+        "release_canonical_sha256": {"type": "string"},
+        "scorer_view_sha256": {"type": "string"},
+        "code_identity": {"type": "string"},
+        "w10_report": {"type": "string"},
+        "w10_report_raw_sha256": {"type": "string"},
+        "direct_bundle_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}}
+      }}
+    }
+  ]
+}
