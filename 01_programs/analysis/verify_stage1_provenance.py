@@ -35,7 +35,7 @@ PROVENANCE_STATUS = "PRIMARY_LOCATORS_VERIFIED_BOUNDED"
 PRE_SCORING_PROJECTION_SHA256 = "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85"
 
 PINNED_SOURCE_SHA = {
-    "stage01_panel_provenance_ledger.csv": "29f050ca9d5239e78f359f896ec9fee9ae273a16338edaa8a5fa9189ffa54e0c",
+    "stage01_panel_provenance_ledger.csv": "38094c6a9d075ae6f74297152b4ac812ce8e27dd2031b7ef7bfdba09b502736d",
     "lineage_primary_source_completion.csv": "ff35c27cf210a225cab4c8e072ba3f585ec841a091b0518aff352ae6f22c8ff8",
     "LINEAGE_REGISTRY_INTEGRATION_MAP.md": "776c75d905d0a0d76e4f7dacc154e48161993006e33449ba87662174be45678c",
     "state_ctl_primary_source_completion.csv": "febef35db329de0ecae95ca2654d6b3afd0e1b3b804b19fd46d11e0fe76df42f",

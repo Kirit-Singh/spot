@@ -39,6 +39,16 @@ def test_clean_registry_passes():
     assert V.run_checks(_reg(), SRC) == []
 
 
+# ---- S1-M5: FOXP3 human support is a fully STRUCTURED secondary locator (not a free-text note) ----
+def test_foxp3_structured_human_corroboration():
+    fx = next(p for p in _reg()["programs"] if p["program_id"] == "treg_like")["marker_provenance"]["FOXP3"]
+    hc = fx.get("human_corroboration")
+    assert hc, "FOXP3 must carry a structured human corroboration locator"
+    assert hc["pmid"] == "17154262" and hc["doi"] and hc["exact_locator"]
+    assert hc["species_lineage_scope"] == "human" and hc["source_type"] == "primary_research"
+    assert "external_corroboration_note" not in fx   # promoted from note -> structured locator
+
+
 # ---- S1-M2: a resealed Tier-2 display-label reinsert is rejected by the STANDALONE verifier ----
 def test_tier2_display_field_reinsert_rejected():
     reg = _reg()

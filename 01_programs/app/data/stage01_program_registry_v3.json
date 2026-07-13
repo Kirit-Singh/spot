@@ -1374,7 +1374,15 @@
      "provenance_inherited": false,
      "provenance_origin": "prior_ledger_primary_located",
      "citation_key": "hori",
-     "external_corroboration_note": "Wang et al. 2007 (PMID 17154262): human \u2014 activated conventional CD4 T cells transiently induce FOXP3; not Treg-exclusive"
+     "human_corroboration": {
+      "source_type": "primary_research",
+      "pmid": "17154262",
+      "doi": "10.1002/eji.200636435",
+      "exact_locator": "Wang et al. 2007 (Eur J Immunol 37:129-138): activation induces transient FOXP3 in human conventional CD4 T cells without regulatory function",
+      "species_lineage_scope": "human",
+      "support_level": "corroborating_secondary_human",
+      "claim_scope_limit": "Wang et al. 2007 (PMID 17154262): human \u2014 activated conventional CD4 T cells transiently induce FOXP3; not Treg-exclusive"
+     }
     },
     "IKZF2": {
      "source_type": "primary_research",
@@ -4255,7 +4263,7 @@
    {
     "role": "prior_marker_ledger",
     "file": "analysis/provenance_sources/stage01_panel_provenance_ledger.csv",
-    "sha256": "29f050ca9d5239e78f359f896ec9fee9ae273a16338edaa8a5fa9189ffa54e0c"
+    "sha256": "38094c6a9d075ae6f74297152b4ac812ce8e27dd2031b7ef7bfdba09b502736d"
    },
    {
     "role": "lineage_completion",
@@ -4283,5 +4291,5 @@
   "not_a_production_or_selectability_promotion": "Provenance-only. The frozen 0/33 production-selectability result, overlay/app deployment gates, and the candidate pointer are unchanged."
  },
  "citations_provenance_note": "Per-program `citations` remain program-level references; per-marker PRIMARY provenance is now carried in structured `marker_provenance` and summarized in `panel_provenance`. 53/53 measured marker-program pairs carry a bounded primary-source locator, independently completed by the lineage and state/CTL supplements (artifact SHA-256 in `panel_provenance.source_artifacts`). Intended-only HLA-DRA is excluded from the measured denominator. Masopust 2026 is recorded as a naming framework only and is never attached to any marker as evidence.",
- "registry_sha256": "070e798e4e15e4fde2b087db9257b1b98a0441b0dcb7ad3f3c76c288521008ae"
+ "registry_sha256": "e579d5fef0643094f33a1e0fe04dab000cf283c5955eee7e5600ca09a4aaa8c1"
 }

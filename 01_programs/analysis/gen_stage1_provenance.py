@@ -33,7 +33,7 @@ PROVENANCE_STATUS = "PRIMARY_LOCATORS_VERIFIED_BOUNDED"
 # Pinned source-artifact SHA-256 (independently verified upstream). Build is fail-closed on mismatch.
 SOURCE_ARTIFACTS = [
     {"role": "prior_marker_ledger", "file": "stage01_panel_provenance_ledger.csv",
-     "sha256": "29f050ca9d5239e78f359f896ec9fee9ae273a16338edaa8a5fa9189ffa54e0c"},   # S1-M5b: +FOXP3 Wang 2007 human corroboration
+     "sha256": "38094c6a9d075ae6f74297152b4ac812ce8e27dd2031b7ef7bfdba09b502736d"},   # S1-M5: +FOXP3 Wang 2007 structured human locator
     {"role": "lineage_completion", "file": "lineage_primary_source_completion.csv",
      "sha256": "ff35c27cf210a225cab4c8e072ba3f585ec841a091b0518aff352ae6f22c8ff8"},
     {"role": "lineage_integration_map", "file": "LINEAGE_REGISTRY_INTEGRATION_MAP.md",
@@ -221,9 +221,22 @@ def build_records():
             "provenance_origin": "prior_ledger_primary_located",
             "citation_key": _n(r["citation_key"]),
         }
-        ext = _n(r["external_primary_support"])
-        if ext:
-            rec["external_corroboration_note"] = ext
+        # Human corroboration promoted to a fully STRUCTURED secondary locator (S1-M5) when a pmid is given
+        # (e.g. FOXP3 ← Wang et al. 2007, PMID 17154262); otherwise the free-text note fallback.
+        ext_note = _n(r["external_primary_support"])
+        ext_pmid = _n(r.get("external_pmid"))
+        if ext_pmid:
+            rec["human_corroboration"] = {
+                "source_type": "primary_research",
+                "pmid": ext_pmid,
+                "doi": _n(r.get("external_doi")),
+                "exact_locator": _n(r.get("external_locator")),
+                "species_lineage_scope": "human",
+                "support_level": "corroborating_secondary_human",
+                "claim_scope_limit": ext_note,
+            }
+        elif ext_note:
+            rec["external_corroboration_note"] = ext_note
         base[key] = rec
         counts["prior_ledger"] += 1
 
