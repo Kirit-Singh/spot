@@ -25,9 +25,15 @@ used or referenced by spot. It does not replace the upstream license text.
   Emma Dann. Upstream `LICENSE` SHA-256:
   `c475d3e1e7f7be9870c2dd8504180458d791676e843b077bcaa71d28bb414648`.
 
-spot distributes only the derived/public artifacts named by its release manifests.
-The large public Stage-1 source and score artifacts are identified by immutable
-Hugging Face revision and per-file hashes; local acquisition paths are not provenance.
+The current public Hugging Face revision
+`e5fcf98b56a9302921d402e97fc5a190bd88f9a6` contains only the source
+`ntc_clustered.h5ad` and the historical v2 `stage01_umap_seed.json` alongside its
+documentation files. It does **not** contain the v3 396,000-cell score Parquet, which is
+currently `release_staging_not_served`. The external revision's `LICENSE` also contains
+an inferred upstream copyright line that the official dataset record does not supply;
+that external notice must be corrected in a history-preserving superseding revision
+before the repository calls the v3 bundle public. See
+`docs/HF_SUPERSEDING_RELEASE_CHECKLIST.md`. Local acquisition paths are not provenance.
 
 ## Perturb2StateModel
 
@@ -44,8 +50,9 @@ retained with the copy.
 
 ## Reactome V97 pathway data
 
-Reactome V97 was released 23 June 2026. The current Stage-2 cache uses human pathway
-annotation files from that release. Reactome database data and files derived from it are
+Reactome V97 was released 30 June 2026; its news notice was created 23 June 2026. The
+current Stage-2 cache uses human pathway annotation files from that release. Reactome
+database data and files derived from it are
 CC0 1.0; software, diagrams and branding have different licenses and are not included by
 that statement.
 
@@ -74,6 +81,14 @@ Required attribution: Gene Ontology Consortium and UniProt-GOA/EMBL-EBI; license
 <https://creativecommons.org/licenses/by/4.0/>; source and citation policy
 <https://geneontology.org/docs/go-citation-policy/>. spot's propagated BP sets are
 modified derivatives and are identified as such in their run manifest.
+
+Copyright notice and warranty statement required by the provider's redistribution
+policy:
+
+> Copyright © 1999–2026 Gene Ontology Consortium.
+>
+> Documents from this server are provided “AS-IS” without any warranty, expressed or
+> implied.
 
 ## ChEMBL and UniProt
 

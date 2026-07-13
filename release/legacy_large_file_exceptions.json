@@ -1,0 +1,31 @@
+{
+  "schema": "spot.release.legacy_large_file_exceptions.v1",
+  "policy_threshold_bytes": 5242880,
+  "inventory_generated_from_commit": "8479dd2f144318100351b7f167f094ce8635f6d8",
+  "entries": [
+    {
+      "path": "01_programs/app/data/stage01_cell_records.json",
+      "role": "historical_v2_reproduction_and_verifier_record; not loaded by the live app",
+      "size_bytes": 17842730,
+      "sha256": "cdf51edaabeeac1bd5c5d1e59b0d4f9e8257b7c3062105382c0b32f6e99e7227",
+      "status": "legacy_exception",
+      "retirement_condition": "retire after the historical v2 reproduction/verifier contract is archived outside the current release"
+    },
+    {
+      "path": "01_programs/app/data/stage01_umap_overlay_v3.json",
+      "role": "current 40k-cell v3 display overlay loaded by the Stage-1 app",
+      "size_bytes": 18116222,
+      "sha256": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
+      "status": "legacy_exception",
+      "retirement_condition": "move to a content-addressed external release when the static app has a verified immutable fetch path"
+    },
+    {
+      "path": "01_programs/app/data/stage01_umap_seed.json",
+      "role": "current 40k-cell frozen coordinate/design shell and historical v2 reproduction input",
+      "size_bytes": 21422364,
+      "sha256": "f51760617900090b60bed753506ee53c6b892db12b6d48c33dc2709112838398",
+      "status": "legacy_exception",
+      "retirement_condition": "retire after the app and historical verifier consume a smaller separately frozen coordinate shell"
+    }
+  ]
+}

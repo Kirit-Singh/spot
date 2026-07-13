@@ -9,9 +9,12 @@ repository-code: "https://github.com/Kirit-Singh/spot"
 url: "https://github.com/Kirit-Singh/spot"
 license: MIT
 abstract: >-
-  An open, provenance-first workbench connecting continuous CD4 T-cell
+  An open, provenance-first workbench designed to connect continuous CD4 T-cell
   transcriptional programs to measured perturbation effects, pathway context,
-  drug links, and brain pharmacokinetic and safety evidence.
+  drug links, and brain pharmacokinetic and safety evidence. The current release
+  implements the transcriptional-program and perturbation-analysis stages; later
+  drug-link and pharmacokinetic/safety stages remain prospective until separately
+  released.
 keywords:
   - perturb-seq
   - single-cell RNA sequencing

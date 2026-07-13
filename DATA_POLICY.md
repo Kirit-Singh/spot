@@ -23,7 +23,9 @@ an explicit exception in its release manifest and must remain below the hosting
 provider's file limit. The currently tracked Stage-1 40,000-cell display JSON files
 (approximately 18–21 MiB each) are legacy static-app exceptions. They are display
 derivatives, not source matrices or the authoritative 396,000-cell score table. New
-large scientific artifacts go to the immutable data release instead.
+large scientific artifacts go to the immutable data release instead. The exact legacy
+exceptions, hashes, current roles and retirement conditions are frozen in
+`release/legacy_large_file_exceptions.json`.
 
 Do not commit raw single-cell matrices, full differential-expression matrices, full
 score Parquet files, model weights, downloaded database snapshots, credentials, tokens,
@@ -43,7 +45,9 @@ file that is too large or too costly to duplicate in Git. A release must include
 
 Code and manifests must fetch by immutable revision and reject a byte mismatch. A
 mutable branch such as `main` is never a scientific pin. Superseding revisions preserve
-history; they do not silently replace prior claims.
+history; they do not silently replace prior claims. The current public-versus-staged
+state and the non-executed publication gate are recorded in
+`docs/HF_SUPERSEDING_RELEASE_CHECKLIST.md`.
 
 ### 3. Local/compute storage: ignored caches and run outputs
 
@@ -87,6 +91,8 @@ new cell-level artifact is published.
 - Source URLs, versions, licenses and claims have been independently verified.
 - Manifests re-hash every downloaded and generated file.
 - Reproduction starts from public inputs and a solver-locked environment.
-- Path and credential scans are clean.
+- The repo-wide path and credential release tests pass. Machine-specific strings are
+  permitted only when named by the narrow, reviewed allowlist as immutable historical,
+  environment-build or verifier-test provenance; executable defaults remain portable.
 - Scientific hashes are re-derived independently; display/provenance-only changes are
   identified separately from scientific changes.
