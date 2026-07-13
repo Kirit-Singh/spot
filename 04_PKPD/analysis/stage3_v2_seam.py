@@ -52,17 +52,84 @@ STAGE3_V2_SCHEMA = "spot.stage03_drug_annotation.v2"
 # for itself pins nothing.
 STAGE3_V2_SCHEMA_SET_SHA256: Optional[str] = None
 
+# The v2 bundle's OWN independent verifier (gate 2), as a module entry point W16 publishes.
+#
+# `stage3_admission` runs `python -m verifier.verify_stage3` — which is the **v1** verifier. Point
+# it at a v2 bundle and it judges the v2 contract by v1's rules, or judges nothing at all, and
+# either way it exits and the bundle is recorded as externally verified. A gate that examined the
+# wrong contract is not a weaker gate; it is a gate that reports PASS without having looked.
+#
+# So this stays None until W16 names its v2 verifier, and a v2 bundle is refused rather than handed
+# to v1's.
+STAGE3_V2_VERIFIER_ENTRY: Optional[str] = None
+
 # What Stage 4 will CHECK once the pin lands. Published here so W16 can build against a stated
 # interface instead of guessing what Stage 4 needs — the mirror image of Stage 4 not guessing what
 # W16 is writing.
 #
 # These are requirements on the CONTRACT, not claims about its fields. Stage 4 does not know the
 # v2 field names and has not invented any.
+# ─── THE STAGE-2 UPSTREAM CONTRACT W16 MUST CONSUME ─────────────────────────────────────────
+#
+# Recorded here VERBATIM, as published — not paraphrased and not inferred. W16 currently expects an
+# INVENTED Stage-2 aggregate envelope. A Stage-3 bundle standing on a synthetic Stage-2 shape
+# carries synthetic numbers into Stage 4 under a real bundle's name, and every hash downstream
+# would be a self-consistent hash of a fiction. That is the failure a green suite cannot see.
+STAGE2_UPSTREAM_CONTRACT = {
+    "manifest_schema": "spot.stage02_run_manifest.v3_topology_only",
+    "manifest_carries": ("bundles[]", "stage1_v3_release"),
+    "external_report_schema": "spot.stage02_run_manifest_verification.v1",
+    "external_report_requires": {
+        "verdict": "admit",
+        # The producer may not be its own judge. This is the whole point of gate 2.
+        "generator_is_not_verifier": True,
+        "n_failed": 0,
+        "manifest_hashes_equal": True,
+        "topology": True,
+        "release": True,
+        "admission": True,
+    },
+    # Stated so nobody re-adds them from muscle memory: these are v1 concepts and the v2 upstream
+    # contract does NOT have them.
+    "absent_by_design": ("artifact_class", "admits block"),
+}
+
+# ─── WHAT STILL BLOCKS THE PIN ──────────────────────────────────────────────────────────────
+#
+# Three, all W16's to close. Named individually so "the seam is closed" never collapses into a
+# vague "not ready yet" that nobody can act on.
+V2_PIN_BLOCKERS = (
+    "ONE canonical document filename. W16 currently emits `drug_annotation.v2.json` while its "
+    "fixture uses an underscore variant. Stage 4 discovers by DECLARATION so it sees both — but "
+    "the v2 ADAPTER must read a real file, and two names for one document is a contract with a "
+    "hole in it.",
+    "the final schema-set sha256, PUBLISHED by W16. Stage 4 re-derives it from the bundle's own "
+    "bytes and compares. A hash Stage 4 computed for itself pins nothing.",
+    "the v2 external-verifier entry point. NOT `verifier.verify_stage3` — that is v1's, and "
+    "judging a v2 bundle by v1's rules reports PASS without having looked.",
+    "W16's current fixture carries a stale `DISP_NON_RANKABLE_ASSERTION` constant. A fixture that "
+    "disagrees with the contract it is meant to demonstrate will be believed over the contract.",
+)
+
+# What Stage 4 will CHECK of the Stage-3 v2 BUNDLE once the pin lands. Published so W16 can build
+# against a stated interface instead of guessing what Stage 4 needs — the mirror image of Stage 4
+# not guessing what W16 is writing.
+#
+# These are requirements on the CONTRACT, not claims about its fields. Stage 4 does not know the v2
+# field names and has NOT invented any. `artifact_class` is deliberately absent from this list: it
+# is a v1 concept, the v2 upstream contract does not carry it, and asserting it here would be
+# exactly the guessing this module exists to prevent.
 STAGE4_REQUIRES_OF_V2 = (
     "schema_version == spot.stage03_drug_annotation.v2, stated in the document",
-    "artifact_class == analysis  (a fixture bundle is synthetic and never reaches Stage 4)",
+    "ONE canonical document filename, and the manifest filename, both stated by W16",
     "a published schema-set sha256 that Stage 4 re-derives from the bundle's own bytes",
-    "gate 2: Stage 3's own verifier.verify_stage3 has PASSED out-of-process on this bundle",
+    "gate 2: the V2 external verifier entry point, named by W16. NOT verifier.verify_stage3 — "
+    "that is v1's, and judging a v2 bundle by v1's rules reports PASS without having looked",
+    "built on an ACTUAL Stage-2 run_release aggregate: manifest "
+    "spot.stage02_run_manifest.v3_topology_only (bundles[] + stage1_v3_release) with an external "
+    "spot.stage02_run_manifest_verification.v1 report carrying verdict=admit, "
+    "generator_is_not_verifier=true, n_failed=0, hashes equal, topology/release/admission true — "
+    "NOT an invented aggregate envelope",
     "an immutable candidate identifier per candidate, stable across the whole chain",
     "per-source provenance: locator, license/terms, raw_sha256, and the source's own release",
     "an explicit typed ORIGIN per lever, so a MEASURED and an INFERRED origin are never fused",
@@ -75,21 +142,48 @@ class Stage3V2NotAdmissible(Rejection):
     """A v2 bundle arrived before the v2 contract was pinned. Refused, never guessed at."""
 
 
-def is_v2_bundle(bundle_dir: str) -> bool:
-    """Does this bundle DECLARE the v2 contract? Read the declaration; infer nothing."""
-    for name in ("drug_annotation.json", "manifest.json"):
-        path = os.path.join(bundle_dir, name)
-        if not os.path.exists(path):
+def _declared_schemas(bundle_dir: str) -> dict[str, str]:
+    """Every schema DECLARED by every JSON document in the bundle. -> {filename: schema}.
+
+    Filename-agnostic, and that is the whole point. The first version of this scanned exactly two
+    names — `drug_annotation.json` and `manifest.json` — because those are what v1 emits. W16 emits
+    **`drug_annotation.v2.json`**, so a real v2 bundle was INVISIBLE to the seam and fell straight
+    through to the v1 reader: the precise misreading this module exists to prevent.
+
+    It passed its own test because the test built the v2 bundle using the v1 FILENAME. A seam that
+    only recognises the adversary it imagined is not a seam. So: read what every document SAYS it
+    is, and never infer a contract from where it happens to live.
+    """
+    out: dict[str, str] = {}
+    if not os.path.isdir(bundle_dir):
+        return out
+    for name in sorted(os.listdir(bundle_dir)):
+        if not name.endswith(".json"):
             continue
         try:
-            with open(path, encoding="utf-8") as fh:
+            with open(os.path.join(bundle_dir, name), encoding="utf-8") as fh:
                 doc = json.load(fh)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             continue
-        declared = str(doc.get("schema_version") or doc.get("schema_id") or "")
-        if declared.startswith(STAGE3_V2_SCHEMA):
-            return True
-    return False
+        if not isinstance(doc, dict):
+            continue
+        declared = doc.get("schema_version") or doc.get("schema_id")
+        if isinstance(declared, str) and declared:
+            out[name] = declared
+    return out
+
+
+def is_v2_bundle(bundle_dir: str) -> bool:
+    """Does ANY document in this bundle declare the v2 contract, whatever it is called?"""
+    return any(schema.startswith(STAGE3_V2_SCHEMA)
+               for schema in _declared_schemas(bundle_dir).values())
+
+
+def v2_documents(bundle_dir: str) -> dict[str, str]:
+    """The v2-declaring documents, by filename. Reported in the refusal so a reader can see
+    exactly which document tripped the seam, and under what name."""
+    return {name: schema for name, schema in _declared_schemas(bundle_dir).items()
+            if schema.startswith(STAGE3_V2_SCHEMA)}
 
 
 def assert_v2_admissible(bundle_dir: str, *, schema_set_sha256: Optional[str] = None) -> None:
@@ -102,10 +196,26 @@ def assert_v2_admissible(bundle_dir: str, *, schema_set_sha256: Optional[str] = 
     if not is_v2_bundle(bundle_dir):
         return
 
+    found = v2_documents(bundle_dir)
+
+    if STAGE3_V2_VERIFIER_ENTRY is None:
+        raise Stage3V2NotAdmissible(
+            "stage3_v2_external_verifier_not_declared",
+            f"this bundle declares {STAGE3_V2_SCHEMA} (in {sorted(found)}), and Stage 4 has no v2 "
+            "external verifier to admit it with. It is NOT read under the v1 contract, and it "
+            "will NOT be handed to `verifier.verify_stage3`: "
+            "that is the v1 verifier, and running it against a v2 bundle would judge the v2 "
+            "contract by v1's rules — or judge nothing — and then record the bundle as externally "
+            "verified. A gate that examined the wrong contract does not verify less; it reports "
+            "PASS without having looked. W16 must publish the v2 verifier entry point. "
+            f"Stage 4 requires: {'; '.join(STAGE4_REQUIRES_OF_V2)}",
+        )
+
     if STAGE3_V2_SCHEMA_SET_SHA256 is None:
         raise Stage3V2NotAdmissible(
             "stage3_v2_contract_not_pinned",
-            f"this bundle declares {STAGE3_V2_SCHEMA}, and Stage 4 has not pinned that contract. "
+            f"this bundle declares {STAGE3_V2_SCHEMA} (in {sorted(found)}), and Stage 4 has not "
+            "pinned that contract. "
             "It is NOT read under the v1 contract: a v2 document parsed by a v1 reader would have "
             "its new fields silently ignored and its evidence admitted against a contract nobody "
             "checked it against, and every downstream hash would be a self-consistent hash of a "
@@ -142,5 +252,7 @@ def seam_status() -> dict[str, Any]:
         "state": ("CLOSED — awaiting W16's final schema-set hash and an externally admitted v2 "
                   "bundle" if STAGE3_V2_SCHEMA_SET_SHA256 is None else "PINNED"),
         "stage4_requires": list(STAGE4_REQUIRES_OF_V2),
+        "pin_blockers": list(V2_PIN_BLOCKERS),
+        "stage2_upstream_contract": STAGE2_UPSTREAM_CONTRACT,
         "v1_unaffected": "spot.stage03_drug_annotation.v1/2026-07-12-r8 remains admitted and frozen",
     }
