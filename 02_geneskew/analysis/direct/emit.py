@@ -310,6 +310,12 @@ def provenance(*, run_id: str, run_sha256: str, run_binding: dict[str, Any],
         "gene_universe": gene_universe,
         "inference_status": config.INFERENCE_STATUS,
         "no_pq_reason": config.NO_PQ_REASON,
+        # "spot emits no p/q" is TRUE and is NOT THE WHOLE TRUTH: ranking eligibility
+        # consumes an UPSTREAM significance flag computed by the release's own DE model.
+        # Named here, where the numbers are — not only in a method doc.
+        "upstream_significance_gate": config.UPSTREAM_SIGNIFICANCE_GATE,
+        # ...and the exact mask the scores were taken under.
+        "mask_rule": config.MASK_RULE,
         "stage2_inputs": manifest,
         "generated_by": "02_geneskew/analysis/direct/run_screen.py",
         "generated_at": created_at,       # noncanonical; excluded from run_id

@@ -594,6 +594,43 @@ def bind_axis(sel: V3Selection, release) -> dict[str, Any]:
     return out
 
 
+def load_selection(args, expect_mode: Optional[str] = None):
+    """THE ONE VERIFIED TYPED V3 OBJECT, for ANY lane. ``None`` when none was supplied.
+
+    B3. Direct and Pathway used to consume only the LEGACY single-condition contract shape,
+    so a v3 object failed their loaders outright — a real v3 selection could not drive them
+    at all. They now take the same typed object the temporal lane does, through the same
+    full gate, and the axis is built from ITS poles.
+
+    ``expect_mode`` refuses a contract for a different analysis mode BY NAME. The two
+    estimators answer different questions and their numbers look alike, so a
+    within-condition runner must never silently execute a cross-condition selection or the
+    other way round.
+    """
+    path = getattr(args, "stage1_v3_selection", None)
+    schema = getattr(args, "stage1_v3_schema", None)
+    if not path:
+        return None
+    if not schema:
+        raise SelectionV3Error(
+            REFUSE_SCHEMA_PIN,
+            "--stage1-v3-selection requires --stage1-v3-schema: the contract is validated "
+            "against the PINNED schema, and a contract checked against no schema has been "
+            "checked against nothing")
+    with open(path) as fh:
+        doc = json.load(fh)
+    bound = validate(doc, load_schema(schema))
+    if expect_mode is not None and bound["analysis_mode"] != expect_mode:
+        raise SelectionV3Error(
+            REFUSE_MODE_ROUTE,
+            f"this runner executes {expect_mode!r}, but the v3 selection declares "
+            f"analysis_mode {bound['analysis_mode']!r}. The two estimators answer "
+            "different questions and their numbers look alike, so the wrong one is never "
+            "silently executed")
+    lane = getattr(args, "lane", None) or "production"
+    return as_selection(bound, doc, lane)
+
+
 def load(path: str, schema_path: str,
          effect_universe_programs: Optional[set[str]] = None) -> dict[str, Any]:
     with open(path) as fh:

@@ -33,8 +33,20 @@ from direct.temporal import run_temporal
 # existed, over the default single-condition synthetic fixture. Every screen column
 # except run_id — that is, every scientific value, both arm scores, both ranks, the
 # Pareto tiers, the masks, the QC and the dispositions.
+# RE-PINNED (round 3). The fixture's DE object now carries realistic gene SYMBOLS in
+# var/gene_name (a real GMT names genes by symbol, and the B1 crosswalk reads that column),
+# so the fixture FILE's bytes changed and with them `effect_source_sha256` — which every
+# screen row carries. PROVEN metadata-only: with `effect_source_sha256` excluded, the
+# scientific content hashes IDENTICALLY to the pre-change value (6667465c…). The only two
+# columns that moved are run_id and effect_source_sha256. Nothing scientific changed.
 GOLDEN_SCREEN_CONTENT_SHA256 = (
-    "e9b72535abede1d5e44aea784f0da5181aa2f33b6850838b2e4fc0dabf13038c")
+    "4297af4537c8ddfc7ed4f8c8d5e5318b3a1149cfe8769388c0d62987138e3261")
+
+# THE DURABLE INVARIANT: every scientific value, independent of which bytes the fixture
+# source happens to have. This one does NOT move when the fixture's metadata changes, and
+# it is the assertion that actually protects the science.
+GOLDEN_SCREEN_SCIENCE_SHA256 = (
+    "6667465c70a6c7dfa7a0194c45fd2b669f7fe570a21669c95663e3efaee8fa49")
 GOLDEN_MASK_SHA256 = (
     "f3eea380f23f8714b7b77cbc7a2e385cd375c5fbc81b7df7892065d1f80f2f09")
 
@@ -45,6 +57,18 @@ def _scientific_content_sha256(df: pd.DataFrame) -> str:
     return hashlib.sha256(canonical_json(rows).encode()).hexdigest()
 
 
+def _science_sha256(df: pd.DataFrame) -> str:
+    """Every SCIENTIFIC value, independent of the fixture source's bytes.
+
+    `effect_source_sha256` pins WHICH file produced the row — it is provenance, not a
+    measurement. Excluding it gives the invariant that must never move for a reason that
+    is not scientific.
+    """
+    rows = json.loads(
+        df.drop(columns=["run_id", "effect_source_sha256"]).to_json(orient="records"))
+    return hashlib.sha256(canonical_json(rows).encode()).hexdigest()
+
+
 class TestTheWithinConditionScreenIsUnmoved:
     def test_every_within_condition_scientific_value_is_byte_identical(self,
                                                                        synthetic_run):
@@ -52,6 +76,13 @@ class TestTheWithinConditionScreenIsUnmoved:
         df = pd.read_parquet(os.path.join(res["out_dir"], "screen.parquet"))
         assert _scientific_content_sha256(df) == GOLDEN_SCREEN_CONTENT_SHA256
         assert res["mask_sha256"] == GOLDEN_MASK_SHA256
+
+    def test_the_science_is_INVARIANT_to_the_fixture_sources_bytes(self, synthetic_run):
+        """The durable one. This hash has not moved since the estimator was built, and it
+        must not move for any reason that is not a change to the science."""
+        res = run_screen.build_screen(synthetic_run())
+        df = pd.read_parquet(os.path.join(res["out_dir"], "screen.parquet"))
+        assert _science_sha256(df) == GOLDEN_SCREEN_SCIENCE_SHA256
 
     def test_running_the_temporal_layer_leaves_the_screen_bit_for_bit_the_same(
             self, temporal_run):

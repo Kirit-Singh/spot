@@ -192,9 +192,13 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
     out = []
     for set_id in sorted(bundle["sets"]):
         s = bundle["sets"][set_id]
-        genes = set(s["genes"])
-        testable = len(s["genes_in_universe"]) >= bundle["min_set_size"] \
-            and len(s["genes_in_universe"]) <= bundle["max_set_size"]
+        # B1: THE ARMS RANK PERTURBED TARGETS, so membership is tested in the
+        # PERTURBATION-TARGET universe. Testing it in the readout universe — which is what
+        # this did — made 2,029 perturbed targets permanently ineligible to be a member of
+        # any pathway: they could top the ranking and never count as a hit.
+        genes = set(s["genes_target"])
+        n_in = len(s["genes_in_target_universe"])
+        testable = bundle["min_set_size"] <= n_in <= bundle["max_set_size"]
 
         result: dict[str, Any]
         if not testable:
@@ -205,8 +209,7 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
                       "n_hits_in_ranking": 0, "n_ranked": len(ranked),
                       "peak_rank": None,
                       "undefined_reason": ("set_too_small_to_test"
-                                           if len(s["genes_in_universe"])
-                                           < bundle["min_set_size"]
+                                           if n_in < bundle["min_set_size"]
                                            else "set_too_large_to_be_specific")}
         else:
             result = enrich_one(ranked, genes)
@@ -220,10 +223,13 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
             "score_weight": SCORE_WEIGHT,
             "leading_edge_convention": LEADING_EDGE_CONVENTION,
             "edge_is_direction_aware": EDGE_IS_DIRECTION_AWARE,
-            "n_genes_in_set": s["n_genes"],
-            "n_genes_in_universe": s["n_genes_in_universe"],
+            "n_genes_in_set": s["n_genes_target"],
+            "n_genes_in_universe": s["n_genes_in_target_universe"],
             "coverage": s["coverage"],
             "testable": testable,
+            # B4: may a RANKING speak for this pathway? Decided by coverage, prospectively.
+            "coverage_disposition": s["coverage_disposition"],
+            "headline_rankable": s["headline_rankable"],
             "inference_status": INFERENCE_STATUS,
             "no_pq_reason": NO_PQ_REASON,
             **result,

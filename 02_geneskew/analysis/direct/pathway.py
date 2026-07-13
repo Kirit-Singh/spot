@@ -88,6 +88,17 @@ def method_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         "enrichment_edge_is_direction_aware": enrichment.EDGE_IS_DIRECTION_AWARE,
         "evidence_lines": list(EVIDENCE_LINES),
         "evidence_lines_are_combined": False,
+        # B1: WHICH UNIVERSE each computation tests membership in. Bound into the method
+        # hash: a run that swapped them would answer a different question under this id,
+        # and that swap is exactly the bug this binding exists to make impossible.
+        "enrichment_membership_universe": "perturbation_target",
+        "convergence_membership_universe": "perturbation_target",
+        "convergence_signature_vector_space": "de_readout",
+        "two_universes_are_bound_separately": True,
+        # B4: the PROSPECTIVE coverage governance, frozen before any result.
+        "coverage_policy_id": genesets.COVERAGE_POLICY_ID,
+        "min_source_coverage": genesets.MIN_SOURCE_COVERAGE,
+        "coverage_namespace": genesets.COVERAGE_NAMESPACE,
         "inference_status": enrichment.INFERENCE_STATUS,
         "no_pq_reason": enrichment.NO_PQ_REASON,
         "gene_sets": genesets.binding_block(bundle),
@@ -135,9 +146,18 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
             "gene_id_namespace": bundle["gene_id_namespace"],
             "effect_universe_sha256": bundle["effect_universe_sha256"],
             "direct_config_sha256": config_sha256,
-            "n_genes_in_set": s["n_genes"],
-            "n_genes_in_universe": s["n_genes_in_universe"],
+            "n_genes_in_set": s["n_genes_target"],
+            "n_genes_in_universe": s["n_genes_in_target_universe"],
             "coverage": s["coverage"],
+            # B1: BOTH universes, side by side. The statistic is computed in the TARGET
+            # space; the readout space is what the signature vectors live in.
+            "n_genes_in_target_universe": s["n_genes_in_target_universe"],
+            "n_genes_in_readout_universe": s["n_genes_in_universe"],
+            "target_source_coverage": s["target_source_coverage"],
+            "readout_source_coverage": s["readout_source_coverage"],
+            # B4: may a ranking speak for this pathway? Decided prospectively, by coverage.
+            "coverage_disposition": s["coverage_disposition"],
+            "headline_rankable": s["headline_rankable"],
             # THE RE-KEYING DENOMINATOR. For a bundle re-keyed symbol -> Ensembl, the
             # members that could not be mapped were already removed, so `coverage` above
             # is 1.0 by construction. `source_coverage` is the fraction of the genes the
@@ -145,7 +165,9 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
             # number a reader needs before believing anything about this set. Null for a
             # bundle that was never re-keyed; an absent loss is not a zero loss.
             "n_source_symbols": s["n_source_symbols"],
-            "n_dropped_unmappable": s["n_dropped_unmappable"],
+            "n_dropped_unmappable": (
+                None if s["n_source_symbols"] is None
+                else s["n_source_symbols"] - s["n_genes_in_target_universe"]),
             "source_coverage": s["source_coverage"],
             # BOTH lines, side by side. Never fused.
             "enrichment": {arm: _enrichment_block(per_arm[arm][set_id])
@@ -187,6 +209,10 @@ def _enrichment_block(e: dict[str, Any]) -> dict[str, Any]:
         "n_ranked": e["n_ranked"],
         "peak_rank": e["peak_rank"],
         "testable": e["testable"],
+        # B4: size is not coverage. `testable` says the statistic is defined; this says
+        # whether a RANKING is allowed to speak for the pathway.
+        "coverage_disposition": e["coverage_disposition"],
+        "headline_rankable": e["headline_rankable"],
         "undefined_reason": e["undefined_reason"],
         "inference_status": e["inference_status"],
         "no_pq_reason": e["no_pq_reason"],

@@ -19,6 +19,7 @@ from fixtures_spec import (
     SYMBOL_TARGETS,
     UNIVERSE,
     TargetSpec,
+    gene_symbol,
 )
 
 
@@ -102,7 +103,11 @@ def _write_main(path: str, specs: list[TargetSpec],
     with h5py.File(path, "w") as f:
         var = f.create_group("var")
         var.create_dataset("gene_ids", data=np.array(UNIVERSE, dtype="S64"))
-        var.create_dataset("gene_name", data=np.array(UNIVERSE, dtype="S64"))
+        # the SYMBOL, not the id: a real GMT names genes by symbol, and the crosswalk is
+        # what turns one into the other
+        var.create_dataset("gene_name",
+                           data=np.array([gene_symbol(g) for g in UNIVERSE],
+                                         dtype="S64"))
         _write_obs(f, specs, conditions=conditions)
         rows = _scope_rows(specs, conditions)
         # THE TEMPORAL SIGNAL: each scope carries its OWN condition's effect.

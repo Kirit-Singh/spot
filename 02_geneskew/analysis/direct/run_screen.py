@@ -424,10 +424,17 @@ def stage2_input_manifest(args) -> list[dict[str, Any]]:
 def build_screen(args) -> dict:
     created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
+    # B3: a Stage-1 v3 WITHIN-CONDITION selection drives this lane natively. It IS the
+    # selection — the axis is built from ITS poles and its full-contract hash is bound.
+    # A temporal contract is refused by name: the two estimators answer different
+    # questions and their numbers look alike.
+    from . import stage1_v3
+    v3 = stage1_v3.load_selection(args, expect_mode=stage1_v3.MODE_WITHIN)
+
     # PRODUCTION FIREWALL, Stage-1 binding, the pooled-main evidence domain, the
     # manifest and the gene universe — all bound BEFORE any dense layer is read, by the
     # same ``prepare`` the preflight runs.
-    ctx = prepare(args)
+    ctx = prepare(args, v3=v3)
 
     # ...and then the SAME gate the preflight applies, over the SAME ctx, BEFORE the
     # dense read and before a single artifact exists. A build that could skip this

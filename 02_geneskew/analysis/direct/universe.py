@@ -52,6 +52,41 @@ def primary_universe(pooled_gene_ids: Sequence[str]) -> dict:
     }
 
 
+def target_universe(identities_by_condition: dict) -> dict:
+    """THE PERTURBATION-TARGET universe: every gene the release actually KNOCKED DOWN.
+
+    A DIFFERENT gene population from the readout universe above, and the distinction is
+    the whole of B1:
+
+      * ``primary_universe``  = ``var`` — what was MEASURED. The columns of the effect
+        matrix; the space a signature VECTOR lives in.
+      * ``target_universe``   = ``obs`` — what was PERTURBED. The rows. The population the
+        arms RANK, and therefore the space a ranked-arm enrichment tests gene-set
+        membership in.
+
+    For the pinned GWCD4i release: 11,526 targets, 10,282 readout genes, 9,497 in common.
+    **2,029 perturbed targets are not readout genes at all.** Testing pathway membership
+    against the readout universe made every one of them permanently ineligible to be a
+    member of any pathway — they could top an arm's ranking and never count as a hit, and
+    nothing in the output would have said so.
+
+    All-condition by construction: the target is the same gene whichever condition it was
+    perturbed in, and a per-condition universe would make a pathway's membership depend on
+    which condition happened to be running.
+    """
+    targets = sorted({str(t) for identities in identities_by_condition.values()
+                      for t in identities})
+    if not targets:
+        raise UniverseError("the release ships no perturbation targets")
+    return {
+        "target_ids": targets,
+        "n_targets": len(targets),
+        "sha256": content_hash(targets),
+        "basis": "released_pooled_main_target_contrast_all_conditions",
+        "role": "ranked_and_perturbed_population_gene_set_membership",
+    }
+
+
 def common_gene_universe(
     reference_gene_ids: Sequence[str],
     other_gene_id_sets: dict[str, Iterable[str]],

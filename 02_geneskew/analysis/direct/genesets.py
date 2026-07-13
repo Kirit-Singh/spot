@@ -92,6 +92,60 @@ def normalize_license(value: Any) -> str:
 MIN_SET_SIZE = 3
 MAX_SET_SIZE = 500
 
+# --------------------------------------------------------------------------- #
+# B4 — COVERAGE GOVERNANCE. A PROSPECTIVE disposition, frozen BEFORE any result was
+# looked at. This paragraph is the pre-registration; the constants below are the rule.
+#
+# THE PROBLEM. Size is not coverage. "Testable" required only 3-500 mapped genes, so a
+# 1,200-gene pathway that retained THREE of them — 0.25% of the genes it is named for —
+# could be ranked beside a pathway with 90% of its genes present, and nothing in the
+# ranking said which was which. The enrichment statistic is perfectly well defined on
+# those three genes; it simply is not a statement about that pathway. Disclosing coverage
+# in a column and then ranking on it anyway is disclosure without governance.
+#
+# THE RULE. A set whose TARGET-namespace source coverage is below MIN_SOURCE_COVERAGE is
+# DESCRIPTIVE_ONLY: it is still computed, still emitted, still carries its full statistic
+# and leading edge — and it is EXCLUDED FROM HEADLINE RANKING. It is not deleted, because
+# a pathway missing from the table is indistinguishable from one that was tested and found
+# nothing; and it is not silently ranked, because a number computed on 0.25% of a pathway
+# is not evidence about that pathway.
+#
+# THE THRESHOLD. 0.50 — a pathway must retain at least HALF the genes it is named for
+# before a ranking is allowed to speak for it. Chosen before results, on the principle
+# that a statistic which speaks for a pathway should be computed on most of it. It is a
+# GOVERNANCE threshold, not a significance one: nothing here is calibrated, and the
+# emitted disposition is a permission, never a p-value.
+# --------------------------------------------------------------------------- #
+COVERAGE_POLICY_ID = "spot.stage02.pathway.coverage_governance.prospective.v1"
+MIN_SOURCE_COVERAGE = 0.50
+DISPOSITION_RANKABLE = "rankable"
+DISPOSITION_DESCRIPTIVE_ONLY = "descriptive_only_low_source_coverage"
+DISPOSITION_UNKNOWN_COVERAGE = "descriptive_only_source_coverage_unknown"
+DISPOSITIONS = (DISPOSITION_RANKABLE, DISPOSITION_DESCRIPTIVE_ONLY,
+                DISPOSITION_UNKNOWN_COVERAGE)
+COVERAGE_NAMESPACE = "perturbation_target"   # the space the statistic is computed in
+
+
+def coverage_disposition(target_source_coverage: Optional[float]) -> dict[str, Any]:
+    """May a ranking speak for this pathway? Decided by coverage, before any result.
+
+    Unknown coverage is DESCRIPTIVE-ONLY, not rankable. A bundle that cannot say how much
+    of a pathway it retained has not earned a headline rank by failing to answer.
+    """
+    if target_source_coverage is None:
+        disposition = DISPOSITION_UNKNOWN_COVERAGE
+    elif target_source_coverage >= MIN_SOURCE_COVERAGE:
+        disposition = DISPOSITION_RANKABLE
+    else:
+        disposition = DISPOSITION_DESCRIPTIVE_ONLY
+    return {
+        "coverage_disposition": disposition,
+        "headline_rankable": disposition == DISPOSITION_RANKABLE,
+        "coverage_policy_id": COVERAGE_POLICY_ID,
+        "min_source_coverage": MIN_SOURCE_COVERAGE,
+        "coverage_namespace": COVERAGE_NAMESPACE,
+    }
+
 
 class GeneSetError(ValueError):
     """The gene-set bundle is not usable. Refuse; never repair."""
@@ -103,8 +157,27 @@ def _require(cond: bool, msg: str) -> None:
 
 
 def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
-         effect_universe_sha256: Optional[str] = None) -> Optional[dict[str, Any]]:
-    """Load, pin and BIND a gene-set bundle. ``None`` when no bundle was supplied.
+         effect_universe_sha256: Optional[str] = None,
+         target_universe: Optional[list[str]] = None,
+         target_universe_sha256: Optional[str] = None) -> Optional[dict[str, Any]]:
+    """Load, pin and BIND a gene-set bundle against BOTH universes.
+
+    TWO UNIVERSES, BOUND SEPARATELY (B1)
+    ------------------------------------
+    ``effect_universe``  the DE READOUT genes — what was MEASURED. The signature vector
+                         space; the columns of the effect matrix.
+    ``target_universe``  the PERTURBATION TARGETS — what was KNOCKED DOWN. The population
+                         the arms RANK, and therefore the space a ranked-arm enrichment
+                         must test gene-set membership in.
+
+    They are not the same set. 11,526 targets, 10,282 readout genes, 9,497 in common:
+    **2,029 perturbed targets are not readout genes at all.** Testing membership against
+    the readout universe — which is what this did — made those 2,029 targets permanently
+    ineligible to be a member of ANY pathway. They could top an arm's ranking and still
+    never count as a hit, and nothing in the output would say so.
+
+    When only one universe is supplied it is used for both, and the binding records that
+    (``single_universe_binding``) rather than pretending two were checked.
 
     An absent bundle is a STATE, not an error: the pathway layer is simply unavailable,
     and every pathway artifact says so. It is never quietly skipped.
@@ -179,7 +252,12 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
     _require(isinstance(raw_sets, list) and bool(raw_sets),
              "gene-set bundle: 'sets' must be a non-empty list")
 
-    universe = set(effect_universe or [])
+    readout_universe = set(effect_universe or [])
+    # One universe supplied -> it serves as both, and the binding SAYS so.
+    single_binding = target_universe is None
+    targets = set(target_universe if target_universe is not None
+                  else (effect_universe or []))
+
     sets: dict[str, dict[str, Any]] = {}
     for i, s in enumerate(raw_sets):
         _require(isinstance(s, dict), f"gene-set bundle: set {i} is malformed")
@@ -188,60 +266,75 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
         _require(set_id not in sets,
                  f"gene-set bundle: duplicate set_id {set_id!r}; two sets under one id "
                  "cannot both be cited")
-        genes = [str(g) for g in (s.get("genes") or [])]
-        # A set with NO genes is normally malformed. There is exactly one honest way for it
-        # to happen: a RE-KEYED set (symbol -> Ensembl) that named genes and had none of
-        # them survive, because this experiment measured none of them. That is a real,
-        # informative state — "this pathway could never have been tested here" — and the
-        # lane emits it rather than deleting it, for the same reason it emits every other
-        # untestable set: a pathway missing from the table is indistinguishable from one
-        # that was tested and found nothing.
-        #
-        # It must SAY that is what it is. An empty set that declares no source symbols is
-        # still refused: silence is not an explanation.
-        rekeyed_to_empty = (not genes
-                            and int(s.get("n_source_symbols") or 0) > 0
-                            and int(s.get("n_dropped_unmappable") or 0)
-                            == int(s.get("n_source_symbols") or 0))
-        _require(bool(genes) or rekeyed_to_empty,
-                 f"gene-set bundle: set {set_id!r} names no genes. A set may be empty ONLY "
-                 "if it was re-keyed and declares that every one of its source symbols was "
-                 "unmappable (n_source_symbols > 0, n_dropped_unmappable == "
-                 "n_source_symbols); an empty set that explains nothing is malformed")
-        _require(len(set(genes)) == len(genes),
-                 f"gene-set bundle: set {set_id!r} lists a gene twice; a duplicated gene "
-                 "would be double-counted by every statistic over the set")
 
-        # Genes absent from the effect universe were never MEASURABLE in this run. They
-        # are reported as coverage — never imputed, and never read as evidence of absence.
-        measured = sorted(g for g in genes if g in universe) if universe else []
+        # A two-namespace bundle names its memberships separately. A legacy single-list
+        # bundle (Ensembl ids, never re-keyed) is read as naming the same members in both.
+        two_ns = ("genes_target" in s) or ("genes_readout" in s)
+        if two_ns:
+            g_target = [str(g) for g in (s.get("genes_target") or [])]
+            g_readout = [str(g) for g in (s.get("genes_readout") or [])]
+        else:
+            legacy = [str(g) for g in (s.get("genes") or [])]
+            g_target = g_readout = legacy
 
-        # THE RE-KEYING LOSS, carried through (never collapsed away).
-        #
-        # A bundle re-keyed from symbols to Ensembl (``geneset_build.py``) has ALREADY
-        # dropped the members it could not map, so ``coverage`` above would come back 1.0
-        # for every set — a pathway record would then look perfectly covered while most of
-        # the pathway was never measured. These fields are the honest denominator: how many
-        # genes the set ORIGINALLY named, and how many of them this experiment could see.
         n_source = s.get("n_source_symbols")
-        n_dropped = s.get("n_dropped_unmappable")
+
+        # A set with NO members is normally malformed. There is exactly one honest way for
+        # it to happen: a RE-KEYED set that named genes and had none of them survive,
+        # because this experiment did not perturb or measure any of them. That is a real,
+        # informative state — "this pathway could never have been tested here" — and the
+        # lane emits it rather than deleting it: a pathway missing from the table is
+        # indistinguishable from one that was tested and found nothing.
+        #
+        # It must SAY that is what it is. An empty set that explains nothing is refused.
+        empty = not g_target and not g_readout
+        explained = bool(n_source) and int(n_source) > 0
+        _require(not empty or explained,
+                 f"gene-set bundle: set {set_id!r} names no genes. A set may be empty ONLY "
+                 "if it was re-keyed and declares how many source symbols it started from "
+                 "(n_source_symbols > 0); an empty set that explains nothing is malformed")
+        for label, g in (("genes_target", g_target), ("genes_readout", g_readout)):
+            _require(len(set(g)) == len(g),
+                     f"gene-set bundle: set {set_id!r} lists a gene twice in {label}; a "
+                     "duplicated gene would be double-counted by every statistic over it")
+
+        # MEMBERSHIP, per universe. Members outside a universe were never measurable /
+        # never perturbed in this run: reported as coverage, never imputed.
+        in_target = sorted(g for g in g_target if g in targets) if targets else []
+        in_readout = (sorted(g for g in g_readout if g in readout_universe)
+                      if readout_universe else [])
+
+        # THE HONEST DENOMINATOR. A re-keyed bundle has already dropped what it could not
+        # map, so a raw in-universe fraction reads 1.0 for every set and a pathway record
+        # would look perfectly covered while most of the pathway was never observed.
+        # `source_coverage` is the fraction of the genes the pathway ORIGINALLY NAMED that
+        # this run could act on at all.
+        src = int(n_source) if n_source else None
+        target_cov = (round(len(in_target) / src, 6) if src else None)
+        readout_cov = (round(len(in_readout) / src, 6) if src else None)
+
         sets[set_id] = {
             "set_id": set_id,
             "name": str(s.get("name") or set_id),
-            "genes": sorted(genes),
-            "n_genes": len(genes),
-            "genes_in_universe": measured,
-            "n_genes_in_universe": len(measured),
-            # None, not 0.0, for a set with no members: a coverage of zero would claim the
-            # ratio was computed and came out empty, and there is no ratio to compute.
-            "coverage": (round(len(measured) / len(genes), 6)
-                         if (universe and genes) else None),
-            # None for a bundle that was never re-keyed (it named Ensembl ids to begin
-            # with) — an absent loss is not a zero loss, and it does not pretend to be.
-            "n_source_symbols": (None if n_source is None else int(n_source)),
-            "n_dropped_unmappable": (None if n_dropped is None else int(n_dropped)),
-            "source_coverage": (round(len(measured) / int(n_source), 6)
-                                if n_source else None),
+            # THE MEMBERSHIP THE ARMS RANK. Enrichment and convergence both read this.
+            "genes_target": sorted(g_target),
+            "n_genes_target": len(g_target),
+            "genes_in_target_universe": in_target,
+            "n_genes_in_target_universe": len(in_target),
+            "target_source_coverage": target_cov,
+            # the signature vector space's view of the same pathway
+            "genes_readout": sorted(g_readout),
+            "n_genes_readout": len(g_readout),
+            "genes_in_universe": in_readout,
+            "n_genes_in_universe": len(in_readout),
+            "readout_source_coverage": readout_cov,
+            "n_source_symbols": src,
+            # what a reader must see before believing anything about this set: the
+            # coverage of the space the statistic is actually computed in.
+            "source_coverage": target_cov,
+            "coverage": (round(len(in_target) / len(g_target), 6)
+                         if (targets and g_target) else None),
+            **coverage_disposition(target_cov),
         }
 
     return {
@@ -259,13 +352,30 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
         "gene_set_license": expected,
         "gene_set_license_reference": reference,
         "gene_id_namespace": namespace,
+        # BOTH universes, bound and named (B1). A bundle that named only one could be
+        # joined against the other without anything noticing.
         "effect_universe_sha256": effect_universe_sha256,
+        "target_universe_sha256": target_universe_sha256,
+        "single_universe_binding": single_binding,
+        "n_effect_universe_genes": len(readout_universe),
+        "n_target_universe_genes": len(targets),
+        # B4: the PROSPECTIVE coverage governance, frozen before any result.
+        "coverage_policy_id": COVERAGE_POLICY_ID,
+        "min_source_coverage": MIN_SOURCE_COVERAGE,
+        "coverage_namespace": COVERAGE_NAMESPACE,
+        "n_headline_rankable_sets": sum(1 for v in sets.values()
+                                        if v["headline_rankable"]),
+        "n_descriptive_only_sets": sum(1 for v in sets.values()
+                                       if not v["headline_rankable"]),
         "min_set_size": MIN_SET_SIZE,
         "max_set_size": MAX_SET_SIZE,
         "sets": sets,
         # Recomputed from the parsed content, independent of any self-declared hash.
+        # BOTH memberships: two bundles that agree on one and differ on the other are
+        # different bundles, and would produce different pathway results.
         "canonical_sha256": content_hash(
-            [[k, v["genes"]] for k, v in sorted(sets.items())]),
+            [[k, v["genes_target"], v["genes_readout"]]
+             for k, v in sorted(sets.items())]),
     }
 
 

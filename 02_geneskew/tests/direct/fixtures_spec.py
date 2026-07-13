@@ -57,6 +57,24 @@ SYMBOL_TARGETS = {
 }
 RELEASE_CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 
+# B1. A target the release PERTURBED but never MEASURED: it is an obs row and not a var
+# column, exactly like the 2,029 real ones. Under the retired single-universe rule it
+# could never be a member of any pathway, however high it ranked.
+OFF_READOUT_TARGET = "ENSG00000000999"
+
+
+def gene_symbol(ensembl: str) -> str:
+    """The SYMBOL this fixture names a gene by, in BOTH namespaces.
+
+    A TARGET's readout symbol must equal its obs target symbol (``TargetSpec.target_symbol``
+    = ``SYM<last two>``), or the two crosswalks would disagree about the same gene — which
+    is a different bug from the one under test. Non-target universe genes get their own
+    family so the two never collide.
+    """
+    if ensembl in TARGET_GENES or ensembl == OFF_READOUT_TARGET:
+        return f"SYM{ensembl[-2:]}"
+    return f"G{ensembl[-3:]}"
+
 
 @dataclass
 class TargetSpec:

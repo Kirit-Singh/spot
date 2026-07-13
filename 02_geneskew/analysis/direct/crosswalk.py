@@ -58,8 +58,47 @@ from typing import Any, Optional
 from .hashing import content_hash, file_sha256
 from .io_data import _decode
 
-CROSSWALK_ID = "spot.stage02.symbol_to_ensembl.de_stats_var.v1"
-PRIMARY_SOURCE = "GWCD4i.DE_stats.h5ad:var(gene_name->gene_ids)"
+CROSSWALK_ID = "spot.stage02.symbol_to_ensembl.de_stats.v2"
+
+# --------------------------------------------------------------------------- #
+# TWO NAMESPACES, TWO UNIVERSES. This is the B1 fix, and it is a SCIENTIFIC one.
+#
+# The DE object carries two different gene populations, and they are NOT the same set:
+#
+#   READOUT  (var: gene_ids / gene_name)              10,282 genes — what was MEASURED.
+#            The columns of the effect matrix. This is the space a signature VECTOR
+#            lives in, and the space a cosine similarity is taken over.
+#
+#   TARGET   (obs: target_contrast / target_contrast_gene_name)
+#            11,526 genes — what was PERTURBED. The rows. This is the space the arms
+#            RANK, and therefore the space a ranked-arm enrichment tests membership in.
+#
+# Only 9,497 targets are also readout genes. **2,029 perturbed targets are not in the
+# readout universe at all.** Building gene-set membership against the readout universe —
+# which is what v1 did — silently made those 2,029 targets ineligible to be a member of
+# ANY pathway: they could be ranked at the very top of an arm and still never register as
+# a hit. That is a systematic false-negative, and it is invisible in the output, because
+# a gene that is not a member simply is not a member.
+#
+# So there are two crosswalks, each with its OWN authority, and each scoped to its own
+# universe. They are NOT unioned: three symbols (IL9R, PAXX, VAMP7) legitimately resolve
+# to a DIFFERENT Ensembl id in the two namespaces — a real annotation difference between
+# the var and obs axes of the same object — and collapsing them would force a false choice
+# between two correct answers.
+# --------------------------------------------------------------------------- #
+NAMESPACE_READOUT = "de_readout"
+NAMESPACE_TARGET = "perturbation_target"
+NAMESPACES = (NAMESPACE_READOUT, NAMESPACE_TARGET)
+
+PRIMARY_SOURCE = {
+    NAMESPACE_READOUT: "GWCD4i.DE_stats.h5ad:var(gene_name->gene_ids)",
+    NAMESPACE_TARGET:
+        "GWCD4i.DE_stats.h5ad:obs(target_contrast_gene_name->target_contrast)",
+}
+UNIVERSE_ROLE = {
+    NAMESPACE_READOUT: "signature_vector_space_and_effect_matrix_columns",
+    NAMESPACE_TARGET: "ranked_and_perturbed_population_gene_set_membership",
+}
 ALIAS_SOURCE = "sgrna_library_metadata.suppl_table.csv:(target_gene_name->target_gene_id)"
 
 # THE RULES, as ids. Stated once, above; an artifact carries the id, not the paragraph.
@@ -91,6 +130,30 @@ def _var_columns(h5ad_path: str) -> tuple[list[str], list[str]]:
         return _decode(var["gene_ids"][:]), _decode(var["gene_name"][:])
 
 
+def _obs_columns(h5ad_path: str) -> tuple[list[str], list[str]]:
+    """``obs/target_contrast`` and ``obs/target_contrast_gene_name``. obs ONLY.
+
+    The PERTURBATION-TARGET namespace: what the release actually knocked down, and the
+    population the arms rank. It is a different gene set from the readout axis, and the
+    release names it separately — so this is its own crosswalk, not a view of the other.
+    """
+    import h5py
+
+    from .io_data import read_categorical
+
+    with h5py.File(h5ad_path, "r") as fh:
+        obs = fh["obs"]
+        for col in ("target_contrast", "target_contrast_gene_name"):
+            if col not in obs:
+                raise CrosswalkError(
+                    f"{os.path.basename(h5ad_path)} has no obs/{col}; the perturbation-"
+                    "target namespace cannot be built and must not be inferred from the "
+                    "readout axis — they are different gene populations")
+        ids = read_categorical(obs["target_contrast"])
+        names = read_categorical(obs["target_contrast_gene_name"])
+    return [str(x) for x in ids], [str(x) for x in names]
+
+
 def _alias_rows(csv_path: str) -> dict[str, set]:
     """symbol -> {ensembl}, from the pinned sgRNA library table."""
     out: dict[str, set] = {}
@@ -103,12 +166,31 @@ def _alias_rows(csv_path: str) -> dict[str, set]:
     return out
 
 
-def build(de_main: str, sgrna: Optional[str] = None) -> dict[str, Any]:
-    """The pinned symbol -> Ensembl crosswalk, scoped to the effect universe."""
-    gene_ids, gene_names = _var_columns(de_main)
+def build(de_main: str, sgrna: Optional[str] = None,
+          namespace: str = NAMESPACE_READOUT) -> dict[str, Any]:
+    """The pinned symbol -> id crosswalk for ONE namespace, scoped to ITS universe.
+
+    ``namespace=de_readout``          var: what was MEASURED (signature vector space).
+    ``namespace=perturbation_target`` obs: what was PERTURBED (the ranked population, and
+                                      therefore the space gene-set membership must be
+                                      tested in for a ranked-arm enrichment). See the
+                                      module docstring: getting this wrong made 2,029
+                                      perturbed targets permanently ineligible to be a
+                                      member of any pathway.
+    """
+    if namespace not in NAMESPACES:
+        raise CrosswalkError(
+            f"unknown namespace {namespace!r}; expected one of {list(NAMESPACES)}")
+
+    if namespace == NAMESPACE_READOUT:
+        gene_ids, gene_names = _var_columns(de_main)
+        what = "var/gene_ids", "var/gene_name"
+    else:
+        gene_ids, gene_names = _obs_columns(de_main)
+        what = "obs/target_contrast", "obs/target_contrast_gene_name"
     if len(gene_ids) != len(gene_names):
         raise CrosswalkError(
-            f"var/gene_ids ({len(gene_ids)}) and var/gene_name ({len(gene_names)}) are "
+            f"{what[0]} ({len(gene_ids)}) and {what[1]} ({len(gene_names)}) are "
             "different lengths; they do not describe the same genes")
 
     universe = set(gene_ids)
@@ -147,13 +229,15 @@ def build(de_main: str, sgrna: Optional[str] = None) -> dict[str, Any]:
 
     return {
         "crosswalk_id": CROSSWALK_ID,
+        "namespace": namespace,
+        "universe_role": UNIVERSE_ROLE[namespace],
         "ambiguity_rule_id": AMBIGUITY_RULE_ID,
         "alias_rule_id": ALIAS_RULE_ID,
-        "primary_source": PRIMARY_SOURCE,
+        "primary_source": PRIMARY_SOURCE[namespace],
         "primary_source_sha256": file_sha256(de_main),
         "alias_source": (ALIAS_SOURCE if sgrna else None),
         "alias_source_sha256": (file_sha256(sgrna) if sgrna else None),
-        "n_effect_universe_genes": len(universe),
+        "n_universe_genes": len(universe),
         "n_rows": len(mapping),
         "n_primary_rows": primary_n,
         "n_alias_rows": len(aliases),
@@ -166,6 +250,17 @@ def build(de_main: str, sgrna: Optional[str] = None) -> dict[str, Any]:
         "canonical_sha256": content_hash(
             [[s, mapping[s]] for s in sorted(mapping)]),
     }
+
+
+def build_both(de_main: str, sgrna: Optional[str] = None) -> dict[str, Any]:
+    """BOTH crosswalks. They are kept separate, and deliberately NOT unioned.
+
+    Three symbols (IL9R, PAXX, VAMP7) resolve to a different Ensembl id on the var axis
+    than on the obs axis — a real annotation difference inside the same object. A union
+    would have to pick one, and picking would put a gene in a pathway under an id the
+    computation that reads it does not use. Each namespace keeps its own authority.
+    """
+    return {ns: build(de_main, sgrna, namespace=ns) for ns in NAMESPACES}
 
 
 def provenance_block(xw: dict[str, Any]) -> dict[str, Any]:

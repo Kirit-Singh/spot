@@ -147,8 +147,13 @@ def test_a_duplicate_gene_in_a_set_is_refused(tmp_path):
 
 def test_genes_absent_from_the_universe_are_COVERAGE_not_imputed(bundle):
     for s in bundle["sets"].values():
-        assert set(s["genes_in_universe"]) <= set(UNIVERSE)
-        assert s["n_genes_in_universe"] <= s["n_genes"]
+        # B1: TWO universes. Membership is decided in the TARGET space (the arms rank
+        # perturbed targets); the readout space is where signature vectors live.
+        assert set(s["genes_in_universe"]) <= set(UNIVERSE)          # readout
+        assert set(s["genes_in_target_universe"]) <= set(UNIVERSE)   # target
+        assert s["n_genes_in_readout_universe" if False else "n_genes_in_universe"] \
+            <= s["n_genes_readout"]
+        assert s["n_genes_in_target_universe"] <= s["n_genes_target"]
         assert 0.0 <= s["coverage"] <= 1.0
 
 

@@ -86,67 +86,88 @@ def read_gmt(path: str, source: str) -> list[dict[str, Any]]:
     return sets
 
 
-def rekey(sets: list[dict[str, Any]], xw: dict[str, Any]) -> dict[str, Any]:
-    """Map every set's members symbol -> Ensembl. Drops are counted, never hidden."""
-    out, losses = [], []
-    n_src = n_map = n_drop = 0
+def _loss_block(out: list[dict[str, Any]], key: str) -> dict[str, Any]:
+    """The mapping loss for ONE namespace. Per set and in total."""
+    n_src = sum(o["n_source_symbols"] for o in out)
+    n_map = sum(o[f"n_{key}"] for o in out)
+    losses = sorted(((1 - o[f"n_{key}"] / o["n_source_symbols"], o["set_id"])
+                     for o in out if o["n_source_symbols"]), reverse=True)
+    testable = [o for o in out if o[f"n_{key}"] >= genesets.MIN_SET_SIZE]
+    worst_t = max(((1 - o[f"n_{key}"] / o["n_source_symbols"]), o["set_id"])
+                  for o in testable) if testable else (None, None)
+    return {
+        "n_sets": len(out),
+        "n_sets_with_zero_mapped_genes": sum(1 for o in out if not o[f"n_{key}"]),
+        "n_sets_at_or_above_min_size": len(testable),
+        "min_set_size": genesets.MIN_SET_SIZE,
+        "n_source_member_slots": n_src,
+        "n_mapped_member_slots": n_map,
+        "n_dropped_member_slots": n_src - n_map,
+        "total_loss_fraction": (round((n_src - n_map) / n_src, 6) if n_src else None),
+        "worst_set_loss_fraction": (round(losses[0][0], 6) if losses else None),
+        "worst_set_id": (losses[0][1] if losses else None),
+        "worst_testable_set_loss_fraction": (round(worst_t[0], 6)
+                                             if worst_t[0] is not None else None),
+        "worst_testable_set_id": worst_t[1],
+        "drop_reason_note": crosswalk.DROP_NOT_IN_UNIVERSE,
+    }
+
+
+def rekey(sets: list[dict[str, Any]], xws: dict[str, Any]) -> dict[str, Any]:
+    """Map every set's members into BOTH namespaces. Drops counted per namespace.
+
+    ``genes_target``  — members that were PERTURBED. This is what ranked-arm ENRICHMENT
+                        tests membership against, because the arms rank targets. It is
+                        also what CONVERGENCE selects members from, because a signature
+                        only exists for a gene that was knocked down.
+    ``genes_readout`` — members that were MEASURED. The signature VECTOR SPACE. Carried
+                        because a reader must be able to see how much of the pathway the
+                        assay could even observe.
+
+    The two are different sets, they are computed from different crosswalks, and neither
+    substitutes for the other (B1).
+    """
+    ro, tg = xws[crosswalk.NAMESPACE_READOUT], xws[crosswalk.NAMESPACE_TARGET]
+    out = []
     for s in sets:
-        m = crosswalk.map_symbols(xw, s["symbols"])
-        n_src += m["n_source_symbols"]
-        n_map += m["n_mapped"]
-        n_drop += m["n_dropped"]
+        m_ro = crosswalk.map_symbols(ro, s["symbols"])
+        m_tg = crosswalk.map_symbols(tg, s["symbols"])
+        n_src = m_tg["n_source_symbols"]
         out.append({
             "set_id": s["set_id"],
             "name": s["name"],
-            # what genesets.load reads: the Ensembl members
-            "genes": m["ensembl"],
-            # ...and what it must never be allowed to forget
-            "n_source_symbols": m["n_source_symbols"],
-            "n_mapped": m["n_mapped"],
-            "n_dropped_unmappable": m["n_dropped"],
-            "source_coverage": (round(m["n_mapped"] / m["n_source_symbols"], 6)
-                                if m["n_source_symbols"] else None),
-            "dropped_symbols": [d["symbol"] for d in m["dropped"]],
-            "drop_reasons": sorted({d["reason"] for d in m["dropped"]}),
+            # THE MEMBERSHIP the arms are ranked in
+            "genes_target": m_tg["ensembl"],
+            "n_genes_target": m_tg["n_mapped"],
+            "n_dropped_target": m_tg["n_dropped"],
+            "target_source_coverage": (round(m_tg["n_mapped"] / n_src, 6)
+                                       if n_src else None),
+            # the signature vector space's view of the same pathway
+            "genes_readout": m_ro["ensembl"],
+            "n_genes_readout": m_ro["n_mapped"],
+            "n_dropped_readout": m_ro["n_dropped"],
+            "readout_source_coverage": (round(m_ro["n_mapped"] / n_src, 6)
+                                        if n_src else None),
+            "n_source_symbols": n_src,
         })
-        if m["n_source_symbols"]:
-            losses.append((1 - m["n_mapped"] / m["n_source_symbols"], s["set_id"]))
-
-    losses.sort(reverse=True)
-    testable = [o for o in out if o["n_mapped"] >= genesets.MIN_SET_SIZE]
-    worst_testable = max(
-        ((1 - o["n_mapped"] / o["n_source_symbols"]), o["set_id"])
-        for o in testable) if testable else (None, None)
-
     return {
         "sets": out,
         "mapping_loss": {
-            "n_sets": len(out),
-            "n_sets_with_zero_mapped_genes": sum(1 for o in out if not o["n_mapped"]),
-            "n_sets_at_or_above_min_size": len(testable),
-            "min_set_size": genesets.MIN_SET_SIZE,
-            "n_source_member_slots": n_src,
-            "n_mapped_member_slots": n_map,
-            "n_dropped_member_slots": n_drop,
-            "total_loss_fraction": (round(n_drop / n_src, 6) if n_src else None),
-            "worst_set_loss_fraction": (round(losses[0][0], 6) if losses else None),
-            "worst_set_id": (losses[0][1] if losses else None),
-            "worst_testable_set_loss_fraction": (
-                round(worst_testable[0], 6) if worst_testable[0] is not None else None),
-            "worst_testable_set_id": worst_testable[1],
-            "drop_reason_note": crosswalk.DROP_NOT_IN_UNIVERSE,
+            crosswalk.NAMESPACE_TARGET: _loss_block(out, "genes_target"),
+            crosswalk.NAMESPACE_READOUT: _loss_block(out, "genes_readout"),
         },
     }
 
 
 def build(*, source: str, gmt: str, release: dict[str, Any], de_main: str,
           out_dir: str, sgrna: Optional[str] = None,
-          effect_universe_sha256: Optional[str] = None) -> dict[str, Any]:
-    """Re-key one source's GMT and write an ENSEMBL-keyed, content-addressed bundle."""
+          effect_universe_sha256: Optional[str] = None,
+          target_universe_sha256: Optional[str] = None) -> dict[str, Any]:
+    """Re-key one source's GMT into BOTH namespaces; write a content-addressed bundle."""
     os.makedirs(out_dir, exist_ok=True)
-    xw = crosswalk.build(de_main, sgrna)
+    xws = crosswalk.build_both(de_main, sgrna)
     sets = read_gmt(gmt, source)
-    result = rekey(sets, xw)
+    result = rekey(sets, xws)
 
     # The LICENCE is carried through unchanged from the symbol cache's corrected
     # provenance — Reactome CC0-1.0, GO-BP CC-BY-4.0 dated. A re-keying does not change
@@ -161,7 +182,10 @@ def build(*, source: str, gmt: str, release: dict[str, Any], de_main: str,
         },
         # THE POINT OF THE WHOLE EXERCISE
         "gene_id_namespace": genesets.ENSEMBL_GENE_ID,
+        # BOTH universes, bound explicitly. A bundle that named only one could be joined
+        # against the other without anything noticing — which is exactly what B1 was.
         "effect_universe_sha256": effect_universe_sha256,
+        "target_universe_sha256": target_universe_sha256,
         "sets": result["sets"],
     }
     path = os.path.join(out_dir, f"{source}_ensembl.genesets.json")
@@ -173,21 +197,22 @@ def build(*, source: str, gmt: str, release: dict[str, Any], de_main: str,
         "source": source,
         "path": path,
         "sha256": file_sha256(path),
-        # content-addressed on the SCIENCE (set ids + their members), not on formatting
+        # content-addressed on the SCIENCE (set ids + BOTH memberships), not on formatting
         "canonical_sha256": content_hash(
-            [[s["set_id"], s["genes"]] for s in sorted(result["sets"],
-                                                       key=lambda s: s["set_id"])]),
+            [[s["set_id"], s["genes_target"], s["genes_readout"]]
+             for s in sorted(result["sets"], key=lambda s: s["set_id"])]),
         "n_sets": len(result["sets"]),
         "gmt_sha256": file_sha256(gmt),
         "release": doc["release"],
         "mapping_loss": result["mapping_loss"],
-        "crosswalk": crosswalk.provenance_block(xw),
+        "crosswalk": {ns: crosswalk.provenance_block(xw) for ns, xw in xws.items()},
     }
 
 
 def build_cache(*, cache_dir: str, de_main: str, out_dir: str,
                 sgrna: Optional[str] = None,
-                effect_universe_sha256: Optional[str] = None) -> dict[str, Any]:
+                effect_universe_sha256: Optional[str] = None,
+                target_universe_sha256: Optional[str] = None) -> dict[str, Any]:
     """Re-key EVERY lane of the symbol cache and emit the Ensembl cache + provenance."""
     with open(os.path.join(cache_dir, "provenance.json")) as fh:
         symbol_prov = json.load(fh)
@@ -202,7 +227,8 @@ def build_cache(*, cache_dir: str, de_main: str, out_dir: str,
                      "license": lane["license"],
                      "license_reference": lane["license_reference"]},
             de_main=de_main, out_dir=out_dir, sgrna=sgrna,
-            effect_universe_sha256=effect_universe_sha256)
+            effect_universe_sha256=effect_universe_sha256,
+            target_universe_sha256=target_universe_sha256)
 
     prov = {
         "schema_version": CACHE_SCHEMA,
@@ -216,6 +242,7 @@ def build_cache(*, cache_dir: str, de_main: str, out_dir: str,
             "identifier_namespace": "gene symbol",
         },
         "effect_universe_sha256": effect_universe_sha256,
+        "target_universe_sha256": target_universe_sha256,
         "lanes": {k: {kk: vv for kk, vv in v.items() if kk != "crosswalk"}
                   for k, v in lanes.items()},
         "crosswalk": next(iter(lanes.values()))["crosswalk"],
@@ -243,20 +270,27 @@ def main(argv=None) -> int:
     ap.add_argument("--out-dir", required=True)
     args = ap.parse_args(argv)
 
-    from . import io_data
+    from . import identity, io_data
     from . import universe as uni
 
     gene_universe = uni.primary_universe(io_data.load_main_gene_ids(args.de_main))
+    raw = io_data.load_main_identity_universe(args.de_main)
+    by_cond = {c: {t: identity.resolve(r["released_estimate_id"], r["target_id"],
+                                       r["target_symbol"], {})
+                   for t, r in tg.items()} for c, tg in raw.items()}
+    target_uni = uni.target_universe(by_cond)
     prov = build_cache(cache_dir=args.cache_dir, de_main=args.de_main,
                        out_dir=args.out_dir, sgrna=args.sgrna,
-                       effect_universe_sha256=gene_universe["sha256"])
+                       effect_universe_sha256=gene_universe["sha256"],
+                       target_universe_sha256=target_uni["sha256"])
     print(json.dumps({
         "identifier_namespace": prov["identifier_namespace"],
         "effect_universe_sha256": prov["effect_universe_sha256"],
-        "crosswalk": {k: prov["crosswalk"][k] for k in
-                      ("crosswalk_id", "primary_source", "primary_source_sha256",
-                       "n_rows", "n_primary_rows", "n_alias_rows",
-                       "n_ambiguous_symbols")},
+        "target_universe_sha256": prov["target_universe_sha256"],
+        "crosswalk": {ns: {k: x[k] for k in
+                           ("namespace", "primary_source", "n_rows", "n_primary_rows",
+                            "n_alias_rows", "n_ambiguous_symbols", "n_universe_genes")}
+                      for ns, x in prov["crosswalk"].items()},
         "lanes": {k: {"n_sets": v["n_sets"], "canonical_sha256": v["canonical_sha256"],
                       "license": v["release"]["license"],
                       "mapping_loss": v["mapping_loss"]}

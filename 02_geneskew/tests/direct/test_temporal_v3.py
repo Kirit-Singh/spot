@@ -230,8 +230,9 @@ class TestTheContractIsObeyedWholly:
     def test_a_WITHIN_condition_v3_contract_is_refused_by_the_temporal_runner(
             self, ghost_run):
         args = ghost_run(contract=v3_contract(mode=G.MODE_WITHIN, conditions=(REST,)))
-        with pytest.raises(ValueError, match="TEMPORAL runner"):
+        with pytest.raises(G.SelectionV3Error) as exc:
             run_temporal.build_temporal(args)
+        assert exc.value.reason == G.REFUSE_MODE_ROUTE
 
     def test_a_v3_contract_naming_a_program_the_registry_lacks_is_REFUSED(self,
                                                                           ghost_run):

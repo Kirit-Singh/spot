@@ -19,7 +19,6 @@ ran — that is asserted, not asserted-ish, by the invariance test.
 from __future__ import annotations
 
 import datetime as _dt
-import json
 import os
 from typing import Any, Optional
 
@@ -79,39 +78,9 @@ def _comparison_block(from_cond: str, to_cond: str,
 
 
 def load_v3(args):
-    """THE ONE VERIFIED TYPED V3 OBJECT, or None (B3).
-
-    It carries the BIOLOGY (poles), the ORDER (from -> to) and the IDENTITY (full-contract
-    hash) together, and everything downstream takes all three from it. The retired code
-    reached in for the CONDITIONS alone and then executed the legacy contract's axes: a
-    valid v3 request for ``GHOST_A -> GHOST_B, Stim48hr -> Rest`` came back scored on
-    ``diff_naive``/``th17_like``, in BOTH directions, bound to the legacy selection — and
-    it ADMITTED. A contract you obey selectively is a contract you do not obey.
-    """
-    path = getattr(args, "stage1_v3_selection", None)
-    schema = getattr(args, "stage1_v3_schema", None)
-    if not path:
-        return None
+    """The verified typed v3 object for THIS lane. Shared gate; temporal mode enforced."""
     from .. import stage1_v3
-
-    if not schema:
-        raise ValueError(
-            "--stage1-v3-selection requires --stage1-v3-schema: the contract is "
-            "validated against the PINNED schema, and a contract checked against no "
-            "schema has been checked against nothing")
-    # The FULL v3 gate: schema pin, content hash, one-biology, condition count, routing,
-    # estimator availability and the execution status that must FOLLOW from all of it.
-    with open(path) as fh:
-        doc = json.load(fh)
-    bound = stage1_v3.validate(doc, stage1_v3.load_schema(schema))
-    if bound["analysis_mode"] != stage1_v3.MODE_TEMPORAL:
-        raise ValueError(
-            f"this is the TEMPORAL runner, but the v3 selection declares analysis_mode "
-            f"{bound['analysis_mode']!r}. A within-condition selection is not executed "
-            "here — the two estimators answer different questions and their numbers look "
-            "alike")
-    lane = getattr(args, "lane", None) or "production"
-    return stage1_v3.as_selection(bound, doc, lane)
+    return stage1_v3.load_selection(args, expect_mode=stage1_v3.MODE_TEMPORAL)
 
 
 def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, Any]:

@@ -50,8 +50,13 @@ def genuine_signatures():
 
 
 def _bundle(members: list[str]) -> dict:
+    # B1: membership lives in the PERTURBATION-TARGET space — the space the arms rank and
+    # the space signatures exist in. `genes_readout` is the signature VECTOR space's view.
     return {"sets": {"PW:TEST": {"name": "the pathway under test",
-                                 "genes": members, "n_genes": len(members)}}}
+                                 "genes_target": members,
+                                 "n_genes_target": len(members),
+                                 "genes_readout": members,
+                                 "n_genes_readout": len(members)}}}
 
 
 def _converge(signatures, members):

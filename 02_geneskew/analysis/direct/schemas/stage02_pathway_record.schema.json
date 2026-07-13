@@ -223,6 +223,13 @@
               "null"
             ]
           },
+          "coverage_disposition": {
+            "enum": [
+              "rankable",
+              "descriptive_only_low_source_coverage",
+              "descriptive_only_source_coverage_unknown"
+            ]
+          },
           "direct_config_sha256": {
             "pattern": "^[0-9a-f]{64}$",
             "type": "string"
@@ -281,11 +288,17 @@
                   ]
                 },
                 "properties": {
+                  "coverage_disposition": {
+                    "type": "string"
+                  },
                   "enrichment_value": {
                     "type": [
                       "number",
                       "null"
                     ]
+                  },
+                  "headline_rankable": {
+                    "type": "boolean"
                   },
                   "inference_status": {
                     "const": "not_calibrated"
@@ -360,7 +373,9 @@
                   "inference_status",
                   "no_pq_reason",
                   "leading_edge_side",
-                  "leading_edge_convention"
+                  "leading_edge_convention",
+                  "coverage_disposition",
+                  "headline_rankable"
                 ],
                 "type": "object"
               },
@@ -411,11 +426,17 @@
                   ]
                 },
                 "properties": {
+                  "coverage_disposition": {
+                    "type": "string"
+                  },
                   "enrichment_value": {
                     "type": [
                       "number",
                       "null"
                     ]
+                  },
+                  "headline_rankable": {
+                    "type": "boolean"
                   },
                   "inference_status": {
                     "const": "not_calibrated"
@@ -490,7 +511,9 @@
                   "inference_status",
                   "no_pq_reason",
                   "leading_edge_side",
-                  "leading_edge_convention"
+                  "leading_edge_convention",
+                  "coverage_disposition",
+                  "headline_rankable"
                 ],
                 "type": "object"
               }
@@ -542,6 +565,9 @@
             ],
             "type": "object"
           },
+          "headline_rankable": {
+            "type": "boolean"
+          },
           "n_dropped_unmappable": {
             "minimum": 0,
             "type": [
@@ -549,8 +575,16 @@
               "null"
             ]
           },
+          "n_genes_in_readout_universe": {
+            "minimum": 0,
+            "type": "integer"
+          },
           "n_genes_in_set": {
             "minimum": 1,
+            "type": "integer"
+          },
+          "n_genes_in_target_universe": {
+            "minimum": 0,
             "type": "integer"
           },
           "n_genes_in_universe": {
@@ -561,6 +595,14 @@
             "minimum": 0,
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "readout_source_coverage": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
               "null"
             ]
           },
@@ -614,6 +656,14 @@
               "number",
               "null"
             ]
+          },
+          "target_source_coverage": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
@@ -633,7 +683,13 @@
           "science_may_change_primary_ranks",
           "n_source_symbols",
           "n_dropped_unmappable",
-          "source_coverage"
+          "source_coverage",
+          "n_genes_in_target_universe",
+          "n_genes_in_readout_universe",
+          "target_source_coverage",
+          "readout_source_coverage",
+          "coverage_disposition",
+          "headline_rankable"
         ],
         "type": "object"
       },

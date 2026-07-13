@@ -153,7 +153,7 @@ def pairwise_within_sets(bundle: dict[str, Any],
     """
     wanted: set[tuple[str, str]] = set()
     for s in bundle["sets"].values():
-        measured = sorted(g for g in s["genes"] if g in signatures)
+        measured = sorted(g for g in s["genes_target"] if g in signatures)
         for i, a in enumerate(measured):
             for b in measured[i + 1:]:
                 wanted.add((a, b))
@@ -233,7 +233,11 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
 
     for set_id in sorted(bundle["sets"]):
         s = bundle["sets"][set_id]
-        measured = sorted(g for g in s["genes"] if g in signatures)
+        # B1: a SIGNATURE exists only for a gene that was PERTURBED, so a set's candidate
+        # members live in the PERTURBATION-TARGET universe — not the readout universe. The
+        # readout universe is the space the signature VECTORS live in (the cosine is taken
+        # over readout genes); it is not the space membership is decided in.
+        measured = sorted(g for g in s["genes_target"] if g in signatures)
         member_set = set(measured)
 
         # THE INDUCED SUBGRAPH: only pairs whose BOTH endpoints are members of this set.
@@ -266,7 +270,7 @@ def converge_sets(bundle: dict[str, Any], signatures: dict[str, dict[str, float]
             "membership_restriction": MEMBERSHIP_RESTRICTION,
             "support_may_route_through_non_members":
                 SUPPORT_MAY_ROUTE_THROUGH_NON_MEMBERS,
-            "n_genes_in_set": s["n_genes"],
+            "n_genes_in_set": s["n_genes_target"],
             "n_measured_perturbations": len(measured),
             "measured_perturbations": measured,
             "n_supporting_perturbations": n_supporting,

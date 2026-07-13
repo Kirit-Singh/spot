@@ -32,18 +32,20 @@ def gene_set_doc(universe: list[str], targets: list[str],
     t = list(targets)
     filler = [g for g in universe if g not in t]
 
-    sets = [
-        {"set_id": "FX:CONVERGENT", "name": "convergent pathway",
-         "genes": t[0:3] + filler[0:2]},
-        {"set_id": "FX:SINGLE", "name": "single-target pathway",
-         "genes": [t[3]] + filler[2:6]},
-        {"set_id": "FX:DIVERGENT", "name": "divergent pathway",
-         "genes": t[4:7] + filler[6:8]},
-        {"set_id": "FX:TOO_SMALL", "name": "too small to test",
-         "genes": t[7:8]},
-        {"set_id": "FX:UNMEASURED", "name": "never perturbed",
-         "genes": filler[8:14]},
+    raw = [
+        ("FX:CONVERGENT", "convergent pathway", t[0:3] + filler[0:2]),
+        ("FX:SINGLE", "single-target pathway", [t[3]] + filler[2:6]),
+        ("FX:DIVERGENT", "divergent pathway", t[4:7] + filler[6:8]),
+        ("FX:TOO_SMALL", "too small to test", t[7:8]),
+        ("FX:UNMEASURED", "never perturbed", filler[8:14]),
     ]
+    # This bundle names Ensembl ids directly (no re-keying), so it declares that it
+    # retained every gene it names: n_source_symbols == the members. A bundle that cannot
+    # say how much of a pathway it kept is DESCRIPTIVE-ONLY (B4), and that is the right
+    # answer for one that will not say — but this one can.
+    sets = [{"set_id": sid, "name": name, "genes": genes,
+             "n_source_symbols": len(genes), "n_dropped_unmappable": 0}
+            for sid, name, genes in raw]
     return {
         "schema_version": genesets.SCHEMA_VERSION,
         "release": {"source": SOURCE, "release_id": RELEASE_ID,

@@ -42,6 +42,7 @@ from typing import Any, Optional
 
 from . import config, convergence, emit, enrichment, gate, genesets, pathway, runid
 from . import run_screen as rs
+from . import universe as uni
 from .hashing import canonical_json, content_hash, sha256_hex
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,8 +71,12 @@ def build_pathway(args) -> dict[str, Any]:
     """Compute the pathway evidence table from the real signatures and pinned sets."""
     created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
+    # B3: a Stage-1 v3 WITHIN-CONDITION selection drives this lane natively too.
+    from . import stage1_v3
+    v3 = stage1_v3.load_selection(args, expect_mode=stage1_v3.MODE_WITHIN)
+
     # THE SAME binding and THE SAME release gate the screen runs.
-    ctx = rs.prepare(args)
+    ctx = rs.prepare(args, v3=v3)
     from . import preflight
     verdict = preflight.assess(args, ctx)
     if verdict["verdict"] != preflight.GO:
@@ -84,9 +89,20 @@ def build_pathway(args) -> dict[str, Any]:
     identity_hashes = rs.identity_hashes_of(manifest)
     gene_universe = ctx["gene_universe"]
 
-    # ---- the PINNED gene sets, bound to THIS run's effect universe ----
+    # ---- the TWO universes (B1). They are different gene populations. ----
+    # READOUT: what was MEASURED — the effect-matrix columns, the signature vector space.
+    # TARGET : what was PERTURBED — the population the arms RANK, and therefore the space
+    #          a ranked-arm enrichment must test gene-set membership in.
+    # 11,526 targets, 10,282 readout genes, 9,497 in common: 2,029 perturbed targets are
+    # not readout genes. Testing membership in the readout universe made those 2,029
+    # permanently ineligible to be a member of ANY pathway — a systematic false negative
+    # that nothing in the output would have shown.
+    target_universe = uni.target_universe(ctx["identities_by_condition"])
+
+    # ---- the PINNED gene sets, bound to BOTH of this run's universes ----
     bundle = genesets.load(getattr(args, "gene_sets", None),
-                           gene_universe["gene_ids"], gene_universe["sha256"])
+                           gene_universe["gene_ids"], gene_universe["sha256"],
+                           target_universe["target_ids"], target_universe["sha256"])
     if bundle is None:
         raise gate.GateError(
             "pathway run requires --gene-sets: a pinned, licensed, release-identified "
@@ -95,7 +111,9 @@ def build_pathway(args) -> dict[str, Any]:
             "contested, and a pathway result computed against one is not evidence")
 
     # ---- the SIGNATURES: only gene-set members, masked by the score's own mask ----
-    members = {g for s in bundle["sets"].values() for g in s["genes"]}
+    # Members in the TARGET namespace: a signature only exists for a gene that was
+    # PERTURBED, and those are the ids condition_rows keys its signatures by.
+    members = {g for s in bundle["sets"].values() for g in s["genes_target"]}
     built = rs.condition_rows(ctx=ctx, args=args, cond=ctx["cond"],
                               identity_hashes=identity_hashes,
                               guide_ids=ctx["guide_ids"], donor_ids=ctx["donor_ids"],
@@ -124,6 +142,11 @@ def build_pathway(args) -> dict[str, Any]:
             [{"name": i["name"], "sha256": i["sha256"], "size_bytes": i["size_bytes"]}
              for i in manifest], key=lambda i: i["name"]),
         "gene_universe_sha256": gene_universe["sha256"],
+        # B1: BOTH universes bound into the run identity, by id and by size. A run that
+        # swapped them would answer a different question and must not keep this id.
+        "target_universe_sha256": target_universe["sha256"],
+        "n_effect_universe_genes": len(gene_universe["gene_ids"]),
+        "n_target_universe_genes": target_universe["n_targets"],
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
         # M2: the reproducible code-identity tuple; a release lane refuses a dirty tree

@@ -427,3 +427,46 @@ def test_the_canonical_fixture_agrees_with_what_the_lane_emits(canonical, artifa
             == c["support_status"])
     assert (canonical["screen"]["row_example"]["B_support_status"]
             == c["support_status"])
+
+
+# --------------------------------------------------------------------------- #
+# Round-3 MAJORS — the upstream significance gate and the mask rule must be SURFACED
+# in the emitted provenance, not left to a method doc.
+# --------------------------------------------------------------------------- #
+def test_the_upstream_significance_gate_is_NAMED_in_the_provenance(artifacts):
+    """'spot emits no p/q' is true and is not the whole truth: ranking eligibility
+    consumes an UPSTREAM significance flag. A reader who took the first statement for
+    'no significance decides anything here' would be wrong."""
+    from direct import config
+    gate = artifacts["provenance.json"]["upstream_significance_gate"]
+    assert gate == config.UPSTREAM_SIGNIFICANCE_GATE
+    # its SOURCE
+    assert gate["field"] == "ontarget_significant"
+    assert "obs.ontarget_significant" in gate["source"]
+    assert gate["computed_by"] == "upstream_release_de_model_not_spot"
+    # its CONSEQUENCE
+    assert gate["consequence"] == \
+        "false_means_base_qc_fails_and_target_is_unranked_in_both_arms"
+    # ...and what it is NOT: spot adds no inference of its own
+    assert gate["spot_recomputes_it"] is False
+    assert gate["spot_rethresholds_it"] is False
+    assert gate["spot_emits_any_p_or_q"] is False
+    # a MISSING flag is not favourable evidence
+    assert gate["missing_is_favourable"] is False
+
+
+def test_the_MASK_RULE_is_emitted_in_full(artifacts):
+    from direct import config
+    rule = artifacts["provenance.json"]["mask_rule"]
+    # JSON has no tuples: compare on content, not on the container type
+    expect = dict(config.MASK_RULE,
+                  removed_gene_classes=list(config.MASK_RULE["removed_gene_classes"]))
+    assert rule == expect
+    assert set(rule["removed_gene_classes"]) == {
+        "intended_target",
+        "neighbor_within_30kb_window",
+        "offtarget_alignment_of_contributing_guides"}
+    assert rule["window_kb"] == 30
+    assert rule["contributing_guides_only"] is True
+    assert rule["unresolved_contributors_yield"] == "no_mask_and_no_score"
+    assert rule["sgrna_alias_rows"] == 26

@@ -186,6 +186,65 @@ MIN_GUIDES_FOR_REPLICATION = 2   # distinct, mapped AND evaluated guides, PER AR
 SIGN_EPS = 1e-9
 
 INFERENCE_STATUS = "not_calibrated"       # no calibrated null -> no p/q
+
+# --------------------------------------------------------------------------- #
+# THE UPSTREAM SIGNIFICANCE GATE (round-3 MAJOR). SURFACED, not hidden.
+#
+# "No new p/q anywhere" is true and it is NOT the whole truth. Stage-2 calibrates no null
+# and emits no p, q or FDR of its own — but RANKING ELIGIBILITY consumes an UPSTREAM
+# significance flag: `obs.ontarget_significant`, computed by the RELEASE's own DE model,
+# not by us. A target whose knockdown did not significantly reduce its own transcript is
+# base-QC-ineligible and therefore unranked.
+#
+# Letting "we emit no p/q" stand for "no significance decides anything here" would be a
+# true sentence doing a false job. So the gate is named, its source is named, and its
+# consequence is named — in the emitted provenance, where a reader looks, not only in a
+# method doc.
+#
+# WHAT IT IS         obs.ontarget_significant (boolean, per target x condition)
+# WHO COMPUTED IT    the Marson GWCD4i release's own DE model (DESeq2), upstream of spot
+# WHAT IT DOES HERE  false -> base QC fails -> the target is NOT RANKED in either arm
+# WHAT IT DOES NOT   it produces no p/q in any spot artifact, and spot never recomputes,
+#                    re-thresholds or re-interprets it. It is consumed as a released
+#                    boolean, exactly as the release published it.
+# MISSING            a missing flag is NOT favourable evidence: it is an explicit
+#                    non-evaluable disposition (missing_qc:ontarget_significant).
+# --------------------------------------------------------------------------- #
+# A MACHINE block: ids, enums, booleans. The paragraph above is the explanation; a served
+# artifact carries the id, not the paragraph.
+UPSTREAM_SIGNIFICANCE_GATE = {
+    "gate_id": "spot.stage02.direct.upstream_significance_gate.v1",
+    "field": "ontarget_significant",
+    "source": "GWCD4i.DE_stats.h5ad:obs.ontarget_significant",
+    "computed_by": "upstream_release_de_model_not_spot",
+    "consumed_as": "released_boolean_verbatim",
+    "consequence": "false_means_base_qc_fails_and_target_is_unranked_in_both_arms",
+    "spot_recomputes_it": False,
+    "spot_rethresholds_it": False,
+    "spot_emits_any_p_or_q": False,
+    "missing_is_favourable": False,
+    "missing_disposition": "missing_qc:ontarget_significant",
+}
+
+# --------------------------------------------------------------------------- #
+# THE MASK RULE, stated in full (round-3 MAJOR). Emitted, not merely versioned.
+# --------------------------------------------------------------------------- #
+MASK_RULE = {
+    "mask_rule_id": "spot.stage02.direct.mask_rule.target_neighbourhood_offtarget.v1",
+    "mask_method_version": "stage2-direct-mask-v1-contributing-guide-and-offtarget",
+    # WHAT IS REMOVED from BOTH the panel and the control gene sets, per estimate, BEFORE
+    # either mean is taken. Enumerated as ids, not prose.
+    "removed_gene_classes": ("intended_target",
+                             "neighbor_within_30kb_window",
+                             "offtarget_alignment_of_contributing_guides"),
+    "window_kb": 30,
+    "neighborhood_column": "nearby_gene_within_30kb",
+    "contributing_guides_only": True,
+    "contributing_guide_source": "proven_contributor_manifest",
+    "unresolved_contributors_yield": "no_mask_and_no_score",
+    "sgrna_alias_rows": 26,
+    "sgrna_alias_source": "sgrna_library_metadata.suppl_table.csv",
+}
 CRISPRI_MODALITY = "CRISPRi_knockdown"
 
 # Emitted in the run binding so a policy change changes run_id.
