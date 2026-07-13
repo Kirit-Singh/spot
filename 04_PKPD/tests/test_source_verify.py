@@ -34,15 +34,62 @@ def test_every_hashable_source_has_a_public_locator_and_a_cache_filename():
             assert probe.get("cache_filename") and probe.get("retrieval_url")
 
 
-def test_a_clean_checkout_reports_not_cached_rather_than_success(monkeypatch, tmp_path):
-    """No bytes here. That is reported explicitly — never as a pass, never as a failure."""
+def test_a_clean_checkout_is_INCOMPLETE_and_never_a_pass(monkeypatch, tmp_path):
+    """This test used to assert `pass`, and that assertion WAS the defect.
+
+    A missing document is not a mismatch — that distinction is real and worth keeping. But it is
+    also NOT a verification, and "we did not check" must never render as "we checked". With no
+    cache, the Grossman BioC and the Wager JATS/HTML — the documents the NEBPI criteria and the
+    CNS-MPO transforms are transcribed FROM — are unverified. Every number the method stands on is
+    unchecked, and the receipt used to say `pass`.
+    """
     monkeypatch.delenv(CACHE_ROOT_ENV, raising=False)
     report = verify_sources(cache_root=str(tmp_path))
 
-    assert report["status"] == "pass"       # a missing cache is not a mismatch
-    assert report["counts"]["verified"] == 0
-    assert report["counts"]["not_cached"] > 0
-    assert all(r["status"] in ("not_cached", "not_acquired") for r in report["sources"])
+    assert report["status"] == "incomplete", "green-with-skips is not complete"
+    assert report["counts"]["MISMATCH"] == 0, "a missing document is still not a mismatch"
+
+    comp = report["completeness"]
+    assert comp["complete"] is False
+    assert comp["verified"] == 0 and comp["required"] > 0
+    assert "grossman2026_nebpi" in comp["unverified"]
+    assert "wager2010_cnsmpo_jats" in comp["unverified"]
+
+
+def test_an_incomplete_receipt_EXITS_NONZERO(monkeypatch, tmp_path, capsys):
+    """It exited 0. So a release receipt could be cut from a run that verified nothing."""
+    monkeypatch.delenv(CACHE_ROOT_ENV, raising=False)
+
+    assert main(["--cache-root", str(tmp_path)]) == 2, (
+        "an incomplete source verification exited 0; a release could be cut from a run in which "
+        "no evidence-dependent document was ever checked")
+
+    out = capsys.readouterr().out
+    assert "REQUIRED (evidence-dependent)" in out
+    assert "green-with-skips is not complete" in out
+
+
+def test_the_receipt_STATES_required_vs_verified_counts(monkeypatch, tmp_path):
+    """The audit's requirement: the receipt must SAY how many were required and how many verified,
+    and NAME the ones it could not. A count nobody can see is not a gate."""
+    monkeypatch.delenv(CACHE_ROOT_ENV, raising=False)
+    comp = verify_sources(cache_root=str(tmp_path))["completeness"]
+
+    assert set(comp) == {"required", "verified", "unverified", "complete", "rule"}
+    assert comp["unverified"] == sorted(comp["unverified"]), "the list must be deterministic"
+    assert "not optional" in comp["rule"]
+
+
+def test_a_source_the_method_does_NOT_rest_on_is_not_required(monkeypatch, tmp_path):
+    """No fabrication, and no over-reach either. `wager2016_cnsmpo_desirability` was never
+    acquired and validates nothing (`is_evidence: false`) — the registry says so, and demanding it
+    would be demanding bytes nobody claims to need."""
+    monkeypatch.delenv(CACHE_ROOT_ENV, raising=False)
+    report = verify_sources(cache_root=str(tmp_path))
+
+    rows = {r["source_id"]: r for r in report["sources"]}
+    assert rows["wager2016_cnsmpo_desirability"]["is_evidence_dependent"] is False
+    assert "wager2016_cnsmpo_desirability" not in report["completeness"]["unverified"]
 
 
 def test_cached_bytes_are_re_hashed_and_verified(tmp_path):

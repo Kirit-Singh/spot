@@ -86,16 +86,54 @@ V1_VERIFIER_ENTRY = "verifier.verify_stage3"
 # What `verifier.verify_stage3_v2` needs, out-of-process. Every one of these is a separate input
 # the verifier re-derives from — which is exactly why gate 2 is worth running: it does not take the
 # bundle's word for its own upstream.
+# Read from W16's `verifier/verify_stage3_v2.py` at ee4810c — the real flags, not my guess at them.
+# I had `bundle_root_15`; the flag is `--stage2-bundles-root`. A flag Stage 4 invented is a verifier
+# Stage 4 never actually runs.
 VERIFIER_INPUTS: tuple[str, ...] = (
-    "bundle",                      # the Stage-3 v2 bundle directory
+    "bundle",                      # the Stage-3 v2 store bundle
     "stage2_aggregate_manifest",   # spot.stage02_run_manifest.v3_topology_only
     "stage2_aggregate_report",     # spot.stage02_run_manifest_verification.v1
-    "bundle_root_15",              # the 15-bundle root
+    "stage2_bundles_root",
     "stage1_release",
     "universe_store",
     "stage3_bridge",
     "artifact_class",
 )
+VERIFIER_PASS_EXIT = 0             # `return 1 if rep.failures else 0`
+
+# ─── THE SELECTION VIEW — a SEPARATE artifact, and the architecture agrees with Stage 4's ────
+#
+# W16 emits `spot.stage03_selection_view.v1` beside the store, and enforces the same rule Stage 4
+# does: the STORE is selection-independent, and a selection identity or an A/B role LEAKING into it
+# is a refusal (`a_selection_identity_leaked_into_the_global_store`). Selection is a projection.
+#
+# The view carries BOTH identities, and W16 says why binding only one is a silent failure in either
+# direction: with only `selection_id`, a method revision looks like a NEW question; with only
+# `question_id`, a stale run masquerades as current. Stage 4 binds both.
+SELECTION_VIEW_SCHEMA = "spot.stage03_selection_view.v1"
+STORE_SCHEMA = "spot.stage03_drug_annotation.v2"
+
+# The view's seven row tables (the store's eighth, `provenance`, is not projected).
+VIEW_TABLES: tuple[str, ...] = (
+    "arm_slots", "arm_summaries", "candidates", "dispositions",
+    "pathway_context", "source_records", "target_drug_edges",
+)
+
+# Every one of these must be FALSE in an admitted view. A view that PERMITS a combined objective is
+# a view that may contain one, and Stage 4 refuses the permission, not merely the value: a flag that
+# says "allowed" is a promise nobody kept yet.
+FORBIDDEN_PERMISSIONS = (
+    "combined_objective_permitted",
+    "candidate_rank_permitted",     # per-arm `arm_rank` is fine; a CANDIDATE-level rank is not
+    "headline_arm_permitted",
+    "p_q_fdr_permitted",
+)
+
+# Arm keys are matched by EXACT STRING EQUALITY, never by prefix. W16 states this as a guarantee
+# (`arm_keys_are_matched_by_exact_string_equality_never_by_prefix`), and Stage 4's projection
+# already does exactly that — a prefix match would silently merge `away_from_A` with
+# `away_from_A_strict`, which are different arms.
+ARM_KEY_MATCH = "exact_string_equality"
 
 # ─── THE QUESTION IDENTITY (v2 only) ────────────────────────────────────────────────────────
 #
@@ -304,6 +342,183 @@ def verifier_argv(bundle_dir: str, inputs: dict[str, str]) -> list[str]:
             continue
         argv += [f"--{name.replace('_', '-')}", inputs[name]]
     return argv
+
+
+class Stage3V2ViewRejected(Rejection):
+    """The selection view cannot be bound, or permits something Stage 4 refuses."""
+
+
+def bind_selection_view_v2(view: dict[str, Any]) -> dict[str, Any]:
+    """Bind W16's `spot.stage03_selection_view.v1`. Both identities, and no permissions.
+
+    PROVISIONAL: W16 is still running its own verification of ee4810c. This binds the contract so
+    the adapter is finished, and it does NOT mark Stage 3 -> 4 admitted. Admission needs an
+    independent re-audit and one real bundle through the whole chain.
+    """
+    declared = str(view.get("schema_version") or "")
+    if declared != SELECTION_VIEW_SCHEMA:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_schema_unknown",
+            f"the selection view declares {declared!r}, not {SELECTION_VIEW_SCHEMA!r}.",
+        )
+
+    selection = view.get("selection") or {}
+    question_id = selection.get("question_id")
+    selection_id = selection.get("selection_id")
+
+    # BOTH, and W16 says exactly why: with only `selection_id`, a method revision looks like a NEW
+    # question; with only `question_id`, a stale run masquerades as current. Binding one is a silent
+    # failure in either direction.
+    if not question_id or not selection_id:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_identity_incomplete",
+            "the view must carry BOTH `question_id` and `selection_id`. With only selection_id a "
+            "method revision looks like a new question; with only question_id a stale run "
+            "masquerades as current. Binding one is a silent failure in either direction.",
+        )
+    assert_question_identity(question_id, selection_id)
+
+    # `selection_full_sha256` is the 64-hex form of the SELECTION id and is entirely legitimate. It
+    # is not, and must never be used as, the question identity — that confusion is the alternate
+    # payload this module refuses by name.
+    full = str(selection.get("selection_full_sha256") or "")
+    if full and not full.startswith(str(selection_id)):
+        raise Stage3V2ViewRejected(
+            "stage3_v2_selection_full_sha_mismatch",
+            f"`selection_full_sha256` ({full[:16]}…) does not begin with `selection_id` "
+            f"({selection_id!r}). The 16-hex id is the first 16 of the 64-hex digest; if they "
+            "disagree, one of them is stale.",
+        )
+
+    permitted = sorted(f for f in FORBIDDEN_PERMISSIONS if view.get(f))
+    if permitted:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_permits_a_forbidden_output",
+            f"the view sets {permitted} to true. Stage 4 refuses the PERMISSION, not merely the "
+            "value: a flag that says a combined objective, a candidate-level rank, a headline arm "
+            "or a p/q value is allowed is a promise nobody has kept yet. A per-arm `arm_rank` is "
+            "fine — it is a statement about one arm; a candidate-level rank orders candidates "
+            "across arms that were never comparable.",
+        )
+
+    store = view.get("store") or {}
+    if str(store.get("bundle_schema") or "") != STORE_SCHEMA:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_store_schema_mismatch",
+            f"the view projects a store declaring {store.get('bundle_schema')!r}, and Stage 4 "
+            f"admits {STORE_SCHEMA!r}.",
+        )
+
+    missing_tables = sorted(set(VIEW_TABLES) - set((view.get("tables") or {})))
+    if missing_tables:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_table_missing",
+            f"the view is missing {missing_tables}. A table absent from a projection is "
+            "indistinguishable from a table whose rows nobody found.",
+        )
+
+    return {
+        "schema": SELECTION_VIEW_SCHEMA,
+        "view_id": view.get("view_id"),
+        "view_content_sha256": view.get("view_content_sha256"),
+        "view_method_id": view.get("view_method_id"),
+        "question_id": question_id,
+        "selection_id": selection_id,
+        "analysis_mode": selection.get("analysis_mode"),
+        "conditions": selection.get("conditions"),
+        "selected_arms": view.get("selected_arms"),
+        "store_bundle_id": store.get("bundle_id"),
+        "store_canonical_content_sha256": store.get("canonical_content_sha256"),
+        "arm_key_match": ARM_KEY_MATCH,
+        # NOT admitted. Bound.
+        "admission_state": "provisional_pending_independent_reaudit_and_one_real_bundle",
+    }
+
+
+# ─── THE RECEIPT CHECKS — why ee4810c is NOT pinned ──────────────────────────────────────────
+#
+# The independent audit found the identity and parity issues fixed at ee4810c, and two that are
+# not. Both are visible in the bytes, and both are the kind that a green suite cannot see:
+#
+#   1. POST-SEAL TABLE MUTATION. The view's `tables` are plain lists of rows. The sealed
+#      `table_hashes` live in `store`, and describe the STORE's tables — they are never re-bound to
+#      the PROJECTED rows. So a row can be changed, added or dropped in the view after the store was
+#      sealed, and nothing in the view disagrees with anything else in the view. Every hash still
+#      reproduces. A projection that cannot be checked against the thing it projects is not a
+#      projection; it is a second, unverified artifact wearing the store's identity.
+#
+#   2. THE VERIFIED STORE RECEIPT IS NOT REBOUND. The view names the store's hashes but does not
+#      carry a receipt Stage 4 can re-derive the projection from. "The store verified" and "this
+#      view came from that verified store" are different claims, and only the first is made.
+#
+# Stage 4 therefore REFUSES ee4810c by name. The refusal IS the finding — it is not a bug in the
+# adapter, and it must not be worked around by pinning.
+STORE_RECEIPT_FIELDS = ("bundle_id", "canonical_content_sha256", "code_tree_sha256",
+                        "schemas_sha256", "table_hashes")
+
+
+def assert_tables_sealed(view: dict[str, Any]) -> None:
+    """Every projected table must be bound to a hash Stage 4 can re-derive from ITS OWN rows."""
+    tables = view.get("tables") or {}
+    unsealed = sorted(name for name, rows in tables.items() if isinstance(rows, list))
+    if unsealed:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_tables_not_sealed",
+            f"the view projects {unsealed} as bare row lists, with no per-table content hash bound "
+            "to the projected rows. The sealed `store.table_hashes` describe the STORE's tables, "
+            "not this projection — so a row can be changed, added or dropped after the store was "
+            "sealed and nothing in the view would disagree with anything else in the view. Every "
+            "hash would still reproduce. A projection that cannot be checked against the thing it "
+            "projects is a second, unverified artifact wearing the store's identity. Each table "
+            "must carry the hash of its own projected rows, and the row set it was projected FROM.",
+        )
+
+
+def assert_store_receipt_rebound(view: dict[str, Any]) -> None:
+    """"The store verified" and "this view came from that verified store" are different claims."""
+    store = view.get("store") or {}
+    missing = sorted(f for f in STORE_RECEIPT_FIELDS if not store.get(f))
+    if missing:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_store_receipt_incomplete",
+            f"the view's store block is missing {missing}. Stage 4 re-derives the projection from "
+            "the verified store; it cannot do that from a store it cannot identify.",
+        )
+
+    if not view.get("view_content_sha256"):
+        raise Stage3V2ViewRejected(
+            "stage3_v2_view_content_not_sealed",
+            "the view declares no `view_content_sha256`, so nothing binds its content to the store "
+            "it claims to project.",
+        )
+
+
+def assert_store_is_selection_independent(view: dict[str, Any]) -> None:
+    """No selection identity, and no A/B role, may live in the STORE.
+
+    W16 enforces this at emission (`a_selection_identity_leaked_into_the_global_store`) — Stage 4
+    re-checks it, because a gate the producer runs on itself is not a gate. A store carrying a
+    question id is a store built FOR one question, and it is not reusable for the next.
+    """
+    store = view.get("store") or {}
+    leaked = sorted(k for k in store
+                    if k.lower() in ("selection_id", "question_id", "selection_roles", "roles"))
+    if leaked:
+        raise Stage3V2ViewRejected(
+            "stage3_v2_selection_leaked_into_the_store",
+            f"the store block carries {leaked}. A store that knows which question it was built for "
+            "is not selection-independent, and the next question needs a whole new acquisition.",
+        )
+
+
+def check_view_receipt(view: dict[str, Any]) -> dict[str, Any]:
+    """Every receipt check, in order. Refuses ee4810c — and the refusal is the finding."""
+    bound = bind_selection_view_v2(view)
+    assert_store_is_selection_independent(view)
+    assert_store_receipt_rebound(view)
+    assert_tables_sealed(view)
+    bound["receipt_state"] = "checked"
+    return bound
 
 
 def admit_v2(bundle_dir: str, *, inputs: Optional[dict[str, str]] = None) -> dict[str, Any]:

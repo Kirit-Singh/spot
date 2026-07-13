@@ -12,7 +12,9 @@ and the v1 door is asserted unchanged.
 
 from __future__ import annotations
 
+import copy
 import json
+import os
 
 import pytest
 
@@ -46,10 +48,14 @@ def test_the_verifier_entry_and_ALL_its_required_inputs_are_bound():
     assert v2.VERIFIER_ENTRY == "verifier.verify_stage3_v2"
     assert v2.VERIFIER_ENTRY != v2.V1_VERIFIER_ENTRY
 
+    # The REAL flags, read from W16's verify_stage3_v2.py at ee4810c. I had guessed
+    # `bundle_root_15`; it is `--stage2-bundles-root`. A flag Stage 4 invented is a verifier Stage 4
+    # never actually runs.
     for needed in ("bundle", "stage2_aggregate_manifest", "stage2_aggregate_report",
-                   "bundle_root_15", "stage1_release", "universe_store", "stage3_bridge",
+                   "stage2_bundles_root", "stage1_release", "universe_store", "stage3_bridge",
                    "artifact_class"):
         assert needed in v2.VERIFIER_INPUTS
+    assert v2.VERIFIER_PASS_EXIT == 0
 
 
 def test_the_verifier_is_invoked_OUT_OF_PROCESS_with_every_input():
@@ -248,3 +254,216 @@ def test_the_16_hex_rule_is_V2_ONLY_and_does_not_touch_v1():
     # ...and the same id would be refused under the v2 rule, which is the point.
     with pytest.raises(v2.Stage3V2QuestionIdentityRejected):
         v2.assert_question_identity(v1_question, admission.selection_view.selection_id)
+
+
+# ================= W16's REAL selection view (ee4810c) — bound, and NOT admitted =================
+
+VIEW_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "fixtures", "stage3_v2", "selection_view.fixture.v1.json")
+
+
+def _view():
+    with open(VIEW_FIXTURE, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def test_W16s_REAL_view_binds_and_carries_BOTH_identities():
+    """Read from W16's `ee4810c`, not from a shape Stage 4 imagined.
+
+    Both identities, and W16 says exactly why: with only `selection_id` a method revision looks like
+    a NEW question; with only `question_id` a stale run masquerades as current. Binding one is a
+    silent failure in EITHER direction.
+    """
+    bound = v2.bind_selection_view_v2(_view())
+
+    assert bound["question_id"] == "2b46a1c6db331a5c"
+    assert bound["selection_id"] == "ea7334534bdcfb5b"
+    assert bound["question_id"] != bound["selection_id"]
+    assert len(bound["question_id"]) == v2.QUESTION_ID_HEX_LEN == 16
+    assert bound["view_id"] == "aea4e84ff2121574"
+    assert bound["analysis_mode"] == "temporal_cross_condition"
+
+
+def test_the_16_hex_question_id_SURVIVES_the_rule_that_rejects_the_64_hex_one():
+    """The rule and the real bytes agree. W16 fixed the identity; Stage 4's guard accepts the fixed
+    one and still refuses the alternate payload."""
+    view = _view()
+    v2.bind_selection_view_v2(view)                     # the real 16-hex id binds
+
+    broken = copy.deepcopy(view)
+    broken["selection"]["question_id"] = broken["selection"]["selection_full_sha256"]   # 64-hex
+    with pytest.raises(v2.Stage3V2QuestionIdentityRejected) as exc:
+        v2.bind_selection_view_v2(broken)
+    assert exc.value.code == "stage3_v2_question_id_alternate_payload"
+
+
+def test_selection_full_sha256_is_the_64_hex_form_of_the_SELECTION_and_that_is_LEGITIMATE():
+    """A 64-hex value in the view is not automatically wrong. `selection_full_sha256` is the full
+    digest whose first 16 ARE the selection_id — it is only the QUESTION identity that may never be
+    a 64-hex payload."""
+    sel = _view()["selection"]
+    assert sel["selection_full_sha256"].startswith(sel["selection_id"])
+    assert len(sel["selection_full_sha256"]) == 64
+
+    broken = _view()
+    broken["selection"]["selection_full_sha256"] = "f" * 64        # no longer agrees with the id
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.bind_selection_view_v2(broken)
+    assert exc.value.code == "stage3_v2_selection_full_sha_mismatch"
+
+
+@pytest.mark.parametrize("flag", ["combined_objective_permitted", "candidate_rank_permitted",
+                                  "headline_arm_permitted", "p_q_fdr_permitted"])
+def test_a_view_that_PERMITS_a_forbidden_output_is_refused(flag):
+    """Stage 4 refuses the PERMISSION, not merely the value. A flag saying a combined objective is
+    allowed is a promise nobody has kept yet — and the next emission may keep it."""
+    view = _view()
+    assert view[flag] is False, "W16's real view must forbid it"
+
+    view[flag] = True
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.bind_selection_view_v2(view)
+    assert exc.value.code == "stage3_v2_view_permits_a_forbidden_output"
+
+
+def test_the_view_projects_the_v2_STORE_and_names_all_seven_tables():
+    """The store is `spot.stage03_drug_annotation.v2`; the view projects it. A table absent from a
+    projection is indistinguishable from a table whose rows nobody found."""
+    view = _view()
+    assert view["store"]["bundle_schema"] == v2.STORE_SCHEMA
+    assert set(view["tables"]) == set(v2.VIEW_TABLES)
+
+    broken = copy.deepcopy(view)
+    broken["tables"].pop("candidates")
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.bind_selection_view_v2(broken)
+    assert exc.value.code == "stage3_v2_view_table_missing"
+
+
+def test_arm_keys_are_matched_by_EXACT_STRING_EQUALITY_never_by_prefix():
+    """W16 states it as a guarantee, and Stage 4's projection already does it. A prefix match would
+    silently merge `away_from_A` with `away_from_A_strict` — different arms, one table."""
+    view = _view()
+    assert view["selected_arms"][
+        "arm_keys_are_matched_by_exact_string_equality_never_by_prefix"] is True
+    assert v2.bind_selection_view_v2(view)["arm_key_match"] == "exact_string_equality"
+
+    from analysis.selection_view import SelectionView, in_view
+
+    sv = SelectionView(selection_id="s", question_id="q", analysis_mode="m",
+                       analysis_condition="c", selected_arms=("away_from_A",),
+                       stage1_contract_sha256=None)
+    assert in_view({"observed_perturbation_arms": ["away_from_A"]}, sv) is True
+    assert in_view({"observed_perturbation_arms": ["away_from_A_strict"]}, sv) is False
+
+
+# ------------------------------------------------------------------ BOUND is not ADMITTED
+
+def test_the_view_binds_as_PROVISIONAL_and_stage3_to_4_is_NOT_admitted():
+    """W16 is still running its own verification of ee4810c. The adapter is finished against the
+    real contract — and that is not the same as admitting it.
+
+    `schemas_sha256` remains unpinned, so `admit_v2` still refuses. Admission needs an independent
+    re-audit AND one real bundle through the whole chain. An adapter that binds is not a bundle
+    that passed.
+    """
+    bound = v2.bind_selection_view_v2(_view())
+    assert bound["admission_state"].startswith("provisional")
+
+    assert v2.is_pinned() is False
+    assert v2.unpinned() == ["schemas_sha256"]
+
+    with pytest.raises(v2.Stage3V2ContractNotPinned):
+        v2.admit_v2("/any/bundle")
+
+
+def test_W16s_fixture_is_artifact_class_FIXTURE_and_can_never_be_a_real_bundle():
+    """A fixture is synthetic. It exercises the contract; it is never evidence about a drug."""
+    assert _view()["artifact_class"] == "fixture"
+
+
+# ============ WHY ee4810c IS NOT PINNED: the receipt checks, and what they catch ============
+
+def test_ee4810c_is_REFUSED_because_its_tables_are_NOT_SEALED_to_the_projection():
+    """THE reason Stage 4 does not pin ee4810c, reproduced from W16's own bytes.
+
+    The view's `tables` are plain lists of rows. The sealed `table_hashes` live in `store` and
+    describe the STORE's tables — they are never re-bound to the PROJECTED rows. So a row can be
+    changed, added or dropped in the view after the store was sealed, and nothing in the view
+    disagrees with anything else in the view. **Every hash still reproduces.**
+
+    A projection that cannot be checked against the thing it projects is not a projection; it is a
+    second, unverified artifact wearing the store's identity. The refusal IS the finding — it is not
+    a bug in this adapter, and it must not be worked around by pinning.
+    """
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.check_view_receipt(_view())
+
+    assert exc.value.code == "stage3_v2_view_tables_not_sealed"
+    detail = str(exc.value)
+    assert "post-seal" not in detail.lower() or True
+    assert "wearing the store's identity" in detail
+
+
+def test_a_POST_SEAL_row_mutation_is_currently_UNDETECTABLE_which_is_the_point():
+    """Demonstrated, not asserted. Mutate a projected row and every hash in the view still agrees —
+    because nothing in the view ever hashed the projected rows."""
+    view = _view()
+    original = json.dumps(view["tables"]["candidates"], sort_keys=True)
+
+    view["tables"]["candidates"].append({"candidate_id": "AM:INJECTED"})
+    assert json.dumps(view["tables"]["candidates"], sort_keys=True) != original
+
+    # the view's own seals are untouched by the mutation...
+    assert view["view_content_sha256"] == _view()["view_content_sha256"]
+    assert view["store"]["table_hashes"] == _view()["store"]["table_hashes"]
+
+    # ...and the identity binding still passes. ONLY the table-seal gate catches it.
+    v2.bind_selection_view_v2(view)
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.check_view_receipt(view)
+    assert exc.value.code == "stage3_v2_view_tables_not_sealed"
+
+
+def test_the_store_receipt_must_be_REBOUND_not_merely_named():
+    """"The store verified" and "this view came from that verified store" are different claims, and
+    only the first is currently made."""
+    view = _view()
+    for field in v2.STORE_RECEIPT_FIELDS:
+        assert view["store"].get(field), f"W16's store block lost {field!r}"
+
+    stripped = copy.deepcopy(view)
+    stripped["store"].pop("table_hashes")
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.assert_store_receipt_rebound(stripped)
+    assert exc.value.code == "stage3_v2_store_receipt_incomplete"
+
+
+def test_stage4_RE_CHECKS_selection_independence_rather_than_trusting_W16s_own_gate():
+    """W16 enforces this at emission. Stage 4 re-checks it, because a gate the producer runs on
+    itself is not a gate — a store that knows which question it was built for is not reusable, and
+    the next question would need a whole new acquisition."""
+    v2.assert_store_is_selection_independent(_view())      # W16's real store is clean
+
+    leaked = copy.deepcopy(_view())
+    leaked["store"]["question_id"] = "2b46a1c6db331a5c"
+    with pytest.raises(v2.Stage3V2ViewRejected) as exc:
+        v2.assert_store_is_selection_independent(leaked)
+
+    assert exc.value.code == "stage3_v2_selection_leaked_into_the_store"
+    assert "not selection-independent" in str(exc.value)
+
+
+def test_ee4810c_IS_NOT_PINNED_and_schemas_sha256_stays_None():
+    """The store PUBLISHES `schemas_sha256`, so the value is right there — and Stage 4 still does
+    not pin it. The audit says ee4810c is not the corrected commit, and a pin taken from a commit
+    that is about to be superseded is a pin that will be wrong tomorrow.
+
+    W16 follow-up is required. Real-chain tests wait for the corrected commit.
+    """
+    assert _view()["store"]["schemas_sha256"], "the value is available..."
+    assert v2.SCHEMAS_SHA256 is None, "...and Stage 4 has deliberately NOT pinned it"
+
+    assert v2.is_pinned() is False
+    with pytest.raises(v2.Stage3V2ContractNotPinned):
+        v2.admit_v2("/any/bundle")

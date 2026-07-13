@@ -42,14 +42,28 @@ def _sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
+def _is_evidence_dependent(s: dict[str, Any]) -> bool:
+    """Does the method transcribe numbers FROM this document?
+
+    Read from the registry, never guessed. `is_evidence: false` is the registry saying "nothing in
+    the method rests on this" — the Wager 2016 entry, whose bytes were never obtained and which
+    validates nothing. Everything else IS evidence-dependent: the Grossman BioC carries the NEBPI
+    criteria, the Wager JATS/HTML carry the CNS-MPO transforms, the DailyMed probes establish the
+    parser contract. A document the method stands on is not optional.
+    """
+    return s.get("is_evidence") is not False and s.get("document_acquired") is not False
+
+
 def _entries(sources: dict[str, Any]) -> list[dict[str, Any]]:
     """One row per hashable document, including each structure probe."""
     out: list[dict[str, Any]] = []
     for s in sources["sources"]:
         sid = s["source_id"]
+        evidence = _is_evidence_dependent(s)
         if s.get("document_acquired") is False:
             out.append({
                 "source_id": sid, "status": "not_acquired",
+                "is_evidence_dependent": evidence,
                 "cache_filename": None, "retrieval_url": s.get("doi"),
                 "declared_sha256": None, "recomputed_sha256": None,
                 "note": s.get("acquisition_blocked_by", "the registry records no bytes"),
@@ -58,6 +72,7 @@ def _entries(sources: dict[str, Any]) -> list[dict[str, Any]]:
         if s.get("raw_sha256"):
             out.append({
                 "source_id": sid, "status": None,
+                "is_evidence_dependent": evidence,
                 "cache_filename": s.get("cache_filename"),
                 "retrieval_url": s.get("retrieval_url") or s.get("url"),
                 "declared_sha256": s["raw_sha256"], "recomputed_sha256": None,
@@ -68,6 +83,7 @@ def _entries(sources: dict[str, Any]) -> list[dict[str, Any]]:
         for probe in s.get("probes", []) or []:
             out.append({
                 "source_id": f"{sid}::{probe['setid'][:8]}", "status": None,
+                "is_evidence_dependent": evidence,
                 "cache_filename": probe.get("cache_filename"),
                 "retrieval_url": probe.get("retrieval_url"),
                 "declared_sha256": probe["raw_sha256"], "recomputed_sha256": None,
@@ -139,18 +155,57 @@ def verify_sources(cache_root: Optional[str] = None,
 
     counts = {s: sum(1 for r in rows if r["status"] == s)
               for s in ("verified", "MISMATCH", "not_cached", "not_acquired")}
+
+    # ─── THE COMPLETENESS GATE ───────────────────────────────────────────────────────────────
+    #
+    # `status` used to be `fail if MISMATCH else pass`. So a run in which the Grossman BioC and the
+    # Wager JATS were simply NOT CACHED — the two documents the NEBPI criteria and the CNS-MPO
+    # transforms are transcribed FROM — exited 0 and reported `pass`. Every number the method
+    # stands on was unverified, and the receipt said everything was fine.
+    #
+    # A missing document is not a mismatch, and that distinction is real and worth keeping. But it
+    # is ALSO not a verification, and "we did not check" must never render as "we checked". So the
+    # receipt now states REQUIRED vs VERIFIED, names every required document it could not verify,
+    # and refuses to call the result complete.
+    #
+    # Nothing is fabricated to close the gap: an unavailable document stays unavailable. The gate
+    # only refuses to pretend the absence is a pass.
+    required = [r for r in rows if r["is_evidence_dependent"]]
+    verified_required = [r for r in required if r["status"] == "verified"]
+    unverified_required = sorted(r["source_id"] for r in required if r["status"] != "verified")
+
+    completeness = {
+        "required": len(required),
+        "verified": len(verified_required),
+        "unverified": unverified_required,
+        "complete": not unverified_required,
+        "rule": (
+            "every EVIDENCE-DEPENDENT document must hash to the registry. A document the method "
+            "transcribes its numbers from is not optional, and `not_cached` is not `verified`."
+        ),
+    }
+
+    if counts["MISMATCH"]:
+        status = "fail"
+    elif unverified_required:
+        status = "incomplete"
+    else:
+        status = "pass"
+
     return {
         "schema_id": "spot.stage04_source_verification.v1",
         "cache_root": root,
         "cache_root_env": CACHE_ROOT_ENV,
         "counts": counts,
-        "status": "fail" if counts["MISMATCH"] else "pass",
+        "completeness": completeness,
+        "status": status,
         "sources": rows,
         "note": (
             "Raw documents are not bundled in this repository. `not_cached` means the bytes "
             "are not on THIS machine, not that they are wrong; re-fetch from retrieval_url. "
             "`not_acquired` means the bytes were never obtained at all, and nothing in the "
-            "method is validated against them."
+            "method is validated against them. `incomplete` means an evidence-dependent document "
+            "was NOT verified — green-with-skips is not complete."
         ),
     }
 
@@ -173,9 +228,24 @@ def main(argv: Optional[list[str]] = None) -> int:
                 print(f"      declared   {row['declared_sha256']}")
                 print(f"      recomputed {row['recomputed_sha256']}")
         c = report["counts"]
+        comp = report["completeness"]
         print(f"\nverified={c['verified']} mismatch={c['MISMATCH']} "
               f"not_cached={c['not_cached']} not_acquired={c['not_acquired']}")
-    return 1 if report["status"] == "fail" else 0
+        print(f"REQUIRED (evidence-dependent): {comp['verified']}/{comp['required']} verified")
+        if not comp["complete"]:
+            print(f"INCOMPLETE — not verified: {comp['unverified']}")
+            print("A document the method transcribes its numbers from is not optional. "
+                  "`not_cached` is not `verified`, and green-with-skips is not complete.")
+
+    # 0 pass · 1 a document does not hash to the registry · 2 an evidence-dependent document was
+    # never verified. `incomplete` used to exit 0, so a run in which the documents the NEBPI
+    # criteria and the CNS-MPO transforms are transcribed FROM were simply not cached reported
+    # `pass`. Every number the method stands on was unverified and the receipt said it was fine.
+    if report["status"] == "fail":
+        return 1
+    if report["status"] == "incomplete":
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
