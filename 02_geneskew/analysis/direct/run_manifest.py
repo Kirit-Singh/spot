@@ -1,30 +1,26 @@
-"""THE STAGE-2 RUN MANIFEST: one artifact that binds every lane output of one run.
+"""THE STAGE-2 AGGREGATE RUN MANIFEST: one artifact binding every reusable ARM of a run.
 
-WHY THIS EXISTS (round-3 MAJOR)
--------------------------------
-Each lane emits its own artifact and its own identity — ``screen.parquet`` under a
-``run_id``, ``temporal.parquet`` under a ``temporal_run_id``, ``pathway.json`` under a
-``pathway_run_id``. Every one of them is verified, content-addressed and honest.
+FROZEN AGAINST ``ROUND4_ADDENDUM.md`` sha256
+``c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f``.
 
-What did NOT exist was anything that said WHICH of them belong to the same run. A reader
-handed three directories had no way to know they were the same science, and nothing stopped
-a screen from one commit being cited beside a pathway result from another. "The per-lane
-outputs are the contract" is a defensible position right up until somebody has to assemble
-them, and then it silently becomes the reader's problem.
+Each bundle already carries its own identity, its own provenance and its own independent
+admission. What did NOT exist was anything saying WHICH of them belong to the same run, or
+whether the run is COMPLETE — and a run that cannot say what completeness means cannot be
+released. Counting invocations was not it: three copies of one Direct result counted as
+three and passed.
 
-So this is the aggregate: it names every lane invocation of a complete Stage-2 run, binds
-each one's id and artifact hashes, binds the shared code identity, and hashes the whole
-thing. It PRODUCES nothing scientific — it is an index, and it says so.
+So this binds the ARMS. The topology (``arm_topology``) says which arm slots a complete
+run must fill; the admitted program set is RE-DERIVED from the bound v3 generic release /
+scorer view; and every bundle's provenance and verification report is LOADED, not assumed.
 
-WHAT A COMPLETE STAGE-2 RUN IS
-------------------------------
-    Direct   (+ Pareto) : 3 invocations — one per condition
-    Temporal            : 6 invocations — one per ORDERED condition pair
-    Pathway             : 6 invocations — 3 conditions x 2 gene-set sources
+    logical arm slots  = programs x {increase, decrease} x context
+    physical bundles   = one ALL-ARM bundle per context
 
-Fifteen invocations. Perturb2State is NOT part of it (see ``P2S_DISPOSITION``): it is a
-secondary method, explicitly DEFERRED, and "complete Stage-2" means
-Direct + Pareto + temporal + pathway.
+A bundle that ships one pair's two arms leaves the rest of its slots empty. That is the
+whole point of the count.
+
+THIS MODULE PRODUCES NO SCIENCE. It is an index, and it says so. It does not verify
+itself: ``verify_run_manifest`` does that, independently and from the same bytes.
 """
 from __future__ import annotations
 
@@ -33,123 +29,318 @@ import json
 import os
 from typing import Any, Optional
 
-from . import code_digest
+from . import code_digest, config
+from .arm_topology import (
+    ARM_BINDING,
+    BATCH_KEYS,
+    BINDING_FIELDS,
+    BUNDLE_BINDINGS,
+    BUNDLE_FILES,
+    DESIRED_CHANGES,
+    EXCLUDED_FROM_RELEASE,
+    EXCLUSION_RULE_ID,
+    LANES,
+    PAIR_DERIVED_VIEW_POLICY,
+    RETIRED_ENTRY_POINTS,
+    RunManifestError,
+    expected_bundles,
+    expected_slots,
+    key_hits,
+    load_release,
+    pair_derived_hits,
+    role_pole_map,
+    selection_capacity,
+)
+from .cli_contracts import CLI_CONTRACTS
 from .hashing import content_hash, file_sha256
 
-SCHEMA_VERSION = "spot.stage02_run_manifest.v1"
-MANIFEST_ID = "spot.stage02.run_manifest.v1"
+SCHEMA_VERSION = "spot.stage02_run_manifest.v3_topology_only"
 
-LANE_DIRECT = "direct"
-LANE_TEMPORAL = "temporal"
-LANE_PATHWAY = "pathway"
-LANES = (LANE_DIRECT, LANE_TEMPORAL, LANE_PATHWAY)
+# The producer states the TOPOLOGY. It never states the ADMISSION.
+ADMISSION_PENDING = "pending_independent_aggregate_admission"
+ADMISSION_RULE_ID = "spot.stage02.run_manifest.admission.independent_only.v1"
+MANIFEST_ID = "spot.stage02.run_manifest.v2"
+FROZEN_ADDENDUM_SHA256 = (
+    "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
 
-# WHAT each lane ships. A manifest that named a file the lane does not emit would be
-# describing a run that did not happen.
-LANE_ARTIFACTS = {
-    LANE_DIRECT: ("screen.parquet", "masks.parquet", "contributing_guides.parquet",
-                  "guide_support.parquet", "donor_support.parquet", "axis.json",
-                  "gene_universe.json", "input_manifest.json", "provenance.json",
-                  "verification.json"),
-    LANE_TEMPORAL: ("temporal.parquet", "endpoints.parquet",
-                    "temporal_provenance.json", "temporal_verification.json"),
-    LANE_PATHWAY: ("pathway.json", "pathway_provenance.json",
-                   "pathway_verification.json"),
-}
-
-# THE EXPECTED MATRIX of a complete run. Stated, so a partial run is visibly partial.
-EXPECTED_INVOCATIONS = {LANE_DIRECT: 3, LANE_TEMPORAL: 6, LANE_PATHWAY: 6}
-N_EXPECTED = sum(EXPECTED_INVOCATIONS.values())          # 15
-
-# --------------------------------------------------------------------------- #
-# PERTURB2STATE — EXPLICITLY DEFERRED (round-3 MAJOR).
-#
-# P2S is a SECONDARY method. It is not part of this run, it is not part of "complete
-# Stage-2", and it does not gate the run. Saying nothing about it would leave a reader to
-# infer either that it ran (it did not) or that it was forgotten (it was not), so it is
-# named here with its state.
-# --------------------------------------------------------------------------- #
-P2S_DISPOSITION = {
-    "component": "perturb2state",
-    "state": "deferred_not_part_of_this_run",
-    "tier": "secondary_method",
-    "gates_the_run": False,
-    "complete_stage2_is": ("direct", "pareto", "temporal", "pathway"),
-}
+__all__ = ["build", "bind_bundle", "load_release", "RunManifestError", "main"]
 
 
-class RunManifestError(ValueError):
-    """A lane output cannot be bound. Refuse; never invent."""
-
-
-def bind_lane(lane: str, out_dir: str, run_id: str,
-              expected: Optional[tuple] = None) -> dict[str, Any]:
-    """Bind ONE lane invocation: its id, its directory, every artifact it shipped.
-
-    An artifact the lane is supposed to emit and did not is a REFUSAL, not a gap: a
-    manifest that quietly omitted a missing file would certify an incomplete run.
-    """
-    if lane not in LANES:
-        raise RunManifestError(f"unknown lane {lane!r}; expected one of {list(LANES)}")
-    names = expected if expected is not None else LANE_ARTIFACTS[lane]
-
-    files: dict[str, Optional[str]] = {}
-    missing = []
-    for name in names:
-        path = os.path.join(out_dir, name)
-        if os.path.exists(path):
-            files[name] = file_sha256(path)
-        else:
-            files[name] = None
-            missing.append(name)
-    if missing:
+def _load(path: str, what: str) -> dict[str, Any]:
+    if not os.path.exists(path):
         raise RunManifestError(
-            f"{lane} run {run_id!r} is missing {missing}; a manifest that omitted a "
-            "missing artifact would certify an incomplete run as complete")
+            f"bundle is missing its {what} ({os.path.basename(path)}); an arm nobody can "
+            "trace and nobody independently admitted is not evidence")
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise RunManifestError(
+            f"bundle {what} ({os.path.basename(path)}) is not readable JSON: {exc}. "
+            "Arbitrary bytes under an expected filename are not an artifact") from exc
+
+
+def _bind_artifact(out_dir: str, binding: Any, what: str) -> dict[str, Any]:
+    """Resolve ONE bound on-disk artifact and prove its bytes.
+
+    The pathway audit: nothing bound the ranking or the membership list, so
+    ``n_hits_in_ranking`` — the number that decides whether an arm is headline-rankable —
+    could not be reconstructed by anybody and was, in the end, taken on trust. Every count
+    now has its bytes bound: a path INSIDE the bundle, a raw hash and a canonical hash.
+    """
+    if not isinstance(binding, dict) or any(f not in binding for f in BINDING_FIELDS):
+        raise RunManifestError(
+            f"bundle binding {what!r} must declare {list(BINDING_FIELDS)}; a count whose "
+            "source cannot be opened is a count nobody can check")
+    rel = str(binding["path"])
+    if os.path.isabs(rel) or ".." in rel.split("/"):
+        raise RunManifestError(
+            f"bundle binding {what!r} path {rel!r} must be bundle-relative; an artifact "
+            "outside the bundle can be swapped without changing the bundle")
+    path = os.path.join(out_dir, rel)
+    if not os.path.exists(path):
+        raise RunManifestError(
+            f"bundle binding {what!r} names {rel!r}, which is not in the bundle")
+    raw = file_sha256(path)
+    if raw != binding["raw_sha256"]:
+        raise RunManifestError(
+            f"bundle binding {what!r}: {rel!r} hashes to {raw[:16]}, but the bundle "
+            f"bound {str(binding['raw_sha256'])[:16]}")
+    doc = _load(path, f"bound artifact {rel}")
+    canon = content_hash(doc)
+    if canon != binding["canonical_sha256"]:
+        raise RunManifestError(
+            f"bundle binding {what!r}: {rel!r} canonical content hashes to {canon[:16]}, "
+            f"but the bundle bound {str(binding['canonical_sha256'])[:16]}")
+    return {"path": rel, "raw_sha256": raw, "canonical_sha256": canon}
+
+
+def bind_bundle(out_dir: str) -> dict[str, Any]:
+    """Bind ONE all-arm bundle: its context, its arms, its bindings, its admission."""
+    bundle = _load(os.path.join(out_dir, "arm_bundle.json"), "arm inventory")
+
+    lane = bundle.get("lane")
+    if lane not in LANES:
+        raise RunManifestError(
+            f"bundle declares lane {lane!r}; expected one of {list(LANES)}")
+    names = BUNDLE_FILES[lane]
+
+    # A reusable arm may not carry a pair's ordering. REFUSED, not filtered: a bundle that
+    # stored one was built against a pair, and dropping the field quietly would hide that.
+    stored = pair_derived_hits(bundle)
+    if stored:
+        raise RunManifestError(
+            f"{lane} bundle stores pair-derived ordering(s) {stored[:5]} in its arm "
+            "inventory. Pareto tiers and concordance labels are JOIN-TIME display only: "
+            "an arm is pair-agnostic, and a tier baked into it would travel into every "
+            "future join that reuses the arm")
+
+    # Nor may it carry BATCH COMMENTARY. The reusable temporal chain omits it by owner
+    # rule: the DiD estimand is population-level, the arm key already carries the ordered
+    # pair, and a batch field baked into an arm is commentary travelling into every join
+    # that reuses it.
+    batch = key_hits(bundle, BATCH_KEYS)
+    if batch:
+        raise RunManifestError(
+            f"{lane} bundle carries batch commentary {batch[:5]} in its arm inventory; "
+            "batch stays out of the reusable temporal chain")
+
+    prov = _load(os.path.join(out_dir, names["provenance"]), "provenance")
+    # Temporal ships a PREFLIGHT (the producer's own self-check); the other lanes still
+    # ship a per-bundle report. Neither is an admission: that is the root envelope.
+    report_name = names.get("verification") or names.get("preflight")
+    report = _load(os.path.join(out_dir, report_name),
+                   "verification report" if names.get("verification") else "preflight")
+
+    files: dict[str, str] = {}
+    for base, _dirs, filenames in os.walk(out_dir):
+        for fn in filenames:
+            path = os.path.join(base, fn)
+            files[os.path.relpath(path, out_dir).replace(os.sep, "/")] = \
+                file_sha256(path)
+    for required in names.values():
+        if required not in files:
+            raise RunManifestError(
+                f"{lane} bundle is missing {required!r}; a manifest that omitted a "
+                "missing artifact would certify an incomplete run as complete")
+
+    # ---- the BYTES every count is derived from ---- #
+    bindings = {what: _bind_artifact(out_dir, (bundle.get("bindings") or {}).get(what),
+                                     what)
+                for what in BUNDLE_BINDINGS[lane]}
+    arms = bundle.get("arms") or []
+    for arm in arms:
+        key = str(arm.get("arm_key"))
+        bindings[f"{key}::{ARM_BINDING}"] = _bind_artifact(
+            out_dir, arm.get(ARM_BINDING), f"{key} {ARM_BINDING}")
 
     return {
         "lane": lane,
-        "run_id": run_id,
+        "bundle_id": str(bundle.get("bundle_id")),
         "out_dir": os.path.basename(out_dir.rstrip(os.sep)),
+        "context": bundle.get("context") or {},
+        "arm_keys": sorted(str(a.get("arm_key")) for a in arms),
+        "n_arms": len(arms),
+        "stage1_v3_release": bundle.get("stage1_v3_release") or {},
+        "gene_sets": bundle.get("gene_sets"),
+        "convergence": bundle.get("convergence"),
+        "bound_artifacts": bindings,
+        # WHAT the bundle stood on, as the bundle itself recorded it. The verifier
+        # re-derives every one of these from the shipped bytes rather than reading them.
+        "code_identity": (prov.get("run_binding") or {}).get("code_identity") or {},
+        "selection_release": (
+            (prov.get("run_binding") or {}).get("selection_release") or {}),
+        # W5's native Stage-1 binding: HOW the program axis was derived. The verifier
+        # re-derives it against the release rather than reading the bundle's own count.
+        "admitted_programs": (prov.get("program_admission") or {}).get("programs"),
+        "program_admission": prov.get("program_admission") or {},
+        "stage2_inputs": (prov.get("run_binding") or {}).get("stage2_inputs") or [],
+        "verification_verdict": report.get("verdict"),
+        "preflight_is_not_an_admission": bool(names.get("preflight")),
         "files": files,
         "artifact_sha256": content_hash(files),
     }
 
 
-def build(*, invocations: list[dict[str, Any]], out_path: str,
-          allow_partial: bool = False,
+def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, Any],
+          allow_partial: bool = False, lane_admissions: Optional[dict] = None,
           code_identity: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    """The aggregate manifest over every lane invocation of ONE Stage-2 run."""
-    by_lane: dict[str, list[dict[str, Any]]] = {lane: [] for lane in LANES}
-    for inv in invocations:
-        by_lane[inv["lane"]].append(inv)
+    """The aggregate manifest over every ARM of one Stage-2 run.
 
-    counts = {lane: len(by_lane[lane]) for lane in LANES}
-    complete = counts == EXPECTED_INVOCATIONS
-    if not complete and not allow_partial:
+    The programs, the conditions and the gene-set sources ALL come from the bound
+    authoritative Stage-1 v3 release. There is no separate --conditions, and the temporal
+    batch policy is not an authority here: the condition universe is
+    ``release.selector.conditions``.
+    """
+    conditions, sources = release["conditions"], release["gene_set_sources"]
+    slots = expected_slots(release["programs"], conditions, sources)
+    want_bundles = expected_bundles(conditions, sources)
+
+    filled: dict[str, list[str]] = {lane: [] for lane in LANES}
+    for b in bundles:
+        filled[b["lane"]] += b["arm_keys"]
+
+    per_lane, topology_complete = {}, True
+    for lane in LANES:
+        want, got = set(slots[lane]), filled[lane]
+        missing = sorted(want - set(got))
+        unexpected = sorted(set(got) - want)
+        duplicated = sorted({k for k in got if got.count(k) > 1})
+        ok = not missing and not unexpected and not duplicated
+        topology_complete = topology_complete and ok
+        per_lane[lane] = {
+            "n_expected_slots": len(want),
+            "n_filled_slots": len(set(got) & want),
+            "n_bundles_expected": len(want_bundles[lane]),
+            "n_bundles_present": sum(1 for b in bundles if b["lane"] == lane),
+            "missing_slots": missing,
+            "unexpected_slots": unexpected,
+            "duplicated_slots": duplicated,
+            "lane_complete": ok,
+        }
+
+    ids = [b["bundle_id"] for b in bundles]
+    dupe_ids = sorted({i for i in ids if ids.count(i) > 1})
+    if dupe_ids:
+        topology_complete = False
+
+    if not topology_complete and not allow_partial:
         raise RunManifestError(
-            f"this is a PARTIAL run: {counts} against the expected "
-            f"{EXPECTED_INVOCATIONS}. A partial run may be manifested — pass "
-            "allow_partial — but it is never silently called complete")
+            "this run's TOPOLOGY is incomplete: "
+            f"{ {lane: per_lane[lane]['lane_complete'] for lane in LANES} }, duplicate "
+            f"bundle ids {dupe_ids}. It MAY be manifested — pass --allow-partial — but it "
+            "is never silently called complete. (Note that a COMPLETE topology is still "
+            "not an admission: see 'admission'.)")
 
-    code = code_identity or code_digest.run_binding()
-    doc = {
+    doc: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "manifest_id": MANIFEST_ID,
         "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         # THIS IS AN INDEX. It produces no science and it says so.
         "produces_scientific_values": False,
-        "binds_lane_outputs": True,
-        "code_identity": code,
-        "expected_invocations": dict(EXPECTED_INVOCATIONS),
-        "n_expected_invocations": N_EXPECTED,
-        "invocation_counts": counts,
-        "n_invocations": sum(counts.values()),
-        "complete": complete,
-        "perturb2state": P2S_DISPOSITION,
-        "invocations": sorted(invocations,
-                              key=lambda i: (i["lane"], i["run_id"])),
+        "binds_arm_outputs": True,
+        "frozen_topology_addendum_sha256": FROZEN_ADDENDUM_SHA256,
+        "code_identity": code_identity or code_digest.run_binding(),
+        "stage1_v3_release": release,
+        # ORDER PRESERVED, as the release states it: a reordered condition list is a
+        # different release, and the pinned release hash is what says so.
+        "conditions": list(conditions),
+        "gene_set_sources": list(sources),
+        "condition_universe_source": release["condition_universe_source"],
+        "temporal_estimand": {
+            "estimand_level": "population",
+            "is_per_cell_fate": False,
+            "is_lineage_traced": False,
+            "batch_commentary_in_reusable_bundles": False,
+        },
+        "desired_change_vocabulary": list(DESIRED_CHANGES),
+        "desired_change_by_role_and_pole": role_pole_map(),
+        "arm_key_rule": (
+            "lane|program_id|desired_change|context — the pole direction and the role are "
+            "PROVENANCE on the arm, never its identity"),
+        "n_expected_arm_slots": sum(len(slots[lane]) for lane in LANES),
+        "n_bound_arm_slots": sum(len(b["arm_keys"]) for b in bundles),
+        "n_expected_bundles": sum(len(v) for v in want_bundles.values()),
+        "n_bundles": len(bundles),
+        "expected_bundles": want_bundles,
+        "per_lane": per_lane,
+        "duplicate_bundle_ids": dupe_ids,
+        "selection_capacity": selection_capacity(
+            release["n_programs"], len(conditions)),
+        "cli_invocation_contracts": CLI_CONTRACTS,
+        # WHAT THE RELEASE IS NOT. Named, so a scheduler cannot discover a retired lane and
+        # a code digest cannot sweep in scratch that no result depends on.
+        "release_scope": {
+            "retired_entry_points": list(RETIRED_ENTRY_POINTS),
+            "excluded_from_release": list(EXCLUDED_FROM_RELEASE),
+            "rule_id": EXCLUSION_RULE_ID,
+        },
+        # THE PINNED LANE VERIFIERS (W7 consumes these).
+        "pinned_lane_verifiers": {
+            "temporal": {"verifier_id":
+                         "spot.stage02.temporal.arm.independent_verifier.v1",
+                         "commit": "99eaa81"},
+            "direct": {"verifier_id": "spot.stage02.direct.release.verifier.v1"},
+        },
+        "combined_objective": None,
+        "combined_objective_permitted": config.COMBINED_OBJECTIVE_PERMITTED,
+        "cross_arm_score_or_order": None,
+        "pair_derived_views": PAIR_DERIVED_VIEW_POLICY,
+        "emits_p_q_or_fdr": False,
+        "upstream_significance_gate": config.UPSTREAM_SIGNIFICANCE_GATE,
+        # ---- TOPOLOGY ONLY. THE PRODUCER DOES NOT ADMIT ITS OWN RUN. ---- #
+        # This says every expected arm slot is filled exactly once by a distinct bundle.
+        # It says NOTHING about whether those bundles were independently verified, whether
+        # their lane reports are typed admissions from the pinned verifiers, or whether
+        # they bind one selection. A run can be perfectly shaped and still be nonsense.
+        "topology_complete": topology_complete,
+        "topology_complete_is_an_admission": False,
+        # WHAT EACH LANE'S OWN VERIFIER SAID, verbatim, beside the aggregate's disposition.
+        # Bound into the manifest's content hash: a native verdict that was quietly
+        # rewritten, or a disposition that does not follow from it, changes the manifest.
+        "lane_admissions": lane_admissions or {},
+        "lane_admission_mapping_rule_id":
+            "spot.stage02.run_manifest.lane_admission_map.v1",
+        "lane_verdicts_are_transliterated": False,
+        # ---- RELEASE ADMISSION IS NOT THE PRODUCER'S TO GRANT ---- #
+        # It used to be set from the topology alone, so a run whose lane reports were bare
+        # verdict strings, or which bound inconsistent selections, was stamped
+        # release_admissible=true HERE and only refused later by the external verifier. A
+        # generator that admits its own output is the exact failure this lane exists to
+        # close, so it no longer has an opinion: admission is granted, if at all, by the
+        # SEPARATE independent aggregate admission report (verify_run_manifest).
+        "release_admissible": None,
+        "admission": {
+            "status": ADMISSION_PENDING,
+            "granted_by": None,
+            "rule_id": ADMISSION_RULE_ID,
+            "producer_may_declare_admission": False,
+            "granted_only_by": "spot.stage02.run_manifest.verifier.v1",
+        },
+        "bundles": sorted(bundles, key=lambda b: (b["lane"], b["bundle_id"])),
     }
+    # The self-hash is over the manifest's CONTENT, excluding the timestamp and itself.
+    # A caller-supplied value is accepted nowhere in this lane.
     doc["manifest_sha256"] = content_hash(
         {k: v for k, v in doc.items() if k != "created_at"})
     with open(out_path, "w") as fh:
@@ -163,29 +354,33 @@ def main(argv=None) -> int:
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Bind every lane output of one Stage-2 run into a run manifest")
+        description="Bind every reusable ARM of one Stage-2 run into a run manifest")
     ap.add_argument("--direct", nargs="*", default=[],
-                    help="direct lane output directories (one per condition)")
+                    help="direct all-arm bundle directories (one per condition)")
     ap.add_argument("--temporal", nargs="*", default=[],
-                    help="temporal lane output directories (one per ordered pair)")
+                    help="temporal all-arm bundles (one per ordered condition pair)")
     ap.add_argument("--pathway", nargs="*", default=[],
-                    help="pathway lane output directories (condition x gene-set source)")
-    ap.add_argument("--allow-partial", action="store_true")
+                    help="pathway all-arm bundles (condition x gene-set source)")
+    ap.add_argument("--release", required=True,
+                    help="the authoritative Stage-1 v3 release: the ONLY source of the "
+                         "admitted programs, the conditions and the pathway sources. NOT "
+                         "the legacy program registry, and NOT a batch policy.")
+    ap.add_argument("--release-root", required=True,
+                    help="the directory the release is STAGED in; component paths resolve "
+                         "against it, never against a machine default")
+    ap.add_argument("--allow-partial", action="store_true",
+                    help="manifest a partial run: it is flagged complete=false and is "
+                         "never release-admissible")
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
 
-    invocations = []
-    for lane, dirs in ((LANE_DIRECT, args.direct), (LANE_TEMPORAL, args.temporal),
-                       (LANE_PATHWAY, args.pathway)):
-        for d in dirs:
-            invocations.append(
-                bind_lane(lane, d, run_id=os.path.basename(d.rstrip(os.sep))))
-
-    doc = build(invocations=invocations, out_path=args.out,
+    release = load_release(args.release, args.release_root)
+    bundles = [bind_bundle(d) for d in (args.direct + args.temporal + args.pathway)]
+    doc = build(bundles=bundles, out_path=args.out, release=release,
                 allow_partial=args.allow_partial)
-    print(json.dumps({k: v for k, v in doc.items() if k != "invocations"},
-                     indent=2, sort_keys=True))
-    return 0 if doc["complete"] else 1
+    print(json.dumps({k: v for k, v in doc.items() if k != "bundles"},
+                     indent=2, sort_keys=True, default=str))
+    return 0 if doc["topology_complete"] else 1
 
 
 if __name__ == "__main__":
