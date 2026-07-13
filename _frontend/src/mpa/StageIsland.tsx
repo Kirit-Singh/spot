@@ -215,10 +215,14 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
         // prod.real is only set when admission === 'admitted' (gated above); each route renders its
         // OWN native path — Stage 3/4 never fall through to the Stage-2 tables. The label map is
         // display-only (same registry the header uses); it never reaches an artifact or a hash.
+        //
+        // The canvas reads the SAME registry-gated displaySelection the header does: a selection whose
+        // program axes the served registry does not name is refused everywhere, so it can never label a
+        // pole on the map while the header has already reverted to the prompt.
         renderRouteReal(prod.real, {
           labels: prod.labels,
-          poleDirections: prod.selection
-            ? { A: directionLabel(prod.selection.A.direction), B: directionLabel(prod.selection.B.direction) }
+          poleDirections: displaySelection
+            ? { A: directionLabel(displaySelection.A.direction), B: directionLabel(displaySelection.B.direction) }
             : undefined,
         })
       ) : (

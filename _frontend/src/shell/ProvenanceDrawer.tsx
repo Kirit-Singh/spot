@@ -136,6 +136,7 @@ function Step({ n, heading, children }: { n: string; heading: string; children: 
   return (
     <div
       className="border-b border-sunken"
+      data-step={n}
       style={{ display: 'grid', gridTemplateColumns: '26px 1fr', columnGap: '12px', padding: '7px 0' }}
     >
       <div
@@ -144,7 +145,7 @@ function Step({ n, heading, children }: { n: string; heading: string; children: 
       >
         {n}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0" data-step-body>
         <h4 className="text-[13px] font-semibold text-ink" style={{ margin: '1px 0 3px' }}>{heading}</h4>
         {children}
       </div>
