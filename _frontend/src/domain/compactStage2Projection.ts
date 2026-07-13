@@ -3,10 +3,14 @@
 // only their method-versioned capped prefix. A selection resolves exactly two gene arms and
 // two endpoint/condition-matched pathway arms from this immutable all-arm map.
 
-export const COMPACT_STAGE2_SCHEMA = 'spot.stage02_display_projection.v1' as const;
-export const COMPACT_STAGE2_METHOD = 'spot.stage02.display_projection.v1' as const;
+export const COMPACT_STAGE2_SCHEMA = 'spot.stage02_display_projection.v2' as const;
+export const COMPACT_STAGE2_METHOD = 'spot.stage02.display_projection.v2' as const;
 export const COMPACT_STAGE2_VERIFIER =
   'spot.stage02.display_projection.independent_verifier.v1' as const;
+export const COMPACT_STAGE2_SYMBOL_CROSSWALK_RAW_SHA256 =
+  'd27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b' as const;
+export const COMPACT_STAGE2_SYMBOL_CROSSWALK_CANONICAL_SHA256 =
+  '8fd8ba97fd9e19455ff75a29645a18c932773d601ce6aa21e352f718a1313eea' as const;
 
 export type CompactLane = 'direct' | 'temporal' | 'pathway';
 
@@ -70,6 +74,21 @@ export interface CompactSourceBundleBinding {
   files: Record<string, CompactSourceFileBinding>;
 }
 
+export interface CompactSymbolCrosswalkBinding {
+  crosswalk_id: 'spot.stage01.effect_universe_gwcd4i.symbol_to_ensembl.v1';
+  inversion_rule_id: 'spot.stage02.symbol_crosswalk.invert_one_to_one_only.v1';
+  path: string;
+  raw_sha256: string;
+  canonical_sha256: string;
+  target_namespace: 'ensembl_gene_id';
+  symbol_namespace: 'hgnc_symbol';
+  coverage_universe: 'de_readout';
+  n_symbols: number;
+  n_one_to_one: number;
+  n_ambiguous_dropped: number;
+  ambiguous_ensembl_ids: string[];
+}
+
 export interface CompactStage2Projection {
   schema_version: typeof COMPACT_STAGE2_SCHEMA;
   method_version: typeof COMPACT_STAGE2_METHOD;
@@ -78,7 +97,10 @@ export interface CompactStage2Projection {
   projection_sha256: string;
   n_arms: number;
   arms: Record<string, CompactStage2Arm>;
-  bindings: { native_bundles: Record<string, CompactSourceBundleBinding> };
+  bindings: {
+    native_bundles: Record<string, CompactSourceBundleBinding>;
+    symbol_crosswalk: CompactSymbolCrosswalkBinding;
+  };
 }
 
 /** Explicit release identity carried by each Stage-2 results/current.json route entry. */

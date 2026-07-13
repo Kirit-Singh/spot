@@ -1,7 +1,7 @@
 # Admitted compact UI projection handoff
 
 The Stage-2 browser payload is W3's exact, selection-independent
-`spot.stage02_display_projection.v1` document. The UI packager does **not** derive, re-rank,
+`spot.stage02_display_projection.v2` document. The UI packager does **not** derive, re-rank,
 re-cap, or rename its rows. The authoritative artifacts remain the admitted Direct, temporal,
 and pathway bundles named by the projection.
 
@@ -40,7 +40,7 @@ active pathway source, and run identity are explicit input; none is inferred fro
   },
   "routes": {
     "targets": {
-      "projection": "<spot.stage02_display_projection.v1 object>",
+      "projection": "<spot.stage02_display_projection.v2 object>",
       "display_verifier_receipt": "<independent receipt object>",
       "compact_release": {
         "run_id": "<admitted Stage-2 run id>",

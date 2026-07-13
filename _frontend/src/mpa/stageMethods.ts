@@ -151,6 +151,12 @@ const STAGE1_RELEASE_UPSTREAM = src(
   'spot.stage01_release_manifest.v2',
   { url: '/data/stage01_release_manifest.json', license: 'MIT (spot; © 2026 Kirit Singh)', canonical_sha256: STAGE1_RELEASE_CANONICAL },
 );
+const HPA_EXTERNAL_LINK = src(
+  'Human Protein Atlas (external gene page link only)',
+  'proteinatlas.org/{Ensembl gene ID}',
+  { url: 'https://www.proteinatlas.org/about/help/dataaccess',
+    license: 'External link only; no HPA expression or tissue data is copied into this release.' },
+);
 const MARSON_DE = src('Marson GWCD4i Perturb-seq (CZI v1.0)', 'marson2025_gwcd4_perturbseq · GWCD4i.DE_stats.h5ad (33,983 × 10,282)', {
   url: CZI_MARSON_URL,
   license: 'MIT',
@@ -251,7 +257,7 @@ function targetsRaw(): RawManifest {
         'Marson GWCD4i Perturb-seq inputs: GWCD4i.DE_stats.h5ad, GWCD4i.pseudobulk_merged.h5ad, GWCD4i.DE_stats.by_guide.h5mu, GWCD4i.DE_stats.by_donors.h5mu, and sgrna_library_metadata.suppl_table.csv; DE-readout 10,282; perturbation-target 11,526 = 11,522 Ensembl + 4 symbol-only.',
       source_tissue: SOURCE_TISSUE.targets,
       estimand:
-        'Two independent Direct arms (away_from_A / toward_B): each a target-masked measured transcriptional-effect screen scored as one signed program projection with a deterministic within-arm rank; no combined/balanced/weighted score. A pair is the JOIN of two independent arms on a join-time Pareto view (display only — never a combined score). Temporal (ordered from→to conditions): population program-projection difference-in-differences per arm; inference_status not_calibrated (no p/q/significance); not lineage tracing, fate mapping, a per-cell transition, or a rate.',
+        'Two independent Direct arms (away_from_A / toward_B): each a target-masked measured transcriptional-effect screen scored as one signed program projection with a deterministic within-arm rank; no combined/balanced/weighted score. A pair is the JOIN of two independent arms on a join-time Pareto view (display only — never a combined score). Temporal (ordered from→to conditions): population program-projection difference-in-differences per arm; inference_status not_calibrated (no p/q/significance); not lineage tracing, fate mapping, a per-cell transition, or a rate. Each UI effect–rank facet is confined to one selected program and context: x = −arm_value for its matched decrease arm and +arm_value for its matched increase arm; y = −log10(rank / N ranked) within that direction. This y-axis is a descriptive transform of native rank, not a p-value, q-value, FDR or independent uncertainty statistic. Labels are the frozen crosswalk symbols; HPA links are generated only from the typed Ensembl ID and import no HPA tissue values.',
       masks_qc:
         "Target-masked: each estimate removes the target's own gene, its frozen 30-kb neighbourhood mask and its guides' off-target alignments before the panel and control means are taken; an absent mask and an empty mask are distinct claims (null when unresolved). Ranking eligibility consumes an UPSTREAM significance flag — obs.ontarget_significant (a per target×condition boolean at GWCD4i.DE_stats.h5ad:obs.ontarget_significant, computed by the Marson GWCD4i release's own DESeq2 DE model, not by spot): it is read as a released boolean verbatim, so spot re-thresholds nothing and emits no p / q / FDR of its own; a target flagged false is ranking-ineligible and a missing flag is a non-evaluable disposition (missing_qc:ontarget_significant).",
       upstream_model:
@@ -272,6 +278,7 @@ function targetsRaw(): RawManifest {
       source_chain: [
         MARSON_DE, MARSON_PB, MARSON_BY_GUIDE, MARSON_BY_DONORS, MARSON_SGRNA,
         MARSON_HF_MIRROR, MARSON_PREPRINT, PERTURB2STATE, STAGE1_RELEASE_UPSTREAM,
+        HPA_EXTERNAL_LINK,
       ],
       ...PROV_RUN_STATUS_UNAVAILABLE,
     },
@@ -445,7 +452,7 @@ export function stageMethodsRaw(page: PageKey): RawManifest {
  * test if a manifest's verified content legitimately changes.
  */
 export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string> = {
-  targets: '327b90a8f3331e4d205096f7d70f8e01e4d41bc557ad881be149828fb6a463f1',
+  targets: '90c11e80a8338443e2550581f89330e2de44a38eafa071d5158d354d7c8adabb',
   pathways: '3d0294fe0b6d0beb618a477b65a0cd82a736fdd60ef875baf2f6eb9a3864f657',
   drugs: '59017bfb16f7a8a88e44f5f79eac321f04492a1e3c035d76d1298040ffcd1fa9',
   pksafety: '86a186781ee64406f2246771c1815d72fb37049214db1e4a262e858bc40ab50b',

@@ -14,7 +14,7 @@
 // wrapper writes it to disk. It writes NOTHING unless invoked with a real spec + output dir.
 //
 // Stage-2 row mapping is intentionally OUT OF SCOPE here: W3 emits the exact
-// spot.stage02_display_projection.v1 document and its generator≠verifier receipt. This packager
+// spot.stage02_display_projection.v2 document and its generator≠verifier receipt. This packager
 // preserves those bytes as a compact served artifact and binds them into results/current.json.
 
 import { createHash } from 'node:crypto';
@@ -51,13 +51,13 @@ const ROUTES = {
     stage_label: 'Targets',
     method_id: 'spot.stage02.direct.masked_program_projection · spot.stage02.pareto.two_arm.v1 · spot.stage02.temporal_cross_condition.v1',
     projection_path: 'stage02/stage2_display_projection.json',
-    projection_schema: 'spot.stage02_display_projection.v1',
+    projection_schema: 'spot.stage02_display_projection.v2',
   },
   pathways: {
     stage_label: 'Pathways',
     method_id: 'spot.stage02.pathway.ranked_arm_enrichment.v2 · spot.stage02.pathway.signature_convergence.v2',
     projection_path: 'stage02/stage2_display_projection.json',
-    projection_schema: 'spot.stage02_display_projection.v1',
+    projection_schema: 'spot.stage02_display_projection.v2',
   },
   drugs: {
     stage_label: 'Drugs',
@@ -77,7 +77,7 @@ ROUTES.pksafety.projection_schema = 'spot.ui_projection.pksafety.v1';
 const ADMITTED_VERIFIER = new Set(['admit', 'admitted', 'pass', 'passed', 'verified', 'ok']);
 const HEX64 = /^[0-9a-f]{64}$/;
 const UI_RELEASE_SCHEMA = 'spot.ui_release_manifest.v1';
-const STAGE2_METHOD = 'spot.stage02.display_projection.v1';
+const STAGE2_METHOD = 'spot.stage02.display_projection.v2';
 const STAGE2_VERIFIER = 'spot.stage02.display_projection.independent_verifier.v1';
 const STAGE2_RECEIPT_PATH = 'stage02/display_projection.verification.json';
 const RELEASE_CONDITIONS = ['Rest', 'Stim8hr', 'Stim48hr'];

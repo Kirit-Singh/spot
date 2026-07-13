@@ -62,10 +62,10 @@ export async function compactProjectionRaw() {
     }
   }
   const body = {
-    schema_version: 'spot.stage02_display_projection.v1', method_version: 'spot.stage02.display_projection.v1',
+    schema_version: 'spot.stage02_display_projection.v2', method_version: 'spot.stage02.display_projection.v2',
     cap_policy: {
       cap_policy_id: 'spot.stage02.display_projection.first_n_native_order.v1',
-      method_version: 'spot.stage02.display_projection.v1', caps: { direct: 100, temporal: 100, pathway: 50 },
+      method_version: 'spot.stage02.display_projection.v2', caps: { direct: 100, temporal: 100, pathway: 50 },
       chosen_before_inspecting_any_value: true, configurable_from_the_ui: false,
       configurable_only_by: 'a method-version change', target_rule: 'first N native-ranked rows',
       pathway_rule: 'first N producer-emitted rows', cross_arm_order_emitted: false,
@@ -74,7 +74,16 @@ export async function compactProjectionRaw() {
     selection_independent: true, selection_id: null, analysis_mode: null,
     combined_objective: null, cross_arm_score_or_order: null,
     authoritative_artifacts_are_the_native_ones: true,
-    bindings: { native_bundles }, n_arms: Object.keys(arms).length, arms,
+    bindings: { native_bundles, symbol_crosswalk: {
+      ambiguous_ensembl_ids: [], canonical_sha256: '8fd8ba97fd9e19455ff75a29645a18c932773d601ce6aa21e352f718a1313eea', coverage_universe: 'de_readout',
+      crosswalk_id: 'spot.stage01.effect_universe_gwcd4i.symbol_to_ensembl.v1',
+      inversion_rule: 'invert only one-to-one entries',
+      inversion_rule_id: 'spot.stage02.symbol_crosswalk.invert_one_to_one_only.v1',
+      n_ambiguous_dropped: 0, n_one_to_one: 10282, n_symbols: 10282,
+      path: 'effect_universe_gwcd4i.json', raw_sha256: 'd27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b',
+      source: { dataset: 'fixture dataset identity', n_genes: 10282, role: 'symbol crosswalk only', source: 'fixture var' },
+      symbol_namespace: 'hgnc_symbol', target_namespace: 'ensembl_gene_id',
+    } }, n_arms: Object.keys(arms).length, arms,
   };
   return { ...body, projection_sha256: await sha256Hex(canonicalJson(body)) };
 }

@@ -20,12 +20,11 @@ const plotH = H - M.top - M.bottom;
 
 function point(row: CompactTargetRow, side: PlotPoint['side'], nRanked: number): PlotPoint | null {
   if (row.arm_value === null || nRanked < 1) return null;
-  const magnitude = Math.abs(row.arm_value);
   return {
     id: row.target_id,
     symbol: row.target_symbol,
     side,
-    shift: side === 'increase' ? magnitude : -magnitude,
+    shift: side === 'increase' ? row.arm_value : -row.arm_value,
     rank: row.rank,
     nRanked,
     evidence: -Math.log10(row.rank / nRanked),

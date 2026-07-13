@@ -23,7 +23,8 @@ describe('CompactStage2Projection — exact W3 producer contract', () => {
   it('parses the complete selection-independent capped projection and its independent receipt', async () => {
     const raw = await compactProjectionRaw();
     const parsed = await parseCompactStage2Projection(raw, raw.projection_sha256);
-    expect(parsed.schema_version).toBe('spot.stage02_display_projection.v1');
+    expect(parsed.schema_version).toBe('spot.stage02_display_projection.v2');
+    expect(parsed.bindings.symbol_crosswalk.n_one_to_one).toBe(10_282);
     expect(parsed.n_arms).toBe(Object.keys(parsed.arms).length);
     const admitted = await compactReceiptAdmitted(raw);
     expect(parseCompactDisplayReceipt(admitted, await expectationFor(raw)).verdict).toBe('admit');
@@ -66,6 +67,18 @@ describe('CompactStage2Projection — exact W3 producer contract', () => {
     (raw2.bindings.native_bundles[arm2.source_bundle] as Record<string, unknown>).lane = 'pathway';
     await reseal(raw2);
     await expect(parseCompactStage2Projection(raw2)).rejects.toThrow(/wrong lane/);
+  });
+
+  it('fails closed when the frozen symbol crosswalk binding is missing or mutated', async () => {
+    const missing = await compactProjectionRaw();
+    delete (missing.bindings as Record<string, unknown>).symbol_crosswalk;
+    await reseal(missing);
+    await expect(parseCompactStage2Projection(missing)).rejects.toThrow(/symbol_crosswalk|bindings/);
+
+    const mutated = await compactProjectionRaw();
+    mutated.bindings.symbol_crosswalk.raw_sha256 = '0'.repeat(64);
+    await reseal(mutated);
+    await expect(parseCompactStage2Projection(mutated)).rejects.toThrow(/crosswalk hash/);
   });
 
   it('rejects a receipt with a wrong arm count, verifier, verdict, or nonempty failures', async () => {

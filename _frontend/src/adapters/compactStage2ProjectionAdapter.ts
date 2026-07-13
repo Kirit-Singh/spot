@@ -8,6 +8,7 @@ import type {
   CompactPathwayArm,
   CompactPathwayRow,
   CompactSourceBundleBinding,
+  CompactSymbolCrosswalkBinding,
   CompactStage2Arm,
   CompactStage2Projection,
   CompactTargetArm,
@@ -16,6 +17,8 @@ import type {
 import {
   COMPACT_STAGE2_METHOD,
   COMPACT_STAGE2_SCHEMA,
+  COMPACT_STAGE2_SYMBOL_CROSSWALK_CANONICAL_SHA256,
+  COMPACT_STAGE2_SYMBOL_CROSSWALK_RAW_SHA256,
   COMPACT_STAGE2_VERIFIER,
 } from '../domain/compactStage2Projection';
 import { fail } from './errors';
@@ -185,9 +188,9 @@ function pathwayArm(v: Record<string, unknown>, mapKey: string, path: string): C
     why_not_ranked: nonempty(v.why_not_ranked, `${path}.why_not_ranked`), rows };
 }
 
-function sourceBindings(v: unknown): { native_bundles: Record<string, CompactSourceBundleBinding> } {
+function sourceBindings(v: unknown): { native_bundles: Record<string, CompactSourceBundleBinding>; symbol_crosswalk: CompactSymbolCrosswalkBinding } {
   if (!isObject(v)) fail('malformed', 'bindings must be an object');
-  exactKeys(v, ['native_bundles'], 'bindings');
+  exactKeys(v, ['native_bundles', 'symbol_crosswalk'], 'bindings');
   if (!isObject(v.native_bundles)) fail('malformed', 'bindings.native_bundles must be an object');
   const native_bundles: Record<string, CompactSourceBundleBinding> = {};
   for (const [rel, raw] of Object.entries(v.native_bundles)) {
@@ -206,7 +209,52 @@ function sourceBindings(v: unknown): { native_bundles: Record<string, CompactSou
     if (Object.keys(files).length === 0) fail('malformed', `bindings.native_bundles.${rel}.files is empty`);
     native_bundles[rel] = { lane, bundle_id: nonempty(raw.bundle_id, `bindings.native_bundles.${rel}.bundle_id`), files };
   }
-  return { native_bundles };
+  if (!isObject(v.symbol_crosswalk)) fail('malformed', 'bindings.symbol_crosswalk must be an object');
+  const cw = v.symbol_crosswalk;
+  exactKeys(cw, ['ambiguous_ensembl_ids', 'canonical_sha256', 'coverage_universe', 'crosswalk_id',
+    'inversion_rule', 'inversion_rule_id', 'n_ambiguous_dropped', 'n_one_to_one', 'n_symbols', 'path',
+    'raw_sha256', 'source', 'symbol_namespace', 'target_namespace'], 'bindings.symbol_crosswalk');
+  if (str(cw.crosswalk_id, 'bindings.symbol_crosswalk.crosswalk_id') !== 'spot.stage01.effect_universe_gwcd4i.symbol_to_ensembl.v1' ||
+      str(cw.inversion_rule_id, 'bindings.symbol_crosswalk.inversion_rule_id') !== 'spot.stage02.symbol_crosswalk.invert_one_to_one_only.v1' ||
+      str(cw.target_namespace, 'bindings.symbol_crosswalk.target_namespace') !== 'ensembl_gene_id' ||
+      str(cw.symbol_namespace, 'bindings.symbol_crosswalk.symbol_namespace') !== 'hgnc_symbol' ||
+      str(cw.coverage_universe, 'bindings.symbol_crosswalk.coverage_universe') !== 'de_readout') {
+    fail('malformed', 'symbol crosswalk identity/namespace mismatch');
+  }
+  const path = nonempty(cw.path, 'bindings.symbol_crosswalk.path');
+  if (path.startsWith('/') || path.includes('..')) fail('malformed', 'symbol crosswalk path is unsafe');
+  nonempty(cw.inversion_rule, 'bindings.symbol_crosswalk.inversion_rule');
+  const ambiguous = arr(cw.ambiguous_ensembl_ids, 'bindings.symbol_crosswalk.ambiguous_ensembl_ids')
+    .map((id, i) => nonempty(id, `bindings.symbol_crosswalk.ambiguous_ensembl_ids[${i}]`));
+  const nAmbiguous = uint(cw.n_ambiguous_dropped, 'bindings.symbol_crosswalk.n_ambiguous_dropped');
+  if (new Set(ambiguous).size !== ambiguous.length || ambiguous.length !== nAmbiguous) {
+    fail('malformed', 'symbol crosswalk ambiguous-id count/list mismatch');
+  }
+  const nSymbols = uint(cw.n_symbols, 'bindings.symbol_crosswalk.n_symbols');
+  const nOneToOne = uint(cw.n_one_to_one, 'bindings.symbol_crosswalk.n_one_to_one');
+  if (nSymbols !== 10_282 || nOneToOne !== 10_282 || nAmbiguous !== 0 || ambiguous.length !== 0) {
+    fail('malformed', 'symbol crosswalk coverage differs from the frozen one-to-one DE-readout universe');
+  }
+  if (!isObject(cw.source)) fail('malformed', 'bindings.symbol_crosswalk.source must be an object');
+  exactKeys(cw.source, ['dataset', 'n_genes', 'role', 'source'], 'bindings.symbol_crosswalk.source');
+  for (const key of ['dataset', 'role', 'source'] as const) nonempty(cw.source[key], `bindings.symbol_crosswalk.source.${key}`);
+  if (uint(cw.source.n_genes, 'bindings.symbol_crosswalk.source.n_genes') !== nSymbols) fail('malformed', 'symbol crosswalk source n_genes mismatch');
+  const rawSha = hex64(cw.raw_sha256, 'bindings.symbol_crosswalk.raw_sha256');
+  const canonicalSha = hex64(cw.canonical_sha256, 'bindings.symbol_crosswalk.canonical_sha256');
+  if (rawSha !== COMPACT_STAGE2_SYMBOL_CROSSWALK_RAW_SHA256 ||
+      canonicalSha !== COMPACT_STAGE2_SYMBOL_CROSSWALK_CANONICAL_SHA256) {
+    fail('content_hash_mismatch', 'symbol crosswalk hash differs from the frozen Stage-1 effect-universe binding');
+  }
+  const symbol_crosswalk: CompactSymbolCrosswalkBinding = {
+    crosswalk_id: 'spot.stage01.effect_universe_gwcd4i.symbol_to_ensembl.v1',
+    inversion_rule_id: 'spot.stage02.symbol_crosswalk.invert_one_to_one_only.v1', path,
+    raw_sha256: rawSha,
+    canonical_sha256: canonicalSha,
+    target_namespace: 'ensembl_gene_id', symbol_namespace: 'hgnc_symbol', coverage_universe: 'de_readout',
+    n_symbols: nSymbols, n_one_to_one: nOneToOne, n_ambiguous_dropped: nAmbiguous,
+    ambiguous_ensembl_ids: ambiguous,
+  };
+  return { native_bundles, symbol_crosswalk };
 }
 
 function validateCapPolicy(v: unknown): void {
