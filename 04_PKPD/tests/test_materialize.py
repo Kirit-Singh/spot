@@ -102,7 +102,10 @@ def _record(run_root, *, key, raw, stable_id, source_type, transform, origin="fe
         adapter_code_sha256=ADAPTER_SHA,
         review_status="unreviewed",
         evidence_state=state,
-        stage3_source_record_id=candidate_id,
+        # THE typed join. This used to be `stage3_source_record_id` — a Stage-3 SOURCE id doing
+        # duty as a candidate id — which is exactly the overload the audit found: a freshly fetched
+        # record has no Stage-3 source id, so it matched nothing and contributed nothing.
+        candidate_id=candidate_id,
     )
 
 
@@ -330,7 +333,7 @@ def test_a_row_whose_HASH_does_not_reproduce_from_the_cache_is_REFUSED(tmp_path)
     report = verify_bundle(_write(tmp_path, doc), run_root.root)
 
     assert report["status"] == "fail"
-    assert any(c["check_id"] == "every_row_hash_matches_the_cached_bytes"
+    assert any(c["check_id"] == "every_FETCHED_row_hash_matches_the_cached_bytes"
                and c["status"] == "fail" for c in report["checks"])
 
 
@@ -438,7 +441,7 @@ def test_the_CLI_writes_a_bundle_and_reports_what_it_could_not_reach(tmp_path, c
     _admission_, manifest, run_root = _acquisition(tmp_path, annotation=True)
     out = str(tmp_path / "bundle.json")
 
-    rc = main(["--stage3-bundle", PINNED_ANNOTATION_BUNDLE,
+    rc = main(["--stage3-annotation-bundle", PINNED_ANNOTATION_BUNDLE,
                "--run-root", run_root.root, "--out", out])
     assert rc == 0
     assert os.path.exists(out)
@@ -457,7 +460,7 @@ def test_the_CLI_REFUSES_when_no_acquisition_ever_ran(tmp_path, capsys):
 
     empty = tmp_path / "empty"
     empty.mkdir()
-    rc = main(["--stage3-bundle", PINNED_ANNOTATION_BUNDLE,
+    rc = main(["--stage3-annotation-bundle", PINNED_ANNOTATION_BUNDLE,
                "--run-root", str(empty), "--out", str(tmp_path / "b.json")])
 
     assert rc == 2

@@ -60,13 +60,22 @@ RECEIPT_FILE = "acquisition_receipt.json"
 
 
 
-def _access_date(doc: dict[str, Any]) -> str:
+def _access_date(doc: dict[str, Any]) -> Optional[str]:
+    """The date Stage 3 states it acquired its bytes — or None, because it states none.
+
+    This used to fall back to `1970-01-01`. An epoch placeholder is not a missing value: it is a
+    FABRICATED provenance claim, it reads as a real access date, and it went into every reused
+    record. Stage 3's `source_records` carry no timestamp at all — they pin their bytes by
+    `raw_sha256`, `source_release` and `access_record_sha256`, which identify a response far better
+    than a wall clock does. So the honest answer is that Stage 4 does not know when Stage 3
+    fetched them, and the record says so rather than inventing a day.
+    """
     acq = doc.get("acquisition") or {}
     for key in ("acquired_at", "access_date", "acquisition_date"):
         value = acq.get(key)
         if isinstance(value, str) and len(value) >= 10:
             return value[:10]
-    return "1970-01-01"
+    return None
 
 
 def _candidate_names(tables: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
@@ -162,8 +171,22 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
         http = client or Client(allow_network=allow_network)
         for name in names:
             resolved, acquired = acquire_identity(http, run_root, name, setid=setid)
-            records += acquired
             candidate_id = queued_by_name.get(name.strip().upper())
+
+            # BIND the bytes to the candidate they were acquired FOR, on a typed field.
+            #
+            # These records used to be appended unchanged, so nothing downstream could tell which
+            # candidate a PubChem or DailyMed response belonged to. The materializer then fell back
+            # to guessing -- matching a Stage-3 SOURCE id, or a substring of the source key -- and a
+            # freshly fetched record matched neither. Every response acquired for a real queued
+            # candidate was silently treated as unmatched and contributed no property and no safety
+            # row, while the receipt cheerfully called the probe `candidate_identity`.
+            #
+            # A name that is NOT a queued candidate stays candidate_id=None: it is a reference
+            # probe (temozolomide, acquired to prove the adapter works), and a probe is never
+            # reported as a candidate.
+            acquired = [r.model_copy(update={"candidate_id": candidate_id}) for r in acquired]
+            records += acquired
             if resolved["organ_system"]["evidence_state"] != "observed":
                 missing.append(MissingEvidence(
                     lane="organ_system",
@@ -215,9 +238,16 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
             "reused_from_stage3": sum(1 for r in records if r.origin == "reused_from_stage3"),
             "fetched_public": sum(1 for r in records if r.origin == "fetched_public"),
             "observed": sum(1 for r in records if r.evidence_state == "observed"),
-            # Nothing here characterises a candidate: identity acquisition is explicit and
-            # per-moiety, and no candidate lane has been acquired in this pass.
-            "candidates_acquired": 0,
+            # COUNTED, not asserted. This was hard-coded to 0, so a receipt could report seven
+            # fetched records for a queued candidate and still say nothing had been acquired for
+            # any candidate. A count that cannot change is not a count.
+            #
+            # A candidate counts only when a record was BOUND to it AND actually observed: a
+            # refusal, a 404 or a reference probe is not an acquisition.
+            "candidates_acquired": len({
+                r.candidate_id for r in records
+                if r.candidate_id and r.evidence_state == "observed"
+            }),
             "identities_acquired": identities,
         },
         "missing": [m.model_dump(exclude_none=True) for m in manifest.missing],
@@ -240,11 +270,47 @@ def _ledger_sha() -> str:
     return ledger_sha256()
 
 
+
+def _route(annotation: Optional[str], legacy: Optional[str]) -> str:
+    """Exactly one door, named for what it opens.
+
+    This CLI consumes Stage 3's DRUG-ANNOTATION bundle (`spot.stage03_drug_annotation.v1`) through
+    `stage3_annotation.py`. The flag used to be called `--stage3-bundle`, which is the name of the
+    OTHER door — the wire bundle (`stage3_adapter.py`) — so a caller who read the flag and handed
+    it a wire bundle got a confusing failure deep inside the annotation reader, and a caller who
+    read the README was told to run the wrong command.
+
+    The legacy name is not silently accepted: a wrong bundle admitted under a right-looking flag is
+    exactly how evidence gets bound to the wrong upstream.
+    """
+    if legacy and annotation:
+        raise Rejection(
+            "stage3_bundle_flag_ambiguous",
+            "--stage3-bundle and --stage3-annotation-bundle were both given. They are different "
+            "doors; supply exactly one.",
+        )
+    if legacy:
+        raise Rejection(
+            "stage3_bundle_flag_retired",
+            "--stage3-bundle is retired here. This command reads Stage 3's DRUG-ANNOTATION bundle "
+            "(spot.stage03_drug_annotation.v1) via analysis/stage3_annotation.py, not the wire "
+            "bundle. Re-run with --stage3-annotation-bundle. The flag was renamed because the old "
+            "name pointed at the other door, and a bundle admitted through the wrong door binds "
+            "evidence to the wrong upstream.",
+        )
+    if not annotation:
+        raise Rejection("stage3_bundle_missing", "--stage3-annotation-bundle is required")
+    return annotation
+
+
 def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -> int:
     ap = argparse.ArgumentParser(prog="run_acquire", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage3-bundle", required=True,
-                    help="an ADMITTED Stage-3 bundle directory (spot.stage03_drug_annotation.v1)")
+    ap.add_argument("--stage3-annotation-bundle", dest="annotation_bundle",
+                    help="an ADMITTED Stage-3 drug-annotation bundle "
+                         "(spot.stage03_drug_annotation.v1)")
+    ap.add_argument("--stage3-bundle", dest="legacy_bundle",
+                    help=argparse.SUPPRESS)   # legacy name; routed to a refusal, see below
     ap.add_argument("--run-root", required=True,
                     help="where raw bytes and the manifest are written. Must be OUTSIDE Git.")
     ap.add_argument("--acquire-identity", action="append", default=[], metavar="NAME",
@@ -260,8 +326,9 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
     args = ap.parse_args(argv)
 
     try:
+        bundle = _route(args.annotation_bundle, args.legacy_bundle)
         code, receipt = run(
-            args.stage3_bundle, args.run_root,
+            bundle, args.run_root,
             names=list(args.acquire_identity),
             allow_network=args.allow_network,
             setid=args.dailymed_setid,

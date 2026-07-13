@@ -100,8 +100,23 @@ def _terms(source_key: str, stage3_license: Optional[str]) -> tuple[Optional[str
             str(entry["license_status"]))
 
 
-def reuse_stage3_source(row: dict[str, Any], *, access_date: str) -> AcquisitionRecord:
-    """One Stage-3 source record -> one Stage-4 acquisition record. Nothing re-derived."""
+# Why a reused record carries no access time. Stated on the record, never left blank: an
+# unexplained absence is indistinguishable from a value nobody bothered to write down.
+ACCESS_TIME_NOT_STATED = (
+    "Stage 3's source_records carry no access timestamp. The response is pinned instead by "
+    "raw_sha256 + source_release + Stage 3's own access_record_sha256, which identify the bytes "
+    "more tightly than a wall clock would. Stage 4 did not fetch these bytes and will not invent "
+    "a time for them."
+)
+
+
+def reuse_stage3_source(row: dict[str, Any], *,
+                        access_date: Optional[str] = None) -> AcquisitionRecord:
+    """One Stage-3 source record -> one Stage-4 acquisition record. Nothing re-derived.
+
+    `access_date` is whatever Stage 3's document STATES, or None. It is never defaulted: an
+    invented date is a provenance claim, and this layer makes none it cannot source.
+    """
     source_key = str(row.get("source") or "unknown")
     status = _str(row.get("acquisition_status"))
     stage3_id = str(row["source_record_id"])
@@ -124,7 +139,10 @@ def reuse_stage3_source(row: dict[str, Any], *, access_date: str) -> Acquisition
         "url": _str(row.get("retrieval_url")) or _str(row.get("source_endpoint")),
         # Stage 3 hashes its canonical query rather than storing it. Carried as a hash.
         "canonical_query_sha256": _str(row.get("query_canonical")),
+        # None when Stage 3 states no date -- see ACCESS_TIME_NOT_STATED. `accessed_at_utc` is
+        # left absent for the same reason: Stage 4 did not perform this access.
         "access_date": access_date,
+        "access_time_not_stated_reason": ACCESS_TIME_NOT_STATED,
         "release_or_last_updated": _str(row.get("source_release")),
         "license": licence,
         "license_or_terms_url": terms_url,
@@ -190,7 +208,8 @@ def reuse_stage3_source(row: dict[str, Any], *, access_date: str) -> Acquisition
     )
 
 
-def reuse_stage3_sources(rows: list[dict[str, Any]], *, access_date: str) -> list[AcquisitionRecord]:
+def reuse_stage3_sources(rows: list[dict[str, Any]], *,
+                         access_date: Optional[str] = None) -> list[AcquisitionRecord]:
     return [reuse_stage3_source(r, access_date=access_date) for r in rows]
 
 

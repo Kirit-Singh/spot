@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 from .acquisition import AcquisitionManifest, AcquisitionRecord, RunRoot
 from .acquisition_records import EvidenceObservationState, ReviewStatus, SourceAcquisitionRecord
@@ -125,11 +125,17 @@ def _source_record(rec: AcquisitionRecord) -> SourceRecord:
         source_record_id=rec.acquisition_record_id,
         source_type=rec.source_type,
         source_name=rec.source_name,
-        acquisition_status=cast("AcquisitionStatus", "acquired_public"),
+        # DERIVED from whether bytes exist, never asserted. Stage 3's own registry contains
+        # `not_acquired` rows -- a source it names but never fetched. Stamping `acquired_public`
+        # on every record would launder those into public sources that carry no bytes, which is
+        # precisely the claim `acquired_public` is supposed to make checkable.
+        acquisition_status=cast(
+            "AcquisitionStatus",
+            "acquired_public" if rec.raw_sha256 else "not_acquired"),
         # The locator that makes the response re-fetchable. A public source must carry one: it
         # cannot simply declare itself public.
         record_id=rec.stable_record_id,
-        access_date=rec.access_date or "",
+        access_date=rec.access_date,
         raw_sha256=rec.raw_sha256,
         raw_bytes=rec.raw_bytes,
         url=rec.url,
@@ -174,15 +180,32 @@ def _selection(rec: AcquisitionRecord) -> dict[str, Any]:
     }
 
 
+def _why_no_access_time(rec: AcquisitionRecord) -> str:
+    """Stated, not blank. The record already carries the reason when Stage 3 reused it."""
+    if rec.access_time_not_stated_reason:
+        return rec.access_time_not_stated_reason
+    return (
+        f"no access timestamp is recorded for this {rec.origin} response. Stage 4 did not perform "
+        "the access and will not invent a time; the bytes are pinned by raw_sha256 and the "
+        "source's own release instead."
+    )
+
+
 def _acquisition_row(rec: AcquisitionRecord) -> SourceAcquisitionRecord:
     state = (EvidenceObservationState.OBSERVED if rec.evidence_state == "observed"
              else EvidenceObservationState(rec.evidence_state))
     return SourceAcquisitionRecord(
         acquisition_id=rec.acquisition_record_id,
         source_record_id=rec.acquisition_record_id,
+        # `synthetic_fixture` is refused by `_refuse_fixture_evidence` before any row is
+        # built, so only the two real origins reach here.
+        origin=cast('Literal["fetched_public", "reused_from_stage3"]', rec.origin),
         request_url=rec.url or "",
         canonical_query=rec.canonical_query or rec.source_key,
-        accessed_at_utc=rec.accessed_at_utc or "",
+        # NEVER `or ""`. A missing time converted to an empty string is how a fabricated epoch
+        # became a crash instead of a caught lie. The absence travels, with its reason.
+        accessed_at_utc=rec.accessed_at_utc,
+        access_time_not_stated_reason=(None if rec.accessed_at_utc else _why_no_access_time(rec)),
         http_status=rec.http_status,
         raw_media_type=rec.raw_media_type,
         response_headers=dict(sorted(rec.response_headers.items())),
@@ -268,7 +291,7 @@ def _property_rows(rec: AcquisitionRecord, raw: bytes, candidate_id: str,
     identity = parse_properties(raw, rec.stable_record_id or "")
     prov = {
         "source_record_id": rec.acquisition_record_id,
-        "access_date": rec.access_date or "",
+        "access_date": rec.access_date,
         "raw_response_sha256": rec.raw_sha256,
         "extraction_transform": rec.extraction_transform,
         "source_url": rec.url,
@@ -305,9 +328,18 @@ def _safety_rows(rec: AcquisitionRecord, raw: bytes, candidate_id: str, moiety_i
                  unii: Optional[str], moiety_name: Optional[str]) -> list[dict[str, Any]]:
     """A DailyMed SPL -> one row per labelled finding, with the subsection it was read from."""
     parsed = parse_dailymed_spl(raw)
+    if not rec.access_date:
+        # A label STAGE 4 fetched must know when it fetched it -- unlike a reused upstream response,
+        # nobody else holds that fact. An absent date here is a defect in the fetch, not an honest
+        # gap in the world, and it is refused rather than blanked.
+        raise MaterializationError(
+            "fetched_label_without_access_date",
+            f"acquisition record {rec.acquisition_record_id!r} is a label Stage 4 fetched, but "
+            "carries no access date. Stage 4 performed this access; only Stage 4 can state when.",
+        )
     rows = safety_rows_from_label(
         parsed, candidate_id, moiety_id, rec.acquisition_record_id,
-        rec.access_date or "",
+        rec.access_date,
         rec.extraction_transform,
         expected_unii=unii, expected_moiety_name=moiety_name,
     )
@@ -357,6 +389,16 @@ def materialize(admission: Any, manifest: AcquisitionManifest, run_root: RunRoot
 
     for rec in sorted(manifest.records, key=lambda r: r.acquisition_record_id):
         sources[rec.acquisition_record_id] = json.loads(_source_record(rec).model_dump_json())
+
+        # The acquisition lane is every RESPONSE this bundle stands on. A Stage-3 row marked
+        # `not_acquired` is not a response: nobody fetched it, there are no bytes, and Stage 3
+        # writes the literal string "not_acquired" where a URL would be. It belongs in `sources`
+        # as not_acquired -- which it now is -- and NOT in a lane whose every row asserts that a
+        # request was made and answered. Inventing a request URL for it would be the same class of
+        # fabrication as inventing the access time.
+        if not rec.raw_sha256:
+            continue
+
         lanes["source_acquisition"].append(
             json.loads(_acquisition_row(rec).model_dump_json()))
 
@@ -421,20 +463,34 @@ def _document(cset: Any, lanes: dict[str, list[dict[str, Any]]], sources: dict[s
 # ------------------------------------------------------------------------------ small helpers
 
 def _candidate_for(rec: AcquisitionRecord, by_id: dict[str, Any]) -> Any:
-    """The record's candidate, matched on the PINNED identity the acquisition recorded.
+    """The candidate these bytes are evidence FOR — read from the record's own typed field.
 
-    Never on arrival order, and never on a name that merely looks similar: a reference probe
-    (temozolomide, acquired to prove the adapter works) is not a candidate and must never be
-    reported as one.
+    This used to GUESS: match `stage3_source_record_id` (which identifies a Stage-3 SOURCE, not a
+    candidate) against the candidate id, or test whether `source_key` happened to end with the
+    active-moiety's name. A freshly fetched PubChem/DailyMed/openFDA response satisfies neither, so
+    every record acquired for a real queued candidate was silently treated as unmatched and
+    contributed nothing — while the receipt called the probe `candidate_identity`.
+
+    Now the acquisition layer STAMPS `candidate_id` on the record, and this reads it. A record with
+    no candidate is a reference probe (temozolomide, acquired to prove an adapter works): recorded
+    as provenance, and never reported as a candidate.
+
+    An unknown candidate_id is REFUSED rather than dropped. Silently ignoring evidence that names a
+    candidate this bundle does not contain would hide a genuine mismatch between the acquisition
+    and the admitted bundle.
     """
-    for cid, cand in sorted(by_id.items()):
-        if rec.stage3_source_record_id and rec.stage3_source_record_id == cid:
-            return cand
-        moiety = getattr(cand, "active_moiety", None)
-        name = (getattr(moiety, "active_moiety_name", None) or "").strip().lower()
-        if name and rec.source_key.endswith(name):
-            return cand
-    return None
+    if not rec.candidate_id:
+        return None
+    candidate = by_id.get(rec.candidate_id)
+    if candidate is None:
+        raise MaterializationError(
+            "acquisition_candidate_not_admitted",
+            f"acquisition record {rec.acquisition_record_id!r} was acquired for candidate "
+            f"{rec.candidate_id!r}, which is not in the admitted Stage-3 bundle. The evidence and "
+            "the bundle disagree about who the candidates are; Stage 4 will not quietly attach it "
+            "to something else, nor quietly drop it.",
+        )
+    return candidate
 
 
 def _moiety_id(candidate: Any) -> str:

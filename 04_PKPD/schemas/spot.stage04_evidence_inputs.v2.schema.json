@@ -169,9 +169,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -214,7 +222,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -441,9 +448,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -486,7 +501,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -1033,9 +1047,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -1078,7 +1100,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -1197,9 +1218,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -1242,7 +1271,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -1576,9 +1604,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -1621,7 +1657,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -1820,9 +1855,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -1865,7 +1908,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -1986,9 +2028,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -2031,7 +2081,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -2509,9 +2558,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -2554,7 +2611,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -2811,9 +2867,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -2856,7 +2920,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],
@@ -2957,10 +3020,30 @@
       "additionalProperties": false,
       "description": "One response, and everything needed to get it again and prove what was read out of it.",
       "properties": {
+        "access_time_not_stated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Time Not Stated Reason"
+        },
         "accessed_at_utc": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
-          "title": "Accessed At Utc",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accessed At Utc"
         },
         "acquisition_id": {
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -3098,6 +3181,15 @@
         "observation_state": {
           "$ref": "#/$defs/EvidenceObservationState"
         },
+        "origin": {
+          "default": "fetched_public",
+          "enum": [
+            "fetched_public",
+            "reused_from_stage3"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
         "raw_bytes": {
           "anyOf": [
             {
@@ -3232,7 +3324,6 @@
         "source_record_id",
         "request_url",
         "canonical_query",
-        "accessed_at_utc",
         "extraction_transform",
         "adapter_id",
         "review_status",
@@ -3258,9 +3349,17 @@
       "description": "A source response/document. Every scientific number binds to one.\n\nA source does not get to *declare* that it is public data. It has to show the\nlocator that makes it re-fetchable and the bytes that make it checkable: an\n`acquired_public` record without a URL, a stable record id, a release, a license and\na byte count is refused. (The audit forged a scored property from a source with none\nof those.) `is_fixture` is derived from `acquisition_status`, never set by hand — so\nrelabeling a fixture as public necessarily changes content identity.",
       "properties": {
         "access_date": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "Access Date",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Date"
         },
         "acquisition_status": {
           "$ref": "#/$defs/AcquisitionStatus"
@@ -3377,8 +3476,7 @@
         "source_record_id",
         "source_type",
         "source_name",
-        "acquisition_status",
-        "access_date"
+        "acquisition_status"
       ],
       "title": "SourceRecord",
       "type": "object"
@@ -3401,9 +3499,17 @@
           "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "title": "Access Date",
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Access Date"
             },
             "extraction_transform": {
               "title": "Extraction Transform",
@@ -3446,7 +3552,6 @@
           },
           "required": [
             "source_record_id",
-            "access_date",
             "raw_response_sha256",
             "extraction_transform"
           ],

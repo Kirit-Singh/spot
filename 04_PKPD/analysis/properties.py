@@ -12,7 +12,7 @@ method hash and therefore the scorecard_set_id.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Optional, Any
 
 from .canonical import strict_content_sha256
 from .evidence_records import PropertyRecord
@@ -40,7 +40,9 @@ class PropertyContribution:
     software_version: str | None
     database_version: str | None
     source_record_id: str
-    access_date: str
+    # Optional for the same reason `Provenance.access_date` is: a reused upstream response
+    # has no Stage-4 access date, and an invented one is a fabricated provenance claim.
+    access_date: Optional[str]
     raw_response_sha256: str
     extraction_transform: str
 

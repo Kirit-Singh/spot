@@ -84,19 +84,37 @@ count + SHA-256, the adapter code hash and the exact extraction transform
 acquisition manifest, `run_stage4` consumed an evidence bundle, and nothing turned one into the
 other — so every green run was scoring a fixture.
 
+**The door is `--stage3-annotation-bundle`.** The current frozen contract is Stage 3's
+drug-annotation bundle (`spot.stage03_drug_annotation.v1`), read by `analysis/stage3_annotation.py`.
+`--stage3-bundle` is the OTHER door — the wire bundle — and it is **retired on these commands**: it
+refuses by name rather than misroute, because a bundle admitted through the wrong door binds
+evidence to the wrong upstream.
+
 ```bash
+S3=<stage3 drug-annotation bundle dir>;  R=<run root, OUTSIDE the tree>;  B=$R/evidence.json
+
 # 1. acquire public bytes (offline by default; cached outside Git, addressed by SHA-256)
-python -m analysis.run_acquire     --stage3-bundle <dir> --run-root <R>
-python -m analysis.run_acquire     --stage3-bundle <dir> --run-root <R> \
+python -m analysis.run_acquire     --stage3-annotation-bundle $S3 --run-root $R
+python -m analysis.run_acquire     --stage3-annotation-bundle $S3 --run-root $R \
     --acquire-identity temozolomide --allow-network --dailymed-setid <setid>
 
 # 2. materialize the typed evidence bundle from what was actually acquired
-python -m analysis.run_materialize --stage3-bundle <dir> --run-root <R> --out <B>
-python -m verifier.verify_bundle   <B> --run-root <R>      # independent; 0 = verified
+python -m analysis.run_materialize --stage3-annotation-bundle $S3 --run-root $R --out $B
+python -m verifier.verify_bundle   $B --run-root $R                      # 0 = verified
 
-# 3. score, emit, verify
-python -m analysis.run_stage4      --stage3-bundle <dir> --evidence-bundle <B>
+# 3. score, emit, verify.  --require-external-verifier makes Stage 3's OWN verifier mandatory;
+#    it is refused by name on any door that cannot consult it, never silently ignored.
+python -m analysis.run_stage4      --stage3-annotation-bundle $S3 --evidence-bundle $B \
+    --outputs-root outputs --require-external-verifier
+python -m verifier.verify_stage4   --release outputs/<scorecard_set_id> --method method
 ```
+
+**A time nobody stated is not a time.** Stage 3's `source_records` carry no access timestamp — they
+pin bytes by `raw_sha256` + `source_release`. Stage 4 did not perform those fetches, so a reused
+record carries **no** `accessed_at_utc` and states why (`access_time_not_stated_reason`), and its
+`origin` says who fetched it. The engine never invents a date, and the verifier delegates
+byte-level re-derivation of reused responses to Stage 3's own verifier rather than claiming to have
+checked bytes it does not hold.
 
 The materializer states `not_evaluated`, with a reason, for **every lane a public acquisition
 cannot reach** — exposure, transporters, NEBPI observations, fu — and those reasons are hashed

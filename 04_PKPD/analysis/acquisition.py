@@ -148,6 +148,21 @@ class AcquisitionRecord(Strict):
     stage3_source_record_id: Optional[str] = None
     note: Optional[str] = None
 
+    # --- the two typed joins the production chain needs ------------------------------
+    #
+    # WHICH CANDIDATE these bytes are evidence FOR. A dedicated field, deliberately: the
+    # materializer used to guess the candidate from `stage3_source_record_id` (which identifies a
+    # Stage-3 SOURCE, not a candidate) or from a substring of `source_key`. Fetched records
+    # satisfied neither, so PubChem/DailyMed/openFDA responses acquired for a real queued candidate
+    # were silently treated as unmatched and contributed NOTHING. An evidence row that cannot name
+    # the candidate it is evidence about is not evidence.
+    candidate_id: Optional[str] = None
+
+    # WHY there is no `accessed_at_utc`. Required whenever the timestamp is absent, so that a blank
+    # can never be mistaken for a value nobody wrote down. The alternative -- an invented
+    # `1970-01-01` -- is a fabricated provenance claim, and it is what this replaces.
+    access_time_not_stated_reason: Optional[str] = None
+
     @model_validator(mode="after")
     def _origin_evidence(self) -> "AcquisitionRecord":
         if self.origin == "fetched_public":

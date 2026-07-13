@@ -100,7 +100,17 @@ class Provenance(Strict):
 
     source_record_id: str = Field(pattern=ID_PATTERN)
     source_url: Optional[str] = None
-    access_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    # Optional, because a reused upstream response HAS no Stage-4 access date: Stage 3 fetched
+    # those bytes and records no timestamp for them. The alternative was an invented `1970-01-01`,
+    # which is a fabricated provenance claim, not a missing value.
+    #
+    # Nothing is weakened by this. Re-fetchability rests on the anchors the validator below still
+    # demands -- url, record_id, release_version, license, raw_sha256, raw_bytes -- which pin a
+    # response far more tightly than a wall clock does. NO new field is added here: `SourceRecord`
+    # and `Provenance` feed the FROZEN v1 evidence/source digests, and an extra key (even a null
+    # one) would move the identity of every v1 release ever emitted. The reason an access time is
+    # absent is carried on the acquisition record and the v2 acquisition lane instead.
+    access_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     release_version: Optional[str] = None
     raw_response_sha256: str = Field(pattern=SHA256_PATTERN)
     extraction_transform: str  # exact, deterministic: how the value was taken out
@@ -156,7 +166,17 @@ class SourceRecord(Strict):
     acquisition_status: AcquisitionStatus
     url: Optional[str] = None
     record_id: Optional[str] = None
-    access_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    # Optional, because a reused upstream response HAS no Stage-4 access date: Stage 3 fetched
+    # those bytes and records no timestamp for them. The alternative was an invented `1970-01-01`,
+    # which is a fabricated provenance claim, not a missing value.
+    #
+    # Nothing is weakened by this. Re-fetchability rests on the anchors the validator below still
+    # demands -- url, record_id, release_version, license, raw_sha256, raw_bytes -- which pin a
+    # response far more tightly than a wall clock does. NO new field is added here: `SourceRecord`
+    # and `Provenance` feed the FROZEN v1 evidence/source digests, and an extra key (even a null
+    # one) would move the identity of every v1 release ever emitted. The reason an access time is
+    # absent is carried on the acquisition record and the v2 acquisition lane instead.
+    access_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     release_version: Optional[str] = None
     license: Optional[str] = None
     raw_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)

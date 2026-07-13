@@ -96,6 +96,11 @@ REQUIRED_COLUMNS_V2: dict[str, tuple[str, ...]] = {
     "source_acquisition": ("acquisition_id", "source_record_id", "canonical_query",
                            "accessed_at_utc", "observation_state", "adapter_code_sha256",
                            "review_status",
+                           # An absent access time must be EXPLAINED in the release, not merely
+                           # absent from it. `origin` is what makes the explanation checkable:
+                           # a Stage-4 fetch with no timestamp is a defect; a reused Stage-3
+                           # response with no timestamp is the honest state of the world.
+                           "origin", "access_time_not_stated_reason",
                            "selection_disposition", "selection_pin", "match_total_reported",
                            "records_returned", "result_set_complete"),
 }

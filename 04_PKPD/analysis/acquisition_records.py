@@ -93,7 +93,24 @@ class SourceAcquisitionRecord(Strict):
     request_url: str
     # The exact, reproducible query — not "I searched ChEMBL". Method + path + sorted params.
     canonical_query: str = Field(min_length=1)
-    accessed_at_utc: str = Field(pattern=UTC_TIMESTAMP_PATTERN)
+    # WHO performed the exchange. A reused Stage-3 response was fetched by STAGE 3: Stage 4 holds
+    # its bytes and its hash, but never made the request, so it has no HTTP status and no access
+    # time of its own. Without this field the record cannot tell the difference between "nobody
+    # observed this" and "somebody upstream observed it and I am carrying their bytes", and the
+    # validators below cannot judge it honestly.
+    origin: Literal["fetched_public", "reused_from_stage3"] = "fetched_public"
+
+    # The time STAGE 4 performed this access -- or absent, when it performed none.
+    #
+    # This was required, so a reused Stage-3 response (whose access time Stage 3 does not record)
+    # had nowhere honest to go. Upstream filled the hole with `1970-01-01`, which is not a missing
+    # value but a fabricated provenance claim, and the chain then crashed converting it to "".
+    # A time that no source states is now stated as ABSENT, with the reason, and the bytes stay
+    # pinned by the hashes that actually identify them.
+    accessed_at_utc: Optional[str] = Field(default=None, pattern=UTC_TIMESTAMP_PATTERN)
+    # REQUIRED whenever `accessed_at_utc` is absent. An unexplained blank is indistinguishable
+    # from a value nobody bothered to record; a stated reason is auditable.
+    access_time_not_stated_reason: Optional[str] = None
 
     http_status: Optional[int] = Field(default=None, ge=100, le=599)
     raw_media_type: Optional[str] = None
@@ -194,15 +211,46 @@ class SourceAcquisitionRecord(Strict):
         if self.content_sha256 and not self.raw_sha256:
             raise ValueError("content_sha256 without raw_sha256: there are no bytes to normalise")
 
+    def _check_access_time(self) -> None:
+        """A time nobody stated is stated as absent -- never blank, never invented."""
+        if self.accessed_at_utc:
+            if self.access_time_not_stated_reason:
+                raise ValueError(
+                    "accessed_at_utc is present AND a not-stated reason is given. One of them is "
+                    "false; a record cannot both know and not know when it was accessed."
+                )
+            return
+        if not (self.access_time_not_stated_reason or "").strip():
+            raise ValueError(
+                "accessed_at_utc is absent and nothing says why. An unexplained blank is "
+                "indistinguishable from a value nobody bothered to record. State the reason -- "
+                "e.g. the upstream stage acquired these bytes and does not record a timestamp -- "
+                "and pin the response by raw_sha256 + release instead. Do NOT invent a time."
+            )
+
     def _check_state(self) -> None:
         st = self.observation_state
+        self._check_access_time()
         if st == EvidenceObservationState.OBSERVED:
             self._require_bytes("observed")
-            if self.http_status is None or not (200 <= self.http_status < 300):
+            # A response STAGE 4 fetched must show a 2xx: a 404 or a challenge page has bytes too,
+            # and they are not an observation of the thing that was asked for.
+            #
+            # A response STAGE 3 fetched has no Stage-4 HTTP status, because Stage 4 made no
+            # request. Demanding one here is what forced the upstream fabrications -- an invented
+            # epoch, an empty-string timestamp. What Stage 4 CAN stand behind is the bytes and
+            # their hash, and `_require_bytes` already insists on those.
+            if self.origin == "fetched_public" and (
+                    self.http_status is None or not (200 <= self.http_status < 300)):
                 raise ValueError(
                     f"observed requires a 2xx HTTP status (got {self.http_status!r}). A 404 or a "
                     "challenge page has bytes too; they are not an observation of the thing that "
                     "was asked for."
+                )
+            if self.origin == "reused_from_stage3" and self.http_status is not None:
+                raise ValueError(
+                    "a reused_from_stage3 response carries an HTTP status, but Stage 4 made no "
+                    "request for it. A status Stage 4 did not receive is not Stage 4's to report."
                 )
             if self.search_id:
                 raise ValueError("search_id is only meaningful for "

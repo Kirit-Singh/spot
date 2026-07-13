@@ -52,7 +52,7 @@ def _keys(node) -> set[str]:
 
 def test_the_default_run_admits_the_bundle_reuses_stage3_and_acquires_nothing(tmp_path, capsys):
     root = str(tmp_path / "run")
-    code = run_acquire.main(["--stage3-bundle", PINNED_BUNDLE, "--run-root", root])
+    code = run_acquire.main(["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root])
     assert code == 0
 
     manifest = _read(os.path.join(root, "acquisition_manifest.json"))
@@ -73,7 +73,7 @@ def test_the_default_run_admits_the_bundle_reuses_stage3_and_acquires_nothing(tm
 
 def test_the_receipt_says_what_was_admitted_and_what_was_not_acquired(tmp_path):
     root = str(tmp_path / "run")
-    run_acquire.main(["--stage3-bundle", PINNED_BUNDLE, "--run-root", root])
+    run_acquire.main(["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root])
 
     receipt = _read(os.path.join(root, "acquisition_receipt.json"))
     assert receipt["stage3"]["bundle_id"] == "s3_0b119088734643bf"
@@ -86,7 +86,7 @@ def test_the_receipt_says_what_was_admitted_and_what_was_not_acquired(tmp_path):
 
 def test_the_run_root_may_not_be_inside_the_git_working_tree(capsys):
     inside = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_should_never_exist")
-    code = run_acquire.main(["--stage3-bundle", PINNED_BUNDLE, "--run-root", inside])
+    code = run_acquire.main(["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", inside])
     assert code == 2
     assert "run_root_inside_git" in capsys.readouterr().err
     assert not os.path.exists(inside)
@@ -95,7 +95,7 @@ def test_the_run_root_may_not_be_inside_the_git_working_tree(capsys):
 def test_identity_acquisition_without_network_permission_is_refused(tmp_path, capsys):
     root = str(tmp_path / "run")
     code = run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root, "--acquire-identity", "fixturomide"])
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root, "--acquire-identity", "fixturomide"])
     assert code == 2
     assert "network_not_permitted" in capsys.readouterr().err
 
@@ -105,7 +105,7 @@ def test_an_acquired_identity_that_is_not_a_candidate_is_a_reference_probe(tmp_p
     probe is a probe: it can never be reported as a candidate, and nothing about it is ranked."""
     root = str(tmp_path / "run")
     code = run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
          "--acquire-identity", "fixturomide", "--allow-network"],
         client=_client())
     assert code == 0
@@ -126,7 +126,7 @@ def test_an_acquired_identity_that_is_not_a_candidate_is_a_reference_probe(tmp_p
 def test_an_acquired_identity_records_every_response_it_rests_on(tmp_path):
     root = str(tmp_path / "run")
     run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
          "--acquire-identity", "fixturomide", "--allow-network"],
         client=_client())
 
@@ -146,7 +146,7 @@ def test_an_acquired_identity_records_every_response_it_rests_on(tmp_path):
 def test_an_identity_conflict_refuses_the_moiety_and_writes_no_identity(tmp_path, capsys):
     root = str(tmp_path / "run")
     code = run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
          "--acquire-identity", "fixturomide", "--allow-network"],
         client=_client(openfda_label="openfda_label_conflicting.json"))
     assert code == 2
@@ -164,7 +164,7 @@ def test_probing_a_reference_drug_does_not_fill_any_candidates_missing_identity_
     fetched would be the overclaim this layer exists to prevent."""
     root = str(tmp_path / "run")
     run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
          "--acquire-identity", "fixturomide", "--allow-network"],
         client=_client())
 
@@ -181,7 +181,7 @@ def test_the_organ_system_field_is_handed_to_w9_as_unspecified_with_the_record_i
     checked`, and the absence is stated in the manifest as well."""
     root = str(tmp_path / "run")
     run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
          "--acquire-identity", "fixturomide", "--allow-network"],
         client=_client())
 
@@ -205,7 +205,7 @@ def test_two_identical_runs_produce_the_same_manifest_content_hash(tmp_path):
     for i in range(2):
         root = str(tmp_path / f"run{i}")
         run_acquire.main(
-            ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+            ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
              "--acquire-identity", "fixturomide", "--allow-network"],
             client=_client())
         hashes.append(_read(os.path.join(root, "acquisition_manifest.json"))["content_sha256"])
@@ -214,7 +214,7 @@ def test_two_identical_runs_produce_the_same_manifest_content_hash(tmp_path):
 
 def test_the_manifest_never_carries_a_ranking_field(tmp_path):
     root = str(tmp_path / "run")
-    run_acquire.main(["--stage3-bundle", PINNED_BUNDLE, "--run-root", root])
+    run_acquire.main(["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root])
     fields = _keys(_read(os.path.join(root, "acquisition_manifest.json")))
     for word in RANKING_WORDS:
         assert not any(word in f for f in fields)
@@ -225,7 +225,7 @@ def test_the_cli_never_re_queries_a_source_stage3_already_acquired(tmp_path, sou
     root = str(tmp_path / "run")
     transport = StaticTransport(_routes(), clock=CLOCK)
     run_acquire.main(
-        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+        ["--stage3-annotation-bundle", PINNED_BUNDLE, "--run-root", root,
          "--acquire-identity", "fixturomide", "--allow-network"],
         client=Client(transport=transport, allow_network=True))
     assert not any(source_key in url for url in transport.seen)

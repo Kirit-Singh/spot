@@ -59,18 +59,26 @@ def verify_bundle(bundle_path: str, run_root: str) -> dict[str, Any]:
     records = {r["acquisition_record_id"]: r for r in manifest.get("records", [])}
     observed = {rid for rid, r in records.items() if r.get("evidence_state") == "observed"}
 
-    # 1 + 2 -- every cited source is an acquired one, and its bytes are in the cache.
+    # 1 + 2 -- every cited source is an acquired one, and its bytes re-derive.
+    #
+    # WHO FETCHED IT decides what can be checked, and pretending otherwise is how this whole class
+    # of defect started. A response STAGE 4 fetched is cached under the run root and must re-hash
+    # from those bytes. A response STAGE 3 fetched is NOT in Stage 4's cache -- Stage 4 carries the
+    # hash, not the bytes -- so re-deriving it here is impossible, and a check that cannot run must
+    # not report `pass`. What IS checkable is that the row agrees with the acquisition manifest,
+    # and that the byte-level re-derivation is Stage 3's own verifier's job. Both are reported.
     cited = set()
-    unbacked, missing_bytes, bad_hash = [], [], []
+    unbacked, missing_bytes, bad_hash, reused_mismatch = [], [], [], []
+    reused_delegated = 0
+
     for lane, rows in bundle.items():
         if not isinstance(rows, list):
             continue
         for row in rows:
-            # The evidence lanes NEST their provenance (`row.provenance.source_record_id`); the
-            # acquisition lane carries it flat. Reading only the flat shape checked the acquisition
-            # rows and silently skipped every property and safety row -- which is to say, it
-            # skipped the evidence. A verifier that walks past the rows it exists to check is
-            # worse than no verifier, because it reports `pass`.
+            # The evidence lanes NEST their provenance; the acquisition lane carries it flat.
+            # Reading only the flat shape checked the acquisition rows and silently skipped every
+            # property and safety row -- a verifier that walks past the rows it exists to check is
+            # worse than none, because it reports `pass`.
             prov = row.get("provenance") or {}
             sid = prov.get("source_record_id") or row.get("source_record_id")
             if not sid:
@@ -80,10 +88,21 @@ def verify_bundle(bundle_path: str, run_root: str) -> dict[str, Any]:
             if rec is None:
                 unbacked.append(f"{lane}:{sid}")
                 continue
+
             want = (prov.get("raw_response_sha256")
                     or row.get("raw_response_sha256") or row.get("raw_sha256"))
             if want is None:
                 continue
+
+            if rec.get("origin") == "reused_from_stage3":
+                # Stage 4 holds no bytes for this response. Check it against the manifest, and say
+                # plainly that the bytes themselves are Stage 3's to re-derive.
+                if want != rec.get("raw_sha256"):
+                    reused_mismatch.append(f"{lane}:{sid}")
+                else:
+                    reused_delegated += 1
+                continue
+
             relpath = rec.get("cache_relpath")
             if not relpath or not os.path.exists(os.path.join(run_root, relpath)):
                 missing_bytes.append(f"{lane}:{sid}")
@@ -95,10 +114,16 @@ def verify_bundle(bundle_path: str, run_root: str) -> dict[str, Any]:
 
     _check(checks, "every_cited_source_was_acquired", not unbacked,
            f"rows citing a source the acquisition never made: {unbacked[:5]}")
-    _check(checks, "every_cited_byte_is_in_the_cache", not missing_bytes,
-           f"rows resting on bytes that are not in the run root: {missing_bytes[:5]}")
-    _check(checks, "every_row_hash_matches_the_cached_bytes", not bad_hash,
-           f"a row's hash does not reproduce from the cache: {bad_hash[:5]}")
+    _check(checks, "every_FETCHED_byte_is_in_the_cache", not missing_bytes,
+           f"Stage-4-fetched rows resting on bytes that are not in the run root: {missing_bytes[:5]}")
+    _check(checks, "every_FETCHED_row_hash_matches_the_cached_bytes", not bad_hash,
+           f"a fetched row's hash does not reproduce from the cache: {bad_hash[:5]}")
+    _check(checks, "every_REUSED_row_agrees_with_the_acquisition_manifest", not reused_mismatch,
+           f"a reused row's hash disagrees with the manifest record it came from: "
+           f"{reused_mismatch[:5]}")
+    _check(checks, "reused_bytes_are_delegated_to_stage3_not_silently_passed", True,
+           f"{reused_delegated} reused row(s): Stage 4 holds the hash, not the bytes. Byte-level "
+           "re-derivation belongs to Stage 3's own verifier and is NOT claimed here.")
 
     # 3 -- no lane may hold evidence the acquisition never observed.
     fabricated = sorted(sid for sid in cited if sid in records and sid not in observed)

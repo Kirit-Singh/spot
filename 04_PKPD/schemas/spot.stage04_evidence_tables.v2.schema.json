@@ -1510,6 +1510,8 @@
         "columns": [
           "acquisition_id",
           "source_record_id",
+          "origin",
+          "access_time_not_stated_reason",
           "request_url",
           "canonical_query",
           "accessed_at_utc",
@@ -1538,6 +1540,8 @@
           "result_set_complete"
         ],
         "dtypes": [
+          "string",
+          "string",
           "string",
           "string",
           "string",
@@ -2456,6 +2460,8 @@
       "columns": [
         "acquisition_id",
         "source_record_id",
+        "origin",
+        "access_time_not_stated_reason",
         "request_url",
         "canonical_query",
         "accessed_at_utc",
@@ -2484,6 +2490,8 @@
         "result_set_complete"
       ],
       "dtypes": [
+        "string",
+        "string",
         "string",
         "string",
         "string",

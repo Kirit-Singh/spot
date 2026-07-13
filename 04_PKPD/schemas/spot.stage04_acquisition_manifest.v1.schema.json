@@ -17,6 +17,18 @@
           "default": null,
           "title": "Access Date"
         },
+        "access_time_not_stated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Time Not Stated Reason"
+        },
         "accessed_at_utc": {
           "anyOf": [
             {
@@ -51,6 +63,18 @@
           ],
           "default": null,
           "title": "Cache Relpath"
+        },
+        "candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
         },
         "canonical_query": {
           "anyOf": [

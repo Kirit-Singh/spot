@@ -83,7 +83,12 @@ FRACTION_UNBOUND_SCHEMA = pa.schema([
 # time, the HTTP status, the terms URL, the adapter build, and how a single record was SELECTED
 # among the candidates the query matched.
 SOURCE_ACQUISITION_SCHEMA = pa.schema([
-    ("acquisition_id", _STR), ("source_record_id", _STR), ("request_url", _STR),
+    ("acquisition_id", _STR), ("source_record_id", _STR),
+    # WHO fetched it, and -- when nobody Stage-4-side did -- WHY there is no access time. Both
+    # must reach the RELEASE, not stop at the bundle: a reader of the emitted artifact has to be
+    # able to tell "Stage 3 fetched this and records no timestamp" from "somebody left it blank".
+    ("origin", _STR), ("access_time_not_stated_reason", _STR),
+    ("request_url", _STR),
     ("canonical_query", _STR), ("accessed_at_utc", _STR), ("http_status", pa.int64()),
     ("raw_media_type", _STR), ("response_headers_json", _STR),
     ("release_or_last_updated", _STR), ("license_or_terms_url", _STR),

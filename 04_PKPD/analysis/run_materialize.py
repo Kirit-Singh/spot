@@ -36,6 +36,8 @@ from .acquisition import (
     RunRoot,
     manifest_content_sha256,
 )
+from pydantic import ValidationError
+
 from .contract_version import ContractVersion
 from .firewall import Rejection
 from .materialize import materialize
@@ -106,11 +108,47 @@ def run(stage3_bundle: str, run_root: str, out: str, *,
     return 0
 
 
+
+def _route(annotation: Optional[str], legacy: Optional[str]) -> str:
+    """Exactly one door, named for what it opens.
+
+    This CLI consumes Stage 3's DRUG-ANNOTATION bundle (`spot.stage03_drug_annotation.v1`) through
+    `stage3_annotation.py`. The flag used to be called `--stage3-bundle`, which is the name of the
+    OTHER door — the wire bundle (`stage3_adapter.py`) — so a caller who read the flag and handed
+    it a wire bundle got a confusing failure deep inside the annotation reader, and a caller who
+    read the README was told to run the wrong command.
+
+    The legacy name is not silently accepted: a wrong bundle admitted under a right-looking flag is
+    exactly how evidence gets bound to the wrong upstream.
+    """
+    if legacy and annotation:
+        raise Rejection(
+            "stage3_bundle_flag_ambiguous",
+            "--stage3-bundle and --stage3-annotation-bundle were both given. They are different "
+            "doors; supply exactly one.",
+        )
+    if legacy:
+        raise Rejection(
+            "stage3_bundle_flag_retired",
+            "--stage3-bundle is retired here. This command reads Stage 3's DRUG-ANNOTATION bundle "
+            "(spot.stage03_drug_annotation.v1) via analysis/stage3_annotation.py, not the wire "
+            "bundle. Re-run with --stage3-annotation-bundle. The flag was renamed because the old "
+            "name pointed at the other door, and a bundle admitted through the wrong door binds "
+            "evidence to the wrong upstream.",
+        )
+    if not annotation:
+        raise Rejection("stage3_bundle_missing", "--stage3-annotation-bundle is required")
+    return annotation
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="run_materialize", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage3-bundle", required=True,
-                    help="the ADMITTED Stage-3 bundle the evidence was acquired for")
+    ap.add_argument("--stage3-annotation-bundle", dest="annotation_bundle",
+                    help="an ADMITTED Stage-3 drug-annotation bundle "
+                         "(spot.stage03_drug_annotation.v1)")
+    ap.add_argument("--stage3-bundle", dest="legacy_bundle",
+                    help=argparse.SUPPRESS)   # legacy name; routed to a refusal, see below
     ap.add_argument("--run-root", required=True,
                     help="the run root `run_acquire` wrote (acquisition_manifest.json + raw/)")
     ap.add_argument("--out", required=True, help="write the evidence bundle here")
@@ -122,11 +160,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = ap.parse_args(argv)
 
     try:
-        return run(args.stage3_bundle, args.run_root, args.out,
+        bundle = _route(args.annotation_bundle, args.legacy_bundle)
+        return run(bundle, args.run_root, args.out,
                    require_external_verifier=args.require_external_verifier,
                    version=ContractVersion(args.contract))
     except Rejection as exc:
         print(f"REFUSED [{exc.code}] {exc.detail}", file=sys.stderr)
+        return 2
+    except ValidationError as exc:
+        # A contract violation is a REFUSAL, not a crash. This escaped as a raw pydantic traceback
+        # -- which is how the `accessed_at_utc` defect presented: a stack trace instead of a named,
+        # fail-closed rejection an operator could act on. The contract caught the problem; the CLI
+        # just failed to say so.
+        first = exc.errors(include_url=False)[:2]
+        print(f"REFUSED [evidence_row_violates_contract] the acquisition cannot be materialized "
+              f"into a valid evidence bundle: {first}", file=sys.stderr)
         return 2
 
 

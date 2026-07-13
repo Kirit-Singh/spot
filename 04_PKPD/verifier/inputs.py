@@ -185,7 +185,12 @@ V2_ONLY_COLUMNS: dict[str, tuple[str, ...]] = {
         "raw_response_sha256", "extraction_transform",
     ),
     "source_acquisition": (
-        "acquisition_id", "source_record_id", "request_url", "canonical_query",
+        "acquisition_id", "source_record_id",
+        # Restated here, not imported: the verifier keeps its own idea of what the inputs ARE.
+        # `origin` is what makes an absent access time judgeable -- a Stage-4 fetch with no
+        # timestamp is a defect, a reused Stage-3 response with none is the honest state.
+        "origin", "access_time_not_stated_reason",
+        "request_url", "canonical_query",
         "accessed_at_utc", "http_status", "raw_media_type", "response_headers_json",
         "release_or_last_updated", "license_or_terms_url", "license_exception_note",
         "raw_bytes", "raw_sha256", "content_sha256", "content_hash_rule",

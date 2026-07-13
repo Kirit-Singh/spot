@@ -477,6 +477,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     # v2 run would leave the nested no-p/q firewall unloaded.
     method = method_for_contract(contract_of_evidence_bundle(args.evidence_bundle))
     try:
+        # A verification flag may NEVER be silently ignored.
+        #
+        # `--require-external-verifier` reached only the annotation door. The wire door and the
+        # fixture door accepted the flag, dropped it, and exited 0 — so a caller who asked for
+        # Stage 3's own verifier to have passed was told the run succeeded when the gate had never
+        # been consulted at all. A gate that is quietly skipped is worse than one that is absent:
+        # the operator believes it ran.
+        #
+        # The wire door has no external-verifier context to consult, so the combination is refused
+        # BY NAME rather than honoured-in-appearance.
+        if args.require_external_verifier and not args.stage3_annotation_bundle:
+            door = "--stage3-bundle" if args.stage3_bundle else "--fixtures"
+            raise Rejection(
+                "external_verifier_not_applicable_to_this_door",
+                f"--require-external-verifier was given with {door}, which has no Stage-3 "
+                "external-verifier context to consult. This flag is only meaningful on "
+                "--stage3-annotation-bundle, the door a real Stage-3 bundle comes through. It is "
+                "refused rather than ignored: a verification you asked for and did not get, "
+                "reported as success, is the worst of the three outcomes.",
+            )
+
         if args.stage3_annotation_bundle:
             return run_annotation_door(args.stage3_annotation_bundle, args.evidence_bundle,
                                        args.outputs_root, args.receipt_out,
