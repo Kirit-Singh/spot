@@ -31,6 +31,7 @@ from .criteria import check_criteria
 from .prose import required_prose_failures, unbound_prose
 from .delivery import rebuild_delivery
 from .reconstruct import (
+    forbidden_field_names,
     load_method,
     load_tables,
     rebuild_cns_mpo,
@@ -80,7 +81,9 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
     # the field existed, and it is still a release.
     version = vinputs.contract_version(manifest)
 
-    method = load_method(method_dir)
+    # The method the RELEASE says it was written under. Binding v1 for a v2 release
+    # would leave the v2 forbidden names unloaded — see reconstruct.load_method.
+    method = load_method(method_dir, version)
     tables = load_tables(out_dir)
 
     # --- -1. the release must actually be the shape this verifier reconstructs ---------
@@ -415,7 +418,7 @@ def verify_release(out_dir: str, method_dir: str) -> dict[str, Any]:
                "fixture/unacquired")
 
         # --- 8. no combined clinical verdict, anywhere ---------------------------------------
-        forbidden = tuple(method["safety_taxonomy"]["prohibited_outputs"]["forbidden_field_names"])
+        forbidden = forbidden_field_names(method)
         hits = _scan_forbidden(scorecards, forbidden)
         _c(checks, "no_composite_clinical_score", not hits, f"hits={hits}")
         _c(checks, "no_selection_emitted_without_public_sources", _selection_ok(out_dir, catalog),

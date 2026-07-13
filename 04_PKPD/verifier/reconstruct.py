@@ -20,6 +20,7 @@ import pyarrow.parquet as pq
 
 from . import canon
 from .delivery import rebuild_delivery
+from .inputs import METHOD_FILES
 
 CNS_MPO_PROPERTIES = ("clogp", "clogd_74", "mw", "tpsa", "hbd", "pka_most_basic")
 NEB_MATRICES = ("brain_tissue_non_enhancing", "microdialysate_brain_isf")
@@ -53,16 +54,41 @@ def load_tables(out_dir: str) -> dict[str, list[dict[str, Any]]]:
     return tables
 
 
-def load_method(method_dir: str) -> dict[str, Any]:
-    out = {}
-    for key, fname in (("cns_mpo", "cns_mpo_wager2010_v1.json"),
-                       ("nebpi", "nebpi_grossman2026_v1.json"),
-                       ("calculator_policy", "calculator_policy_v1.json"),
-                       ("delivery_rules", "delivery_rules_v1.json"),
-                       ("safety_taxonomy", "safety_taxonomy_v1.json")):
-        with open(os.path.join(method_dir, fname), encoding="utf-8") as fh:
+def load_method(method_dir: str, version: str = "v1") -> dict[str, Any]:
+    """The method files the release SAYS it was written under — not always the v1 five.
+
+    This hard-coded `safety_taxonomy_v1.json` regardless of the release's contract, so the v2
+    forbidden names (`p_value`, `q_value`, `fdr`, `adjusted_p`, and the organ/toxicity score
+    names) lived in `safety_taxonomy_v2.json` and were never loaded by the verifier at all. A v2
+    release carrying a fully resealed `p_value` therefore passed every check: the generator would
+    have refused to write it, but the INDEPENDENT verifier — the only thing standing between a
+    tampered release and a reader — had no rule to refuse it with.
+
+    `METHOD_FILES` is the verifier's own list, deliberately not imported from `analysis/`: a
+    verifier that trusts the generator's definition of the method is not independent of it.
+    """
+    out: dict[str, Any] = {}
+    for key, fname in METHOD_FILES[version].items():
+        path = os.path.join(method_dir, fname)
+        if not os.path.exists(path):
+            continue  # a v1 release's method dir has no v2 files, and is not asked for them
+        with open(path, encoding="utf-8") as fh:
             out[key] = json.load(fh)
     return out
+
+
+def forbidden_field_names(method: dict[str, Any]) -> tuple[str, ...]:
+    """Every name that may not appear in an emitted document, at any depth.
+
+    v1's list, plus v2's additions when the release is a v2 release. Composed rather than
+    replaced: v2 forbids MORE, never less, and v1's own list is frozen into the identity of every
+    release ever emitted.
+    """
+    names = list(method["safety_taxonomy"]["prohibited_outputs"]["forbidden_field_names"])
+    v2 = method.get("safety_taxonomy_v2")
+    if v2:
+        names.extend(v2["prohibited_outputs_v2"]["additional_forbidden_field_names"])
+    return tuple(names)
 
 
 # ------------------------------------------------------------------------- CNS-MPO
