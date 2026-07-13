@@ -40,7 +40,17 @@ import json
 import os
 from typing import Any, Optional
 
-from . import config, convergence, emit, enrichment, gate, genesets, pathway, runid
+from . import (
+    config,
+    convergence,
+    emit,
+    enrichment,
+    gate,
+    genesets,
+    pathway,
+    pathway_evidence,
+    runid,
+)
 from . import run_screen as rs
 from . import universe as uni
 from .hashing import canonical_json, content_hash, sha256_hex
@@ -125,6 +135,16 @@ def build_pathway(args) -> dict[str, Any]:
                                 identity_hashes["direct_config_sha256"],
                                 pairs=pairs)
 
+    # ---- THE BYTES THE COUNTS CAN BE RECOUNTED FROM ----
+    # W0/A3 follow-on: n_hits_in_ranking was counted against a ranked list that lived only
+    # in memory, so a verifier could only re-derive the coverage arithmetic from the
+    # record's OWN declared counts. Forge them together and the artifact admits. The
+    # membership, the target universe, each arm's ranking and the masked signatures now ship
+    # WITH the bundle and are bound into its identity, so an independent verifier can recount
+    # rather than re-read. (This lane emits them; it does not check them.)
+    evidence_doc = pathway_evidence.build(rows, bundle, target_universe, gene_universe)
+    sig_rows = pathway_evidence.signature_rows(signatures)
+
     # ---- CONTENT ADDRESSING: the artifact is named by what produced it ----
     binding = {
         "runner_id": RUNNER_ID,
@@ -156,6 +176,10 @@ def build_pathway(args) -> dict[str, Any]:
         # WHAT the records are, by content: a run that emitted different records under
         # the same id would be citing numbers it does not hold.
         "records_sha256": doc["records_sha256"],
+        # ...and WHAT the counts in those records were counted FROM. Bound by CONTENT here
+        # (the raw byte hashes are added beside the files, which cannot exist until the run
+        # id names the directory they go in).
+        "evidence_artifacts": pathway_evidence.binding_block(evidence_doc, sig_rows),
     }
     full = sha256_hex(canonical_json(binding))
     pathway_run_id = full[:PATHWAY_RUN_ID_LEN]
@@ -174,6 +198,11 @@ def build_pathway(args) -> dict[str, Any]:
                   n_intra_set_pairs=len(pairs))
     emit.write_json(os.path.join(out_dir, "pathway.json"), result)
 
+    # The evidence goes INTO the bundle, beside the records it accounts for. An independent
+    # verifier recounts n_hits_in_ranking / n_genes_in_target_universe from these bytes
+    # instead of re-deriving one declared number from another.
+    evidence_paths = pathway_evidence.write(evidence_doc, sig_rows, out_dir)
+
     prov = {
         "schema_version": SCHEMA_PROVENANCE,
         "pathway_run_id": pathway_run_id,
@@ -181,6 +210,11 @@ def build_pathway(args) -> dict[str, Any]:
         "pathway_method_sha256": method_sha,
         "created_at": created_at,
         "run_binding": binding,
+        # The same evidence block, plus the RAW byte hash of each file as written. The
+        # canonical hash (bound into the run id, above) proves WHAT the evidence says; the
+        # raw hash pins the exact bytes that say it.
+        "evidence_artifacts": pathway_evidence.written_block(
+            binding["evidence_artifacts"], evidence_paths),
         "n_records": doc["n_records"],
         "n_convergent": doc["n_convergent"],
         "n_single_target_support": doc["n_single_target_support"],
