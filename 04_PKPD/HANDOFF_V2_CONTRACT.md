@@ -67,17 +67,32 @@ v1 is a legitimate contract, it is simply not a claim that anything was acquired
 
 ---
 
-## 3. Alignment with W8 (`b87c629` / `b287f72`) — no competing selector
+## 3. Alignment with W8 (`b287f72`, authoritative) — no competing implementations
 
-`analysis/selection.py` and `analysis/organ_system.py` are **W8's files, adopted verbatim.** My
-own rival implementations are gone.
+**Three** files are W8's, adopted verbatim: `analysis/selection.py`, `analysis/organ_system.py`
+and `analysis/acquisition.py`. My rivals to all three are gone.
 
-* **Selection.** My `unique_by_identity / deterministic_total_order / ambiguous_refused`
-  vocabulary is deleted. The acquisition record now speaks `selection.py`'s: `exactly_one`
-  (matched on an identity PIN) or `sorted_unique` (collect-all). What the *record* adds is the
-  proof: the source's own `match_total_reported` against `records_returned`. A `limit=1`
-  truncation therefore appears as `total > returned` → `result_set_complete=False` → **cannot be
-  `observed`**. That is the TEMODAR bug (two applications, six products) made unrepresentable.
+The third one was found late, and only because the conflict surface was checked mechanically
+rather than trusted. `analysis/acquisition.py` **does not exist in the common base `e410d72`** —
+both lanes created it, for the same purpose, citing the same audit finding (§4.7). "W8 wins the
+duplicate" would therefore have deleted `SourceAcquisitionRecord` out from under every module
+that imports it, and the merged tree would not have imported at all. That is a broken merge, not
+a clean one, and it would have surfaced as an ImportError rather than as a conflict.
+
+All three are now **byte-identical to `b287f72`**, verified by hash. The merge is a genuine
+no-op and "W8 wins" never has to fire.
+
+* **Selection.** My whole rival vocabulary is deleted along with my rival record. W8 enforces
+  selection **at acquisition time** — `selection.py` raises on zero/many/truncated — and does not
+  record the proof of that selection in the artifact. **Open question for W8, not something I
+  will fork their record over:** an artifact reader cannot currently see *how* a record was
+  selected (`exactly_one` on which pin? was the result set complete?). If that provenance is
+  wanted in the emitted manifest, the fields belong on W8's `AcquisitionRecord`.
+* **Acquisition record.** W8's is a superset of what I had: `origin`
+  (`fetched_public` / `reused_from_stage3` / `synthetic_fixture`), licence status, and the
+  outside-Git cache binding. Fixtures now build records with W8's own `fixture_record`, so every
+  one is `origin=synthetic_fixture` / `evidence_state=not_applicable` — labelled synthetic bytes
+  are not an observation of anything and can never become a public record.
 * **organ_system.** W8's `OrganSystemEvidence` field-for-field (14 bound columns). The controlled
   vocabulary applies **only** where W8 says `value_kind='controlled_value'`; a `source_term` stays
   **verbatim**, because normalising "Nervous system disorders" → `neurologic` here would *be* the
@@ -98,11 +113,13 @@ v2 path through `evidence_bundle.py` / `run_stage4.py`.
 v1 is frozen and v2 is green, so the order below is chosen so that **the frozen-v1 proof runs
 against every intermediate state**, not just the final one.
 
-1. **Land W8 first** (`b87c629`, then the `b287f72` handoff doc). It owns `analysis/selection.py`
-   and `analysis/organ_system.py`.
-2. **Then this branch** (`e410d72..293ce61`). It contains byte-identical copies of those two
-   files, so they should merge as no-ops. **If git reports a conflict in either, W8's version
-   wins** — mine is a copy, not a fork.
+1. **Land W8 first — `b287f72`** (confirmed authoritative for every duplicated file). It owns
+   `analysis/selection.py`, `analysis/organ_system.py` and `analysis/acquisition.py`.
+2. **Then this branch** (`e410d72..bd7a403`). It carries byte-identical copies of all three, so
+   they merge as no-ops. **If git reports a conflict in any of them, W8's version wins** — mine
+   is a copy, not a fork. `analysis/schemas_export.py` is the one genuinely shared file that both
+   lanes *edit*; W8's `acquisition_manifest_schema()` is already pre-merged into mine, so it
+   should apply cleanly.
 3. **Re-run the frozen-v1 proof on the merge commit** — this is the gate, and it is one command:
    ```
    pytest 04_PKPD/tests/test_contract_version_freeze.py -q     # must exit 0
@@ -128,6 +145,8 @@ against every intermediate state**, not just the final one.
   test. v2 method content belongs in a new file.
 * **`analysis/evidence_bundle.py` and `analysis/run_stage4.py`** are touched by this branch and
   were explicitly *not* touched by W8 — should be clean.
+* **After merging, grep for `SourceAcquisitionRecord`.** It should return nothing. If it appears,
+  an older revision of this branch got in and the tree will not import.
 * `analysis/firewall.py` moved its `Provenance` import to `contracts` (the cycle W8's
   `organ_system.py` would otherwise hit). Keep that.
 
@@ -140,4 +159,5 @@ against every intermediate state**, not just the final one.
 * **No drug ranking**, no change to Stage-3 admission, no p/q values, no combined clinical score,
   no `safe` flag (the last three are now *enforced* by the forbidden-name scan, not merely
   declared).
-* **Stage-4 final still waits on the Stage-3 v2 interface**, which is not this branch's.
+* **Stage-4 final remains gated on the externally admitted real Stage-3 v2 interface**, which is
+  not this branch's to deliver or to declare ready.
