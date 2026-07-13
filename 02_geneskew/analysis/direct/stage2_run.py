@@ -186,9 +186,10 @@ def build_run_identity(cfg: Cfg) -> dict:
                         "V3_SCHEMA", "REGISTRY", "ENV_LOCK")}
     stage1 = {"release": h(cfg.stage1_release), "release_root": h(cfg.stage1_release_root),
               "scorer_view": h(cfg.stage1_view)}
+    # bind the REAL explicit Ensembl gene-set artifacts (GENESETS_REACTOME / GENESETS_GO_BP) — the
+    # SAME files the producer, the aggregate pins, and the bundle reference. Never sel_dir aliases.
     gene_sets = {}
-    for src in SOURCES:
-        gp = os.path.join(cfg.sel_dir, f"genesets_{src}.ensembl.json")
+    for src, gp in (("reactome", cfg.genesets_reactome), ("go_bp", cfg.genesets_go_bp)):
         gene_sets[src] = h(gp)
     code_identity = ("<tree:02_geneskew/analysis/direct>" if DRY
                      else "tree:" + tree_sha256(SELF))

@@ -471,6 +471,7 @@ def test_run_identity_binds_all_three_external_verifiers(monkeypatch):
         de = guide = donor = sgrna = manifest = srcreg = pb = v3_schema = registry = env_lock = "/x"
         stage1_release = stage1_release_root = stage1_view = "/x"
         sel_dir = "/x"; lane = "production"; p2s_scores = "/x"; p2s_env_lock = ""
+        genesets_reactome = genesets_go_bp = "/x"
         direct_verifier = "/dv"; temporal_verifier = "/tv"; pathway_verifier = "/pv"
 
     m = S.build_run_identity(C)
