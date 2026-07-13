@@ -65,7 +65,8 @@ from .contracts import Namespace
 from .evidence_bundle import is_empty, load_evidence_bundle
 from .emit import emit
 from .firewall import Rejection
-from .method_config import STAGE4_DIR, load_method_bundle
+from .contract_version import SCHEMA_TO_VERSION, ContractVersion
+from .method_config import STAGE4_DIR, MethodBundle, load_method_bundle
 from .pipeline import Stage4Inputs, Stage4Result, run_pipeline
 from .stage3_adapter import Stage3Admission, adapt, load_stage3_bundle
 from .stage3_annotation import (
@@ -82,6 +83,38 @@ RECEIPT_SCHEMA = "spot.stage04_admission_receipt.v1"
 
 class ProductionGateRefusal(Exception):
     """The run is not allowed to become something a downstream stage would trust."""
+
+
+def method_for_contract(version: ContractVersion) -> MethodBundle:
+    """The method bundle the ADMITTED contract requires.
+
+    A v2 run MUST bind the v2 method. `safety_taxonomy_v2.prohibited_outputs_v2.
+    additional_forbidden_field_names` is where the nested no-p/q firewall lives — `p_value`,
+    `q_value`, `fdr`, `adjusted_p`, and the organ/toxicity score names. Load v1 for a v2 run and
+    none of them is forbidden: the firewall is not weakened, it is ABSENT, and a nested `p_value`
+    sails straight through. Stage 4 computes no statistic and consumes none; a forbidden-field
+    list that was never loaded is not a list.
+
+    v1 keeps exactly its seven frozen files. A v2 addition may never reach into it — those bytes
+    are hashed into the identity of every release ever emitted.
+    """
+    return load_method_bundle(version=version)
+
+
+def contract_of_evidence_bundle(path: Optional[str]) -> ContractVersion:
+    """The contract the bundle DECLARES. Nothing is inferred, and no bundle means v1.
+
+    An unrecognised schema is left to `load_evidence_bundle`, which refuses it by name — reading
+    the id here is only how the method gets chosen, never how a bundle gets admitted.
+    """
+    if not path or not os.path.exists(path):
+        return ContractVersion.V1
+    try:
+        with open(path, encoding="utf-8") as fh:
+            schema = (json.load(fh) or {}).get("schema_id")
+    except (OSError, json.JSONDecodeError):
+        return ContractVersion.V1        # the door will refuse it, with a better message
+    return SCHEMA_TO_VERSION.get(str(schema), ContractVersion.V1)
 
 
 def production_pointer_decision(inputs: Stage4Inputs, result: Stage4Result) -> dict[str, Any]:
@@ -440,7 +473,9 @@ def main(argv: Optional[list[str]] = None) -> int:
               "--stage3-annotation-bundle or --fixtures", file=sys.stderr)
         return 2
 
-    method = load_method_bundle()
+    # The method is chosen by the contract the evidence bundle DECLARES — binding v1 for a
+    # v2 run would leave the nested no-p/q firewall unloaded.
+    method = method_for_contract(contract_of_evidence_bundle(args.evidence_bundle))
     try:
         if args.stage3_annotation_bundle:
             return run_annotation_door(args.stage3_annotation_bundle, args.evidence_bundle,

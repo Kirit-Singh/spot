@@ -154,13 +154,33 @@ def _safety_violations(inputs: Any) -> list[ProfileViolation]:
 
 
 def _acquisition_violations(inputs: Any) -> list[ProfileViolation]:
-    """Every source whose BYTES are consumed must say how those bytes were obtained."""
+    """Every source whose BYTES are CONSUMED must say how those bytes were obtained.
+
+    Consumed means: a Stage-4 evidence row rests on it. That is exactly the set
+    `provenance_bindings` yields — the same enumeration the referential-integrity firewall uses,
+    not a second one invented here.
+
+    It is deliberately NOT every source in `inputs.sources`. `run_stage4.stage3_inputs` merges
+    Stage-3's own source records into that catalog, carried across untouched as upstream
+    provenance. Stage 4 never fetched those bytes — Stage 3 did, and Stage 3 has its own
+    provenance for them — so it can hold no acquisition record for them and never will. Demanding
+    one refused every real Stage-3 bundle on the v2 path, whatever evidence came with it: the
+    contract could not be satisfied by any input that existed. A rule nothing can satisfy is not
+    a firewall, it is a wall.
+
+    A source a Stage-4 row actually cites is still refused if it was never acquired. That is the
+    check, and it is undiminished.
+    """
+    from .pipeline import provenance_bindings
+
     out: list[ProfileViolation] = []
     acquired = {a.source_record_id for a in inputs.acquisitions}
+    consumed = {prov.source_record_id for _owner, prov in provenance_bindings(inputs)}
 
-    for sid, rec in sorted(inputs.sources.items()):
-        if not rec.raw_sha256:
-            continue  # a source with no bytes has nothing to have acquired
+    for sid in sorted(consumed):
+        rec = inputs.sources.get(sid)
+        if rec is None or not rec.raw_sha256:
+            continue  # dangling/byte-less sources are the integrity firewall's refusal, not this
         if sid not in acquired:
             out.append(ProfileViolation(
                 "source_not_acquired", sid,

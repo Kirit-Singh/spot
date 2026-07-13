@@ -84,9 +84,20 @@ REQUIRED_COLUMNS_V2: dict[str, tuple[str, ...]] = {
     "potency_evidence": REQUIRED_COLUMNS_V1["potency_evidence"] + ("relation",),
     "fraction_unbound": ("fraction_unbound_id", "candidate_id", "active_moiety_id", "matrix",
                          "value_source_string", "source_record_id", "raw_response_sha256"),
+    # W8's `selection.py` vocabulary, restated — NOT a second one invented here. The verifier
+    # used to require `selection_uniqueness`, a field no emitter has ever written, so every real
+    # v2 release carrying acquisition rows was refused as `release_reconstructable` — a message
+    # that blames the RELEASE for the verifier's own stale expectation.
+    #
+    # These five are what make a selection auditable: WHICH disposition was used (exactly_one on
+    # an identity pin, or sorted_unique collect-all), the pin it matched on, and the source's own
+    # match total against what actually arrived — which is what makes a `limit=1` truncation
+    # visible instead of invisible.
     "source_acquisition": ("acquisition_id", "source_record_id", "canonical_query",
                            "accessed_at_utc", "observation_state", "adapter_code_sha256",
-                           "review_status", "selection_uniqueness"),
+                           "review_status",
+                           "selection_disposition", "selection_pin", "match_total_reported",
+                           "records_returned", "result_set_complete"),
 }
 
 REQUIRED_COLUMNS = {"v1": REQUIRED_COLUMNS_V1, "v2": REQUIRED_COLUMNS_V2}
