@@ -135,7 +135,16 @@ function requireBinding(b) {
   if (!b || typeof b !== 'object') fail('spec.stage1_binding is required');
   if (typeof b.release_method_version !== 'string' || b.release_method_version.trim() === '') fail('stage1_binding.release_method_version required');
   if (typeof b.registry_scorer_view_sha256 !== 'string' || !HEX64.test(b.registry_scorer_view_sha256)) fail('stage1_binding.registry_scorer_view_sha256 must be 64-hex');
-  return { release_method_version: b.release_method_version, registry_scorer_view_sha256: b.registry_scorer_view_sha256 };
+  // 539431d release identity — carried into current.json so the browser can pin-verify it (schema-file
+  // raw sha from release components.selection_schema_v3 + the release self-hash). Both required, 64-hex.
+  if (typeof b.selection_schema_raw_sha256 !== 'string' || !HEX64.test(b.selection_schema_raw_sha256)) fail('stage1_binding.selection_schema_raw_sha256 must be 64-hex');
+  if (typeof b.release_self_sha256 !== 'string' || !HEX64.test(b.release_self_sha256)) fail('stage1_binding.release_self_sha256 must be 64-hex');
+  return {
+    release_method_version: b.release_method_version,
+    registry_scorer_view_sha256: b.registry_scorer_view_sha256,
+    selection_schema_raw_sha256: b.selection_schema_raw_sha256,
+    release_self_sha256: b.release_self_sha256,
+  };
 }
 
 

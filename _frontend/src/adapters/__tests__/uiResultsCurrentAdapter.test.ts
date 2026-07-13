@@ -7,7 +7,12 @@ import { parseUiResultsCurrent } from '../uiResultsCurrentAdapter';
 import { AdapterError } from '../errors';
 
 const H = 'a'.repeat(64);
-const BINDING = { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: H };
+const BINDING = {
+  release_method_version: 'stage1-continuous-v3.0.1',
+  registry_scorer_view_sha256: H,
+  selection_schema_raw_sha256: 'b'.repeat(64),
+  release_self_sha256: 'c'.repeat(64),
+};
 const CHAIN = { stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null };
 const ENTRY = { manifest_path: 'results/manifests/targets.ui_release.json', content_hash: H, projection_path: null, projection_content_hash: null };
 
@@ -43,6 +48,11 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   it('rejects a missing / malformed stage1_binding', () => {
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', routes: {} })).toThrow(AdapterError);
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: { release_method_version: 'v', registry_scorer_view_sha256: 'short' }, routes: {} })).toThrow(AdapterError);
+    // the 539431d release-identity hashes are required + 64-hex (shape); absent/short → rejected
+    const noSchemaRaw = { release_method_version: 'v', registry_scorer_view_sha256: H, release_self_sha256: 'c'.repeat(64) };
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: noSchemaRaw, chain: CHAIN, routes: {} })).toThrow(AdapterError);
+    const shortReleaseSelf = { ...BINDING, release_self_sha256: 'deadbeef' };
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: shortReleaseSelf, chain: CHAIN, routes: {} })).toThrow(AdapterError);
   });
 
   it('rejects a missing / malformed chain (stage2_run_id required)', () => {

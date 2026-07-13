@@ -17,7 +17,7 @@ const prov = { provenance: {} } as unknown as { provenance: unknown };
 
 function sel(mode: SelectionV3['analysis_mode'], A: SelectionV3['A'], B: SelectionV3['B'], conditions: string[]): SelectionV3 {
   return {
-    selection_id: 'a'.repeat(16), analysis_mode: mode, execution_status: 'ready',
+    selection_id: 'a'.repeat(16), question_id: 'q'.repeat(16), analysis_mode: mode, execution_status: 'ready',
     estimator_id: mode === 'within_condition' ? 'within_condition_v1' : 'temporal_cross_condition_v1',
     estimator_status: 'available', A, B, conditions,
     registry_scorer_view_sha256: 'b'.repeat(64), source_h5ad_sha256: 'c'.repeat(64),

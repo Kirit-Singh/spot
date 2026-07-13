@@ -191,6 +191,7 @@ function shallowSelectionV3(value: unknown): SelectionV3 | null {
   const bId = s(Br.program_id);
   const bDir = dir(Br.direction);
   const selection_id = s(top.selection_id);
+  const question_id = s(top.question_id); // biology-only id; authoritatively re-derived in parseSelectionV3
   const estimator_id = s(top.estimator_id);
   const mode = top.analysis_mode;
   const exec = top.execution_status;
@@ -200,13 +201,14 @@ function shallowSelectionV3(value: unknown): SelectionV3 | null {
     : null;
 
   if (aId === null || aDir === null || bId === null || bDir === null) return null;
-  if (selection_id === null || estimator_id === null || conditions === null) return null;
+  if (selection_id === null || question_id === null || estimator_id === null || conditions === null) return null;
   if (mode !== 'within_condition' && mode !== 'temporal_cross_condition') return null;
   if (exec !== 'ready' && exec !== 'refused' && exec !== 'awaiting_estimator') return null;
   if (est !== 'available' && est !== 'not_implemented') return null;
 
   return {
     selection_id,
+    question_id,
     analysis_mode: mode,
     execution_status: exec,
     estimator_id,

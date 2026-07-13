@@ -29,6 +29,11 @@ export interface RouteReleaseEntry {
 export interface Stage1Binding {
   release_method_version: string; // e.g. stage1-continuous-v3.0.1
   registry_scorer_view_sha256: string; // ties to the v3 selection's registry_scorer_view_sha256
+  // Release-level identity of the exact Stage-1 v3 contract these results descend from. The loader
+  // pins the UI's own build (STAGE1_* in stage1/contractBinding) and refuses a served release whose
+  // identity differs — a deployed UI resolves downstream results only for the release it was built on.
+  selection_schema_raw_sha256: string; // == release components.selection_schema_v3.raw_sha256
+  release_self_sha256: string; // == release self_release_sha256
 }
 
 /**

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, sha256Hex } from '../../stage1/canonical';
+import { deriveQuestionId } from '../../stage1/questionId';
 import { deriveExecutionStatus, SelectionError, type EstimatorStatus } from '../../stage1/selectionV3';
 import { parseSelectionV3 } from '../selectionV3Adapter';
 
@@ -16,6 +17,11 @@ interface BuildOpts {
   estimator_status?: 'available' | 'not_implemented';
   execution_status?: string;
   tamperFullContract?: string;
+  /** Force a specific question_id (still folded into the full-contract hash, so the value is
+   *  internally hash-consistent — exercises a REFORGED-but-consistent question_id). */
+  questionId?: string;
+  /** Omit question_id from the contract entirely (exercises the null refusal). */
+  omitQuestionId?: boolean;
 }
 
 /**
@@ -72,6 +78,14 @@ async function build(opts: BuildOpts = {}): Promise<Record<string, unknown>> {
     provenance_bindings: { primary_registry_v3_raw_sha256: 'd'.repeat(64) },
     historical_validation_provenance: { kind: 'frozen', selectability_v3_raw_sha256: 'e'.repeat(64), active_gate: false },
   };
+  // question_id (539431d): biology-only top-level field, folded into the full-contract hash (as the
+  // real emitter does). Derived from the poles + ordered conditions + mode, so the happy-path fixture
+  // matches the adapter's independent re-derivation.
+  if (!opts.omitQuestionId) {
+    contract.question_id =
+      opts.questionId ??
+      (await deriveQuestionId({ program_id: aId, direction: aDir }, { program_id: bId, direction: bDir }, conditions, mode));
+  }
   contract.full_contract_content_sha256 = await sha256Hex(canonicalJson(contract));
   if (opts.tamperFullContract) contract.full_contract_content_sha256 = opts.tamperFullContract;
   return contract;
@@ -103,6 +117,12 @@ describe('parseSelectionV3 — projects a verified within_condition contract', (
     expect(s.full_contract_content_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(s.registry_scorer_view_sha256).toBe('a'.repeat(64));
     expect(s.source_h5ad_sha256).toBe('b'.repeat(64));
+    // question_id: biology-only, independently re-derived, DISTINCT from selection_id.
+    expect(s.question_id).toMatch(/^[0-9a-f]{16}$/);
+    expect(s.question_id).toBe(
+      await deriveQuestionId({ program_id: 'treg_like', direction: 'low' }, { program_id: 'th1_like', direction: 'high' }, ['Stim48hr'], 'within_condition'),
+    );
+    expect(s.question_id).not.toBe(s.selection_id);
   });
 
   it('is generic — projects a NON-Treg arbitrary pair (th17_like → th1_like)', async () => {
@@ -158,5 +178,17 @@ describe('parseSelectionV3 — fail-closed rejections', () => {
       () => build({ mode: 'within_condition', estimator_id: 'temporal_cross_condition_v1' }).then(parseSelectionV3),
       'estimator_mode_mismatch',
     );
+  });
+
+  it('rejects a contract with NO question_id (null → cannot be re-derived-and-matched)', async () => {
+    // full_contract hash is still valid (computed over the question_id-less contract); the adapter
+    // refuses because the required biology-only question_id is absent.
+    await expectCode(() => build({ omitQuestionId: true }).then(parseSelectionV3), 'malformed');
+  });
+
+  it('rejects a REFORGED question_id (hash-consistent but != independently re-derived biology id)', async () => {
+    // The forged id is folded into the full-contract hash, so verifySelectionV3 passes; the adapter's
+    // independent 539431d re-derivation still catches that it names a different question.
+    await expectCode(() => build({ questionId: '0'.repeat(16) }).then(parseSelectionV3), 'malformed');
   });
 });

@@ -61,7 +61,7 @@ function nativeBundleRaw() {
 /** A temporal cross-condition v3 selection whose away_from_A(high)=decrease arm the bundle carries. */
 function temporalSelection(): SelectionV3 {
   return {
-    selection_id: 'a'.repeat(16), analysis_mode: 'temporal_cross_condition', execution_status: 'ready',
+    selection_id: 'a'.repeat(16), question_id: 'q'.repeat(16), analysis_mode: 'temporal_cross_condition', execution_status: 'ready',
     estimator_id: 'temporal_cross_condition_v1', estimator_status: 'available',
     A: { program_id: 'th17_like', direction: 'high' }, // away_from_A(high) = decrease → matches ARM
     B: { program_id: 'th1_like', direction: 'high' }, //  toward_b(high) = increase (no arm → neutral)

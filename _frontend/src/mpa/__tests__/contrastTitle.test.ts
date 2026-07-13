@@ -11,6 +11,7 @@ import type { Stage1Selection } from '../contrastTitle';
 import { SELECTION_V3_KEY, SELECTION_KEY } from '../../repository/source';
 import { canonicalJson, sha256Hex } from '../../stage1/canonical';
 import { deriveExecutionStatus } from '../../stage1/selectionV3';
+import { deriveQuestionId } from '../../stage1/questionId';
 
 const CONTRAST = 'Treg-like lo (at 48 hr) → Th1-like hi (at 48 hr)';
 // The v3 contract carries program_ids, not display labels, so the shallow header contrast
@@ -55,6 +56,8 @@ async function buildV3(over: Record<string, unknown> = {}): Promise<Record<strin
     trust_bindings: { validation_raw_sha256: 'c'.repeat(64) },
     provenance_bindings: { primary_registry_v3_raw_sha256: 'd'.repeat(64) },
     historical_validation_provenance: { kind: 'frozen', selectability_v3_raw_sha256: 'e'.repeat(64), active_gate: false },
+    // biology-only question_id (539431d), folded into the full-contract hash like the real emitter.
+    question_id: await deriveQuestionId({ program_id: 'treg_like', direction: 'low' }, { program_id: 'th1_like', direction: 'high' }, ['Stim48hr'], 'within_condition'),
     ...over,
   };
   contract.full_contract_content_sha256 = await sha256Hex(canonicalJson(contract));

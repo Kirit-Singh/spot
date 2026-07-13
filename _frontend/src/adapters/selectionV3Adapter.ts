@@ -8,6 +8,7 @@
 // typed SelectionV3 the UI consumes.
 
 import { SelectionError, verifySelectionV3 } from '../stage1/selectionV3';
+import { deriveQuestionId } from '../stage1/questionId';
 
 export interface SelectionV3Pole {
   program_id: string;
@@ -15,7 +16,8 @@ export interface SelectionV3Pole {
 }
 
 export interface SelectionV3 {
-  selection_id: string;
+  selection_id: string; // method/input-bound (over canonical_content) — DISTINCT from question_id
+  question_id: string; // biology-only ordered-question identity (539431d recipe), re-derived + verified
   analysis_mode: 'within_condition' | 'temporal_cross_condition';
   execution_status: 'ready' | 'refused' | 'awaiting_estimator';
   estimator_id: string;
@@ -94,22 +96,34 @@ export async function parseSelectionV3(raw: unknown): Promise<SelectionV3> {
   if (!Array.isArray(conditionsRaw)) {
     throw new SelectionError('malformed', 'canonical_content.conditions must be an array');
   }
+  const conditions = conditionsRaw.map((c, i) => asString(c, `canonical_content.conditions[${i}]`));
+  const A = {
+    program_id: asString(ccA.program_id, 'canonical_content.A.program_id'),
+    direction: asDirection(ccA.direction, 'canonical_content.A.direction'),
+  };
+  const B = {
+    program_id: asString(ccB.program_id, 'canonical_content.B.program_id'),
+    direction: asDirection(ccB.direction, 'canonical_content.B.direction'),
+  };
+
+  // question_id (539431d): the contract MUST carry a biology-only question_id; the browser INDEPENDENTLY
+  // re-derives it and refuses a null (asString throws) or a tampered/reforged value (mismatch).
+  const declaredQuestionId = asString(source.question_id, 'question_id');
+  const derivedQuestionId = await deriveQuestionId(A, B, conditions, verified.analysis_mode);
+  if (declaredQuestionId !== derivedQuestionId) {
+    throw new SelectionError('malformed', `question_id "${declaredQuestionId}" != independently re-derived "${derivedQuestionId}"`);
+  }
 
   return {
     selection_id: verified.selection_id,
+    question_id: derivedQuestionId,
     analysis_mode: verified.analysis_mode,
     execution_status: verified.execution_status,
     estimator_id: asString(source.estimator_id, 'estimator_id'),
     estimator_status: asEstimatorStatus(source.estimator_status, 'estimator_status'),
-    A: {
-      program_id: asString(ccA.program_id, 'canonical_content.A.program_id'),
-      direction: asDirection(ccA.direction, 'canonical_content.A.direction'),
-    },
-    B: {
-      program_id: asString(ccB.program_id, 'canonical_content.B.program_id'),
-      direction: asDirection(ccB.direction, 'canonical_content.B.direction'),
-    },
-    conditions: conditionsRaw.map((c, i) => asString(c, `canonical_content.conditions[${i}]`)),
+    A,
+    B,
+    conditions,
     registry_scorer_view_sha256: asString(
       cc.registry_scorer_view_sha256,
       'canonical_content.registry_scorer_view_sha256',

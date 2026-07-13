@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { loadProductionProjection, resolveRouteArtifact } from '../resolveRouteArtifact';
 import type { RouteLoaderDeps } from '../resolveRouteArtifact';
 import { parseStage2Projection } from '../../adapters/routeProjectionAdapter';
+import { STAGE1_SELECTION_SCHEMA_RAW_SHA256, STAGE1_V3_RELEASE_SELF_SHA256 } from '../../stage1/contractBinding';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
 
 const CONDS = ['Rest', 'Stim8hr', 'Stim48hr'];
@@ -67,15 +68,22 @@ const stage2Native = {
 };
 
 const withinSelection: SelectionV3 = {
-  selection_id: 'a'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
+  selection_id: 'a'.repeat(16), question_id: 'q'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
   estimator_id: 'within_condition_v1', estimator_status: 'available',
   A: { program_id: 'p1', direction: 'high' }, B: { program_id: 'p2', direction: 'high' }, conditions: ['Rest'],
   registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64), // matches spec.stage1_binding
   selection_full_sha256: 'f'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
 };
 // results/current.json is SELECTION-INDEPENDENT — one release resolves any within/temporal selection.
+// The 539431d release-identity hashes must be the UI's pinned values, else loadProductionProjection
+// refuses the release (cross-release fail-closed) and no route binds.
 const spec = {
-  stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64) },
+  stage1_binding: {
+    release_method_version: 'stage1-continuous-v3.0.1',
+    registry_scorer_view_sha256: 'd'.repeat(64),
+    selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256,
+    release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256,
+  },
   routes: {
     targets: { native: stage2Native, receipt: receipt('targets') },
     drugs: { native: drugsNative, receipt: receipt('drugs') },

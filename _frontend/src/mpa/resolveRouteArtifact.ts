@@ -22,6 +22,7 @@ import { parseDrugsProjection, parsePkSafetyProjection, parseStage2Projection, r
 import { resultRouteKeyForPage } from '../domain/uiResultsCurrent';
 import { resolveJoinedView } from '../repository/joinResolver';
 import { canonicalJson, sha256Hex } from '../stage1/canonical';
+import { STAGE1_SELECTION_SCHEMA_RAW_SHA256, STAGE1_V3_RELEASE_SELF_SHA256 } from '../stage1/contractBinding';
 import { readStage1SelectionV3 } from './contrastTitle';
 import { buildStageMethodsManifest } from './stageMethods';
 
@@ -167,6 +168,12 @@ export async function loadProductionProjection(
   // match; a result package from a different Stage-1 release/scorer is refused, never rendered.
   if (!selection) return null;
   if (current.stage1_binding.registry_scorer_view_sha256 !== selection.registry_scorer_view_sha256) return null;
+
+  // 539431d RELEASE PIN — the served release identity MUST equal the exact Stage-1 v3 contract this UI
+  // was built against (schema-file raw sha + release self-hash). A UI built on a different Stage-1 release
+  // never binds these results, even if the scorer view happened to match. Fail closed on any drift.
+  if (current.stage1_binding.selection_schema_raw_sha256 !== STAGE1_SELECTION_SCHEMA_RAW_SHA256) return null;
+  if (current.stage1_binding.release_self_sha256 !== STAGE1_V3_RELEASE_SELF_SHA256) return null;
 
   let raw: unknown;
   try {

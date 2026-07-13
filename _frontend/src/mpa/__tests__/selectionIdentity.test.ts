@@ -2,7 +2,9 @@
 // selected gene arm keys) from the verified v3 selection — results/current.json is selection-INDEPENDENT,
 // so ONE admitted release resolves arbitrary within/temporal dropdown choices. A changed A/B/time yields a
 // DIFFERENT identity (the loader then selects different release slots / filters Stage-3/4 by these arms),
-// never reusing a previous selection's result. question_id is intentionally not derived yet (awaits W13).
+// never reusing a previous selection's result. The biology-only question_id (539431d) is re-derived +
+// verified upstream in parseSelectionV3 and carried through here, DISTINCT from the method/input-bound
+// selection_id; identical full endpoints (both poles → the same arm) are refused.
 
 import { describe, expect, it } from 'vitest';
 import { selectionIdentity } from '../selectionIdentity';
@@ -10,7 +12,7 @@ import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
 
 function sel(over: Partial<SelectionV3>): SelectionV3 {
   return {
-    selection_id: 's1', analysis_mode: 'within_condition', execution_status: 'ready',
+    selection_id: 's1', question_id: 'q'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
     estimator_id: 'within_condition_v1', estimator_status: 'available',
     A: { program_id: 'treg_like', direction: 'high' }, B: { program_id: 'th1_like', direction: 'low' }, conditions: ['Rest'],
     registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64),
@@ -48,5 +50,19 @@ describe('selectionIdentity — runtime derivation over a selection-independent 
     expect(selectionIdentity(sel({ conditions: ['Stim48hr'] })).arm_keys).not.toEqual(base.arm_keys); // changed time
     expect(selectionIdentity(sel({ B: { program_id: 'th2_like', direction: 'low' } })).arm_keys).not.toEqual(base.arm_keys); // changed B
     expect(selectionIdentity(sel({ selection_id: 's2' })).selection_id).not.toBe(base.selection_id);
+  });
+
+  it('carries the biology-only question_id through (DISTINCT from selection_id)', () => {
+    const id = selectionIdentity(sel({ selection_id: 's1', question_id: 'q'.repeat(16) }));
+    expect(id.question_id).toBe('q'.repeat(16));
+    expect(id.question_id).not.toBe(id.selection_id);
+  });
+
+  it('REFUSES identical full endpoints — both poles resolve to the exact same arm', () => {
+    // within_condition, same program: away_from_A(high)=decrease and toward_b(low)=decrease → both poles
+    // become direct|treg_like|decrease|Rest. That is a degenerate (A==B) question, not a real contrast.
+    expect(() =>
+      selectionIdentity(sel({ analysis_mode: 'within_condition', A: { program_id: 'treg_like', direction: 'high' }, B: { program_id: 'treg_like', direction: 'low' }, conditions: ['Rest'] })),
+    ).toThrow(/identical full endpoints/);
   });
 });

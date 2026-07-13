@@ -13,6 +13,7 @@ function goto(url: string) {
 const selectionV3Raw = {
   schema_version: 'spot.stage01_selection.v3',
   selection_id: 'a1b2c3d4e5f60718',
+  question_id: 'q'.repeat(16), // biology-only id; shallow projection shape-checks it present
   analysis_mode: 'within_condition',
   execution_status: 'ready',
   estimator_id: 'within_condition_v1',

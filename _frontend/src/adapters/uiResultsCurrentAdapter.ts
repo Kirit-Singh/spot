@@ -49,6 +49,9 @@ function stage1Binding(v: unknown, path: string): Stage1Binding {
   return {
     release_method_version: reqStr(v.release_method_version, `${path}.release_method_version`),
     registry_scorer_view_sha256: hex64(v.registry_scorer_view_sha256, `${path}.registry_scorer_view_sha256`),
+    // Shape only here (both must be 64-hex); the loader enforces they EQUAL the UI's pinned release.
+    selection_schema_raw_sha256: hex64(v.selection_schema_raw_sha256, `${path}.selection_schema_raw_sha256`),
+    release_self_sha256: hex64(v.release_self_sha256, `${path}.release_self_sha256`),
   };
 }
 

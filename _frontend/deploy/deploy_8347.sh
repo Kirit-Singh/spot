@@ -43,16 +43,16 @@ TARGET_DATA="$TARGET_ROOT/data"
 REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 
 # Pinned Stage-1 data baseline (verified reproducible; see coordinator handoff).
-# Baseline pinned to the canonical-source cleanup HEAD 184211a (origin/stage1-canonical-ui-cleanup): it
-# brings 01_programs/app/01_page.html up to the live classified UI (five-route nav + sole Methods &
-# provenance drawer + removed /01_notebook.html drawer link) AND the insecure-HTTP sha256 fallback
-# (_sha256js), plus a UI-link hygiene regression scan. The canonical base is therefore now BYTE-IDENTICAL
-# to the nav-retargeted import (both 570a6f07), so the classified 01_page diff below is EMPTY. 184211a does
-# NOT touch 01_programs/app/data/: the 22-file digest is byte-identical to 9a2f6cf9 (verified).
-STAGE1_DATA_COMMIT="184211ac3c359189de894b35576c90d89d20b9ab"
-STAGE1_DATA_DIGEST="edbc8da3a2affc1e4e312c36b7aa1563b218d99669c9577c789a1cc0bdc68ea8"
-STAGE1_PAGE_BASE_SHA="570a6f07eda39d8a94cae449c0226a35320d6a908c947992ed479564615b5e32"   # pin:01_page.html base @ 184211a (== import; canonical cleanup absorbed the classified UI + hash fallback)
-STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-570a6f07eda39d8a94cae449c0226a35320d6a908c947992ed479564615b5e32}"  # nav-retargeted import — now byte-identical to the canonical base
+# Baseline pinned to the GO Stage-1 contract 539431d (off 184211a): adds the re-synced temporal estimator
+# identity (343f20db) + the required biology-only question_id emission + the v3 selection schema update.
+# The canonical base (01_programs/app/01_page.html @ 539431d) still carries the five-route nav + sole
+# Methods & provenance drawer + hash fallback and is BYTE-IDENTICAL to the served import (both 9fb4f282),
+# so the classified 01_page diff below is EMPTY. Only stage01_selection_bundle.json changed under data/, so
+# the 22-file digest moves to 9c7b9ec0; the four scorer invariants stay byte-identical (verified).
+STAGE1_DATA_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"
+STAGE1_DATA_DIGEST="9c7b9ec0d623275c9ee8096db8dca63d8e3149ccebf1fa61eb0b4326ca3cfd15"
+STAGE1_PAGE_BASE_SHA="9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1"   # pin:01_page.html base @ 539431d (== import; question_id-emitting page keeps the classified UI + hash fallback)
+STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1}"  # nav-retargeted import — byte-identical to the 539431d canonical base
 INVARIANTS=(
   "data/stage01_selectability_v3.json:7c326a86"
   "data/stage01_validation.json:1c14cd28"

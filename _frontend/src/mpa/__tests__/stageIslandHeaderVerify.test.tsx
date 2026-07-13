@@ -11,6 +11,7 @@ import { StageIsland } from '../StageIsland';
 import { SELECTION_V3_KEY } from '../../repository/source';
 import { canonicalJson, sha256Hex } from '../../stage1/canonical';
 import { deriveExecutionStatus } from '../../stage1/selectionV3';
+import { deriveQuestionId } from '../../stage1/questionId';
 
 /** Build a spot.stage01_selection.v3 contract with REAL recomputed hashes (treg_like → th1_like @ Stim48hr). */
 async function buildV3(opts: { tamperFullContract?: string } = {}): Promise<Record<string, unknown>> {
@@ -48,6 +49,8 @@ async function buildV3(opts: { tamperFullContract?: string } = {}): Promise<Reco
     trust_bindings: { validation_raw_sha256: 'c'.repeat(64) },
     provenance_bindings: { primary_registry_v3_raw_sha256: 'd'.repeat(64) },
     historical_validation_provenance: { kind: 'frozen', selectability_v3_raw_sha256: 'e'.repeat(64), active_gate: false },
+    // biology-only question_id (539431d), folded into the full-contract hash like the real emitter.
+    question_id: await deriveQuestionId({ program_id: aId, direction: aDir }, { program_id: bId, direction: bDir }, ['Stim48hr'], 'within_condition'),
   };
   contract.full_contract_content_sha256 = await sha256Hex(canonicalJson(contract));
   if (opts.tamperFullContract) contract.full_contract_content_sha256 = opts.tamperFullContract;
