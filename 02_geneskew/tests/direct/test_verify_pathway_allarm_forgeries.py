@@ -267,6 +267,54 @@ class TestDeletingTheDenominatorDoesNotDisableTheGate:
         assert "every_gene_set_in_the_bundle_is_emitted" in _failed(report), \
             sorted(_failed(report))
 
+    def test_DELETING_the_streamed_pair_DENOMINATOR_is_refused(self, prepared, tmp_path):
+        """`if declared is not None` was itself the bypass: remove the number and the gate
+        that checks it never runs. The artifact stays perfectly coherent — it simply declines
+        to say how many pairs it evaluated, and every ratio read against that denominator is
+        then unfalsifiable."""
+        def corrupt(doc):
+            doc.pop("n_intra_set_pairs", None)
+        report = _verify(prepared, _reseal(prepared, str(tmp_path / "d3"), corrupt))
+        assert report["verdict"] == VP.REJECT
+        assert DENOMINATOR_GATE in _failed(report), sorted(_failed(report))
+
+    def test_DELETING_the_size_policy_from_the_CONVERGENCE_artifact_is_refused(
+            self, prepared, tmp_path):
+        def corrupt(doc):
+            for field in ("convergence_size_policy_id", "convergence_size_basis",
+                          "max_convergence_set_size"):
+                doc.pop(field, None)
+        report = _verify(prepared, _reseal(prepared, str(tmp_path / "d4"), corrupt))
+        assert report["verdict"] == VP.REJECT
+        assert VP.GATE_CONVERGENCE_SIZE in _failed(report), sorted(_failed(report))
+
+    def test_DELETING_the_size_policy_from_the_METHOD_block_is_refused(self, prepared,
+                                                                       tmp_path):
+        """The other place the policy is stated. A run that names no size policy in its
+        method has not been held to one, however honest its convergence artifact looks."""
+        from direct import pathway_arms
+        real = pathway_arms.build
+
+        def forged(**kw):
+            doc = copy.deepcopy(real(**kw))
+            for field in ("convergence_size_policy_id", "convergence_size_basis",
+                          "max_convergence_set_size"):
+                doc["method"].pop(field, None)
+            return doc
+
+        pathway_arms.build = forged
+        try:
+            from direct import run_pathway_arms as rpa
+            args = copy.deepcopy(prepared)
+            args.out_root = str(tmp_path / "d5")
+            out_dir = rpa.build_pathway_arms(args)["out_dir"]
+        finally:
+            pathway_arms.build = real
+
+        report = _verify(prepared, out_dir)
+        assert report["verdict"] == VP.REJECT
+        assert VP.GATE_CONVERGENCE_SIZE in _failed(report), sorted(_failed(report))
+
     def test_DELETING_the_expected_arm_slot_count_is_refused(self, prepared, tmp_path):
         from direct import pathway_arms
         real = pathway_arms.expected_slots

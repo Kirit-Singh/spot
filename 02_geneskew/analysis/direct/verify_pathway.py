@@ -851,16 +851,28 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None,
         declared_pairs = conv_doc.get("n_intra_set_pairs",
                                       doc.get("n_intra_set_pairs"))
         reconstruction["n_intra_set_pairs"] = true_pairs
-        # The STREAMED denominator exists only where the producer stopped emitting its
-        # non-supportive pair records. A contract that declares none has none to forge, and a
-        # gate asserted against a value that does not exist would refuse every honest legacy
-        # artifact. Where it IS declared, it is re-derived.
-        if declared_pairs is not None:
+        if contract == CONTRACT_ALL_ARM:
+            # MISSING IS A REFUSAL. `if declared is not None` was itself the bypass: DELETE
+            # `n_intra_set_pairs`, reseal, and the gate simply did not run. A check a forger
+            # can switch off by removing its subject is not a check. The all-arm producer
+            # emits this number; a bundle that does not is not an all-arm bundle.
+            ok = (isinstance(declared_pairs, int)
+                  and not isinstance(declared_pairs, bool)
+                  and declared_pairs >= 0
+                  and declared_pairs == true_pairs)
+            checks.append(_check(
+                GATE_INTRA_SET_PAIRS, ok,
+                f"the artifact declares n_intra_set_pairs={declared_pairs!r}; the BOUND "
+                f"signatures evaluate {true_pairs}. The all-arm contract MUST declare a "
+                "concrete non-negative evaluated-pair count: a denominator nobody recomputes "
+                "is a denominator anybody can choose, and an ABSENT one is not an exemption"))
+        elif declared_pairs is not None:
+            # The legacy contract emitted every pair record and declares no such denominator.
+            # Where it does declare one, it is re-derived.
             checks.append(_check(
                 GATE_INTRA_SET_PAIRS, declared_pairs == true_pairs,
                 f"the artifact declares n_intra_set_pairs={declared_pairs}; the BOUND "
-                f"signatures evaluate {true_pairs}. A denominator nobody recomputes is a "
-                "denominator anybody can choose"))
+                f"signatures evaluate {true_pairs}"))
         else:
             reconstruction["declares_no_evaluated_pair_denominator"] = True
 
@@ -879,15 +891,23 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None,
                 if c.get(field) != true_v:
                     bad.append(f"{r['set_id']}: declares {field}={c.get(field)!r}; the "
                                f"FROZEN policy re-derives {true_v!r}")
-        # The policy the run DECLARES, wherever it declares it — the method block in both
-        # contracts, and the convergence artifact too when there is one. Every place it is
-        # stated is a place it could be raised.
+        # The policy the run DECLARES, in every place it declares it. `if field in block` was
+        # a bypass of exactly the same shape: DELETE the policy id, reseal, and the
+        # declaration check evaporates — leaving a bundle that names no size policy at all
+        # and is congratulated for it. The all-arm producer emits all three fields in BOTH
+        # the method block and the convergence artifact, so in that contract their ABSENCE is
+        # a refusal, not a pass.
         frozen = {"convergence_size_policy_id": RC.SPEC_CONVERGENCE_SIZE_POLICY_ID,
                   "convergence_size_basis": RC.SPEC_CONVERGENCE_SIZE_BASIS,
                   "max_convergence_set_size": RC.SPEC_MAX_CONVERGENCE_SET_SIZE}
-        for where, block in (("method", method), ("convergence", conv_doc)):
+        required_blocks = ((("method", method), ("convergence", conv_doc))
+                           if contract == CONTRACT_ALL_ARM else (("method", method),))
+        for where, block in required_blocks:
             for field, true_v in frozen.items():
-                if field in block and block.get(field) != true_v:
+                if contract == CONTRACT_ALL_ARM and field not in block:
+                    bad.append(f"the {where} block DECLARES NO {field}: a run that names no "
+                               "convergence-size policy has not been held to one")
+                elif field in block and block.get(field) != true_v:
                     bad.append(f"{where} ran under {field}={block.get(field)!r}; the FROZEN "
                                f"policy is {true_v!r}")
         checks.append(_check(GATE_CONVERGENCE_SIZE, not bad, "; ".join(bad[:5])))
