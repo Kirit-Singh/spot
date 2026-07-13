@@ -15,12 +15,21 @@ import type { Stage4UiArtifact } from '../domain/stage4UiArtifact';
 import type { StageMethodsManifest } from '../domain/methodsManifest';
 import type { UiResultsCurrent } from '../domain/uiResultsCurrent';
 import type { RealRouteResolution } from './renderReal';
+import type { SelectionV3 } from '../adapters/selectionV3Adapter';
 import { parseUiResultsCurrent } from '../adapters/uiResultsCurrentAdapter';
 import { mergeAdmittedManifest, parseUiReleaseManifest } from '../adapters/uiReleaseManifestAdapter';
+import { parseDrugsProjection, parsePkSafetyProjection, parseStage2Projection } from '../adapters/routeProjectionAdapter';
 import { resultRouteKeyForPage } from '../domain/uiResultsCurrent';
+import { resolveJoinedView } from '../repository/joinResolver';
+import { canonicalJson, sha256Hex } from '../stage1/canonical';
+import { readStage1SelectionV3 } from './contrastTitle';
 import { buildStageMethodsManifest } from './stageMethods';
 
-const RESULTS_CURRENT_PATH = 'results/current.json';
+const RESULTS_ROOT = 'results/';
+const RESULTS_CURRENT_PATH = `${RESULTS_ROOT}current.json`;
+// current.json manifest_path / projection_path are RESULTS-tree-relative (matching the deploy inventory);
+// the browser resolves them under the served results/ root.
+const underResults = (relPath: string): string => `${RESULTS_ROOT}${relPath}`;
 
 /** A route's native canvas projection — a Stage-2 join view, or a Stage-3/Stage-4 UI artifact. */
 export type RouteProjection =
@@ -75,7 +84,7 @@ export async function loadRouteReleaseManifest(
 
   let manifestText: string;
   try {
-    manifestText = await fetchText(entry.manifest_path);
+    manifestText = await fetchText(underResults(entry.manifest_path));
   } catch {
     return null;
   }
@@ -134,16 +143,59 @@ async function sameOriginFetchText(path: string): Promise<string> {
 }
 
 /**
- * PRE-RUN production loader. No native projection loader is wired yet (W1 supplies the deterministic
- * native→browser projection loaders after the real run), so this resolves to null and the island shows
- * the compact pending state. It NEVER returns demo/fixture data. Once W1 binds results/current.json +
- * the per-route ui_release manifests + native projections, this begins returning admitted resolutions.
+ * The REAL content-verified production projection loader. For the active route it reads the route's
+ * `projection_path` + `projection_content_hash` from results/current.json, fetches the same-origin
+ * projection, verifies its canonical content hash, and strict-parses the compact route schema into a
+ * RouteProjection. FAIL-CLOSED: no projection bound, a 404, malformed JSON, a content-hash mismatch, an
+ * unknown/wrong-route/fixture-shaped projection, or (for Stage-2) an absent selection / analysis-mode
+ * mismatch all return null → the route stays unbound. Stage-2 resolves the JoinedView from the ADMITTED
+ * bundles + the stored, independently-verified v3 selection (never a synthetic view). Never demo/fixture.
  */
-const noProjectionYet: RouteLoaderDeps['loadProjection'] = async () => null;
+export async function loadProductionProjection(
+  page: PageKey,
+  current: UiResultsCurrent,
+  fetchText: (path: string) => Promise<string>,
+  selection: SelectionV3 | null,
+): Promise<RouteProjection | null> {
+  const routeKey = resultRouteKeyForPage(page);
+  if (!routeKey) return null;
+  const entry = current.routes[routeKey];
+  if (!entry || !entry.projection_path || !entry.projection_content_hash) return null; // no projection → unbound
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await fetchText(underResults(entry.projection_path)));
+  } catch {
+    return null; // 404 / malformed JSON
+  }
+  // content-address the projection (canonical form — same convention as the ui_release manifest).
+  try {
+    if ((await sha256Hex(canonicalJson(raw))) !== entry.projection_content_hash) return null;
+  } catch {
+    return null;
+  }
+
+  try {
+    if (routeKey === 'drugs') return { kind: 'stage3', artifact: parseDrugsProjection(raw) };
+    if (routeKey === 'pksafety') return { kind: 'stage4', artifact: parsePkSafetyProjection(raw) };
+    // Stage-2 (targets | pathways): resolve the view from the admitted bundles + the stored selection.
+    const proj = parseStage2Projection(raw);
+    if (!selection) return null; // Stage-2 needs the independently-verified v3 selection to resolve
+    if (proj.analysis_mode !== selection.analysis_mode) return null; // fail closed on mode mismatch
+    const view = resolveJoinedView(selection, proj.bundles, proj.pathway_source, proj.release_conditions);
+    return { kind: 'stage2', view, bundles: proj.bundles };
+  } catch {
+    return null; // strict-parse rejection / view-resolution failure → unbound
+  }
+}
 
 export async function resolveProductionRealArtifact(page: PageKey): Promise<RealRouteResolution | null> {
   try {
-    return await resolveRouteArtifact(page, { fetchText: sameOriginFetchText, loadProjection: noProjectionYet });
+    const selection = await readStage1SelectionV3().catch(() => null);
+    return await resolveRouteArtifact(page, {
+      fetchText: sameOriginFetchText,
+      loadProjection: (p, current, fetchText) => loadProductionProjection(p, current, fetchText, selection),
+    });
   } catch {
     return null;
   }

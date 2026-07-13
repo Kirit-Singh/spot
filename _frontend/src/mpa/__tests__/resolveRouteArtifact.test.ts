@@ -94,11 +94,12 @@ describe('loadResultsCurrent — fail-closed pointer fetch', () => {
 });
 
 describe('loadRouteReleaseManifest — fail-closed drawer binding', () => {
-  const MP = 'results/manifests/targets.ui_release.json';
+  // manifest_path is RESULTS-tree-relative; the loader resolves it under the served results/ root.
+  const MP = 'manifests/targets.ui_release.json';
 
   it('binds an admitted manifest → merged run rows onto the STATIC definition', async () => {
     const m = await admittedManifest('targets');
-    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, m.hash) }), fakeFetch({ [MP]: m.json }));
+    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, m.hash) }), fakeFetch({ ['results/' + MP]:m.json }));
     expect(merged).not.toBeNull();
     expect(merged!.methods.method_code_sha256).toBe('c'.repeat(64));
     expect(merged!.provenance.verifier_status).toBe('admitted');
@@ -114,19 +115,19 @@ describe('loadRouteReleaseManifest — fail-closed drawer binding', () => {
 
   it('content-hash mismatch → null', async () => {
     const m = await admittedManifest('targets');
-    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, 'e'.repeat(64)) }), fakeFetch({ [MP]: m.json }));
+    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, 'e'.repeat(64)) }), fakeFetch({ ['results/' + MP]:m.json }));
     expect(merged).toBeNull();
   });
 
   it('cross-route method_id (a pksafety manifest served at the targets path) → null', async () => {
     const wrong = await admittedManifest('pksafety');
-    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, wrong.hash) }), fakeFetch({ [MP]: wrong.json }));
+    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, wrong.hash) }), fakeFetch({ ['results/' + MP]:wrong.json }));
     expect(merged).toBeNull();
   });
 
   it('non-admitted verifier status → null', async () => {
     const m = await admittedManifest('targets', { verifier_status: 'pending' });
-    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, m.hash) }), fakeFetch({ [MP]: m.json }));
+    const merged = await loadRouteReleaseManifest('targets', current({ targets: entry(MP, m.hash) }), fakeFetch({ ['results/' + MP]:m.json }));
     expect(merged).toBeNull();
   });
 
@@ -146,12 +147,12 @@ describe('resolveRouteArtifact — route-discriminated admitted resolution', () 
         stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64) },
         routes: { [page]: entry(manifestPath, m.hash) },
       }),
-      [manifestPath]: m.json,
+      ['results/' + manifestPath]: m.json,
     };
   }
 
   it('admitted manifest + matching stage2 projection → route:targets, admission admitted, merged manifest', async () => {
-    const files = await filesFor('targets', 'results/manifests/targets.ui_release.json');
+    const files = await filesFor('targets', 'manifests/targets.ui_release.json');
     const res = await resolveRouteArtifact('targets', { fetchText: fakeFetch(files), loadProjection: async () => stage2Projection });
     expect(res?.route).toBe('targets');
     expect(res?.admission).toBe('admitted');
@@ -159,20 +160,20 @@ describe('resolveRouteArtifact — route-discriminated admitted resolution', () 
   });
 
   it('admitted manifest but NO projection → null (unbound, never partially rendered)', async () => {
-    const files = await filesFor('targets', 'results/manifests/targets.ui_release.json');
+    const files = await filesFor('targets', 'manifests/targets.ui_release.json');
     const res = await resolveRouteArtifact('targets', { fetchText: fakeFetch(files), loadProjection: async () => null });
     expect(res).toBeNull();
   });
 
   it('route/projection KIND mismatch (targets route, stage3 projection) → null', async () => {
-    const files = await filesFor('targets', 'results/manifests/targets.ui_release.json');
+    const files = await filesFor('targets', 'manifests/targets.ui_release.json');
     const proj: RouteProjection = { kind: 'stage3', artifact: stage3Artifact() };
     const res = await resolveRouteArtifact('targets', { fetchText: fakeFetch(files), loadProjection: async () => proj });
     expect(res).toBeNull();
   });
 
   it('drugs route + stage3 projection → route:drugs resolution', async () => {
-    const files = await filesFor('drugs', 'results/manifests/drugs.ui_release.json');
+    const files = await filesFor('drugs', 'manifests/drugs.ui_release.json');
     const proj: RouteProjection = { kind: 'stage3', artifact: stage3Artifact() };
     const res = await resolveRouteArtifact('drugs', { fetchText: fakeFetch(files), loadProjection: async () => proj });
     expect(res?.route).toBe('drugs');
