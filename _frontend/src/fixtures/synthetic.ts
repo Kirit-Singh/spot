@@ -29,8 +29,8 @@ export function fixtureProvenance(opts: {
     method: {
       method_id: opts.methodId,
       config_id: `fixture_config_${opts.slug}`,
-      code_ref: 'fixture://not-a-real-pipeline',
-      env_ref: 'fixture://synthetic-env',
+      code_ref: 'synthetic-fixture-not-a-real-pipeline',
+      env_ref: 'synthetic-fixture-env',
     },
     sources: opts.sources,
     cs_session: { session_ref: 'fixture-session', frame_ref: 'fixture-frame' },

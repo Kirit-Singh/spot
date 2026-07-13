@@ -2,13 +2,31 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import App from './App';
-import { SELECTION_KEY } from './repository/source';
-import { researchSelectionExampleRaw } from './fixtures/researchSelection.example';
+import { SELECTION_V3_KEY } from './repository/source';
 
 /** Set the full URL (search + hash) before render — the demo gate reads location.search. */
 function goto(url: string) {
   window.history.pushState({}, '', url);
 }
+
+/** A minimal, structurally-valid spot.stage01_selection.v3 contract (the sync gate is shallow). */
+const selectionV3Raw = {
+  schema_version: 'spot.stage01_selection.v3',
+  selection_id: 'a1b2c3d4e5f60718',
+  analysis_mode: 'within_condition',
+  execution_status: 'ready',
+  estimator_id: 'within_condition_v1',
+  estimator_status: 'available',
+  selection_full_sha256: 'f'.repeat(64),
+  full_contract_content_sha256: '9'.repeat(64),
+  canonical_content: {
+    A: { program_id: 'treg_like', score_field: 'treg_like_score', direction: 'low' },
+    B: { program_id: 'th1_like', score_field: 'th1_like_score', direction: 'high' },
+    conditions: ['Stim48hr'],
+    registry_scorer_view_sha256: 'a'.repeat(64),
+    source_h5ad_sha256: 'b'.repeat(64),
+  },
+};
 
 describe('spot shell — navigation & modes', () => {
   beforeEach(() => {
@@ -76,18 +94,15 @@ describe('spot shell — navigation & modes', () => {
     });
   });
 
-  describe('valid research-only selection', () => {
+  describe('valid v3 selection', () => {
     beforeEach(() => {
-      window.localStorage.setItem(SELECTION_KEY, JSON.stringify(researchSelectionExampleRaw));
+      window.localStorage.setItem(SELECTION_V3_KEY, JSON.stringify(selectionV3Raw));
     });
 
-    it('shows the real A/B/condition context', () => {
+    it('enters research mode — not the empty scaffold, not demo', () => {
       render(<App />);
-      const bar = screen.getByLabelText('Stage-1 selection context');
-      expect(within(bar).getByText('Treg-like')).toBeInTheDocument();
-      expect(within(bar).getByText('Th1-like')).toBeInTheDocument();
-      expect(within(bar).getByText(/Stim48hr/)).toBeInTheDocument();
-      expect(within(bar).getByText('research-only')).toBeInTheDocument();
+      expect(screen.queryByLabelText('No selection')).toBeNull();
+      expect(screen.getByText('analysis not generated')).toBeInTheDocument();
     });
 
     it('shows analysis-not-generated and never falls back to fixture results', () => {
@@ -98,8 +113,18 @@ describe('spot shell — navigation & modes', () => {
     });
   });
 
+  it('rejects a v1 object in the v3 key (fail-closed, no v1 fallback)', () => {
+    window.localStorage.setItem(
+      SELECTION_V3_KEY,
+      JSON.stringify({ schema_version: 'spot.stage01_selection.v1' }),
+    );
+    render(<App />);
+    expect(screen.getByText('selection rejected')).toBeInTheDocument();
+    expect(screen.queryByText('GENE_A')).toBeNull();
+  });
+
   it('rejects an unreadable stored selection (no data, no research results)', () => {
-    window.localStorage.setItem(SELECTION_KEY, '{ not valid json');
+    window.localStorage.setItem(SELECTION_V3_KEY, '{ not valid json');
     render(<App />);
     expect(screen.getByText('selection rejected')).toBeInTheDocument();
     expect(screen.queryByText('GENE_A')).toBeNull();
@@ -111,56 +136,19 @@ describe('spot shell — navigation & modes', () => {
   });
 });
 
-describe('compact selection context + drawer relocation', () => {
+describe('v3 research mode — honest not-generated, no legacy context bar', () => {
   beforeEach(() => {
     goto('/02_page.html');
     window.localStorage.clear();
-    window.localStorage.setItem(SELECTION_KEY, JSON.stringify(researchSelectionExampleRaw));
+    window.localStorage.setItem(SELECTION_V3_KEY, JSON.stringify(selectionV3Raw));
   });
 
-  it('keeps question/selection/source off the compact context bar', () => {
+  it('does not render the legacy compact Stage-1 selection context bar (v3 carrier is separate)', () => {
     render(<App />);
-    const bar = screen.getByLabelText('Stage-1 selection context');
-    expect(within(bar).getByText('Treg-like')).toBeInTheDocument();
-    expect(within(bar).getByText(/Stim48hr/)).toBeInTheDocument();
-    expect(within(bar).getByText(/a1b2c3d4e5f60718/)).toBeInTheDocument();
-    expect(within(bar).getByText('research-only')).toBeInTheDocument();
-    expect(within(bar).queryByText(/Q_treg_to_th1_stim48/)).toBeNull();
-    expect(within(bar).queryByText(/SEL_treg_to_th1_stim48_r1/)).toBeNull();
-    expect(within(bar).queryByText(/stage01_research_bridge/)).toBeNull();
+    expect(screen.queryByLabelText('Stage-1 selection context')).toBeNull();
   });
 
-  it('surfaces the moved selection detail inside the provenance drawer', () => {
-    render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Stage-1 selection')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Q_treg_to_th1_stim48/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/SEL_treg_to_th1_stim48_r1/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/stage01_research_bridge/)).toBeInTheDocument();
-  });
-
-  it('preserves optional v3 Stage-1 bindings in provenance only, never on the bar', () => {
-    const v3 = {
-      ...researchSelectionExampleRaw,
-      stage1_method_version: 'stage1-continuous-v3.0.1',
-      program_registry_sha256: 'a'.repeat(64),
-      source_h5ad_sha256: 'b'.repeat(64),
-    };
-    window.localStorage.setItem(SELECTION_KEY, JSON.stringify(v3));
-    render(<App />);
-    const bar = screen.getByLabelText('Stage-1 selection context');
-    expect(within(bar).queryByText(/stage1-continuous-v3\.0\.1/)).toBeNull();
-    expect(within(bar).queryByText(/a{64}/)).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /Methods/ }));
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('stage1-continuous-v3.0.1')).toBeInTheDocument();
-    expect(within(dialog).getByText('a'.repeat(64))).toBeInTheDocument();
-    expect(within(dialog).getByText('b'.repeat(64))).toBeInTheDocument();
-  });
-
-  it('shows the analysis-not-generated state with no explanatory paragraph', () => {
+  it('shows the analysis-not-generated state, the stage-2 target and no explanatory paragraph', () => {
     render(<App />);
     expect(screen.getByText('analysis not generated')).toBeInTheDocument();
     expect(screen.queryByText(/results appear here/i)).toBeNull();

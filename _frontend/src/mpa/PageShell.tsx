@@ -2,7 +2,7 @@
 // provenance drawer, wrapping one stage's body. Every React page renders through this,
 // so the visual system is identical and DRY across the MPA.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Provenance } from '../domain/common';
 import type { StageSelection } from '../domain/selection';
 import type { StageMethodsManifest } from '../domain/methodsManifest';
@@ -53,6 +53,12 @@ export function PageShell({
     methods: null,
     focus: 'methods',
   });
+  // The exact header button that opened the drawer — restored on every close path (U15).
+  const invokerRef = useRef<HTMLElement | null>(null);
+  const closeDrawer = () => {
+    setDrawer((d) => ({ ...d, open: false }));
+    invokerRef.current?.focus?.();
+  };
   const opener = useMemo(
     () => ({
       open: (
@@ -73,16 +79,24 @@ export function PageShell({
           subtitle={subtitle}
           subtitleNode={subtitleNode}
           onClearSelection={onClearSelection}
-          onOpenMethods={(section) =>
+          onOpenMethods={(section, invoker) => {
+            // capture the exact invoking button so focus returns to it on close (U15). Prefer the
+            // element handed up from the click (event.currentTarget) — robust even when the drawer
+            // is opened programmatically; fall back to activeElement only if none was supplied.
+            invokerRef.current =
+              invoker ??
+              (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
             opener.open(
-              // drawer title derives from the ACTIVE PAGE (manifest stage label), not the contrast
-              `${methodsManifest?.stage_label ?? subtitle} — methods & provenance`,
+              // pass the route-specific stage label as `title`; the drawer renders it ONLY as the
+              // dialog aria-label + an sr-only stage label (harness + a11y), never as a visible header
+              // line — the single visible h2 is "Methods & provenance" (exact Stage-1 parity).
+              methodsManifest?.stage_label ?? subtitle,
               methodsProvenance,
               methodsNotes,
               methodsManifest,
               section,
-            )
-          }
+            );
+          }}
         />
         <MpaNav active={page} />
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
@@ -95,7 +109,7 @@ export function PageShell({
         notes={drawer.notes}
         methods={drawer.methods}
         focus={drawer.focus}
-        onClose={() => setDrawer((d) => ({ ...d, open: false }))}
+        onClose={closeDrawer}
       />
     </ProvenanceProvider>
   );

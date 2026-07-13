@@ -114,7 +114,10 @@ export function manifestFromProvenance(stage_label: string, p: Provenance): Stag
       ...base.provenance,
       raw_sha256: p.hashes.raw_sha256,
       canonical_sha256: p.hashes.canonical_sha256,
-      cs_notebook_url: p.cs_session ? p.cs_session.frame_ref : null,
+      // A Claude-Science session/frame id is NOT a notebook URL. Promoting `cs_session.frame_ref`
+      // here rendered a frame ref as an <a href> in the drawer (methodsManifestAdapter.ts §23).
+      // There is no genuine notebook-URL field on Provenance, so this stays null (never invented).
+      cs_notebook_url: null,
       artifact_paths: [p.artifact_id],
       source_chain: p.sources.map((s) => ({
         label: s.label,

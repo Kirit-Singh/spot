@@ -15,7 +15,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 DIST = os.environ.get("SPOT_DIST", "/home/tcelab/spot-dist")
 PORT = int(os.environ.get("SPOT_PORT", "8347"))
 # Only these content extensions may be served; everything else 404s.
-ALLOW_EXT = {".html", ".css", ".js", ".json", ".svg", ".png", ".ico", ".woff2", ".webp", ".map", ".txt"}
+# .csv is public Stage-1 distribution data (stage01_bins_v3.csv / stage01_controls_v3.csv, listed
+# and hashed in the release manifest); the DENY list below still blocks all source/script types.
+ALLOW_EXT = {".html", ".css", ".js", ".json", ".csv", ".svg", ".png", ".ico", ".woff2", ".webp", ".map", ".txt"}
 # Explicit denylist (belt-and-suspenders): dotfiles, pycache, source/scripts/logs/configs.
 DENY = re.compile(r"(^|/)\.|/__pycache__/|\.(py|sh|log|md|env|ini|cfg|pem|key|lock|toml|ya?ml|sql)$", re.I)
 

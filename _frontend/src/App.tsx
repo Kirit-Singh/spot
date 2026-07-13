@@ -12,7 +12,7 @@ import type { Provenance } from './domain/common';
 import type { StageSelection } from './domain/selection';
 import { buildRepository } from './repository/repository';
 import type { ArtifactSlot, SpotRepository } from './repository/repository';
-import { browserSource, SELECTION_KEY, STAGE2_KEY, STAGE3_KEY, STAGE4_KEY } from './repository/source';
+import { browserSource, SELECTION_V3_KEY, STAGE2_KEY, STAGE3_KEY, STAGE4_KEY } from './repository/source';
 import { TopBar } from './shell/TopBar';
 import { StageNav } from './shell/StageNav';
 import { ProvenanceDrawer } from './shell/ProvenanceDrawer';
@@ -105,7 +105,7 @@ export default function App() {
         <StageNav current={route} onNavigate={navigate} />
         <main className="flex min-h-0 flex-1 flex-col">
           {repo.mode === 'rejected_selection' ? (
-            <SelectionRejected reason={repo.selectionRejection ?? 'unknown'} target={SELECTION_KEY} />
+            <SelectionRejected reason={repo.selectionRejection ?? 'unknown'} target={SELECTION_V3_KEY} />
           ) : repo.mode === 'empty' ? (
             <>
               <EmptyBar />

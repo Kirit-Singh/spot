@@ -89,13 +89,14 @@ input:focus-visible,
   }
 }
 
-/* Respect reduced-motion for the provenance drawer + any transitions. */
+/* Respect reduced-motion: TRUE zero transition (computed transition-duration === "0s"), not a
+ * near-zero 0.001ms hack — the acceptance harness requires an exact 0s under reduced-motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition-duration: 0.001ms !important;
-    animation-duration: 0.001ms !important;
+    transition: none !important;
+    animation-duration: 0s !important;
     animation-iteration-count: 1 !important;
   }
 }

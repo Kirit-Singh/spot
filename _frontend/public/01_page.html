@@ -313,13 +313,13 @@
 </head>
 <body>
 
-<div class="top"><div class="hleft"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2026)</a></span></div><span class="dstools"><div class="lkwrap"><button id="linksBtn" class="methodstab" aria-expanded="false" aria-label="Data links"><span class="lkic">🔗</span><span class="tlbl">Links</span></button><div id="linksMenu" class="lkmenu"><a id="dsSrc" target="_blank" rel="noopener"></a><a id="dsHf" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></div></div><button id="provbtn" class="methodstab"><span class="ic">i</span><span class="tlbl">Methods &amp; provenance</span></button></span></div>
+<div class="top"><div class="hleft"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2025)</a></span></div><span class="dstools"><div class="lkwrap"><button id="linksBtn" class="methodstab" aria-expanded="false" aria-label="Data links"><span class="lkic">🔗</span><span class="tlbl">Links</span></button><div id="linksMenu" class="lkmenu"><a id="dsSrc" target="_blank" rel="noopener"></a><a id="dsHf" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></div></div><button id="provbtn" class="methodstab"><span class="ic">i</span><span class="tlbl">Methods &amp; provenance</span></button></span></div>
 <div class="nav">
-  <div class="nstep on"><span class="n">01</span>CD4 programs</div><span class="nsep">›</span>
-  <a class="nstep step" href="targets.html"><span class="n">02</span>Skewing genes</a><span class="nsep">›</span>
-  <a class="nstep step" href="drugs.html"><span class="n">03</span>Drug link</a><span class="nsep">›</span>
-  <a class="nstep step" href="pksafety.html"><span class="n">04</span>PK / PD · brain</a><span class="nsep">›</span>
-  <div class="nstep off"><span class="n">05</span>Trial</div>
+  <a class="nstep on" href="01_page.html" aria-current="page" style="text-decoration:none"><span class="n">01</span>Programs</a><span class="nsep">›</span>
+  <a class="nstep step" href="targets.html"><span class="n">02</span>Targets</a><span class="nsep">·</span>
+  <a class="nstep step" href="pathways.html"><span class="n">02</span>Pathways</a><span class="nsep">›</span>
+  <a class="nstep step" href="drugs.html"><span class="n">03</span>Drugs</a><span class="nsep">›</span>
+  <a class="nstep step" href="pksafety.html"><span class="n">04</span>PK &amp; Safety</a>
 </div>
 
 <div class="body">
@@ -477,7 +477,7 @@ let sx,sy,ox,oy;
 // program_id + method provenance come from the v3.0.1 registry; base portability comes from the frozen validation
 let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
 // v3 truthful current pointer (schema spot.stage01_current.v3): carries selection_routing +
-// measurement_display_release. No production/research split; the historical 0/33 gate is not active here.
+// measurement_display_release. No production/research split; the historical selectability gate is not active here.
 let CURRENT=null,MARKER_DIAG=null,BUNDLE=null;   // BUNDLE = served spot.stage01_selection_bundle.v1 (v3-contract constants)
 // each axis carries its own condition (enables cross-subset display comparisons); when both share one
 // REAL condition that value is the executable analysis_condition. Different timepoints render as a
@@ -849,7 +849,7 @@ async function computeContrast(){
 function hashesOk(){return !!(V3_OK&&V3&&BUNDLE&&METHOD_VERSION===V3.method_version&&REGISTRY_SHA===(V3.registry||{}).registry_sha256&&H5AD_SHA===V3.source_h5ad_raw_sha256);}
 // RESEARCH-only readiness gate — Identify-genes is enabled ONLY when this returns ok:true.
 // It decides research readiness from base portability + a concrete shared timepoint. It does NOT
-// consult the frozen 0/33 PRODUCTION-selectability flag (that governs production promotion only).
+// consult the frozen PRODUCTION-selectability flag (that governs production promotion only).
 // the temporal estimator is executable only when it is implemented + bound in the served bundle;
 // otherwise a cross-condition selection is awaiting_estimator (button disabled). Mirrors emit_selection_contract.
 function temporalEstimatorAvailable(){

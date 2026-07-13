@@ -1,17 +1,20 @@
 // Downstream header title = the carried Stage-1 selection, rendered as a contrast,
-// e.g. "Naïve-like hi (at rest) → Activated hi (at rest)". The Stage-1 page stores the
-// selection artifact in session/localStorage (key spot.stage01_selection.v1) on
-// Identify-genes. Falls back to a prompt when nothing is bound.
+// e.g. "treg_like lo (at 48 hr) → th1_like hi (at 48 hr)". The Stage-1 page stores the
+// AUTHORITATIVE v3 selection artifact in session/localStorage (key
+// spot.stage01_selection.v3) on Identify-genes. Falls back to a prompt when nothing is bound.
 //
-// RECONCILED with the v3 shell adapter: readStage1Selection() resolves the stored
-// selection through parseSelection() — the SAME validated `research_only` path the body
-// binds to — so the header contrast agrees with the body and a malformed / wrong-namespace
-// selection is excluded. The unvalidated raw object is kept as a fallback so we never
-// regress "show the carried selection" for a selection the strict adapter would reject.
-// The storage key itself is imported (SELECTION_KEY) — one source of truth, not a literal.
+// FAIL-CLOSED, v3-only: the selection is read ONLY from SELECTION_V3_KEY and validated as a
+// spot.stage01_selection.v3 contract. There is NO v1 read and NO raw-object fallback — a
+// corrupt / absent / wrong-schema selection resolves to null so the header reverts to the
+// prompt rather than rendering an unverified contrast.
+//   - readStage1Selection()   sync, shallow-shapes the v3 key (schema-gated, NO hash check)
+//                             so the header renders synchronously today.
+//   - readStage1SelectionV3()  async, runs the full fail-closed parseSelectionV3 verifier
+//                             (recomputes hashes, re-derives routing) — the trustworthy path.
 
-import { parseSelection } from '../adapters/selectionAdapter';
-import { SELECTION_KEY } from '../repository/source';
+import { parseSelectionV3 } from '../adapters/selectionV3Adapter';
+import type { SelectionV3 } from '../adapters/selectionV3Adapter';
+import { SELECTION_V3_KEY, readReconciledV3Raw } from '../repository/source';
 
 interface Pole {
   display_label?: string;
@@ -23,36 +26,75 @@ export interface Stage1Selection {
   analysis_condition?: string;
 }
 
+const V3_SCHEMA = 'spot.stage01_selection.v3';
+
 /**
- * Read the selection the Stage-1 page bridged via storage (session/local hold identical
- * content — the frozen page writes both). PRIMARY: resolve through the shell's validated
- * `research_only` adapter so the header agrees with the body. FALLBACK: the unvalidated
- * raw object, so a selection the strict adapter rejects still renders a contrast rather
- * than silently vanishing from the header.
+ * The reconciled v3 bytes (session + local agree, or exactly one present), JSON-parsed —
+ * or null when absent / mismatched / malformed. Routing BOTH reads through the SAME
+ * {@link readReconciledV3Raw} rule keeps the header and the repository on ONE selection.
+ */
+function parseReconciledV3(): unknown {
+  const raw = readReconciledV3Raw();
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null; // malformed JSON — treat as no selection
+  }
+}
+
+/** True only for a plain object declaring the authoritative v3 schema_version. */
+function isV3(obj: unknown): obj is Record<string, unknown> {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    !Array.isArray(obj) &&
+    (obj as Record<string, unknown>).schema_version === V3_SCHEMA
+  );
+}
+
+/**
+ * SYNC shallow-shape of a v3 contract into the header's Stage1Selection. No hash recompute
+ * (that is {@link readStage1SelectionV3}); it only projects canonical_content for display.
+ * Returns null for anything that is not the v3 schema — NEVER a v1 or raw-object fallback.
  */
 export function readStage1Selection(): Stage1Selection | null {
-  if (typeof window === 'undefined') return null;
-  for (const store of [window.sessionStorage, window.localStorage]) {
-    let raw: string | null = null;
-    try {
-      raw = store.getItem(SELECTION_KEY);
-    } catch {
-      continue; // unreadable store — try the next
-    }
-    if (!raw) continue;
-    let obj: unknown;
-    try {
-      obj = JSON.parse(raw);
-    } catch {
-      continue; // malformed JSON — treat as no selection in this store
-    }
-    try {
-      return parseSelection(obj, 'research_only'); // validated adapter path
-    } catch {
-      return obj as Stage1Selection; // fallback: unvalidated raw object
-    }
+  const obj = parseReconciledV3();
+  if (!isV3(obj)) return null; // fail closed: absent / mismatched / wrong schema → no fallback
+  const cc = obj.canonical_content;
+  if (typeof cc !== 'object' || cc === null) return null;
+  const ccr = cc as Record<string, unknown>;
+  const conditions = Array.isArray(ccr.conditions) ? ccr.conditions : [];
+  return {
+    program_a: pole1(ccr.A),
+    program_b: pole1(ccr.B),
+    analysis_condition: typeof conditions[0] === 'string' ? (conditions[0] as string) : undefined,
+  };
+}
+
+/** Shallow pole projection: program_id doubles as the display label (v3 carries no label). */
+function pole1(v: unknown): Pole | undefined {
+  if (typeof v !== 'object' || v === null) return undefined;
+  const p = v as Record<string, unknown>;
+  return {
+    display_label: typeof p.program_id === 'string' ? p.program_id : undefined,
+    direction: typeof p.direction === 'string' ? p.direction : undefined,
+  };
+}
+
+/**
+ * ASYNC fail-closed read of the verified v3 selection. Runs {@link parseSelectionV3} (named
+ * schema gate + independent hash recompute + routing re-derivation). Returns the verified
+ * {@link SelectionV3} or null — NEVER a v1 read, NEVER a raw/forged fallback.
+ */
+export async function readStage1SelectionV3(): Promise<SelectionV3 | null> {
+  const obj = parseReconciledV3();
+  if (obj === null) return null;
+  try {
+    return await parseSelectionV3(obj); // throws on non-v3 / forged / mismatch → null
+  } catch {
+    return null;
   }
-  return null;
 }
 
 const DIR: Record<string, string> = { high: 'hi', low: 'lo' };
@@ -75,17 +117,14 @@ export function contrastTitle(sel: Stage1Selection | null): string | null {
 
 export const NO_SELECTION_TITLE = 'Select populations in Programs →';
 
-/** Remove the bridged selection so the downstream header reverts to the prompt. */
+/** Remove the bridged v3 selection so the downstream header reverts to the prompt. */
 export function clearStage1Selection(): void {
   if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(SELECTION_KEY);
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.sessionStorage.removeItem(SELECTION_KEY);
-  } catch {
-    /* ignore */
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    try {
+      store.removeItem(SELECTION_V3_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 }

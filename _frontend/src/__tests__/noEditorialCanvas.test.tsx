@@ -7,10 +7,28 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it } from 'vitest';
 
 import App from '../App';
-import { SELECTION_KEY } from '../repository/source';
-import { researchSelectionExampleRaw } from '../fixtures/researchSelection.example';
+import { SELECTION_V3_KEY } from '../repository/source';
 
 const ROUTES = ['stage-2', 'stage-3', 'stage-4'] as const;
+
+/** A minimal, structurally-valid spot.stage01_selection.v3 contract (the sync gate is shallow). */
+const selectionV3Raw = {
+  schema_version: 'spot.stage01_selection.v3',
+  selection_id: 'a1b2c3d4e5f60718',
+  analysis_mode: 'within_condition',
+  execution_status: 'ready',
+  estimator_id: 'within_condition_v1',
+  estimator_status: 'available',
+  selection_full_sha256: 'f'.repeat(64),
+  full_contract_content_sha256: '9'.repeat(64),
+  canonical_content: {
+    A: { program_id: 'treg_like', score_field: 'treg_like_score', direction: 'low' },
+    B: { program_id: 'th1_like', score_field: 'th1_like_score', direction: 'high' },
+    conditions: ['Stim48hr'],
+    registry_scorer_view_sha256: 'a'.repeat(64),
+    source_h5ad_sha256: 'b'.repeat(64),
+  },
+};
 
 const FORBIDDEN_MAIN = [
   /not production-selectable/i,
@@ -28,7 +46,7 @@ const FORBIDDEN_MAIN = [
 function renderRoute(route: string, opts: { demo?: boolean; research?: boolean } = {}) {
   const q = opts.demo ? '?demo=1' : '';
   window.history.pushState({}, '', `/02_page.html${q}#/${route}`);
-  if (opts.research) window.localStorage.setItem(SELECTION_KEY, JSON.stringify(researchSelectionExampleRaw));
+  if (opts.research) window.localStorage.setItem(SELECTION_V3_KEY, JSON.stringify(selectionV3Raw));
   render(<App />);
   return screen.getByRole('main');
 }
@@ -89,12 +107,11 @@ describe('empty mode (default) — honest scaffold, no fake data, no editorial',
   }
 });
 
-describe('research-only mode — compact not-generated state, no paragraphs', () => {
+describe('v3 research mode — compact not-generated state, no paragraphs', () => {
   for (const route of ROUTES) {
-    it(`${route}: compact research-only state visible with no editorial prose`, () => {
+    it(`${route}: compact not-generated state visible with no editorial prose`, () => {
       const main = renderRoute(route, { research: true });
       assertNoForbidden(main);
-      expect(main).toHaveTextContent(/research-only/);
       expect(main).toHaveTextContent('analysis not generated');
       expect(main.querySelectorAll('p')).toHaveLength(0);
       expect(main).not.toHaveTextContent(/results appear here|selection context above is real/i);
@@ -117,10 +134,10 @@ describe('provenance drawer — one gate note and a compact role row', () => {
     expect(within(dialog).getAllByText(/0\s*\/\s*33/)).toHaveLength(1);
   });
 
-  it('replaces the footer paragraph with a compact "Claude Science role" row', () => {
+  it('renders NO generic "Claude Science role — provenance trace" footer row (only real bound records)', () => {
     const dialog = openDrawer('stage-2');
-    expect(within(dialog).getByText('Claude Science role')).toBeInTheDocument();
-    expect(within(dialog).getByText('provenance trace')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Claude Science role')).toBeNull();
+    expect(within(dialog).queryByText('provenance trace')).toBeNull();
     expect(within(dialog).queryByText(/auditability only|is not evidence/i)).toBeNull();
   });
 

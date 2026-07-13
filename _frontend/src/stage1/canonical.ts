@@ -6,6 +6,9 @@
 // selection contracts contain only strings / enums / ints / bools / null / string-arrays,
 // so there is no Python↔JS float-formatting divergence to worry about.
 
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+
 /** JSON string with ensure_ascii=True: escape every non-ASCII code unit as \uXXXX. */
 function ensureAsciiString(s: string): string {
   return JSON.stringify(s).replace(/[-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
@@ -30,11 +33,16 @@ export function canonicalJson(value: unknown): string {
   throw new Error('canonicalJson: unserializable value of type ' + t);
 }
 
-/** SHA-256 hex of a UTF-8 string via WebCrypto (browser + Node 18+/jsdom). */
+/**
+ * SHA-256 hex of a UTF-8 string. Uses the audited MIT @noble/hashes implementation directly,
+ * NOT WebCrypto: crypto.subtle is unavailable in an INSECURE browser context (plain-HTTP,
+ * non-localhost origin — exactly how the :8347 distribution is served), which previously made
+ * every content-address recompute reject and fall back to "unavailable". noble is deterministic
+ * and context-independent, so hash verification is preserved everywhere. The async signature is
+ * kept (noble is synchronous) so callers are unchanged.
+ */
 export async function sha256Hex(text: string): Promise<string> {
-  const bytes = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(sha256(new TextEncoder().encode(text)));
 }
 
 /** content_hash: sha256 of the canonical JSON form (Direct hashing.content_hash). */

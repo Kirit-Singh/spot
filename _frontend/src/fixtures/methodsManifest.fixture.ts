@@ -20,7 +20,7 @@ export function demoMethodsManifest(stage_label: string): StageMethodsManifest {
       ],
       method_id: 'target_masked_measured_effect_screen.fixture',
       method_code_sha256: 'f'.repeat(64),
-      environment: 'fixture://synthetic-env',
+      environment: 'synthetic-fixture-env',
       last_run_utc: '2026-07-13T00:00:00Z',
       reproduce_command: 'python -m analysis.direct.run_screen --lane fixture --demo',
     },
@@ -30,7 +30,7 @@ export function demoMethodsManifest(stage_label: string): StageMethodsManifest {
       canonical_sha256: 'b'.repeat(64),
       generator_status: 'generated (fixture)',
       verifier_status: 'admitted (fixture verifier)',
-      cs_notebook_url: 'fixture://cs-notebook',
+      cs_notebook_url: 'https://example.org/demo/cs-notebook',
       artifact_paths: [`fixture:${stage_label.toLowerCase()}/screen.parquet`],
       source_chain: [
         {

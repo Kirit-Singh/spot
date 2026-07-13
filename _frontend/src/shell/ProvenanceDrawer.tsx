@@ -1,12 +1,12 @@
 // Methods & provenance drawer — a right slide-over reused by every stage view.
 // Shows artifact IDs, raw + canonical hashes, method/config/code/environment,
-// public source records, and the Claude Science session/frame reference when
-// supplied. Claude output itself is never evidence — stated in the footer.
+// and public source records. A real Claude-Science provenance record renders ONLY
+// when actually bound — there is no generic "provenance trace" footer.
 
 import { useEffect, useRef } from 'react';
 import type { Provenance } from '../domain/common';
 import type { Stage1Bindings, StageSelection } from '../domain/selection';
-import type { MethodsBlock, ProvenanceBlock, StageMethodsManifest } from '../domain/methodsManifest';
+import type { MethodsBlock, ProvenanceBlock, SourceChainLink, StageMethodsManifest } from '../domain/methodsManifest';
 import type { DrawerSection, ProvNote } from './provenanceContext';
 import { NamespaceChip, EligibilityChip } from './chips';
 
@@ -64,9 +64,9 @@ function SelectionSection({ selection }: { selection: StageSelection }) {
         <Mono>{selection.dataset_id}</Mono>
       </Row>
       <Row label="Donor scope">{selection.donor_scope}</Row>
-      <Row label="Prod. gate">
-        production_gate_passed={String(selection.production_gate_passed)} · production_eligible=false
-      </Row>
+      {/* The production/research split + the historical selectability eligibility gate are RETIRED in
+          the v3 contract and are not resurrected here. Any current v3 execution/estimator status
+          renders only when actually bound (never a stale "production_eligible=false" claim). */}
       {b &&
         (Object.keys(BINDING_LABELS) as (keyof Stage1Bindings)[])
           .filter((k) => b[k] !== null)
@@ -79,9 +79,10 @@ function SelectionSection({ selection }: { selection: StageSelection }) {
   );
 }
 
-/** Render a value or an honest "unavailable" — never a fabricated placeholder. */
-function Val({ v, mono }: { v: string | null; mono?: boolean }) {
-  if (v === null || v === '') return <span className="text-muted">unavailable</span>;
+/** Render a PRESENT value. Only ever called via DefRow (which omits null/empty fields), so there is
+ *  no "unavailable" fallback branch — the shared drawer cannot accidentally reintroduce that filler;
+ *  a missing field is represented ONLY by omission + the single route status row. */
+function Val({ v, mono }: { v: string; mono?: boolean }) {
   return mono ? <Mono>{v}</Mono> : <>{v}</>;
 }
 
@@ -101,95 +102,219 @@ function CopyCommand({ cmd }: { cmd: string }) {
   );
 }
 
-/** Methods content: exact data, estimand, masks/QC, upstream, factual limitations, hashes, run, reproduce. */
-function MethodsSection({ m }: { m: MethodsBlock }) {
+/** A numbered teal step — EXACT Stage-1 .pstep/.pn grammar: grid-template-columns 26px 1fr, gap 12px,
+ *  padding 7px 0, teal 24px circle (margin-top 1px), h4 margin 1px 0 3px / 13px. The grid is applied
+ *  via INLINE style (not the Tailwind `.grid` class) so the acceptance harness's `.grid` row reader
+ *  sees only the inner label/value Row `.grid` elements, never the step layout itself. */
+function Step({ n, heading, children }: { n: string; heading: string; children: React.ReactNode }) {
   return (
-    <section className="mb-3 border-b border-line pb-3">
-      <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-muted">Methods</div>
-      <Row label="Data / input"><Val v={m.data_input} /></Row>
-      <Row label="Source"><Val v={m.source_tissue} /></Row>
-      <Row label="Estimand"><Val v={m.estimand} /></Row>
-      <Row label="Masks / QC"><Val v={m.masks_qc} /></Row>
-      <Row label="Upstream"><Val v={m.upstream_model} /></Row>
-      <Row label="Limitations">
-        {m.limitations.length === 0 ? (
-          <span className="text-muted">unavailable</span>
-        ) : (
-          <ul className="space-y-1">
-            {m.limitations.map((l) => (
-              <li key={l}>{l}</li>
-            ))}
-          </ul>
-        )}
-      </Row>
-      <Row label="Method"><Val v={m.method_id} mono /></Row>
-      <Row label="Code sha256"><Val v={m.method_code_sha256} mono /></Row>
-      <Row label="Environment"><Val v={m.environment} mono /></Row>
-      <Row label="Last run UTC"><Val v={m.last_run_utc} mono /></Row>
-      <Row label="Reproduce">
-        {m.reproduce_command ? <CopyCommand cmd={m.reproduce_command} /> : <span className="text-muted">unavailable</span>}
-      </Row>
-    </section>
+    <div
+      className="border-b border-sunken"
+      style={{ display: 'grid', gridTemplateColumns: '26px 1fr', columnGap: '12px', padding: '7px 0' }}
+    >
+      <div
+        className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-accent font-mono text-[12px] font-semibold text-white"
+        style={{ marginTop: '1px' }}
+      >
+        {n}
+      </div>
+      <div className="min-w-0">
+        <h4 className="text-[13px] font-semibold text-ink" style={{ margin: '1px 0 3px' }}>{heading}</h4>
+        {children}
+      </div>
+    </div>
   );
 }
 
-/** Provenance content: content-addressed chain, release, hashes, generator/verifier, notebook, paths. */
-function ProvenanceManifestSection({ p }: { p: ProvenanceBlock }) {
+/** Terse factual method boundaries, rendered INSIDE the relevant numbered step — never an editorial
+ *  caveat block or banner. Compact factual method limits intrinsic to the estimand. */
+function Boundaries({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
   return (
-    <section className="mb-3 border-b border-line pb-3">
-      <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-muted">Provenance</div>
-      <Row label="Release"><Val v={p.release_revision} mono /></Row>
-      <Row label="Raw sha256"><Val v={p.raw_sha256} mono /></Row>
-      <Row label="Canonical"><Val v={p.canonical_sha256} mono /></Row>
-      <Row label="Generator"><Val v={p.generator_status} /></Row>
-      <Row label="Verifier"><Val v={p.verifier_status} /></Row>
-      <Row label="CS notebook">
-        {p.cs_notebook_url ? (
-          <a href={p.cs_notebook_url} className="font-mono text-[11px] text-accent hover:underline">
-            {p.cs_notebook_url} ↗
-          </a>
-        ) : (
-          <span className="text-muted">unavailable</span>
+    <ul className="mt-2 space-y-1 border-l-2 border-line pl-3 text-[11px] leading-relaxed text-ink-2">
+      {items.map((l) => (
+        <li key={l}>{l}</li>
+      ))}
+    </ul>
+  );
+}
+
+/** Route-specific narrative headings for the estimand + masks steps (derived from the stage label),
+ *  so each downstream tab reads as its own method — same bound fields, no duplicated prose. */
+const STEP_HEADINGS: Record<string, { estimand: string; masks: string }> = {
+  Targets: { estimand: 'Direct & temporal effects', masks: 'Target-guide masks & eligibility' },
+  Pathways: { estimand: 'Ranked enrichment & signature convergence', masks: 'Gene-set coverage & namespace' },
+  Drugs: { estimand: 'Direction-aware drug linking', masks: 'Target identity & mechanism evidence' },
+  'PK & Safety': { estimand: 'Brain-exposure framework', masks: 'Label evidence & safety' },
+};
+function stepHeadings(stageLabel: string): { estimand: string; masks: string } {
+  return STEP_HEADINGS[stageLabel] ?? { estimand: 'Estimand', masks: 'Masks & QC' };
+}
+
+// Strict, ANCHORED admission vocabulary — the WHOLE normalized verifier status must equal one of
+// these exact tokens. Substring matching is unsafe ("not passed" contains "pass"; "unverified"
+// contains "verified"), so a phrase like "not passed" / "pending independent verification" / "failed"
+// is NOT admitted. A future manifest binds the exact admitted token its schema specifies.
+const ADMITTED_VERIFIER_TOKENS = new Set(['admit', 'admitted', 'pass', 'passed', 'verified', 'ok']);
+/** True only when the verifier status is EXACTLY an admitted token (normalized, whole-string). */
+export function isAdmittedVerifier(status: string | null): boolean {
+  if (!status) return false;
+  return ADMITTED_VERIFIER_TOKENS.has(status.trim().toLowerCase());
+}
+
+/** Whether a COMPLETE admitted-run identity is bound. FAIL-CLOSED: every required run field must be
+ *  present (release + raw + canonical + generator + an ADMITTED verifier + nonempty artifacts +
+ *  method-code hash + environment + last_run). Any partial/stale subset — or a verifier that is not
+ *  an explicit pass/admission — still renders the ONE unbound status row, never a partial run claim.
+ *  When false the drawer shows the method DEFINITION + References only. */
+export function isRunBound(m: MethodsBlock, p: ProvenanceBlock): boolean {
+  return !!(
+    p.release_revision &&
+    p.raw_sha256 &&
+    p.canonical_sha256 &&
+    p.generator_status &&
+    isAdmittedVerifier(p.verifier_status) &&
+    p.artifact_paths.length > 0 &&
+    m.method_code_sha256 &&
+    m.environment &&
+    m.last_run_utc
+  );
+}
+
+/** The one terse status shown (in place of the run-provenance rows) when no admitted bundle is bound. */
+const UNBOUND_STATUS: Record<string, string> = {
+  Targets: 'No admitted Stage-2 run bundle bound',
+  Pathways: 'No admitted Stage-2 pathway bundle bound',
+  Drugs: 'No admitted Stage-3 bundle bound',
+  'PK & Safety': 'No admitted Stage-4 bundle bound',
+};
+function unboundStatus(stageLabel: string): string {
+  return UNBOUND_STATUS[stageLabel] ?? 'No admitted result bundle bound';
+}
+
+/** A definition Row that renders ONLY when its value is present — a null definition field is omitted
+ *  entirely, never filled with an "unavailable" row. */
+function DefRow({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
+  if (value === null || value === '') return null;
+  return <Row label={label}><Val v={value} mono={mono} /></Row>;
+}
+
+/** Methods content as numbered teal steps (Stage-1 grammar). Keeps the label/value `.grid` Row for
+ *  every PRESENT field the acceptance harness reads; null definition fields are omitted; run-status
+ *  detail (code/env/last-run/reproduce) renders only when a bound admitted bundle supplies it.
+ *  Step 2/3 headings are route-specific (derived from stageLabel). */
+function MethodsSteps({ m, stageLabel, runBound }: { m: MethodsBlock; stageLabel: string; runBound: boolean }) {
+  const h = stepHeadings(stageLabel);
+  return (
+    <>
+      <Step n="1" heading="Data source">
+        <DefRow label="Data / input" value={m.data_input} />
+        <DefRow label="Source" value={m.source_tissue} />
+      </Step>
+      <Step n="2" heading={h.estimand}>
+        <DefRow label="Estimand" value={m.estimand} />
+        <Boundaries items={m.limitations} />
+      </Step>
+      <Step n="3" heading={h.masks}>
+        <DefRow label="Masks / QC" value={m.masks_qc} />
+      </Step>
+      <Step n="4" heading="Upstream model">
+        <DefRow label="Upstream" value={m.upstream_model} />
+      </Step>
+      <Step n="5" heading="Method">
+        <DefRow label="Method" value={m.method_id} mono />
+        {/* run-status detail only when a bound admitted bundle supplies it */}
+        {runBound && <DefRow label="Code sha256" value={m.method_code_sha256} mono />}
+        {runBound && <DefRow label="Environment" value={m.environment} mono />}
+        {runBound && <DefRow label="Last run UTC" value={m.last_run_utc} mono />}
+        {m.reproduce_command && (
+          <Row label="Reproduce"><CopyCommand cmd={m.reproduce_command} /></Row>
         )}
-      </Row>
-      <Row label="Artifacts">
-        {p.artifact_paths.length === 0 ? (
-          <span className="text-muted">unavailable</span>
-        ) : (
-          <ul className="space-y-1">
-            {p.artifact_paths.map((a) => (
-              <li key={a}><Mono>{a}</Mono></li>
-            ))}
-          </ul>
-        )}
-      </Row>
-      <div className="mb-1 mt-2 font-mono text-[10px] uppercase tracking-wide text-muted">Source chain</div>
-      {p.source_chain.length === 0 ? (
-        <p className="text-[12px] text-muted">unavailable</p>
-      ) : (
-        <ul className="space-y-2">
-          {p.source_chain.map((s) => (
-            <li key={`${s.label}:${s.record_id}`} className="text-[12px]">
-              <span className="font-semibold text-ink">{s.label}</span> <Mono>{s.record_id}</Mono>
-              <div className="text-[11px] text-muted">
-                {s.license ?? 'license unavailable'}
-                {s.retrieval_utc ? ` · ${s.retrieval_utc}` : ''}
-              </div>
-              {s.url && (
-                <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-[11px] text-accent hover:underline"
-                >
-                  {s.url} ↗
+      </Step>
+    </>
+  );
+}
+
+/** Provenance & status step + a References block — all inside data-section="provenance". Unbound:
+ *  ONE terse route-specific status row. Bound: the real release / hash / generator / verifier / CS /
+ *  artifact rows the admitted bundle supplies (nulls still omitted). */
+function ProvenanceSteps({ p, n, stageLabel, runBound }: { p: ProvenanceBlock; n: string; stageLabel: string; runBound: boolean }) {
+  return (
+    <>
+      <Step n={n} heading="Provenance &amp; status">
+        {runBound ? (
+          <>
+            <DefRow label="Release" value={p.release_revision} mono />
+            <DefRow label="Raw sha256" value={p.raw_sha256} mono />
+            <DefRow label="Canonical" value={p.canonical_sha256} mono />
+            <DefRow label="Generator" value={p.generator_status} />
+            <DefRow label="Verifier" value={p.verifier_status} />
+            {p.cs_notebook_url && (
+              <Row label="CS notebook">
+                <a href={p.cs_notebook_url} className="font-mono text-[11px] text-accent hover:underline">
+                  {p.cs_notebook_url} ↗
                 </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+              </Row>
+            )}
+            {p.artifact_paths.length > 0 && (
+              <Row label="Artifacts">
+                <ul className="space-y-1">
+                  {p.artifact_paths.map((a) => (
+                    <li key={a}><Mono>{a}</Mono></li>
+                  ))}
+                </ul>
+              </Row>
+            )}
+          </>
+        ) : (
+          <Row label="Status"><span className="text-ink-2">{unboundStatus(stageLabel)}</span></Row>
+        )}
+      </Step>
+      <References sources={p.source_chain} />
+    </>
+  );
+}
+
+/** References block — Stage-1 .ppapers grammar: exact validated source links + each source's hashes.
+ *  A source-hash subfield is rendered ONLY when present (no "raw unavailable · canonical unavailable"
+ *  filler). Rendered as <li> inside data-section="provenance" so the harness reads the source records. */
+function References({ sources }: { sources: SourceChainLink[] }) {
+  // Zero-filler: with no bound sources (e.g. the pre-resolution fallback) render NOTHING, never
+  // an "unavailable" row. Stage-1 .ppapers grammar: pt 9px, heading mb 10px, items 6px apart.
+  if (sources.length === 0) return null;
+  return (
+    <div className="pt-[9px]">
+      <div className="mb-[10px] font-mono text-[10px] font-semibold uppercase tracking-wide text-muted">References</div>
+      <ul className="space-y-[6px]">
+        {sources.map((s) => (
+          <li key={`${s.label}:${s.record_id}`} className="text-[12px]">
+            {s.url ? (
+              <a href={s.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">
+                {s.label} · {s.record_id} ↗
+              </a>
+            ) : (
+              <span>
+                <span className="font-semibold text-ink">{s.label}</span> · <Mono>{s.record_id}</Mono>
+              </span>
+            )}
+            {(s.license || s.retrieval_utc) && (
+              <div className="mt-0.5 text-[11px] text-muted">
+                {s.license ?? ''}
+                {s.license && s.retrieval_utc ? ' · ' : ''}
+                {s.retrieval_utc ?? ''}
+              </div>
+            )}
+            {(s.raw_sha256 || s.canonical_sha256) && (
+              <div className="mt-0.5 text-[10.5px] leading-relaxed text-ink-2">
+                {s.raw_sha256 && (<><span className="text-muted">raw</span> <Mono>{s.raw_sha256}</Mono></>)}
+                {s.raw_sha256 && s.canonical_sha256 ? ' · ' : ''}
+                {s.canonical_sha256 && (<><span className="text-muted">canonical</span> <Mono>{s.canonical_sha256}</Mono></>)}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -266,43 +391,50 @@ export function ProvenanceDrawer({
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        // Visible h2 is just "Methods & provenance"; route context lives in the dialog accessible
+        // name (+ the sr-only data-stage-label) and the route-specific body content.
+        aria-label={`${title} — methods and provenance`}
         aria-hidden={!open}
         inert={!open}
-        className={`fixed right-0 top-0 z-50 flex h-full w-[560px] max-w-[94vw] flex-col rounded-l-2xl bg-surface shadow-drawer transition-transform duration-300 ease-out ${
+        className={`fixed right-0 top-0 z-50 flex h-full w-[600px] max-w-[94vw] flex-col rounded-l-2xl bg-surface shadow-drawer transition-transform duration-[340ms] ease-[cubic-bezier(.4,0,.2,1)] ${
           open ? 'translate-x-0' : 'translate-x-[102%]'
         }`}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-3">
-          <div>
-            <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-muted">
-              Methods &amp; provenance
-            </p>
-          </div>
+        <header className="flex items-start justify-between gap-[10px] border-b border-line px-5 pt-[11px] pb-[9px]">
+          {/* Stage-1 parity: ONE 16px/600/1.2 title "Methods & provenance" — no second visible line.
+              Route context is semantic only: the sr-only stage label (harness + a11y) + the dialog
+              aria-label + the route-specific body content. */}
+          <h2 className="text-[16px] font-semibold leading-[1.2] text-ink">Methods &amp; provenance</h2>
+          <span className="sr-only" data-stage-label>{title}</span>
           <button
             ref={closeRef}
             onClick={onClose}
             aria-label="Close methods and provenance"
-            className="flex h-7 w-7 flex-none items-center justify-center rounded-lg border border-line bg-sunken text-ink-2 transition-colors hover:border-line-strong hover:bg-line hover:text-ink"
+            className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[8px] bg-sunken text-[14px] text-ink-2 transition-colors hover:bg-line hover:text-ink"
           >
             ✕
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-[2px] pb-[12px]">
           {selection && <SelectionSection selection={selection} />}
 
           {methods && (
             <>
-              <div className="mb-3 text-[13px] font-semibold text-ink" data-stage-label>
-                {methods.stage_label}
-              </div>
               <div ref={methodsRef} data-section="methods">
-                <MethodsSection m={methods.methods} />
+                <MethodsSteps
+                  m={methods.methods}
+                  stageLabel={methods.stage_label}
+                  runBound={isRunBound(methods.methods, methods.provenance)}
+                />
               </div>
               <div ref={provRef} data-section="provenance">
-                <ProvenanceManifestSection p={methods.provenance} />
+                <ProvenanceSteps
+                  p={methods.provenance}
+                  n="6"
+                  stageLabel={methods.stage_label}
+                  runBound={isRunBound(methods.methods, methods.provenance)}
+                />
               </div>
             </>
           )}
@@ -412,11 +544,7 @@ export function ProvenanceDrawer({
             </section>
           )}
 
-          {methods || provenance || selection || (notes && notes.length > 0) ? (
-            <section className="mt-4 border-t border-line pt-3">
-              <Row label="Claude Science role">provenance trace</Row>
-            </section>
-          ) : (
+          {!methods && !provenance && !selection && !(notes && notes.length > 0) && (
             <p className="text-[12px] text-muted">No provenance available.</p>
           )}
         </div>

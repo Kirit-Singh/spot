@@ -1,8 +1,9 @@
 // The ONE contextual header slide-out drawer, per active downstream tab. Clicking a tab then
-// Methods & provenance opens the same drawer geometry with THAT stage's content — no route
-// change. Production shows "unavailable" (never a fixture); ?demo=1 fills it synthetically.
+// Methods & provenance opens the same drawer geometry with THAT stage's content — no route change.
+// Production-only: no demo/fixture route. Unbound routes show ONE terse route status and zero
+// "unavailable" filler (the resolved-manifest invariant); ?demo=1 reveals nothing synthetic.
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { StageIsland } from '../StageIsland';
 import type { PageKey } from '../pages';
@@ -24,8 +25,9 @@ function renderStage(page: PageKey, subtitle: string) {
   );
 }
 
-function openDrawer(action: 'Methods' | 'Provenance' = 'Methods') {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(action) }));
+// One combined header action on every route (Stage-1 parity: single "Methods & provenance").
+function openDrawer() {
+  fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/i }));
   return screen.getByRole('dialog');
 }
 
@@ -46,26 +48,23 @@ describe('contextual Methods & Provenance drawer', () => {
       const { unmount } = renderStage(page, label);
       const dialog = openDrawer();
       expect(dialog.querySelector('[data-stage-label]')?.textContent).toBe(label); // stage-specific
-      expect(within(dialog).getByText('Methods')).toBeInTheDocument();
-      expect(within(dialog).getByText('Provenance')).toBeInTheDocument();
+      expect(dialog.querySelector('[data-section="methods"]')).toBeTruthy();
+      expect(dialog.querySelector('[data-section="provenance"]')).toBeTruthy();
       expect(window.location.href).toBe(before); // NO navigation — one shell drawer
       unmount();
     }
   });
 
-  it('BOTH the Methods and the Provenance header actions open the same one drawer', () => {
+  it('the ONE combined action opens the single drawer with BOTH sections (no separate provenance action)', () => {
     goto('/02_page.html');
     renderStage('targets', 'Targets');
-    // Methods action
-    const d1 = openDrawer('Methods');
-    expect(within(d1).getByText('Methods')).toBeInTheDocument();
-    expect(within(d1).getByText('Provenance')).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: 'Escape' });
-    // Provenance action opens the same drawer (both sections present)
-    const d2 = openDrawer('Provenance');
-    expect(within(d2).getByText('Provenance')).toBeInTheDocument();
-    expect(within(d2).getByText('Methods')).toBeInTheDocument();
-    expect(d2).toBe(d1); // the same single shell drawer node
+    // Stage-1 parity: exactly one header action, no separate "Provenance" button.
+    expect(screen.queryByRole('button', { name: /^Provenance$/ })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Methods & provenance/i })).toHaveLength(1);
+    const d = openDrawer();
+    expect(d.querySelector('[data-section="methods"]')).toBeTruthy();
+    expect(d.querySelector('[data-section="provenance"]')).toBeTruthy(); // both sections, one drawer
+    // (References render only with bound sources — asserted on the resolved manifest elsewhere)
   });
 
   it('states the source-tissue fact in the drawer (stage-appropriate, not a canvas banner)', () => {
@@ -86,38 +85,58 @@ describe('contextual Methods & Provenance drawer', () => {
     ).toBeInTheDocument();
   });
 
-  it('MINOR 6: Drug link states its upstream CD4 source fact (not "unavailable")', () => {
+  it('MINOR 6: Drugs states its upstream CD4 source fact (not "unavailable")', () => {
     goto('/02_page.html');
-    renderStage('drugs', 'Drug link');
+    renderStage('drugs', 'Drugs');
     expect(
       within(openDrawer()).getByText(/Marson primary-human-CD4 dataset/),
     ).toBeInTheDocument();
   });
 
-  it('MINOR 7: the Provenance action opens a neutrally-titled drawer (not "— methods")', () => {
-    goto('/02_page.html');
-    renderStage('targets', 'Targets');
-    const dialog = openDrawer('Provenance');
-    const title = within(dialog).getByRole('heading', { level: 2 }).textContent ?? '';
-    expect(title).toMatch(/— methods & provenance$/); // neutral, not "— methods"
-    expect(title.endsWith('— methods')).toBe(false);
-  });
-
-  it('production shows "unavailable" values and never a fixture (values never invented)', () => {
+  it('Stage-1 header: ONE "Methods & provenance" title; route identity is semantic (data-stage-label + aria-label) + body', () => {
     goto('/02_page.html');
     renderStage('targets', 'Targets');
     const dialog = openDrawer();
-    expect(within(dialog).getAllByText('unavailable').length).toBeGreaterThan(3);
+    const h2 = within(dialog).getByRole('heading', { level: 2 });
+    expect(h2.textContent).toBe('Methods & provenance'); // single title, NO second route line
+    expect(h2).not.toHaveAttribute('data-stage-label'); // route is not on the visible title
+    // route identity: sr-only stage label + dialog aria-label + route-specific body content
+    expect(dialog.querySelector('[data-stage-label]')?.textContent).toBe('Targets');
+    expect(dialog.getAttribute('aria-label')).toContain('Targets');
+    expect(within(dialog).getByText('Direct & temporal effects')).toBeInTheDocument(); // route-specific
+  });
+
+  it('pre-resolution fallback obeys zero-filler: an immediately-opened drawer has zero literal "unavailable"', () => {
+    goto('/02_page.html');
+    renderStage('targets', 'Targets');
+    const dialog = openDrawer(); // opened BEFORE the async manifest resolves (reads the fallback)
+    expect(within(dialog).queryAllByText('unavailable')).toHaveLength(0); // References returns null when empty
+    expect(within(dialog).getAllByText('No admitted Stage-2 run bundle bound')).toHaveLength(1);
+  });
+
+  it('CLEAN unbound: exactly one route status row, never a fixture (strict zero-unavailable is asserted on the resolved manifest)', () => {
+    goto('/02_page.html');
+    renderStage('targets', 'Targets');
+    const dialog = openDrawer();
+    expect(within(dialog).getAllByText('No admitted Stage-2 run bundle bound')).toHaveLength(1);
     expect(within(dialog).queryByText(/fixture/i)).toBeNull();
     expect(within(dialog).queryByText(/run_screen --lane fixture/)).toBeNull();
   });
 
-  it('?demo=1 fills the drawer from the synthetic manifest (explicit gate) incl. a copyable reproduce command', () => {
+  it('the public ?demo=1 route is RETIRED — the RESOLVED drawer is the honest production manifest (one status, zero filler)', async () => {
     goto('/02_page.html?demo=1');
     renderStage('targets', 'Targets');
-    const dialog = openDrawer();
-    expect(within(dialog).getByText('target_masked_measured_effect_screen.fixture')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /Copy reproduce command/ })).toBeInTheDocument();
+    // Await the ASYNC real manifest into the drawer (re-click until method_id shows) — this proves we
+    // are NOT asserting on the pre-resolution fallback.
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: /Methods & provenance/i }));
+      expect(within(screen.getByRole('dialog')).getByText(/masked_program_projection/)).toBeInTheDocument();
+    });
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText(/fixture/i)).toBeNull(); // no synthetic fixture even with ?demo=1
+    expect(within(dialog).queryByText('target_masked_measured_effect_screen.fixture')).toBeNull();
+    expect(within(dialog).getAllByText('No admitted Stage-2 run bundle bound')).toHaveLength(1);
+    expect(within(dialog).queryAllByText('unavailable')).toHaveLength(0); // zero filler on the resolved manifest
   });
 
   it('keyboard/focus/escape: focuses close on open, aria-modal, Escape closes', () => {

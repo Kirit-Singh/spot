@@ -15,7 +15,7 @@ export function TopBar({
   subtitle: string;
   subtitleNode?: ReactNode;
   onClearSelection?: () => void;
-  onOpenMethods: (section?: DrawerSection) => void;
+  onOpenMethods: (section?: DrawerSection, invoker?: HTMLElement) => void;
 }) {
   // Match the frozen Programs title exactly: Newsreader 16px / weight 500 / ink.
   const titleCls = 'truncate font-editorial text-[16px] font-medium leading-none text-ink';
@@ -42,23 +42,28 @@ export function TopBar({
           )}
         </span>
       </div>
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-2.5">
+        {/* ONE combined action, matching Stage-1's #provbtn "Methods & provenance". A single
+            click opens the active-page contextual drawer focused at Methods, with both the
+            Methods and Provenance sections visible. No separate provenance action. */}
         <button
           type="button"
-          onClick={() => onOpenMethods('methods')}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-ink-2 hover:border-accent hover:text-accent"
+          // Retain the accessible name even when the text label is hidden below 880px (Stage-1
+          // parity: compact info icon on mobile). getByRole/name + the harness textContent match
+          // both still resolve "Methods & provenance".
+          aria-label="Methods & provenance"
+          // Pass the button element itself (event.currentTarget) as the invoker, so focus is
+          // restored to THIS button on close even when the drawer is opened programmatically
+          // (a JS .click() does not move document.activeElement to the button). (U15)
+          onClick={(e) => onOpenMethods('methods', e.currentTarget)}
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-ink-2 hover:border-accent hover:text-accent"
         >
           <span className="flex h-[15px] w-[15px] items-center justify-center rounded-full border border-current text-[9px] font-bold italic">
             i
           </span>
-          Methods
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenMethods('provenance')}
-          className="inline-flex items-center rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-ink-2 hover:border-accent hover:text-accent"
-        >
-          Provenance
+          {/* Stage-1 parity: hide the text label below 880px, keep the icon. Text stays in the DOM
+              (display:none) so textContent-based invoker matching is unaffected. */}
+          <span className="hidden min-[880px]:inline">Methods &amp; provenance</span>
         </button>
       </div>
     </header>

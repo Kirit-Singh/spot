@@ -1,31 +1,34 @@
 // Data-adapter (repository) layer. Components depend ONLY on this interface and
 // never learn where artifacts come from, nor which namespace they belong to.
 //
-// Three strictly separated worlds, decided in code — never by editing a data field:
-//   - fixture           : direct entry with no live selection → synthetic preview
-//   - research_only      : a Stage-1 research-bridge selection in localStorage
-//   - production (future): a separate source; production_gate_passed=false can never
-//                          reach it, so it is not constructible here today.
+// Two strictly separated worlds, decided in code — never by editing a data field:
+//   - demo (?demo=1) : synthetic preview artifacts (unmistakably synthetic) — the ONLY
+//                      place fixtures are allowed.
+//   - production      : the AUTHORITATIVE Stage-1 v3 selection contract in storage
+//                      (spot.stage01_selection.v3), read FAIL-CLOSED. A v1 object, a
+//                      raw non-v3 object, or a structurally-broken v3 is REJECTED — it
+//                      never falls back to a v1 read, a stale value, or fixture results.
 //
-// A research selection with no matching artifact is `not_generated` — the shell must
-// NEVER fall back to fixture results beneath a real research selection.
+// A verified v3 selection is real, but binding downstream Stage-2/3/4 analyses to it is
+// held (no v3 artifact producer yet), so every stage is `not_generated` — the shell must
+// NEVER fall back to fixture results beneath a real selection.
 
 import type { Namespace } from '../domain/common';
 import type { StageSelection } from '../domain/selection';
 import type { Stage2Artifact } from '../domain/stage2';
 import type { Stage3Artifact } from '../domain/stage3';
 import type { Stage4Artifact } from '../domain/stage4';
-import { AdapterError } from '../adapters/errors';
 import { parseSelection } from '../adapters/selectionAdapter';
 import { parseStage2 } from '../adapters/stage2Adapter';
 import { parseStage3 } from '../adapters/stage3Adapter';
 import { parseStage4 } from '../adapters/stage4Adapter';
+import type { SelectionV3 } from '../adapters/selectionV3Adapter';
 import { selectionFixtureRaw } from '../fixtures/selection.fixture';
 import { stage2FixtureRaw } from '../fixtures/stage2.fixture';
 import { stage3FixtureRaw } from '../fixtures/stage3.fixture';
 import { stage4FixtureRaw } from '../fixtures/stage4.fixture';
 import type { ArtifactSource } from './source';
-import { SELECTION_KEY, STAGE2_KEY, STAGE3_KEY, STAGE4_KEY } from './source';
+import { SELECTION_V3_KEY } from './source';
 
 /** A stage artifact is either loaded, not-yet-generated, or rejected (with a reason). */
 export type ArtifactSlot<T> =
@@ -35,7 +38,8 @@ export type ArtifactSlot<T> =
 
 // empty  — no selection, no demo: honest workflow scaffold, no data.
 // demo   — explicit demo gate: synthetic example artifacts (unmistakably synthetic).
-// research — a real Stage-1 research selection in localStorage.
+// research — a real Stage-1 v3 selection in storage.
+// rejected_selection — a present selection that failed the fail-closed v3 gate.
 export type RepositoryMode = 'empty' | 'demo' | 'research' | 'rejected_selection';
 
 export interface BuildOptions {
@@ -46,8 +50,10 @@ export interface BuildOptions {
 export interface SpotRepository {
   readonly namespace: Namespace;
   readonly mode: RepositoryMode;
-  /** The ingested selection context, or null when the selection was rejected. */
+  /** The legacy StageSelection context (demo/fixture only); null under a v3 selection. */
   readonly selection: StageSelection | null;
+  /** The AUTHORITATIVE parsed v3 selection, or null when none is bound / it was rejected. */
+  readonly selectionV3: SelectionV3 | null;
   /** Why a present selection was rejected (mode === 'rejected_selection'). */
   readonly selectionRejection: string | null;
   getStage2(): ArtifactSlot<Stage2Artifact>;
@@ -56,7 +62,6 @@ export interface SpotRepository {
 }
 
 const loaded = <T,>(artifact: T): ArtifactSlot<T> => ({ status: 'loaded', artifact });
-const rejected = <T,>(reason: string): ArtifactSlot<T> => ({ status: 'rejected', reason });
 const notGenerated = <T,>(): ArtifactSlot<T> => ({ status: 'not_generated' });
 
 function parseJson(raw: string): { ok: true; value: unknown } | { ok: false; reason: string } {
@@ -68,25 +73,25 @@ function parseJson(raw: string): { ok: true; value: unknown } | { ok: false; rea
 }
 
 /**
- * Build the repository from a source. The mode is decided by whether a Stage-1
- * selection is present and valid — this is the single place that binds a namespace.
+ * Build the repository from a source. The mode is decided by whether a Stage-1 v3
+ * selection is present and passes the fail-closed schema gate — this is the single
+ * place that binds a namespace.
  */
 export function buildRepository(source: ArtifactSource, opts: BuildOptions = {}): SpotRepository {
-  const selRaw = source.read(SELECTION_KEY);
+  const selRaw = source.read(SELECTION_V3_KEY);
   // No selection: honest empty scaffold by default; synthetic demo only behind the gate.
   if (selRaw === null) return opts.demo ? demoRepository() : emptyRepository();
 
   const parsed = parseJson(selRaw);
   if (!parsed.ok) return rejectedSelectionRepository(parsed.reason);
 
-  // The research bridge is bound to research_only in code. A selection declaring any
-  // other namespace (fixture / production) is rejected — production can never enter here.
-  try {
-    const selection = parseSelection(parsed.value, 'research_only');
-    return researchRepository(selection, source);
-  } catch (err) {
-    return rejectedSelectionRepository(describe(err));
+  // FAIL-CLOSED v3 gate: only the authoritative v3 contract is accepted. A v1 object, a raw
+  // non-v3 object, or a structurally-broken v3 is rejected outright — never a v1/raw fallback.
+  const selectionV3 = shallowSelectionV3(parsed.value);
+  if (selectionV3 === null) {
+    return rejectedSelectionRepository('not a valid spot.stage01_selection.v3 contract');
   }
+  return researchV3Repository(selectionV3);
 }
 
 /** Demo/example repository — synthetic artifacts, only reachable behind the demo gate. */
@@ -99,17 +104,13 @@ export function createFixtureRepository(): SpotRepository {
   return demoRepository();
 }
 
-function describe(err: unknown): string {
-  if (err instanceof AdapterError) return `${err.code}: ${err.message}`;
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** Honest empty scaffold: no selection, no data. Stages render their output shape only. */
 function emptyRepository(): SpotRepository {
   return {
     namespace: 'research_only',
     mode: 'empty',
     selection: null,
+    selectionV3: null,
     selectionRejection: null,
     getStage2: notGenerated,
     getStage3: notGenerated,
@@ -122,6 +123,7 @@ function demoRepository(): SpotRepository {
     namespace: 'fixture',
     mode: 'demo',
     selection: parseSelection(selectionFixtureRaw, 'fixture'),
+    selectionV3: null,
     selectionRejection: null,
     getStage2: () => loaded(parseStage2(stage2FixtureRaw, 'fixture')),
     getStage3: () => loaded(parseStage3(stage3FixtureRaw, 'fixture')),
@@ -130,11 +132,12 @@ function demoRepository(): SpotRepository {
 }
 
 function rejectedSelectionRepository(reason: string): SpotRepository {
-  const reject = <T,>(): ArtifactSlot<T> => rejected('selection rejected');
+  const reject = <T,>(): ArtifactSlot<T> => ({ status: 'rejected', reason: 'selection rejected' });
   return {
     namespace: 'research_only',
     mode: 'rejected_selection',
     selection: null,
+    selectionV3: null,
     selectionRejection: reason,
     getStage2: reject,
     getStage3: reject,
@@ -142,61 +145,79 @@ function rejectedSelectionRepository(reason: string): SpotRepository {
   };
 }
 
-function researchRepository(selection: StageSelection, source: ArtifactSource): SpotRepository {
-  // Parse each stage once; downstream stages bind to the loaded upstream artifact-id.
-  const s2 = loadStage2(source.read(STAGE2_KEY), selection);
-  const upstream2 = s2.status === 'loaded' ? s2.artifact.provenance.artifact_id : null;
-  const s3 = loadDownstream(source.read(STAGE3_KEY), (v) => parseStage3(v, 'research_only'), upstream2);
-  const upstream3 = s3.status === 'loaded' ? s3.artifact.provenance.artifact_id : null;
-  const s4 = loadDownstream(source.read(STAGE4_KEY), (v) => parseStage4(v, 'research_only'), upstream3);
-
+/**
+ * A verified v3 selection. It is real and exposed via `selectionV3`, but downstream
+ * binding is held (no v3 artifact producer), so every stage is not_generated — NEVER
+ * a fixture. `selection` (the legacy StageSelection) stays null; the v3 is the carrier.
+ */
+function researchV3Repository(selectionV3: SelectionV3): SpotRepository {
   return {
     namespace: 'research_only',
     mode: 'research',
-    selection,
+    selection: null,
+    selectionV3,
     selectionRejection: null,
-    getStage2: () => s2,
-    getStage3: () => s3,
-    getStage4: () => s4,
+    getStage2: notGenerated,
+    getStage3: notGenerated,
+    getStage4: notGenerated,
   };
 }
 
-/** Load + bind a research Stage-2 artifact to its selection (id, namespace, contrast). */
-function loadStage2(raw: string | null, selection: StageSelection): ArtifactSlot<Stage2Artifact> {
-  if (raw === null) return notGenerated();
-  const parsed = parseJson(raw);
-  if (!parsed.ok) return rejected(parsed.reason);
-  let artifact: Stage2Artifact;
-  try {
-    artifact = parseStage2(parsed.value, 'research_only');
-  } catch (err) {
-    return rejected(describe(err));
-  }
-  const s = artifact.selection;
-  if (s.selection_id !== selection.selection_id) return rejected('selection_id mismatch');
-  if (s.namespace !== selection.namespace) return rejected('namespace mismatch');
-  if (s.contrast_id !== selection.contrast_id) return rejected('contrast_id mismatch');
-  return loaded(artifact);
-}
+const s = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+const dir = (v: unknown): 'high' | 'low' | null => (v === 'high' || v === 'low' ? v : null);
 
-/** Load + bind a downstream (Stage-3/4) artifact to its upstream artifact-id. */
-function loadDownstream<T extends { provenance: { upstream_ref: { artifact_id: string } | null } }>(
-  raw: string | null,
-  parse: (v: unknown) => T,
-  upstreamArtifactId: string | null,
-): ArtifactSlot<T> {
-  if (raw === null) return notGenerated();
-  const parsed = parseJson(raw);
-  if (!parsed.ok) return rejected(parsed.reason);
-  let artifact: T;
-  try {
-    artifact = parse(parsed.value);
-  } catch (err) {
-    return rejected(describe(err));
-  }
-  if (upstreamArtifactId === null) return rejected('no matching upstream artifact to bind to');
-  if (artifact.provenance.upstream_ref?.artifact_id !== upstreamArtifactId) {
-    return rejected('upstream artifact-id mismatch');
-  }
-  return loaded(artifact);
+/**
+ * Sync shallow projection of a spot.stage01_selection.v3 object into {@link SelectionV3}.
+ * No hash recompute (that is the async {@link parseSelectionV3}) — it only schema-gates and
+ * shape-checks. Returns null for anything that is not the v3 schema or is structurally
+ * incomplete, so {@link buildRepository} can fail closed.
+ */
+function shallowSelectionV3(value: unknown): SelectionV3 | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const top = value as Record<string, unknown>;
+  if (top.schema_version !== 'spot.stage01_selection.v3') return null;
+
+  const cc = top.canonical_content;
+  if (typeof cc !== 'object' || cc === null) return null;
+  const ccr = cc as Record<string, unknown>;
+  const A = ccr.A;
+  const B = ccr.B;
+  if (typeof A !== 'object' || A === null || typeof B !== 'object' || B === null) return null;
+  const Ar = A as Record<string, unknown>;
+  const Br = B as Record<string, unknown>;
+
+  const aId = s(Ar.program_id);
+  const aDir = dir(Ar.direction);
+  const bId = s(Br.program_id);
+  const bDir = dir(Br.direction);
+  const selection_id = s(top.selection_id);
+  const estimator_id = s(top.estimator_id);
+  const mode = top.analysis_mode;
+  const exec = top.execution_status;
+  const est = top.estimator_status;
+  const conditions = Array.isArray(ccr.conditions)
+    ? ccr.conditions.filter((c): c is string => typeof c === 'string')
+    : null;
+
+  if (aId === null || aDir === null || bId === null || bDir === null) return null;
+  if (selection_id === null || estimator_id === null || conditions === null) return null;
+  if (mode !== 'within_condition' && mode !== 'temporal_cross_condition') return null;
+  if (exec !== 'ready' && exec !== 'refused' && exec !== 'awaiting_estimator') return null;
+  if (est !== 'available' && est !== 'not_implemented') return null;
+
+  return {
+    selection_id,
+    analysis_mode: mode,
+    execution_status: exec,
+    estimator_id,
+    estimator_status: est,
+    A: { program_id: aId, direction: aDir },
+    B: { program_id: bId, direction: bDir },
+    conditions,
+    registry_scorer_view_sha256: s(ccr.registry_scorer_view_sha256) ?? '',
+    source_h5ad_sha256: s(ccr.source_h5ad_sha256) ?? '',
+    selection_full_sha256: s(top.selection_full_sha256) ?? '',
+    full_contract_content_sha256: s(top.full_contract_content_sha256) ?? '',
+    raw: top,
+  };
 }

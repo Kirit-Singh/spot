@@ -11,22 +11,19 @@ export interface PageDef {
   href: string;
 }
 
+// Conceptual stage numbers: Targets AND Pathways are two VIEWS of the same Stage-2
+// gene-perturbation stage, so both carry '02'. Drugs is 03, PK & Safety is 04. There is
+// no stage 05 in this pipeline. PageKey + href values are stable (routing depends on them).
 export const PAGES: PageDef[] = [
   { key: 'programs', n: '01', label: 'Programs', href: '01_page.html' },
   { key: 'targets', n: '02', label: 'Targets', href: 'targets.html' },
-  { key: 'pathways', n: '03', label: 'Pathways', href: 'pathways.html' },
-  { key: 'drugs', n: '04', label: 'Drugs', href: 'drugs.html' },
-  { key: 'pksafety', n: '05', label: 'PK & Safety', href: 'pksafety.html' },
+  { key: 'pathways', n: '02', label: 'Pathways', href: 'pathways.html' },
+  { key: 'drugs', n: '03', label: 'Drugs', href: 'drugs.html' },
+  { key: 'pksafety', n: '04', label: 'PK & Safety', href: 'pksafety.html' },
 ];
 
-/** Carry the current query (selection thread + ?demo) across page navigations. */
+/** Carry the current query (the Stage-1 selection thread) across page navigations. */
 export function hrefWithSearch(href: string): string {
   const s = typeof window !== 'undefined' ? window.location.search : '';
   return href + s;
-}
-
-/** Explicit demo gate: synthetic data renders only when ?demo=1 is present. */
-export function isDemoGate(): boolean {
-  if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('demo') === '1';
 }
