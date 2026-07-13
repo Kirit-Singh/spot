@@ -3,7 +3,6 @@
   "method_version": "stage1-continuous-v3.0.1",
   "pointer_state": "candidate",
   "pointer_state_reason_codes": [
-    "overlay_release_blocked",
     "panel_provenance_bounded"
   ],
   "stage1_kind": "continuous_measurement_and_generic_selector",
@@ -26,9 +25,25 @@
     "measurement_bundle_lockable": true,
     "measurement_bundle_blocker_codes": [],
     "panel_provenance_status": "PRIMARY_LOCATORS_VERIFIED_BOUNDED",
-    "overlay_release_ok": false,
-    "overlay_deployment_status": "blocked_overlay_gate_false",
-    "app_deployment_ready": false
+    "served_artifact_integrity_ok": true,
+    "overlay_release_fidelity_ok": true,
+    "overlay_release_ok": true,
+    "overlay_deployment_status": "deployable",
+    "app_deployment_ready": true,
+    "app_deployment_reason_codes": [],
+    "app_deployment_derivation": "app_deployment_ready = served_artifact_integrity_ok AND overlay_release_fidelity_ok; DECOUPLED from the frozen historical within-condition selectability outcome (never an input).",
+    "overlay_representativeness_gate": {
+      "ok": false,
+      "n_gate_failures": 1,
+      "gate_ids": [
+        "overlay_composition",
+        "overlay_correlations",
+        "overlay_distributions"
+      ],
+      "role": "descriptive_visualization_representativeness",
+      "blocks_deployment": false,
+      "note": "overlay composition/distributions/correlations representativeness; separate from the overlay==full fidelity that gates deployment, and never blocks continuous scores or generic Stage-2 selection"
+    }
   },
   "historical_validation_source": {
     "artifact": "stage01_selectability_v3.json",
@@ -116,5 +131,5 @@
     "inference_status": "descriptive_only_no_p_q_fdr",
     "active_gate": false
   },
-  "self_canonical_sha256": "3dd581037d704558273139fd0da2e57208715a0cb1ee940a6c7182f61428501b"
+  "self_canonical_sha256": "01b357ff991707ed829963f24c8b3c73961db351d15b21c8c5381b1bba75738d"
 }

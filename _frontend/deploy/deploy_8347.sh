@@ -43,14 +43,15 @@ TARGET_DATA="$TARGET_ROOT/data"
 REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 
 # Pinned Stage-1 data baseline (verified reproducible; see coordinator handoff).
-# Baseline pinned to the GO Stage-1 contract 539431d (off 184211a): adds the re-synced temporal estimator
-# identity (343f20db) + the required biology-only question_id emission + the v3 selection schema update.
-# The canonical base (01_programs/app/01_page.html @ 539431d) still carries the five-route nav + sole
-# Methods & provenance drawer + hash fallback and is BYTE-IDENTICAL to the served import (both 9fb4f282),
-# so the classified 01_page diff below is EMPTY. Only stage01_selection_bundle.json changed under data/, so
-# the 22-file digest moves to 9c7b9ec0; the four scorer invariants stay byte-identical (verified).
-STAGE1_DATA_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"
-STAGE1_DATA_DIGEST="9c7b9ec0d623275c9ee8096db8dca63d8e3149ccebf1fa61eb0b4326ca3cfd15"
+# Baseline pinned to the GO Stage-1 contract 539431d PLUS the authorized app-deployment-readiness repair:
+# gen_stage1_t8 now DERIVES app_deployment_ready + overlay_release_ok from verified served-artifact
+# integrity + overlay==full fidelity (NOT the historical 0-of-33 selectability), so the regenerated
+# stage01_current.json + stage01_release_manifest.json move the 22-file digest to 5fe59f99. The four scorer
+# invariants + the immutable validation stay byte-identical; the canonical 01_page.html is unchanged.
+# STAGE1_DATA_COMMIT must be set to the deployed release commit (release/spot-final HEAD) that carries this
+# regenerated data — it is no longer 539431d (data changed). Set it at deploy time from the served checkout.
+STAGE1_DATA_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"   # BUMP to release/spot-final HEAD before deploy (data regenerated past 539431d)
+STAGE1_DATA_DIGEST="5fe59f99e33d1526e2ba4933dc210bd199917e306daf302f156b742926886cbb"
 STAGE1_PAGE_BASE_SHA="9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1"   # pin:01_page.html base @ 539431d (== import; question_id-emitting page keeps the classified UI + hash fallback)
 STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1}"  # nav-retargeted import — byte-identical to the 539431d canonical base
 INVARIANTS=(

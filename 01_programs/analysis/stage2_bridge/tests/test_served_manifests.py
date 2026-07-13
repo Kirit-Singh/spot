@@ -19,9 +19,12 @@ CURRENT = os.path.join(DATA, "stage01_current.json")
 FULLVERIFY = os.path.join(ANALYSIS, "stage01_full_release_verification.json")
 
 
-def test_real_stage1_gate_declares_not_deployed():
-    assert vsm.declared_deployed(json.load(open(GATE))) is False       # app_deployment_ready / overlay_release_ok false
-    assert vsm.declared_deployed(json.load(open(CURRENT))) is False
+def test_real_stage1_gate_declares_deployed_after_readiness_repair():
+    # After the authorized readiness repair the gate DERIVES app_deployment_ready + overlay_release_ok
+    # from verified served-artifact integrity + overlay==full fidelity (NOT the historical selectability),
+    # so both served gate manifests now declare DEPLOYED — and agree with each other.
+    assert vsm.declared_deployed(json.load(open(GATE))) is True
+    assert vsm.declared_deployed(json.load(open(CURRENT))) is True
 
 
 def test_deployment_manifest_shape_declares_deployed():
@@ -32,19 +35,24 @@ def test_deployment_manifest_shape_declares_deployed():
 
 
 def test_attack_contradictory_pair_refused():
-    gate = json.load(open(GATE))                                       # declares NOT deployed
+    # A gate that declares NOT deployed paired with a deployment manifest that declares deployed is a
+    # release-state contradiction the verifier refuses — independent of the current real gate value.
+    not_deployed_gate = {"release_gates": {"app_deployment_ready": False, "overlay_release_ok": False}}
     deployment = {"release": "spot-8347-same-origin",
                   "files": [{"path": "01_page.html", "sha256": "0" * 64, "class": "built"}]}
-    reason = vsm.contradictory_served_manifests(gate, deployment)
+    reason = vsm.contradictory_served_manifests(not_deployed_gate, deployment)
     assert reason is not None and "contradiction" in reason           # the attack is caught
     ok, reasons = vsm.check_paths(GATE)                                # single manifest -> nothing to contradict
     assert ok
 
 
 def test_consistent_pair_ok():
-    gate = json.load(open(GATE))
-    consistent_gate = {"release_gates": {"app_deployment_ready": False, "overlay_release_ok": False}}
-    assert vsm.contradictory_served_manifests(gate, consistent_gate) is None
+    gate = json.load(open(GATE))                                       # now declares DEPLOYED (readiness repair)
+    deployment = {"release": "spot-8347-same-origin",
+                  "files": [{"path": "01_page.html", "sha256": "0" * 64, "class": "built"}]}
+    # a deployed gate AGREES with a deployment manifest that serves built app files (promotion unblocked)
+    assert vsm.contradictory_served_manifests(gate, deployment) is None
+    assert vsm.contradictory_served_manifests(gate, {"release_gates": {"app_deployment_ready": True, "overlay_release_ok": True}}) is None
     # the real served gate manifests (release_manifest + current) agree with each other
     ok, reasons = vsm.check_paths(GATE, CURRENT)
     assert ok, reasons
