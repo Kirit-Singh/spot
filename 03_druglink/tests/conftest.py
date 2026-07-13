@@ -26,12 +26,41 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..", "analysis")))
 sys.path.insert(0, _HERE)
 
 import direct_fixture  # noqa: E402
+import universe_store_fixture as USF  # noqa: E402
+from stage2_release_fixture import build_release  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def analysis_root():
     """The importable ``analysis/`` root, for tests that spawn a CLEAN interpreter."""
     return os.path.abspath(os.path.join(_HERE, "..", "analysis"))
+
+
+@pytest.fixture(scope="session")
+def store():
+    """The REAL admitted universe store, opened through the GATED path. Never synthesised.
+
+    Shared by the two halves of the store's contract — ``test_universe_rows`` (target
+    identity) and ``test_universe_edges`` (assertion lanes) — so the store is proved from its
+    own bytes ONCE. If it is not on this host the tests skip: they never fall back to a
+    fixture and report a pass over zero rows.
+    """
+    from druglink import universe_rows as ur
+    if USF.STORE_DIR is None:
+        pytest.skip("no admitted universe store on this host")
+    return ur.load_store(USF.STORE_DIR)
+
+
+@pytest.fixture(scope="session")
+def all_edges(store):
+    """Every source drug assertion the store holds, joined by exact typed identity."""
+    from druglink import universe_rows as ur
+    edges = ur.drug_edges_for_targets(
+        store, [{"target_id": r["target_id"],
+                 "target_id_namespace": r["target_id_namespace"]}
+                for r in store.typed_universe])
+    assert edges, "non-vacuity: the real store must produce edges"
+    return edges
 
 
 @pytest.fixture(scope="session")
@@ -131,3 +160,15 @@ def analysis_build(loaded_direct, analysis_cache):
                                          direct=loaded_direct)
     return run_stage3.build(artifact_class="analysis", direct=loaded_direct,
                             acquired=acquired)
+
+
+# --- the sealed NON-PRODUCTION Stage-2 aggregate release (plumbing, never science) --- #
+@pytest.fixture(scope="module")
+def honest(tmp_path_factory):
+    return build_release(tmp_path_factory.mktemp("s2_aggregate"))
+
+
+@pytest.fixture(scope="module")
+def admitted(honest):
+    from druglink import stage2_aggregate as sa
+    return sa.admit_aggregate(**honest)

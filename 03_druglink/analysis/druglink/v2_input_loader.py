@@ -28,9 +28,11 @@ Hard invariants (each reused from the lane modules, asserted here across lanes):
     independent ``verification_ref``; no default, no ``admitted=True`` path (no self-admission).
   * **No combined score** — arms are independent; counts are per-lane, never pooled.
   * **No fixture fallback** — a lane with no admitted bundle stays EMPTY; nothing is invented.
-  * **Production consumption GATED** — while the independent detached-clone matrix is not
-    green (``arm_query.DETACHED_CLONE_MATRIX_GREEN``), the loader will not serve a production
-    run: no real candidates until a real admitted Stage-2 bundle exists.
+  * **Production consumption GATED BY AN ARTIFACT** — a production run must present a
+    Stage-2 aggregate admitted FROM DISK (``stage2_aggregate.admit_aggregate``): manifest
+    re-hashed, an INDEPENDENT report binding those exact manifest bytes, and the full
+    15-bundle / 300-arm-slot topology reconstructed from the bundles root. No real
+    candidates until such an aggregate exists.
 """
 from __future__ import annotations
 
@@ -38,6 +40,7 @@ from typing import Any, Optional, Sequence
 
 from . import arm_query as aq
 from . import pathway_bridge as pb
+from . import stage2_aggregate as sa
 from .direction import ORIGIN_DIRECT_TARGET
 
 LOADER_SCHEMA = "spot.stage03_v2_input_loader.v1"
@@ -145,6 +148,45 @@ def _assert_origins_never_merge(measured: list[dict[str, Any]],
                 f"pathway node {n.get('target_id')!r} carries a measured arm rank")
 
 
+GATE_NO_ADMITTED_AGGREGATE: str = "a_production_run_has_no_admitted_stage2_aggregate"
+
+
+def _aggregate_binding(admitted: Optional[sa.AdmittedAggregate]) -> Optional[dict[str, Any]]:
+    """Name the exact aggregate that opened the production gate, by its own bytes."""
+    if admitted is None:
+        return None
+    return {
+        "manifest_raw_sha256": admitted.manifest_raw_sha256,
+        "manifest_canonical_sha256": admitted.manifest_canonical_sha256,
+        "manifest_self_hash": admitted.manifest_self_hash,
+        "stage1_release_sha256": admitted.stage1_release_sha256,
+        "verifier_id": admitted.verifier_id,
+        "verdict": admitted.verdict,
+        "artifact_class": admitted.artifact_class,
+        "n_bundles": len(admitted.bundles),
+        "n_arms": len(admitted.arms),
+    }
+
+
+def _require_admitted_aggregate(admitted: Optional[sa.AdmittedAggregate]) -> None:
+    """A production run must present a Stage-2 aggregate ADMITTED FROM DISK.
+
+    This replaces the module constant `arm_query.DETACHED_CLONE_MATRIX_GREEN`, which was a
+    Boolean literal in Stage-3's own source. Nothing an upstream lane could produce, and no
+    artifact on disk, could ever flip it — only a Stage-3 edit could, so the "gate" recorded
+    a Stage-3 intention rather than an upstream fact, and it would have gone on reporting
+    green with no admitted bundle behind it. The gate is now the artifact: `admit_aggregate`
+    re-hashes the manifest, requires an INDEPENDENT report that binds those exact manifest
+    bytes, and reconstructs the full 15-bundle / 300-slot topology from the bundles root.
+    """
+    if admitted is None:
+        raise ProductionConsumptionGated(
+            f"[{GATE_NO_ADMITTED_AGGREGATE}] a production run requires a Stage-2 aggregate "
+            "admitted from disk (druglink.stage2_aggregate.admit_aggregate); Stage 3 will "
+            "not serve a production run or generate real candidates without one")
+    sa.require_analysis(admitted)      # a fixture aggregate cannot enter the analysis path
+
+
 def load_admitted_stage2_inputs(
     *,
     direct_arm_bundle: Optional[dict[str, Any]] = None,
@@ -154,15 +196,12 @@ def load_admitted_stage2_inputs(
     pathway_nodes: Sequence[dict[str, Any]] = (),
     measured_target_ids: Optional[set] = None,
     require_production: bool = False,
+    admitted_aggregate: Optional[sa.AdmittedAggregate] = None,
 ) -> dict[str, Any]:
     """Unified admitted-Stage-2 input load. Typed origins separate; ordered axes preserved;
     admission hashes bound; no combined score / fixture fallback / self-admission."""
-    gated = not aq.DETACHED_CLONE_MATRIX_GREEN
-    if require_production and gated:
-        raise ProductionConsumptionGated(
-            "the independent detached-clone matrix is not green; Stage 3 will not serve a "
-            "production run or generate real candidates until a real admitted Stage-2 "
-            "bundle exists")
+    if require_production:
+        _require_admitted_aggregate(admitted_aggregate)
 
     measured: list[dict[str, Any]] = []
     admission_binding: dict[str, Any] = {"direct": None, "temporal": [], "pathway": None}
@@ -215,7 +254,11 @@ def load_admitted_stage2_inputs(
         "arms_are_independent": True,
         "combined_objective_permitted": False,
         "headline_arm_permitted": False,
-        "production_consumption_gated": gated,
+        # Gated is now a FACT about the inputs, not a constant in Stage-3's source: it is
+        # true exactly when no Stage-2 aggregate was admitted from disk. The binding names
+        # WHICH aggregate opened the gate, so the claim is checkable against the bytes.
+        "production_consumption_gated": admitted_aggregate is None,
+        "stage2_aggregate_binding": _aggregate_binding(admitted_aggregate),
         "counts": {"n_measured_levers": len(measured), "n_pathway_nodes": len(pathway),
                    "per_lane": per_lane},
     }
