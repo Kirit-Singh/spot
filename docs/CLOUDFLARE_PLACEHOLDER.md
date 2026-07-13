@@ -77,17 +77,23 @@ redirected:
 form (canonical, or the stable alias while provisioning). The access-code comparison,
 constant-time check, and host-only `__Host-spot-review` cookie are unchanged.
 
-## Placeholder -> production switch
+## Placeholder -> production switch (DONE)
 
-1. Set the production environment variables **first**: `SITE_MODE=production` and, during
-   certificate provisioning, `ALLOW_PAGES_DEV_ALIAS=1`.
-   Attaching the custom domain while `SITE_MODE=placeholder` would 503 the canonical host.
-2. Attach `spotpathways.com`, then `spotpathway.com`, in the Pages project's Custom domains
-   screen. Wait for Active DNS + certificate.
-3. Once the canonical certificate is active, **remove `ALLOW_PAGES_DEV_ALIAS`** so the
-   stable alias 308s to the canonical host.
-4. Point the build at the full-site assembler (`build_pages.sh` / `dist/cloudflare-pages`)
-   once the Stage-1..4 release is admitted.
+Pages environment variables come from the committed `wrangler.jsonc` `env.production.vars`.
+`wrangler pages deploy` **reapplies them on every deploy**, so an out-of-band dashboard or
+API change to `SITE_MODE` is silently clobbered. Change it here, not there.
+
+1. `SITE_MODE=production` in `env.production.vars` **before** attaching the custom domain —
+   attaching it while `SITE_MODE=placeholder` 503s the canonical host (placeholder mode
+   refuses every host but the alias).
+2. Attach `spotpathways.com`, then `spotpathway.com`. Wait for Active DNS + certificate.
+   `ALLOW_PAGES_DEV_ALIAS=1` keeps the stable alias serving during provisioning.
+3. Once the canonical certificate is active, **remove `ALLOW_PAGES_DEV_ALIAS`** so the alias
+   308s to the canonical host. *(Completed — both domains `status=active cert=active`.)*
+4. Point the build at the full-site assembler once the Stage-1..4 release is admitted:
+   `pages_build_output_dir` currently pins `./dist/cloudflare-placeholder` so that a bare
+   `wrangler pages deploy` cannot publish the app bundle. Flip it to `./dist/cloudflare-pages`
+   only at admitted release.
 
 The cookie mechanism is identical across modes (same signing key, same signed message),
 so the switch is a mode/host change, not a crypto change. Host-only cookies from
