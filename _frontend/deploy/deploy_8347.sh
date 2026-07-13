@@ -37,8 +37,12 @@ PUBLIC_DIR="$FRONTEND_DIR/public"
 DEPLOY_MANIFEST="${SPOT_DEPLOY_RECEIPT:-$HOME/.spot-runs/spot-8347-deployed_manifest.txt}"
 mkdir -p "$(dirname "$DEPLOY_MANIFEST")"
 
-SPOT_REPO="/Users/kiritsingh/spot"                  # authoritative Stage-1 checkout
-TARGET_ROOT="$SPOT_REPO/01_programs/app"            # the dir :8347 serves (local)
+SPOT_REPO="${SPOT_STAGE1_REPO:-$REPO_DIR}"          # clean release worktree carrying Stage-1
+STAGE1_SOURCE_ROOT="$SPOT_REPO/01_programs/app"     # immutable source; never written by deploy
+# Assemble outside every git worktree. The old deploy wrote built files into /Users/.../spot,
+# which both depended on a stale checkout and dirtied a user-owned worktree. A release must be a
+# pure projection of a clean commit plus an admitted results tree, so staging is external.
+TARGET_ROOT="${SPOT_DEPLOY_STAGING:-$HOME/.spot-runs/spot-8347-staging}"
 TARGET_DATA="$TARGET_ROOT/data"
 REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 
@@ -50,7 +54,8 @@ REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 # invariants + the immutable validation stay byte-identical; the canonical 01_page.html is unchanged.
 # STAGE1_DATA_COMMIT must be set to the deployed release commit (release/spot-final HEAD) that carries this
 # regenerated data — it is no longer 539431d (data changed). Set it at deploy time from the served checkout.
-STAGE1_DATA_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"   # BUMP to release/spot-final HEAD before deploy (data regenerated past 539431d)
+STAGE1_DATA_COMMIT="5eae9c9e1a28f7ebd949efad0b7873421943b541"
+STAGE1_PAGE_BASE_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"
 STAGE1_DATA_DIGEST="5fe59f99e33d1526e2ba4933dc210bd199917e306daf302f156b742926886cbb"
 STAGE1_PAGE_BASE_SHA="9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1"   # pin:01_page.html base @ 539431d (== import; question_id-emitting page keeps the classified UI + hash fallback)
 STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1}"  # nav-retargeted import — byte-identical to the 539431d canonical base
@@ -58,7 +63,7 @@ INVARIANTS=(
   "data/stage01_selectability_v3.json:7c326a86"
   "data/stage01_validation.json:1c14cd28"
   "data/stage01_stage2_registry_view.json:d37c1927"   # scorer-view raw
-  "data/stage01_release_manifest.json:ad0baf75"        # release-manifest raw
+  "data/stage01_release_manifest.json:dcf0cb41"        # release-manifest raw @ 5eae9c9
 )
 
 # tcedirector :8347 served dir. CONFIRMED SPOT_DIST of the pid listening on :8347.
@@ -166,10 +171,22 @@ say "UI worktree  : $REPO_DIR"
 say "target root  : $TARGET_ROOT"
 say "8347 (tce)   : $TCE_HOST:$TCE_8347_DIR   (SKIP_REMOTE=$SKIP_REMOTE)"
 say ""
-[ -d "$TARGET_ROOT" ] || die "target root does not exist: $TARGET_ROOT"
-[ -d "$TARGET_DATA" ] || die "target data/ does not exist: $TARGET_DATA"
+[ -d "$STAGE1_SOURCE_ROOT" ] || die "Stage-1 source root does not exist: $STAGE1_SOURCE_ROOT"
+[ -d "$STAGE1_SOURCE_ROOT/data" ] || die "Stage-1 source data/ does not exist"
 [ -f "$PUBLIC_DIR/01_page.html" ] || die "missing nav-retargeted import: $PUBLIC_DIR/01_page.html"
 git -C "$REPO_DIR" ls-files --error-unmatch _frontend/public/data >/dev/null 2>&1 && die "_frontend/public/data is git-tracked — release must carry no bundled data" || true
+
+# The staging target must never be a source worktree or filesystem root. Recreate it from the
+# pinned Stage-1 release before any overlays are applied; this also guarantees stale result/assets
+# from a prior run cannot survive.
+case "$TARGET_ROOT" in
+  ""|/|"$REPO_DIR"|"$REPO_DIR"/*|"$SPOT_REPO"|"$SPOT_REPO"/*)
+    die "unsafe SPOT_DEPLOY_STAGING (must be an external non-root directory): $TARGET_ROOT";;
+esac
+rm -rf "$TARGET_ROOT"
+mkdir -p "$TARGET_ROOT"
+rsync -a --delete "$STAGE1_SOURCE_ROOT/" "$TARGET_ROOT/"
+[ -d "$TARGET_DATA" ] || die "staging copy produced no data/"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. UI worktree identity — a CLEAN COMMIT is required; no dirty/untracked override
@@ -191,14 +208,20 @@ say "       clean; ui_commit = $UI_COMMIT"
 # 2. Stage-1 DATA baseline pin (commit + digest + invariants + 01_page nav-only diff)
 # ─────────────────────────────────────────────────────────────────────────────
 say "[2/10] Stage-1 data baseline pin"
-HEAD_SPOT="$(git -C "$SPOT_REPO" rev-parse HEAD)"
-[ "$HEAD_SPOT" = "$STAGE1_DATA_COMMIT" ] || die "spot HEAD $HEAD_SPOT != pinned data commit $STAGE1_DATA_COMMIT"
-[ -z "$(git -C "$SPOT_REPO" status --porcelain 01_programs/app/data)" ] || die "spot 01_programs/app/data is dirty — commit-clean data required"
+git -C "$SPOT_REPO" cat-file -e "$STAGE1_DATA_COMMIT^{commit}" 2>/dev/null \
+  || die "pinned Stage-1 data commit is unavailable: $STAGE1_DATA_COMMIT"
+[ -z "$(git -C "$SPOT_REPO" status --porcelain 01_programs/app/data)" ] \
+  || die "Stage-1 source data is dirty — commit-clean data required"
+# The UI integration commit is expected to be newer than the scientific-data commit. Prove its
+# Stage-1 data subtree is still byte-identical to that pin rather than incorrectly requiring HEAD
+# itself to equal the old commit.
+git -C "$SPOT_REPO" diff --quiet "$STAGE1_DATA_COMMIT" -- 01_programs/app/data \
+  || die "Stage-1 data subtree differs from pinned commit $STAGE1_DATA_COMMIT"
 LOCAL_DIGEST="$(data_digest_local)"
 [ "$LOCAL_DIGEST" = "$STAGE1_DATA_DIGEST" ] || die "local data digest $LOCAL_DIGEST != pinned $STAGE1_DATA_DIGEST"
 for inv in "${INVARIANTS[@]}"; do
   f="${inv%%:*}"; pre="${inv##*:}"; got="$(sha256_of "$TARGET_ROOT/$f")"
-  [ "${got:0:8}" = "$pre" ] || die "invariant $f sha256 ${got:0:8}… != pinned $pre…"
+  [ "${got:0:8}" = "$pre" ] || die "invariant $f sha256 ${got:0:8}… != pinned ${pre}…"
 done
 # 01_page.html: base pin + import pin (the exact-byte guard) + a CLASSIFIED diff vs the pinned commit.
 # At 184211a the canonical base already IS the classified UI (== import, 570a6f07), so this diff is now
@@ -214,7 +237,7 @@ done
 #                       not a UI destination). Only the exact "/01_notebook.html" anchor line.
 # Anything else is a NON-classified change and hard-refuses.
 BASE01="$(mktemp -t spot_base01.XXXXXX)"
-git -C "$SPOT_REPO" show "$STAGE1_DATA_COMMIT:01_programs/app/01_page.html" > "$BASE01" || die "cannot read pinned 01_page.html"
+git -C "$SPOT_REPO" show "$STAGE1_PAGE_BASE_COMMIT:01_programs/app/01_page.html" > "$BASE01" || die "cannot read pinned 01_page.html"
 [ "$(sha256_of "$BASE01")" = "$STAGE1_PAGE_BASE_SHA" ] || die "pinned base 01_page.html sha != $STAGE1_PAGE_BASE_SHA"
 [ "$(sha256_of "$PUBLIC_DIR/01_page.html")" = "$STAGE1_PAGE_IMPORT_SHA" ] || die "import 01_page.html sha != pinned $STAGE1_PAGE_IMPORT_SHA (re-review + update STAGE1_PAGE_IMPORT_SHA)"
 NAV_ALLOW='(nstep|nsep|window\.location\.assign|href="(01_page|targets|pathways|drugs|pksafety)\.html"|/02_page\.html#/stage-)'
@@ -224,7 +247,7 @@ OFFENDING="$(diff -u "$BASE01" "$PUBLIC_DIR/01_page.html" | grep -E '^[+-]' | gr
   | grep -vE 'No production/research split|PRODUCTION-selectability flag' \
   | grep -vE 'href="/01_notebook\.html"' || true)"
 rm -f "$BASE01"
-[ -z "$OFFENDING" ] || { printf '%s\n' "$OFFENDING" | sed 's/^/         /' >&2; die "01_page.html diff vs $STAGE1_DATA_COMMIT touches NON-classified lines (not nav/citation/0-33-retire)"; }
+[ -z "$OFFENDING" ] || { printf '%s\n' "$OFFENDING" | sed 's/^/         /' >&2; die "01_page.html diff vs $STAGE1_PAGE_BASE_COMMIT touches NON-classified lines (not nav/citation/0-33-retire)"; }
 say "       spot@$STAGE1_DATA_COMMIT · data digest $STAGE1_DATA_DIGEST · 22 invariants + classified 01_page diff OK"
 
 # ─────────────────────────────────────────────────────────────────────────────
