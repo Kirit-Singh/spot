@@ -31,10 +31,18 @@ from typing import Any, Optional, Sequence
 
 from . import arm_query as aq
 from . import pathway_bridge as pb
-from .direction import ORIGIN_DIRECT_TARGET, ORIGIN_PATHWAY_NODE
+from .direction import ORIGIN_DIRECT_TARGET
 
 LOADER_SCHEMA = "spot.stage03_v2_input_loader.v1"
 LOADER_METHOD_ID = "spot.stage03.v2_input_loader.v1"
+
+# THREE typed origins, stamped explicitly on every row so no consumer ever infers from
+# time_scope. Direct (same-condition) and temporal (cross-time DiD) are BOTH measured but
+# are DISTINCT estimands and MUST NOT be fused; pathway is the inferred endpoint context.
+ORIGIN_DIRECT_SAME_TIME = ORIGIN_DIRECT_TARGET             # "direct_target"
+ORIGIN_TEMPORAL_CROSS_TIME = "temporal_cross_time_measured"
+ORIGIN_ENDPOINT_PATHWAY = "endpoint_pathway_context"
+MEASURED_ORIGINS = frozenset({ORIGIN_DIRECT_SAME_TIME, ORIGIN_TEMPORAL_CROSS_TIME})
 
 
 class V2InputLoaderError(ValueError):
@@ -45,14 +53,24 @@ class ProductionConsumptionGated(V2InputLoaderError):
     """The independent detached-clone matrix is not green; no real candidates yet."""
 
 
+def _measured_origin(ctx: dict[str, Any]) -> str:
+    """direct_target for same-condition, temporal_cross_time_measured for cross-time DiD.
+    The origin is decided HERE from the bundle's own context and stamped on the row, so a
+    consumer never has to read time_scope to tell Direct from temporal."""
+    return (ORIGIN_TEMPORAL_CROSS_TIME if ctx["time_scope"] == aq.CROSS_TIME
+            else ORIGIN_DIRECT_SAME_TIME)
+
+
 def _load_measured_bundle(bundle: dict[str, Any],
                           admission: Optional[aq.ExternalAdmission]):
-    """One admitted Direct/temporal arm bundle -> measured (direct_target) levers."""
+    """One admitted Direct/temporal arm bundle -> measured levers, origin-typed by time
+    scope (Direct and temporal are DISTINCT origins, never fused)."""
     adm = aq.require_external_admission(bundle, admission)   # no self-admission, no default
+    origin = _measured_origin(aq.arm_context(bundle))
     levers: list[dict[str, Any]] = []
     for arm in bundle.get("arms", []):
         for row in aq.normalize_arm(arm, bundle=bundle, admission=adm):
-            levers.append(dict(row, origin_type=ORIGIN_DIRECT_TARGET))
+            levers.append(dict(row, origin_type=origin, measured_evidence=True))
     return levers, adm
 
 
@@ -79,7 +97,8 @@ def _load_pathway_nodes(bundle: dict[str, Any], nodes: Sequence[dict[str, Any]],
             "target_id": node.get("target_id"),
             "target_id_namespace": node.get("target_id_namespace"),
             "set_id": node.get("set_id"),
-            "origin_type": ORIGIN_PATHWAY_NODE,
+            "origin_type": ORIGIN_ENDPOINT_PATHWAY,
+            "measured_evidence": False,
             "node_class": node_class,
             "arm_rank": None, "arm_direction_measured": False,
             **resolved})
@@ -89,13 +108,31 @@ def _load_pathway_nodes(bundle: dict[str, Any], nodes: Sequence[dict[str, Any]],
 def _assert_origins_never_merge(measured: list[dict[str, Any]],
                                 pathway: list[dict[str, Any]]) -> None:
     for l in measured:
-        if l.get("origin_type") != ORIGIN_DIRECT_TARGET:
+        ot = l.get("origin_type")
+        if ot not in MEASURED_ORIGINS:
             raise V2InputLoaderError(
-                f"measured lever {l.get('target_id')!r} is not a direct_target origin")
+                f"measured lever {l.get('target_id')!r} has non-measured origin {ot!r}")
+        if l.get("measured_evidence") is not True:
+            raise V2InputLoaderError(
+                f"measured lever {l.get('target_id')!r} not flagged measured_evidence")
+        # the origin must AGREE with the row's own time scope — Direct and temporal fused
+        # into one origin is exactly the defect this asserts against.
+        ts = l.get("time_scope")
+        if ts == aq.CROSS_TIME and ot != ORIGIN_TEMPORAL_CROSS_TIME:
+            raise V2InputLoaderError(
+                f"cross-time row {l.get('target_id')!r} stamped {ot!r}: Direct and "
+                "temporal must never be fused")
+        if ts == aq.SAME_TIME and ot != ORIGIN_DIRECT_SAME_TIME:
+            raise V2InputLoaderError(
+                f"same-time row {l.get('target_id')!r} stamped {ot!r}")
     for n in pathway:
-        if n.get("origin_type") != ORIGIN_PATHWAY_NODE:
+        if n.get("origin_type") != ORIGIN_ENDPOINT_PATHWAY:
             raise V2InputLoaderError(
-                f"pathway node {n.get('target_id')!r} is not a pathway_node origin")
+                f"pathway node {n.get('target_id')!r} is not an endpoint_pathway_context "
+                "origin")
+        if n.get("measured_evidence") is not False:
+            raise V2InputLoaderError(
+                f"pathway node {n.get('target_id')!r} must not be flagged measured")
         if n.get("arm_rank") is not None:      # an inferred node with a measured rank
             raise V2InputLoaderError(
                 f"pathway node {n.get('target_id')!r} carries a measured arm rank")
@@ -157,8 +194,12 @@ def load_admitted_stage2_inputs(
         "measured_levers": measured,        # origin_type == direct_target
         "pathway_nodes": pathway,           # origin_type == pathway_node — SEPARATE
         "typed_origins": {
-            "measured": ORIGIN_DIRECT_TARGET, "inferred": ORIGIN_PATHWAY_NODE,
-            "gene_and_pathway_evidence_are_never_merged": True},
+            "same_condition_direct": ORIGIN_DIRECT_SAME_TIME,
+            "temporal_cross_time_measured": ORIGIN_TEMPORAL_CROSS_TIME,
+            "endpoint_pathway_context": ORIGIN_ENDPOINT_PATHWAY,
+            "direct_and_temporal_never_fused": True,
+            "gene_and_pathway_evidence_are_never_merged": True,
+            "origin_stamped_explicitly_no_downstream_time_scope_inference": True},
         "admission_binding": admission_binding,
         "arms_are_independent": True,
         "combined_objective_permitted": False,

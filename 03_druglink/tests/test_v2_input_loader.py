@@ -80,15 +80,53 @@ def _full():
         measured_target_ids={"ENSG1", "ENSG2"})
 
 
-def test_measured_and_pathway_origins_are_separate():
+def test_three_typed_origins_direct_temporal_pathway_never_fused():
     r = _full()
-    assert all(l["origin_type"] == "direct_target" for l in r["measured_levers"])
-    assert {l["target_id"] for l in r["measured_levers"]} == {"ENSG1", "ENSG2"}
-    assert all(n["origin_type"] == "pathway_node" for n in r["pathway_nodes"])
+    by_id = {l["target_id"]: l for l in r["measured_levers"]}
+    # same-condition Direct target
+    assert by_id["ENSG1"]["origin_type"] == "direct_target"
+    # cross-time DiD target row is DISTINCT — never 'direct_target'
+    assert by_id["ENSG2"]["origin_type"] == "temporal_cross_time_measured"
+    assert by_id["ENSG2"]["origin_type"] != "direct_target"      # the fusion bug
+    # pathway evidence is its own third origin
+    assert all(n["origin_type"] == "endpoint_pathway_context" for n in r["pathway_nodes"])
     assert {n["target_id"] for n in r["pathway_nodes"]} == {"ENSG3"}
-    # no target is BOTH a measured lever and an inferred pathway node
+    # three distinct origins present, and none shared across a target
+    assert {l["origin_type"] for l in r["measured_levers"]} == {
+        "direct_target", "temporal_cross_time_measured"}
     assert not ({l["target_id"] for l in r["measured_levers"]}
                 & {n["target_id"] for n in r["pathway_nodes"]})
+
+
+def test_temporal_rows_are_nonempty_and_never_stamped_direct():
+    # NON-VACUOUS: assert there IS a cross-time row, then assert its origin is temporal.
+    r = v2.load_admitted_stage2_inputs(
+        temporal_arm_bundles=[(_temporal_bundle(), _adm("b" * 64))])
+    temporal_rows = [l for l in r["measured_levers"]
+                     if l.get("time_scope") == "cross_time"]
+    assert len(temporal_rows) >= 1                               # not vacuously true
+    assert all(l["origin_type"] == "temporal_cross_time_measured"
+               for l in temporal_rows)
+    assert all(l["origin_type"] != "direct_target" for l in temporal_rows)
+    assert all(l["measured_evidence"] is True for l in temporal_rows)
+
+
+def test_mixed_origin_input_keeps_each_row_typed_without_time_scope_inference():
+    # Direct + temporal + pathway together; every row self-declares its origin so no
+    # consumer needs to read time_scope to tell Direct from temporal.
+    r = _full()
+    all_rows = r["measured_levers"] + r["pathway_nodes"]
+    for row in all_rows:
+        assert row["origin_type"] in {
+            "direct_target", "temporal_cross_time_measured", "endpoint_pathway_context"}
+        # origin agrees with the row's own nature, not requiring time_scope to disambiguate
+        if row.get("time_scope") == "cross_time":
+            assert row["origin_type"] == "temporal_cross_time_measured"
+        elif row.get("time_scope") == "same_time":
+            assert row["origin_type"] == "direct_target"
+    # measured vs inferred still separate
+    assert all(l["measured_evidence"] is True for l in r["measured_levers"])
+    assert all(n["measured_evidence"] is False for n in r["pathway_nodes"])
 
 
 def test_ordered_temporal_axis_preserved_from_to():
