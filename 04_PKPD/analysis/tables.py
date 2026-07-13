@@ -117,6 +117,30 @@ EXPOSURE_SCHEMA = pa.schema(
         ("timepoint", _STR),
         ("kp_reported_source_string", _STR),
         ("kp_uu_brain_reported_source_string", _STR),
+        # --- v2: the context a clinical PK number needs before it means anything.
+        # A Cmax and a Ctrough are different exposures; a geometric mean of twelve and one
+        # patient's value are different evidence. A bare float carries neither distinction.
+        ("pk_metric", _STR),
+        ("pk_statistic", _STR),
+        ("pk_sample_size", pa.int64()),
+        ("pk_variability_kind", _STR),
+        ("pk_variability_source_string", _STR),
+        ("pk_variability_units", _STR),
+        # How/where/when the sample was taken, and what was done to it afterwards. An
+        # uncorrected brain-tissue concentration may be measuring the blood in the tissue;
+        # an uncalibrated microdialysate is not an interstitial concentration at all.
+        ("sampling_method", _STR),
+        ("sample_location", _STR),
+        ("time_relative_to_dose", _STR),
+        ("analytical_method", _STR),
+        ("steady_state", _BOOL),
+        ("residual_blood_correction", _STR),
+        ("microdialysis_recovery_state", _STR),
+        ("microdialysis_recovery_source_string", _STR),
+        ("microdialysis_recovery_method", _STR),
+        ("co_medications", _LIST_STR),
+        ("assay_method", _STR),
+        ("paired_plasma_measurement_id", _STR),
         ("evidence_type", _STR),
         ("margin_status", _STR),
         ("margin", _F64),

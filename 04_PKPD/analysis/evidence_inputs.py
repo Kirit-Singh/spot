@@ -76,6 +76,12 @@ INPUT_COLUMNS: dict[str, tuple[str, ...]] = {
         "detection_status", "quantitation_limit_kind", "quantitation_limit_source_string",
         "quantitation_limit_units", "timepoint", "kp_reported_source_string",
         "kp_uu_brain_reported_source_string", "evidence_type",
+        "pk_metric", "pk_statistic", "pk_sample_size", "pk_variability_kind",
+        "pk_variability_source_string", "pk_variability_units",
+        "sampling_method", "sample_location", "time_relative_to_dose", "analytical_method",
+        "steady_state", "residual_blood_correction", "microdialysis_recovery_state",
+        "microdialysis_recovery_source_string", "microdialysis_recovery_method",
+        "co_medications", "assay_method", "paired_plasma_measurement_id",
         "source_record_id", "source_url", "access_date", "release_version",
         "raw_response_sha256", "extraction_transform",
     ),
@@ -210,6 +216,48 @@ def _assay(b: Any) -> dict[str, Any]:
     return {col: (getattr(b, attr) if b is not None else None) for col, attr in _ASSAY_FIELDS}
 
 
+_PK_FIELDS = (
+    ("pk_metric", "pk_metric"),
+    ("pk_statistic", "statistic"),
+    ("pk_sample_size", "sample_size"),
+    ("pk_variability_kind", "variability_kind"),
+    ("pk_variability_source_string", "variability_source_string"),
+    ("pk_variability_units", "variability_units"),
+)
+
+_SAMPLING_FIELDS = (
+    ("sampling_method", "sampling_method"),
+    ("sample_location", "sample_location"),
+    ("time_relative_to_dose", "time_relative_to_dose"),
+    ("analytical_method", "analytical_method"),
+    ("steady_state", "steady_state"),
+    ("residual_blood_correction", "residual_blood_correction"),
+    ("microdialysis_recovery_state", "microdialysis_recovery_state"),
+    ("microdialysis_recovery_source_string", "microdialysis_recovery_source_string"),
+    ("microdialysis_recovery_method", "microdialysis_recovery_method"),
+)
+
+
+def _enum_value(v: Any) -> Any:
+    """Enums enter canonical content as their declared string, never as `PkMetric.CMAX`."""
+    return getattr(v, "value", v)
+
+
+def _flatten(obj: Any, fields: tuple[tuple[str, str], ...]) -> dict[str, Any]:
+    """A v1 row has no v2 sub-record, so every cell is None — the honest representation of
+    'this row never carried a PK metric', not a default that invents one."""
+    return {col: (_enum_value(getattr(obj, attr)) if obj is not None else None)
+            for col, attr in fields}
+
+
+def _pk_detail(d: Any) -> dict[str, Any]:
+    return _flatten(d, _PK_FIELDS)
+
+
+def _sampling(s: Any) -> dict[str, Any]:
+    return _flatten(s, _SAMPLING_FIELDS)
+
+
 def evidence_input_rows(inputs: Any) -> dict[str, list[dict[str, Any]]]:
     """Every consumed evidence-input row, as the exact dict the parquet must carry."""
     from .delivery_reduce import assignment_content
@@ -277,7 +325,12 @@ def evidence_input_rows(inputs: Any) -> dict[str, list[dict[str, Any]]]:
              "timepoint": m.timepoint,
              "kp_reported_source_string": m.kp_reported_source_string,
              "kp_uu_brain_reported_source_string": m.kp_uu_brain_reported_source_string,
-             "evidence_type": m.evidence_type.value, **_prov(m.provenance)}
+             "evidence_type": m.evidence_type.value,
+             **_pk_detail(m.pk_detail), **_sampling(m.sampling),
+             "co_medications": list(m.co_medications),
+             "assay_method": m.assay_method,
+             "paired_plasma_measurement_id": m.paired_plasma_measurement_id,
+             **_prov(m.provenance)}
             for m in inputs.exposures
         ],
         "delivery_assignments": [assignment_content(a) for a in inputs.delivery_assignments],

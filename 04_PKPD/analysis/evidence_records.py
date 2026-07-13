@@ -14,6 +14,7 @@ from pydantic import Field, model_validator
 
 from .assay_records import POINT_ESTIMATE_RELATIONS, AssayBinding, Relation
 from .contracts import ID_PATTERN, SHA256_PATTERN, Strict
+from .pk_records import PkDetail, SamplingDetail
 from .quantity import CNS_MPO_DIMENSIONS, Quantity, validate_domain
 
 
@@ -222,6 +223,19 @@ class ExposureMeasurement(Strict):
     kp_reported_source_string: Optional[str] = None
     kp_uu_brain_reported_source_string: Optional[str] = None
     evidence_type: EvidenceType
+    # --- v2: the context a clinical PK number needs before it means anything. Optional on the
+    # model so a v1 bundle stays valid; REQUIRED by the v2 profile (`contract_profile.py`).
+    # WHICH exposure (Cmax vs Ctrough), over how many subjects, with what spread.
+    pk_detail: Optional[PkDetail] = None
+    # How/where/when the sample was taken; residual-blood correction; probe recovery.
+    sampling: Optional[SamplingDetail] = None
+    # A brain concentration under dexamethasone + an enzyme-inducing antiseizure drug is not
+    # the same exposure as one without them. GBM patients are rarely on neither.
+    co_medications: list[str] = Field(default_factory=list)
+    assay_method: Optional[str] = None
+    # The plasma measurement this brain/CSF sample is paired with. Every ratio needs one, and
+    # integrity checks that it resolves to a real PLASMA row of the same moiety and context.
+    paired_plasma_measurement_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
     provenance: Provenance
 
     @model_validator(mode="after")

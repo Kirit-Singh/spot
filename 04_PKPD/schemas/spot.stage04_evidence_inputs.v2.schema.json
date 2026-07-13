@@ -226,6 +226,78 @@
           "title": "EvidenceType",
           "type": "string"
         },
+        "PkDetail": {
+          "additionalProperties": false,
+          "description": "What kind of exposure number this is, over how many subjects, with what spread.",
+          "properties": {
+            "pk_metric": {
+              "$ref": "#/$defs/PkMetric"
+            },
+            "sample_size": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sample Size"
+            },
+            "statistic": {
+              "$ref": "#/$defs/Statistic"
+            },
+            "variability_kind": {
+              "$ref": "#/$defs/VariabilityKind"
+            },
+            "variability_source_string": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Variability Source String"
+            },
+            "variability_units": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Variability Units"
+            }
+          },
+          "required": [
+            "pk_metric",
+            "statistic",
+            "variability_kind"
+          ],
+          "title": "PkDetail",
+          "type": "object"
+        },
+        "PkMetric": {
+          "description": "WHICH exposure. These are not interchangeable and never sum.",
+          "enum": [
+            "Cmax",
+            "Ctrough",
+            "Cavg",
+            "AUC",
+            "concentration_at_time",
+            "other"
+          ],
+          "title": "PkMetric",
+          "type": "string"
+        },
         "Provenance": {
           "additionalProperties": false,
           "description": "The binding from a number to the response it came from.",
@@ -282,6 +354,142 @@
           ],
           "title": "Provenance",
           "type": "object"
+        },
+        "ResidualBloodCorrection": {
+          "description": "Explicit, and with no default: silence is not one of the four answers.\n\n`not_applicable` is for a sample that is not tissue (a plasma draw, a CSF draw). A tissue\nsample that claims it must say so and be refused: the whole point of the field is that the\nquestion was ASKED of every tissue concentration.",
+          "enum": [
+            "applied",
+            "not_applied",
+            "not_reported",
+            "not_applicable"
+          ],
+          "title": "ResidualBloodCorrection",
+          "type": "string"
+        },
+        "SamplingDetail": {
+          "additionalProperties": false,
+          "description": "How, where and when the sample was taken — and what was done to it afterwards.",
+          "properties": {
+            "analytical_method": {
+              "minLength": 1,
+              "title": "Analytical Method",
+              "type": "string"
+            },
+            "microdialysis_recovery_method": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Microdialysis Recovery Method"
+            },
+            "microdialysis_recovery_source_string": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Microdialysis Recovery Source String"
+            },
+            "microdialysis_recovery_state": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "reported",
+                    "not_reported"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Microdialysis Recovery State"
+            },
+            "residual_blood_correction": {
+              "$ref": "#/$defs/ResidualBloodCorrection"
+            },
+            "sample_location": {
+              "minLength": 1,
+              "title": "Sample Location",
+              "type": "string"
+            },
+            "sampling_method": {
+              "$ref": "#/$defs/SamplingMethod"
+            },
+            "steady_state": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Steady State"
+            },
+            "time_relative_to_dose": {
+              "minLength": 1,
+              "title": "Time Relative To Dose",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sampling_method",
+            "sample_location",
+            "time_relative_to_dose",
+            "analytical_method",
+            "residual_blood_correction"
+          ],
+          "title": "SamplingDetail",
+          "type": "object"
+        },
+        "SamplingMethod": {
+          "enum": [
+            "resection_homogenate",
+            "microdialysis",
+            "pet",
+            "csf_draw",
+            "blood_draw",
+            "other"
+          ],
+          "title": "SamplingMethod",
+          "type": "string"
+        },
+        "Statistic": {
+          "description": "WHOSE exposure: a cohort summary, or one person's measurement.",
+          "enum": [
+            "mean",
+            "median",
+            "geometric_mean",
+            "individual",
+            "range",
+            "other"
+          ],
+          "title": "Statistic",
+          "type": "string"
+        },
+        "VariabilityKind": {
+          "enum": [
+            "sd",
+            "cv_percent",
+            "range",
+            "iqr",
+            "ci95",
+            "not_reported"
+          ],
+          "title": "VariabilityKind",
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -291,6 +499,18 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Active Moiety Id",
           "type": "string"
+        },
+        "assay_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assay Method"
         },
         "binding_state": {
           "enum": [
@@ -305,6 +525,13 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Candidate Id",
           "type": "string"
+        },
+        "co_medications": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Co Medications",
+          "type": "array"
         },
         "concentration_source_string": {
           "anyOf": [
@@ -410,6 +637,30 @@
           "title": "Measurement Id",
           "type": "string"
         },
+        "paired_plasma_measurement_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paired Plasma Measurement Id"
+        },
+        "pk_detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PkDetail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "provenance": {
           "$ref": "#/$defs/Provenance"
         },
@@ -456,6 +707,17 @@
         "route": {
           "title": "Route",
           "type": "string"
+        },
+        "sampling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SamplingDetail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "schedule": {
           "title": "Schedule",
