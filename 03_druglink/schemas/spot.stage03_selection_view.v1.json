@@ -1,0 +1,775 @@
+{
+  "$defs": {
+    "analysis_mode": {
+      "description": "within_condition reads the two same-time DIRECT arms. temporal_cross_condition reads the two TEMPORAL difference-in-differences arms of an ORDERED from->to pair \u2014 never same-time Direct ranks. The two estimators answer different questions and their numbers look alike.",
+      "enum": [
+        "within_condition",
+        "temporal_cross_condition"
+      ]
+    },
+    "counts": {
+      "additionalProperties": false,
+      "description": "What the filter LEFT BEHIND. A dropped row and a row nobody found look identical, so a filtered-out row is COUNTED, never silently vanished.",
+      "properties": {
+        "n_filtered_out": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_in_store": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n_in_view": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "n_in_store",
+        "n_in_view",
+        "n_filtered_out"
+      ],
+      "type": "object"
+    },
+    "desired_change": {
+      "description": "What the perturbation is trying to do to the program. THE arm-key component.",
+      "enum": [
+        "increase",
+        "decrease"
+      ]
+    },
+    "lane": {
+      "enum": [
+        "direct",
+        "temporal",
+        "pathway"
+      ]
+    },
+    "origin_type": {
+      "description": "direct_target and temporal_cross_time_measured are both MEASURED and are DISTINCT estimands \u2014 never fused. endpoint_pathway_context is INFERRED: nobody perturbed it, so it carries no measured rank, no observed support, and it never sources a drug edge.",
+      "enum": [
+        "direct_target",
+        "temporal_cross_time_measured",
+        "endpoint_pathway_context"
+      ]
+    },
+    "pole": {
+      "description": "What Stage-1 was ASKED for. NOT a desired change: away_from_A(high) DECREASES a program while toward_B(high) INCREASES it, which is exactly why a pole may not key an arm.",
+      "enum": [
+        "high",
+        "low"
+      ]
+    },
+    "role": {
+      "description": "A property of the QUESTION, assigned at join time. Never a property of an arm.",
+      "enum": [
+        "away_from_A",
+        "toward_B"
+      ]
+    },
+    "selected_arm": {
+      "additionalProperties": false,
+      "properties": {
+        "arm_key": {
+          "description": "lane|program_id|desired_change|<context...>. Matched by EXACT string equality. NEVER a prefix match: the release holds six temporal arms per (program, desired_change), one per ordered pair, and they differ ONLY in their context.",
+          "pattern": "^(direct|temporal|pathway)\\|[^|]+\\|(increase|decrease)\\|[^|]+(\\|[^|]+)?$",
+          "type": "string"
+        },
+        "context": {
+          "description": "direct: {condition}. temporal: {from_condition, to_condition} \u2014 ORDERED; reversing them changes the sign of the difference. pathway: {condition, pathway_source}.",
+          "type": "object"
+        },
+        "desired_change": {
+          "$ref": "#/$defs/desired_change"
+        },
+        "lane": {
+          "$ref": "#/$defs/lane"
+        },
+        "pole": {
+          "$ref": "#/$defs/pole"
+        },
+        "program_id": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/role"
+        }
+      },
+      "required": [
+        "role",
+        "pole",
+        "program_id",
+        "desired_change",
+        "lane",
+        "context",
+        "arm_key"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "short_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "type": "string"
+    }
+  },
+  "$id": "spot.stage03_selection_view.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The browser-safe result of materialize(admitted store, verified selection). It FILTERS and ANNOTATES rows the store already holds; it never re-ranks, never promotes, never writes back, and is never a release artifact. Roles (away_from_A / toward_B) are assigned HERE, at join time \u2014 an arm is A in one question and B in another, so no role is ever stored on an arm. STRICT: additionalProperties is false throughout the envelope; an unknown field is a refusal, not an extra. The table ROW columns are enforced in code (druglink.view_contract), derived from the producer's own column tuples so the contract and the tables cannot drift apart.",
+  "properties": {
+    "admission": {
+      "additionalProperties": false,
+      "description": "THE JOIN. The W3 receipt binds the aggregate manifest AND report AND the bridge, by raw AND canonical bytes. An ADMIT that names no bytes is an opinion about some other artifact.",
+      "properties": {
+        "aggregate_manifest_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "aggregate_manifest_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "aggregate_report_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "aggregate_verdict": {
+          "const": "admit"
+        },
+        "aggregate_verifier_id": {
+          "type": "string"
+        },
+        "bridge_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bridge_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "receipt_schema": {
+          "const": "spot.stage02_stage3_receipt.v1"
+        }
+      },
+      "required": [
+        "receipt_schema",
+        "aggregate_manifest_raw_sha256",
+        "aggregate_manifest_canonical_sha256",
+        "aggregate_report_raw_sha256",
+        "bridge_raw_sha256",
+        "bridge_canonical_sha256",
+        "aggregate_verifier_id",
+        "aggregate_verdict"
+      ],
+      "type": "object"
+    },
+    "arm_evidence": {
+      "description": "What each SELECTED arm actually found \u2014 including nothing. An arm no drug evidence reached SAYS SO by name; a bare 0 would make 'no evidence' and 'never ran' one silence.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "arm_evidence_state": {
+            "type": "string"
+          },
+          "arm_key": {
+            "type": "string"
+          },
+          "arm_slot_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "context": {
+            "type": "object"
+          },
+          "desired_change": {
+            "$ref": "#/$defs/desired_change"
+          },
+          "directional_evidence_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "lane": {
+            "$ref": "#/$defs/lane"
+          },
+          "n_edges": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "n_ranked": {
+            "description": "A count of RANKS, never of ROWS. Stage 2 RETAINS every unrankable target with rank:null, so 'in the ranking' is not 'in the rows'.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "n_records": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "n_targets_in_admitted_universe": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "origin_is_measured": {
+            "const": true
+          },
+          "origin_type": {
+            "$ref": "#/$defs/origin_type"
+          },
+          "pole": {
+            "$ref": "#/$defs/pole"
+          },
+          "program_id": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/$defs/role"
+          }
+        },
+        "required": [
+          "role",
+          "pole",
+          "program_id",
+          "desired_change",
+          "lane",
+          "context",
+          "arm_key",
+          "origin_type",
+          "origin_is_measured",
+          "n_edges",
+          "n_records",
+          "n_ranked",
+          "arm_evidence_state"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "artifact_class": {
+      "enum": [
+        "analysis",
+        "fixture"
+      ]
+    },
+    "candidate_rank_permitted": {
+      "const": false
+    },
+    "combined_objective_permitted": {
+      "const": false
+    },
+    "counts": {
+      "items": {
+        "$ref": "#/$defs/counts"
+      },
+      "minItems": 7,
+      "type": "array"
+    },
+    "guarantees": {
+      "additionalProperties": {
+        "const": true
+      },
+      "description": "What a consumer may rely on. Bound into the view id, so revoking one moves every identifier instead of quietly changing what the view means.",
+      "required": [
+        "the_view_is_a_pure_function_of_the_admitted_store_and_the_selection",
+        "the_view_never_re_ranks_or_re_orders_the_store",
+        "the_view_never_promotes_an_evidence_class",
+        "the_view_never_writes_back_to_the_store",
+        "the_view_is_not_a_release_artifact_and_no_release_holds_one_selection",
+        "the_view_only_filters_and_annotates_rows_the_store_already_contains",
+        "roles_are_assigned_at_join_time_never_stored_on_an_arm",
+        "arm_keys_are_matched_by_exact_string_equality_never_by_prefix",
+        "direct_and_temporal_are_distinct_estimands_never_fused",
+        "a_pathway_record_never_sources_a_drug_edge",
+        "an_inverse_direction_hypothesis_is_never_observed_support_and_is_never_promoted",
+        "a_null_rank_is_never_a_zero_and_never_sorts_as_best",
+        "filtered_out_rows_are_reported_as_counts_never_silently_dropped",
+        "a_cached_view_is_regenerable_from_the_store_and_discardable",
+        "row_order_is_by_content_id_and_is_not_a_ranking"
+      ],
+      "type": "object"
+    },
+    "headline_arm_permitted": {
+      "const": false
+    },
+    "inference_status": {
+      "const": "not_calibrated",
+      "description": "Stage 3 has no null distribution and no multiple-testing frame. A p/q/FDR field would have the FORM of a calibrated statistic and none of the meaning."
+    },
+    "missingness": {
+      "additionalProperties": false,
+      "description": "Every absence, as a STATED reason. Never a bare null, never a silent 0.",
+      "properties": {
+        "arms_with_no_drug_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hypothesis_only_meaning": {
+          "type": "string"
+        },
+        "hypothesis_only_statuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "n_edges_with_a_null_rank": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "null_rank_meaning": {
+          "type": "string"
+        },
+        "pathway_context_absence_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pathway_lane_admitted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "arms_with_no_drug_evidence",
+        "n_edges_with_a_null_rank",
+        "null_rank_meaning",
+        "pathway_lane_admitted",
+        "pathway_context_absence_reason",
+        "hypothesis_only_statuses",
+        "hypothesis_only_meaning"
+      ],
+      "type": "object"
+    },
+    "origin_type": {
+      "description": "The typed origin of the GENE arms this question selected. DERIVED from their lane, never declared by a row.",
+      "enum": [
+        "direct_target",
+        "temporal_cross_time_measured"
+      ]
+    },
+    "origin_types_present": {
+      "items": {
+        "$ref": "#/$defs/origin_type"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "p_q_fdr_permitted": {
+      "const": false
+    },
+    "schema_version": {
+      "const": "spot.stage03_selection_view.v1"
+    },
+    "selected_arms": {
+      "additionalProperties": false,
+      "description": "THE EXACT TWO GENE ARMS this question names, plus the role-matched PATHWAY CONTEXT arms. Derived from the selection \u2014 never guessed, never pattern-matched, never hardcoded.",
+      "properties": {
+        "analysis_mode": {
+          "$ref": "#/$defs/analysis_mode"
+        },
+        "arm_key_rule_id": {
+          "type": "string"
+        },
+        "arm_keys_are_matched_by_exact_string_equality_never_by_prefix": {
+          "const": true
+        },
+        "arms": {
+          "additionalProperties": false,
+          "properties": {
+            "A": {
+              "$ref": "#/$defs/selected_arm"
+            },
+            "B": {
+              "$ref": "#/$defs/selected_arm"
+            }
+          },
+          "required": [
+            "A",
+            "B"
+          ],
+          "type": "object"
+        },
+        "gene_arm_keys": {
+          "description": "The DISTINCT gene arms this question names. ONE key when a single reusable arm carries BOTH roles: away_from_A(high) and toward_B(low) are both `decrease`, and Stage 1 admits that selection (it refuses only same program + same direction WITHIN-condition). That is the reusable-arm design working \u2014 an arm is A in one question and B in another \u2014 not a degenerate question.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "gene_arm_keys_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gene_arm_lane": {
+          "enum": [
+            "direct",
+            "temporal"
+          ]
+        },
+        "one_arm_carries_both_roles": {
+          "description": "STATED, so a consumer can neither double-count a shared arm nor read a two-role question as a single-role one.",
+          "type": "boolean"
+        },
+        "pathway_context_arm_keys": {
+          "additionalProperties": false,
+          "properties": {
+            "away_from_A": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "toward_B": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "away_from_A",
+            "toward_B"
+          ],
+          "type": "object"
+        },
+        "pathway_context_label": {
+          "description": "condition_matched_direct_pathway (within-condition) or endpoint_direct_pathway (cross-time: A at from_condition, B at to_condition \u2014 two WITHIN-condition readings side by side, NEVER a statistic computed across time).",
+          "enum": [
+            "condition_matched_direct_pathway",
+            "endpoint_direct_pathway"
+          ]
+        },
+        "role_and_pole_map_rule_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "analysis_mode",
+        "arm_key_rule_id",
+        "arm_keys_are_matched_by_exact_string_equality_never_by_prefix",
+        "arms",
+        "gene_arm_keys",
+        "gene_arm_keys_sha256",
+        "gene_arm_lane",
+        "one_arm_carries_both_roles",
+        "pathway_context_arm_keys",
+        "pathway_context_label",
+        "role_and_pole_map_rule_id"
+      ],
+      "type": "object"
+    },
+    "selection": {
+      "additionalProperties": false,
+      "description": "THE QUESTION. Every identifier is RE-DERIVED from the contract's own content, never read on trust: an id nobody recomputes is a label, and a label can be moved onto a different contract.",
+      "properties": {
+        "analysis_mode": {
+          "$ref": "#/$defs/analysis_mode"
+        },
+        "canonical_content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "combined_objective_permitted": {
+          "const": false
+        },
+        "conditions": {
+          "description": "ORDERED. within_condition: exactly one. temporal_cross_condition: exactly two, (from, to).",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "type": "array"
+        },
+        "full_contract_content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "poles": {
+          "additionalProperties": false,
+          "properties": {
+            "A": {
+              "additionalProperties": false,
+              "properties": {
+                "condition": {
+                  "description": "The pole's OWN condition: A at conditions[0], B at conditions[-1] (the same one within-time; the two ENDPOINTS across time).",
+                  "type": "string"
+                },
+                "direction": {
+                  "$ref": "#/$defs/pole"
+                },
+                "program_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "program_id",
+                "direction",
+                "condition"
+              ],
+              "type": "object"
+            },
+            "B": {
+              "additionalProperties": false,
+              "properties": {
+                "condition": {
+                  "description": "The pole's OWN condition: A at conditions[0], B at conditions[-1] (the same one within-time; the two ENDPOINTS across time).",
+                  "type": "string"
+                },
+                "direction": {
+                  "$ref": "#/$defs/pole"
+                },
+                "program_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "program_id",
+                "direction",
+                "condition"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "A",
+            "B"
+          ],
+          "type": "object"
+        },
+        "question_id": {
+          "$ref": "#/$defs/short_id",
+          "description": "WHICH QUESTION this is. Stage-1's BIOLOGY-ONLY ordered-question identity: sha256(canonical_json({A:{program_id,direction,condition:conditions[0]}, B:{program_id,direction,condition:conditions[-1]}, analysis_mode}))[:16]. The CONDITION lives INSIDE each pole \u2014 drop it and 'the same program, same direction, at two different times' collapses into one pole compared with itself, and two different questions get one id. NO method binding: the same biological question keeps ONE question_id across method/registry/source revisions. Stage 3 RE-DERIVES it and refuses a contract that declares another."
+        },
+        "question_id_rule_id": {
+          "type": "string"
+        },
+        "roles": {
+          "additionalProperties": false,
+          "properties": {
+            "A": {
+              "const": "away_from_A"
+            },
+            "B": {
+              "const": "toward_B"
+            }
+          },
+          "required": [
+            "A",
+            "B"
+          ],
+          "type": "object"
+        },
+        "roles_are_assigned_at_join_time_never_stored_on_an_arm": {
+          "const": true
+        },
+        "selection_full_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "selection_id": {
+          "$ref": "#/$defs/short_id",
+          "description": "WHICH RUN of that question. sha256(canonical_json(canonical_content))[:16] \u2014 the biology PLUS the scorer view, the source h5ad and the method version. It is the METHOD/INPUT-BOUND identity and it moves when the method does. Bound ALONGSIDE question_id and never conflated with it: with only this, a method revision looks like a new question; with only question_id, a stale run masquerades as the current one."
+        },
+        "selection_id_rule_id": {
+          "type": "string"
+        },
+        "selection_schema": {
+          "const": "spot.stage01_selection.v3"
+        },
+        "stage1_release_binding_sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "analysis_mode",
+        "canonical_content_sha256",
+        "combined_objective_permitted",
+        "conditions",
+        "full_contract_content_sha256",
+        "poles",
+        "question_id",
+        "question_id_rule_id",
+        "roles",
+        "roles_are_assigned_at_join_time_never_stored_on_an_arm",
+        "selection_full_sha256",
+        "selection_id",
+        "selection_id_rule_id",
+        "selection_schema",
+        "stage1_release_binding_sha256"
+      ],
+      "type": "object"
+    },
+    "store": {
+      "additionalProperties": false,
+      "description": "WHAT WAS PROJECTED. The GLOBAL, selection-independent v2 bundle \u2014 addressed by id, never copied into the view, and never modified by it. `provenance` is deliberately not projected: it describes the store, not this question, and a reader opens the bundle by id.",
+      "properties": {
+        "bundle_id": {
+          "type": "string"
+        },
+        "bundle_schema": {
+          "const": "spot.stage03_drug_annotation.v2"
+        },
+        "canonical_content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "code_tree_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "direction_vocabulary_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schemas_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selection_view_vocabulary_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage1_release_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage2_manifest_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage2_manifest_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stage2_manifest_self_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "table_hashes": {
+          "type": "object"
+        },
+        "universe_store_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "bundle_id",
+        "bundle_schema",
+        "canonical_content_sha256",
+        "table_hashes",
+        "stage2_manifest_self_hash",
+        "method_sha256"
+      ],
+      "type": "object"
+    },
+    "tables": {
+      "additionalProperties": false,
+      "description": "The PROJECTED rows. Row COLUMNS are enforced strictly in druglink.view_contract, derived from the producer's own column tuples so the contract cannot drift from the tables. Row order is by content id and is NOT a ranking.",
+      "properties": {
+        "arm_slots": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "arm_summaries": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "candidates": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "dispositions": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "pathway_context": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "source_records": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "target_drug_edges": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "arm_slots",
+        "target_drug_edges",
+        "arm_summaries",
+        "candidates",
+        "pathway_context",
+        "source_records",
+        "dispositions"
+      ],
+      "type": "object"
+    },
+    "view_content_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "view_id": {
+      "$ref": "#/$defs/short_id"
+    },
+    "view_method_id": {
+      "const": "spot.stage03.selection_view.projection.v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "view_method_id",
+    "view_id",
+    "view_content_sha256",
+    "selection",
+    "selected_arms",
+    "store",
+    "admission",
+    "origin_type",
+    "origin_types_present",
+    "arm_evidence",
+    "tables",
+    "counts",
+    "guarantees",
+    "missingness",
+    "inference_status",
+    "combined_objective_permitted",
+    "candidate_rank_permitted",
+    "headline_arm_permitted",
+    "p_q_fdr_permitted"
+  ],
+  "title": "Stage-3 selection view \u2014 a PURE PROJECTION of the selection-independent v2 store onto ONE verified Stage-1 v3 selection",
+  "type": "object"
+}

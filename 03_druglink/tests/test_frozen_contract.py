@@ -55,15 +55,45 @@ FROZEN_CONTRACT_SHA256 = \
 # published `document_file`, per-row namespace, explicit missingness, and the sign-derived
 # direction fields). Each move is a deliberate re-pin of a NEW $id — never an edit to v1.
 #
+# --- THE SELECTION-VIEW ROUND. TWO deliberate moves, and v1 STILL did not budge. ------------
+#
+# 1. A NEW schema was ADDED: `spot.stage03_selection_view.v1` — the browser-safe PROJECTION of
+#    the selection-independent v2 store onto ONE verified Stage-1 v3 selection. It is a new $id,
+#    not a widening of anything, and the set digest moves because an ADDED file must move it.
+#
+# 2. `spot.stage03_drug_annotation.v2` was CORRECTED. Its `independent_report` block carried TWO
+#    defects that made it impossible to admit a GENUINE Stage-2 release — and that nobody could
+#    hit, because until this round no v2 bundle had ever been built from native bytes:
+#
+#      * `additionalProperties: false` with no `manifest_sha256` / `manifest_sha256_recomputed`,
+#        while `bundle_v2.bind_report` emits exactly those (the NATIVE binding: the report must
+#        admit THIS manifest by the semantic self-hash Stage 3 re-derives). Every real release
+#        was refused by its own schema;
+#      * `verifier_id: {pattern: "independent"}` — the retired substring rule. The real Stage-2
+#        verifier is `spot.stage02.run_manifest.verifier.v1` and its id contains no such
+#        substring, so this REFUSED every genuine report while ADMITTING any forgery that merely
+#        named itself "…independent…". The LOADER was fixed for exactly this reason
+#        (`stage2_aggregate._check_report`: independence is the STRUCTURED FIELD
+#        `generator_is_not_verifier`, because a name is not a binding) — and the schema kept the
+#        rule the code had already thrown out. `table_hashes` had also fallen behind the producer
+#        and omitted `pathway_context`.
+#
+#    A schema that refuses the real thing and admits the forgery is worse than no schema. Fixed,
+#    re-pinned, and reported.
+#
 # WHAT THE STAGE-4 OWNER MUST BE TOLD, before any v2 bundle is admitted downstream:
-#     schema set   3068e0c1… -> db4b3557…      (a file was ADDED / the new v2 completed)
+#     schema set   db4b3557… -> 3f23a901…      (selection-view ADDED; v2 corrected)
 #     v1 contract  361d0833…  UNCHANGED        (what Stage 4 binds today — verify this first)
-#     v2 contract  28a331b3…  NEW              (not yet consumed by Stage 4)
+#     v2 contract  28a331b3… -> 6ad784ab…      (still NOT consumed by Stage 4)
+#     view schema  a652f4e0…  NEW              (W12 / W6 consume this)
 FROZEN_SCHEMA_SET_SHA256 = \
-    "db4b35574437b7009af399ad0157b4a31925eacc97223c16fc2a077fc3b0bb57"
+    "3f23a9011d8ce4e7334b05ddcff5b7c2246b777243eb3603977c66c49b6a2cec"
 FROZEN_V2_CONTRACT = "spot.stage03_drug_annotation.v2"
 FROZEN_V2_CONTRACT_SHA256 = \
-    "28a331b3b840a756c360c3916634dd80dc24dbf59710800a67bebf60f02f9ac3"
+    "6ad784ab44d1aad9746ead1d112066d93000afd310d6d8e8fb15deace1f20597"
+FROZEN_VIEW_CONTRACT = "spot.stage03_selection_view.v1"
+FROZEN_VIEW_CONTRACT_SHA256 = \
+    "a652f4e043c9235c42d1301a3bd7e53c7f2db0c2f57d5cbe4310d9fd2dd291ee"
 
 # The verifier's gate inventory on a clean bundle (sorted check names, newline-joined).
 # NEW at r8, closing the class of defect B6 belonged to: the freeze pinned the contract
@@ -193,6 +223,57 @@ def test_v2_is_a_NEW_id_and_v1_is_not_widened_to_reach_it():
     # v1 keeps its own pair, and never learns the v2 origins.
     assert set(v1["$defs"]["origin_type"]["enum"]) == {"direct_target", "pathway_node"}
     assert "temporal_cross_time_measured" not in json.dumps(v1)
+
+
+def test_the_v2_report_binding_admits_the_REAL_verifier_and_not_a_self_named_forgery():
+    """The retired substring rule is GONE, and it may never come back.
+
+    `verifier_id: {pattern: "independent"}` refused every genuine Stage-2 report (the real
+    verifier is `spot.stage02.run_manifest.verifier.v1`) while admitting anything that named
+    itself "…independent…". A name is not a binding. Independence is the STRUCTURED FIELD the
+    loader checks; the schema must not re-impose a rule the code correctly threw out.
+    """
+    with open(os.path.join(SCHEMA_DIR, f"{FROZEN_V2_CONTRACT}.json")) as fh:
+        v2 = json.load(fh)
+    report = v2["$defs"]["stage2_aggregate_binding"]["properties"]["independent_report"]
+    assert "pattern" not in report["properties"]["verifier_id"], (
+        "the v2 schema re-imposed a substring rule on the verifier id. It would refuse the real "
+        "Stage-2 report and admit a forgery that renamed itself." + _UNFREEZE)
+    # It must bind the manifest the report claims to have admitted — by BOTH of the report's
+    # own hashes, which is what makes an ADMIT about THESE bytes rather than some others.
+    for field in ("manifest_sha256", "manifest_sha256_recomputed"):
+        assert field in report["required"], f"the v2 report binding dropped {field!r}" + _UNFREEZE
+
+
+def test_the_selection_view_contract_is_byte_frozen():
+    """W12 (frontend) and W6 (Stage-4) build against these exact bytes.
+
+    The view is a PROJECTION: it never re-ranks, never promotes and never writes back. Those
+    guarantees are enum-locked in the schema, so revoking one moves this hash instead of quietly
+    changing what a shipped page means.
+    """
+    path = os.path.join(SCHEMA_DIR, f"{FROZEN_VIEW_CONTRACT}.json")
+    got = _sha256(path)
+    assert got == FROZEN_VIEW_CONTRACT_SHA256, (
+        f"{FROZEN_VIEW_CONTRACT} changed: {got} != pinned {FROZEN_VIEW_CONTRACT_SHA256}"
+        + _UNFREEZE)
+
+    with open(path) as fh:
+        view = json.load(fh)
+    assert view["$id"] == FROZEN_VIEW_CONTRACT
+    # A ROLE is a property of the QUESTION. The view assigns one; the store never carries one.
+    assert set(view["$defs"]["role"]["enum"]) == {"away_from_A", "toward_B"}
+    assert set(view["$defs"]["analysis_mode"]["enum"]) == {
+        "within_condition", "temporal_cross_condition"}
+    # The three typed origins survive the projection, and stay separable.
+    assert set(view["$defs"]["origin_type"]["enum"]) == {
+        "direct_target", "temporal_cross_time_measured", "endpoint_pathway_context"}
+    # The guarantees are REQUIRED, so a view that quietly drops one fails its own schema.
+    for promise in ("the_view_never_re_ranks_or_re_orders_the_store",
+                    "the_view_never_promotes_an_evidence_class",
+                    "the_view_never_writes_back_to_the_store",
+                    "arm_keys_are_matched_by_exact_string_equality_never_by_prefix"):
+        assert promise in view["properties"]["guarantees"]["required"]
 
 
 @pytest.mark.parametrize("term", RETIRED)

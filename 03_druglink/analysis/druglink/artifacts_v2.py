@@ -67,7 +67,9 @@ from .hashing import canonical_json, content_hash, file_sha256, row_key, table_h
 from .stage2_aggregate import AdmittedAggregate
 from .universe_rows import AdmittedStore
 
-# THE SEVEN v2 TABLES. This set is the contract, and the verifier RESTATES it independently.
+# THE EIGHT v2 TABLES. This set is the contract, and the verifier RESTATES it independently.
+# (Seven scientific + `provenance`. It said SEVEN while listing eight — a miscount a consumer
+#  would have discovered by finding a table nobody told them about.)
 #
 # `arm_slots` is not optional and is not a convenience: it carries EVERY arm slot the release
 # resolved, including the ones no drug evidence reached. Without it, "this arm had no drug

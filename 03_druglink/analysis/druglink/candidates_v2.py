@@ -177,8 +177,14 @@ def build_arm_slots(aggregate: sa.AdmittedAggregate, store: ur.AdmittedStore, *,
     out: list[dict[str, Any]] = []
     for arm in aggregate.arms:
         mine = by_arm.get(arm.arm_key, [])
-        targets = sorted({(str(r.get("target_id")), str(r.get("target_id_namespace")))
-                          for r in arm.records})
+        # A RECORD WITH NO TARGET NAMES NO TARGET. `str(None)` is the string "None", and a
+        # pathway record legitimately carries no target_id — it is a gene-set enrichment. Left
+        # unguarded, every pathway arm slot reported one target, called "None", in a namespace
+        # called "None": an invented identity, in a table whose whole job is to say honestly what
+        # each arm covered. A measured record with no target is refused upstream by
+        # `typed_identity`, so nothing real is lost here.
+        targets = sorted({(str(r["target_id"]), str(r.get("target_id_namespace")))
+                          for r in arm.records if r.get("target_id")})
         in_universe = [t for t in targets if store.row_for(t[0], t[1]) is not None]
         assertions = [a for t in in_universe for a in by_target.get(t, ())]
         statuses = {str(e["directional_evidence_status"]) for e in mine}
@@ -401,9 +407,12 @@ def check_candidate_identity(tables: Mapping[str, list[dict[str, Any]]]) -> None
 
 def build(*, artifact_class: str, aggregate: sa.AdmittedAggregate,
           store: ur.AdmittedStore) -> dict[str, list[dict[str, Any]]]:
-    """The whole selection-independent v2 evidence set. Six scientific tables, no winner.
+    """The whole selection-independent v2 evidence set. SEVEN scientific tables, no winner.
 
-    (:mod:`druglink.bundle_v2` adds the seventh, ``provenance``.)
+    arm_slots, target_drug_edges, pathway_context, arm_summaries, candidates, source_records,
+    dispositions — and :mod:`druglink.bundle_v2` adds the EIGHTH, ``provenance``, for the
+    EIGHT the bundle ships. (This said "six ... the seventh" while building seven; a consumer
+    binding the stated count would have missed a whole table.)
     """
     ac.require(artifact_class)
     built = build_edges(aggregate, store)

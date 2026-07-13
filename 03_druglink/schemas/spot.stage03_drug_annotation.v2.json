@@ -1264,9 +1264,15 @@
       "properties": {
         "independent_report": {
           "additionalProperties": false,
-          "description": "A SEPARATE artifact from a SEPARATE verifier. Its raw and canonical identity are bound here, and it must admit THIS manifest by both hashes: an ADMIT that names other bytes is an opinion about some other artifact.",
+          "description": "A SEPARATE artifact from a SEPARATE verifier. Its raw and canonical identity are bound here, and it must admit THIS manifest: both its claimed `manifest_sha256` and its own `manifest_sha256_recomputed` must equal the SEMANTIC self-hash Stage 3 re-derived from the manifest bytes on disk. An ADMIT that names other bytes is an opinion about some other artifact. NOTE what is NOT here: a `pattern: independent` on the verifier_id. The real Stage-2 verifier is `spot.stage02.run_manifest.verifier.v1` and its id contains no such substring, so that rule REFUSED every genuine release while ADMITTING any forgery that merely named itself '...independent...'. A name is not a binding. Independence is the STRUCTURED FIELD `generator_is_not_verifier`, checked by the loader against the report's own bytes.",
           "properties": {
             "canonical_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "manifest_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "manifest_sha256_recomputed": {
               "$ref": "#/$defs/sha256"
             },
             "raw_sha256": {
@@ -1276,7 +1282,6 @@
               "const": "admit"
             },
             "verifier_id": {
-              "pattern": "independent",
               "type": "string"
             }
           },
@@ -1284,7 +1289,9 @@
             "raw_sha256",
             "canonical_sha256",
             "verifier_id",
-            "verdict"
+            "verdict",
+            "manifest_sha256",
+            "manifest_sha256_recomputed"
           ],
           "type": "object"
         },
@@ -1786,7 +1793,7 @@
     },
     "table_hashes": {
       "additionalProperties": false,
-      "description": "The content hash of every one of the SEVEN v2 tables. `arm_slots` carries EVERY arm slot the release resolved, including the ones no drug evidence reached: without it, 'this arm had no drug evidence' and 'this arm never ran' are the same silence. `source_records` carries every VERBATIM source assertion, including the variant-specific and ambiguous-identity lanes that may never rank a gene: a dropped assertion is indistinguishable from a drug nobody found.",
+      "description": "The content hash of every emitted v2 table. `pathway_context` is one of them: the pathway CONTEXTUALIZES a measured edge and never sources one, and a member with no measured support is carried there with STATED missingness rather than dropped. `arm_slots` carries EVERY arm slot the release resolved, including the ones no drug evidence reached: without it, 'this arm had no drug evidence' and 'this arm never ran' are the same silence. `source_records` carries every VERBATIM source assertion, including the variant-specific and ambiguous-identity lanes that may never rank a gene: a dropped assertion is indistinguishable from a drug nobody found.",
       "properties": {
         "arm_slots": {
           "$ref": "#/$defs/sha256"
@@ -1798,6 +1805,9 @@
           "$ref": "#/$defs/sha256"
         },
         "dispositions": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pathway_context": {
           "$ref": "#/$defs/sha256"
         },
         "provenance": {
@@ -1812,12 +1822,13 @@
       },
       "required": [
         "arm_slots",
-        "target_drug_edges",
         "arm_summaries",
         "candidates",
-        "source_records",
         "dispositions",
-        "provenance"
+        "pathway_context",
+        "provenance",
+        "source_records",
+        "target_drug_edges"
       ],
       "type": "object"
     },

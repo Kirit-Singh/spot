@@ -27,6 +27,7 @@ sys.path.insert(0, _HERE)
 
 import direct_fixture  # noqa: E402
 import universe_store_fixture as USF  # noqa: E402
+from selection_world import world  # noqa: E402,F401  (the ONE sealed selection-view store)
 from stage2_release_fixture import build_release  # noqa: E402
 
 
