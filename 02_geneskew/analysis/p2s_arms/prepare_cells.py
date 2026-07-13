@@ -26,7 +26,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from . import config
+from . import config, stage1_canonical
 from . import disposition as D
 
 CHUNK_ROWS = 20_000
@@ -47,8 +47,14 @@ def read_obs_column(obs: h5py.Group, name: str) -> np.ndarray:
 
 
 def load_scores(path: str, condition: str, program_ids: list[str]) -> dict[str, Any]:
-    """Stage-1's FULL by-barcode score table, for one condition. READ, never recomputed."""
+    """Stage-1's FULL by-barcode score table, for one condition. READ, never recomputed.
+
+    Gated on BOTH hashes: the raw sha256 pins the bytes, and the CANONICAL score hash
+    (re-derived here) pins the science those bytes encode in Stage-1's frozen form. A
+    re-rounded or re-ordered table would pass a raw check it happened to match and fail this.
+    """
     df = pd.read_parquet(path)
+    canonical = stage1_canonical.verify(df)          # REFUSES on a canonical mismatch
 
     for col in ("barcode", "donor", "condition"):
         if col not in df.columns:
@@ -90,6 +96,7 @@ def load_scores(path: str, condition: str, program_ids: list[str]) -> dict[str, 
         "n_rows_all_conditions": n_all,
         "n_rows_condition": len(sub),
         "conditions_present": sorted(df["condition"].astype(str).unique().tolist()),
+        "canonical": canonical,
     }
 
 
@@ -256,4 +263,5 @@ def build(*, ntc_path: str, scores_path: str, condition: str, program_ids: list[
                  "n_donors": int(len(set(donors.tolist())))},
         "donors_present": sorted(set(donors.tolist())),
         "conditions_present": scores["conditions_present"],
+        "canonical": scores["canonical"],
     }

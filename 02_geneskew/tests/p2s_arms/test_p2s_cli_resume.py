@@ -35,7 +35,8 @@ import pytest
 from p2s_arms import disposition as D
 from p2s_arms import run_p2s_arms
 
-REQUIRED_FLAGS = ("--direct-bundle", "--w10-report", "--env-lock", "--stage1-release")
+REQUIRED_FLAGS = ("--direct-bundle", "--w10-report", "--env-lock",
+                  "--p2s-env-lock", "--inputs", "--stage1-release")
 
 
 def _flag_names(parser) -> set[str]:
@@ -89,8 +90,7 @@ def test_a_refusal_emits_a_TYPED_DEFERRED_DISPOSITION_and_exits_2(tmp_path, bund
         "--env-lock", fx.REAL_SOLVER_LOCK,
         "--stage1-release", "unused-because-we-refuse-first",
         "--arm-key", f"direct|{fx.PROGRAM}|increase|{fx.CONDITION}",
-        "--cells", inputs["cells"], "--effects", inputs["effects"],
-        "--masks", inputs["masks"], "--eligible", inputs["eligible"],
+        "--inputs", str(tmp_path), "--p2s-env-lock", fx.REAL_P2S_LOCK,
         "--out-root", out_root, "--lane", "synthetic",
     ]
     code = run_p2s_arms.main(argv)
@@ -117,8 +117,7 @@ def test_a_refused_arm_is_a_RESULT_not_a_silence(tmp_path, bundle_dir, view, inp
         "--w10-report", os.path.join(bundle_dir, "verification.json"),
         "--env-lock", fx.REAL_SOLVER_LOCK, "--stage1-release", "x",
         "--arm-key", f"direct|{fx.PROGRAM}|increase|{fx.CONDITION}",
-        "--cells", inputs["cells"], "--effects", inputs["effects"],
-        "--masks", inputs["masks"], "--eligible", inputs["eligible"],
+        "--inputs", str(tmp_path), "--p2s-env-lock", fx.REAL_P2S_LOCK,
         "--out-root", out_root, "--lane", "synthetic",
     ])
     assert os.path.exists(os.path.join(out_root, run_p2s_arms.DEFERRED_FILE))

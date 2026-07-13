@@ -49,7 +49,7 @@ import pandas as pd
 from direct import code_digest
 from direct import io_data as direct_io
 
-from . import binding, config, prepare_cells, w10
+from . import binding, config, direct_inventory, prepare_cells, w10
 from . import disposition as D
 
 CELLS_FILE = "cells.npz"
@@ -68,7 +68,8 @@ ARTIFACT_FILES = (CELLS_FILE, EFFECTS_FILE, MASKS_FILE, ELIGIBLE_FILE)
 # somebody turns off.
 FIXTURE_TOKENS = ("fixture", "synthetic", "/tests/", "tests/", "mock", "dummy")
 
-PINS = {"ntc": config.NTC_H5AD_SHA256, "de_main": config.DE_MAIN_SHA256}
+PINS = {"ntc": config.NTC_H5AD_SHA256, "de_main": config.DE_MAIN_SHA256,
+        "stage1_scores": config.STAGE1_SCORES_RAW_SHA256}
 
 
 def refuse_fixture_path(name: str, path: str) -> None:
@@ -156,33 +157,79 @@ def effects_matrix(readout: dict[str, Any], targets: list[str]) -> dict[str, Any
     }
 
 
-def from_bundle(bundle_dir: str) -> dict[str, Any]:
-    """Masks and eligibility, from the ADMITTED bundle's OWN bytes. Never re-derived."""
-    masks = pd.read_parquet(os.path.join(bundle_dir, "masks.parquet"))
-    cols = {c.lower(): c for c in masks.columns}
-    tcol = cols.get("target_id")
-    gcol = cols.get("gene_id") or cols.get("gene_ensembl") or cols.get("masked_gene_id")
-    if not tcol or not gcol:
-        raise D.RefusalError(
-            D.REFUSE_BUNDLE_INCOMPLETE,
-            f"the bundle's masks.parquet has no target/gene columns (it has "
-            f"{list(masks.columns)})")
-    mask_rows = (masks[[tcol, gcol]].astype(str)
-                 .rename(columns={tcol: "target_id", gcol: "gene_id"})
-                 .drop_duplicates())
+def from_bundle(bundle_dir: str, *, programs: list[str], condition: str,
+                readout_symbols: set) -> dict[str, Any]:
+    """MAIN-estimate masks and ARM-SPECIFIC eligibility, via ``direct_inventory``.
 
-    arms = pd.read_parquet(os.path.join(bundle_dir, "arms.parquet"))
-    elig = (arms[["target_id", "base_state"]].astype(str).drop_duplicates()
-            .rename(columns={"base_state": "state"}))
-    keep = elig[elig["state"].isin(config.ELIGIBLE_STATES)]
-    if keep.empty:
+    Masks are selected on the full estimate identity (main/main), never unioned across
+    scopes, and an empty main mask is refused. Eligibility is ``evaluable`` on each program's
+    OWN arm — and each program's two sign arms are proven to share one inventory. Every
+    evaluable target must carry a mask; a missing one refuses rather than defaulting to the
+    (most-permissive) empty mask.
+
+    The eligible OUTPUT is arm-keyed, so the producer can filter to the arm it is fitting
+    rather than inheriting a global set.
+    """
+    masks = direct_inventory.main_estimate_masks(bundle_dir)
+
+    eligible_rows: list[dict[str, Any]] = []
+    union: set = set()
+    per_program: dict[str, int] = {}
+    unresolved_total = 0
+    for program_id in programs:
+        inv = direct_inventory.bind(bundle_dir, program_id=program_id, condition=condition)
+        per_program[program_id] = inv["eligible"]["n_evaluable"]
+        unresolved_total += inv["n_symbol_targets_unresolved"]
+        for arm_key in (inv["eligible"]["arm_key"], inv["eligible"]["sibling_arm_key"]):
+            for t in inv["targets"]:
+                eligible_rows.append({
+                    "arm_key": arm_key, "program_id": program_id, "condition": condition,
+                    "target_id": t, "state": inv["eligible"]["base_state_by_target"][t],
+                    # target_ensembl from the MAIN MASK rows; null for symbol-namespace targets
+                    "target_ensembl": inv["target_ensembl_by_target"].get(t),
+                    "evaluable": True})
+        union |= set(inv["targets"])
+
+    # SYMBOL-NAMESPACE TARGETS: a null target_ensembl is legitimate ONLY IF the target's
+    # symbol is PROVEN ABSENT from the pinned DE gene_name crosswalk. If the symbol is present
+    # but was not uniquely mapped, its self-gene would go unmasked — REFUSE that target.
+    ens_by_target: dict[str, Any] = {}
+    for program_id in programs:
+        inv = direct_inventory.bind(bundle_dir, program_id=program_id, condition=condition)
+        ens_by_target.update(inv["target_ensembl_by_target"])
+    null_targets = [t for t in union if not ens_by_target.get(t)]
+    present_unmapped = sorted(t for t in null_targets if str(t) in readout_symbols)
+    if present_unmapped:
         raise D.RefusalError(
-            D.REFUSE_BUNDLE_INCOMPLETE,
-            "the admitted bundle's arm rows carry no target in an eligible state "
-            f"{list(config.ELIGIBLE_STATES)}; there is no perturbation matrix to build")
-    return {"masks": mask_rows.to_dict("records"),
-            "eligible": keep.to_dict("records"),
-            "targets": sorted(keep["target_id"].unique().tolist())}
+            D.REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED,
+            f"{len(present_unmapped)} target(s) have no target_ensembl yet their SYMBOL is "
+            f"present in the DE readout (e.g. {present_unmapped[:3]}). A symbol that the "
+            "crosswalk contains but did not map uniquely must be resolved or the target "
+            "refused — never left with its self-gene unmasked")
+    n_proven_absent = len([t for t in null_targets if str(t) not in readout_symbols])
+
+    # every evaluable target (union across programs) MUST have a mask — checked here too, so
+    # a target eligible for one program but unmasked cannot slip through on another's pass.
+    unmasked = sorted(t for t in union if t not in masks["by_target"])
+    if unmasked:
+        raise D.RefusalError(
+            D.REFUSE_MASK_MISSING_FOR_ELIGIBLE,
+            f"{len(unmasked)} evaluable target(s) have NO main-estimate mask (e.g. "
+            f"{unmasked[:3]}). A missing mask withholds nothing — the most permissive setting "
+            "there is — and is never a default")
+
+    return {"masks": masks["rows"], "mask_meta": {
+                "n_rows_all_scopes": masks["n_rows_all_scopes"],
+                "n_rows_main": masks["n_rows_main"], "scopes_unioned": masks["scopes_unioned"],
+                "estimate_type": masks["estimate_type"], "estimate_id": masks["estimate_id"],
+                "gene_column": masks["gene_column"],
+                "n_symbol_targets_unresolved": len(null_targets),
+                "n_symbol_targets_proven_absent_from_readout": n_proven_absent,
+                "null_target_ensembl_requires_proven_absence": True,
+                "target_genes_subtracted_globally": False},
+            "eligible": eligible_rows,
+            "targets": sorted(union),
+            "n_evaluable_by_program": per_program}
 
 
 def build(args, *, release=None, view=None) -> dict[str, Any]:
@@ -216,6 +263,9 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
         bundle_dir=args.direct_bundle, w10_report=args.w10_report,
         env_lock=args.env_lock, lane=args.lane)
     admission = admitted["admission"]
+    # THE SECOND ENVIRONMENT. The Direct lock pins where the arms came from; this pins where
+    # preparation and the fit run. Two locks, bound separately.
+    p2s_lock = binding.verify_p2s_runtime_lock(args.p2s_env_lock)
 
     if str(admission.get("condition")) != args.condition:
         raise D.RefusalError(
@@ -223,10 +273,11 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
             f"--condition {args.condition!r} is not the admitted bundle's condition "
             f"({admission.get('condition')!r})")
 
-    # 2. THE PINS — hashed from the bytes handed in.
+    # 2. THE PINS — hashed from the bytes handed in. Raw scores are HARD-GATED, not merely
+    #    recorded; the canonical hash is gated inside prepare_cells.load_scores.
     ntc_sha = check_pin("ntc", args.ntc, PINS["ntc"])
     de_sha = check_pin("de_main", args.de_main, PINS["de_main"])
-    scores_sha = w10.file_sha256(args.stage1_scores)
+    scores_sha = check_pin("stage1-scores", args.stage1_scores, PINS["stage1_scores"])
 
     # 3. THE PROGRAM SET — derived from the bound release, never a copied count.
     if release is None or view is None:
@@ -241,18 +292,23 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
             "the bound release derives a different scorer view from the one W10 admitted; "
             "these are not the same arms")
 
-    programs = list(view["admitted_program_ids"])
-    if config.ACTIVATION_PROGRAM_ID not in programs:
-        programs.append(config.ACTIVATION_PROGRAM_ID)     # the covariate must be scored too
+    # base-portable programs carry arms; the activation covariate must be SCORED (for the
+    # design) but is NOT an arm and gets no eligibility of its own.
+    arm_programs = list(view["admitted_program_ids"])
+    score_programs = list(arm_programs)
+    if config.ACTIVATION_PROGRAM_ID not in score_programs:
+        score_programs.append(config.ACTIVATION_PROGRAM_ID)
 
-    # 4. THE BUNDLE'S OWN masks and eligibility.
-    bundle = from_bundle(args.direct_bundle)
-
-    # 5. THE READOUT, and the CELLS crossed into its namespace.
+    # 5. THE READOUT (loaded first — its symbols prove/refuse null target identities).
     readout = load_readout(args.de_main, args.condition)
+    readout_symbols = {str(s) for s in readout["symbols"] if s}
+
+    # 4. THE BUNDLE'S OWN masks (main estimate) and ARM-SPECIFIC eligibility.
+    bundle = from_bundle(args.direct_bundle, programs=arm_programs, condition=args.condition,
+                         readout_symbols=readout_symbols)
     cells = prepare_cells.build(
         ntc_path=args.ntc, scores_path=args.stage1_scores, condition=args.condition,
-        program_ids=programs, readout_gene_ids=readout["gene_ids"],
+        program_ids=score_programs, readout_gene_ids=readout["gene_ids"],
         readout_symbols=readout["symbols"], max_cells=args.max_cells, seed=args.seed)
 
     eff = effects_matrix(readout, bundle["targets"])
@@ -266,13 +322,29 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
         "raw_input_sha256": {
             "ntc_h5ad": ntc_sha, "stage1_scores": scores_sha, "de_main": de_sha},
         "pinned_input_sha256": dict(PINS),
+        "stage1_scores": {
+            "raw_sha256": scores_sha,
+            "raw_sha256_pinned": config.STAGE1_SCORES_RAW_SHA256,
+            "canonical_scores_sha256": cells["canonical"]["canonical_scores_sha256"],
+            "canonical_scores_sha256_pinned": config.STAGE1_SCORES_CANONICAL_SHA256,
+            "canonical_rederived": True,
+            "read_by_barcode_never_recomputed": True,
+        },
+        "environment_locks": {
+            "direct_solver_lock_sha256": admitted["solver_lock"]["sha256"],
+            "p2s_runtime_lock_sha256": p2s_lock["sha256"],
+            "direct_lock_executes_p2s": config.DIRECT_LOCK_EXECUTES_P2S,
+        },
         "public_source": {"ntc": config.NTC_HF_SOURCE, "revision": config.NTC_HF_REVISION},
         "dims": cells["dims"],
         "n_effect_targets": len(eff["target_ids"]),
         "n_effect_genes": len(eff["gene_ids"]),
         "effect_container": "matrix (targets x genes), float32 — never long rows",
         "n_mask_rows": len(bundle["masks"]),
+        "mask_contract": bundle["mask_meta"],
         "n_eligible_targets": len(bundle["targets"]),
+        "eligibility_is_arm_specific": True,
+        "n_evaluable_by_program": bundle["n_evaluable_by_program"],
         "barcode_join": cells["join"],
         "gene_namespace": {
             "cells": config.GENE_NAMESPACE_CELLS,
@@ -280,7 +352,7 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
             **{k: v for k, v in cells["crosswalk"].items() if k != "symbol_to_ensembl"},
         },
         "subsample": cells["subsample"],
-        "program_ids": sorted(programs),
+        "program_ids": sorted(arm_programs),
         "scorer_view_sha256": view["scorer_view_sha256"],
         "donors": cells["donors_present"],
         "direct_binding": binding.bound_block(
@@ -299,6 +371,7 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
     os.makedirs(out_dir, exist_ok=True)
 
     np.savez(os.path.join(out_dir, CELLS_FILE),
+             condition=np.asarray(args.condition),          # the scalar condition, in-band
              barcodes=np.asarray(cells["barcodes"], dtype=object).astype("U"),
              donors=np.asarray(cells["donors"], dtype=object).astype("U"),
              gene_ids=np.asarray(cells["gene_ids"], dtype=object).astype("U"),
@@ -308,7 +381,11 @@ def build(args, *, release=None, view=None) -> dict[str, Any]:
              target_ids=np.asarray(eff["target_ids"], dtype=object).astype("U"),
              gene_ids=np.asarray(eff["gene_ids"], dtype=object).astype("U"),
              zscore=eff["zscore"], log_fc=eff["log_fc"])
-    pd.DataFrame(bundle["masks"]).to_parquet(os.path.join(out_dir, MASKS_FILE), index=False)
+    # the producer loader reads (target_id, gene_id); the main-estimate gene is masked_gene_ensembl
+    mask_out = [{"target_id": r["target_id"], "gene_id": r["gene_id"]}
+                for r in bundle["masks"]]
+    pd.DataFrame(mask_out).to_parquet(os.path.join(out_dir, MASKS_FILE), index=False)
+    # eligibility is ARM-KEYED: the producer filters to the arm it is fitting
     pd.DataFrame(bundle["eligible"]).to_parquet(os.path.join(out_dir, ELIGIBLE_FILE),
                                                 index=False)
 
@@ -342,7 +419,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "non-deterministically)")
     ap.add_argument("--direct-bundle", required=True, dest="direct_bundle")
     ap.add_argument("--w10-report", required=True, dest="w10_report")
-    ap.add_argument("--env-lock", required=True, dest="env_lock")
+    ap.add_argument("--env-lock", required=True, dest="env_lock",
+                    help="the DIRECT solver lock (2983d140) — the environment the ARMS were "
+                         "computed in")
+    ap.add_argument("--p2s-env-lock", required=True, dest="p2s_env_lock",
+                    help="the P2S RUNTIME lock (sklearn + pert2state_model) — a SEPARATE "
+                         "environment; the Direct lock cannot execute this lane")
     ap.add_argument("--stage1-release", required=True)
     ap.add_argument("--condition", required=True, choices=list(config.CONDITIONS))
     ap.add_argument("--out-root", required=True)

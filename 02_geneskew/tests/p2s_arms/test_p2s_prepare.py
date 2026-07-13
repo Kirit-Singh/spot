@@ -20,17 +20,18 @@ import os
 import fixtures_p2s as fx
 import numpy as np
 import pytest
-from p2s_arms import config, prepare_cells, prepare_inputs
+from p2s_arms import config, prepare_cells, prepare_inputs, stage1_canonical
 from p2s_arms import disposition as D
 from p2s_arms.w10 import file_sha256
 
 CONDITION = "Stim48hr"
 REQUIRED_FLAGS = ("--ntc", "--stage1-scores", "--de-main", "--direct-bundle",
-                  "--w10-report", "--env-lock", "--stage1-release", "--condition")
+                  "--w10-report", "--env-lock", "--p2s-env-lock", "--stage1-release",
+                  "--condition")
 
 
 @pytest.fixture
-def real_inputs(tmp_path, view, bundle_dir, w10_report, monkeypatch):
+def real_inputs(tmp_path, view, bundle_dir, w10_report, p2s_lock, monkeypatch):
     """The pinned public inputs, in their real shape — with the pins set to these bytes."""
     programs = list(view["admitted_program_ids"])
     ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
@@ -39,15 +40,26 @@ def real_inputs(tmp_path, view, bundle_dir, w10_report, monkeypatch):
 
     monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
     monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
+    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
+    _pin_canonical(scores, monkeypatch)
     return {"ntc": ntc, "scores": scores, "de": de, "bundle": bundle_dir,
-            "w10": w10_report, "programs": programs, "view": view}
+            "w10": w10_report, "programs": programs, "view": view, "p2s_lock": p2s_lock}
+
+
+def _pin_canonical(scores_path, monkeypatch):
+    """Point the canonical gate at THIS fixture table's own hash (the mechanism is the test)."""
+    import pandas as pd
+    df = pd.read_parquet(scores_path)
+    monkeypatch.setattr(stage1_canonical, "EXPECTED",
+                        stage1_canonical.canonical_scores_sha256(df))
 
 
 def _argv(ri, tmp_path, **over):
     a = {
         "--ntc": ri["ntc"], "--stage1-scores": ri["scores"], "--de-main": ri["de"],
         "--direct-bundle": ri["bundle"], "--w10-report": ri["w10"],
-        "--env-lock": fx.REAL_SOLVER_LOCK, "--stage1-release": "unused-in-fixture-lane",
+        "--env-lock": fx.REAL_SOLVER_LOCK, "--p2s-env-lock": ri["p2s_lock"],
+        "--stage1-release": "unused-in-fixture-lane",
         "--condition": CONDITION, "--out-root": str(tmp_path / "prepared"),
         "--lane": "synthetic", "--release-kind": "fixture",
     }
@@ -202,23 +214,25 @@ def test_MUTATION_the_DE_pin_failure_names_the_tcedirector_read(real_inputs, tmp
 
 
 def test_MUTATION_a_DUPLICATE_barcode_is_refused(tmp_path, view, bundle_dir, w10_report,
-                                                 monkeypatch):
+                                                 p2s_lock, monkeypatch):
     ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
     scores = fx.write_stage1_scores(str(tmp_path / "s.parquet"),
                                     ntc, view["admitted_program_ids"], duplicate=True)
     de = fx.write_de_readout(str(tmp_path / "de.h5ad"), fx.target_ids())
     monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
     monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
+    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
 
+    _pin_canonical(scores, monkeypatch)
     ri = {"ntc": ntc, "scores": scores, "de": de, "bundle": bundle_dir,
-          "w10": w10_report, "view": view}
+          "w10": w10_report, "view": view, "p2s_lock": p2s_lock}
     with pytest.raises(D.RefusalError) as e:
         _build(ri, tmp_path)
     assert e.value.reason == D.REFUSE_DUPLICATE_BARCODE
 
 
 def test_MUTATION_a_cell_with_NO_score_row_is_refused_never_imputed(
-        tmp_path, view, bundle_dir, w10_report, monkeypatch):
+        tmp_path, view, bundle_dir, w10_report, p2s_lock, monkeypatch):
     """An absent score is not a score of zero."""
     ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
     scores = fx.write_stage1_scores(str(tmp_path / "s.parquet"), ntc,
@@ -226,9 +240,11 @@ def test_MUTATION_a_cell_with_NO_score_row_is_refused_never_imputed(
     de = fx.write_de_readout(str(tmp_path / "de.h5ad"), fx.target_ids())
     monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
     monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
+    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
 
+    _pin_canonical(scores, monkeypatch)
     ri = {"ntc": ntc, "scores": scores, "de": de, "bundle": bundle_dir,
-          "w10": w10_report, "view": view}
+          "w10": w10_report, "view": view, "p2s_lock": p2s_lock}
     with pytest.raises(D.RefusalError) as e:
         _build(ri, tmp_path)
     assert e.value.reason == D.REFUSE_MISSING_BARCODE
@@ -236,17 +252,19 @@ def test_MUTATION_a_cell_with_NO_score_row_is_refused_never_imputed(
 
 
 def test_MUTATION_a_program_the_release_admits_but_stage1_never_scored_is_refused(
-        tmp_path, view, bundle_dir, w10_report, monkeypatch):
+        tmp_path, view, bundle_dir, w10_report, p2s_lock, monkeypatch):
     ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
     scores = fx.write_stage1_scores(str(tmp_path / "s.parquet"), ntc,
                                     view["admitted_program_ids"],
-                                    omit_program=fx.PROGRAM)
+                                    omit_program="th1_like")
     de = fx.write_de_readout(str(tmp_path / "de.h5ad"), fx.target_ids())
     monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
     monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
-
+    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
+    # deliberately NOT pinning canonical: a table missing an admitted program's score column
+    # is missing a canonical field, and the canonical recipe refuses it BY THAT REASON.
     ri = {"ntc": ntc, "scores": scores, "de": de, "bundle": bundle_dir,
-          "w10": w10_report, "view": view}
+          "w10": w10_report, "view": view, "p2s_lock": p2s_lock}
     with pytest.raises(D.RefusalError) as e:
         _build(ri, tmp_path)
     assert e.value.reason == D.REFUSE_PROGRAM_SET_MISMATCH
@@ -322,3 +340,38 @@ def test_the_CLI_refuses_with_exit_2_and_a_named_reason(real_inputs, tmp_path, m
     err = json.loads(capsys.readouterr().err)
     assert err["state"] == "refused"
     assert err["reason"] == D.REFUSE_INPUT_NOT_PINNED
+
+
+def test_MUTATION_a_null_target_whose_SYMBOL_is_in_the_readout_is_REFUSED(
+        tmp_path, view, bundle_dir, w10_report, p2s_lock, monkeypatch):
+    """A symbol the crosswalk contains but did not map must be resolved or refused —
+    never left with its self-gene unmasked. (Real absentees: MTRNR2L1/4/8, OCLM.)"""
+    import pandas as pd
+    from p2s_arms import prepare_inputs
+
+    # blank one target's target_ensembl in the MAIN mask -> null identity
+    mpath = os.path.join(bundle_dir, "masks.parquet")
+    m = pd.read_parquet(mpath)
+    victim = m.loc[m["estimate_type"] == "main", "target_id"].iloc[0]
+    m.loc[m["target_id"] == victim, "target_ensembl"] = None
+    m.loc[m["target_id"] == victim, "masked_gene_ensembl"] = "ENSG00000000000"  # not self
+    m.to_parquet(mpath, index=False)
+    w10_report = fx.write_w10_report(str(tmp_path / "w10.json"), bundle_dir, view)
+
+    ntc = fx.write_ntc_h5ad(str(tmp_path / "ntc.h5ad"))
+    scores = fx.write_stage1_scores(str(tmp_path / "s.parquet"), ntc,
+                                    view["admitted_program_ids"])
+    # the readout NAMES a symbol equal to the victim target_id -> present but unmapped
+    de = fx.write_de_readout(str(tmp_path / "de.h5ad"), fx.target_ids(),
+                             symbols=[str(victim)] + fx.CELL_SYMBOLS[1:],
+                             gene_ids=[f"ENSG{i:011d}" for i in range(len(fx.CELL_SYMBOLS))])
+    monkeypatch.setitem(prepare_inputs.PINS, "ntc", file_sha256(ntc))
+    monkeypatch.setitem(prepare_inputs.PINS, "de_main", file_sha256(de))
+    monkeypatch.setitem(prepare_inputs.PINS, "stage1_scores", file_sha256(scores))
+    _pin_canonical(scores, monkeypatch)
+
+    ri = {"ntc": ntc, "scores": scores, "de": de, "bundle": bundle_dir,
+          "w10": w10_report, "view": view, "p2s_lock": p2s_lock}
+    with pytest.raises(D.RefusalError) as e:
+        _build(ri, tmp_path)
+    assert e.value.reason == D.REFUSE_TARGET_SYMBOL_PRESENT_UNMAPPED

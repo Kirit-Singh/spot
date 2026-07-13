@@ -43,7 +43,6 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     FORBIDDEN_FILES,
     INCREASE,
     NEGATIVE_DECLARATIONS,
-    OPPOSED,
     PINNED_SOLVER_LOCK_SHA256,
     PROVENANCE_FILE,
     RECON_FILE,
@@ -52,9 +51,12 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     SPEC_L1_MAX,
     SPEC_L1_MIN,
     SPEC_LANE_ROLE,
+    SPEC_PRIMARY_LAYER,
+    SPEC_PRIMARY_MODEL_CONFIG,
+    SPEC_PRIMARY_SCOPE,
     SPEC_RANDOM_STATE,
     SPEC_SIGN_TRANSFORM_TOL,
-    SPEC_STATUS_VALUES,
+    SPEC_SIGN_VALUES,
     SUPPORT_FILE,
     VERIFIER_ID,
     W10_SPEC_SHA256,
@@ -67,7 +69,6 @@ from verify_p2s_rules import (  # noqa: E402  (the verifier-side reimplementatio
     forbidden_keys,
     machine_paths,
     parse_arm_key,
-    support_status,
 )
 
 PASS, FAIL = "pass", "fail"
@@ -249,8 +250,8 @@ def verify(out_dir: str) -> dict[str, Any]:
     # -- 6. the two arms are ONE measurement and a sign ------------------------- #
     rep.check(*_check_sign_transform(coefs, parsed))
 
-    # -- 7. the support status, re-derived from the emitted frequencies --------- #
-    rep.check(*_check_support_status(support))
+    # -- 7. CONTINUOUS support: primary estimand + no discrete verdict ---------- #
+    rep.check(*_check_continuous_support(support, method))
 
     # -- 8. determinism and the model pin -------------------------------------- #
     m = method.get("model") or {}
@@ -274,10 +275,10 @@ def verify(out_dir: str) -> dict[str, Any]:
     paths = machine_paths(doc) + machine_paths(prov)
     rep.check("no machine-local path is emitted", not paths, f"at {paths[:5]}")
 
-    # -- 10. counting: a zero coefficient does not disappear from coverage ------ #
+    # -- 10. counting: every concordance ships its denominator ------------------ #
     bad_den = [r["target_id"] for r in support
-               if int(r["n_selected_runs"]) > int(r["n_runs"])]
-    rep.check("no target is selected in more runs than it appeared in", not bad_den,
+               if int(r["n_sensitivity_sign_concordant"]) > int(r["n_sensitivity_fits"])]
+    rep.check("no concordance exceeds its sensitivity denominator", not bad_den,
               f"{bad_den[:4]}")
     rep.check("every support row ships its denominator",
               all(int(r["n_runs"]) > 0 for r in support))
@@ -312,21 +313,36 @@ def _check_sign_transform(coefs: list[dict[str, Any]],
             f"{len(bad)} slot(s) where increase != -decrease, e.g. {bad[:3]}")
 
 
-def _check_support_status(support: list[dict[str, Any]]) -> tuple[str, bool, str]:
-    """Re-derive every status, and check the opposed flag never launders into support."""
-    bad, laundered = [], []
+def _check_continuous_support(support: list[dict[str, Any]],
+                              method: dict[str, Any]) -> tuple[str, bool, str]:
+    """Support is CONTINUOUS: a primary sign, sensitivity denominators, and NO discrete verdict.
+
+    Re-derives the OPPOSED fact from the primary sign (not from a selection frequency), and
+    confirms the primary estimand is the single seeded-SVD family — never pooled.
+    """
+    bad = []
     for r in support:
-        want = support_status(float(r["selection_frequency"]),
-                              float(r["positive_frequency"]),
-                              float(r["negative_frequency"]))
-        got = str(r["support_status"])
-        if got not in SPEC_STATUS_VALUES or got != want:
-            bad.append((r["arm_key"], r["target_id"], got, want))
-        if bool(r["opposed"]) != (got == OPPOSED):
-            laundered.append((r["arm_key"], r["target_id"], got, r["opposed"]))
-    ok = not bad and not laundered
-    return ("every support status re-derives, and opposed is never converted to support",
-            ok, f"mis-derived {bad[:3]}; opposed-flag disagreement {laundered[:3]}")
+        sign = str(r["primary_sign"])
+        if sign not in SPEC_SIGN_VALUES:
+            bad.append((r["arm_key"], r["target_id"], "sign", sign))
+        # opposed is EXACTLY the primary-sign-is-opposed fact, never a laundered verdict
+        if bool(r["opposed"]) != (sign == "opposed"):
+            bad.append((r["arm_key"], r["target_id"], "opposed", r["opposed"]))
+        # denominators must ship: a concordance without its n is not a fraction
+        if int(r["n_sensitivity_sign_concordant"]) > int(r["n_sensitivity_fits"]):
+            bad.append((r["arm_key"], r["target_id"], "concordance>denominator", None))
+
+    sup = method.get("support") or {}
+    prim = sup.get("primary_estimand") or {}
+    primary_ok = (prim.get("donor_scope") == SPEC_PRIMARY_SCOPE
+                  and prim.get("effect_layer") == SPEC_PRIMARY_LAYER
+                  and prim.get("model_config") == SPEC_PRIMARY_MODEL_CONFIG
+                  and sup.get("families_are_pooled_into_primary") is False
+                  and sup.get("support_is_discrete_flag") is False)
+    ok = not bad and primary_ok
+    return ("support is continuous: primary sign + sensitivity denominators, no pooled "
+            "families, no discrete verdict",
+            ok, f"row issues {bad[:3]}; primary_estimand ok={primary_ok}")
 
 
 def main(argv=None) -> int:

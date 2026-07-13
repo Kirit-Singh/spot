@@ -50,6 +50,12 @@ def env_lock() -> str:
 
 
 @pytest.fixture
+def p2s_lock() -> str:
+    """The REAL committed P2S runtime lock (copied byte-for-byte from tcefold, hashes to pin)."""
+    return fx.REAL_P2S_LOCK
+
+
+@pytest.fixture
 def inputs(tmp_path) -> dict[str, str]:
     d = tmp_path / "inputs"
     d.mkdir()

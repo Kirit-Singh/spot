@@ -9,8 +9,10 @@ which is the point.
 
 WHAT THE UI MUST READ OFF IT, AND MUST NOT
 ------------------------------------------
-Read: ``support_status`` and ``opposed`` PER ``arm_key``, plus the denominators
-(``n_runs``, ``n_selected_runs``) that go with every frequency.
+Read: the ``primary_coefficient``, ``primary_sign`` and ``opposed`` PER ``arm_key`` (from the
+single seeded-SVD primary fit), plus the sensitivity sign-concordance fields and their
+denominators. There is NO discrete support flag: the SVD backprojection is dense, so a
+magnitude threshold is the consumer's, defined prospectively.
 
 Do NOT: rank by it, gate on it, promote or demote a Direct target with it, or show it as
 agreement that "validates" a Direct result. It is reconstruction support, and
@@ -63,7 +65,8 @@ def build(out_root: str, *, arm_key: str = ARM_KEY) -> dict:
 
     up = upstream.identity(dict(synthetic.UPSTREAM_OBSERVED,
                                 commit=config.UPSTREAM_COMMIT,
-                                version=config.UPSTREAM_VERSION))
+                                version=config.UPSTREAM_VERSION,
+                                tree_sha256=config.UPSTREAM_TREE_SHA256))
 
     out = runner.execute(
         bound=bound, release=release, view=view, up=up, paths=paths,

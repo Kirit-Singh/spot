@@ -16,7 +16,7 @@ enough that nobody would check.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -63,12 +63,14 @@ def load_cells(path: str) -> dict[str, Any]:
             "cell_axis_disagreement",
             f"expr has {expr.shape[0]} row(s) for {len(barcodes)} barcode(s)")
 
+    condition = str(z["condition"]) if "condition" in z.files else None
     return {
         "barcodes": barcodes,
         "donors": np.asarray([str(d) for d in z["donors"]]),
         "gene_ids": [str(g) for g in z["gene_ids"]],
         "expr": expr,
         "scores": scores,
+        "condition": condition,
         "n_cells": len(barcodes),
         "sha256": file_sha256(path),
     }
@@ -121,25 +123,35 @@ def load_masks(path: str) -> dict[str, Any]:
     return {"rows": rows, "sha256": file_sha256(path)}
 
 
-def load_eligible(path: str) -> dict[str, Any]:
-    """Only direct-screen ELIGIBLE targets become perturbation columns."""
-    from . import config
+def load_eligible(path: str, *, arm_key: Optional[str] = None) -> dict[str, Any]:
+    """The targets EVALUABLE on this ARM. Eligibility is arm-specific, not a global set.
 
+    The prepared table is arm-keyed. When an ``arm_key`` is given (production always gives
+    one — the arm being fitted), only that arm's evaluable targets become columns. A target
+    evaluable for another program's arm is not evaluable for this one.
+    """
     df = pd.read_parquet(path)
-    for col in ("target_id", "state"):
+    for col in ("target_id",):
         if col not in df.columns:
             raise InputError("eligible_missing_column",
                              f"the eligibility table has no {col!r} column")
-    keep = df[df["state"].astype(str).isin(config.ELIGIBLE_STATES)]
-    targets = sorted(keep["target_id"].astype(str).unique())
+
+    if arm_key is not None and "arm_key" in df.columns:
+        df = df[df["arm_key"].astype(str) == str(arm_key)]
+
+    if "evaluable" in df.columns:
+        df = df[df["evaluable"].astype(bool)]
+
+    targets = sorted(df["target_id"].astype(str).unique())
     if not targets:
         raise InputError(
             "no_eligible_target",
-            f"no target is in an eligible state {list(config.ELIGIBLE_STATES)}, so there is "
-            "no perturbation matrix to reconstruct from. P2S cannot admit or rescue a "
+            f"no target is EVALUABLE on {arm_key!r} (eligibility is arm-specific), so there "
+            "is no perturbation matrix to reconstruct from. P2S cannot admit or rescue a "
             "target the Direct screen found ineligible")
     return {"targets": targets, "n_eligible": len(targets),
+            "arm_key": arm_key,
             "target_gene_ids": sorted(
-                keep["target_ensembl"].astype(str).unique().tolist())
-            if "target_ensembl" in keep.columns else [],
+                df["target_ensembl"].astype(str).unique().tolist())
+            if "target_ensembl" in df.columns else [],
             "sha256": file_sha256(path)}

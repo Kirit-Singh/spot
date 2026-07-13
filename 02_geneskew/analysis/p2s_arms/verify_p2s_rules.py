@@ -58,14 +58,20 @@ FORBIDDEN_FILES = ("p2s_temporal.parquet", "p2s_temporal_endpoints.json",
 SPEC_LANE_ROLE = "secondary_non_gating"
 SPEC_RANDOM_STATE = 42
 SPEC_L1_MIN, SPEC_L1_MAX = 0.0, 1.0
-SPEC_MIN_SELECTION = 0.5
-SPEC_SIGN_DOMINANCE = 0.75
 SPEC_NONZERO_TOL = 1e-6
 SPEC_SIGN_TRANSFORM_TOL = 1e-12
 
-SUPPORTED, OPPOSED, MIXED, WEAK, NOT_SELECTED = (
-    "p2s_supported", "p2s_opposed", "p2s_mixed", "p2s_weak", "p2s_not_selected")
-SPEC_STATUS_VALUES = frozenset({SUPPORTED, OPPOSED, MIXED, WEAK, NOT_SELECTED})
+# CONTINUOUS support: the SVD backprojection is dense, so there is NO discrete verdict. The
+# per-row SIGN FACT is the only categorical, and it is not a support verdict.
+SIGN_SUPPORTIVE, SIGN_OPPOSED, SIGN_ZERO = "supportive", "opposed", "zero"
+SPEC_SIGN_VALUES = frozenset({SIGN_SUPPORTIVE, SIGN_OPPOSED, SIGN_ZERO})
+
+# The PRIMARY estimand — exactly one fit family. Restated here as the verifier's OWN literal.
+SPEC_PRIMARY_SCOPE = "all_donor"
+SPEC_PRIMARY_LAYER = "zscore"
+SPEC_PRIMARY_MODEL_CONFIG = "pca_on_60"
+# Discrete-support / rank tokens that must NEVER appear as a support column.
+FORBIDDEN_SUPPORT_TOKENS = ("support_status", "selection_frequency", "p2s_supported", "rank")
 
 INCREASE, DECREASE = "increase", "decrease"
 DESIRED_CHANGES = frozenset({INCREASE, DECREASE})
@@ -110,10 +116,12 @@ NEGATIVE_DECLARATIONS = {
 # this list — not by a name rule that would have to anticipate what it was called.
 SUPPORT_COLUMNS = frozenset({
     "arm_key", "program_id", "desired_change", "condition", "target_id",
-    "n_runs", "n_selected_runs", "selection_frequency", "positive_frequency",
-    "negative_frequency", "median_coefficient", "coefficient_min", "coefficient_max",
-    "lodo_sign_agreement", "n_lodo_runs", "effect_layer_agreement", "n_effect_layers",
-    "support_status", "opposed"})
+    "n_runs", "primary_coefficient", "primary_abs_coefficient", "primary_sign",
+    "opposed", "primary_available",
+    "sens_log_fc_sign_concordance", "n_log_fc",
+    "sens_pca_off_sign_concordance", "n_pca_off",
+    "lodo_sign_concordance", "n_lodo",
+    "n_sensitivity_fits", "n_sensitivity_sign_concordant"})
 COEF_COLUMNS = frozenset({
     "arm_key", "program_id", "desired_change", "condition", "target_id",
     "coefficient", "coef_fit_variation", "nonzero", "sign",
@@ -216,29 +224,17 @@ def parse_arm_key(arm_key: str) -> dict[str, str]:
     return {"program_id": program_id, "desired_change": change, "condition": condition}
 
 
-def support_status(sel: float, pos: float, neg: float) -> str:
-    """The frozen categorical rule, re-derived from the emitted frequencies."""
-    if sel <= 0:
-        return NOT_SELECTED
-    if sel < SPEC_MIN_SELECTION:
-        return WEAK
-    if pos >= SPEC_SIGN_DOMINANCE:
-        return SUPPORTED
-    if neg >= SPEC_SIGN_DOMINANCE:
-        return OPPOSED
-    return MIXED
 
 
 def canonical_support(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = [{
         "arm_key": str(r["arm_key"]), "target_id": str(r["target_id"]),
         "n_runs": int(r["n_runs"]),
-        "selection_frequency": num(r["selection_frequency"]),
-        "positive_frequency": num(r["positive_frequency"]),
-        "negative_frequency": num(r["negative_frequency"]),
-        "median_coefficient": num(r["median_coefficient"]),
-        "support_status": str(r["support_status"]),
+        "primary_coefficient": num(r["primary_coefficient"]),
+        "primary_sign": str(r["primary_sign"]),
         "opposed": bool(r["opposed"]),
+        "n_sensitivity_fits": int(r["n_sensitivity_fits"]),
+        "n_sensitivity_sign_concordant": int(r["n_sensitivity_sign_concordant"]),
     } for r in rows]
     out.sort(key=lambda r: (r["arm_key"], r["target_id"]))
     return out
