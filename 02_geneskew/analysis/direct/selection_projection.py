@@ -49,6 +49,7 @@ import os
 from typing import Any
 
 from . import arm_keys as K
+from . import lane_admission as LA
 from . import stage1_v3 as S1
 from .display_projection import CAP_OF
 
@@ -93,6 +94,7 @@ G_LANE_MISMATCH = "the_store_does_not_cover_the_condition_this_selection_asks_ab
 G_ESTIMATOR_BORROWED = "a_temporal_question_was_answered_out_of_the_within_condition_store"
 G_ARM_NOT_IN_STORE = "a_derived_arm_key_resolves_to_no_arm_in_the_admitted_store"
 G_FORBIDDEN = "a_forbidden_cross_arm_or_inferential_field_reached_the_artifact"
+G_STAGE1_UNBOUND = "production_requires_the_stage1_identity_the_stores_must_have_been_built_on"
 
 
 class SelectionProjectionError(ValueError):
@@ -152,32 +154,31 @@ def discover(bundles_root: str) -> dict[str, list]:
     return out
 
 
-def _admission(bundles_root: str, lane: str, *, condition: str = "",
+def _admission(bundles_root: str, lane: str, *, bundle_dir: str, arm_key: str = "",
+               condition: str = "", stage1: dict | None = None,
                mode: str) -> dict[str, Any]:
-    """The lane's INDEPENDENT admission — or a refusal. In fixture mode: declared, never faked."""
-    name, owner = ADMISSION_OF[lane]
-    path = os.path.join(bundles_root, name.format(condition=condition))
+    """The lane's TYPED admission — a report that BINDS THESE BYTES, or a refusal.
 
-    if not os.path.exists(path):
+    It used to accept any file at the expected name whose verdict said ADMIT, and store only
+    that file's hash. `echo '{"verdict":"ADMIT"}' > direct_admission_Rest.json` beside an
+    unadmitted store was accepted by the producer AND by the verifier. Production mode was
+    self-attested. `lane_admission` now demands the real report, from the pinned verifier, with
+    a full gate inventory, zero failures, recompute_mode=all, and a bound artifact that names
+    the bundle ON DISK.
+    """
+    try:
+        if lane == "direct":
+            return LA.bind_direct(bundles_root, condition=condition, bundle_dir=bundle_dir,
+                                  arm_key=arm_key, stage1=stage1 or {})
+        return LA.bind_external(bundles_root, lane, bundle_dir=bundle_dir,
+                                stage1_release_sha256=(stage1 or {}).get(
+                                    "stage1_release_sha256", ""))
+    except LA.AdmissionError as exc:
         if mode == MODE_PRODUCTION:
-            _refuse(G_LANE_UNADMITTED,
-                    f"the {lane} store carries no {owner} admission at "
-                    f"{os.path.basename(path)}. In production a store nobody admitted is not "
-                    "evidence — and an unadmitted answer is indistinguishable from an "
-                    "admitted one once it is on a page")
-        return {"admitted": False, "mode": MODE_FIXTURE, "owner": owner,
-                "report": None, "report_sha256": None,
-                "not_admitted_because": "no independent receipt on this host (fixture mode)"}
-
-    with open(path) as fh:
-        rep = json.load(fh)
-    verdict = rep.get("native_verdict", rep.get("verdict"))
-    if verdict != "ADMIT" or rep.get("disposition", "admitted") != "admitted":
-        _refuse(G_LANE_UNADMITTED,
-                f"the {lane} store's {owner} report says {verdict!r}, not the exact token "
-                "'ADMIT'. A refused store may not answer a question")
-    return {"admitted": True, "mode": mode, "owner": owner,
-            "report": os.path.basename(path), "report_sha256": _raw(path)}
+            _refuse(G_LANE_UNADMITTED, str(exc))
+        # FIXTURE: the refusal is DECLARED, never papered over. Nothing claims admission.
+        return {"admitted": False, "mode": MODE_FIXTURE, "owner": None, "report": None,
+                "not_admitted_because": str(exc)}
 
 
 # --------------------------------------------------------------------------- #
@@ -265,7 +266,7 @@ def _pathway_pointers(stores: dict, arm: dict, mode: str, bundles_root: str) -> 
         if str(ctx.get("condition")) != arm["condition"]:
             continue
         source = str(ctx.get("gene_set_source"))
-        adm = _admission(bundles_root, "pathway", mode=mode)
+        adm = _admission(bundles_root, "pathway", bundle_dir=b["dir"], mode=mode)
         if not adm["admitted"] and mode == MODE_PRODUCTION:
             continue
         out.append({
@@ -281,8 +282,13 @@ def _pathway_pointers(stores: dict, arm: dict, mode: str, bundles_root: str) -> 
 # --------------------------------------------------------------------------- #
 # THE PROJECTION.
 # --------------------------------------------------------------------------- #
+STAGE1_IDENTITY_FIELDS = ("stage1_scorer_view_canonical_sha256",
+                          "registry_scorer_projection_sha256")
+
+
 def project(*, selection_path: str, schema_path: str, bundles_root: str,
-            mode: str = MODE_PRODUCTION, producer_commit: str = "") -> dict[str, Any]:
+            mode: str = MODE_PRODUCTION, producer_commit: str = "",
+            stage1: dict | None = None) -> dict[str, Any]:
     with open(selection_path) as fh:
         doc = json.load(fh)
     bound = S1.validate(doc, S1.load_schema(schema_path))   # arms DERIVED, never trusted
@@ -301,6 +307,21 @@ def project(*, selection_path: str, schema_path: str, bundles_root: str,
                 "answered out of the within-condition store would return numbers about a "
                 "question nobody asked")
 
+    # THE STAGE-1 IDENTITY this projection is bound to. A W10 report that verified a bundle
+    # built against a DIFFERENT Stage-1 release verified a different release.
+    #
+    # It is SUPPLIED, and in production it is REQUIRED. Deriving it from the selection would
+    # have meant that a selection which happened not to carry it silently SKIPPED the check —
+    # a fail-open my own attack found, and the quietest kind: the gate is there, it runs, and
+    # it compares nothing.
+    stage1 = dict(stage1 or {})
+    if mode == MODE_PRODUCTION and not all(stage1.get(f) for f in STAGE1_IDENTITY_FIELDS):
+        _refuse(G_STAGE1_UNBOUND,
+                f"production requires {list(STAGE1_IDENTITY_FIELDS)}: the identity of the "
+                "Stage-1 release the admitted stores were BUILT ON. Without it, a report that "
+                "verified a bundle built against a stale Stage-1 would be accepted — it "
+                "verified a different release")
+
     arms_out: dict[str, Any] = {}
     admissions: dict[str, Any] = {}
     inputs: dict[str, Any] = {}
@@ -315,8 +336,9 @@ def project(*, selection_path: str, schema_path: str, bundles_root: str,
                 _refuse(G_LANE_MISMATCH,
                         f"this selection asks about condition {cond!r}; the release ships no "
                         "Direct bundle for it")
-            admissions["direct"] = _admission(bundles_root, "direct", condition=cond,
-                                              mode=mode)
+            admissions["direct"] = _admission(
+                bundles_root, "direct", condition=cond, bundle_dir=bundle["dir"],
+                arm_key=arm["direct_arm_key"], stage1=stage1, mode=mode)
             rows = _direct_rows(bundle, arm["direct_arm_key"])
             key, lane = arm["direct_arm_key"], "direct"
         else:
@@ -328,7 +350,8 @@ def project(*, selection_path: str, schema_path: str, bundles_root: str,
                 _refuse(G_LANE_MISMATCH,
                         f"this selection asks about the ordered pair {frm!r} -> {to!r}; the "
                         "release ships no temporal bundle for it")
-            admissions["temporal"] = _admission(bundles_root, "temporal", mode=mode)
+            admissions["temporal"] = _admission(
+                bundles_root, "temporal", bundle_dir=bundle["dir"], stage1=stage1, mode=mode)
             rows = _temporal_rows(bundle, arm["temporal_arm_key"])
             key, lane = arm["temporal_arm_key"], "temporal"
 
@@ -339,8 +362,11 @@ def project(*, selection_path: str, schema_path: str, bundles_root: str,
                      "condition": arm["condition"],
                      "pathway_support": _pathway_pointers(stores, arm, mode, bundles_root)})
         arms_out[role] = view
+        # RELATIVE paths only. A binding carrying this host's directory layout would be a
+        # binding to a machine, not to a release.
         inputs[os.path.relpath(bundle["dir"], bundles_root).replace(os.sep, "/")] = {
-            "bundle_id": bundle["norm"]["bundle_id"], "lane": lane}
+            "bundle_id": bundle["norm"]["bundle_id"], "lane": lane,
+            "condition": arm["condition"], "arm_key": key}
 
     art = {
         "schema_version": SCHEMA,
@@ -367,6 +393,7 @@ def project(*, selection_path: str, schema_path: str, bundles_root: str,
                           "raw_sha256": _raw(selection_path)},
             "schema": {"raw_sha256": _raw(schema_path)},
             "stores": inputs,
+            "stage1": stage1,
             "admissions": admissions,
         },
     }
@@ -437,12 +464,21 @@ def main(argv=None) -> int:
                     help="production REQUIRES an independent admission for every store it "
                          "reads. fixture is for tests only and says so in the artifact.")
     ap.add_argument("--producer-commit", default="")
+    ap.add_argument("--stage1-scorer-view-sha256", default="",
+                    help="REQUIRED in production: the Stage-1 scorer-view identity the "
+                         "admitted stores were built on")
+    ap.add_argument("--stage1-scorer-projection-sha256", default="",
+                    help="REQUIRED in production")
     args = ap.parse_args(argv)
 
     try:
         art = project(selection_path=args.selection, schema_path=args.schema,
                       bundles_root=args.bundles_root, mode=args.mode,
-                      producer_commit=args.producer_commit)
+                      producer_commit=args.producer_commit,
+                      stage1={"stage1_scorer_view_canonical_sha256":
+                              args.stage1_scorer_view_sha256,
+                              "registry_scorer_projection_sha256":
+                              args.stage1_scorer_projection_sha256})
     except (SelectionProjectionError, S1.SelectionV3Error) as exc:
         print(json.dumps({"projected": False, "error": str(exc),
                           "gate": getattr(exc, "gate", getattr(exc, "reason", None))},

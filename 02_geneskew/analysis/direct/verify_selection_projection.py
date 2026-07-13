@@ -21,7 +21,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from typing import Any
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 SCHEMA = "spot.stage02_selection_projection.v1"
 MODE_PRODUCTION = "production"
@@ -184,18 +187,16 @@ def verify(artifact_path: str, *, selection_path: str, bundles_root: str) -> dic
             continue
         failures += _check_arm(art, role, arm, bundles_root, mode)
 
-    # (4) EVERY STORE ADMITTED (production).
+    # (4) EVERY STORE ADMITTED — AND THE ADMISSION RE-DERIVED FROM THE ORIGINAL REPORT.
+    #
+    # The producer's admission index is an INDEX. It is not evidence. The old check only
+    # confirmed that the file the producer hashed still hashed to that value — so
+    # `echo '{"verdict":"ADMIT"}' > direct_admission_Rest.json` was accepted by BOTH sides and
+    # production mode was self-attested. Every edge of the index is now rebuilt HERE, from the
+    # original report and the store bytes, by the same typed contract the producer used and
+    # WITHOUT reading the producer's answer.
     if art.get("mode") == MODE_PRODUCTION:
-        for lane, adm in ((art.get("bindings") or {}).get("admissions") or {}).items():
-            if adm.get("admitted") is not True or not adm.get("report_sha256"):
-                failures.append(
-                    f"{G_UNADMITTED}: the {lane} store carries no independent admission. An "
-                    "unadmitted answer is indistinguishable from an admitted one on a page")
-            else:
-                p = os.path.join(bundles_root, str(adm.get("report")))
-                if not os.path.exists(p) or _raw(p) != adm["report_sha256"]:
-                    failures.append(f"{G_UNADMITTED}: the {lane} admission report is not the "
-                                    "bytes that were bound")
+        failures += _reverify_admissions(art, bundles_root, mode)
 
     # (5) NOTHING COMBINED, NOTHING INFERENTIAL — anywhere.
     failures += _forbidden(art)
@@ -262,6 +263,37 @@ def _check_arm(art: dict, role: str, arm: dict, bundles_root: str, mode: str) ->
                        f"{got.get('value')!r}; natively it is {exp['target_id']!r}/"
                        f"{exp['rank']!r}/{exp['value']!r}")
             shown += 1
+    return bad
+
+
+def _reverify_admissions(art: dict, bundles_root: str, mode: str) -> list:
+    """Rebuild every admission from the ORIGINAL report + the store bytes. Index-free."""
+    from direct import lane_admission as LA          # the TYPED CONTRACT, not the index
+
+    bad: list[str] = []
+    lane = STORE_OF_MODE[mode]
+    stores = (art.get("bindings") or {}).get("stores") or {}
+    stage1 = (art.get("bindings") or {}).get("stage1") or {}
+
+    for rel, s in stores.items():
+        if s.get("lane") != lane:
+            continue
+        bundle_dir = os.path.join(bundles_root, rel)
+        try:
+            if lane == "direct":
+                LA.bind_direct(bundles_root, condition=str(s.get("condition")),
+                               bundle_dir=bundle_dir, arm_key=str(s.get("arm_key")),
+                               stage1=stage1)
+            else:
+                LA.bind_external(bundles_root, lane, bundle_dir=bundle_dir,
+                                 stage1_release_sha256=stage1.get("stage1_release_sha256", ""))
+        except LA.AdmissionError as exc:
+            bad.append(f"{G_UNADMITTED}: {rel}: {exc}")
+        except (OSError, ValueError, KeyError) as exc:
+            bad.append(f"{G_UNADMITTED}: {rel}: the admission could not be re-derived: {exc}")
+
+    if not bad and not stores:
+        bad.append(f"{G_UNADMITTED}: this projection names no store it read")
     return bad
 
 
