@@ -233,9 +233,7 @@ def estimator_registry() -> dict[str, Any]:
                        IMPLEMENTED_ESTIMATORS else ESTIMATOR_NOT_IMPLEMENTED),
         },
     }
-    from .temporal import config as tconfig
-    from .temporal import policy as tpolicy
-    from .temporal import run_temporal as trun
+    from .temporal.arms import config as tconfig
 
     reg[ESTIMATOR_TEMPORAL].update({
         "method_id": tconfig.ESTIMATOR_ID,
@@ -244,10 +242,12 @@ def estimator_registry() -> dict[str, Any]:
         "estimand_level": tconfig.ESTIMAND_LEVEL,
         "estimand_is_per_cell_fate": tconfig.ESTIMAND_IS_PER_CELL_FATE,
         "inference_status": tconfig.INFERENCE_STATUS,
-        # THE HASH THE BRIDGE BINDS. It covers the temporal method, the within-condition
-        # method it differences, the frozen batch policy and both code trees — so a
-        # contract admitted against it cannot silently be executed by a different one.
-        "method_sha256": trun.temporal_method_sha256(tpolicy.load()),
+        # THE HASH THE BRIDGE BINDS: the GENERIC temporal method identity — what the estimand
+        # IS (a population-level DiD on program projections, no calibrated null). It is
+        # reproducible (no host, no path, no code-tree hash) and carries no batch policy: the
+        # retired fixed-pair lane owned that, and a contract admitted against this identity
+        # cannot silently be executed by a different estimand.
+        "method_sha256": tconfig.method_sha256(),
     })
     return reg
 

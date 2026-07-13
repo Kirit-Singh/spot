@@ -187,7 +187,7 @@ class TestTheVerifierReadsTheShippedBytes:
     ])
     def test_an_ON_DISK_poison_is_REJECTED_even_with_a_clean_caller_dict(
             self, built, key):
-        from direct.temporal import admission
+        from direct import admission
         res, _, _ = built
         clean = self._poison_file_only(res["out_dir"], key, 0.01)
         assert admission.forbidden_keys(clean) == []     # the caller's copy IS clean
@@ -229,7 +229,7 @@ class TestTheVerifierReadsTheShippedBytes:
 class TestNoPValueNoCombinedObjective:
     def test_the_clean_artifact_carries_no_p_or_q_anywhere(self, built):
         _, doc, prov = built
-        from direct.temporal import admission
+        from direct import admission
         assert admission.forbidden_keys(doc) == []
         assert admission.forbidden_keys(prov) == []
 
