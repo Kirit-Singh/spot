@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from functools import lru_cache
 from typing import Any, Literal, Optional
 
 from pydantic import Field, model_validator
@@ -384,3 +385,15 @@ def to_source_record(record: AcquisitionRecord) -> SourceRecord:
 def new_record_id(prefix: str, *parts: str) -> str:
     """A content-addressed record id: the same request, re-run, is the same id."""
     return f"{prefix}_{short_id(sha256_bytes('|'.join(parts).encode('utf-8')))}"
+
+
+@lru_cache(maxsize=32)
+def code_sha256(module_file: str) -> str:
+    """The hash of the adapter source that did the extracting.
+
+    An extraction transform named in prose ("parsed the warnings section") is not reproducible;
+    the bytes of the code that did it are. Change the adapter and every record it writes gets a
+    new identity, which is the point.
+    """
+    with open(module_file, "rb") as fh:
+        return sha256_bytes(fh.read())
