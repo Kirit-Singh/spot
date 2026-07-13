@@ -46,6 +46,11 @@ import verify_release_rules as W  # noqa: E402  (the W5-audit rules)  (independe
 VERIFIER_ID = "spot.stage02.run_manifest.verifier.v1"
 SCHEMA_VERSION = "spot.stage02_run_manifest_verification.v1"
 
+# The Stage-3 handoff carried in the aggregate admission RECEIPT: the exact consumable
+# paths Stage-3 v2 binds directly (no run-root fixture, no guessing). Stage 3 and the UI
+# consume ONLY the admitted release, so ``admitted`` gates the handoff.
+STAGE3_HANDOFF_SCHEMA = "spot.stage02.stage3_handoff.v1"
+
 # ---- THE NAMED GATES. Each mutation dies at the one that names its violation. ---- #
 G_SCORER = "the_admitted_set_rederives_from_base_portable_AND_agrees_with_the_selector"
 G_RELEASE_PIN = "the_release_canonically_hashes_to_the_INDEPENDENTLY_pinned_release"
@@ -416,6 +421,17 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
         "lane_admissions": lane_admissions,
         "mapping_rule_id": LA.MAPPING_RULE_ID,
     }
+    # ---- THE STAGE-3 HANDOFF. The exact consumable paths a Stage-3 v2 consumer binds
+    # DIRECTLY off the admitted release. ``admitted`` is true ONLY on an ADMIT verdict.
+    doc["stage3_inputs"] = {
+        "schema_version": STAGE3_HANDOFF_SCHEMA,
+        "consume_only_when_admitted": True,
+        "admitted": doc["verdict"] == R.ADMIT,
+        "manifest": os.path.abspath(manifest_path),
+        "report": None,  # the receipt's OWN path, filled by main() when written
+        "bundles_root": os.path.abspath(bundles_root),
+        "stage1_release": os.path.abspath(release_path),
+    }
     return doc
 
 
@@ -483,6 +499,8 @@ def main(argv=None) -> int:
         doc = rep.doc(VERIFIER_ID, SCHEMA_VERSION, n_bundles=0, n_arm_slots=0)
 
     if args.report:
+        if isinstance(doc.get("stage3_inputs"), dict):
+            doc["stage3_inputs"]["report"] = os.path.abspath(args.report)
         with open(args.report, "w") as fh:
             json.dump(doc, fh, indent=2, sort_keys=True)
             fh.write("\n")

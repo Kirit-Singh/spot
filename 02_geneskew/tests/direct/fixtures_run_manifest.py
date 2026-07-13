@@ -514,10 +514,10 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
     doc = {
         "fixture": True,
         "schema_version": schema,
-        "release_id_rule": "sha256(canonical JSON excluding release_id)",
+        "lane": lane,
+        "release_id_rule":
+            "sha256(canonical JSON excluding the id and admission fields)",
         "analysis_mode": "temporal_cross_condition",
-        "stage1_binding": {"release_canonical_sha256":
-                           run["staged"]["release_canonical_sha256"]},
         "n_bundles": len(entries),
         "n_logical_arms": sum(len(json.load(open(os.path.join(d, "arm_bundle.json")))
                                   ["arms"]) for d in run[lane]),
@@ -525,6 +525,16 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
                            for a in json.load(open(os.path.join(d, "arm_bundle.json")))
                            ["arms"]),
         "bundles": sorted(entries, key=lambda b: b["bundle_key"]),
+        "stage1_binding": {
+            "release_canonical_sha256": run["staged"]["release_canonical_sha256"],
+            "registry_scorer_view_canonical_sha256":
+                run["staged"]["release"]["registry_scorer_view_canonical_sha256"],
+            "registry_scorer_projection_sha256":
+                run["staged"]["release"]["registry_scorer_projection_sha256"],
+        },
+        "solver_lock_sha256": _raw(run["staged"]["env_lock"]),
+        "producer_commit": "fc9bdcd",
+        "independent_verifier_commit": "99eaa81",
         # 'pending' is the ONLY honest producer state: a producer cannot truthfully emit
         # the external verdict on itself.
         "external_admission": {
@@ -658,9 +668,8 @@ def write_native_admission(run: dict, lane: str, *, verdict="ADMIT", admitted=Tr
             "stage1_release_sha256": run["staged"]["release_canonical_sha256"],
         },
     }
-    doc = dict(body,
-               direct_release_run_id=inv["release_id"][:16],
-               verdict=verdict, admitted=admitted, self_admitted=self_admitted,
+    doc = dict(body, verdict=verdict, admitted=admitted,
+               self_admitted=self_admitted,
                verifier_id=verifier_id or spec["verifier_id"])
     doc[spec["self_hash_field"]] = _canon(
         {k: v for k, v in doc.items() if k not in spec["excludes"]})
