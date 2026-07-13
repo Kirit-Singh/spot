@@ -23,7 +23,7 @@ PINNED_SOLVER_LOCK_SHA256 = \
 # RE-DERIVED from W10's own recipe at commit e4cf8b9 (verifier head 3119900); it matched.
 # This is a version-locked pin: when W10's verifier changes, refresh it (and P2S's).
 W10_VERIFIER_CODE_SHA256 = \
-    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
+    "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f"
 
 # THE GATES THAT MUST HAVE RUN. Pinning the code sha says the report NAMES the right code;
 # this says its gate inventory actually CONTAINS the security-critical checks — so an empty
@@ -43,6 +43,9 @@ REQUIRED_GATES = {
         "every rank RE-DERIVES per arm",
         "every emitted base delta RE-DERIVES from the bound DE data",
         "the run id RE-DERIVES from its own binding",
+        "the target_identity rows are EXACTLY this bundle's arm target set",
+        "every observed_perturbation_modality is EXACTLY CRISPRi_knockdown",
+        "the target_identity canonical hash is bound into the run identity",
     ),
     W10_VERIFIER_ID_RELEASE: (
         "every bundle cites the SAME scorer view as the release",
@@ -51,6 +54,7 @@ REQUIRED_GATES = {
         "INDEPENDENTLY ADMITTED in full",
         "every bundle in the release binds the SAME solver lock",
         "every bundle in the release was built by the SAME code",
+        "the release target universe is a MIXED namespace union",
     ),
 }
 
@@ -78,14 +82,14 @@ PROFILE_RELEASE_FIXTURE = "spot.stage02.direct.release.fixture.v1"
 GATE_PROFILES = {
     PROFILE_BUNDLE_PRODUCTION: {
         "gate_inventory_sha256":
-            "d98200175b528dec569655e558944d065c1280c19874c4e555ff0bbdb66c1cc4",
-        "n_gates": 80,
+            "e6b5da89f1e4e7bf39380318769342cc585630c781c2226fa25b2df8aaf24d45",
+        "n_gates": 90,
         "match": "exact",
     },
     PROFILE_RELEASE_PRODUCTION: {
         "gate_inventory_sha256":
-            "377ca01b7190608ccce260d61a7d022e1a91eed8f420986f1579cc65f0615a9b",
-        "n_gates": 26,
+            "e66d7f9be7b4f8e38c45b2e7c4815459f7215441ee553ba6278469d9cd3a2437",
+        "n_gates": 28,
         "match": "exact",
     },
     # Fixture profiles carry NO exact hash: they are lenient by design (subset match), so a

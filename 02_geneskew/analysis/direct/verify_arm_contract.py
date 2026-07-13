@@ -112,6 +112,18 @@ REFUSE_BUNDLE_BYTES = "a_bundle_file_on_disk_does_not_hash_to_the_admitted_value
 REFUSE_MASK = "the_masks_parquet_does_not_re_derive_the_bound_mask_identity"
 REFUSE_CONDITION = "the_report_condition_is_not_the_bundle_condition"
 REFUSE_BUNDLE_MISSING = "the_direct_bundle_is_not_on_disk"
+REFUSE_BUNDLE_INVENTORY = "the_admitted_artifact_map_is_not_the_authoritative_bundle_inventory"
+REFUSE_IDENTITY_MISMATCH = "the_bundle_run_id_disagrees_across_report_dir_and_bundle_document"
+
+# The authoritative Direct bundle artifact inventory — restated here, the 11 files a bundle
+# ships (the 10 evidence/identity artifacts plus the verification slot). The admitted
+# artifact map must be EXACTLY this set, re-hashed in full.
+AUTHORITATIVE_BUNDLE_FILES = frozenset({
+    "arm_bundle.json", "provenance.json", "arms.parquet", "masks.parquet",
+    "contributing_guides.parquet", "guide_support.parquet", "donor_support.parquet",
+    "input_manifest.json", "gene_universe.json", "target_identity.json",
+    "verification.json",
+})
 REFUSE_CODE_IDENTITY_DISAGREES = "the_release_bundles_do_not_share_one_code_identity"
 
 
@@ -311,9 +323,23 @@ def _verify_bundle_on_disk(report: dict, bundle_dir: str) -> dict[str, Any]:
 
     bound = report["bound_artifact"]
     claimed = dict(bound.get("artifact_sha256") or {})
+
+    # COMPLETENESS, not a subset. The admitted map's key set must be EXACTLY the authoritative
+    # Direct bundle inventory — every required file, no more, no fewer. Looping only the keys
+    # that happen to be present would let a resealed report drop target_identity.json (or any
+    # file) and still pass: the files it named would hash fine, and the file it omitted would
+    # never be looked for.
+    missing = AUTHORITATIVE_BUNDLE_FILES - set(claimed)
+    extra = set(claimed) - AUTHORITATIVE_BUNDLE_FILES
+    if missing or extra:
+        _refuse(REFUSE_BUNDLE_INVENTORY,
+                f"the admitted artifact map is not the authoritative bundle inventory: "
+                f"missing={sorted(missing)} extra={sorted(extra)}")
+
     observed: dict[str, str] = {}
     drift = []
-    for name, want in sorted(claimed.items()):
+    for name in sorted(AUTHORITATIVE_BUNDLE_FILES):     # every required file, re-hashed
+        want = claimed[name]
         p = os.path.join(bundle_dir, name)
         if not os.path.exists(p):
             drift.append(f"{name} (admitted, absent on disk)")
@@ -326,6 +352,21 @@ def _verify_bundle_on_disk(report: dict, bundle_dir: str) -> dict[str, Any]:
         _refuse(REFUSE_BUNDLE_BYTES,
                 f"{len(drift)} bundle file(s) do not hash to the admitted value: "
                 f"{drift[:3]}")
+
+    # THE BUNDLE'S IDENTITY is the SAME everywhere: the report, the bundle document, the
+    # directory name, and the provenance binding must all name one run id. A report re-pointed
+    # at another directory, or a directory renamed under a report, is caught here.
+    dir_id = os.path.basename(os.path.normpath(bundle_dir))
+    doc_id = None
+    doc_path = os.path.join(bundle_dir, "arm_bundle.json")
+    if os.path.exists(doc_path):
+        with open(doc_path) as fh:
+            doc_id = json.load(fh).get("arm_bundle_run_id")
+    rid = bound.get("arm_bundle_run_id")
+    if not (rid == dir_id == doc_id):
+        _refuse(REFUSE_IDENTITY_MISMATCH,
+                f"the run id disagrees across report/dir/arm_bundle.json: report={rid!r} "
+                f"dir={dir_id!r} arm_bundle.json={doc_id!r}")
 
     # THE MASK, re-derived from masks.parquet AND cross-checked against the bundle's own
     # provenance binding — provenance ("what the run bound") plus masks.parquet ("the bytes").
@@ -358,6 +399,7 @@ def _verify_bundle_on_disk(report: dict, bundle_dir: str) -> dict[str, Any]:
                 f"the bundle's provenance binds lock {str(prov_lock)[:16]}..., not the pin")
 
     return {"artifact_sha256": observed,
+            "artifact_map_sha256": content_sha256(observed),
             "mask_sha256": rederived_mask if rederived_mask is not None else bound_mask}
 
 
@@ -409,7 +451,8 @@ def normalize(report: dict, bundle_dir: Optional[str] = None,
     bound = report["bound_artifact"]
     is_bundle = report["schema_version"] == SCHEMA_BUNDLE
 
-    disk: dict[str, Any] = {"artifact_sha256": {}, "mask_sha256": None}
+    disk: dict[str, Any] = {"artifact_sha256": {}, "mask_sha256": None,
+            "artifact_map_sha256": None}
     verified = False
     if bundle_dir is not None and is_bundle:
         disk = _verify_bundle_on_disk(report, bundle_dir)
@@ -454,6 +497,7 @@ def normalize(report: dict, bundle_dir: Optional[str] = None,
         "arm_rows_sha256": bound.get("arm_rows_sha256"),
         "mask_sha256": disk["mask_sha256"],
         "direct_bundle_sha256": disk["artifact_sha256"],
+        "direct_bundle_artifact_map_sha256": disk.get("artifact_map_sha256"),
         "bundle_verified_on_disk": verified,
         "n_failed": report["n_failed"],
     }

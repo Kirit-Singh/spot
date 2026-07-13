@@ -359,7 +359,9 @@ def real(synthetic_run, tmp_path):
 
     def copy_bundle():
         counter["n"] += 1
-        dst = str(tmp_path / f"copy{counter['n']}")
+        # preserve the run-id basename: a real bundle directory IS named its run id, and
+        # the adapter cross-checks report id == dir id == arm_bundle.json id
+        dst = str(tmp_path / f"c{counter['n']}" / os.path.basename(bundle))
         shutil.copytree(bundle, dst)
         return dst
 
@@ -451,6 +453,28 @@ class TestTheRealCrossContractBindingAdmitsAndMutationsRefuse:
         with open(p, "w") as fh:
             json.dump(tampered, fh)
         ok, got = _refuses(p, bundle, C.REFUSE_SELF_HASH)
+        assert ok, got
+
+    def test_a_RESEALED_SUBSET_artifact_map_refuses(self, real, tmp_path):
+        # drop target_identity.json from the artifact map and honestly reseal. The files it
+        # still names hash fine; the completeness check refuses the omission.
+        report, _, bundle, _ = real
+        forged = json.loads(json.dumps(report))
+        forged["bound_artifact"]["artifact_sha256"].pop("target_identity.json")
+        body = {k: v for k, v in forged.items() if k != "report_sha256"}
+        forged["report_sha256"] = AR.content_sha256(body)
+        fp = str(tmp_path / "subset.json")
+        with open(fp, "w") as fh:
+            json.dump(forged, fh)
+        ok, got = _refuses(fp, bundle, C.REFUSE_BUNDLE_INVENTORY)
+        assert ok, got
+
+    def test_a_report_pointed_at_a_RENAMED_directory_refuses(self, real, tmp_path):
+        import shutil
+        report, report_path, bundle, _ = real
+        renamed = str(tmp_path / "not-the-run-id")
+        shutil.copytree(bundle, renamed)
+        ok, got = _refuses(report_path, renamed, C.REFUSE_IDENTITY_MISMATCH)
         assert ok, got
 
     def test_a_report_for_ANOTHER_BUNDLE_refuses(self, real, synthetic_run, tmp_path):
@@ -581,7 +605,7 @@ class TestTheProductionProfileIsExact:
         # silently refusing W10's own production reports
         assert AR.content_sha256(production_report["gate_inventory"]) == \
             C.GATE_PROFILES[C.PROFILE_BUNDLE_PRODUCTION]["gate_inventory_sha256"]
-        assert production_report["n_gates"] == 80
+        assert production_report["n_gates"] == 90
 
 
 class TestTheEmittedBindingValidatesAgainstThePublishedSchemaFile:

@@ -132,7 +132,8 @@ def gate_bundle(bundle_dir: str, de_main: str, condition: str, arm_target_ids: s
              "altered or defaulted modality refuses",
              not bad_mod and doc.get("observed_perturbation_modality") == MODALITY
              and doc.get("modality_rule_id") == MODALITY_RULE_ID,
-             f"{len(bad_mod)} bad row(s); doc modality={doc.get('observed_perturbation_modality')!r}")
+             f"{len(bad_mod)} bad row(s); doc modality="
+             f"{doc.get('observed_perturbation_modality')!r}")
 
     # RE-DERIVE the identity from the source and compare — never trust the artifact's own
     # namespace / symbol / ensembl.
