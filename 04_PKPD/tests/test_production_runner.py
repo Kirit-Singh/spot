@@ -134,11 +134,13 @@ def test_a_fixture_class_bundle_can_never_reach_production(tmp_path, no_network)
                     client=_client(no_network))
 
     assert run.stopped_at == "admit"
-    # The refusal comes from GATE 1 (the contract restatement in stage3_contract_v2), not from
-    # this runner's own belt-and-braces class check. The chain is protected by the contract even
-    # if a future runner forgets to look.
-    assert run.stop_code == "stage3_artifact_class_refused"
-    assert "fixture" in run.stop_detail
+    # The refusal comes from GATE 1 (the contract restatement), not from this runner's own
+    # belt-and-braces class check (`stage3_artifact_class_not_analysis`). The chain is protected by
+    # the contract even if a future runner forgets to look. The code was renamed upstream
+    # (stage3_artifact_class_refused -> stage3_bundle_is_a_fixture); the behaviour is unchanged.
+    assert run.stop_code == "stage3_bundle_is_a_fixture"
+    assert run.stop_code != "stage3_artifact_class_not_analysis"   # i.e. NOT the runner's own check
+    assert "fixture" in run.stop_detail.lower()
     assert not run.produced_an_artifact
     assert no_network.calls == []                         # and still no request
 
