@@ -318,9 +318,16 @@ class TestTheAdversarialFailOpenCasesAreClosed:
         assert rc == 0
         report = json.load(open(report_path))    # release schema + release verifier_id
         assert report["schema_version"] == C.SCHEMA_RELEASE
-        b = C.normalize(report)                 # must not raise on its own schema
+        # normalize WITH the release directory so the adapter re-derives the W3 cross-pins
+        b = C.load_and_normalize(report_path, prod.out_root)
         assert b["subject_kind"] == "release"
         assert b["arm_rows_sha256"] is None
+        # the W3 cross-pins for the aggregate manifest Direct lane
+        assert isinstance(b["direct_bundle_ids"], list) and len(b["direct_bundle_ids"]) == 3
+        assert all(b["direct_bundle_ids"])
+        assert b["code_identity"] and b["release_canonical_sha256"]
+        assert b["scorer_view_sha256"]
+        assert b["w10_report"] == report_path and b["w10_report_raw_sha256"]
         C.validate_binding(b)                    # explicitly: the binding is schema-valid
 
 
@@ -616,7 +623,47 @@ class TestTheEmittedBindingValidatesAgainstThePublishedSchemaFile:
                 argv += [flag, v]
         rel_path = str(tmp_path / "release_verification.json")
         assert VR.main(argv + ["--report", rel_path]) == 0
-        binding = C.load_and_normalize(rel_path, None)
+        binding = C.load_and_normalize(rel_path, res["out_dir"])   # release dir via --bundle
         assert binding["subject_kind"] == "release"
         assert binding["arm_rows_sha256"] is None      # legitimate for a release subject
+        # the W3 cross-pins present and well-formed
+        assert len(binding["direct_bundle_ids"]) == 3 and all(binding["direct_bundle_ids"])
+        assert binding["code_identity"] and binding["scorer_view_sha256"]
+        assert binding["release_canonical_sha256"] and binding["w10_report_raw_sha256"]
         jsonschema.validate(binding, json.load(open(C.SCHEMA_PATH)))
+
+    def test_a_release_whose_bundles_disagree_on_code_identity_REFUSES(
+            self, synthetic_run, tmp_path):
+        import fixtures_v3_release as V3
+        import verify_direct_release as VR
+        from direct import arm_release
+        conds = ("Rest", "Stim8hr", "Stim48hr")
+        prod = synthetic_run(conditions=conds)
+        root = str(tmp_path / "root")
+        stage1 = V3.stage_release(root, conditions=conds)
+        prod.stage1_release, prod.stage1_release_root = stage1, root
+        prod.env_lock, prod.out_root = LOCK, str(tmp_path / "rel")
+        res = arm_release.build_release(prod)
+        argv = ["--release", res["out_dir"], "--de-main", prod.de_main,
+                "--sgrna", prod.sgrna, "--by-guide", prod.by_guide,
+                "--by-donors", prod.by_donors, "--guide-manifest", prod.guide_manifest,
+                "--registry", prod.registry, "--stage1-v3-release", stage1,
+                "--release-root", root, "--recompute", "all", "--env-lock", LOCK]
+        for flag, attr in (("--source-registry", "source_registry"),
+                           ("--pseudobulk", "pseudobulk")):
+            v = getattr(prod, attr, None)
+            if v:
+                argv += [flag, v]
+        rel_path = str(tmp_path / "release_verification.json")
+        assert VR.main(argv + ["--report", rel_path]) == 0
+        # corrupt ONE bundle's provenance code identity on disk -> the 3 no longer agree
+        reldoc = json.load(open(os.path.join(res["out_dir"], "direct_release.json")))
+        bdir = os.path.join(res["out_dir"], reldoc["bundles"][0]["path"])
+        pp = os.path.join(bdir, "provenance.json")
+        prov = json.load(open(pp))
+        prov["run_binding"]["code_identity"]["canonical_digest"] = "deadbeef" * 2
+        with open(pp, "w") as fh:
+            json.dump(prov, fh)
+        with pytest.raises(C.ContractError) as exc:
+            C.load_and_normalize(rel_path, res["out_dir"])
+        assert exc.value.reason == C.REFUSE_CODE_IDENTITY_DISAGREES
