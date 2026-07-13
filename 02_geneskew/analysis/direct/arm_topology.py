@@ -152,7 +152,11 @@ PORTABLE_KEY = "base_portable"
 # There is NO per-program hash in the view. If an arm needs a per-program projection id, it
 # is SPECIFIED here and derived by hashing the program's canonical record — never read from
 # a field that does not exist.
-PROJECTION_ID_RULE = "spot.stage02.arm.program_projection_id.canonical_view_record.v1"
+# Stage-1 AUTHORITATIVE. The whole emitted program record, keys sorted, ARRAY ORDER
+# PRESERVED (panel/control lists are the science and are never re-sorted), over the
+# base-portable programs only.
+PROJECTION_ID_RULE = (
+    "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1")
 
 # Batch commentary stays OUT of the reusable temporal chain (owner rule). The DiD estimand
 # is population-level and the arm key already carries the ordered pair; a batch field in a

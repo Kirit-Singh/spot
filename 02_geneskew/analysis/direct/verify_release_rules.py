@@ -58,6 +58,9 @@ LANE_METHOD_FIELD = {"temporal": "temporal_method_sha256"}
 
 
 PROJECTION_MAP = "per_program_projection_sha256"
+PROJECTION_RULE_FIELD = "per_program_projection_rule_id"
+PROJECTION_RULE_ID = (
+    "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1")
 
 
 def method_field(prov: Any, lane: str, bundle_id: str) -> list[str]:
@@ -119,6 +122,15 @@ def stage1_bindings(prov: Any, release: Any, admitted: list, bundle_id: str,
                    f"admits {sorted(admitted)[:3]}…")
     if not adm.get("registry_scorer_view_sha256"):
         bad.append(f"{bundle_id}: program_admission.registry_scorer_view_sha256 is null")
+
+    # THE RULE the map was computed under. A map of hashes whose recipe is unstated is a
+    # map of numbers: two lanes can each be internally consistent and be hashing different
+    # things.
+    got_rule = sel.get(PROJECTION_RULE_FIELD)
+    if got_rule != PROJECTION_RULE_ID:
+        bad.append(f"{bundle_id}: {PROJECTION_RULE_FIELD} is {got_rule!r}; the canonical "
+                   f"rule is {PROJECTION_RULE_ID!r} — keys sorted, ARRAY ORDER PRESERVED, "
+                   "over the whole emitted program record")
 
     # THE PER-PROGRAM PROJECTION MAP, re-derived. The scalar is one number over the whole
     # view; it cannot see a single program's projection drift.

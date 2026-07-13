@@ -190,7 +190,9 @@ def _selection_release(staged: dict) -> dict[str, Any]:
             # (a) the SCALAR Stage-2-bound OVERALL projection identity (008c1da1)...
             "registry_scorer_projection_sha256":
                 staged["release"]["registry_scorer_projection_sha256"],
-            # ...and (b) the PER-PROGRAM map. Neither substitutes for the other.
+            # ...and (b) the PER-PROGRAM map, under the Stage-1 authoritative rule.
+            "per_program_projection_rule_id":
+                "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1",
             "per_program_projection_sha256": dict(staged["projection"]),
             "programs_derived_from": "bound_stage1_v3_scorer_view",
             "effect_universe_sha256": _canon("FIXTURE-effect-universe")}

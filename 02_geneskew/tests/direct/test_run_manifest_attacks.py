@@ -1155,6 +1155,62 @@ class TestTheThreePostE122Blockers:
         assert doc["n_failed"] > 0
         assert V.G_STAGE1_NONNULL in doc["failed_gates"]
 
+    def test_5h_the_CANONICAL_RULE_sorts_KEYS_and_PRESERVES_ARRAY_ORDER(self):
+        """The arrays ARE the science. Sorting them would erase a real difference."""
+        import verify_manifest_rules as MR
+
+        rec = {"program_id": "p", "panel_ensembl": ["ENSG2", "ENSG1"],
+               "control_ensembl": ["ENSGB", "ENSGA"]}
+        reordered_keys = {"control_ensembl": ["ENSGB", "ENSGA"],
+                          "panel_ensembl": ["ENSG2", "ENSG1"], "program_id": "p"}
+        reordered_arrays = {"program_id": "p", "panel_ensembl": ["ENSG1", "ENSG2"],
+                            "control_ensembl": ["ENSGB", "ENSGA"]}
+
+        # object key order is NOT identity...
+        assert MR.content_sha256(rec) == MR.content_sha256(reordered_keys)
+        # ...but array order IS: panel/control are the genes the projection is taken over
+        assert MR.content_sha256(rec) != MR.content_sha256(reordered_arrays)
+
+    def test_5i_a_REORDERED_panel_array_changes_the_projection_and_is_REFUSED(
+            self, tmp_path):
+        run = F.complete_run(tmp_path)
+        view = run["staged"]["view"]
+        rec = next(p for p in view["programs"] if p["program_id"] == "treg_like")
+        assert len(rec["panel_ensembl"]) > 1
+
+        flipped = dict(rec, panel_ensembl=list(reversed(rec["panel_ensembl"])))
+        assert F._canon(flipped) != F._canon(rec)      # the rule is order-sensitive
+
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"]
+               ["per_program_projection_sha256"].update({"treg_like": F._canon(flipped)}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_5j_a_MISSING_or_WRONG_projection_rule_id_is_REFUSED(self, tmp_path):
+        # a map of hashes whose recipe is unstated is a map of numbers: two lanes can each
+        # be internally consistent and be hashing different things
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"per_program_projection_rule_id": "some.other.rule.v1"}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_5k_the_rule_id_is_the_STAGE1_AUTHORITATIVE_one(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        prov = json.load(open(os.path.join(run["temporal"][0],
+                                           "temporal_provenance.json")))
+        sel = prov["run_binding"]["selection_release"]
+        assert (sel["per_program_projection_rule_id"]
+                == "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1")
+
     def test_6_stage2_inputs_is_EXACTLY_W5s_THREE_KEYS(self, tmp_path):
         run = F.complete_run(tmp_path)
         prov = json.load(open(os.path.join(run["temporal"][0],

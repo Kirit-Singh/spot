@@ -87,6 +87,21 @@ PORTABLE_KEY = "base_portable"
 # --------------------------------------------------------------------------- #
 # The verifier's own hashing and readers.
 # --------------------------------------------------------------------------- #
+# THE CANONICAL PER-PROGRAM PROJECTION RULE (Stage-1 AUTHORITATIVE).
+#
+#   value = sha256(canonical JSON of the ENTIRE program record, exactly as emitted in
+#           stage01_stage2_registry_view.json), over records with base_portable == true.
+#
+# Canonical JSON: object keys SORTED; ARRAY ORDER PRESERVED. The arrays are the science —
+# `panel_ensembl` and `control_ensembl` are the genes the projection is taken over, and
+# sorting them would erase a real difference between two views that emitted them in
+# different orders. `json.dumps(sort_keys=True)` sorts keys and never touches array order,
+# which is exactly the rule; it is asserted by test rather than left as an accident of the
+# serialiser.
+PROJECTION_RULE_ID = (
+    "spot.stage01_stage2_registry_view.program_record.canonical_sha256.v1")
+
+
 def content_sha256(obj: Any) -> str:
     return hashlib.sha256(
         json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
