@@ -50,6 +50,7 @@ if _HERE not in sys.path:
 import verify_arm_bundle as VB  # noqa: E402
 import verify_arm_rules as AR  # noqa: E402
 import verify_arm_view as AV  # noqa: E402
+import verify_target_identity as TI  # noqa: E402
 from verify_arm_report import Report, verifier_code_sha256  # noqa: E402
 
 VERIFIER_ID = "spot.stage02.direct.release.verifier.v1"
@@ -177,6 +178,7 @@ def verify(args) -> Report:
     per_bundle: list[dict] = []
     code_ids: set = set()
     lock_shas: set = set()
+    union_records: list = []
     for entry in bundles:
         cond = str(entry.get("condition"))
         bundle_dir = os.path.join(args.release, str(entry.get("path") or ""))
@@ -206,6 +208,9 @@ def verify(args) -> Report:
         run_binding = prov.get("run_binding") or {}
         code_ids.add((run_binding.get("code_identity") or {}).get("canonical_digest"))
         lock_shas.add((run_binding.get("environment_lock") or {}).get("sha256"))
+        ti_doc = TI.read_doc(bundle_dir)
+        if ti_doc is not None:
+            union_records.append(ti_doc.get("records") or [])
 
     rep.gate("every bundle in the release was built by the SAME code — a release whose "
              "conditions came from different code is not one release",
@@ -221,6 +226,11 @@ def verify(args) -> Report:
              and next(iter(lock_shas)) == VB.G.PINNED_SOLVER_LOCK_SHA256,
              f"locks across bundles: {sorted(str(s) for s in lock_shas)}; pinned="
              f"{VB.G.PINNED_SOLVER_LOCK_SHA256}")
+
+    # THE RELEASE TARGET UNIVERSE: the UNION of the three condition bundles is the mixed
+    # namespace universe (11,522 ensembl + 4 gene_symbol = 11,526 for a real production
+    # release; a fixture checks the shape, not the count).
+    TI.gate_release_union(union_records, rep, expect_production_universe=False)
 
     n_logical = sum(int(b.get("n_expected_arm_slots") or 0) for b in bundles)
     rep.gate("the release's logical arm count is the sum of its bundles' derived slots",

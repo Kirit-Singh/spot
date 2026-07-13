@@ -60,6 +60,7 @@ import verify_arm_recompute as RC  # noqa: E402
 import verify_arm_rules as AR  # noqa: E402
 import verify_arm_science as S  # noqa: E402
 import verify_arm_view as AV  # noqa: E402
+import verify_target_identity as TI  # noqa: E402
 from verify_arm_report import (  # noqa: E402,F401
     BUNDLE_FILE,
     BUNDLE_RUN_ID_LEN,
@@ -193,6 +194,12 @@ def verify(args) -> Report:
     S.gate_recompute(rows, recomputed, args.recompute, rep)
     S.gate_evidence_bindings(binding, recomputed, manifest_doc, args.guide_manifest,
                              recomputed["gene_universe_sha256"], mask_rows, rep)
+
+    # ---- the per-target IDENTITY / ASSAY artifact (W3's typed target join) ----
+    # Reopened in place from the bundle, its identity RE-DERIVED from the source, both bound
+    # hashes re-checked. A Direct bundle with arm values but no bound statement of what each
+    # target IS is a bundle Stage 3 cannot join.
+    TI.gate_bundle(args.bundle, args.de_main, condition, set(all_targets), binding, rep)
 
     rep.bound = {
         "arm_bundle_run_id": prov.get("arm_bundle_run_id"),

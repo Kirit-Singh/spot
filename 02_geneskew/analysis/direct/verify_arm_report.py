@@ -32,11 +32,12 @@ GUIDE_SUPPORT_FILE = "guide_support.parquet"
 DONOR_SUPPORT_FILE = "donor_support.parquet"
 INPUTS_FILE = "input_manifest.json"
 UNIVERSE_FILE = "gene_universe.json"
+TARGET_IDENTITY_FILE = "target_identity.json"
 VERIFICATION_FILE = "verification.json"
 
 EXPECTED_FILES = {BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE, MASKS_FILE, CONTRIB_FILE,
                   GUIDE_SUPPORT_FILE, DONOR_SUPPORT_FILE, INPUTS_FILE, UNIVERSE_FILE,
-                  VERIFICATION_FILE}
+                  TARGET_IDENTITY_FILE, VERIFICATION_FILE}
 
 BUNDLE_SCHEMA = "spot.stage02_direct_arm_bundle.v1"
 REQUEST_SCHEMA = "spot.stage02_arm_bundle_request.v1"
@@ -60,7 +61,8 @@ INFERENCE_STATUS = "not_calibrated"
 VERIFIER_MODULES = ("verify_arm_bundle.py", "verify_arm_gates.py",
                     "verify_arm_report.py", "verify_arm_rules.py",
                     "verify_arm_science.py", "verify_arm_view.py",
-                    "verify_arm_recompute.py", "verify_direct_release.py")
+                    "verify_arm_recompute.py", "verify_direct_release.py",
+                    "verify_target_identity.py")
 # The producer modules this verifier may never import. ASSERTED against its own source at
 # run time (see verify_arm_gates.gate_independence), never merely promised here.
 FORBIDDEN_IMPORTS = ("direct.arm_bundle", "direct.run_arms", "direct.scorer_view",
