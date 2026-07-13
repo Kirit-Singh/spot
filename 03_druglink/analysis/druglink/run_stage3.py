@@ -32,11 +32,56 @@ from . import (acquisition, adapters, armlever, artifact_class as ac, artifacts,
                bundle, candidates, direct_run, drug_mapping, identity,
                joint_context, mechanisms, pathways, potency,
                science_registry as sr, science_review, targets, workflow as wf)
-from .direction import ORIGIN_DIRECT_TARGET, ORIGIN_PATHWAY_NODE
+from . import admitted_universe, arm_query as aq, v2_input_loader as v2
+from .direction import V1_ORIGIN_TYPES, V2_ORIGIN_TYPES
 from .hashing import short_id
 
 CRISPRI_MODALITY = "CRISPRi_knockdown"
-ORIGINS = (ORIGIN_DIRECT_TARGET, ORIGIN_PATHWAY_NODE)
+
+# The origins a V1 BUNDLE contains, counted SEPARATELY and never pooled. Unchanged: this drives
+# the frozen bundle document, whose bytes Stage 4 binds by SHA.
+ORIGINS = V1_ORIGIN_TYPES
+
+# The v2 lane's typed origins. Two are MEASURED and are DISTINCT ESTIMANDS — a same-condition
+# effect and a cross-time difference-in-differences answer different questions, and fusing them
+# was the defect a1d8958 fixed. One is INFERRED and was never perturbed at all. They are
+# counted separately, always: a total across them would be a combined objective wearing a
+# total's clothes.
+V2_ORIGINS = V2_ORIGIN_TYPES
+
+
+def load_v2_inputs(*, universe_store: str,
+                   universe_targets: list[dict[str, str]],
+                   direct_arm_bundle: Optional[dict[str, Any]] = None,
+                   direct_admission: Optional[aq.ExternalAdmission] = None,
+                   temporal_arm_bundles: tuple = (),
+                   pathway_arm_bundle: Optional[dict[str, Any]] = None,
+                   pathway_nodes: tuple = (),
+                   require_production: bool = False) -> dict[str, Any]:
+    """THE v2 input stage: bind the admitted universe store, then load the three typed origins.
+
+    Two bindings, in this order, and neither is optional:
+
+      1. the UNIVERSE STORE an independent verifier admitted, by its exact ``store_id``. A
+         missing store REFUSES — it does not quietly become a fixture, which is precisely how
+         a synthetic number becomes a result;
+      2. the ADMITTED Stage-2 evidence, origin-typed: ``direct_target`` and
+         ``temporal_cross_time_measured`` (both measured, distinct estimands, never fused) and
+         ``endpoint_pathway_context`` (inferred, never perturbed, never a measurement).
+
+    Direction is NOT decided here. The frozen direction engine decides it at view time, from
+    the arm's own desired_change and the drug's sourced action — never the cache and never the
+    loader. That is rule 3 of the admission contract, and it is why this function returns
+    inputs rather than verdicts.
+    """
+    store_binding = admitted_universe.bind(store_dir=universe_store,
+                                           universe_targets=universe_targets)
+    inputs = v2.load_admitted_stage2_inputs(
+        direct_arm_bundle=direct_arm_bundle, direct_admission=direct_admission,
+        temporal_arm_bundles=temporal_arm_bundles,
+        pathway_arm_bundle=pathway_arm_bundle, pathway_nodes=pathway_nodes,
+        measured_target_ids=None, require_production=require_production)
+    return {"universe_store_binding": store_binding, "v2_inputs": inputs}
 
 
 def _disposition_rows(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -262,19 +307,66 @@ def run(*, artifact_class: str, direct_run_dir: str, direct_inputs_root: str,
     return {**result, "bundle_dir": bundle_path}
 
 
+def _v2_main(args) -> int:
+    """The v2 input path: bind the admitted store, load the three typed origins, REFUSE to
+    fabricate a bundle while the detached-clone matrix is red.
+
+    It writes NOTHING. That is not an omission — it is the gate. `DETACHED_CLONE_MATRIX_GREEN`
+    is False, so there is no admitted Stage-2 arm bundle to stand on, and a Stage-3 bundle
+    built without one would carry synthetic numbers into Stage 4 under a real bundle's name.
+    """
+    try:
+        loaded = load_v2_inputs(
+            universe_store=args.universe_store,
+            universe_targets=[],            # the run's typed universe; empty until a real run
+            require_production=True)
+    except (admitted_universe.AdmittedUniverseError, v2.V2InputLoaderError,
+            aq.ArmQueryError) as exc:
+        print(f"REFUSED [{args.artifact_class}]: {exc}")
+        print("no bundle was written. Stage 3 does not fabricate candidates: while the "
+              "independent detached-clone matrix is red there is no admitted Stage-2 arm "
+              "bundle to stand on, and a synthetic number in a bundle is a synthetic number "
+              "on its way to Stage 4.")
+        return 3
+
+    inputs = loaded["v2_inputs"]
+    print(f"universe_store   {loaded['universe_store_binding']['store_id'][:16]}… "
+          f"(admitted_by={loaded['universe_store_binding']['admitted_by']}, "
+          f"producer_admits={loaded['universe_store_binding']['producer_admits_store']})")
+    counts = inputs["counts"]
+    print(f"measured_levers  {counts['n_measured_levers']}")
+    print(f"pathway_nodes    {counts['n_pathway_nodes']}  (inferred; never perturbed)")
+    print("origins counted SEPARATELY; no combined objective "
+          f"({inputs['combined_objective_permitted']})")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         description="spot Stage-3 drug link (offline; verified Direct run only)")
+    # ---- v2: the three typed origins + the admitted universe store -------------------
+    ap.add_argument("--v2", action="store_true",
+                    help="consume ADMITTED Stage-2 arm bundles through the v2 input loader: "
+                         "direct_target + temporal_cross_time_measured (measured, distinct "
+                         "estimands, never fused) + endpoint_pathway_context (inferred). "
+                         "GATED: emits no candidate bundle until the independent "
+                         "detached-clone matrix is green.")
+    ap.add_argument("--universe-store", default=None,
+                    help="the universe store an INDEPENDENT verifier admitted, bound by its "
+                         "exact store_id (bdf41b69…). A missing store REFUSES; there is no "
+                         "fixture fallback.")
     ap.add_argument("--artifact-class", required=True,
                     choices=list(ac.ARTIFACT_CLASSES),
                     help="analysis (a real computation) or fixture (synthetic; never "
                          "reaches Stage 4). The production/research namespaces are "
                          "retired.")
-    ap.add_argument("--direct-run", required=True,
-                    help="a Stage-2 Direct RUN DIRECTORY. There is no --lever-set.")
-    ap.add_argument("--direct-inputs-root", required=True,
-                    help="the raw inputs the Direct run's files were pinned against")
-    ap.add_argument("--cache-root", required=True)
+    # Required for the v1 (Direct run-directory) path, and validated below rather than by
+    # argparse — the v2 path consumes admitted ARM BUNDLES and has no run directory to name.
+    ap.add_argument("--direct-run", default=None,
+                    help="v1: a Stage-2 Direct RUN DIRECTORY. There is no --lever-set.")
+    ap.add_argument("--direct-inputs-root", default=None,
+                    help="v1: the raw inputs the Direct run's files were pinned against")
+    ap.add_argument("--cache-root", default=None)
     ap.add_argument("--output-root", required=True)
     ap.add_argument("--direct-analysis", default=None,
                     help="Direct analysis root providing direct.verify_run "
@@ -295,6 +387,18 @@ def main(argv: Optional[list[str]] = None) -> int:
                          "the registry; one that cites nothing is downgraded to "
                          "insufficient, never favourable by default.")
     args = ap.parse_args(argv)
+
+    if args.v2:
+        if not args.universe_store:
+            ap.error("--v2 requires --universe-store: the admitted universe store is bound "
+                     "by its exact store_id, and a run without it has no admitted store")
+        return _v2_main(args)
+
+    missing = [f for f, v in (("--direct-run", args.direct_run),
+                              ("--direct-inputs-root", args.direct_inputs_root),
+                              ("--cache-root", args.cache_root)) if not v]
+    if missing:
+        ap.error(f"the v1 Direct-run path requires {missing}")
 
     try:
         out = run(artifact_class=args.artifact_class, direct_run_dir=args.direct_run,

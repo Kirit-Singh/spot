@@ -18,7 +18,7 @@ from typing import Any, Optional
 from . import (artifact_class as ac, canonical_number, env, joint_context,
                schemas, science_review, workflow as wf)
 from .armlever import ARMS
-from .direction import ORIGIN_TYPES
+from .direction import V1_ORIGIN_TYPES
 from .hashing import content_hash, without
 
 # Lanes this release deliberately does not evaluate. Absence of evidence is recorded as
@@ -126,7 +126,14 @@ def build_document(*, artifact_class: str, upstream: dict[str, Any],
         "arms_are_independent": True,
         "combined_objective_permitted": False,
         "headline_arm_permitted": False,
-        "origin_types": list(ORIGIN_TYPES),
+        # The origins THIS BUNDLE contains — the v1 pair. NOT the engine's full closed set.
+        #
+        # These bytes are validated against the FROZEN Stage-3 schema set and hashed into the
+        # bundle id, and Stage 4 binds them by SHA. The engine learned two further origins for
+        # the v2 lane; announcing them here would move a downstream consumer's pinned bytes to
+        # describe a lane that has not shipped a bundle. When v2 ships, the schema $id bumps,
+        # the set is re-hashed, and the new hash goes to the Stage-4 owner — in that order.
+        "origin_types": list(V1_ORIGIN_TYPES),
         "gene_and_pathway_evidence_are_never_merged": True,
         "directional_evidence_statuses": list(wf.DIRECTIONAL_EVIDENCE_STATUSES),
         "drug_mapping_statuses": list(wf.DRUG_MAPPING_STATUSES),

@@ -133,9 +133,41 @@ ACTION_EXPLICIT_UNKNOWN = frozenset({
 _DUAL_RE = re.compile(r"[/&+]| AND |,")
 
 # Where a lever came from. A pathway node was NEVER PERTURBED.
+#
+# THE THREE TYPED v2 ORIGINS. The engine used to know only `direct_target` and the v1
+# `pathway_node`, and its first guard drops an unknown origin to UNRESOLVED — which reads as
+# "we considered this and it did not resolve" when in fact nothing considered it. Every
+# cross-time measured lever would have been discarded under a status that claimed to have
+# looked at it.
+#
+# Two origins are MEASURED and they are DISTINCT ESTIMANDS — a same-condition Direct effect and
+# a cross-time difference-in-differences are not the same quantity, and fusing them was the
+# defect a1d8958 fixed. They reach their status by the same rule and keep separate origin_type
+# values on the row, so a consumer tells them apart without inferring anything.
+#
+# One origin is INFERRED. Nobody perturbed a pathway node, so it can never carry observed
+# support — whatever the drug does.
 ORIGIN_DIRECT_TARGET = "direct_target"
-ORIGIN_PATHWAY_NODE = "pathway_node"
-ORIGIN_TYPES = (ORIGIN_DIRECT_TARGET, ORIGIN_PATHWAY_NODE)
+ORIGIN_TEMPORAL_CROSS_TIME = "temporal_cross_time_measured"
+ORIGIN_ENDPOINT_PATHWAY = "endpoint_pathway_context"
+ORIGIN_PATHWAY_NODE = "pathway_node"          # v1; still emitted by pathways.py
+
+MEASURED_ORIGINS = frozenset({ORIGIN_DIRECT_TARGET, ORIGIN_TEMPORAL_CROSS_TIME})
+INFERRED_ORIGINS = frozenset({ORIGIN_ENDPOINT_PATHWAY, ORIGIN_PATHWAY_NODE})
+
+# The closed set the ENGINE resolves. Widening the vocabulary must never OPEN it: an origin
+# nobody declared is still unresolved, and fails closed.
+ORIGIN_TYPES = (ORIGIN_DIRECT_TARGET, ORIGIN_TEMPORAL_CROSS_TIME,
+                ORIGIN_ENDPOINT_PATHWAY, ORIGIN_PATHWAY_NODE)
+
+# The vocabulary a V1 BUNDLE actually contains, and the one the FROZEN Stage-3 schema set
+# enumerates. Stage 4 binds those bytes by SHA, so this pair is not widened as a side effect of
+# teaching the engine new origins — see `vocabularies()`.
+V1_ORIGIN_TYPES = (ORIGIN_DIRECT_TARGET, ORIGIN_PATHWAY_NODE)
+
+# The v2 lane's typed origins, kept OUT of the frozen v1 document until a v2 bundle ships.
+V2_ORIGIN_TYPES = (ORIGIN_DIRECT_TARGET, ORIGIN_TEMPORAL_CROSS_TIME,
+                   ORIGIN_ENDPOINT_PATHWAY)
 
 # Direct's per-arm desired-modulation vocabulary, consumed verbatim, never renamed.
 MOD_DECREASE = "decrease"
@@ -182,7 +214,9 @@ def translate(*, desired_modulation: str, effect: str, arm_evaluable: bool,
     Returns ``directional_evidence_status`` + a compact reason code. No promotion, no
     eligibility, no recommendation: only what the evidence is.
     """
-    pathway = origin_type == ORIGIN_PATHWAY_NODE
+    # INFERRED, not "the v1 pathway constant". A node from either pathway vocabulary was never
+    # perturbed, and that — not its name — is what decides it cannot be a measurement.
+    pathway = origin_type in INFERRED_ORIGINS
 
     if origin_type not in ORIGIN_TYPES:
         return _out(wf.UNRESOLVED, wf.REASON_ARM_NOT_EVALUABLE, origin_type)
@@ -226,10 +260,17 @@ def translate(*, desired_modulation: str, effect: str, arm_evaluable: bool,
 
 
 def _out(status: str, reason: str, origin_type: str) -> dict[str, Any]:
-    # Only a MEASURED direct target carries observed-perturbation support. An
-    # inverse-direction hypothesis and a pathway hypothesis are inferences: false.
+    # Only a MEASURED ORIGIN in a MEASURED STATUS carries observed-perturbation support.
+    #
+    # BOTH halves are load-bearing. `wf.MEASURED_EVIDENCE` is {OBSERVED_PERTURBATION} alone, so
+    # an INVERSE_DIRECTION_HYPOTHESIS — a pharmacologic guess about the direction the knockdown
+    # did NOT move — can never be filed as observed support, at any origin. And an inferred
+    # node can never carry it whatever its status, because nobody perturbed it.
+    #
+    # A cross-time DiD target WAS perturbed, so it is measured. It is a different estimand from
+    # the same-condition effect, and it stays a different one: the origin rides on the row.
     supported = (status in wf.MEASURED_EVIDENCE
-                 and origin_type == ORIGIN_DIRECT_TARGET)
+                 and origin_type in MEASURED_ORIGINS)
     return {
         "directional_evidence_status": status,
         "directional_evidence_reason": reason,
@@ -238,6 +279,28 @@ def _out(status: str, reason: str, origin_type: str) -> dict[str, Any]:
         # A LABEL, not a tier, and deliberately unordered. It exists so an inverse
         # hypothesis can never be filed under a measurement's evidence class.
         "stage3_evidence_class": wf.evidence_class(status),
+    }
+
+
+def v2_origin_vocabulary() -> dict[str, Any]:
+    """The v2 lane's typed-origin vocabulary. NOT part of the frozen v1 bundle document.
+
+    It lives here, beside the engine that resolves these origins, rather than in
+    `vocabularies()` — which is hashed into every v1 bundle id and validated against a schema
+    set Stage 4 pins by SHA. Putting the v2 terms there would move bytes a downstream consumer
+    is bound to, to announce a lane that has not shipped a bundle yet.
+    """
+    return {
+        "origin_types": list(V2_ORIGIN_TYPES),
+        "measured_origins": sorted(MEASURED_ORIGINS),
+        "inferred_origins": sorted(INFERRED_ORIGINS),
+        # Both measured, both perturbed, and NOT the same quantity: a same-condition effect and
+        # a cross-time difference-in-differences answer different questions. Fusing them was
+        # the defect; keeping them apart is the contract.
+        "direct_and_temporal_are_distinct_estimands_never_fused": True,
+        "inferred_origin_can_never_carry_observed_support": True,
+        "observed_knockdown_direction_is_never_the_inverse_pharmacologic_hypothesis": True,
+        "combined_objective_permitted": False,
     }
 
 
@@ -252,7 +315,20 @@ def vocabularies() -> dict[str, Any]:
         "action_functional_inhibition": sorted(ACTION_FUNCTIONAL_INHIBITION),
         "action_functional_activation": sorted(ACTION_FUNCTIONAL_ACTIVATION),
         "action_explicit_unknown": sorted(ACTION_EXPLICIT_UNKNOWN),
-        "origin_types": list(ORIGIN_TYPES),
+        # THE V1 VOCABULARY, DELIBERATELY UNCHANGED.
+        #
+        # This dict is hashed into every Stage-3 bundle id AND validated against the FROZEN
+        # Stage-3 schema set, which Stage 4 binds to by SHA. A v1 bundle contains only v1
+        # origins, so listing only them here is not an omission — it is what that bundle
+        # actually holds.
+        #
+        # The engine knows four origins (ORIGIN_TYPES). Advertising the v2 ones HERE would
+        # change the frozen document's bytes and silently break the Stage-4 consumer the freeze
+        # exists to protect. When the v2 lane ships a bundle, that happens together with a
+        # schema $id bump, a re-hash, and a handoff to the Stage-4 owner — in that order, and
+        # not as a side effect of wiring an input loader. `v2_origin_vocabulary()` below holds
+        # the v2 terms until then.
+        "origin_types": list(V1_ORIGIN_TYPES),
         "inhibition_is_not_abundance_reduction": True,
         "activation_is_never_inferred_from_inhibition": True,
         "pathway_node_is_never_a_measurement": True,
