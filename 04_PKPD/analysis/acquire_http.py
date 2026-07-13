@@ -17,12 +17,14 @@ table cannot be fetched at all.
 
 from __future__ import annotations
 
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from .firewall import Rejection
 from .public_sources import assert_fetch_permitted, base_url, host
@@ -30,6 +32,18 @@ from .public_sources import assert_fetch_permitted, base_url, host
 USER_AGENT = "spot-stage4-acquisition/1.0 (+public-source evidence; contact: repository owner)"
 DEFAULT_TIMEOUT_S = 30
 DEFAULT_MAX_BYTES = 16 * 1024 * 1024
+
+# Bounded. A public API is shared infrastructure, and a retry storm is how an acquisition gets
+# throttled into failure halfway through a queue.
+DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_BACKOFF_S = 0.5
+# Minimum spacing between requests to ONE host. PubChem asks for no more than a few per second.
+DEFAULT_MIN_INTERVAL_S = 0.25
+
+# Transient: worth asking again. A 4xx is an ANSWER — retrying a 404 does not make it evidence of
+# absence on the third attempt, it just adds noise to someone else's server. 429 is the exception:
+# it explicitly means "later".
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 # The headers that are part of the record. Everything else (Date, Set-Cookie, request ids,
 # CDN noise) is per-request and would make the same document hash differently on every fetch.
@@ -44,7 +58,11 @@ class HttpResponse:
     status: int
     headers: dict[str, str]
     body: bytes
+    # The clock of the fetch that ACTUALLY happened. A cache hit carries the ORIGINAL time — it is
+    # never re-stamped, because no access occurred now and claiming one would be fabricated
+    # provenance.
     accessed_at_utc: str
+    from_cache: bool = False
 
     @property
     def media_type(self) -> str:
@@ -85,11 +103,27 @@ class Client:
     """A bounded, ledger-checked HTTP GET. It does nothing else."""
 
     def __init__(self, *, allow_network: bool = False, transport: Optional[Transport] = None,
-                 timeout: int = DEFAULT_TIMEOUT_S, max_bytes: int = DEFAULT_MAX_BYTES) -> None:
+                 timeout: int = DEFAULT_TIMEOUT_S, max_bytes: int = DEFAULT_MAX_BYTES,
+                 cache: Optional[Any] = None, max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+                 backoff_s: float = DEFAULT_BACKOFF_S,
+                 min_interval_s: float = DEFAULT_MIN_INTERVAL_S,
+                 sleep: Optional[Callable[[float], None]] = None,
+                 clock: Optional[Callable[[], float]] = None) -> None:
         self.allow_network = allow_network
         self.transport = transport or _urllib_transport
         self.timeout = timeout
         self.max_bytes = max_bytes
+        # Fetch each canonical query once. A reuse keeps the ORIGINAL access time.
+        self.cache = cache
+        self.max_attempts = max(1, max_attempts)
+        self.backoff_s = backoff_s
+        self.min_interval_s = min_interval_s
+        self._sleep = sleep or time.sleep
+        self._clock = clock or time.monotonic
+        self._last_request: dict[str, float] = {}
+        self._lock = threading.Lock()
+        self.n_fetched = 0
+        self.n_reused = 0
 
     # -- query construction is part of the record, so it lives here ---------------------
     @staticmethod
@@ -134,6 +168,23 @@ class Client:
                 f"{source_key!r} is registered at {expected!r} in the public-source ledger, but "
                 f"the request targets {parsed.hostname!r}. Stage 4 talks to the host the ledger "
                 "names, and to no other.")
+        # A response already fetched for this exact question is REUSED, with the envelope of the
+        # fetch that really happened. This is the only path that returns bytes without a request.
+        if self.cache is not None:
+            hit = self.cache.recall(url)
+            if hit is not None:
+                entry, body = hit
+                self.n_reused += 1
+                return HttpResponse(
+                    source_key=source_key, url=url, canonical_query=canonical_query,
+                    status=int(entry["status"]),
+                    headers={k: v for k, v in sorted(dict(entry["headers"]).items())
+                             if k in HEADER_ALLOWLIST},
+                    body=body,
+                    accessed_at_utc=str(entry["accessed_at_utc"]),   # the ORIGINAL access
+                    from_cache=True,
+                )
+
         if not self.allow_network:
             raise Rejection(
                 "network_not_permitted",
@@ -141,27 +192,21 @@ class Client:
                 "opt-in: the caller passes allow_network=True (the CLI's --allow-network), so "
                 "no code path reaches a public API by accident.")
 
-        try:
-            status, headers, body = self.transport(url, self.timeout)
-        except Rejection:
-            raise
-        except (urllib.error.URLError, OSError, TimeoutError) as exc:
-            raise Rejection(
-                "source_unreachable",
-                f"{source_key}: {url!r} could not be fetched ({type(exc).__name__}: {exc}). A "
-                "source that did not answer has not been evaluated; it has not said 'no'.")
+        status, headers, body = self._fetch_with_retry(source_key, url)
 
-        if status != 200:
-            raise Rejection(
-                "source_http_error",
-                f"{source_key}: {url!r} returned HTTP {status}. Only a 200 carries bytes Stage 4 "
-                "will read; a 404 is not evidence of absence and a 500 is not evidence of "
-                "anything.")
         if len(body) > self.max_bytes:
             raise Rejection(
                 "source_response_too_large",
                 f"{source_key}: {url!r} returned {len(body)} bytes, over the {self.max_bytes}-byte "
                 "cap. Acquisition is bounded.")
+
+        accessed_at_utc = self._now()
+        self.n_fetched += 1
+        if self.cache is not None:
+            self.cache.remember(
+                url=url, source_key=source_key, canonical_query=canonical_query, status=status,
+                headers=headers, accessed_at_utc=accessed_at_utc, body=body,
+                suffix=_suffix_for(headers))
 
         return HttpResponse(
             source_key=source_key,
@@ -170,11 +215,69 @@ class Client:
             status=status,
             headers={k: v for k, v in sorted(headers.items()) if k in HEADER_ALLOWLIST},
             body=body,
-            accessed_at_utc=self._now(),
+            accessed_at_utc=accessed_at_utc,
+            from_cache=False,
         )
+
+    def _fetch_with_retry(self, source_key: str, url: str) -> tuple[int, dict[str, str], bytes]:
+        """Bounded retry, transient failures only. A 4xx is an answer, not a flake."""
+        last: Optional[Rejection] = None
+        for attempt in range(1, self.max_attempts + 1):
+            self._respect_rate_limit(source_key)
+            try:
+                status, headers, body = self.transport(url, self.timeout)
+            except Rejection:
+                raise
+            except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                last = Rejection(
+                    "source_unreachable",
+                    f"{source_key}: {url!r} could not be fetched ({type(exc).__name__}: {exc}). A "
+                    "source that did not answer has not been evaluated; it has not said 'no'.")
+            else:
+                if status == 200:
+                    return status, headers, body
+                last = Rejection(
+                    "source_http_error",
+                    f"{source_key}: {url!r} returned HTTP {status} after {attempt} attempt(s). "
+                    "Only a 200 carries bytes Stage 4 will read; a 404 is not evidence of absence "
+                    "and a 500 is not evidence of anything.")
+                if status not in RETRYABLE_STATUS:
+                    raise last          # an answer. Asking again does not change it.
+
+            if attempt < self.max_attempts:
+                self._sleep(self.backoff_s * (2 ** (attempt - 1)))
+
+        assert last is not None
+        raise last
+
+    def _respect_rate_limit(self, source_key: str) -> None:
+        """Space requests to one host. Politeness here is what keeps a long queue from throttling."""
+        if self.min_interval_s <= 0:
+            return
+        with self._lock:
+            host_key = host(source_key)
+            previous = self._last_request.get(host_key)
+            now = self._clock()
+            if previous is not None:
+                wait = self.min_interval_s - (now - previous)
+                if wait > 0:
+                    self._sleep(wait)
+                    now = self._clock()
+            self._last_request[host_key] = now
 
     def _now(self) -> str:
         clock = getattr(self.transport, "clock", None)
         if isinstance(clock, str):
             return clock
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# Media type -> cache-file suffix. The bytes are addressed by hash; the suffix is only so a
+# reviewer opening the run root can see what a file is.
+_SUFFIX = {"application/json": "json", "application/xml": "xml", "text/xml": "xml",
+           "text/html": "html", "text/plain": "txt"}
+
+
+def _suffix_for(headers: dict[str, str]) -> str:
+    media = (headers.get("content-type") or "").split(";")[0].strip().lower()
+    return _SUFFIX.get(media, "bin")

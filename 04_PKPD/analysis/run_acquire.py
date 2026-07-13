@@ -37,7 +37,10 @@ import os
 import sys
 from typing import Any, Optional
 
+from .acquire_cache import RequestCache
 from .acquire_http import Client
+from .acquire_plan import plan_document, plan_queue
+from .acquire_pool import DEFAULT_MAX_WORKERS, bounded_map
 from .acquisition import (
     ACQUISITION_SCHEMA_ID,
     HARD_RULES,
@@ -57,6 +60,7 @@ from .stage3_admission import admit
 from .stage3_reuse import reuse_stage3_sources, stage3_missing_lanes
 
 RECEIPT_FILE = "acquisition_receipt.json"
+PLAN_FILE = "acquisition_plan.json"
 
 
 
@@ -156,7 +160,11 @@ def acquire_identity(client: Client, run_root: RunRoot, name: str, *,
 
 def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: bool,
         setid: Optional[str], require_external_verifier: bool,
-        client: Optional[Client] = None) -> tuple[int, dict[str, Any]]:
+        client: Optional[Client] = None, plan_only: bool = False,
+        max_workers: int = DEFAULT_MAX_WORKERS,
+        reuse_cache: bool = True) -> tuple[int, dict[str, Any]]:
+    # Admission is UNCHANGED and is not weakened by any flag below. A plan over an unadmitted
+    # bundle would be a schedule built on bytes nobody verified.
     admission = admit(bundle_dir, require_external_verifier=require_external_verifier)
     run_root = RunRoot(run_root_dir)
 
@@ -167,10 +175,28 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
     queued_by_name = _candidate_names(admission.tables)
     identities: list[dict[str, Any]] = []
 
+    # PLAN: what WOULD be acquired for the queued candidates, offline. Readiness, not a result.
+    plan = plan_document(plan_queue(client or Client(), admission.tables))
+    if plan_only:
+        path = os.path.join(run_root.root, PLAN_FILE)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(plan, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+
+    cache = RequestCache(run_root) if reuse_cache else None
+    http = client or Client(allow_network=allow_network, cache=cache)
+    if client is not None and cache is not None and getattr(client, "cache", None) is None:
+        client.cache = cache            # the injected test client gets reuse too
+
     if names:
-        http = client or Client(allow_network=allow_network)
-        for name in names:
-            resolved, acquired = acquire_identity(http, run_root, name, setid=setid)
+        # Bounded concurrency across MOIETIES. Within one moiety the chain stays sequential —
+        # the SPL needs the set ID, Drugs@FDA needs the application number. Concurrency changes
+        # the wall clock, never the records: bounded_map returns results in input order.
+        acquired_all = bounded_map(
+            names, lambda n: acquire_identity(http, run_root, n, setid=setid),
+            max_workers=max_workers)
+
+        for name, (resolved, acquired) in zip(names, acquired_all):
             candidate_id = queued_by_name.get(name.strip().upper())
 
             # BIND the bytes to the candidate they were acquired FOR, on a typed field.
@@ -249,6 +275,22 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
                 if r.candidate_id and r.evidence_state == "observed"
             }),
             "identities_acquired": identities,
+            # TRANSPORT ONLY. These numbers change the wall clock, never a record: a reused
+            # response keeps the access time, status and hash of the fetch that really happened.
+            "transport": {
+                "fetched": getattr(http, "n_fetched", 0),
+                "reused_from_cache": getattr(http, "n_reused", 0),
+                "max_workers": max_workers,
+                "cache_entries": cache.n_entries() if cache is not None else 0,
+            },
+        },
+        # READINESS, not a result: what WOULD be acquired for the queued candidates once the
+        # admitted bundle lands. Nothing here has been fetched or characterised.
+        "plan": {
+            "n_candidates_queued": plan["n_candidates_queued"],
+            "n_acquirable": plan["n_acquirable"],
+            "n_requests_total": plan["n_requests_total"],
+            "written": PLAN_FILE if plan_only else None,
         },
         "missing": [m.model_dump(exclude_none=True) for m in manifest.missing],
         "hard_rules": HARD_RULES + [
@@ -320,6 +362,13 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
                     help="pin the DailyMed product when discovery returns more than one")
     ap.add_argument("--allow-network", action="store_true",
                     help="permit requests to the ledgered public hosts. Off by default.")
+    ap.add_argument("--plan", action="store_true",
+                    help="write acquisition_plan.json: what WOULD be acquired for the queued "
+                         "candidates, offline. Acquires nothing.")
+    ap.add_argument("--max-concurrency", type=int, default=DEFAULT_MAX_WORKERS,
+                    help="bounded workers across moieties. Changes the wall clock, never a record.")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="do not reuse previously fetched responses from the run root")
     ap.add_argument("--require-external-verifier", action="store_true",
                     help="a REAL run: refuse a bundle Stage-3's own verifier.verify_stage3 has "
                          "not actually passed")
@@ -334,6 +383,9 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
             setid=args.dailymed_setid,
             require_external_verifier=args.require_external_verifier,
             client=client,
+            plan_only=args.plan,
+            max_workers=args.max_concurrency,
+            reuse_cache=not args.no_cache,
         )
     except Rejection as exc:
         print(f"REFUSED [{exc.code}] {exc.detail}", file=sys.stderr)
@@ -351,6 +403,14 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
         print(f"identity         : {probe['moiety_name']} [{probe['role']}] "
               f"unii={ident['unii']} cid={ident['pubchem_cid']} "
               f"applications={','.join(ident['fda_application_numbers']) or 'none'}")
+    t = acq.get("transport", {})
+    print(f"transport        : fetched={t.get('fetched', 0)} "
+          f"reused_from_cache={t.get('reused_from_cache', 0)} "
+          f"workers={t.get('max_workers')}")
+    p = receipt.get("plan", {})
+    print(f"queue plan       : {p.get('n_acquirable')}/{p.get('n_candidates_queued')} queued "
+          f"candidate(s) acquirable, {p.get('n_requests_total')} request(s)"
+          + (f" -> {p['written']}" if p.get("written") else ""))
     print("\nThis layer ACQUIRES evidence. No drug is ranked, scored, selected or recommended, "
           "and nothing here asserts brain penetrance or safety.")
     return code

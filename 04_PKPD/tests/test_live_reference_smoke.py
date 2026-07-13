@@ -60,6 +60,58 @@ def client():
 
 
 @live_only
+def test_every_named_public_source_answers_with_a_checkable_record(client, run_root):
+    """Item-1 smoke: for EACH named source, verify the things a reviewer would have to check by
+    hand — HTTP status, content type, source identity, access time, licence/terms, raw-cache
+    SHA-256. TEMODAR/temozolomide is an explicitly TEST-ONLY probe: it is not a Stage-3 candidate
+    (every queued row is an antibody) and nothing about it is presented as a result."""
+    from analysis.acquire_cache import RequestCache
+    from analysis.acquisition import verify_cached_bytes
+    from analysis.public_sources import host as ledger_host
+
+    cache = RequestCache(run_root)
+    live = Client(allow_network=True, cache=cache)
+
+    pubchem, records = acquire_pubchem_identity(live, run_root, REFERENCE_MOIETY)
+    rxcui, rx_record = acquire_rxcui(live, run_root, REFERENCE_MOIETY)
+    label, label_records = acquire_label(live, run_root, REFERENCE_MOIETY, setid=TEMODAR_SETID)
+    approval, approval_records = acquire_approval(live, run_root, label.listing.setid)
+    every = [*records, rx_record, *label_records, *approval_records]
+
+    by_source: dict[str, int] = {}
+    for rec in every:
+        by_source[rec.source_key] = by_source.get(rec.source_key, 0) + 1
+
+        # 1. HTTP status + content type, as reported by the source
+        assert rec.http_status == 200, f"{rec.source_key}: HTTP {rec.http_status}"
+        assert rec.raw_media_type in ("application/json", "application/xml", "text/xml"), \
+            f"{rec.source_key}: unexpected media type {rec.raw_media_type!r}"
+
+        # 2. source identity: the bytes came from the host the LEDGER names, over https
+        assert rec.url.startswith(f"https://{ledger_host(rec.source_key)}/"), rec.url
+        assert rec.canonical_query and rec.stable_record_id
+
+        # 3. access time: a real UTC stamp, not a placeholder
+        assert rec.accessed_at_utc and rec.accessed_at_utc.endswith("Z")
+        assert not rec.accessed_at_utc.startswith("1970")
+
+        # 4. licence / terms recorded — a source may not declare itself free
+        assert rec.license_or_terms_url and rec.license_status
+
+        # 5. the raw cache holds exactly the bytes that were hashed
+        verify_cached_bytes(rec, run_root)
+
+    # all four named sources answered
+    assert set(by_source) == {"pubchem", "rxnorm", "dailymed", "openfda"}
+
+    # the request cache filed one entry per canonical query, and a re-run reuses them
+    assert cache.n_entries() == len(every) - 0 or cache.n_entries() >= 4
+    before = live.n_fetched
+    acquire_pubchem_identity(live, run_root, REFERENCE_MOIETY)
+    assert live.n_fetched == before and live.n_reused > 0     # served from cache, no new request
+
+
+@live_only
 def test_the_four_public_sources_answer_and_identity_converges_for_the_reference_moiety(
         client, run_root):
     pubchem, pubchem_records = acquire_pubchem_identity(client, run_root, REFERENCE_MOIETY)

@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from functools import lru_cache
 from typing import Any, Final, Literal, Optional, cast
 
@@ -282,7 +283,11 @@ class RunRoot:
         path = os.path.join(self.root, relpath)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         if not os.path.exists(path):  # content-addressed: the same bytes are one entry
-            tmp = path + ".part"
+            # UNIQUE tmp name per writer. A fixed `path + ".part"` races: two workers caching the
+            # same bytes would interleave into one tmp file and could publish a truncated object
+            # under a hash that no longer describes it. os.replace is atomic, so the last writer
+            # simply wins with identical content.
+            tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.part"
             with open(tmp, "wb") as fh:
                 fh.write(data)
             os.replace(tmp, path)
