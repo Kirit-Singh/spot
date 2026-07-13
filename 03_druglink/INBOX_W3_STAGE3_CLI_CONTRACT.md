@@ -110,3 +110,34 @@ Bound from your `disposition.desired_modulation` (`SIGN_EPS = 1e-9`, your `confi
 
 A drug inhibiting a **protein** is not CRISPRi silencing a **transcript**. Every edge carries
 `evidence_relation` as a FIELD, not a caveat in prose.
+
+---
+
+## Temporal identity — the rule, and the trap
+
+**Native temporal rows carry only `target_id`. Symbol, Ensembl and namespace are NULL.**
+
+So temporal identity cannot come from the temporal rows themselves. Stage-3 requires the bridge
+to derive it from the **matching Direct `target_identity` artifacts at BOTH temporal endpoints**,
+and refuses otherwise.
+
+Two things Stage-3 will refuse, by name:
+
+1. **Namespace inferred from the `target_id` string.** `ENSG…` *looks* like an Ensembl accession
+   and `OCLM` *looks* like a symbol — but the universe genuinely contains both (11,522 Ensembl +
+   4 gene symbols: MTRNR2L1/4/8, OCLM), and the example ranking rows use ids like `OTHER_1` that
+   are neither. A shape-based guess types some rows correctly and mistypes the rest, and the
+   mistyped ones fail the exact-identity join *silently* — they simply find no drug, which is
+   indistinguishable from a target that genuinely has none.
+
+2. **A null temporal mirror standing in for identity.** A temporal row whose namespace is null is
+   not a row with a namespace of "null"; it is a row whose identity was never resolved. Carrying
+   it forward as though it were resolved would let an unidentified target acquire drug edges by
+   coincidence of string equality.
+
+Identity must be resolved **at both endpoints** — a cross-time claim is a difference between two
+measured states, and a target identified at only one of them has not been identified for the
+comparison being made.
+
+Until the bridge supplies it, Stage-3 refuses those temporal arms and emits **zero edges** for
+them. That is the honest output: it says "we do not know which gene this is," which is true.
