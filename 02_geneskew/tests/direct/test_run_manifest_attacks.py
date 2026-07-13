@@ -152,14 +152,15 @@ def test_5_one_lane_bound_to_ANOTHER_SELECTION(tmp_path):
 # --------------------------------------------------------------------------- #
 # 6. AN UNADMITTED ARM.
 # --------------------------------------------------------------------------- #
-def test_6_an_external_admission_changed_to_REJECT(tmp_path):
-    """The in-bundle report is a PREFLIGHT. The admission is the per-lane root envelope."""
+def test_6_an_independent_admission_changed_to_REFUSE(tmp_path):
+    """The in-bundle report is a PREFLIGHT. The admission is the lane's own, and Direct's
+    lives IN PLACE in `direct_release.json` — W10's shape, read natively."""
     run = F.complete_run(tmp_path)
-    F.write_external_admission(run, verdict="REJECT", lane="direct")
+    F.write_native_admission(run, "direct", verdict="REFUSE", admitted=False)
     doc = _verify(run, _manifest(tmp_path, run)["path"])
 
     assert doc["verdict"] == V.R.REJECT
-    assert V.G_EXTERNAL_ADMISSION in doc["failed_gates"]
+    assert V.G_LANE_ADMISSION in doc["failed_gates"]
 
 
 # --------------------------------------------------------------------------- #

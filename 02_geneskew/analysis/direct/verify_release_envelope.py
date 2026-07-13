@@ -53,11 +53,15 @@ from typing import Any, Optional
 # PER-LANE root artifacts. Each lane's release is admitted by ITS OWN independent verifier:
 # an admission is an admission OF ONE LANE'S RELEASE, and one generic report cannot say
 # which lane it admitted.
+# RECONCILED (see ``release_inventory``): Direct's inventory is W10's OWN
+# `direct_release.json`, admitted IN PLACE. Temporal/pathway keep an immutable pending
+# inventory plus a separate envelope. Two shapes, both read natively; neither bent.
 INVENTORY_FILE_OF = {
-    "direct": "direct_arm_release.json",
+    "direct": "direct_release.json",
     "temporal": "temporal_arm_release.json",
     "pathway": "pathway_arm_release.json",
 }
+ADMIT_IN_PLACE_LANES = ("direct",)
 ADMISSION_FILE_OF = {
     "direct": "direct_arm_external_admission.json",
     "temporal": "temporal_arm_external_admission.json",
@@ -69,7 +73,7 @@ REPORT_ID_FIELD = "report_id"
 SHA256_LEN = 64
 
 INVENTORY_SCHEMA_OF = {
-    "direct": "spot.stage02_direct_arm_release.v1",
+    "direct": "spot.stage02_direct_release.v1",
     "temporal": "spot.stage02_temporal_arm_release.v1",
     "pathway": "spot.stage02_pathway_arm_release.v1",
 }
@@ -129,19 +133,36 @@ def check_inventory(root: str, expect_bundles: int, expect_arms: int,
                    f"{INVENTORY_SCHEMA!r}")
 
     # CONTENT ADDRESSING: the id follows the content, or the inventory can be edited and
-    # keep its name.
-    claimed = doc.get("release_id")
-    derived = self_hash(doc, "release_id")
+    # keep its name. In an ADMIT_IN_PLACE lane the hash is deliberately BLIND to the four
+    # fields the verifier fills in — which is exactly what makes admitting a release
+    # identity-preserving rather than a rewrite.
+    if lane in ADMIT_IN_PLACE_LANES:
+        id_field, excludes = "direct_release_sha256", (
+            "direct_release_sha256", "direct_release_run_id", "verdict", "admitted",
+            "self_admitted", "verifier_id")
+    else:
+        id_field, excludes = "release_id", ("release_id",)
+    claimed = doc.get(id_field)
+    derived = _canon({k: v for k, v in doc.items() if k not in excludes})
     if claimed != derived:
-        bad.append(f"{INVENTORY_FILE}: release_id {str(claimed)[:16]} does not follow its "
+        bad.append(f"{INVENTORY_FILE}: {id_field} {str(claimed)[:16]} does not follow its "
                    f"own content ({derived[:16]})")
 
     # THE PRODUCER MAY NOT ADMIT ITS OWN RELEASE.
-    ext = doc.get("external_admission") or {}
-    if ext.get("status") not in PRODUCER_STATES:
-        bad.append(f"{INVENTORY_FILE}: external_admission.status is "
-                   f"{ext.get('status')!r}; 'pending' is the only honest producer state — "
-                   "a producer cannot truthfully emit the external verdict on itself")
+    #
+    # In an ADMIT_IN_PLACE lane the independent verifier fills the admission fields into this
+    # same file, so `external_admission.status` is not the carrier — `self_admitted` is, and
+    # the typed adapter checks it. Demanding `pending` here would refuse every release W10
+    # has ever admitted.
+    if lane not in ADMIT_IN_PLACE_LANES:
+        ext = doc.get("external_admission") or {}
+        if ext.get("status") not in PRODUCER_STATES:
+            bad.append(f"{INVENTORY_FILE}: external_admission.status is "
+                       f"{ext.get('status')!r}; 'pending' is the only honest producer "
+                       "state — a producer cannot emit the external verdict on itself")
+    elif doc.get("self_admitted") is not False:
+        bad.append(f"{INVENTORY_FILE}: self_admitted={doc.get('self_admitted')!r} — an "
+                   "in-place admission is still not a self-admission")
 
     # EVERY REFERENCED BYTE. An inventory that named files it never hashed would be an
     # index of nothing.
@@ -184,7 +205,13 @@ def _byte_check(root: str, rel_dir: str, name: str, entry: Any) -> list[str]:
 def check_external_admission(root: str, inventory: Optional[dict],
                              expect_verifier_id: Optional[str],
                              lane: str = "temporal") -> tuple:
-    """The EXTERNAL ADMISSION: present, from the pinned verifier, BOUND TO THIS inventory."""
+    """The EXTERNAL ADMISSION: present, from the pinned verifier, BOUND TO THIS inventory.
+
+    An ADMIT_IN_PLACE lane has no separate envelope by design — its admission is in the
+    inventory, and the typed adapter reads it there. Demanding one would refuse W10.
+    """
+    if lane in ADMIT_IN_PLACE_LANES:
+        return inventory, []
     bad: list[str] = []
     INVENTORY_FILE = INVENTORY_FILE_OF[lane]
     ADMISSION_FILE = ADMISSION_FILE_OF[lane]

@@ -460,9 +460,10 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
 # THE ROOT ARTIFACTS. The producer's per-bundle report is a PREFLIGHT; these are what an
 # admission actually rests on.
 # --------------------------------------------------------------------------- #
-INVENTORY_FILE_OF = {"direct": "direct_arm_release.json",
+INVENTORY_FILE_OF = {"direct": "direct_release.json",
                      "temporal": "temporal_arm_release.json",
                      "pathway": "pathway_arm_release.json"}
+ADMIT_IN_PLACE_LANES = ("direct",)
 ADMISSION_FILE_OF = {"direct": "direct_arm_external_admission.json",
                      "temporal": "temporal_arm_external_admission.json",
                      "pathway": "pathway_arm_external_admission.json"}
@@ -506,11 +507,12 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
     """The IMMUTABLE, CONTENT-ADDRESSED per-lane inventory. status is always PENDING."""
     root = run["root"]
     entries = [_bundle_entry(root, d, lane) for d in run[lane]]
+    schema = ("spot.stage02_direct_release.v1" if lane == "direct"
+              else "spot.stage02_temporal_arm_release.v1" if lane == "temporal"
+              else "spot.stage02_pathway_arm_release.v1")
     doc = {
         "fixture": True,
-        "schema_version": f"spot.stage02_{lane}_arm_release.v1"
-                          if lane != "temporal"
-                          else "spot.stage02_temporal_arm_release.v1",
+        "schema_version": schema,
         "release_id_rule": "sha256(canonical JSON excluding release_id)",
         "analysis_mode": "temporal_cross_condition",
         "stage1_binding": {"release_canonical_sha256":
@@ -531,7 +533,17 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
                 "spot.stage02_temporal_arm_verifier_report.v1",
         },
     }
-    doc["release_id"] = _canon(doc)
+    if lane in ADMIT_IN_PLACE_LANES:
+        # W10's shape: the inventory carries the admission fields, and its own hash is BLIND
+        # to them — so the independent verifier can fill them in without changing what the
+        # release IS.
+        body = dict(doc)
+        doc = dict(body, direct_release_run_id=_canon(body)[:16],
+                   verdict="ADMIT", admitted=True, self_admitted=False,
+                   verifier_id=NATIVE_ADMISSION["direct"]["verifier_id"])
+        doc["direct_release_sha256"] = _canon(body)
+    else:
+        doc["release_id"] = _canon(doc)
     path = os.path.join(root, INVENTORY_FILE_OF[lane])
     _write(path, doc)
     return path
@@ -568,9 +580,10 @@ def seal_release(run: dict) -> dict:
     """Re-derive every lane's inventory from the bytes on disk, then re-admit each. Used
     after a mutation, so an attack has to survive a FULLY consistent reseal."""
     for lane in ("direct", "temporal", "pathway"):
-        write_inventory(run, lane)
-        write_external_admission(run, lane=lane)
-        write_native_admission(run, lane)      # the lane's NATIVE, typed admission
+        write_inventory(run, lane)             # Direct's IS the admission (in place)
+        if lane not in ADMIT_IN_PLACE_LANES:
+            write_external_admission(run, lane=lane)
+            write_native_admission(run, lane)
     return run
 
 
@@ -608,6 +621,17 @@ def write_native_admission(run: dict, lane: str, *, verdict="ADMIT", admitted=Tr
     """The lane's NATIVE admission, in that lane's OWN vocabulary. Never transliterated."""
     spec = NATIVE_ADMISSION[lane]
     root = run["root"]
+    if lane in ADMIT_IN_PLACE_LANES:
+        # admitted IN PLACE, in the inventory itself (W10's shape)
+        path = os.path.join(root, INVENTORY_FILE_OF[lane])
+        doc = json.load(open(path))
+        body = {k: v for k, v in doc.items() if k not in spec["excludes"]}
+        doc = dict(body, direct_release_run_id=_canon(body)[:16],
+                   verdict=verdict, admitted=admitted, self_admitted=self_admitted,
+                   verifier_id=verifier_id or spec["verifier_id"])
+        doc["direct_release_sha256"] = _canon(body)
+        _write(path, doc)
+        return path
     inv_path = os.path.join(root, INVENTORY_FILE_OF[lane])
     inv = json.load(open(inv_path))
 
