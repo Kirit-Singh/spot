@@ -7,7 +7,6 @@
 import { PageShell } from './PageShell';
 import { AwaitingArtifact } from './AwaitingArtifact';
 import { DemoBar } from './DemoBar';
-import { MethodsLinks } from './MethodsLinks';
 import { ScienceEvidence } from './ScienceEvidence';
 import type { ScienceEvidenceRecord } from './ScienceEvidence';
 import { isDemoGate } from './pages';
@@ -80,7 +79,6 @@ export function StageIsland({
       ) : (
         <AwaitingArtifact purpose={purpose} regions={regions} evidence={null} enqueueTarget={enqueueTarget} />
       )}
-      <MethodsLinks page={page} />
     </PageShell>
   );
 }
