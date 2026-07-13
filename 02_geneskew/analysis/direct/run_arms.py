@@ -30,7 +30,7 @@ import datetime as _dt
 import json
 import os
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from . import (
     arm_bundle,
@@ -55,9 +55,14 @@ SCHEMA_PROVENANCE = "spot.stage02_arm_bundle_provenance.v1"
 RUNNER_ID = "spot.stage02.direct.all_arm_runner.v1"
 BUNDLE_RUN_ID_LEN = 16
 
+# THE PHYSICAL CONTRACT (owner, pre-integration). These names are what the independent
+# verifier (W10) and the aggregate manifest (W3) read. They are emitted NATIVELY — there is
+# no copy and no rename step, because a shim means the bytes that ship are not the bytes the
+# producer wrote, and the two can drift.
 ROWS_FILE = "arms.parquet"
 BUNDLE_FILE = "arm_bundle.json"
-PROVENANCE_FILE = "arm_bundle_provenance.json"
+PROVENANCE_FILE = "provenance.json"
+VERIFICATION_FILE = "verification.json"
 
 
 def request_block(args, ctx: dict[str, Any], view: dict[str, Any]) -> dict[str, Any]:
@@ -81,8 +86,8 @@ def request_block(args, ctx: dict[str, Any], view: dict[str, Any]) -> dict[str, 
     return dict(body, request_sha256=content_hash(body))
 
 
-def base_deltas(*, ctx: dict[str, Any], args, cond: str,
-                admitted: list[str]) -> dict[str, list[dict[str, Any]]]:
+def base_deltas(*, ctx: dict[str, Any], args, cond: str, admitted: list[str],
+                signature_targets: Optional[set] = None) -> dict[str, Any]:
     """ONE base delta per (program, target). The single dense read in the lane.
 
     The mask is the SAME mask the within-condition screen takes its score under — built per
@@ -108,6 +113,8 @@ def base_deltas(*, ctx: dict[str, Any], args, cond: str,
                                 universe_ids) for p in admitted}
 
     out: dict[str, list[dict[str, Any]]] = {p: [] for p in admitted}
+    signatures: dict[str, dict[str, float]] = {}
+    mask_rows: list[dict[str, Any]] = []
     for i, target in enumerate(targets):
         ident = identities[target]
         n_guides = rs._f(meta["n_guides"][i])
@@ -125,6 +132,17 @@ def base_deltas(*, ctx: dict[str, Any], args, cond: str,
         mask = masks.build_estimate_mask(est, contrib,
                                          library.get(ident.target_ensembl))
         mask_set = mask["gene_set"]
+        mask_rows += masks.mask_rows_for_emit(est, mask, universe_ids, run_id=None)
+
+        # THE TARGET-MASKED SIGNATURE, under the SAME mask the deltas are taken under. A
+        # signature masked differently from the numbers it explains would explain different
+        # numbers.
+        if (signature_targets is not None and target in signature_targets
+                and mask_set is not None):
+            row_values = main["log_fc"][i]
+            signatures[target] = {
+                g: float(row_values[gene_index[g]]) for g in universe_ids
+                if g in gene_index and g not in mask_set}
 
         # BASE QC once per target: a function of no program's outcome, and of no arm's.
         base_state, base_passed, _reasons = disposition.base_qc(
@@ -149,7 +167,7 @@ def base_deltas(*, ctx: dict[str, Any], args, cond: str,
                 "base_state": base_state,
                 "base_passed": base_passed,
             })
-    return out
+    return {"base": out, "signatures": signatures, "mask_rows": mask_rows}
 
 
 def build_bundle(args) -> dict[str, Any]:
@@ -174,7 +192,8 @@ def build_bundle(args) -> dict[str, Any]:
     cond = ctx["cond"]
     request = request_block(args, ctx, view)
 
-    base = base_deltas(ctx=ctx, args=args, cond=cond, admitted=admitted)
+    scan = base_deltas(ctx=ctx, args=args, cond=cond, admitted=admitted)
+    base = scan["base"]
     rows = arm_bundle.build_rows(condition=cond, admitted=admitted,
                                  base_by_program=base)
     doc = arm_bundle.build(condition=cond, view=view, base_by_program=base, rows=rows)
@@ -224,6 +243,28 @@ def build_bundle(args) -> dict[str, Any]:
         "inference_status": config.INFERENCE_STATUS,
     }
     emit.write_json(os.path.join(out_dir, PROVENANCE_FILE), prov)
+
+    # THE VERIFICATION SLOT — fail-closed, and NOT self-admission.
+    #
+    # A producer may not admit its own output: the independent Direct verifier (W10) reads
+    # the SHIPPED bytes at these exact paths and decides. So the artifact ships with an
+    # explicit NOT-YET-ADMITTED verdict rather than a clean bill of health it wrote itself.
+    # An artifact with no verification file at all would be indistinguishable from one whose
+    # verifier had not run, and a downstream reader would have to guess which.
+    emit.write_json(os.path.join(out_dir, VERIFICATION_FILE), {
+        "schema_version": "spot.stage02_direct_arm_verification.v1",
+        "arm_bundle_run_id": bundle_run_id,
+        "arm_bundle_run_sha256": full,
+        "generator_is_not_verifier": True,
+        "fail_closed": True,
+        "verifier_id": None,
+        "verdict": "pending_independent_verification",
+        "admitted": False,
+        "verified_paths": [BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE],
+        "arm_rows_sha256": doc["arm_rows_sha256"],
+        "n_expected_arm_slots": doc["n_expected_arm_slots"],
+        "n_arm_slots": doc["n_arm_slots"],
+    })
 
     return {
         "arm_bundle_run_id": bundle_run_id,

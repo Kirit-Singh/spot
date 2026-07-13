@@ -30,7 +30,7 @@ def bundle(synthetic_run, tmp_path):
     res = run_arms.build_bundle(args)
     with open(os.path.join(res["out_dir"], "arm_bundle.json")) as fh:
         doc = json.load(fh)
-    with open(os.path.join(res["out_dir"], "arm_bundle_provenance.json")) as fh:
+    with open(os.path.join(res["out_dir"], "provenance.json")) as fh:
         prov = json.load(fh)
     return res, doc, prov
 
@@ -261,6 +261,25 @@ class TestTheAdmittedSetComesFromTheBOUNDRelease:
         with pytest.raises(scorer_view.ScorerViewError) as exc:
             scorer_view.view(R())
         assert exc.value.reason == scorer_view.REFUSE_NO_ADMITTED
+
+
+class TestThePhysicalContract:
+    """The exact names W10's verifier and W3's manifest read. Emitted natively, no shim."""
+
+    def test_the_bundle_ships_exactly_the_contract_files(self, bundle):
+        res, _, _ = bundle
+        assert sorted(os.listdir(res["out_dir"])) == [
+            "arm_bundle.json", "arms.parquet", "provenance.json", "verification.json"]
+
+    def test_the_producer_does_NOT_admit_its_own_output(self, bundle):
+        res, _, _ = bundle
+        with open(os.path.join(res["out_dir"], "verification.json")) as fh:
+            v = json.load(fh)
+        assert v["admitted"] is False
+        assert v["verdict"] == "pending_independent_verification"
+        assert v["generator_is_not_verifier"] is True
+        assert v["fail_closed"] is True
+        assert v["verifier_id"] is None
 
 
 class TestTheBundleIsContentAddressed:
