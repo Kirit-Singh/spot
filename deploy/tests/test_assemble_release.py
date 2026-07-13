@@ -78,7 +78,7 @@ def test_all_lanes_admit_stages_and_emits_content_addressed_manifest(tmp_path):
         assert rec["sha256"] == ar.sha256_file(os.path.join(staging, rec["path"]))
 
     # content address is reproducible from the manifest's own content
-    content = {"release_id": m["release_id"], "lanes": m["lanes"],
+    content = {"release_id": m["release_id"], "lanes": m["lanes"], "routes": m["routes"],
                "files": [{k: r[k] for k in ("path", "sha256", "size", "lane", "role")} for r in m["files"]]}
     assert ar.canonical_sha256(content) == m["manifest_content_sha256"]
 
@@ -138,7 +138,7 @@ def test_sha256_mismatch_refused_and_not_silently_fixed(tmp_path):
 def test_negative_verdict_receipt_refused(tmp_path):
     neg = _receipt(tmp_path, "stage2", verdict="REFUSE", name="neg_receipt.json")
     spec = _spec(tmp_path, stage2={"receipt": {"src": neg, "dst": "lanes/stage2/receipt.json"}})
-    assert "negative/unusable verdict" in _refuses(tmp_path, spec)
+    assert "negative verdict" in _refuses(tmp_path, spec)
 
 
 def test_receipt_without_positive_verdict_refused_but_allowed_when_lenient(tmp_path):
@@ -194,6 +194,153 @@ def test_staging_inside_repo_refused(tmp_path):
 def test_relative_staging_refused(tmp_path):
     with pytest.raises(ar.Refusal, match="absolute path"):
         ar.assemble(_spec(tmp_path), "relative/staging", run_utc="2026-07-13T00:00:00Z")
+
+
+# ------------------------------------------- receipt <-> artifact binding (W3 / bc3b10b lesson)
+def _stage2_receipt(tmp, artifact_path, name="s2_receipt.json", **patch):
+    """A receipt shaped like the real spot.stage02.display_projection independent verifier."""
+    doc = {
+        "verifier_id": "spot.stage02.display_projection.independent_verifier.v1",
+        "generator_is_not_verifier": True,
+        "rebuilt_from_admitted_native_bytes": True,
+        "subject": {
+            "projection_file": os.path.basename(artifact_path),
+            "projection_raw_sha256": ar.sha256_file(artifact_path),
+            "self_hash_agrees": True,
+        },
+        "n_arms": 2,
+        "n_failed": 0,
+        "failures": [],
+        "verdict": "admit",
+    }
+    doc.update(patch)
+    p = tmp / name
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def _stage2_spec(tmp, artifact, receipt, **patch):
+    art = {"src": artifact, "dst": "stage2_display_projection.json", "bound_by_receipt": True}
+    art.update(patch.pop("artifact", {}))
+    return _spec(tmp, stage2={"receipt": {"src": receipt, "dst": "lanes/stage2/receipt.json"},
+                              "artifacts": [art]})
+
+
+def test_receipt_bound_artifact_admits_when_receipt_names_those_bytes(tmp_path):
+    art = _artifact(tmp_path, "stage2", body='{"schema_version":"spot.stage02_display_projection.v2"}',
+                    name="stage2_display_projection.json")
+    spec = _stage2_spec(tmp_path, art, _stage2_receipt(tmp_path, art))
+    m = ar.assemble(spec, _staging(tmp_path), run_utc="2026-07-13T00:00:00Z")
+    assert m["lanes"]["stage2"]["status"] == "ADMIT"
+
+
+def test_altered_artifact_with_original_receipt_is_refused(tmp_path):
+    """The exact defect bc3b10b names: alter the projection, keep the original receipt."""
+    art = _artifact(tmp_path, "stage2", body='{"arm_value": 1.6758342617}',
+                    name="stage2_display_projection.json")
+    receipt = _stage2_receipt(tmp_path, art)                      # judges the ORIGINAL bytes
+    with open(art, "w", encoding="utf-8") as fh:                  # ...now alter the artifact
+        fh.write('{"arm_value": 125.1318342617}')
+    msg = _refuses(tmp_path, _stage2_spec(tmp_path, art, receipt))
+    assert "receipt does not name these bytes" in msg
+    assert "not staged" in msg      # and the bytes it DID judge are absent
+
+
+def test_receipt_naming_bytes_that_are_not_staged_is_refused(tmp_path):
+    art = _artifact(tmp_path, "stage2", body='{"a":1}', name="stage2_display_projection.json")
+    other = _artifact(tmp_path, "stage2", body='{"b":2}', name="other.json")
+    receipt = _stage2_receipt(tmp_path, other)   # judged a file we are not staging
+    msg = _refuses(tmp_path, _stage2_spec(tmp_path, art, receipt))
+    assert "the receipt's subject is absent" in msg
+
+
+@pytest.mark.parametrize("patch,expect", [
+    ({"failures": ["a_gate_failed"], "n_failed": 1}, "but claims admit"),
+    ({"rebuilt_from_admitted_native_bytes": False}, "rebuilt_from_admitted_native_bytes=false"),
+    ({"generator_is_not_verifier": False}, "generator_is_not_verifier=false"),
+])
+def test_receipt_contradicting_its_own_body_is_refused(tmp_path, patch, expect):
+    art = _artifact(tmp_path, "stage2", body='{"a":1}', name="stage2_display_projection.json")
+    receipt = _stage2_receipt(tmp_path, art, **patch)   # verdict still says "admit"
+    assert expect in _refuses(tmp_path, _stage2_spec(tmp_path, art, receipt))
+
+
+def test_receipt_with_self_hash_disagreement_is_refused(tmp_path):
+    art = _artifact(tmp_path, "stage2", body='{"a":1}', name="stage2_display_projection.json")
+    r = json.loads(open(_stage2_receipt(tmp_path, art), encoding="utf-8").read())
+    r["subject"]["self_hash_agrees"] = False
+    p = tmp_path / "bad_self_hash.json"
+    p.write_text(json.dumps(r), encoding="utf-8")
+    assert "self_hash_agrees=false" in _refuses(tmp_path, _stage2_spec(tmp_path, art, str(p)))
+
+
+# --------------------------------------------------------------- dist (Cloudflare) + HF + dry-run
+def test_dist_is_staged_and_hashed(tmp_path):
+    dist = tmp_path / "dist"
+    (dist / "data").mkdir(parents=True)
+    (dist / "01_page.html").write_text("<!doctype html>ok", encoding="utf-8")
+    (dist / "data" / "x.json").write_text('{"ok":1}', encoding="utf-8")
+    spec_path = _spec(tmp_path)
+    spec = json.loads(open(spec_path, encoding="utf-8").read())
+    spec["dist"] = {"src": str(dist)}
+    open(spec_path, "w", encoding="utf-8").write(json.dumps(spec))
+
+    staging = _staging(tmp_path)
+    m = ar.assemble(spec_path, staging, run_utc="2026-07-13T00:00:00Z")
+    assert m["dist"]["file_count"] == 2
+    assert os.path.isfile(os.path.join(staging, "dist", "01_page.html"))
+    assert os.path.isfile(os.path.join(staging, "dist", "data", "x.json"))
+    handoff = json.loads(open(os.path.join(staging, "DEPLOY_HANDOFF.json"), encoding="utf-8").read())
+    assert handoff["cloudflare"]["dist_dir"] == "dist"
+
+
+def test_missing_dist_dir_refused(tmp_path):
+    spec_path = _spec(tmp_path)
+    spec = json.loads(open(spec_path, encoding="utf-8").read())
+    spec["dist"] = {"src": str(tmp_path / "no_such_dist")}
+    open(spec_path, "w", encoding="utf-8").write(json.dumps(spec))
+    assert "[dist] not a directory" in _refuses(tmp_path, spec_path)
+
+
+def test_hf_placeholder_revision_refused_but_null_is_fine(tmp_path):
+    man = tmp_path / "hf_manifest.json"
+    card = tmp_path / "hf_card.md"
+    card.write_text("# card", encoding="utf-8")
+
+    def _write(rel_rev):
+        man.write_text(json.dumps({
+            "status": "TEMPLATE_ONLY_NOT_UPLOADED",
+            "immutable_source": {"hf_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6"},
+            "stage1_v3_release": {"stage1_release_hf_revision": rel_rev},
+        }), encoding="utf-8")
+
+    def _spec_with_hf():
+        sp = _spec(tmp_path)
+        d = json.loads(open(sp, encoding="utf-8").read())
+        d["hf"] = {"card": str(card), "manifest": str(man)}
+        open(sp, "w", encoding="utf-8").write(json.dumps(d))
+        return sp
+
+    _write("PENDING")                       # a placeholder is NOT a revision
+    assert "must be null" in _refuses(tmp_path, _spec_with_hf())
+
+    _write(None)                            # null == not yet uploaded: fine
+    m = ar.assemble(_spec_with_hf(), str(tmp_path / "staging_hf"), run_utc="2026-07-13T00:00:00Z")
+    assert m["hf"]["stage1_release_hf_revision"] is None
+
+
+def test_dry_run_writes_nothing_and_reports_inventory(tmp_path):
+    staging = _staging(tmp_path)
+    m = ar.assemble(_spec(tmp_path), staging, run_utc="2026-07-13T00:00:00Z", dry_run=True)
+    assert m["dry_run"] is True and m["would_stage"] > 0
+    assert all(len(f["sha256"]) == 64 for f in m["files"])
+    assert not os.path.exists(staging)       # dry run stages nothing
+
+
+def test_shipped_closeout_spec_refuses_with_pending_lanes(tmp_path):
+    msg = _refuses(tmp_path, os.path.join(DEPLOY, "release_spec.closeout.json"))
+    for lane in LANES:
+        assert f"[{lane}] status is 'PENDING'" in msg
 
 
 def test_non_empty_staging_refused_and_never_deleted(tmp_path):

@@ -1,0 +1,54 @@
+{
+  "_comment": "CLOSEOUT release spec. Slots are exact where the shape is known; every 'src' and every hash is null until the orchestrator supplies the real admitted bytes. Nothing here is invented. As shipped this REFUSES (every lane is PENDING). Flip a lane to ADMIT only when its production receipt admits.",
+  "_slot_provenance": {
+    "stage2": "Symbol-bound display projection from W3 commit bc3b10b (origin/agent/stage2-runmanifest-round4). Artifact filename, schema and receipt shape are taken from that commit: display_projection.PROJECTION_FILE='stage2_display_projection.json', SCHEMA='spot.stage02_display_projection.v2', verifier_id='spot.stage02.display_projection.independent_verifier.v1', receipt verdict is 'admit'|'reject' and its subject.projection_raw_sha256 names the exact bytes judged. 'bound_by_receipt' makes the assembler refuse an artifact the receipt did not judge.",
+    "pathway": "PENDING — the pathway rows of the Stage-2 projection are not yet admitted; the direct/temporal rows are what bc3b10b covers. Add the pathway artifact + receipt here when it admits.",
+    "stage3": "PENDING — 03_druglink is specified but not implemented; artifact shape unknown, so no dst is guessed.",
+    "stage4": "PENDING — 04_PKPD is specified but not implemented; artifact shape unknown, so no dst is guessed."
+  },
+  "release_id": null,
+  "lanes": {
+    "stage1": {
+      "status": "PENDING",
+      "route": "/01_page.html",
+      "receipt": {"src": null, "dst": "lanes/stage1/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": "stage01_program_registry_v3.json", "expected_sha256": null},
+        {"src": null, "dst": "stage01_stage2_registry_view.json", "expected_sha256": null}
+      ]
+    },
+    "stage2": {
+      "status": "PENDING",
+      "route": "/02_page.html",
+      "receipt": {"src": null, "dst": "lanes/stage2/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": "stage2_display_projection.json", "expected_sha256": null, "bound_by_receipt": true}
+      ]
+    },
+    "stage3": {
+      "status": "PENDING",
+      "route": "/03_page.html",
+      "receipt": {"src": null, "dst": "lanes/stage3/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": null, "expected_sha256": null}
+      ]
+    },
+    "stage4": {
+      "status": "PENDING",
+      "route": "/04_page.html",
+      "receipt": {"src": null, "dst": "lanes/stage4/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": null, "expected_sha256": null}
+      ]
+    }
+  },
+  "dist": {
+    "_comment": "Prebuilt UI dist for the Cloudflare lane, e.g. produced by deploy/build_dist.sh <dist-dir>. Every file is scanned + hashed and staged under dist/. Leave src null until the UI build is the reviewed source build.",
+    "src": null
+  },
+  "hf": {
+    "_comment": "HF packaging checks. The immutable source revision must be a real 40-hex revision; stage1_release_hf_revision must stay null until a real upload returns one.",
+    "card": "01_programs/hf_release/STAGE1_V3_DATASET_CARD.template.md",
+    "manifest": "01_programs/hf_release/stage1_release_hf_manifest.template.json"
+  }
+}

@@ -48,6 +48,7 @@ SCANNED_FILES = [
     "01_programs/analysis/test_selection_v3_browser.mjs",
     "deploy/RELEASE_ASSEMBLY.md",
     "deploy/release_spec.template.json",
+    "deploy/release_spec.closeout.json",
     "deploy/handoff_release.sh",
 ]
 

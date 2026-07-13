@@ -7,18 +7,43 @@ never reads credentials.
 
 ## Commands
 ```bash
+# 0. fail-closed dry test — validates + prints the inventory, copies NOTHING
+python3 deploy/assemble_release.py --spec deploy/release_spec.closeout.json \
+    --staging-dir <abs dir outside repo> --dry-run
+
 # 1. assemble (refuses unless every lane is ADMIT)
 python3 deploy/assemble_release.py \
-    --spec       <release_spec.json> \
+    --spec       deploy/release_spec.closeout.json \
     --staging-dir <ABSOLUTE dir OUTSIDE the repo> \
     [--run-utc 2026-07-13T00:00:00Z] [--lenient-receipt]
 
 # 2. one-command handoff to the UI / Cloudflare deploy lane (re-verifies; does not deploy)
 deploy/handoff_release.sh <staging-dir>
 ```
-Fill `deploy/release_spec.template.json` with the real admitted paths + receipts. As shipped it
-is `PENDING` on every lane, so it **refuses** — no path or hash in it is real, and none may be
-invented.
+`deploy/release_spec.closeout.json` holds the **exact** slots; `release_spec.template.json` is the
+bare shape. Both ship `PENDING` on every lane, so they **refuse** — no path or hash in them is
+real, and none may be invented.
+
+## Receipt binds the artifact bytes (the bc3b10b lesson)
+The Stage-2 display-projection receipt (`spot.stage02.display_projection.independent_verifier.v1`)
+names the bytes it judged in `subject.projection_raw_sha256`, recomputed from the file on disk.
+The assembler enforces that binding:
+
+- an artifact marked `"bound_by_receipt": true` must hash to bytes the receipt actually names —
+  **an altered artifact paired with its original receipt is refused**;
+- every hash the receipt says it judged must be staged for that lane (its subject cannot be absent);
+- a receipt may not contradict its own body: `verdict: "admit"` alongside a non-empty `failures`,
+  `n_failed > 0`, `self_hash_agrees: false`, `rebuilt_from_admitted_native_bytes: false`, or
+  `generator_is_not_verifier: false` is a refusal.
+
+## Routes, dist (Cloudflare) and HF
+- `lanes.<stage>.route` is recorded in the manifest (`routes`) and the handoff, so the deploy lane
+  knows which artifact serves which page. It is part of the content address.
+- `dist.src` — a prebuilt UI dist (e.g. from `deploy/build_dist.sh <dir>`). Every file is scanned,
+  hashed and staged under `dist/`; the handoff exposes it as `cloudflare.dist_dir`.
+- `hf.card` / `hf.manifest` — the immutable source revision must be a real 40-hex revision, and
+  `stage1_release_hf_revision` must stay **null** until a real upload returns one. A placeholder
+  such as `"PENDING"` is refused: a revision is never invented.
 
 ## Refusal behaviour (exit 2, nothing staged)
 Validation and scanning run **before any copy**, so a refusal writes nothing at all.

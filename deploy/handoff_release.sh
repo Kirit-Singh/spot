@@ -59,7 +59,8 @@ for rec in files:
         problems.append(f"size drift: {rec['path']}")
 
 # re-derive the content address from the manifest's own content
-content = {"release_id": m.get("release_id"), "lanes": m.get("lanes"),
+# (must mirror assemble_release.assemble() exactly: release_id, lanes, routes, files)
+content = {"release_id": m.get("release_id"), "lanes": m.get("lanes"), "routes": m.get("routes") or {},
            "files": [{k: r[k] for k in ("path", "sha256", "size", "lane", "role")} for r in files]}
 blob = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 rederived = hashlib.sha256(blob.encode("utf-8")).hexdigest()
