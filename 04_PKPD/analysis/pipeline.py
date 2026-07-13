@@ -13,6 +13,10 @@ from typing import Any, Optional
 from .cnsmpo import CnsMpoResult, score_cns_mpo
 from .contracts import EvidenceContext, SourceRecord, Stage3DrugCandidateSet
 from .delivery import DeliveryResult, resolve_delivery_requirement
+from .acquisition import SourceAcquisitionRecord
+from .contract_profile import assert_contract_satisfied
+from .contract_version import ContractVersion
+from .pk_records import FractionUnboundRecord
 from .evidence_records import (
     DeliveryAssignment,
     ExposureMeasurement,
@@ -56,7 +60,20 @@ class Stage4Inputs:
     # adding one flipped a margin from not_computable to computed without moving the id.
     potency_context_links: list[PotencyContextLink] = field(default_factory=list)
     search_manifests: list[SearchManifest] = field(default_factory=list)
+    # v2. An fu is an OBSERVATION -- it has a species, a method, a concentration dependence
+    # and a source of its own -- so it is a lane, not a field buried inside a concentration.
+    # Kp,uu rests on two of these, and a Kp,uu whose fu records cannot be inspected is an
+    # unbound ratio asserted from total concentrations.
+    fraction_unbound: list[FractionUnboundRecord] = field(default_factory=list)
+    # v2. The acquisition manifest behind the sources: canonical query, accessed_at_utc, HTTP
+    # status, terms URL, adapter code hash, observation state. Content-addressed and bound
+    # into the scorecard_set_id.
+    acquisitions: list[SourceAcquisitionRecord] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
+    # Which evidence contract these rows speak. A v1 bundle stays v1 forever: it does not
+    # become acquisition-complete because newer code can read it, and its rows do not acquire
+    # v2 columns full of nulls.
+    contract_version: ContractVersion = ContractVersion.V1
 
     def evidence_lanes(self) -> dict[str, list[Any]]:
         """Everything that feeds the scorecard_set_id, as the exact rows the release carries.
@@ -73,7 +90,7 @@ class Stage4Inputs:
         """
         from .evidence_inputs import evidence_input_rows
 
-        return evidence_input_rows(self)
+        return evidence_input_rows(self, self.contract_version)
 
 
 @dataclass
@@ -169,6 +186,11 @@ def select_margin_potency(
 
 def run_pipeline(inputs: Stage4Inputs, method: MethodBundle) -> Stage4Result:
     """Every number here is either an input record or a declared transform of one."""
+    # The bundle declares a contract; this is where it has to carry it. A v2 bundle that
+    # is missing the fields that make it acquisition-complete stops HERE, before any
+    # lane is computed -- a run that got as far as a release would have produced a
+    # document that reads like a result.
+    assert_contract_satisfied(inputs)
     check_referential_integrity(inputs)
 
     ctx_by_candidate: dict[str, list[EvidenceContext]] = {}

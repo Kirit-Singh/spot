@@ -63,7 +63,10 @@ def test_the_frozen_v1_schema_is_byte_for_byte_what_it_always_was(filename, pinn
 
 
 def test_table_schema_export_matches_the_parquet_writer():
-    from analysis.tables import SORT_KEYS, TABLE_SCHEMAS
+    from analysis.contract_version import ContractVersion
+    from analysis.tables import sort_keys, table_schemas
+    TABLE_SCHEMAS = table_schemas(ContractVersion.V2)
+    SORT_KEYS = sort_keys(ContractVersion.V2)
 
     exported = schemas_export.tables_schema()["tables"]
     assert set(exported) == set(TABLE_SCHEMAS)
@@ -201,7 +204,9 @@ def test_cli_fixture_smoke_run(tmp_path, capsys):
     written = os.listdir(tmp_path)
     assert len(written) == 1  # exactly one scorecard set directory
     assert PRODUCTION_POINTER not in written
-    from analysis.emit import ARTIFACTS
+    from analysis.contract_version import ContractVersion
+    from analysis.emit import artifact_allowlist
+    ARTIFACTS = artifact_allowlist(ContractVersion.V1)
 
     assert sorted(os.listdir(tmp_path / written[0])) == sorted(ARTIFACTS)
 

@@ -16,6 +16,7 @@ from analysis.emit import emit
 from analysis.evidence_records import PotencyRecord, Provenance
 from analysis.method_config import METHOD_DIR, load_method_bundle
 from analysis.pipeline import run_pipeline
+from analysis.contract_version import ContractVersion
 from analysis.tables import write_table
 from analysis.verify import verify_output_dir
 from verifier.checks import verify_release
@@ -65,7 +66,7 @@ def reseal(out_dir, table, rows):
     the source bindings (or of the reduction) can catch it.
     """
     path = os.path.join(out_dir, f"{table}.parquet")
-    desc = write_table(table, rows, path)
+    desc = write_table(table, rows, path, ContractVersion.V1)
 
     manifest_path = os.path.join(out_dir, "manifest.json")
     with open(manifest_path, encoding="utf-8") as fh:

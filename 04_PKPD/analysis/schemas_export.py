@@ -13,7 +13,7 @@ import json
 import os
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import TypeAdapter
 
 from .contracts import (
     STAGE3_CONTRACT_STATUS,
@@ -34,12 +34,27 @@ from .evidence_records import (
     SearchManifest,
     TransporterObservation,
 )
+from .acquisition import SourceAcquisitionRecord
+from .assay_records import AssayBinding
+from .organ_system import OrganSystemEvidence
 from .method_config import STAGE4_DIR
-from .tables import SORT_KEYS, TABLE_SCHEMAS
+from .pk_records import (
+    FractionUnboundRecord,
+    PkDetail,
+    RatioReport,
+    SamplingDetail,
+    UnboundDerivation,
+)
+from .contract_version import ContractVersion
+from .tables import sort_keys, table_schemas
 
 SCHEMA_DIR = os.path.join(STAGE4_DIR, "schemas")
 
-EVIDENCE_MODELS: dict[str, type[BaseModel]] = {
+# `OrganSystemEvidence` is acquisition's frozen dataclass, not a pydantic model: it is
+# consumed as-is rather than re-declared, because a second declaration of the same
+# evidence shape is exactly the drift this schema exists to prevent. `_json_schema`
+# handles both kinds.
+EVIDENCE_MODELS: dict[str, Any] = {
     "EvidenceContext": EvidenceContext,
     "SourceRecord": SourceRecord,
     "PropertyRecord": PropertyRecord,
@@ -54,6 +69,16 @@ EVIDENCE_MODELS: dict[str, type[BaseModel]] = {
     # potency-context source and a caller-authored negative search went unnoticed.
     "PotencyContextLink": PotencyContextLink,
     "SearchManifest": SearchManifest,
+    # v2. The acquisition contract, the assay binding, and the PK context that makes a
+    # clinical concentration mean something. Published so a producer can build against them.
+    "SourceAcquisitionRecord": SourceAcquisitionRecord,
+    "FractionUnboundRecord": FractionUnboundRecord,
+    "OrganSystemEvidence": OrganSystemEvidence,
+    "AssayBinding": AssayBinding,
+    "PkDetail": PkDetail,
+    "SamplingDetail": SamplingDetail,
+    "RatioReport": RatioReport,
+    "UnboundDerivation": UnboundDerivation,
 }
 
 
@@ -73,6 +98,18 @@ def stage3_schema() -> dict[str, Any]:
     )
     schema["x-spot-stage3-contract-status"] = STAGE3_CONTRACT_STATUS
     return schema
+
+
+def _json_schema(model: Any) -> dict[str, Any]:
+    """Pydantic models and stdlib dataclasses alike.
+
+    `OrganSystemEvidence` is acquisition's frozen dataclass and is consumed here as-is rather
+    than re-declared as a pydantic model — a second declaration of the same evidence shape is
+    exactly the drift this schema exists to prevent.
+    """
+    if hasattr(model, "model_json_schema"):
+        return model.model_json_schema()
+    return TypeAdapter(model).json_schema()
 
 
 def evidence_inputs_schema() -> dict[str, Any]:
@@ -106,7 +143,7 @@ def evidence_inputs_schema() -> dict[str, Any]:
             "the per-lane bindings above."
         ),
         "stage4_method_version": STAGE4_METHOD_VERSION,
-        "records": {name: model.model_json_schema() for name, model in EVIDENCE_MODELS.items()},
+        "records": {name: _json_schema(model) for name, model in EVIDENCE_MODELS.items()},
     }
 
 
@@ -124,13 +161,28 @@ def tables_schema() -> dict[str, Any]:
             "publication_rounding": "ROUND_HALF_UP",
             "nan_inf": "rejected in canonical content",
         },
+        "contract_versions": {
+            version.value: {
+                name: {
+                    "columns": list(schema.names),
+                    "dtypes": [str(f.type) for f in schema],
+                    "sort_key": list(sort_keys(version)[name]),
+                }
+                for name, schema in table_schemas(version).items()
+            }
+            for version in (ContractVersion.V1, ContractVersion.V2)
+        },
+        "note": (
+            "v1 is FROZEN and is a strict column PREFIX of v2: a v1 release carries exactly the "
+            "v1 columns, not the v1 columns plus nulls, and hashes exactly as it always did."
+        ),
         "tables": {
             name: {
                 "columns": list(schema.names),
                 "dtypes": [str(f.type) for f in schema],
-                "sort_key": list(SORT_KEYS[name]),
+                "sort_key": list(sort_keys(ContractVersion.V2)[name]),
             }
-            for name, schema in TABLE_SCHEMAS.items()
+            for name, schema in table_schemas(ContractVersion.V2).items()
         },
     }
 

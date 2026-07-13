@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from .canonical import content_sha256, sha256_bytes
+from .contract_version import ContractVersion
 
 STAGE4_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 METHOD_DIR = os.path.join(STAGE4_DIR, "method")
 
-METHOD_FILES = {
+METHOD_FILES_V1 = {
     "cns_mpo": "cns_mpo_wager2010_v1.json",
     "nebpi": "nebpi_grossman2026_v1.json",
     "calculator_policy": "calculator_policy_v1.json",
@@ -48,10 +49,26 @@ class MethodBundle:
         return list(self.safety_taxonomy["prohibited_outputs"]["forbidden_field_names"])
 
 
-def load_method_bundle(method_dir: str = METHOD_DIR) -> MethodBundle:
+# v2 method content lives in NEW files. The seven v1 files above are bound by hash into every
+# release ever emitted, so editing one -- or adding one to that map -- would make all of them
+# unverifiable. v2 therefore ADDS.
+METHOD_FILES_V2 = {
+    **METHOD_FILES_V1,
+    "nebpi_source_framing": "nebpi_source_framing_v2.json",
+    "safety_taxonomy_v2": "safety_taxonomy_v2.json",
+}
+
+METHOD_FILES = {
+    ContractVersion.V1: METHOD_FILES_V1,
+    ContractVersion.V2: METHOD_FILES_V2,
+}
+
+
+def load_method_bundle(method_dir: str = METHOD_DIR,
+                       version: ContractVersion = ContractVersion.V1) -> MethodBundle:
     loaded: dict[str, Any] = {}
     hashes: dict[str, str] = {}
-    for key, filename in sorted(METHOD_FILES.items()):
+    for key, filename in sorted(METHOD_FILES[version].items()):
         path = os.path.join(method_dir, filename)
         with open(path, "rb") as fh:
             raw = fh.read()

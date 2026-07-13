@@ -272,3 +272,72 @@ def test_two_acquisitions_of_one_source_record_are_refused():
             manifest_id="man.1",
             records=[_record(), _record(acquisition_id="acq.other")],
         )
+
+
+# ------------------------------------------------- selection: no arbitrary first record
+#
+# The vocabulary is `analysis/selection.py`'s, not a second one invented beside it: a selection
+# is `exactly_one` (matched on an identity PIN, zero and many both refusals) or `sorted_unique`
+# (collect-all). What the RECORD adds is the proof: the source's own match total against what
+# actually arrived. The live data settled this — TEMODAR's openFDA label declares TWO
+# application numbers and its Drugs@FDA record carries SIX products, so `results[0]` was
+# returning a wrong answer while `limit=1` made the multiplicity impossible to see.
+
+
+def test_an_exactly_one_selection_must_name_the_identity_pin_it_matched_on():
+    """Matching on position is not matching on identity."""
+    with pytest.raises(ValidationError) as exc:
+        _record(selection_disposition="exactly_one",
+                match_total_reported=1, records_returned=1, result_set_complete=True)
+    assert "PIN" in str(exc.value) or "pin" in str(exc.value)
+
+
+def test_a_proven_unique_selection_is_legal():
+    rec = _record(selection_disposition="exactly_one", selection_pin="setid=046a9011",
+                  match_total_reported=1, records_returned=1, result_set_complete=True)
+    assert rec.result_set_complete is True
+
+
+def test_a_truncated_result_set_cannot_be_observed_this_is_the_limit_1_bug():
+    """The source says seven records match; one arrived. Nothing about that one row can be
+    called unique — and `limit=1` did not merely risk the wrong record, it removed the evidence
+    that would have shown the risk."""
+    with pytest.raises(ValidationError) as exc:
+        _record(selection_disposition="exactly_one", selection_pin="setid=046a9011",
+                match_total_reported=7, records_returned=1, result_set_complete=False)
+    assert "truncated" in str(exc.value).lower() or "complete" in str(exc.value).lower()
+
+
+def test_completeness_cannot_simply_be_asserted_it_must_agree_with_the_source_total():
+    """`result_set_complete` is the source's own total agreeing with what we can see. It is not
+    a flag an adapter gets to set because it feels confident."""
+    with pytest.raises(ValidationError):
+        _record(selection_disposition="exactly_one", selection_pin="setid=X",
+                match_total_reported=7, records_returned=1, result_set_complete=True)
+
+
+def test_a_total_the_source_never_reported_cannot_prove_uniqueness():
+    """Uniqueness that cannot be proven is not assumed. Without a total, the rows that arrived
+    cannot be shown to be all of them."""
+    with pytest.raises(ValidationError):
+        _record(selection_disposition="exactly_one", selection_pin="setid=X",
+                match_total_reported=None, records_returned=1, result_set_complete=False)
+
+
+def test_a_collect_all_selection_needs_no_pin_because_it_chooses_nothing():
+    """`sorted_unique` drops nothing and picks nothing — every application, every marketing
+    status — so there is no choice to justify."""
+    rec = _record(selection_disposition="sorted_unique",
+                  match_total_reported=6, records_returned=6, result_set_complete=True)
+    assert rec.selection_pin is None
+
+
+def test_an_unseparable_match_is_conflicting_not_a_silent_arg_max():
+    rec = _record(
+        observation_state=EvidenceObservationState.CONFLICTING,
+        selection_disposition="sorted_unique",
+        match_total_reported=2, records_returned=2, result_set_complete=True,
+        conflict_note=("TEMODAR declares NDA021029 (capsule, Discontinued) and NDA022277 "
+                       "(injection, Prescription). The two applications disagree."),
+    )
+    assert rec.observation_state is EvidenceObservationState.CONFLICTING

@@ -4,6 +4,144 @@
   "description": "One row per actual observation, each bound to a public source response (source_record_id + access_date + raw_response_sha256 + exact extraction transform). Nothing here is derived, imputed or summarized. v2 adds the acquisition contract: a SourceAcquisitionRecord per source (canonical query, accessed_at_utc, HTTP status/media type/headers, release, terms URL, raw bytes + hash, stable content hash, transform, adapter code hash, review status and an explicit observation state), structured assay/PK bindings, and reported-vs-derived ratios. v1 documents remain readable and remain NOT acquisition-complete.",
   "migration": "v1 -> v2 is additive: every new field is optional on the model, so a v1 document validates unchanged. It does NOT become acquisition-complete by validating. To reach v2 a document must declare schema_id spot.stage04_evidence_bundle.v2 and satisfy analysis/contract_profile.py, which requires the acquisition manifest and the per-lane bindings above.",
   "records": {
+    "AssayBinding": {
+      "additionalProperties": false,
+      "description": "The activity / assay / target / document a potency or transporter number came from.\n\nEvery id here is the SOURCE's stable id, so an independent reader can pull the same\nrecord and see the same number. That is the difference between evidence and a citation.",
+      "properties": {
+        "activity_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Activity Id"
+        },
+        "assay_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assay Description"
+        },
+        "assay_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assay Id"
+        },
+        "assay_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assay Type"
+        },
+        "confidence_score": {
+          "anyOf": [
+            {
+              "maximum": 9,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence Score"
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Id"
+        },
+        "experimental_system": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experimental System"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Id"
+        },
+        "target_organism": {
+          "minLength": 1,
+          "title": "Target Organism",
+          "type": "string"
+        },
+        "target_uniprot_accession": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Uniprot Accession"
+        },
+        "validity_comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity Comment"
+        }
+      },
+      "required": [
+        "target_organism"
+      ],
+      "title": "AssayBinding",
+      "type": "object"
+    },
     "DeliveryAssignment": {
       "$defs": {
         "DeliveryBasis": {
@@ -28,7 +166,7 @@
         },
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -300,7 +438,7 @@
         },
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -353,6 +491,65 @@
             "extraction_transform"
           ],
           "title": "Provenance",
+          "type": "object"
+        },
+        "RatioReport": {
+          "additionalProperties": false,
+          "description": "A Kp or Kp,uu — and whether the SOURCE said it or someone worked it out.\n\n`reported` is the source's own number. `derived` is a calculation, and a calculation must\nname the measurements it divided and the transform it used, or it cannot be checked and\ncannot be distinguished from an assertion.",
+          "properties": {
+            "basis": {
+              "enum": [
+                "reported",
+                "derived"
+              ],
+              "title": "Basis",
+              "type": "string"
+            },
+            "derivation_transform": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Derivation Transform"
+            },
+            "fraction_unbound_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Fraction Unbound Ids",
+              "type": "array"
+            },
+            "input_measurement_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Input Measurement Ids",
+              "type": "array"
+            },
+            "ratio_kind": {
+              "default": "kp",
+              "enum": [
+                "kp",
+                "kp_uu_brain"
+              ],
+              "title": "Ratio Kind",
+              "type": "string"
+            },
+            "value_source_string": {
+              "title": "Value Source String",
+              "type": "string"
+            }
+          },
+          "required": [
+            "basis",
+            "value_source_string"
+          ],
+          "title": "RatioReport",
           "type": "object"
         },
         "ResidualBloodCorrection": {
@@ -479,6 +676,34 @@
           "title": "Statistic",
           "type": "string"
         },
+        "UnboundDerivation": {
+          "additionalProperties": false,
+          "description": "C_free = C_total * fu — an INFERENCE, declared as one.\n\nA free concentration the source MEASURED and a free concentration obtained by multiplying a\ntotal by a plasma fu are not the same evidence: the second inherits every assumption in the\nfu (species, method, concentration dependence, matrix). The audit requires \"both source-bound\ninputs and the exact declared transform\", so both are mandatory here.",
+          "properties": {
+            "fraction_unbound_id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Fraction Unbound Id",
+              "type": "string"
+            },
+            "from_measurement_id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "From Measurement Id",
+              "type": "string"
+            },
+            "transform": {
+              "minLength": 1,
+              "title": "Transform",
+              "type": "string"
+            }
+          },
+          "required": [
+            "from_measurement_id",
+            "fraction_unbound_id",
+            "transform"
+          ],
+          "title": "UnboundDerivation",
+          "type": "object"
+        },
         "VariabilityKind": {
           "enum": [
             "sd",
@@ -519,6 +744,15 @@
             "unspecified"
           ],
           "title": "Binding State",
+          "type": "string"
+        },
+        "binding_state_basis": {
+          "default": "measured",
+          "enum": [
+            "measured",
+            "derived_from_fraction_unbound"
+          ],
+          "title": "Binding State Basis",
           "type": "string"
         },
         "candidate_id": {
@@ -593,6 +827,17 @@
           "title": "Formulation",
           "type": "string"
         },
+        "kp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RatioReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "kp_reported_source_string": {
           "anyOf": [
             {
@@ -604,6 +849,17 @@
           ],
           "default": null,
           "title": "Kp Reported Source String"
+        },
+        "kp_uu_brain": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RatioReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "kp_uu_brain_reported_source_string": {
           "anyOf": [
@@ -738,6 +994,17 @@
           ],
           "default": null,
           "title": "Timepoint"
+        },
+        "unbound_derivation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnboundDerivation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -757,6 +1024,135 @@
         "provenance"
       ],
       "title": "ExposureMeasurement",
+      "type": "object"
+    },
+    "FractionUnboundRecord": {
+      "$defs": {
+        "Provenance": {
+          "additionalProperties": false,
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
+          "properties": {
+            "access_date": {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "title": "Access Date",
+              "type": "string"
+            },
+            "extraction_transform": {
+              "title": "Extraction Transform",
+              "type": "string"
+            },
+            "raw_response_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Raw Response Sha256",
+              "type": "string"
+            },
+            "release_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Release Version"
+            },
+            "source_record_id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Source Record Id",
+              "type": "string"
+            },
+            "source_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Source Url"
+            }
+          },
+          "required": [
+            "source_record_id",
+            "access_date",
+            "raw_response_sha256",
+            "extraction_transform"
+          ],
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "One measured fraction unbound. Its own row, its own source, its own method.\n\nfu,plasma and fu,brain are different numbers and Kp,uu needs both. This is a lane rather\nthan a field on the exposure row because an fu IS an observation — with a species, a\nmethod and a source of its own — and burying it inside a concentration would be exactly\nthe \"load-bearing context hidden in free text\" the audit refused.",
+      "properties": {
+        "active_moiety_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Active Moiety Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "concentration_dependence": {
+          "enum": [
+            "independent",
+            "dependent",
+            "not_reported"
+          ],
+          "title": "Concentration Dependence",
+          "type": "string"
+        },
+        "fraction_unbound_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Fraction Unbound Id",
+          "type": "string"
+        },
+        "matrix": {
+          "enum": [
+            "plasma",
+            "blood",
+            "brain",
+            "csf"
+          ],
+          "title": "Matrix",
+          "type": "string"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "species": {
+          "minLength": 1,
+          "title": "Species",
+          "type": "string"
+        },
+        "value_source_string": {
+          "title": "Value Source String",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fraction_unbound_id",
+        "candidate_id",
+        "active_moiety_id",
+        "matrix",
+        "value_source_string",
+        "method",
+        "species",
+        "concentration_dependence",
+        "provenance"
+      ],
+      "title": "FractionUnboundRecord",
       "type": "object"
     },
     "NebpiObservation": {
@@ -798,7 +1194,7 @@
         },
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -947,11 +1343,237 @@
       "title": "NebpiObservation",
       "type": "object"
     },
+    "OrganSystemEvidence": {
+      "properties": {
+        "code_system": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code System"
+        },
+        "evidence_state": {
+          "title": "Evidence State",
+          "type": "string"
+        },
+        "extraction_transform": {
+          "default": "organ_system.extract_organ_system:v1 (verbatim from a declared source field; never inferred)",
+          "title": "Extraction Transform",
+          "type": "string"
+        },
+        "label_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label Version"
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locator"
+        },
+        "organ_system": {
+          "title": "Organ System",
+          "type": "string"
+        },
+        "raw_response_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Raw Response Sha256"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "section_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Code"
+        },
+        "setid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Setid"
+        },
+        "source_key": {
+          "title": "Source Key",
+          "type": "string"
+        },
+        "source_record_id": {
+          "title": "Source Record Id",
+          "type": "string"
+        },
+        "subsection_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subsection Code"
+        },
+        "value_kind": {
+          "title": "Value Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "organ_system",
+        "value_kind",
+        "evidence_state",
+        "source_key",
+        "source_record_id",
+        "setid",
+        "label_version",
+        "raw_response_sha256"
+      ],
+      "title": "OrganSystemEvidence",
+      "type": "object"
+    },
+    "PkDetail": {
+      "$defs": {
+        "PkMetric": {
+          "description": "WHICH exposure. These are not interchangeable and never sum.",
+          "enum": [
+            "Cmax",
+            "Ctrough",
+            "Cavg",
+            "AUC",
+            "concentration_at_time",
+            "other"
+          ],
+          "title": "PkMetric",
+          "type": "string"
+        },
+        "Statistic": {
+          "description": "WHOSE exposure: a cohort summary, or one person's measurement.",
+          "enum": [
+            "mean",
+            "median",
+            "geometric_mean",
+            "individual",
+            "range",
+            "other"
+          ],
+          "title": "Statistic",
+          "type": "string"
+        },
+        "VariabilityKind": {
+          "enum": [
+            "sd",
+            "cv_percent",
+            "range",
+            "iqr",
+            "ci95",
+            "not_reported"
+          ],
+          "title": "VariabilityKind",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "What kind of exposure number this is, over how many subjects, with what spread.",
+      "properties": {
+        "pk_metric": {
+          "$ref": "#/$defs/PkMetric"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Size"
+        },
+        "statistic": {
+          "$ref": "#/$defs/Statistic"
+        },
+        "variability_kind": {
+          "$ref": "#/$defs/VariabilityKind"
+        },
+        "variability_source_string": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Variability Source String"
+        },
+        "variability_units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Variability Units"
+        }
+      },
+      "required": [
+        "pk_metric",
+        "statistic",
+        "variability_kind"
+      ],
+      "title": "PkDetail",
+      "type": "object"
+    },
     "PotencyContextLink": {
       "$defs": {
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -1195,7 +1817,7 @@
         },
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -1361,7 +1983,7 @@
       "$defs": {
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -1512,6 +2134,65 @@
         "provenance"
       ],
       "title": "PropertyRecord",
+      "type": "object"
+    },
+    "RatioReport": {
+      "additionalProperties": false,
+      "description": "A Kp or Kp,uu — and whether the SOURCE said it or someone worked it out.\n\n`reported` is the source's own number. `derived` is a calculation, and a calculation must\nname the measurements it divided and the transform it used, or it cannot be checked and\ncannot be distinguished from an assertion.",
+      "properties": {
+        "basis": {
+          "enum": [
+            "reported",
+            "derived"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "derivation_transform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Derivation Transform"
+        },
+        "fraction_unbound_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fraction Unbound Ids",
+          "type": "array"
+        },
+        "input_measurement_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Measurement Ids",
+          "type": "array"
+        },
+        "ratio_kind": {
+          "default": "kp",
+          "enum": [
+            "kp",
+            "kp_uu_brain"
+          ],
+          "title": "Ratio Kind",
+          "type": "string"
+        },
+        "value_source_string": {
+          "title": "Value Source String",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "value_source_string"
+      ],
+      "title": "RatioReport",
       "type": "object"
     },
     "SafetyEvidenceRecord": {
@@ -1696,9 +2377,136 @@
           "title": "LabelIdentity",
           "type": "object"
         },
+        "OrganSystemEvidence": {
+          "properties": {
+            "code_system": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Code System"
+            },
+            "evidence_state": {
+              "title": "Evidence State",
+              "type": "string"
+            },
+            "extraction_transform": {
+              "default": "organ_system.extract_organ_system:v1 (verbatim from a declared source field; never inferred)",
+              "title": "Extraction Transform",
+              "type": "string"
+            },
+            "label_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label Version"
+            },
+            "locator": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Locator"
+            },
+            "organ_system": {
+              "title": "Organ System",
+              "type": "string"
+            },
+            "raw_response_sha256": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Raw Response Sha256"
+            },
+            "reason": {
+              "default": "",
+              "title": "Reason",
+              "type": "string"
+            },
+            "section_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Section Code"
+            },
+            "setid": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Setid"
+            },
+            "source_key": {
+              "title": "Source Key",
+              "type": "string"
+            },
+            "source_record_id": {
+              "title": "Source Record Id",
+              "type": "string"
+            },
+            "subsection_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Subsection Code"
+            },
+            "value_kind": {
+              "title": "Value Kind",
+              "type": "string"
+            }
+          },
+          "required": [
+            "organ_system",
+            "value_kind",
+            "evidence_state",
+            "source_key",
+            "source_record_id",
+            "setid",
+            "label_version",
+            "raw_response_sha256"
+          ],
+          "title": "OrganSystemEvidence",
+          "type": "object"
+        },
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -1831,6 +2639,17 @@
           ],
           "default": null
         },
+        "organ_system_evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrganSystemEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "provenance": {
           "anyOf": [
             {
@@ -1872,11 +2691,124 @@
       "title": "SafetyEvidenceRecord",
       "type": "object"
     },
+    "SamplingDetail": {
+      "$defs": {
+        "ResidualBloodCorrection": {
+          "description": "Explicit, and with no default: silence is not one of the four answers.\n\n`not_applicable` is for a sample that is not tissue (a plasma draw, a CSF draw). A tissue\nsample that claims it must say so and be refused: the whole point of the field is that the\nquestion was ASKED of every tissue concentration.",
+          "enum": [
+            "applied",
+            "not_applied",
+            "not_reported",
+            "not_applicable"
+          ],
+          "title": "ResidualBloodCorrection",
+          "type": "string"
+        },
+        "SamplingMethod": {
+          "enum": [
+            "resection_homogenate",
+            "microdialysis",
+            "pet",
+            "csf_draw",
+            "blood_draw",
+            "other"
+          ],
+          "title": "SamplingMethod",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "How, where and when the sample was taken — and what was done to it afterwards.",
+      "properties": {
+        "analytical_method": {
+          "minLength": 1,
+          "title": "Analytical Method",
+          "type": "string"
+        },
+        "microdialysis_recovery_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Microdialysis Recovery Method"
+        },
+        "microdialysis_recovery_source_string": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Microdialysis Recovery Source String"
+        },
+        "microdialysis_recovery_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "reported",
+                "not_reported"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Microdialysis Recovery State"
+        },
+        "residual_blood_correction": {
+          "$ref": "#/$defs/ResidualBloodCorrection"
+        },
+        "sample_location": {
+          "minLength": 1,
+          "title": "Sample Location",
+          "type": "string"
+        },
+        "sampling_method": {
+          "$ref": "#/$defs/SamplingMethod"
+        },
+        "steady_state": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Steady State"
+        },
+        "time_relative_to_dose": {
+          "minLength": 1,
+          "title": "Time Relative To Dose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sampling_method",
+        "sample_location",
+        "time_relative_to_dose",
+        "analytical_method",
+        "residual_blood_correction"
+      ],
+      "title": "SamplingDetail",
+      "type": "object"
+    },
     "SearchManifest": {
       "$defs": {
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -1993,6 +2925,320 @@
         "provenance"
       ],
       "title": "SearchManifest",
+      "type": "object"
+    },
+    "SourceAcquisitionRecord": {
+      "$defs": {
+        "EvidenceObservationState": {
+          "description": "The five states the audit requires. A null is not one of them.\n\n`NOT_EVALUATED` and `NOT_FOUND_AFTER_SEARCH` are the pair that matters most: \"nobody\nlooked\" and \"we ran this exact query against this exact release and it came back empty\"\nare different scientific claims, and only the second one is evidence.",
+          "enum": [
+            "observed",
+            "not_evaluated",
+            "not_found_after_reproducible_search",
+            "conflicting",
+            "not_applicable"
+          ],
+          "title": "EvidenceObservationState",
+          "type": "string"
+        },
+        "ReviewStatus": {
+          "description": "Who, if anyone, checked that the extraction says what the source says.",
+          "enum": [
+            "not_reviewed",
+            "machine_extracted",
+            "human_reviewed",
+            "dual_independently_reviewed",
+            "disputed"
+          ],
+          "title": "ReviewStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "One response, and everything needed to get it again and prove what was read out of it.",
+      "properties": {
+        "accessed_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+          "title": "Accessed At Utc",
+          "type": "string"
+        },
+        "acquisition_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Acquisition Id",
+          "type": "string"
+        },
+        "adapter_code_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adapter Code Sha256"
+        },
+        "adapter_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "canonical_query": {
+          "minLength": 1,
+          "title": "Canonical Query",
+          "type": "string"
+        },
+        "conflict_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conflict Note"
+        },
+        "content_hash_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Hash Rule"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "extraction_transform": {
+          "minLength": 1,
+          "title": "Extraction Transform",
+          "type": "string"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "license_exception_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Exception Note"
+        },
+        "license_or_terms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Or Terms Url"
+        },
+        "match_total_reported": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Match Total Reported"
+        },
+        "not_applicable_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Not Applicable Reason"
+        },
+        "observation_state": {
+          "$ref": "#/$defs/EvidenceObservationState"
+        },
+        "raw_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Bytes"
+        },
+        "raw_media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Media Type"
+        },
+        "raw_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Sha256"
+        },
+        "records_returned": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Records Returned"
+        },
+        "release_or_last_updated": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release Or Last Updated"
+        },
+        "request_url": {
+          "title": "Request Url",
+          "type": "string"
+        },
+        "response_headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Response Headers",
+          "type": "object"
+        },
+        "result_set_complete": {
+          "default": false,
+          "title": "Result Set Complete",
+          "type": "boolean"
+        },
+        "review_status": {
+          "$ref": "#/$defs/ReviewStatus"
+        },
+        "search_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search Id"
+        },
+        "selection_disposition": {
+          "anyOf": [
+            {
+              "enum": [
+                "exactly_one",
+                "sorted_unique"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selection Disposition"
+        },
+        "selection_pin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selection Pin"
+        },
+        "source_record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "acquisition_id",
+        "source_record_id",
+        "request_url",
+        "canonical_query",
+        "accessed_at_utc",
+        "extraction_transform",
+        "adapter_id",
+        "review_status",
+        "observation_state"
+      ],
+      "title": "SourceAcquisitionRecord",
       "type": "object"
     },
     "SourceRecord": {
@@ -2152,7 +3398,7 @@
         },
         "Provenance": {
           "additionalProperties": false,
-          "description": "The binding from a number to the response it came from.",
+          "description": "The binding from a number to the response it came from.\n\nLives here rather than in `evidence_records` because the PK records need it too, and a\ncontract module that has to import the records it constrains is a cycle waiting to happen.\n`evidence_records` re-exports it, so every existing import keeps working.",
           "properties": {
             "access_date": {
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -2363,6 +3609,34 @@
         "provenance"
       ],
       "title": "TransporterObservation",
+      "type": "object"
+    },
+    "UnboundDerivation": {
+      "additionalProperties": false,
+      "description": "C_free = C_total * fu — an INFERENCE, declared as one.\n\nA free concentration the source MEASURED and a free concentration obtained by multiplying a\ntotal by a plasma fu are not the same evidence: the second inherits every assumption in the\nfu (species, method, concentration dependence, matrix). The audit requires \"both source-bound\ninputs and the exact declared transform\", so both are mandatory here.",
+      "properties": {
+        "fraction_unbound_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Fraction Unbound Id",
+          "type": "string"
+        },
+        "from_measurement_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "From Measurement Id",
+          "type": "string"
+        },
+        "transform": {
+          "minLength": 1,
+          "title": "Transform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_measurement_id",
+        "fraction_unbound_id",
+        "transform"
+      ],
+      "title": "UnboundDerivation",
       "type": "object"
     }
   },

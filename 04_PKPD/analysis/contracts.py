@@ -60,6 +60,22 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
 
+class Provenance(Strict):
+    """The binding from a number to the response it came from.
+
+    Lives here rather than in `evidence_records` because the PK records need it too, and a
+    contract module that has to import the records it constrains is a cycle waiting to happen.
+    `evidence_records` re-exports it, so every existing import keeps working.
+    """
+
+    source_record_id: str = Field(pattern=ID_PATTERN)
+    source_url: Optional[str] = None
+    access_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    release_version: Optional[str] = None
+    raw_response_sha256: str = Field(pattern=SHA256_PATTERN)
+    extraction_transform: str  # exact, deterministic: how the value was taken out
+
+
 class Namespace(str, Enum):
     """Preserved from Stage 3, never upgraded here.
 

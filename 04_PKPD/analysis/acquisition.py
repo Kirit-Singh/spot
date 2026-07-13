@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import Field, model_validator
 
@@ -112,6 +112,24 @@ class SourceAcquisitionRecord(Strict):
 
     review_status: ReviewStatus
     observation_state: EvidenceObservationState
+
+    # --- how a SINGLE record was chosen among the ones the query MATCHED.
+    #
+    # The vocabulary here is `analysis/selection.py`'s, not a second one invented next to it:
+    # a selection is `exactly_one` (matched on an identity PIN, with zero and many both typed
+    # refusals) or `sorted_unique` (collect-all in canonical order, nothing dropped, nothing
+    # chosen). There is no third option and there is no `results[0]`.
+    #
+    # `match_total_reported` is the SOURCE's own count of what its query matched, and
+    # `records_returned` is what actually arrived. A `limit=1` makes those differ — which is why
+    # it did not merely risk the wrong record, it removed the evidence that would have shown the
+    # risk. A truncated result set cannot prove uniqueness, so it cannot be `observed`.
+    selection_disposition: Optional[Literal["exactly_one", "sorted_unique"]] = None
+    selection_pin: Optional[str] = None
+    match_total_reported: Optional[int] = Field(default=None, ge=0)
+    records_returned: Optional[int] = Field(default=None, ge=0)
+    result_set_complete: bool = False
+
     # Required by `not_found_after_reproducible_search`: the SearchManifest whose acquired
     # bytes ARE the empty response.
     search_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
@@ -128,6 +146,7 @@ class SourceAcquisitionRecord(Strict):
         self._check_headers()
         self._check_content_hash()
         self._check_state()
+        self._check_selection()
         if not self.adapter_code_sha256:
             raise ValueError(
                 f"acquisition {self.acquisition_id!r}: adapter_code_sha256 is required. The "
@@ -206,6 +225,52 @@ class SourceAcquisitionRecord(Strict):
         elif st == EvidenceObservationState.NOT_APPLICABLE:
             if not self.not_applicable_reason:
                 raise ValueError("not_applicable requires not_applicable_reason")
+
+    def _check_selection(self) -> None:
+        """The record must be able to show that its selection was not a pick.
+
+        These are `selection.py`'s guarantees, restated as invariants of the artifact, so that a
+        selection which never had them cannot be written down as though it did.
+        """
+        if self.selection_disposition is None:
+            return
+
+        if self.selection_disposition == "exactly_one" and not self.selection_pin:
+            raise ValueError(
+                "selection_disposition='exactly_one' must name the identity PIN it matched on. "
+                "Matching on position is not matching on identity, and `results[0]` is a bet "
+                "that the result set had one element -- a bet that fails silently, on the one "
+                "drug where it matters."
+            )
+
+        total, returned = self.match_total_reported, self.records_returned
+        if self.result_set_complete:
+            if total is None or returned is None or total != returned:
+                raise ValueError(
+                    f"result_set_complete=True but the source reported {total!r} matching "
+                    f"record(s) and {returned!r} arrived. Completeness is the source's own total "
+                    "agreeing with what we can actually see; it is not a flag to be asserted."
+                )
+        elif total is not None and returned is not None and total == returned:
+            raise ValueError(
+                "the source's total equals what arrived, so the result set IS complete; saying "
+                "otherwise understates the evidence"
+            )
+
+        # The `limit=1` failure, closed. A response that says `total: 7` and hands back 1 row has
+        # not shown us the other 6, so nothing about that row can be called unique -- and an
+        # observation is exactly a claim that we saw the thing we asked for.
+        if (self.observation_state == EvidenceObservationState.OBSERVED
+                and self.selection_disposition == "exactly_one"
+                and not self.result_set_complete):
+            raise ValueError(
+                f"acquisition {self.acquisition_id!r} claims to have observed exactly one "
+                f"record, but the result set is not complete (source total="
+                f"{total!r}, returned={returned!r}). A truncated page cannot prove uniqueness. "
+                "Raise the query limit or pin the record explicitly; do not read the rows that "
+                "happened to arrive. If the candidates genuinely cannot be separated, the state "
+                "is 'conflicting' and it names the conflict."
+            )
 
     def _require_bytes(self, state: str) -> None:
         if not self.raw_sha256 or not self.raw_bytes:

@@ -13,22 +13,14 @@ from typing import Literal, Optional
 from pydantic import Field, model_validator
 
 from .assay_records import POINT_ESTIMATE_RELATIONS, AssayBinding, Relation
-from .contracts import ID_PATTERN, SHA256_PATTERN, Strict
-from .pk_records import PkDetail, SamplingDetail
+from .contracts import ID_PATTERN, Provenance, Strict
+from .pk_records import PkDetail, RatioReport, SamplingDetail, UnboundDerivation
 from .quantity import CNS_MPO_DIMENSIONS, Quantity, validate_domain
 
-
-# --------------------------------------------------------------------------- shared
-
-class Provenance(Strict):
-    """The binding from a number to the response it came from."""
-
-    source_record_id: str = Field(pattern=ID_PATTERN)
-    source_url: Optional[str] = None
-    access_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    release_version: Optional[str] = None
-    raw_response_sha256: str = Field(pattern=SHA256_PATTERN)
-    extraction_transform: str  # exact, deterministic: how the value was taken out
+# `Provenance` now lives in `contracts` (the PK records need it too, and a contract module
+# that imports the records it constrains is a cycle). Re-exported here so every existing
+# `from .evidence_records import Provenance` keeps working.
+__all__ = ["Provenance"]
 
 
 class EvidenceType(str, Enum):
@@ -236,6 +228,16 @@ class ExposureMeasurement(Strict):
     # The plasma measurement this brain/CSF sample is paired with. Every ratio needs one, and
     # integrity checks that it resolves to a real PLASMA row of the same moiety and context.
     paired_plasma_measurement_id: Optional[str] = Field(default=None, pattern=ID_PATTERN)
+    # Was this free concentration MEASURED, or obtained by multiplying a total by an fu? The
+    # two are not the same evidence: the second inherits every assumption in the fu. `measured`
+    # is the default because that is what a v1 `binding_state="free"` row already meant.
+    binding_state_basis: Literal["measured", "derived_from_fraction_unbound"] = "measured"
+    unbound_derivation: Optional[UnboundDerivation] = None
+    # Kp / Kp,uu as structured reported-or-derived ratios. The v1 `*_reported_source_string`
+    # fields remain the REPORTED lane (their names say so); these supersede them and can also
+    # express a derivation.
+    kp: Optional[RatioReport] = None
+    kp_uu_brain: Optional[RatioReport] = None
     provenance: Provenance
 
     @model_validator(mode="after")
@@ -251,7 +253,50 @@ class ExposureMeasurement(Strict):
             # Kp,uu,brain is not an observation, it is an inference we refuse.
             raise ValueError("kp_uu_brain_reported must not be set on a CSF measurement")
         self._check_quantitation_limit()
+        self._check_unbound_derivation()
+        self._check_ratios()
         return self
+
+    def _check_unbound_derivation(self) -> None:
+        derived = self.binding_state_basis == "derived_from_fraction_unbound"
+        if derived and self.unbound_derivation is None:
+            raise ValueError(
+                "binding_state_basis='derived_from_fraction_unbound' requires unbound_derivation: "
+                "C_free = C_total * fu is an INFERENCE, and the audit requires both the "
+                "source-bound inputs and the exact declared transform. Without them a calculated "
+                "free concentration is indistinguishable from a measured one."
+            )
+        if derived and self.binding_state != "free":
+            raise ValueError(
+                f"binding_state is {self.binding_state!r} but the row claims to have DERIVED an "
+                "unbound concentration. You do not derive a free concentration and then call it "
+                "total."
+            )
+        if not derived and self.unbound_derivation is not None:
+            raise ValueError(
+                "unbound_derivation is set but binding_state_basis says the value was measured. "
+                "A row cannot be both a measurement and a calculation."
+            )
+
+    def _check_ratios(self) -> None:
+        # The v1 firewall blocked a CSF row from reporting a brain Kp,uu. The v2 structured
+        # field must not become a way around it: the blood-CSF barrier is still not the BBB,
+        # however richly the row is annotated, and a DERIVED ratio is if anything worse.
+        if self.matrix == "csf" and self.kp_uu_brain is not None:
+            raise ValueError(
+                "a CSF measurement must not carry a brain Kp,uu, reported or derived. Grossman "
+                "2026 is explicit that the blood-CSF barrier is not the BBB, so a CSF-derived "
+                "Kp,uu,brain is not an observation — it is an inference, and Stage 4 refuses it."
+            )
+        # One number, one value. Two representations are two chances to state it differently.
+        for v1, v2, name in ((self.kp_reported_source_string, self.kp, "kp"),
+                             (self.kp_uu_brain_reported_source_string, self.kp_uu_brain,
+                              "kp_uu_brain")):
+            if v1 is not None and v2 is not None and v2.value_source_string != v1:
+                raise ValueError(
+                    f"{name}: the v1 reported string ({v1!r}) and the v2 ratio "
+                    f"({v2.value_source_string!r}) disagree. One measurement has one value."
+                )
 
     def _check_quantitation_limit(self) -> None:
         parts = (self.quantitation_limit_kind, self.quantitation_limit_source_string,

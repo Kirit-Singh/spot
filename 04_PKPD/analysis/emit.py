@@ -31,7 +31,8 @@ from .emit_rows import (
     _safety_rows,
     _source_catalog_rows,
 )
-from .evidence_inputs import DERIVED_COLUMNS, INPUT_COLUMNS, evidence_input_rows
+from .contract_version import ContractVersion
+from .evidence_inputs import derived_columns, evidence_input_rows, input_columns
 from .firewall import safe_path_component
 from .ids import (
     code_tree_sha256,
@@ -42,11 +43,14 @@ from .ids import (
 from .method_config import STAGE4_DIR, MethodBundle
 from .pipeline import Stage4Inputs, Stage4Result, build_provenance_chain
 from .safety import assert_no_forbidden_fields
-from .tables import TABLE_SCHEMAS, write_table
+from .tables import table_schemas, write_table
 
 # The EXACT allowlist. An extra production-looking file in the directory is a failure,
 # not a curiosity: the audit dropped one in and verification still passed.
-TABLE_ARTIFACTS = (
+# v1 is FROZEN: a v1 release has exactly these fifteen tables. It does not gain two empty ones
+# because a v2 exists -- an empty `source_acquisition.parquet` in a v1 release would be a claim
+# that the release HAS an acquisition manifest and that it is empty, which is false.
+TABLE_ARTIFACTS_V1 = (
     # derived lanes
     "delivery_evidence", "transporter_evidence", "exposure_evidence", "safety_evidence",
     "nebpi_decisions", "nebpi_criteria",
@@ -55,8 +59,17 @@ TABLE_ARTIFACTS = (
     "potency_context_links", "delivery_assignments", "nebpi_observations",
     "search_manifests", "source_catalog",
 )
+TABLE_ARTIFACTS_V2 = TABLE_ARTIFACTS_V1 + ("fraction_unbound", "source_acquisition")
+
+TABLE_ARTIFACTS = {
+    ContractVersion.V1: TABLE_ARTIFACTS_V1,
+    ContractVersion.V2: TABLE_ARTIFACTS_V2,
+}
 JSON_DOCS = ("scorecards.json", "manifest.json", "verification.json", "selection.json")
-ARTIFACTS = tuple(f"{t}.parquet" for t in TABLE_ARTIFACTS) + JSON_DOCS
+
+
+def artifact_allowlist(version: ContractVersion) -> tuple[str, ...]:
+    return tuple(f"{t}.parquet" for t in TABLE_ARTIFACTS[version]) + JSON_DOCS
 
 # A real solver lock: pip-compile --generate-hashes, every distribution pinned by
 # sha256, installable with `pip install --require-hashes`. Not a loose requirements list.
@@ -129,6 +142,7 @@ class FullRowBindingError(RuntimeError):
 def assert_full_row_binding(
     canonical: dict[str, list[dict[str, Any]]],
     table_rows: dict[str, list[dict[str, Any]]],
+    version: ContractVersion = ContractVersion.V1,
 ) -> None:
     """Every emitted column of every consumed row IS the consumed row. No exceptions.
 
@@ -144,10 +158,10 @@ def assert_full_row_binding(
     `scorecard_set_id`, so a change here MUST move the identity — it cannot be resealed away.
     """
     for table, rows in canonical.items():
-        declared = set(INPUT_COLUMNS[table]) | set(DERIVED_COLUMNS[table])
+        declared = set(input_columns(version)[table]) | set(derived_columns(version)[table])
         emitted = table_rows[table]
 
-        schema_cols = set(TABLE_SCHEMAS[table].names)
+        schema_cols = set(table_schemas(version)[table].names)
         if schema_cols != declared:
             raise FullRowBindingError(
                 f"{table}: the parquet schema and the INPUT|DERIVED declaration disagree "
@@ -156,9 +170,9 @@ def assert_full_row_binding(
                 "an unbound column."
             )
 
-        key = INPUT_COLUMNS[table][0]
+        key = input_columns(version)[table][0]
         want = {r[key]: r for r in rows}
-        got = {r[key]: {c: r.get(c) for c in INPUT_COLUMNS[table]} for r in emitted}
+        got = {r[key]: {c: r.get(c) for c in input_columns(version)[table]} for r in emitted}
         if want != got:
             missing = sorted(set(want) - set(got))
             extra = sorted(set(got) - set(want))
@@ -360,7 +374,8 @@ def emit(inputs: Stage4Inputs, result: Stage4Result, method: MethodBundle,
     )
     safe_path_component(scorecard_set_id)
 
-    canonical = evidence_input_rows(inputs)
+    version = inputs.contract_version
+    canonical = evidence_input_rows(inputs, version)
     builders = {
         "delivery_evidence": lambda: _delivery_rows(result, inputs),
         "nebpi_decisions": lambda: _nebpi_decision_rows(result),
@@ -379,16 +394,21 @@ def emit(inputs: Stage4Inputs, result: Stage4Result, method: MethodBundle,
         "delivery_assignments": lambda: _pure_input_rows(canonical, "delivery_assignments"),
         "nebpi_observations": lambda: _pure_input_rows(canonical, "nebpi_observations"),
         "search_manifests": lambda: _pure_input_rows(canonical, "search_manifests"),
+        # Pure inputs: nothing is derived from an fu row or an acquisition row, so both are
+        # bound into identity in full and reconstructed by nobody -- they ARE the evidence.
+        "fraction_unbound": lambda: _pure_input_rows(canonical, "fraction_unbound"),
+        "source_acquisition": lambda: _pure_input_rows(canonical, "source_acquisition"),
     }
 
     os.makedirs(outputs_root, exist_ok=True)
     tmp_dir = tempfile.mkdtemp(prefix=f".tmp-{uuid.uuid4().hex[:8]}-", dir=outputs_root)
     try:
-        table_rows = {name: builders[name]() for name in TABLE_ARTIFACTS}
-        assert_full_row_binding(canonical, table_rows)
+        table_rows = {name: builders[name]() for name in TABLE_ARTIFACTS[version]}
+        assert_full_row_binding(canonical, table_rows, version)
         artifacts = [
-            write_table(name, table_rows[name], os.path.join(tmp_dir, f"{name}.parquet"))
-            for name in TABLE_ARTIFACTS
+            write_table(name, table_rows[name],
+                        os.path.join(tmp_dir, f"{name}.parquet"), version)
+            for name in TABLE_ARTIFACTS[version]
         ]
 
         scorecards = build_scorecards(scorecard_set_id, inputs, result, method)
@@ -425,7 +445,11 @@ def emit(inputs: Stage4Inputs, result: Stage4Result, method: MethodBundle,
                 "publication_rounding": "ROUND_HALF_UP (a frozen implementation rule, not a published one)",
                 "nan_inf": "rejected",
             },
-            "artifact_allowlist": sorted(ARTIFACTS),
+            "artifact_allowlist": sorted(artifact_allowlist(version)),
+            # Absent means v1. A release written before this field existed IS a v1
+            # release, and must stay readable by every later verifier.
+            **({"evidence_contract_version": version.value}
+               if version != ContractVersion.V1 else {}),
             "artifacts": sorted(artifacts, key=lambda a: a["filename"]),
             "is_fixture": inputs.candidate_set.is_fixture,
         }
@@ -438,8 +462,8 @@ def emit(inputs: Stage4Inputs, result: Stage4Result, method: MethodBundle,
         _write_json(os.path.join(tmp_dir, "verification.json"), verification)
 
         written = set(os.listdir(tmp_dir))
-        missing = sorted(set(ARTIFACTS) - written)
-        extra = sorted(written - set(ARTIFACTS))
+        missing = sorted(set(artifact_allowlist(version)) - written)
+        extra = sorted(written - set(artifact_allowlist(version)))
         if missing or extra:
             raise RuntimeError(f"artifact set does not match the allowlist: missing={missing} extra={extra}")
 

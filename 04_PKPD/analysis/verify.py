@@ -22,7 +22,7 @@ from typing import Any, Optional
 
 import pyarrow.parquet as pq
 
-from .evidence_inputs import INPUT_COLUMNS, evidence_input_rows
+from .evidence_inputs import evidence_input_rows, input_columns
 from .firewall import compute_candidate_rows_sha256
 from .ids import (
     code_tree_sha256,
@@ -77,7 +77,7 @@ def _emitted_rows_match_inputs(out_dir: str, inputs: Stage4Inputs) -> list[str]:
     An extra row, a missing row, or ANY changed bound cell in any evidence-input table means
     the release is not the run — so it is stale, not merely different.
     """
-    canonical = evidence_input_rows(inputs)
+    canonical = evidence_input_rows(inputs, inputs.contract_version)
     problems: list[str] = []
 
     for table, want_rows in canonical.items():
@@ -86,7 +86,7 @@ def _emitted_rows_match_inputs(out_dir: str, inputs: Stage4Inputs) -> list[str]:
             problems.append(f"{table}: not emitted")
             continue
 
-        cols = INPUT_COLUMNS[table]
+        cols = input_columns(inputs.contract_version)[table]
         on_disk = pq.read_table(path).to_pylist()
         missing_cols = [c for c in cols if on_disk and c not in on_disk[0]]
         if missing_cols:

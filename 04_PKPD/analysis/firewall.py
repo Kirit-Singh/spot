@@ -23,11 +23,11 @@ from .contracts import (
     AcquisitionStatus,
     DirectionCompatibility,
     Namespace,
+    Provenance,
     SourceRecord,
     Stage3Candidate,
     Stage3DrugCandidateSet,
 )
-from .evidence_records import Provenance
 
 
 class Rejection(Exception):

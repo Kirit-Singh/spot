@@ -17,6 +17,20 @@ import os
 from typing import Any
 
 from analysis.canonical import canonical_json, sha256_bytes
+from analysis.acquisition import EvidenceObservationState, ReviewStatus, SourceAcquisitionRecord
+from analysis.assay_records import AssayBinding, Relation
+from analysis.contract_version import ContractVersion
+from analysis.organ_system import LabelRef, extract_organ_system
+from analysis.pk_records import (
+    FractionUnboundRecord,
+    PkDetail,
+    PkMetric,
+    ResidualBloodCorrection,
+    SamplingDetail,
+    SamplingMethod,
+    Statistic,
+    VariabilityKind,
+)
 from analysis.contracts import EvidenceContext, SourceRecord, Stage3DrugCandidateSet
 from analysis.evidence_records import (
     DeliveryAssignment,
@@ -91,6 +105,7 @@ def source_registry() -> dict[str, SourceRecord]:
         "src.fixture.exposure",
         "src.fixture.nebpi",
         "src.fixture.delivery",
+        "src.fixture.fu",
     ]
     reg = {
         sid: SourceRecord(
@@ -452,6 +467,189 @@ def _prov_label(source_id: str, filename: str, transform: str) -> Provenance:
         source_record_id=source_id, access_date=ACCESS_DATE,
         raw_response_sha256=sha256_bytes(fixture_bytes(filename)), extraction_transform=transform,
     )
+
+
+# --------------------------------------------------------------------------- v2 lanes
+# Labelled synthetic, like every other fixture here: these exercise the acquisition-complete
+# contract end-to-end (and give the resealed-cell sweep a row of every new bound column to
+# mutate) without pretending any of it was fetched.
+
+
+def fraction_unbound() -> list[FractionUnboundRecord]:
+    """fu,plasma and fu,brain. Kp,uu needs BOTH -- deriving one from a single fu is asserting
+    an unbound ratio from total concentrations."""
+    prov = _prov("src.fixture.fu", "read fu from the cached fixture protein-binding study")
+    return [
+        FractionUnboundRecord(
+            fraction_unbound_id="FU-PLASMA-001", candidate_id="FIXTURE-001",
+            active_moiety_id="FXM-001", matrix="plasma", value_source_string="0.12",
+            method="equilibrium dialysis (fixture)", species="human",
+            concentration_dependence="independent", provenance=prov),
+        FractionUnboundRecord(
+            fraction_unbound_id="FU-BRAIN-001", candidate_id="FIXTURE-001",
+            active_moiety_id="FXM-001", matrix="brain", value_source_string="0.04",
+            method="brain homogenate binding (fixture)", species="human",
+            concentration_dependence="not_reported", provenance=prov),
+    ]
+
+
+def acquisitions() -> list[SourceAcquisitionRecord]:
+    """One acquisition record per fixture source that carries bytes.
+
+    The three interesting states are all present: an `observed` fetch, a
+    `not_found_after_reproducible_search` bound to the negative-search manifest, and a
+    `conflicting` one -- so the sweep exercises the fields each state requires.
+    """
+    reg = source_registry()
+
+    def acq(sid: str, **over) -> SourceAcquisitionRecord:
+        base: dict[str, Any] = dict(
+            acquisition_id=f"ACQ-{sid.split('.')[-1].upper()}",
+            source_record_id=sid,
+            request_url=f"https://fixture.invalid/{sid}",
+            canonical_query=f"GET /fixture/{sid}",
+            accessed_at_utc="2026-07-11T09:15:00Z",
+            http_status=200,
+            raw_media_type="application/json",
+            response_headers={"content-type": "application/json", "etag": f'W/"{sid}"'},
+            release_or_last_updated="fixture-release-1",
+            license_or_terms_url="https://fixture.invalid/terms",
+            raw_bytes=reg[sid].raw_bytes,
+            raw_sha256=reg[sid].raw_sha256,
+            content_sha256=reg[sid].raw_sha256,
+            extraction_transform="fixture extraction",
+            adapter_id="fixture_adapter",
+            adapter_code_sha256=sha256_bytes(f"FIXTURE adapter build for {sid}".encode()),
+            review_status=ReviewStatus.HUMAN_REVIEWED,
+            observation_state=EvidenceObservationState.OBSERVED,
+            # The fixture query matches exactly one record by its own id. It is not a
+            # `limit=1` truncation of a larger match, and it says so.
+            # selection.py's vocabulary: matched on an identity PIN, and the source's own
+            # total agrees with what arrived -- so the result set is complete and the
+            # uniqueness was actually PROVEN rather than assumed.
+            selection_disposition="exactly_one",
+            selection_pin="the fixture source_record_id",
+            match_total_reported=1,
+            records_returned=1,
+            result_set_complete=True,
+        )
+        base.update(over)
+        return SourceAcquisitionRecord(**base)
+
+    # EVERY source that carries bytes needs one: under v2 a byte with no canonical query,
+    # access time, terms URL and adapter build is a byte nobody can get again. The special
+    # states are attached to the two label sources.
+    special = {
+        # "We ran this exact query against this release and it came back empty" -- bound to the
+        # manifest AND to the bytes that came back empty. Not the same claim as "nobody looked".
+        "src.fixture.label.openfda": dict(
+            observation_state=EvidenceObservationState.NOT_FOUND_AFTER_SEARCH,
+            search_id="SRCH-001-periop-bleed"),
+        # The sources disagree, and the disagreement is stated rather than silently resolved.
+        "src.fixture.label.dailymed": dict(
+            observation_state=EvidenceObservationState.CONFLICTING,
+            conflict_note=("FIXTURE: the cached SPL and the cached openFDA record give "
+                           "different effective dates for the same setid."),
+            content_sha256=sha256_bytes(b"FIXTURE normalised dailymed content"),
+            content_hash_rule=("sha256 over the SPL with the volatile <effectiveTime> stamp "
+                               "blanked (fixture rule)."),
+            review_status=ReviewStatus.DISPUTED),
+        "src.fixture.transporter": dict(
+            license_exception_note="FIXTURE: third-party rights may attach to some rows."),
+    }
+    return [acq(sid, **special.get(sid, {}))
+            for sid, rec in sorted(reg.items()) if rec.raw_sha256]
+
+
+def stage4_inputs_v2() -> Stage4Inputs:
+    """The SAME evidence, spoken in the v2 contract.
+
+    Every v1 row here gains the v2 fields the acquisition profile requires, and the two v2-only
+    lanes (fraction unbound, source acquisition) are populated. This is what an
+    acquisition-complete bundle looks like; `contract_profile.py` refuses one that is missing
+    any of it.
+
+    The v1 fixture set (`stage4_inputs`) is deliberately NOT touched: it is frozen evidence and
+    its digest is pinned.
+    """
+    inputs = stage4_inputs()
+    inputs.contract_version = ContractVersion.V2
+    inputs.potencies = [_v2_potency(p) for p in inputs.potencies]
+    inputs.exposures = [_v2_exposure(m) for m in inputs.exposures]
+    inputs.safety_records = [_v2_safety(r) for r in inputs.safety_records]
+    inputs.fraction_unbound = fraction_unbound()
+    inputs.acquisitions = acquisitions()
+    return inputs
+
+
+def _v2_potency(p: PotencyRecord) -> PotencyRecord:
+    return PotencyRecord(**{
+        **p.model_dump(),
+        "relation": Relation.EQ,
+        "assay_binding": AssayBinding(
+            activity_id=f"FIXTURE_ACT_{p.potency_id}",
+            assay_id=f"FIXTURE_ASSAY_{p.potency_id}",
+            target_id="FIXTURE_TGT_1",
+            document_id=f"FIXTURE_DOC_{p.potency_id}",
+            assay_type="F",
+            assay_description="FIXTURE functional viability assay",
+            experimental_system="patient_derived_gbm_line (fixture)",
+            target_organism="Homo sapiens",
+            target_uniprot_accession="P00000",
+            confidence_score=9,
+            validity_comment=None,
+        ),
+    })
+
+
+def _v2_exposure(m: ExposureMeasurement) -> ExposureMeasurement:
+    tissue = m.matrix.startswith("brain_tissue") or m.matrix == "normal_animal_brain"
+    method = SamplingMethod.RESECTION_HOMOGENATE if tissue else (
+        SamplingMethod.CSF_DRAW if m.matrix == "csf" else SamplingMethod.BLOOD_DRAW)
+    return ExposureMeasurement(**{
+        **m.model_dump(),
+        "pk_detail": PkDetail(
+            pk_metric=PkMetric.CONCENTRATION_AT_TIME, statistic=Statistic.MEDIAN,
+            sample_size=9, variability_kind=VariabilityKind.RANGE,
+            variability_source_string="FIXTURE range", variability_units="nM"),
+        "sampling": SamplingDetail(
+            sampling_method=method,
+            sample_location="FIXTURE sample location",
+            time_relative_to_dose=m.timepoint or "FIXTURE time",
+            analytical_method="LC-MS/MS (fixture)",
+            steady_state=True,
+            residual_blood_correction=(ResidualBloodCorrection.APPLIED if tissue
+                                       else ResidualBloodCorrection.NOT_APPLICABLE)),
+        "co_medications": ["dexamethasone (fixture)"],
+        "assay_method": "LC-MS/MS (fixture)",
+        # The plasma row every brain/CSF sample is paired with.
+        "paired_plasma_measurement_id": ("EXP-002" if m.measurement_id != "EXP-002" else None),
+        "binding_state_basis": "measured",
+    })
+
+
+def _v2_safety(r: SafetyEvidenceRecord) -> SafetyEvidenceRecord:
+    """The organ system comes from ACQUISITION's extractor, not from this fixture's opinion.
+
+    No public source in the Stage-4 ledger currently carries an organ-system field, so every
+    real extraction returns `unspecified` / `not_evaluated` — WITH the record and bytes it
+    looked at. That is the honest answer, and it is the one the fixture carries: inventing a
+    classification here would be the exact inference the field forbids.
+    """
+    d = r.model_dump()
+    li = r.label_identity
+    d["organ_system_evidence"] = extract_organ_system(
+        LabelRef(
+            source_record_id=(r.provenance.source_record_id if r.provenance
+                              else "src.fixture.label.dailymed"),
+            setid=(li.setid if li else None),
+            label_version=(li.label_version if li else None),
+            raw_response_sha256=(r.provenance.raw_response_sha256 if r.provenance else None),
+            structured={},
+        ),
+        source_key="dailymed",
+    )
+    return SafetyEvidenceRecord(**d)
 
 
 def stage4_inputs() -> Stage4Inputs:
