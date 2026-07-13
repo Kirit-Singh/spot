@@ -275,6 +275,44 @@ def test_the_GATE_refuses_the_borrowed_estimator_even_WITHOUT_the_schema():
     assert exc.value.reason == G.REFUSE_MODE_ROUTE
 
 
+def test_the_IDENTITY_split_preserves_the_PUBLIC_SURFACE():
+    """The derivations live in ``stage1_v3_ids``; they are named through ``stage1_v3``.
+
+    Every lane, every runner and every test reaches the identities through this module. An
+    identity that quietly changed its import path would be an identity that changed — so the
+    re-export is a CONTRACT, and it is asserted rather than assumed. Each name must resolve,
+    and resolve to the SAME object: a shadowing copy would drift from the original in silence.
+    """
+    from direct import stage1_v3_ids as I
+
+    names = [n for n in vars(I)
+             if not n.startswith("_") and n not in ("annotations", "Any", "content_hash")]
+    assert len(names) >= 29, "the identity module lost a public name"
+    for n in names:
+        assert hasattr(G, n), f"stage1_v3 no longer re-exports {n!r}"
+        assert getattr(G, n) is getattr(I, n), f"{n!r} is a COPY, not the derivation"
+
+    # the derivations themselves, reachable by their original names
+    for fn in ("derive_question_id", "derive_selection_id", "endpoints", "pole_identity",
+               "declared_method_identity", "selection_biology_sha256"):
+        assert callable(getattr(G, fn))
+
+
+def test_the_identity_module_depends_on_NOTHING_that_could_move_an_id():
+    """Identity must not be able to change because a config, a policy or a release moved."""
+    import ast
+    import os
+
+    src = os.path.join(os.path.dirname(G.__file__), "stage1_v3_ids.py")
+    with open(src) as fh:
+        tree = ast.parse(fh.read())
+    imported = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
+    assert imported <= {"__future__", "typing", "hashing"}, imported
+    # ...and nothing plain-imported either: no config, no policy, no release, no os/json.
+    assert not [a.name for n in ast.walk(tree) if isinstance(n, ast.Import)
+                for a in n.names]
+
+
 def test_the_temporal_estimator_IS_in_the_implemented_set():
     assert G.ESTIMATOR_TEMPORAL in G.IMPLEMENTED_ESTIMATORS
     assert G.IMPLEMENTED_ESTIMATORS == (G.ESTIMATOR_WITHIN, G.ESTIMATOR_TEMPORAL)
