@@ -83,3 +83,27 @@ python -m druglink.gbm_context.run_gbm_context \
   ready and unit-tested, and will populate as soon as a validated dependency handoff is supplied.
 - `example_handoff.smoke.json` is that real smoke output (6 representative real immune genes —
   **illustrative, not the final Stage-2 selection**).
+
+## Methods & Provenance drawer payload (Stage-3 / Drugs tab)
+`stage3_methods_manifest.drugs.json` is the compact machine-readable `StageMethodsManifest`
+(`_frontend/src/domain/methodsManifest.ts`) rendered by the ONE shared header drawer. It is
+emitted by `emit_methods_manifest.py` **from the run handoff's own recorded provenance** (never
+re-typed), and canonicalised with the UI's exact rule
+(`sort_keys, separators=(",",":"), ensure_ascii=True` → sha256), so W12 can pin it in
+`STAGE_METHODS_HASHES.drugs` and the adapter's fail-closed content gate accepts it.
+
+- **content_sha256** `b195a4c0b4ff9ab85338e7d745b7f2f1df723745a23d7ea737004995a742db8e` (4333 bytes;
+  the stored file is already canonical, so the raw-byte sha256 equals the content hash).
+  Independently recomputed with a node replica of `canonicalJson` — same value.
+- **source_chain:** `chembl_37`, `uniprot_2026_02`, **`open_targets_26_06`** (CC0 1.0;
+  `canonical_sha256` content-addresses the 6 pinned raw responses, each individually sha256'd in
+  the handoff), **`depmap_public_26q1`** (CC BY 4.0; every hash **null** — not retrieved, official
+  catalog empty, **no coverage claimed**).
+- **Run-status stays `null`** (method/code hash, environment, last-run, reproduce command,
+  release, generator/verifier, artifact paths): no admitted Stage-3 candidate bundle is bound to
+  the page, and the drawer renders an absent field as "unavailable" rather than inventing one.
+- The previously stale limitation ("… Open Targets … and DepMap-PRISM are not [wired]") is
+  **corrected**: Open Targets disease association is now wired; DepMap dependency is explicitly
+  `not_evaluated` with the strict `> 0.5` rule stated.
+
+Regenerate: `python -m druglink.gbm_context.emit_methods_manifest --handoff example_handoff.smoke.json --out stage3_methods_manifest.drugs.json`
