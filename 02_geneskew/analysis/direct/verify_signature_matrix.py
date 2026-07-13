@@ -777,8 +777,11 @@ def _deterministic_report(result: dict[str, Any]) -> dict[str, Any]:
         "n_bundles": result.get("n_bundles"),
         "n_conditions": result.get("n_conditions"),
         # the RE-DERIVED run ids this report stands for — a machine-independent content hash, not
-        # a path — so the release aggregate can bind THIS report to a specific bundle identity.
+        # a path — so the release aggregate can bind THIS report to a specific bundle identity,
+        # and the raw bytes (provenance, gene-set source) it read for each, so the aggregate can
+        # prove which files were checked.
         "run_ids": result.get("run_ids"),
+        "bound_artifacts": result.get("bound_artifacts"),
         "verdict": result.get("verdict"),
         "n_failed": result.get("n_failed"),
         "gates": [{"check": c["check"], "status": c["status"]}
@@ -823,15 +826,26 @@ def main(argv=None) -> int:
 
     # RE-DERIVE the run id of every bundle this report covers, from its own run_binding — never
     # the declared id (a forged id is exactly what V_IDENTITY rejects, so an admitted report's
-    # re-derived id is trustworthy). The release aggregate binds the report to the bundle by this.
+    # re-derived id is trustworthy). The release aggregate binds the report to the bundle by this,
+    # and by ATTESTING the raw bytes this verifier actually read — the provenance it re-derived
+    # identity from and the gene-set source it re-derived members from — so the aggregate can
+    # prove WHICH bundle bytes each report checked, one to one.
     run_ids = []
+    bound_artifacts = {}
     for bdir in args.bundles:
         pp = os.path.join(bdir, PROVENANCE_FILE)
         if os.path.exists(pp):
             rb = (json.load(open(pp)).get("run_binding") or {})
             if rb:
-                run_ids.append(R.content_sha256(rb)[:RUN_ID_LEN])
+                rid = R.content_sha256(rb)[:RUN_ID_LEN]
+                run_ids.append(rid)
+                att = {PROVENANCE_FILE: R.sha256_file(pp)}
+                gs = os.path.join(bdir, "gene_sets.source.json")
+                if os.path.exists(gs):
+                    att["gene_sets.source.json"] = R.sha256_file(gs)
+                bound_artifacts[rid] = att
     result["run_ids"] = sorted(set(run_ids))
+    result["bound_artifacts"] = bound_artifacts
 
     report = _deterministic_report(result)
     report_bytes = json.dumps(report, sort_keys=True, separators=(",", ":")).encode()
