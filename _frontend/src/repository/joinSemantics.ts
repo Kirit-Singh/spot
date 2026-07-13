@@ -4,10 +4,10 @@
 //
 //   within_condition       → gene ranking from two DIRECT arms; pathway panels are the two
 //                            condition-matched Pathway arms.
-//   temporal_cross_condition → gene ranking from two TEMPORAL DiD arms (population-level DiD);
-//                            pathway panels are the ENDPOINT Direct-Pathway contexts
-//                            (A at from_condition, B at to_condition), labeled
-//                            "endpoint_pathway_context" — NEVER temporal enrichment/fate.
+//   temporal_cross_condition → gene ranking from two TEMPORAL DiD arms (population-level DiD).
+//                            Same-time pathway arms are never substituted for a temporal pathway
+//                            result. Pathway routing remains unavailable until an independently
+//                            admitted temporal-pathway bundle exists.
 // Stage-3 drug acquisition consumes the selected gene arms (temporal arms for a cross-time
 // selection). The condition universe is derived independently from the authoritative Stage-1
 // v3 release.selector.conditions — NOT from any --batch-policy input.
@@ -67,9 +67,9 @@ export interface JoinPlan {
   gene_ranking_lane: 'direct' | 'temporal';
   /** The two independent gene arms joined (A, B). No combined arm. */
   gene_arm_keys: [string, string];
-  /** Pathway context label — condition-matched (within) or endpoint (temporal). Never temporal. */
-  pathway_context: 'condition_matched' | 'endpoint_pathway_context';
-  pathway_arm_keys: [string, string];
+  /** Pathway context label. Cross-time selections cannot borrow same-time endpoint pathways. */
+  pathway_context: 'condition_matched' | 'awaiting_temporal_pathway_bundle';
+  pathway_arm_keys: [string, string] | null;
 }
 
 /** Freeze the join: same-time uses Direct gene ranks; cross-time uses Temporal DiD arms. */
@@ -106,11 +106,7 @@ export function joinPlan(sel: JoinSelectionInput): JoinPlan {
       temporalArmKey(sel.A.program_id, dcA, from, to),
       temporalArmKey(sel.B.program_id, dcB, from, to),
     ],
-    // endpoint Direct-Pathway contexts: A at from_condition, B at to_condition. NOT temporal.
-    pathway_context: 'endpoint_pathway_context',
-    pathway_arm_keys: [
-      pathwayArmKey(sel.A.program_id, dcA, from, sel.source),
-      pathwayArmKey(sel.B.program_id, dcB, to, sel.source),
-    ],
+    pathway_context: 'awaiting_temporal_pathway_bundle',
+    pathway_arm_keys: null,
   };
 }

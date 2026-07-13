@@ -89,12 +89,15 @@ export function resolveCompactStage2Selection(
   if (selection.conditions.length !== 2) fail('malformed', 'cross-condition selection must name two ordered conditions');
   const [from, to] = selection.conditions;
   if (from === to) fail('malformed', 'cross-condition endpoints must differ');
+  // The admitted compact release currently carries only same-time pathway arms. Those endpoint
+  // arms are not a temporal enrichment estimand and must never be substituted for one.
+  if (route === 'pathways') fail('incomplete_release', 'awaiting_temporal_pathway_bundle');
   return {
     schema_version: 'spot.ui_compact_stage2_selection_view.v1',
     display_release_id: metadata.display_release_id,
     pathway_source: source,
     mode: selection.analysis_mode,
-    pathway_context: 'endpoint_pathway_context',
+    pathway_context: 'awaiting_temporal_pathway_bundle',
     geneArmA: targetArm(projection, temporalArmKey(selection.A.program_id, changeA, from, to), 'temporal'),
     geneArmB: targetArm(projection, temporalArmKey(selection.B.program_id, changeB, from, to), 'temporal'),
     effectRankFacets: [
@@ -105,7 +108,7 @@ export function resolveCompactStage2Selection(
         increase: targetArm(projection, temporalArmKey(selection.B.program_id, 'increase', from, to), 'temporal'),
         decrease: targetArm(projection, temporalArmKey(selection.B.program_id, 'decrease', from, to), 'temporal') },
     ],
-    pathwayArmA: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.A.program_id, changeA, from, source)),
-    pathwayArmB: route === 'targets' ? null : pathwayArm(projection, pathwayArmKey(selection.B.program_id, changeB, to, source)),
+    pathwayArmA: null,
+    pathwayArmB: null,
   };
 }

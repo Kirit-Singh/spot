@@ -71,15 +71,17 @@ describe('compact Stage-2 production loader — all dropdown arrangements', () =
   });
 
   const pairs = CONDITIONS.flatMap((from) => CONDITIONS.filter((to) => to !== from).map((to) => [from, to] as const));
-  it.each(pairs)('loads ordered temporal %s → %s without endpoint inference', async (from, to) => {
+  it.each(pairs)('loads ordered temporal targets %s → %s and refuses endpoint pathway substitution', async (from, to) => {
     const rel = await release();
-    const result = await loadProductionProjection('pathways', rel.current, rel.fetchText,
+    const result = await loadProductionProjection('targets', rel.current, rel.fetchText,
       selection('temporal_cross_condition', [from, to]));
     const view = stage2View(result);
     expect(view?.geneArmA.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
     expect(view?.geneArmB.arm_key).toBe(temporalArmKey('prog_beta', 'decrease', from, to));
-    expect(view?.pathwayArmA?.context.condition).toBe(from);
-    expect(view?.pathwayArmB?.context.condition).toBe(to);
+    expect(view?.pathwayArmA).toBeNull();
+    expect(view?.pathwayArmB).toBeNull();
+    expect(await loadProductionProjection('pathways', rel.current, rel.fetchText,
+      selection('temporal_cross_condition', [from, to]))).toBeNull();
   });
 });
 

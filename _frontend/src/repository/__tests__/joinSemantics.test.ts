@@ -1,6 +1,6 @@
 // Contract tests freezing the cross-time join semantics + the release condition-universe gate.
-// A cross-time selection must NEVER use same-time Direct gene ranks, and endpoint pathways
-// must NEVER be labeled temporal. No combined score, no longitudinal pathway statistic.
+// A cross-time selection must NEVER use same-time Direct gene ranks or borrow same-time endpoint
+// pathways. No combined score, no longitudinal pathway statistic.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -56,7 +56,7 @@ describe('within_condition join — two Direct arms + condition-matched Pathway 
   });
 });
 
-describe('temporal_cross_condition join — two Temporal DiD arms + ENDPOINT pathway contexts', () => {
+describe('temporal_cross_condition join — two Temporal DiD arms; no borrowed endpoint pathways', () => {
   const plan = joinPlan({
     mode: 'temporal_cross_condition',
     A,
@@ -75,13 +75,9 @@ describe('temporal_cross_condition join — two Temporal DiD arms + ENDPOINT pat
     ]);
   });
 
-  it('labels pathway panels ENDPOINT (A at from, B at to) — never temporal enrichment/fate', () => {
-    expect(plan.pathway_context).toBe('endpoint_pathway_context');
-    expect(plan.pathway_context).not.toMatch(/temporal/);
-    expect(plan.pathway_arm_keys).toEqual([
-      'pathway|naive_like|decrease|Rest|reactome', // A at from_condition
-      'pathway|checkpoint_hi|decrease|Stim48hr|reactome', // B at to_condition
-    ]);
+  it('leaves pathway routing unavailable instead of substituting same-time endpoint arms', () => {
+    expect(plan.pathway_context).toBe('awaiting_temporal_pathway_bundle');
+    expect(plan.pathway_arm_keys).toBeNull();
   });
 
   it('Stage-3 drug acquisition consumes the selected temporal gene arms', () => {
@@ -95,7 +91,7 @@ describe('no combined / longitudinal statistic leaks into a join plan', () => {
     const plan = joinPlan({ mode: 'within_condition', A, B, conditions: ['Rest'], source: 'go_bp' });
     expect(plan.gene_arm_keys).toHaveLength(2);
     expect(plan.pathway_arm_keys).toHaveLength(2);
-    const all = [...plan.gene_arm_keys, ...plan.pathway_arm_keys].join(' ');
+    const all = [...plan.gene_arm_keys, ...(plan.pathway_arm_keys ?? [])].join(' ');
     expect(all).not.toMatch(/combined|balanced|weighted|longitudinal/i);
   });
 });

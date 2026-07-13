@@ -1,7 +1,7 @@
 // Production join resolver + referential identity + desired-direction disposition.
 // Freezes the cross-time join end-to-end at the resolver level (audit acceptance 3 & 4):
 // within-condition → two Direct gene arms + condition-matched pathway; temporal → two Temporal
-// DiD gene arms + endpoint pathway (A@from, B@to). Identity joins by immutable base_key (never
+// DiD gene arms and no borrowed endpoint pathway. Identity joins by immutable base_key (never
 // symbol); conditionUniverse gates the release conditions.
 
 import { describe, expect, it } from 'vitest';
@@ -83,7 +83,7 @@ describe('resolveJoinedView — within-condition (Direct gene arms + condition-m
   });
 });
 
-describe('resolveJoinedView — temporal (Temporal DiD arms + ENDPOINT pathway A@from/B@to)', () => {
+describe('resolveJoinedView — temporal (Temporal DiD arms; no endpoint-pathway substitution)', () => {
   const v = resolveJoinedView(
     sel('temporal_cross_condition', A, B, ['Rest', 'Stim48hr']),
     {
@@ -97,10 +97,10 @@ describe('resolveJoinedView — temporal (Temporal DiD arms + ENDPOINT pathway A
     expect(v.geneArmA?.arm_key).toBe('temporal|th17_like|decrease|Rest|Stim48hr');
     expect((v.geneArmA?.arm_key ?? '').startsWith('direct|')).toBe(false);
   });
-  it('uses ENDPOINT pathway contexts: A at from_condition, B at to_condition; label never temporal', () => {
-    expect(v.pathway_context).toBe('endpoint_pathway_context');
-    expect(v.pathwayArmA?.arm_key).toBe('pathway|th17_like|decrease|Rest|reactome'); // A@from
-    expect(v.pathwayArmB?.arm_key).toBe('pathway|th1_like|increase|Stim48hr|reactome'); // B@to
+  it('does not reuse the available same-time endpoint pathway bundles', () => {
+    expect(v.pathway_context).toBe('awaiting_temporal_pathway_bundle');
+    expect(v.pathwayArmA).toBeNull();
+    expect(v.pathwayArmB).toBeNull();
   });
 });
 

@@ -44,16 +44,19 @@ describe('resolveCompactStage2Selection — arbitrary axes and every condition a
   });
 
   const orderedPairs = CONDITIONS.flatMap((from) => CONDITIONS.filter((to) => to !== from).map((to) => [from, to] as const));
-  it.each(orderedPairs)('binds temporal %s → %s without reversing endpoints', async (from, to) => {
+  it.each(orderedPairs)('binds temporal target arms %s → %s without borrowing endpoint pathways', async (from, to) => {
     const { projection, metadata } = await release();
     const view = resolveCompactStage2Selection(projection, metadata, selection('temporal_cross_condition', [from, to]));
     expect(view.geneArmA.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
     expect(view.geneArmB.arm_key).toBe(temporalArmKey('prog_beta', 'increase', from, to));
     expect(view.effectRankFacets[0].increase.arm_key).toBe(temporalArmKey('prog_alpha', 'increase', from, to));
     expect(view.effectRankFacets[0].decrease.arm_key).toBe(temporalArmKey('prog_alpha', 'decrease', from, to));
-    expect(view.pathwayArmA?.arm_key).toBe(pathwayArmKey('prog_alpha', 'decrease', from, 'reactome'));
-    expect(view.pathwayArmB?.arm_key).toBe(pathwayArmKey('prog_beta', 'increase', to, 'reactome'));
-    expect(view.pathway_context).toBe('endpoint_pathway_context');
+    expect(view.pathwayArmA).toBeNull();
+    expect(view.pathwayArmB).toBeNull();
+    expect(view.pathway_context).toBe('awaiting_temporal_pathway_bundle');
+    expect(() => resolveCompactStage2Selection(
+      projection, metadata, selection('temporal_cross_condition', [from, to]), 'pathways',
+    )).toThrow(/awaiting_temporal_pathway_bundle/);
   });
 
   it('resolves targets without requiring pathway arms, while the pathways route still fails closed', async () => {

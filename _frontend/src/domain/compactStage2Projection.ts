@@ -157,7 +157,7 @@ export interface CompactStage2SelectionView {
   display_release_id: string;
   pathway_source: 'reactome' | 'go_bp';
   mode: 'within_condition' | 'temporal_cross_condition';
-  pathway_context: 'condition_matched' | 'endpoint_pathway_context';
+  pathway_context: 'condition_matched' | 'awaiting_temporal_pathway_bundle';
   geneArmA: CompactTargetArm;
   geneArmB: CompactTargetArm;
   /** Both signed directions for each selected program, kept in two separate program facets. */

@@ -5,8 +5,8 @@
 // there is no combined/balanced score and no longitudinal pathway statistic.
 //
 //   within_condition        → two DIRECT gene arms + condition-matched Pathway arms
-//   temporal_cross_condition → two TEMPORAL DiD gene arms + ENDPOINT Direct-Pathway arms
-//                              (A at from_condition, B at to_condition), never temporal enrichment
+//   temporal_cross_condition → two TEMPORAL DiD gene arms; pathway remains unavailable until
+//                              a verified temporal-pathway bundle is admitted
 
 import { conditionUniverse, joinPlan } from './joinSemantics';
 import type { JoinPlan, JoinSelectionInput } from './joinSemantics';
@@ -78,17 +78,14 @@ export function resolveJoinedView(
     };
   }
 
-  // temporal_cross_condition: endpoint pathway contexts — A@from, B@to
-  const [from, to] = sel.conditions;
-  const pwFrom = pw[`${from}|${source}`] ?? null;
-  const pwTo = pw[`${to}|${source}`] ?? null;
+  // temporal_cross_condition: never borrow same-time endpoint pathway arms.
   return {
     mode: sel.analysis_mode,
     plan,
     geneArmA: bundles.temporal ? getNativeTemporalArm(bundles.temporal, sel.A.program_id, dcA) : null,
     geneArmB: bundles.temporal ? getNativeTemporalArm(bundles.temporal, sel.B.program_id, dcB) : null,
-    pathwayArmA: pwFrom ? getPathwayArm(pwFrom, sel.A.program_id, dcA) : null,
-    pathwayArmB: pwTo ? getPathwayArm(pwTo, sel.B.program_id, dcB) : null,
+    pathwayArmA: null,
+    pathwayArmB: null,
     pathway_context: plan.pathway_context,
   };
 }
