@@ -963,27 +963,169 @@ class TestTheREALW11Bytes:
         assert adm["binds"]["producer_release_raw_sha256"] == W11_INVENTORY_RAW
         assert adm["binds"]["stage1_release"]["stage1_release_raw_sha256"]
 
-    def test_END_TO_END_the_REAL_W11_admission_ADMITS(self, tmp_path):
-        """The control: the real inventory + the real admission, through the real contract."""
+    def _staged(self, tmp_path):
+        """The REAL inventory + the REAL admission, at the names the contract reads."""
         import shutil
         inv, adm = self._real()
         root = str(tmp_path)
         shutil.copyfile(W11_INVENTORY, os.path.join(root, "temporal_arm_release.json"))
         shutil.copyfile(W11_ADMISSION,
                         os.path.join(root, "temporal_arm_external_admission.json"))
+        return root, inv, adm
 
-        # the bundle the release actually ships, at the path the inventory names
+    def _real_root(self, tmp_path):
+        """The REAL inventory + REAL admission + the REAL bundle directories, byte for byte."""
+        import shutil
+        inv, adm = self._real()
+        base = os.path.dirname(W11_INVENTORY)
+        missing = [b["relative_dir"] for b in inv["bundles"]
+                   if not os.path.isdir(os.path.join(base, b["relative_dir"]))]
+        if missing:
+            pytest.skip(f"the real bundle directories are not on this host: {missing}")
+
+        root = str(tmp_path)
+        shutil.copyfile(W11_INVENTORY, os.path.join(root, "temporal_arm_release.json"))
+        shutil.copyfile(W11_ADMISSION,
+                        os.path.join(root, "temporal_arm_external_admission.json"))
+        for b in inv["bundles"]:
+            shutil.copytree(os.path.join(base, b["relative_dir"]),
+                            os.path.join(root, "temporal", b["relative_dir"]))
+        s1 = dict(STAGE1, stage1_release_raw_sha256=(
+            adm["binds"]["stage1_release"]["stage1_release_raw_sha256"]))
+        return root, inv, adm, s1
+
+    def test_END_TO_END_the_REAL_W11_admission_ADMITS_the_REAL_bundles(self, tmp_path):
+        """THE CONTROL. Real inventory, real 188-gate admission, real bundle bytes, real pin.
+
+        Every leg: schema, verifier id, report_id self-hash, verdict, the 188-gate inventory
+        against the PUBLISHED hash, the 14 binds keys, producer_release_id/_raw against the
+        inventory ON DISK, release_id re-derivation, the native PENDING state, the NESTED
+        Stage-1 raw, the non-empty bundle list, and EVERY bundle file and EVERY ranking
+        re-hashed against the bytes.
+        """
+        root, inv, _adm, s1 = self._real_root(tmp_path)
+
+        for entry in inv["bundles"]:
+            bd = os.path.join(root, "temporal", entry["relative_dir"])
+            out = LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
+            assert out["admitted"] is True
+            assert out["n_gates"] == 188
+            assert out["n_bundles"] == 6
+            assert out["bound_bundle_id"] == entry["bundle_id"]
+
+    def test_the_VERIFIER_ADMITS_the_REAL_bytes_INDEPENDENTLY(self, tmp_path):
+        """generator != verifier, on real bytes: the independent restatement admits too."""
+        import verify_admission_rules as VR
+        root, inv, _adm, s1 = self._real_root(tmp_path)
+        bd = os.path.join(root, "temporal", inv["bundles"][0]["relative_dir"])
+        out = VR.check_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert out["admitted"] is True and out["n_gates"] == 188
+
+    def test_an_EDITED_RANKING_in_the_REAL_release_is_REFUSED(self, tmp_path):
+        """The real inventory bound every ranking file. Edit one and it refuses."""
+        root, inv, _adm, s1 = self._real_root(tmp_path)
         entry = inv["bundles"][0]
-        bd = os.path.join(root, "temporal", str(entry.get("relative_dir", "b0")))
+        bd = os.path.join(root, "temporal", entry["relative_dir"])
+        rel = sorted(entry["rankings"])[0]
+        target = os.path.join(bd, rel)
+        os.chmod(target, 0o644)                  # the source is immutable; the COPY is ours
+        with open(target, "a") as fh:
+            fh.write("\n")                       # ONE byte
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert exc.value.gate == LA.G_BOUND_BYTES
+        assert rel in str(exc.value)
+
+    def test_a_PRODUCER_VERIFIER_DRIFT_is_CAUGHT_on_the_REAL_bytes(self, tmp_path,
+                                                                   monkeypatch):
+        """Move the VERIFIER'S pin off the published one: the pair must disagree."""
+        import verify_admission_rules as VR
+        root, inv, _adm, s1 = self._real_root(tmp_path)
+        bd = os.path.join(root, "temporal", inv["bundles"][0]["relative_dir"])
+        assert LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)["admitted"]
+
+        monkeypatch.setitem(VR.EXTERNAL, "temporal",
+                            dict(VR.EXTERNAL["temporal"], gate_inventory_sha256="f" * 64))
+        with pytest.raises(VR.AdmissionError) as exc:
+            VR.check_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert exc.value.gate == VR.G_GATES
+
+    def test_the_VERIFIER_reaches_the_SAME_point_on_the_REAL_bytes(self, tmp_path):
+        """generator != verifier, on real bytes: the independent restatement agrees."""
+        import verify_admission_rules as VR
+        root, inv, adm = self._staged(tmp_path)
+        entry = inv["bundles"][0]
+        bd = os.path.join(root, "temporal", str(entry["relative_dir"]))
         os.makedirs(bd, exist_ok=True)
         with open(os.path.join(bd, "arm_bundle.json"), "w") as fh:
             json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
                        "bundle_id": entry["bundle_id"], "lane": "temporal",
-                       "context": {"from_condition": entry.get("from_condition"),
-                                   "to_condition": entry.get("to_condition")}}, fh)
+                       "context": {"from_condition": entry["from_condition"],
+                                   "to_condition": entry["to_condition"]}}, fh)
+        s1 = dict(STAGE1, stage1_release_raw_sha256=(
+            adm["binds"]["stage1_release"]["stage1_release_raw_sha256"]))
 
-        s1 = dict(STAGE1, stage1_release_raw_sha256=
-                  adm["binds"]["stage1_release"]["stage1_release_raw_sha256"])
-        out = LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
-        assert out["admitted"] is True
-        assert out["n_gates"] == 188
+        with pytest.raises(VR.AdmissionError) as exc:
+            VR.check_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert exc.value.gate == VR.G_BOUND_BYTES
+
+    def test_a_STALE_NESTED_stage1_is_REFUSED_ON_THE_REAL_ADMISSION(self, tmp_path):
+        """The real envelope, against a Stage-1 it was not built on."""
+        root, _inv, _adm = self._staged(tmp_path)
+        bd = os.path.join(root, "temporal", "x")
+        os.makedirs(bd, exist_ok=True)
+        with open(os.path.join(bd, "arm_bundle.json"), "w") as fh:
+            json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
+                       "bundle_id": "x", "lane": "temporal",
+                       "context": {"from_condition": "Rest", "to_condition": "Stim48hr"}}, fh)
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_external(root, "temporal", bundle_dir=bd,
+                             stage1=dict(STAGE1,
+                                         stage1_release_raw_sha256="dead" + "0" * 60))
+        assert exc.value.gate == LA.G_STALE_STAGE1
+
+    def test_ONE_MISSING_GATE_is_REFUSED_ON_THE_REAL_ADMISSION(self, tmp_path):
+        """Drop one of W11's 188 real gate names and reseal: the PUBLISHED pin refuses it."""
+        root, _inv, adm = self._staged(tmp_path)
+        forged = dict(adm)
+        forged["gate_inventory"] = adm["gate_inventory"][:-1]           # 187
+        forged.pop("report_id")
+        forged["report_id"] = content_hash(forged)                      # resealed
+        with open(os.path.join(root, "temporal_arm_external_admission.json"), "w") as fh:
+            json.dump(forged, fh)
+
+        bd = os.path.join(root, "temporal", "x")
+        os.makedirs(bd, exist_ok=True)
+        with open(os.path.join(bd, "arm_bundle.json"), "w") as fh:
+            json.dump({"bundle_id": "x"}, fh)
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_external(root, "temporal", bundle_dir=bd, stage1=STAGE1)
+        assert exc.value.gate == LA.G_GATES
+        assert "188" in str(exc.value)
+
+    def test_THE_BUNDLE_BYTE_LEG_IS_UNPROVEN_and_says_so(self):
+        """The 6 bundle directories were NOT copied. This leg of the contract — every bundle
+        file and EVERY RANKING re-hashed against the bytes on disk — is therefore NOT proven on
+        real bytes, and production must not proceed on temporal until it is."""
+        base = os.path.dirname(W11_INVENTORY)
+        inv = json.load(open(W11_INVENTORY)) if os.path.exists(W11_INVENTORY) else {"bundles": []}
+        missing = [b["relative_dir"] for b in inv.get("bundles", [])
+                   if not os.path.isdir(os.path.join(base, b["relative_dir"]))]
+        if not missing:
+            # the bytes landed: prove the leg for real, against the inventory's own hashes
+            for b in inv["bundles"]:
+                d = os.path.join(base, b["relative_dir"])
+                for group in ("files", "rankings"):
+                    for name, e in (b.get(group) or {}).items():
+                        assert file_sha256(os.path.join(d, name)) == e["raw_sha256"], name
+            return
+
+        # The CODE is fail-closed here regardless: bind_external re-hashes every bundle file
+        # and every ranking, so temporal CANNOT be admitted in production without these bytes.
+        # This marker exists so the gap cannot be forgotten — it is not a silent skip.
+        pytest.skip(
+            "PRODUCTION GATE (temporal): the 6 bundle directories named by the real inventory "
+            f"are NOT on this host: {missing}. The per-bundle / per-ranking byte-binding leg of "
+            "the W11 contract cannot be exercised, so the temporal lane is NOT proven "
+            "end-to-end on real bytes. Production is fail-closed without them (bind_external "
+            "re-hashes each one). Copy output/temporal/<relative_dir>/ from tcefold to close it.")
