@@ -8,7 +8,7 @@
     "verify_stage1_t8.py": "2574638eafd31a9b8fc99431070caac07f8de15aa3f86cfbaf35aad97773df74",
     "stage1_t8_preflight.py": "2351a33e8e4cfe3c1d7d57fb62944718aee78a377600f1f76d479836bf921357",
     "test_stage1_t8.py": "b0a0fbb4371f1b38512a13c48bd38ff017d79ab05678890f3b21185a14e96d4c",
-    "gen_full_release_verification.py": "d59e0109798fd21bee2e3fb16e240ebc6a952465a70967da03ffec68f7c3c380",
+    "gen_full_release_verification.py": "91b15f0f38674f7a3f699b848391f3755b6298d4f5099e4ccacf647555fdb747",
     "gen_stage1_provenance.py": "f3ef4d01421906687875c63bc87002e6bf0598ee845ea3009521f45d407e7572",
     "verify_stage1_provenance.py": "40fa59ac26f61e1accc92ae8bd70ccd96f0929446be7a2eda0346455dcf735a7",
     "test_stage1_provenance.py": "47b8be513e36e975d1774504b0a218e6ecdfb4ecba1b812ebe324745b2a0b78e",
@@ -71,13 +71,14 @@
   },
   "scope_and_limits": {
     "measurement_bundle": "measurement_bundle_lockable is TRUE (inputs+registry+scores+summary+code+verifier+mutation suite+solver lock all present and independently verified). This does NOT imply any selectable pair, identity confirmation, or downstream availability.",
-    "production_stage2_ready": "FALSE — 0/33 program-condition pairs cleared the frozen production gate.",
-    "panel_provenance": "PRIMARY_LOCATORS_VERIFIED_BOUNDED — all 53 measured marker-program pairs carry a bounded primary-source locator in the v3 registry marker_provenance/panel_provenance (18 prior-ledger + 14 lineage + 21 state/CTL completions; source SHAs pinned in registry panel_provenance.source_artifacts and enforced by verify_stage1_provenance.py). This is a bounded association/RNA-level provenance fact only: it does NOT change the scorer, any score, the 0/33 production result, overlay/app deployment, or the candidate pointer, and Masopust remains naming-only.",
-    "overlay_release": "overlay_release_ok is FALSE — the v3 overlay is built and proven overlay==full but is NOT deployed/served; overlay deployment is a separate gate.",
+    "stage1_kind": "continuous_measurement_and_generic_selector — no production/research split and no 0-of-33 production gate exists in the ACTIVE contract; any supported (program A/direction, program B/direction, condition/mode) yields the same typed spot.stage01_selection.v3.",
+    "historical_within_condition_validation": "The frozen T7b within-condition LOMO validation (stage01_selectability_v3.json, raw 7c326a86…, active_gate:false) recorded 0 of 33 program-condition pairs clearing a pre-registered production gate. This is a FROZEN HISTORICAL validation outcome ONLY — it is NOT the current release/deployment state and does NOT gate the generic selector, any selection, or app/overlay deployment.",
+    "panel_provenance": "PRIMARY_LOCATORS_VERIFIED_BOUNDED — all 53 measured marker-program pairs carry a bounded primary-source locator in the v3 registry marker_provenance/panel_provenance (18 prior-ledger + 14 lineage + 21 state/CTL completions; source SHAs pinned in registry panel_provenance.source_artifacts and enforced by verify_stage1_provenance.py). This is a bounded association/RNA-level provenance fact only: it does NOT change the scorer, any score, the frozen historical within-condition validation outcome, overlay/app deployment, or the candidate pointer, and Masopust remains naming-only.",
+    "overlay_release": "overlay_release_ok is FALSE — the v3 overlay is built and proven overlay==full but is NOT APPROVED for release by this Stage-1 gate (deployment is a separate gate; do not deploy on this gate alone). A served deployment manifest that declares the app/overlay deployed while this gate is false is a release-state CONTRADICTION the served-manifest consistency verifier (verify_served_manifests.py) refuses.",
     "coefficients_from_method": "Registry coefficients are checked for internal consistency here; recomputing them from the frozen method requires the pinned h5ad and is the scoring-tier reproduce's job.",
     "earlier_limited_observation": "stage01_validation_independent_check.json remains an intentionally LIMITED sampled observation and is not broadened by this record.",
     "reproducibility": "Heavy artifacts (parquet, v3 overlay, coordinates, v3 registry, v3 summary) are gitignored release-staging outputs bound here by hash; the reproduce chain regenerates them from pinned inputs."
   },
   "recovery_receipt_all_pass": true,
-  "self_canonical_sha256": "b7b6fd1c1f84e9030a22ca6ad1776b89d144d0b128b1907efb3c4db9186e7be3"
+  "self_canonical_sha256": "96638cf892a7849eb0e3d4dcb2961063c862c3957bdf4778d35cc57af50e4ea5"
 }
