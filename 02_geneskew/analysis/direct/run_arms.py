@@ -60,6 +60,7 @@ BUNDLE_RUN_ID_LEN = 16
 # no copy and no rename step, because a shim means the bytes that ship are not the bytes the
 # producer wrote, and the two can drift.
 ROWS_FILE = "arms.parquet"
+MASKS_FILE = "masks.parquet"
 BUNDLE_FILE = "arm_bundle.json"
 PROVENANCE_FILE = "provenance.json"
 VERIFICATION_FILE = "verification.json"
@@ -198,7 +199,11 @@ def build_bundle(args) -> dict[str, Any]:
                                  base_by_program=base)
     doc = arm_bundle.build(condition=cond, view=view, base_by_program=base, rows=rows)
 
-    manifest = rs.stage2_input_manifest(args)
+    # THE REUSABLE-BUNDLE INPUTS. The A/B selection is NOT one of them (W10): binding it
+    # gave byte-identical bundles different ids whenever a pair the bundle neither contains
+    # nor uses had changed, and an arm keyed on the question that happened to be asked first
+    # is not reusable.
+    manifest = rs.bundle_input_manifest(args)
     binding = {
         "runner_id": RUNNER_ID,
         "lane": ctx["lane"],
@@ -211,6 +216,13 @@ def build_bundle(args) -> dict[str, Any]:
             [{"name": i["name"], "sha256": i["sha256"], "size_bytes": i["size_bytes"]}
              for i in manifest], key=lambda i: i["name"]),
         "gene_universe_sha256": ctx["gene_universe"]["sha256"],
+        # EVERY delta depends on these bytes: the contributor manifest decides which guides
+        # contributed, which decides the mask, which decides the projection. Binding a COUNT
+        # of them binds nothing — two different manifests with the same number of rows would
+        # produce different science under the same id (W10).
+        "contributor_manifest": rs.contributor_manifest_identity(args, ctx),
+        "mask_sha256": emit.mask_content_sha256(scan["mask_rows"]),
+        "n_mask_rows": len(scan["mask_rows"]),
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
         "code_identity": rs.code_identity_for(
@@ -230,6 +242,12 @@ def build_bundle(args) -> dict[str, Any]:
                     dict(doc, arm_bundle_run_id=bundle_run_id))
     emit.write_parquet(rows, os.path.join(out_dir, ROWS_FILE),
                        sort_by=["arm_key", "target_id"])
+    # The MASK ARTIFACT ships too. Binding the hash of bytes nobody can hold is the same
+    # defect as naming a gene-set file that lives on the producer's disk: a verifier could
+    # check the mask hashed to X and had no way to obtain X.
+    emit.write_parquet(scan["mask_rows"], os.path.join(out_dir, MASKS_FILE),
+                       ["estimate_type", "estimate_id", "target_id",
+                        "masked_gene_ensembl", "mask_reason", "guide_id"])
 
     prov = {
         "schema_version": SCHEMA_PROVENANCE,
@@ -260,7 +278,7 @@ def build_bundle(args) -> dict[str, Any]:
         "verifier_id": None,
         "verdict": "pending_independent_verification",
         "admitted": False,
-        "verified_paths": [BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE],
+        "verified_paths": [BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE, MASKS_FILE],
         "arm_rows_sha256": doc["arm_rows_sha256"],
         "n_expected_arm_slots": doc["n_expected_arm_slots"],
         "n_arm_slots": doc["n_arm_slots"],

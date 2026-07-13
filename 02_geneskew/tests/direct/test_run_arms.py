@@ -269,7 +269,8 @@ class TestThePhysicalContract:
     def test_the_bundle_ships_exactly_the_contract_files(self, bundle):
         res, _, _ = bundle
         assert sorted(os.listdir(res["out_dir"])) == [
-            "arm_bundle.json", "arms.parquet", "provenance.json", "verification.json"]
+            "arm_bundle.json", "arms.parquet", "masks.parquet", "provenance.json",
+            "verification.json"]
 
     def test_the_producer_does_NOT_admit_its_own_output(self, bundle):
         res, _, _ = bundle
@@ -280,6 +281,95 @@ class TestThePhysicalContract:
         assert v["generator_is_not_verifier"] is True
         assert v["fail_closed"] is True
         assert v["verifier_id"] is None
+
+
+class TestW10_ThePAIRIsNotPartOfAReusableBundlesIDENTITY:
+    """W10 proved it: byte-identical arm content, DIFFERENT bundle ids, because the runner
+    bound `stage2_input_manifest` — which hashes stage01_selection_contract.json. So a pair
+    the bundle does not contain, does not use, and cannot be affected by was deciding its id.
+    An arm keyed on whichever question happened to be asked first is not reusable: the cache
+    misses every time, and the same measurement is recomputed under a new name.
+    """
+
+    def _build(self, synthetic_run, tmp_path, tag, **kw):
+        args = synthetic_run(**kw)
+        args.condition = "StimX"
+        args.out_root = str(tmp_path / tag)
+        return run_arms.build_bundle(args)
+
+    def test_changing_ONLY_the_pair_leaves_the_bundle_id_IDENTICAL(
+            self, synthetic_run, tmp_path):
+        a = self._build(synthetic_run, tmp_path, "a")
+        # the SAME data, a DIFFERENT A/B selection contract
+        b = self._build(synthetic_run, tmp_path, "b",
+                        a_direction="low", b_direction="low")
+        assert a["arm_bundle_run_id"] == b["arm_bundle_run_id"]
+
+    def test_changing_ONLY_the_pair_leaves_the_arm_BYTES_identical(
+            self, synthetic_run, tmp_path):
+        a = self._build(synthetic_run, tmp_path, "c")
+        b = self._build(synthetic_run, tmp_path, "d",
+                        a_direction="low", b_direction="low")
+        assert a["bundle"]["arm_rows_sha256"] == b["bundle"]["arm_rows_sha256"]
+
+    def test_the_selection_contract_is_NOT_in_the_bound_inputs(self, bundle):
+        _, _, prov = bundle
+        names = {i["name"] for i in prov["run_binding"]["stage2_inputs"]}
+        assert "stage01_selection_contract.json" not in names
+
+    def test_the_DATA_still_moves_the_id(self, bundle):
+        # the pair must not move it; the data must. A bundle nothing can change is not an
+        # identity, it is a constant.
+        _, _, prov = bundle
+        names = {i["name"] for i in prov["run_binding"]["stage2_inputs"]}
+        assert "GWCD4i.DE_stats.h5ad" in names
+
+
+class TestW10_TheCONTRIBUTORManifestAndTheMASKAreBoundAsBYTES:
+    """Every delta depends on them: the manifest decides which guides contributed, which
+    decides the mask, which decides the projection. The bundle recorded only COUNTS — and two
+    different manifests with the same number of rows would produce different science under
+    the same id.
+    """
+
+    def test_the_contributor_manifest_is_bound_by_RAW_and_CANONICAL_hash(self, bundle):
+        _, _, prov = bundle
+        m = prov["run_binding"]["contributor_manifest"]
+        assert m["status"] == "bound"
+        assert len(m["raw_sha256"]) == 64
+        assert len(m["canonical_sha256"]) == 64
+
+    def test_the_MASK_content_hash_is_bound(self, bundle):
+        _, _, prov = bundle
+        assert len(prov["run_binding"]["mask_sha256"]) == 64
+        assert prov["run_binding"]["n_mask_rows"] > 0
+
+    def test_the_mask_ARTIFACT_ships_so_the_hash_can_be_CHECKED(self, bundle):
+        # binding the hash of bytes nobody can hold is the same defect as naming a gene-set
+        # file that only exists on the producer's disk
+        res, _, _ = bundle
+        assert os.path.exists(os.path.join(res["out_dir"], "masks.parquet"))
+
+    def test_a_RESEALED_mask_mutation_changes_the_bound_hash(self, bundle):
+        # the honest-producer attack: alter the masked genes and re-hash. The mask hash is
+        # over the mask ROWS, so it moves — and the run id, which covers it, moves with it.
+        from direct import emit as _emit
+        res, _, prov = bundle
+        import pandas as pd
+        df = pd.read_parquet(os.path.join(res["out_dir"], "masks.parquet"))
+        rows = [{k: (None if pd.isna(v) else (v.item() if hasattr(v, "item") else v))
+                 for k, v in r.items()} for r in df.to_dict("records")]
+        assert rows, "no mask rows to mutate"
+        honest = _emit.mask_content_sha256(rows)
+        rows[0]["mask_reason"] = "forged"
+        assert _emit.mask_content_sha256(rows) != honest
+
+    def test_a_RESEALED_contributor_manifest_changes_the_bound_identity(self, bundle):
+        from direct.hashing import content_hash
+        _, _, prov = bundle
+        m = prov["run_binding"]["contributor_manifest"]
+        forged = dict(m, n_rows=(m["n_rows"] or 0) + 1)
+        assert content_hash(forged) != content_hash(m)
 
 
 class TestTheBundleIsContentAddressed:

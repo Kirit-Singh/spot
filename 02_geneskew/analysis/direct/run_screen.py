@@ -500,6 +500,57 @@ def stage2_input_manifest(args) -> list[dict[str, Any]]:
     })
 
 
+def bundle_input_manifest(args) -> list[dict[str, Any]]:
+    """The pinned inputs of a REUSABLE bundle. The A/B SELECTION IS NOT ONE OF THEM.
+
+    W10 proved the defect: the all-arm runner bound ``stage2_input_manifest``, which hashes
+    ``stage01_selection_contract.json``. So two bundles with byte-identical arm content got
+    DIFFERENT ids purely because a pair the bundle does not contain, does not use and cannot
+    be affected by had changed. A reusable arm keyed on the question that happened to be
+    asked first is not reusable — it is a pair's run wearing a different name, and the cache
+    would miss every time.
+
+    A bundle's scientific identity is the DATA, the generic v3 release/scorer view and the
+    CONTEXT. Nothing else. The pair is not an input here; it is a JOIN performed later.
+    """
+    return emit.input_manifest({
+        "GWCD4i.DE_stats.h5ad": args.de_main,
+        "GWCD4i.DE_stats.by_guide.h5mu": args.by_guide,
+        "GWCD4i.DE_stats.by_donors.h5mu": args.by_donors,
+        "sgrna_library_metadata.suppl_table.csv": args.sgrna,
+        "stage01_program_registry.json": args.registry,
+        # NO stage01_selection_contract.json. See above.
+    })
+
+
+def contributor_manifest_identity(args, ctx: dict[str, Any]) -> dict[str, Any]:
+    """The contributor manifest, by RAW bytes and by CONTENT — not by its row count.
+
+    W10's second defect: the all-arm output recorded only COUNTS of the contributor evidence,
+    although EVERY delta in the bundle depends on those bytes — the manifest decides which
+    guides contributed, which decides the mask, which decides the projection. A bundle that
+    binds a count binds nothing: two different manifests with the same number of rows would
+    produce different science under the same id.
+    """
+    doc = ctx.get("manifest_doc")
+    path = getattr(args, "guide_manifest", None)
+    if doc is None:
+        return {"status": "absent", "raw_sha256": None, "canonical_sha256": None,
+                "manifest_sha256": None, "n_rows": None, "n_scopes": None,
+                "source_record_table": None, "source_replay": None}
+    return {
+        "status": "bound",
+        "raw_sha256": file_sha256(path) if path else None,
+        "canonical_sha256": doc["canonical_sha256"],
+        "manifest_sha256": doc["manifest_sha256"],
+        "n_rows": doc["n_rows"],
+        "n_scopes": doc["n_scopes"],
+        "evidence_domain": doc["evidence_domain"],
+        "source_record_table": doc["source_record_table"],
+        "source_replay": doc["source_replay"],
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Main build.
 # --------------------------------------------------------------------------- #
