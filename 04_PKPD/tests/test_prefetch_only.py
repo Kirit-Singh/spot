@@ -150,67 +150,144 @@ def test_an_empty_manifest_is_refused(tmp_path):
 # ------------------------------------------------- 2. it warms the cache and verifies every byte
 
 
-def test_warming_caches_every_response_and_verifies_request_source_and_hash(tmp_path):
-    receipt = warm(_manifest(tmp_path), str(tmp_path / "run"), client=_client())
+class _Klaxon:
+    """Any request at all is a failure while the run is held."""
 
-    assert receipt["counts"] == {"acquired": 1, "not_found": 0, "error": 0}
-    assert receipt["n_responses_cached"] >= 4
+    clock = CLOCK
 
-    for request in receipt["candidates"][0]["requests"]:
-        assert request["http_status"] == 200
-        assert request["url"].startswith("https://")
-        assert request["raw_sha256"] and request["raw_bytes"]
-        assert request["license_or_terms_url"]
-        assert request["accessed_at_utc"] == CLOCK
-        assert request["cache_relpath"].startswith("raw/")
-        # the bytes are really on disk, under their own hash
-        assert os.path.isfile(os.path.join(str(tmp_path / "run"), request["cache_relpath"]))
-
-    assert receipt["content_sha256"] and receipt["elapsed_seconds"] >= 0
-    assert receipt["transport"]["max_workers"] == 4
+    def __call__(self, url: str, timeout: int):
+        raise AssertionError(f"THE WIRE WAS TOUCHED WHILE HELD: {url!r}")
 
 
-def test_a_miss_is_counted_not_fatal_to_the_rest_of_the_queue(tmp_path):
-    """One unresolvable molecule must not kill a hundred-candidate warm-up."""
-    path = _manifest(tmp_path, records=[
-        _record(NAME, "CHEMBL1"),
-        _record("nosuchmoleculeexists", "CHEMBL2"),
-    ])
-    receipt = warm(path, str(tmp_path / "run"), client=_client())
+def test_warming_is_held_until_the_adapters_pass_the_source_totals_through(tmp_path):
+    """THE INTEGRATION GATE. It is not enough for AcquisitionRecord to HAVE the fields — the real
+    adapter constructors must pass selection_disposition / pin / match_total_reported /
+    records_returned / result_set_complete through `record_from_response`, from the response the
+    source actually sent. Until they do, a receipt could not state how many records each source
+    claimed to have, and stamping a `1` because one row came back would be a fabricated total.
 
-    assert receipt["counts"]["acquired"] == 1
-    assert receipt["counts"]["not_found"] + receipt["counts"]["error"] == 1
-    assert receipt["n_candidates"] == 2
+    So the run refuses, and it refuses BEFORE THE WIRE.
+    """
+    from analysis.acquire_http import Client
+
+    with pytest.raises(Rejection) as exc:
+        warm(_manifest(tmp_path), str(tmp_path / "run"),
+             client=Client(transport=_Klaxon(), allow_network=True))
+
+    assert exc.value.code == "source_totals_not_bound"
+    assert "NO REQUEST IS MADE" in exc.value.detail
+    # not one byte was fetched, and no run root was even created
+    assert not os.path.exists(str(tmp_path / "run" / "raw"))
+
+
+class _Rec:
+    """A fetched record, shaped as the adapter would hand it over."""
+
+    origin = "fetched_public"
+    acquisition_record_id = "acq_x"
+
+    def __init__(self, source_key, canonical_query, **over):
+        self.source_key = source_key
+        self.canonical_query = canonical_query
+        self.selection_disposition = "unique"
+        self.selection_pin = None
+        self.match_total_reported = None
+        self.records_returned = 1
+        self.result_set_complete = None
+        for k, v in over.items():
+            setattr(self, k, v)
+
+
+# --- SEARCH / LIST endpoints: the source reports a total, so it is MANDATORY ---------------
+
+def test_a_search_endpoint_that_drops_the_source_total_is_refused():
+    """openFDA reports meta.results.total. An adapter that does not pass it through leaves a
+    truncated page indistinguishable from a complete one — the limit=1 defect, returning."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("openfda", 'drug/label.json?limit=25&search=x',
+                                  match_total_reported=None)])
+    assert exc.value.code == "source_total_missing_on_search"
+
+
+def test_a_search_endpoint_whose_completeness_contradicts_its_own_total_is_refused():
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("openfda", "drug/drugsfda.json?limit=25&search=x",
+                                  match_total_reported=7, records_returned=1,
+                                  result_set_complete=True)])      # 7 != 1
+    assert exc.value.code == "source_totals_inconsistent"
+
+
+def test_a_search_endpoint_that_reports_its_total_honestly_passes():
+    from analysis.source_totals import assert_totals_bound
+
+    assert_totals_bound([_Rec("dailymed", "spls.json?drug_name=x&pagesize=100",
+                              match_total_reported=20, records_returned=20,
+                              result_set_complete=True)])
+
+
+# --- DIRECT / identity endpoints: the source reports NO total. Null is the honest answer. ----
+
+@pytest.mark.parametrize("source_key,query", [
+    ("pubchem", "compound/name/temozolomide/cids/JSON"),
+    ("pubchem", "compound/cid/5394/property/InChIKey/JSON"),
+    ("rxnorm", "rxcui.json?name=temozolomide&search=0"),
+    ("dailymed", "spls/046a9011-3911-4d3f-a15f-fbb56d5aad56.xml"),
+])
+def test_a_direct_endpoint_may_honestly_report_no_total(source_key, query):
+    """These endpoints return the document or the whole list. There is no match total, so null is
+    correct — and the gate must NOT refuse an honest absence."""
+    from analysis.source_totals import assert_totals_bound
+
+    assert_totals_bound([_Rec(source_key, query, match_total_reported=None,
+                              result_set_complete=None)])
+
+
+@pytest.mark.parametrize("source_key,query", [
+    ("pubchem", "compound/name/temozolomide/cids/JSON"),
+    ("rxnorm", "rxcui.json?name=x&search=0"),
+])
+def test_stamping_total_1_on_an_endpoint_that_reports_none_is_refused(source_key, query):
+    """THE FORBIDDEN MOVE. A `1` that merely echoes the single row that arrived is
+    indistinguishable in the artifact from a total the source actually stated."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec(source_key, query, match_total_reported=1, records_returned=1,
+                                  result_set_complete=True)])
+    assert exc.value.code == "source_total_invented"
+    assert "fabricated" in exc.value.detail or "invented" in exc.value.detail.lower()
+
+
+def test_a_direct_endpoint_may_not_assert_completeness_it_cannot_derive():
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("pubchem", "compound/cid/1/property/InChIKey/JSON",
+                                  match_total_reported=None, result_set_complete=True)])
+    assert exc.value.code == "source_total_invented"
+
+
+def test_the_selection_proof_and_the_returned_count_are_always_required():
+    """However the endpoint behaves, we always know HOW we selected and HOW MANY rows we parsed."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("pubchem", "compound/cid/1/property/X/JSON",
+                                  selection_disposition=None)])
+    assert exc.value.code == "source_totals_not_bound"
 
 
 # ------------------------------------ 3. THE WALL: a prefetch can never enter Stage 4
 
 
-def test_warming_writes_no_acquisition_manifest_so_materialization_has_nothing_to_read(tmp_path):
-    root = str(tmp_path / "run")
-    warm(_manifest(tmp_path), root, client=_client())
-
-    assert os.path.isfile(os.path.join(root, "prefetch_receipt.json"))
-    assert not os.path.exists(os.path.join(root, "acquisition_manifest.json"))
-
-
-def test_stage4_materialization_refuses_a_run_root_that_was_only_warmed(tmp_path):
-    """FAIL-CLOSED. The materializer reads `acquisition_manifest.json`; a warmed cache has none,
-    so a prefetch cannot walk into Stage 4 by itself."""
-    from analysis.run_materialize import load_manifest
-
-    root = str(tmp_path / "run")
-    warm(_manifest(tmp_path), root, client=_client())
-
-    with pytest.raises(Exception) as exc:      # Rejection or OSError — either way it does not load
-        load_manifest(root)
-    assert "acquisition_manifest" in str(exc.value) or "manifest" in str(exc.value).lower()
-
-
-def test_the_prefetch_receipt_is_refused_at_the_stage4_door_if_anyone_hands_it_over(tmp_path):
-    """The second wall. Even if a future caller points Stage 4 at the receipt directly, the door
-    refuses it by name: it was never bound to an admitted bundle."""
-    receipt = warm(_manifest(tmp_path), str(tmp_path / "run"), client=_client())
+def test_a_prefetch_artifact_is_refused_at_the_stage4_door(tmp_path):
+    """The second wall, independent of the first. Even if a caller points Stage 4 at a prefetch
+    receipt directly, the door refuses it BY NAME: it was never bound to an admitted bundle."""
+    receipt = {"prefetch_only": True, "stage4_admissible": False}
 
     with pytest.raises(Rejection) as exc:
         assert_not_prefetch_only(receipt)
@@ -218,39 +295,47 @@ def test_the_prefetch_receipt_is_refused_at_the_stage4_door_if_anyone_hands_it_o
     assert "admitted" in exc.value.detail
 
 
-def test_the_receipt_says_in_its_own_fields_that_it_is_not_admissible(tmp_path):
-    receipt = warm(_manifest(tmp_path), str(tmp_path / "run"), client=_client())
+def test_stage4_materialization_cannot_read_a_run_root_that_holds_only_a_cache(tmp_path):
+    """FAIL-CLOSED. The materializer reads `acquisition_manifest.json`. Warming never writes one,
+    so a warmed cache cannot walk into Stage 4 by itself."""
+    from analysis.acquisition import RunRoot
+    from analysis.run_materialize import load_manifest
 
-    assert receipt["prefetch_only"] is True
-    assert receipt["stage4_admissible"] is False
-    assert receipt["stage3_admission_required"] is False
-    assert receipt["stage3_admission_implied"] is False
-    assert "never becomes an evidence bundle" in " ".join(receipt["hard_rules"])
+    root = str(tmp_path / "run")
+    RunRoot(root)                                   # a run root with a cache but no manifest
+
+    with pytest.raises(Exception) as exc:
+        load_manifest(root)
+    assert "manifest" in str(exc.value).lower()
 
 
 # ------------------------------------------------ 4. the payoff: the bytes re-bind, for free
 
 
-def test_the_warmed_cache_is_replayed_when_the_admitted_bundle_finally_lands(tmp_path):
-    """The whole reason to warm: acquisition against the ADMITTED bundle asks the same canonical
-    questions, so it is served from cache with ZERO new requests — and the records it builds are
-    bound to that bundle, not to the prefetch."""
+def test_cached_bytes_replay_and_re_bind_with_zero_new_requests(tmp_path):
+    """The payoff that makes warming worth doing at all: the cache is keyed on the CANONICAL
+    QUERY, so a later acquisition asks the same questions and is served from cache — and the
+    records it builds are bound to THAT run, with the access time of the fetch that really
+    happened, never re-stamped."""
     from analysis.acquire_cache import RequestCache
     from analysis.acquisition import RunRoot
     from analysis.run_acquire import acquire_identity
 
     root = str(tmp_path / "run")
-    warm(_manifest(tmp_path), root, client=_client())
-
-    # now the "admitted bundle" arrives and acquisition runs over the SAME run root
-    transport = StaticTransport(_routes(), clock="2026-07-20T00:00:00Z")
     run_root = RunRoot(root)
-    later = Client(transport=transport, allow_network=True, cache=RequestCache(run_root))
+    cache = RequestCache(run_root)
 
+    first = Client(transport=StaticTransport(_routes(), clock=CLOCK), allow_network=True,
+                   cache=cache)
+    acquire_identity(first, run_root, NAME)
+    assert first.n_fetched > 0
+
+    # "the admitted bundle lands" — same questions, a later clock, a fresh client
+    transport = StaticTransport(_routes(), clock="2026-07-20T00:00:00Z")
+    later = Client(transport=transport, allow_network=True, cache=RequestCache(RunRoot(root)))
     resolved, records = acquire_identity(later, run_root, NAME)
 
     assert transport.seen == []                      # not one new request: pure cache replay
     assert later.n_reused > 0 and later.n_fetched == 0
-    # and the access time is the fetch that REALLY happened, not the replay
-    assert all(r.accessed_at_utc == CLOCK for r in records)
+    assert all(r.accessed_at_utc == CLOCK for r in records)   # the REAL fetch time, not the replay
     assert resolved["unii"] == "FIXTURE001"

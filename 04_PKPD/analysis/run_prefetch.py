@@ -42,6 +42,7 @@ from .acquisition import RunRoot
 from .canonical import strict_content_sha256
 from .firewall import Rejection
 from .prefetch_verify import VerifiedPrefetchManifest, verify_prefetch_manifest
+from .source_totals import assert_model_carries_totals, assert_totals_bound, totals_of
 
 MAX_CONCURRENCY = 4
 RECEIPT = "prefetch_receipt.json"
@@ -103,12 +104,22 @@ def prefetch_one(client: Client, run_root: RunRoot, candidate: dict[str, Any]) -
     verified: list[dict[str, Any]] = []
 
     def check(records: Any) -> None:
-        """Every request/response/source/hash, verified as it arrives."""
+        """Every request/response/source/hash/total, verified as it arrives."""
         from .acquisition import verify_cached_bytes
+
+        batch = records if isinstance(records, list) else [records]
+        # The adapter must have passed the source-reported totals through. If it dropped them,
+        # this raises and the candidate is recorded as an error — no receipt claims a warm cache
+        # it cannot describe.
+        assert_totals_bound(batch)
 
         for rec in records if isinstance(records, list) else [records]:
             verify_cached_bytes(rec, run_root)       # the cache holds what was hashed
+            # THE SOURCE'S OWN TOTALS, read off the admitted record. Never inferred here, never
+            # defaulted, and never stamped `1` because one row came back. If the adapter did not
+            # pass them through record_from_response, `assert_totals_bound` below stops the run.
             verified.append({
+                **totals_of(rec),
                 "source_key": rec.source_key,
                 "url": rec.url,
                 "canonical_query": rec.canonical_query,
@@ -142,6 +153,11 @@ def prefetch_one(client: Client, run_root: RunRoot, candidate: dict[str, Any]) -
                            f"{len(verified)} response(s) cached", verified)
 
 
+def _gate_source_totals(records: list[Any]) -> None:
+    """The integration gate. It is enforced in CODE, not by remembering to wait."""
+    assert_totals_bound(records)
+
+
 def _setid_of(label_records: list[Any]) -> str:
     """The set ID of the SPL that was actually served — not one we assumed."""
     spl = next(r for r in label_records if (r.raw_media_type or "").endswith("xml"))
@@ -155,6 +171,11 @@ def run_prefetch(manifest_path: str, run_root_dir: str, *, client: Optional[Clie
     """Warm the cache. Emits a receipt and a cache — never an acquisition manifest."""
     verified = load_prefetch_manifest(manifest_path, expect_raw_sha256=expect_raw_sha256,
                                       expect_content_sha256=expect_content_sha256)
+    # PREFLIGHT, before the wire. If the contract cannot carry the source-reported totals, no
+    # adapter can be passing them through, and a warm-up would produce a receipt that cannot say
+    # how many records each source claimed to have. Refuse now — not after 3,000 requests.
+    assert_model_carries_totals()
+
     manifest = verified.document
     run_root = RunRoot(run_root_dir)
     cache = RequestCache(run_root)
