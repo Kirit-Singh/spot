@@ -43,7 +43,12 @@ def env(tmp_path_factory):
         (sel / f"genesets_{s}.ensembl.json").write_text("{}")
     names = ("V3_SCHEMA", "REGISTRY", "STAGE1_RELEASE", "DE", "GUIDE", "DONOR", "SGRNA",
              "MANIFEST", "SRCREG", "PB", "ENV_LOCK")
-    e = dict(os.environ, SEL_DIR=str(sel), OUT=str(d / "out"), SPOT_DRY_RUN="1")
+    w10 = d / "w10"
+    w10.mkdir()
+    for c in CONDITIONS:
+        (w10 / f"direct_mask_report_{c}.md").write_text("# report\n")
+    e = dict(os.environ, SEL_DIR=str(sel), OUT=str(d / "out"), SPOT_DRY_RUN="1",
+             W10_REPORT_DIR=str(w10))
     for n in names:
         p = d / f"{n.lower()}.bin"
         p.write_text("x")
@@ -53,18 +58,27 @@ def env(tmp_path_factory):
 
 def capture(env, what):
     """Run the script in dry-run mode and parse the invocations it WOULD have made."""
+    return [(lab, argv) for lab, argv, _p, _c in capture_flow(env, what)]
+
+
+def capture_flow(env, what):
+    """The invocations AND what each step declares it produces / consumes."""
     proc = subprocess.run(["bash", SCRIPT, what], env=env, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
-    invocations, current, label = [], None, None
+    out, current, label, prod, cons = [], None, None, [], []
     for line in proc.stdout.splitlines():
         if line.startswith("=== BEGIN "):
-            label, current = line[len("=== BEGIN "):], []
+            label, current, prod, cons = line[len("=== BEGIN "):], [], [], []
+        elif line.startswith("=== PRODUCES "):
+            prod.append(line[len("=== PRODUCES "):])
+        elif line.startswith("=== CONSUMES "):
+            cons.append(line[len("=== CONSUMES "):])
         elif line.startswith("=== END "):
-            invocations.append((label, current))
+            out.append((label, current, prod, cons))
             current = None
         elif current is not None:
             current.append(line)
-    return invocations
+    return out
 
 
 class TestItParses:
@@ -106,18 +120,76 @@ class TestTheArgvIsRight:
         assert len(step0) == 3
         assert len(bundles) == 15
 
-    def test_STEP0_runs_BEFORE_any_pathway_bundle(self, env):
-        labels = [lab for lab, _ in capture(env, "all")]
-        first_pathway = next(i for i, lab in enumerate(labels)
-                             if lab.startswith("pathway:"))
-        last_step0 = max(i for i, lab in enumerate(labels) if lab.startswith("step0:"))
-        assert last_step0 < first_pathway
-
     def test_EVERY_invocation_passes_the_env_lock(self, env):
         # the solver-lock gate: all 15 production invocations bind the lock, and Step 0 too
         for label, argv in capture(env, "all"):
             assert "--env-lock" in argv, f"{label} does not pass --env-lock"
             assert argv[argv.index("--env-lock") + 1], f"{label} passes an EMPTY --env-lock"
+
+
+class TestTheDEPENDENCYFlowIsPROVEDNotAssumed:
+    """A zero-compute proof that every consumer's input is some producer's output, and is
+    produced BEFORE it is consumed.
+
+    Ordering in a runbook is otherwise a comment: the steps are in the right order because
+    somebody typed them in the right order, and the next person to add a step has nothing to
+    check their work against.
+    """
+
+    def test_every_CONSUMED_input_is_some_step_s_declared_OUTPUT(self, env):
+        flow = capture_flow(env, "all")
+        produced = {p for _l, _a, prods, _c in flow for p in prods}
+        # the W10 reports are an EXTERNAL input: produced by another lane, not by this runbook
+        external = {c for _l, _a, _p, cons in flow for c in cons
+                    if c.startswith("w10_report:")}
+        for label, _argv, _prods, cons in flow:
+            for c in cons:
+                if c in external:
+                    continue
+                assert c in produced, f"{label} consumes {c!r}, which nothing produces"
+
+    def test_every_input_is_produced_BEFORE_it_is_consumed(self, env):
+        flow = capture_flow(env, "all")
+        first_produced = {}
+        for i, (_l, _a, prods, _c) in enumerate(flow):
+            for p in prods:
+                first_produced.setdefault(p, i)
+        for i, (label, _a, _p, cons) in enumerate(flow):
+            for c in cons:
+                if c.startswith("w10_report:"):
+                    continue
+                assert first_produced.get(c, 10**9) < i, \
+                    f"{label} consumes {c!r} before anything produces it"
+
+    def test_STEP0_consumes_the_DIRECT_bundle_and_the_W10_report(self, env):
+        # the cross-lane anchor: without them the mask is only self-consistent
+        flow = {lab: (prods, cons) for lab, _a, prods, cons in capture_flow(env, "all")}
+        for cond in CONDITIONS:
+            _prods, cons = flow[f"step0:{cond}"]
+            assert f"direct:{cond}" in cons
+            assert f"w10_report:{cond}" in cons
+
+    def test_STEP0_passes_the_DISCOVERED_direct_bundle_and_the_report(self, env):
+        for label, argv in capture(env, "step0"):
+            assert "--direct-bundle" in argv, f"{label} does not anchor to a Direct bundle"
+            assert "--direct-mask-report" in argv, f"{label} passes no W10 report"
+            assert argv[argv.index("--direct-bundle") + 1]
+            assert argv[argv.index("--direct-mask-report") + 1]
+
+    def test_the_direct_bundle_path_is_DISCOVERED_never_GUESSED(self, env):
+        # its directory IS its run id; a guessed path finds nothing, or finds a stale bundle
+        for _label, argv in capture(env, "step0"):
+            supplied = argv[argv.index("--direct-bundle") + 1]
+            assert supplied.startswith("<discovered:direct:")
+            assert "direct-Rest" not in supplied
+
+    def test_DIRECT_runs_before_STEP0_which_runs_before_PATHWAY(self, env):
+        labels = [lab for lab, _a, _p, _c in capture_flow(env, "all")]
+        last_direct = max(i for i, x in enumerate(labels) if x.startswith("direct:"))
+        step0 = [i for i, x in enumerate(labels) if x.startswith("step0:")]
+        first_pathway = next(i for i, x in enumerate(labels) if x.startswith("pathway:"))
+        assert last_direct < min(step0)
+        assert max(step0) < first_pathway
 
 
 class TestTheSelectionFlagGetsAPATHNotAConditionName:
