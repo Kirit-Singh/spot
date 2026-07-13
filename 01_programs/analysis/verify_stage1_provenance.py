@@ -48,6 +48,8 @@ PROV_TOP = ("citations_provenance_note", "registry_sha256",
 # + Tier-2 display-only fields (display_label) so a cosmetic relabel can never move the scorer-core invariant.
 PROV_PROG = ("selection_rationale", "citations", "citations_verification_status", "marker_provenance",
              "display_label")
+# Tier-2 display-only fields that must NEVER live in the Tier-1 scientific registry (S1-M2 standalone check).
+DISPLAY_ONLY_FIELDS = ("display_label",)
 
 
 def _raw(path):
@@ -241,6 +243,15 @@ def run_checks(reg, src_dir=SRC_DEFAULT):
         fails.append("registry_sha256_does_not_recompute")
     if reg.get("method_version") != METHOD_VERSION:
         fails.append("method_version_changed")
+
+    # 8) Tier-2 display fields must NOT live in the Tier-1 scientific registry (S1-M2). A resealed
+    #    display_label reinsert re-hashes registry_sha256 so check 7 passes — this catches the leak directly,
+    #    so the STANDALONE verifier rejects it, not only the reproduce-path protected checker.
+    leaked = sorted({p.get("program_id") or p.get("score_field")
+                     for grp in ("programs", "sensitivity_lanes") for p in reg.get(grp, [])
+                     if any(f in p for f in DISPLAY_ONLY_FIELDS)})
+    if leaked:
+        fails.append(f"tier2_field_in_tier1_registry:{leaked}")
 
     return fails
 

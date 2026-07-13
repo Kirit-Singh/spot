@@ -39,6 +39,14 @@ def test_clean_registry_passes():
     assert V.run_checks(_reg(), SRC) == []
 
 
+# ---- S1-M2: a resealed Tier-2 display-label reinsert is rejected by the STANDALONE verifier ----
+def test_tier2_display_field_reinsert_rejected():
+    reg = _reg()
+    reg["programs"][0]["display_label"] = "INJECTED TIER-2 LABEL"
+    fails = V.run_checks(_reseal(reg), SRC)   # reseal re-hashes registry_sha256 so the self-integrity check passes
+    assert _has(fails, "tier2_field_in_tier1_registry")
+
+
 # ---- missing locator ----
 def test_missing_locator_rejected():
     reg = _reseal(_reg())
