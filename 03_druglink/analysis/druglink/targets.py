@@ -56,13 +56,56 @@ def target_entity_id(source: str, source_target_id: str) -> str:
     return short_id({"source": source, "source_target_id": source_target_id})
 
 
+class TargetIdentityConflict(ValueError):
+    """One UniProt accession, two different genes. Stage 3 refuses to pick one.
+
+    This used to be ``uniprot_to_gene[acc] = gene`` — last write wins. Whichever record
+    happened to be parsed last silently became the truth, so the identity of a drug target
+    depended on the ORDER the public responses arrived in. Reverse the pages and the answer
+    changes, with no error, no disposition and nothing in the bundle to say a choice was
+    ever made.
+
+    There is no safe tie-break here. Picking the first, the last, the lowest-sorting, or
+    the "reviewed" one all invent a resolution the sources did not agree on. A conflicting
+    accession is a named refusal.
+    """
+
+
+def resolve_uniprot_to_gene(recs: list[dict[str, Any]]) -> dict[str, str]:
+    """UniProt -> Ensembl, FAIL-CLOSED on disagreement.
+
+    A gene legitimately has several accessions (many-to-one is normal and fine). An
+    accession mapping to two DIFFERENT genes is not — it is a contradiction in the
+    evidence, and Stage 3 will not silently resolve it.
+    """
+    seen: dict[str, dict[str, list[str]]] = {}
+    for r in recs:
+        if r.get("record_kind") != "gene_map":
+            continue
+        acc, gene = r["uniprot_id"], r["target_ensembl"]
+        by_gene = seen.setdefault(acc, {})
+        by_gene.setdefault(gene, []).append(r.get("source_record_id", "?"))
+
+    conflicts = {acc: genes for acc, genes in seen.items() if len(genes) > 1}
+    if conflicts:
+        detail = "; ".join(
+            f"{acc} -> {sorted(genes)} (records {sorted(rid for g in genes.values()
+                                                        for rid in g)})"
+            for acc, genes in sorted(conflicts.items()))
+        raise TargetIdentityConflict(
+            f"{len(conflicts)} UniProt accession(s) map to MORE THAN ONE gene: {detail}. "
+            "Stage 3 will not pick one: last-write-wins would make a drug target's "
+            "identity depend on the order the public pages happened to arrive in. Resolve "
+            "the conflict upstream, or exclude the accession — do not let it be decided by "
+            "parse order.")
+
+    return {acc: next(iter(genes)) for acc, genes in seen.items()}
+
+
 def build(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Return {entities, components, by_source_id, gene_to_entities, dispositions}."""
     recs = list(records)
-    uniprot_to_gene: dict[str, str] = {}
-    for r in recs:
-        if r.get("record_kind") == "gene_map":
-            uniprot_to_gene[r["uniprot_id"]] = r["target_ensembl"]
+    uniprot_to_gene = resolve_uniprot_to_gene(recs)
 
     entities: dict[str, dict[str, Any]] = {}
     components: list[dict[str, Any]] = []
