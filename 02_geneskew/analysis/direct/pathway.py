@@ -98,7 +98,10 @@ def method_block(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
         # B4: the PROSPECTIVE coverage governance, frozen before any result.
         "coverage_policy_id": genesets.COVERAGE_POLICY_ID,
         "min_source_coverage": genesets.MIN_SOURCE_COVERAGE,
+        "min_arm_ranked_members": genesets.MIN_ARM_RANKED_MEMBERS,
         "coverage_namespace": genesets.COVERAGE_NAMESPACE,
+        "arm_eligibility_is_independent_per_arm": True,
+        "combined_arm_eligibility_permitted": False,
         "inference_status": enrichment.INFERENCE_STATUS,
         "no_pq_reason": enrichment.NO_PQ_REASON,
         "gene_sets": genesets.binding_block(bundle),
@@ -155,9 +158,12 @@ def build_records(rows: list[dict[str, Any]], bundle: Optional[dict[str, Any]],
             "n_genes_in_readout_universe": s["n_genes_in_universe"],
             "target_source_coverage": s["target_source_coverage"],
             "readout_source_coverage": s["readout_source_coverage"],
-            # B4: may a ranking speak for this pathway? Decided prospectively, by coverage.
-            "coverage_disposition": s["coverage_disposition"],
-            "headline_rankable": s["headline_rankable"],
+            # A2: the record carries the GLOBAL disposition — a property of the pathway
+            # and the assay. It is NECESSARY for a headline arm result and never
+            # SUFFICIENT, and it deliberately does NOT imply that either arm, let alone
+            # both, may be ranked. That question is per-arm and lives in the arm blocks.
+            "global_coverage_disposition": s["global_coverage_disposition"],
+            "global_coverage_policy_passed": s["global_coverage_policy_passed"],
             # THE RE-KEYING DENOMINATOR. For a bundle re-keyed symbol -> Ensembl, the
             # members that could not be mapped were already removed, so `coverage` above
             # is 1.0 by construction. `source_coverage` is the fraction of the genes the
@@ -209,10 +215,16 @@ def _enrichment_block(e: dict[str, Any]) -> dict[str, Any]:
         "n_ranked": e["n_ranked"],
         "peak_rank": e["peak_rank"],
         "testable": e["testable"],
-        # B4: size is not coverage. `testable` says the statistic is defined; this says
-        # whether a RANKING is allowed to speak for the pathway.
-        "coverage_disposition": e["coverage_disposition"],
-        "headline_rankable": e["headline_rankable"],
+        # A2 — PER-ARM ELIGIBILITY. `testable` says the statistic is defined; these say
+        # whether a RANKING is allowed to speak for the pathway IN THIS ARM. Global
+        # coverage alone never authorises that: a set can clear the global bar and still
+        # have exactly one of its members in this arm's ranking.
+        "n_source_symbols": e["n_source_symbols"],
+        "global_target_source_coverage": e["global_target_source_coverage"],
+        "arm_evaluable_source_coverage": e["arm_evaluable_source_coverage"],
+        "arm_coverage_disposition": e["arm_coverage_disposition"],
+        "arm_headline_rankable": e["arm_headline_rankable"],
+        "arm_undefined_reason": e["arm_undefined_reason"],
         "undefined_reason": e["undefined_reason"],
         "inference_status": e["inference_status"],
         "no_pq_reason": e["no_pq_reason"],

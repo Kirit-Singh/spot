@@ -223,13 +223,6 @@
               "null"
             ]
           },
-          "coverage_disposition": {
-            "enum": [
-              "rankable",
-              "descriptive_only_low_source_coverage",
-              "descriptive_only_source_coverage_unknown"
-            ]
-          },
           "direct_config_sha256": {
             "pattern": "^[0-9a-f]{64}$",
             "type": "string"
@@ -288,8 +281,31 @@
                   ]
                 },
                 "properties": {
-                  "coverage_disposition": {
-                    "type": "string"
+                  "arm_coverage_disposition": {
+                    "enum": [
+                      "rankable",
+                      "descriptive_only_low_source_coverage",
+                      "descriptive_only_source_coverage_unknown",
+                      "descriptive_only_thin_arm",
+                      "undefined"
+                    ]
+                  },
+                  "arm_evaluable_source_coverage": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "arm_headline_rankable": {
+                    "type": "boolean"
+                  },
+                  "arm_undefined_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "enrichment_value": {
                     "type": [
@@ -297,8 +313,13 @@
                       "null"
                     ]
                   },
-                  "headline_rankable": {
-                    "type": "boolean"
+                  "global_target_source_coverage": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
                   },
                   "inference_status": {
                     "const": "not_calibrated"
@@ -332,6 +353,13 @@
                   "n_ranked": {
                     "minimum": 0,
                     "type": "integer"
+                  },
+                  "n_source_symbols": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
                   },
                   "no_pq_reason": {
                     "const": "no_calibrated_null_for_this_enrichment_statistic"
@@ -374,8 +402,12 @@
                   "no_pq_reason",
                   "leading_edge_side",
                   "leading_edge_convention",
-                  "coverage_disposition",
-                  "headline_rankable"
+                  "n_source_symbols",
+                  "global_target_source_coverage",
+                  "arm_evaluable_source_coverage",
+                  "arm_coverage_disposition",
+                  "arm_headline_rankable",
+                  "arm_undefined_reason"
                 ],
                 "type": "object"
               },
@@ -426,8 +458,31 @@
                   ]
                 },
                 "properties": {
-                  "coverage_disposition": {
-                    "type": "string"
+                  "arm_coverage_disposition": {
+                    "enum": [
+                      "rankable",
+                      "descriptive_only_low_source_coverage",
+                      "descriptive_only_source_coverage_unknown",
+                      "descriptive_only_thin_arm",
+                      "undefined"
+                    ]
+                  },
+                  "arm_evaluable_source_coverage": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "arm_headline_rankable": {
+                    "type": "boolean"
+                  },
+                  "arm_undefined_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "enrichment_value": {
                     "type": [
@@ -435,8 +490,13 @@
                       "null"
                     ]
                   },
-                  "headline_rankable": {
-                    "type": "boolean"
+                  "global_target_source_coverage": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
                   },
                   "inference_status": {
                     "const": "not_calibrated"
@@ -470,6 +530,13 @@
                   "n_ranked": {
                     "minimum": 0,
                     "type": "integer"
+                  },
+                  "n_source_symbols": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
                   },
                   "no_pq_reason": {
                     "const": "no_calibrated_null_for_this_enrichment_statistic"
@@ -512,8 +579,12 @@
                   "no_pq_reason",
                   "leading_edge_side",
                   "leading_edge_convention",
-                  "coverage_disposition",
-                  "headline_rankable"
+                  "n_source_symbols",
+                  "global_target_source_coverage",
+                  "arm_evaluable_source_coverage",
+                  "arm_coverage_disposition",
+                  "arm_headline_rankable",
+                  "arm_undefined_reason"
                 ],
                 "type": "object"
               }
@@ -565,7 +636,14 @@
             ],
             "type": "object"
           },
-          "headline_rankable": {
+          "global_coverage_disposition": {
+            "enum": [
+              "rankable",
+              "descriptive_only_low_source_coverage",
+              "descriptive_only_source_coverage_unknown"
+            ]
+          },
+          "global_coverage_policy_passed": {
             "type": "boolean"
           },
           "n_dropped_unmappable": {
@@ -688,8 +766,8 @@
           "n_genes_in_readout_universe",
           "target_source_coverage",
           "readout_source_coverage",
-          "coverage_disposition",
-          "headline_rankable"
+          "global_coverage_disposition",
+          "global_coverage_policy_passed"
         ],
         "type": "object"
       },

@@ -133,6 +133,9 @@ NEGATIVE_DECLARATIONS = {
     "combined_objective_permitted": False,
     "evidence_lines_are_combined": False,
     "reliability_is_a_significance_test": False,
+    # A2: the pathway lane's ban on a COMBINED per-arm eligibility. The two arms are
+    # independent; there is no combined eligibility and no combined score.
+    "combined_arm_eligibility_permitted": False,
 }
 
 REQUIRED_FILES = ("temporal.parquet", "endpoints.parquet", "temporal_provenance.json")

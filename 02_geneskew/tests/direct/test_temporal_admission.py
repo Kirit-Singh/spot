@@ -405,7 +405,8 @@ class TestTheNegativeDeclarationIsExemptOnlyWhileItForbids:
         # thing. Each of these is a rule saying "this is forbidden".
         assert set(admission.NEGATIVE_DECLARATIONS) == {
             "combined_objective_permitted", "evidence_lines_are_combined",
-            "reliability_is_a_significance_test"}
+            "reliability_is_a_significance_test",
+            "combined_arm_eligibility_permitted"}
         assert all(v is False for v in admission.NEGATIVE_DECLARATIONS.values())
 
 

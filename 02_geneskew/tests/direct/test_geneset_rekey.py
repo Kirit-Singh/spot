@@ -295,60 +295,124 @@ class TestB1_TheTargetUniverseIsWhatEnrichmentRanks:
         assert m["two_universes_are_bound_separately"] is True
 
 
-class TestB4_CoverageIsGOVERNED_notMerelyDisclosed:
-    """Size is not coverage. A pathway retaining 0.25% of its genes must not rank."""
+class TestA2_GlobalCoverageIsNecessaryNeverSufficient:
+    """Size is not coverage, and GLOBAL coverage is not ARM coverage.
 
-    def test_the_policy_is_prospective_and_named(self):
-        assert genesets.COVERAGE_POLICY_ID.endswith("prospective.v1")
+    A pathway can clear the global bar and still have exactly ONE of its members in the
+    ranking an arm actually produced. An enrichment computed on one gene is perfectly well
+    defined and is not a statement about a pathway.
+    """
+
+    def test_the_policy_is_prospective_and_names_BOTH_thresholds(self):
+        assert genesets.COVERAGE_POLICY_ID.endswith("prospective.v2")
         assert genesets.MIN_SOURCE_COVERAGE == 0.50
+        assert genesets.MIN_ARM_RANKED_MEMBERS == 3
         assert genesets.COVERAGE_NAMESPACE == "perturbation_target"
 
-    def test_a_well_covered_pathway_is_RANKABLE(self):
+    def test_global_coverage_is_a_policy_PASS_not_a_licence_to_rank(self):
         d = genesets.coverage_disposition(0.9)
-        assert d["coverage_disposition"] == genesets.DISPOSITION_RANKABLE
-        assert d["headline_rankable"] is True
+        assert d["global_coverage_disposition"] == genesets.DISPOSITION_RANKABLE
+        assert d["global_coverage_policy_passed"] is True
+        # it deliberately does NOT publish a `headline_rankable`: that is per-arm
+        assert "headline_rankable" not in d
 
-    def test_a_low_coverage_pathway_is_DESCRIPTIVE_ONLY(self):
+    def test_a_low_coverage_pathway_fails_the_global_policy(self):
         d = genesets.coverage_disposition(0.0025)      # the reviewer's 0.25% case
-        assert d["coverage_disposition"] == genesets.DISPOSITION_DESCRIPTIVE_ONLY
-        assert d["headline_rankable"] is False
+        assert d["global_coverage_disposition"] == genesets.DISPOSITION_DESCRIPTIVE_ONLY
+        assert d["global_coverage_policy_passed"] is False
 
-    def test_exactly_at_the_threshold_is_rankable(self):
-        assert genesets.coverage_disposition(0.50)["headline_rankable"] is True
+    def test_exactly_at_the_global_threshold_passes(self):
+        assert genesets.coverage_disposition(0.50)["global_coverage_policy_passed"] is True
 
-    def test_UNKNOWN_coverage_is_descriptive_only_never_rankable(self):
-        # a bundle that will not say how much of a pathway it kept has not earned a rank
+    def test_UNKNOWN_coverage_never_passes(self):
         d = genesets.coverage_disposition(None)
-        assert d["coverage_disposition"] == genesets.DISPOSITION_UNKNOWN_COVERAGE
-        assert d["headline_rankable"] is False
+        assert d["global_coverage_disposition"] == genesets.DISPOSITION_UNKNOWN_COVERAGE
+        assert d["global_coverage_policy_passed"] is False
 
-    def test_a_descriptive_only_set_is_STILL_COMPUTED_and_EMITTED(self, rekeyed):
-        # it is not deleted: a pathway missing from the table is indistinguishable from
-        # one that was tested and found nothing.
-        args, _, _, _ = rekeyed
-        res = run_pathway.build_pathway(args)
-        with open(os.path.join(res["out_dir"], "pathway.json")) as fh:
-            doc = json.load(fh)
-        low = [r for r in doc["records"] if not r["headline_rankable"]]
-        assert low, "the fixture must exercise the descriptive-only branch"
-        for r in low:
-            assert r["coverage_disposition"].startswith("descriptive_only")
-            assert "enrichment" in r and "convergence" in r     # still computed
 
-    def test_the_disposition_reaches_the_enrichment_block(self, rekeyed):
+class TestA2_PerArmEligibility:
+    """arm_headline_rankable = global-policy AND n_hits>=3 AND enrichment defined."""
+
+    def test_the_audited_case_4_global_1_arm_evaluable_is_NOT_rankable(self):
+        # global coverage 4/6 = 0.67 PASSES the global bar; only ONE member is in this
+        # arm's ranking. It was reported testable, headline-rankable and enriched at 1.0.
+        a = genesets.arm_disposition(global_policy_passed=True, n_hits_in_ranking=1,
+                                     enrichment_value=1.0, n_source_symbols=6)
+        assert a["arm_headline_rankable"] is False
+        assert a["arm_coverage_disposition"] == genesets.DISPOSITION_THIN_ARM
+        assert a["arm_evaluable_source_coverage"] == pytest.approx(1 / 6, abs=1e-6)
+
+    def test_EXACTLY_three_arm_evaluable_members_IS_rankable_inclusive(self):
+        a = genesets.arm_disposition(global_policy_passed=True, n_hits_in_ranking=3,
+                                     enrichment_value=0.4, n_source_symbols=6)
+        assert a["arm_headline_rankable"] is True
+        assert a["arm_coverage_disposition"] == genesets.DISPOSITION_RANKABLE
+
+    def test_two_arm_evaluable_members_is_a_THIN_ARM(self):
+        a = genesets.arm_disposition(global_policy_passed=True, n_hits_in_ranking=2,
+                                     enrichment_value=0.4, n_source_symbols=6)
+        assert a["arm_headline_rankable"] is False
+        assert a["arm_coverage_disposition"] == genesets.DISPOSITION_THIN_ARM
+
+    def test_a_thick_arm_that_FAILS_global_coverage_is_still_not_rankable(self):
+        a = genesets.arm_disposition(global_policy_passed=False, n_hits_in_ranking=50,
+                                     enrichment_value=0.9, n_source_symbols=2000)
+        assert a["arm_headline_rankable"] is False
+        assert a["arm_coverage_disposition"] == genesets.DISPOSITION_DESCRIPTIVE_ONLY
+
+    def test_an_UNDEFINED_enrichment_is_never_rankable_whatever_the_coverage(self):
+        a = genesets.arm_disposition(global_policy_passed=True, n_hits_in_ranking=10,
+                                     enrichment_value=None, n_source_symbols=12)
+        assert a["arm_headline_rankable"] is False
+        assert a["arm_coverage_disposition"] == genesets.DISPOSITION_UNDEFINED
+
+    def test_UNKNOWN_global_coverage_is_never_rankable(self):
+        a = genesets.arm_disposition(global_policy_passed=None, n_hits_in_ranking=10,
+                                     enrichment_value=0.5, n_source_symbols=None)
+        assert a["arm_headline_rankable"] is False
+        assert a["arm_coverage_disposition"] == genesets.DISPOSITION_UNKNOWN_COVERAGE
+
+    def test_the_arms_are_INDEPENDENT_no_combined_eligibility(self, rekeyed):
+        from direct import pathway
+        m = pathway.method_block(None)
+        assert m["arm_eligibility_is_independent_per_arm"] is True
+        assert m["combined_arm_eligibility_permitted"] is False
+
+    def test_every_arm_block_carries_the_full_per_arm_disposition(self, rekeyed):
         args, _, _, _ = rekeyed
         res = run_pathway.build_pathway(args)
         with open(os.path.join(res["out_dir"], "pathway.json")) as fh:
             doc = json.load(fh)
         for r in doc["records"]:
-            for arm_block in r["enrichment"].values():
-                assert arm_block["headline_rankable"] == r["headline_rankable"]
+            for arm in ("away_from_A", "toward_B"):
+                e = r["enrichment"][arm]
+                for field in ("n_ranked", "n_hits_in_ranking",
+                              "arm_evaluable_source_coverage",
+                              "arm_coverage_disposition", "arm_headline_rankable",
+                              "arm_undefined_reason"):
+                    assert field in e, f"{arm} missing {field}"
 
-    def test_the_policy_is_bound_into_the_method_hash(self):
-        from direct import pathway
-        m = pathway.method_block(None)
-        assert m["coverage_policy_id"] == genesets.COVERAGE_POLICY_ID
-        assert m["min_source_coverage"] == genesets.MIN_SOURCE_COVERAGE
+    def test_the_record_does_NOT_imply_both_arms_are_rankable(self, rekeyed):
+        args, _, _, _ = rekeyed
+        res = run_pathway.build_pathway(args)
+        with open(os.path.join(res["out_dir"], "pathway.json")) as fh:
+            doc = json.load(fh)
+        for r in doc["records"]:
+            # the record keeps GLOBAL coverage only; it publishes no record-level licence
+            assert "headline_rankable" not in r
+            assert "global_coverage_policy_passed" in r
+
+    def test_a_descriptive_only_set_is_STILL_COMPUTED_and_EMITTED(self, rekeyed):
+        args, _, _, _ = rekeyed
+        res = run_pathway.build_pathway(args)
+        with open(os.path.join(res["out_dir"], "pathway.json")) as fh:
+            doc = json.load(fh)
+        low = [r for r in doc["records"]
+               if not any(r["enrichment"][a]["arm_headline_rankable"]
+                          for a in ("away_from_A", "toward_B"))]
+        assert low, "the fixture must exercise the non-rankable branch"
+        for r in low:
+            assert "enrichment" in r and "convergence" in r      # still computed
 
 
 class TestTheLossIsRecordedNeverHidden:
@@ -369,7 +433,7 @@ class TestTheLossIsRecordedNeverHidden:
         assert s["n_genes_target"] == 0
         assert s["n_source_symbols"] == 4
         assert s["target_source_coverage"] == 0.0
-        assert s["headline_rankable"] is False
+        assert s["global_coverage_policy_passed"] is False
 
     def test_an_empty_set_that_EXPLAINS_NOTHING_is_still_refused(self, tmp_path):
         doc = {"schema_version": genesets.SCHEMA_VERSION,

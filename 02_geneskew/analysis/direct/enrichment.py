@@ -57,7 +57,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from . import config
+from . import config, genesets
 
 # v2, not v1: the leading edge is now direction-aware. A negative enrichment that used to
 # come back with an empty edge now names the members at the bottom that produced it, so
@@ -226,10 +226,21 @@ def enrich_arm(rows: list[dict[str, Any]], bundle: dict[str, Any],
             "n_genes_in_set": s["n_genes_target"],
             "n_genes_in_universe": s["n_genes_in_target_universe"],
             "coverage": s["coverage"],
+            "n_source_symbols": s["n_source_symbols"],
+            "global_target_source_coverage": s["target_source_coverage"],
             "testable": testable,
-            # B4: may a RANKING speak for this pathway? Decided by coverage, prospectively.
-            "coverage_disposition": s["coverage_disposition"],
-            "headline_rankable": s["headline_rankable"],
+            # A2: the GLOBAL disposition — necessary, never sufficient.
+            "global_coverage_disposition": s["global_coverage_disposition"],
+            "global_coverage_policy_passed": s["global_coverage_policy_passed"],
+            # ...and THIS ARM's own eligibility, computed on the members THIS ARM ranked.
+            # The arms are independent: no combined eligibility, no combined score.
+            "n_ranked": len(ranked),
+            **genesets.arm_disposition(
+                global_policy_passed=s["global_coverage_policy_passed"],
+                n_hits_in_ranking=result["n_hits_in_ranking"],
+                enrichment_value=result["enrichment_value"],
+                n_source_symbols=s["n_source_symbols"]),
+            "arm_undefined_reason": result["undefined_reason"],
             "inference_status": INFERENCE_STATUS,
             "no_pq_reason": NO_PQ_REASON,
             **result,

@@ -116,21 +116,52 @@ MAX_SET_SIZE = 500
 # GOVERNANCE threshold, not a significance one: nothing here is calibrated, and the
 # emitted disposition is a permission, never a p-value.
 # --------------------------------------------------------------------------- #
-COVERAGE_POLICY_ID = "spot.stage02.pathway.coverage_governance.prospective.v1"
+# --------------------------------------------------------------------------- #
+# A2 — THREE COVERAGE CONCEPTS, KEPT DISTINCT.
+#
+# They were collapsed into one number, and the collapse hid a real failure: a pathway can
+# pass a GLOBAL coverage bar and still have exactly ONE of its members in the ranking an
+# arm actually produced. An audit found a set with 4 global members and 1 arm-evaluable
+# member reported testable, headline-rankable, and enriched at 1.0. An enrichment computed
+# on one gene is perfectly well defined and is not a statement about a pathway.
+#
+#   1. SOURCE coverage        members that survived the frozen symbol->id mapping, over the
+#                             symbols the pathway originally named.
+#   2. GLOBAL TARGET coverage members present in the ALL-RELEASE perturbation-target
+#                             universe. A property of the pathway and the assay.
+#   3. ARM-EVALUABLE coverage members present in THIS arm's ranking at THIS condition,
+#                             after base QC. A property of the pathway, the assay, the
+#                             condition AND the arm — and the ONLY one the statistic was
+#                             actually computed over.
+#
+# Global coverage may NOT authorise a headline arm result. The arms are independent and
+# their eligibility is SEPARATE: there is no combined eligibility and no combined score.
+#
+# FROZEN BEFORE ANY SCORE WAS INSPECTED:
+#     MIN_SOURCE_COVERAGE    = 0.50   a pathway must retain half the genes it is named for
+#     MIN_ARM_RANKED_MEMBERS = 3      ...and an ARM must actually rank three of them
+# --------------------------------------------------------------------------- #
+COVERAGE_POLICY_ID = "spot.stage02.pathway.coverage_governance.prospective.v2"
 MIN_SOURCE_COVERAGE = 0.50
+MIN_ARM_RANKED_MEMBERS = 3
+
 DISPOSITION_RANKABLE = "rankable"
 DISPOSITION_DESCRIPTIVE_ONLY = "descriptive_only_low_source_coverage"
 DISPOSITION_UNKNOWN_COVERAGE = "descriptive_only_source_coverage_unknown"
+DISPOSITION_THIN_ARM = "descriptive_only_thin_arm"
+DISPOSITION_UNDEFINED = "undefined"
 DISPOSITIONS = (DISPOSITION_RANKABLE, DISPOSITION_DESCRIPTIVE_ONLY,
-                DISPOSITION_UNKNOWN_COVERAGE)
-COVERAGE_NAMESPACE = "perturbation_target"   # the space the statistic is computed in
+                DISPOSITION_UNKNOWN_COVERAGE, DISPOSITION_THIN_ARM,
+                DISPOSITION_UNDEFINED)
+COVERAGE_NAMESPACE = "perturbation_target"
 
 
 def coverage_disposition(target_source_coverage: Optional[float]) -> dict[str, Any]:
-    """May a ranking speak for this pathway? Decided by coverage, before any result.
+    """The GLOBAL disposition: a property of the pathway and the assay, not of an arm.
 
-    Unknown coverage is DESCRIPTIVE-ONLY, not rankable. A bundle that cannot say how much
-    of a pathway it retained has not earned a headline rank by failing to answer.
+    NECESSARY for a headline arm result and never SUFFICIENT — see ``arm_disposition``.
+    Unknown coverage is DESCRIPTIVE-ONLY: a bundle that cannot say how much of a pathway it
+    retained has not earned a rank by failing to answer.
     """
     if target_source_coverage is None:
         disposition = DISPOSITION_UNKNOWN_COVERAGE
@@ -139,36 +170,72 @@ def coverage_disposition(target_source_coverage: Optional[float]) -> dict[str, A
     else:
         disposition = DISPOSITION_DESCRIPTIVE_ONLY
     return {
-        "coverage_disposition": disposition,
-        "headline_rankable": disposition == DISPOSITION_RANKABLE,
+        "global_coverage_disposition": disposition,
+        # NECESSARY, NOT SUFFICIENT. Deliberately NOT called `headline_rankable`: that name
+        # read as a licence to rank, and a record-level licence would imply BOTH arms.
+        "global_coverage_policy_passed": disposition == DISPOSITION_RANKABLE,
         "coverage_policy_id": COVERAGE_POLICY_ID,
         "min_source_coverage": MIN_SOURCE_COVERAGE,
+        "min_arm_ranked_members": MIN_ARM_RANKED_MEMBERS,
         "coverage_namespace": COVERAGE_NAMESPACE,
+    }
+
+
+def arm_disposition(*, global_policy_passed: Optional[bool], n_hits_in_ranking: int,
+                    enrichment_value: Optional[float],
+                    n_source_symbols: Optional[int]) -> dict[str, Any]:
+    """May a ranking speak for this pathway IN THIS ARM? Per arm, independently.
+
+        arm_headline_rankable = global-coverage-policy
+                                AND n_hits_in_ranking >= MIN_ARM_RANKED_MEMBERS
+                                AND enrichment_value is defined
+
+    The threshold is INCLUSIVE: exactly three arm-evaluable members is enough. Three is the
+    smallest number this lane will call a pathway result, and a rule that excluded its own
+    boundary would be a different rule from the one that was frozen.
+    """
+    defined = enrichment_value is not None
+    thick = n_hits_in_ranking >= MIN_ARM_RANKED_MEMBERS
+    passed = bool(global_policy_passed) and thick and defined
+
+    # Precedence: an undefined statistic is the strongest statement about what is not
+    # known; then a property of the PATHWAY (coverage); then a property of THIS ARM.
+    if not defined:
+        disposition = DISPOSITION_UNDEFINED
+    elif global_policy_passed is None:
+        disposition = DISPOSITION_UNKNOWN_COVERAGE
+    elif not global_policy_passed:
+        disposition = DISPOSITION_DESCRIPTIVE_ONLY
+    elif not thick:
+        disposition = DISPOSITION_THIN_ARM
+    else:
+        disposition = DISPOSITION_RANKABLE
+
+    return {
+        "n_hits_in_ranking": n_hits_in_ranking,
+        # THE COVERAGE THE STATISTIC WAS ACTUALLY COMPUTED OVER — not the global one.
+        "arm_evaluable_source_coverage": (
+            round(n_hits_in_ranking / n_source_symbols, 6) if n_source_symbols else None),
+        "arm_coverage_disposition": disposition,
+        "arm_headline_rankable": passed,
+        "min_arm_ranked_members": MIN_ARM_RANKED_MEMBERS,
     }
 
 
 # --------------------------------------------------------------------------- #
 # THE UNIVERSE-BINDING GATES (A1). NAMED, and FAIL-CLOSED.
 #
-# An enrichment statistic is a statement about a set RELATIVE TO a background. The same
-# set against a different background is a different number. So the bundle must DECLARE the
-# two universes it was built against, and both declarations are COMPARED to the universes
-# this run actually holds.
+# An enrichment statistic is a statement about a set RELATIVE TO a background. The same set
+# against a different background is a different number. So the bundle DECLARES the two
+# universes it was built against, and both declarations are COMPARED to the universes this
+# run actually holds.
 #
-# The retired code was fail-OPEN twice over:
-#   * the readout check ran only ``if declared is not None and runtime is not None`` — a
-#     bundle that declared nothing sailed through;
-#   * the target universe was not checked AT ALL; and
-#   * the emitted bundle carried the CALLER'S value, so a false declaration was silently
-#     OVERWRITTEN with the truth and the lie left no trace.
-#
-# An independent audit forged ``target_universe_sha256 = "0"*64`` and the loader admitted
-# it, then reported the correct hash back. That is worse than admitting the forgery: it
-# manufactured evidence that the forgery was never there.
-#
-# Now: a bundle that does not declare a universe the run supplies is REFUSED; a declaration
-# that does not match is REFUSED at a gate named for WHICH universe failed; and the bundle
-# carries the DECLARED value — which, by the time it is carried, has been proven equal.
+# The retired code was fail-OPEN twice over: the readout check ran only when BOTH sides
+# were present, so a bundle declaring nothing sailed through; the target universe was not
+# checked at all; and the emitted bundle carried the CALLER'S value, so a false declaration
+# was silently OVERWRITTEN with the truth. An audit forged target_universe_sha256="0"*64,
+# the loader admitted it, and then reported the CORRECT hash back — manufacturing evidence
+# that the forgery was never there.
 # --------------------------------------------------------------------------- #
 GATE_EFFECT_UNIVERSE = "gene_set_bundle_effect_universe_binding_mismatch"
 GATE_TARGET_UNIVERSE = "gene_set_bundle_target_universe_binding_mismatch"
@@ -179,9 +246,8 @@ UNIVERSE_GATES = (GATE_EFFECT_UNIVERSE, GATE_TARGET_UNIVERSE,
 
 # The TARGET universe is NOT homogeneous Ensembl. The release perturbs 11,522 Ensembl
 # targets and 4 SYMBOL targets (MTRNR2L1, MTRNR2L4, MTRNR2L8, OCLM) whose obs.target_contrast
-# IS the symbol. Their identity is the released key, and an Ensembl id is NEVER inferred
-# from it — the release publishes ENSG-looking estimate keys for three of them that belong
-# to DIFFERENT genes. The mixed namespace is declared, carried, and preserved.
+# IS the symbol. An Ensembl id is NEVER inferred from the released estimate key — the
+# release publishes ENSG-looking keys for three of them that belong to DIFFERENT genes.
 TARGET_ID_NAMESPACE = "mixed_ensembl_gene_id_and_released_gene_symbol"
 SYMBOL_TARGETS_PRESERVED = ("MTRNR2L1", "MTRNR2L4", "MTRNR2L8", "OCLM")
 NEVER_INFER_ENSEMBL_FROM_RELEASED_KEY = True
@@ -446,11 +512,14 @@ def load(path: Optional[str], effect_universe: Optional[list[str]] = None,
         # B4: the PROSPECTIVE coverage governance, frozen before any result.
         "coverage_policy_id": COVERAGE_POLICY_ID,
         "min_source_coverage": MIN_SOURCE_COVERAGE,
+        "min_arm_ranked_members": MIN_ARM_RANKED_MEMBERS,
         "coverage_namespace": COVERAGE_NAMESPACE,
-        "n_headline_rankable_sets": sum(1 for v in sets.values()
-                                        if v["headline_rankable"]),
-        "n_descriptive_only_sets": sum(1 for v in sets.values()
-                                       if not v["headline_rankable"]),
+        # A GLOBAL count. It is NOT a count of headline-rankable arm results — that is a
+        # per-arm question and it cannot be answered here, before any arm has been ranked.
+        "n_global_coverage_policy_passed": sum(
+            1 for v in sets.values() if v["global_coverage_policy_passed"]),
+        "n_global_coverage_policy_failed": sum(
+            1 for v in sets.values() if not v["global_coverage_policy_passed"]),
         "min_set_size": MIN_SET_SIZE,
         "max_set_size": MAX_SET_SIZE,
         "sets": sets,
