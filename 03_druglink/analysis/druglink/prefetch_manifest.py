@@ -34,6 +34,7 @@ import json
 import os
 from typing import Any, Mapping
 
+from . import assertions_v2 as av2
 from .hashing import canonical_json, content_hash, file_sha256
 from .universe_rows import AdmittedStore
 
@@ -43,6 +44,12 @@ ARTIFACT_CLASS = "prefetch_only"          # NOT a Stage-3 artifact class. Delibe
 DIRECT_LANE_PREFIX = "direct|"
 
 PROJECTION_SCHEMA = "spot.stage02_display_projection.v2"
+
+# A lookup key is STATED or it is explicitly NOT AVAILABLE. It is never a null wearing a key's
+# name — the first version of this manifest emitted source_locator=None on all 455 rows while the
+# handoff claimed every row carried an exact public-source lookup key.
+LOOKUP_KEY_STATED = "stated"
+LOOKUP_KEY_NOT_AVAILABLE = "not_available"
 
 
 class PrefetchError(ValueError):
@@ -179,23 +186,53 @@ def build(*, projection_path: str, store: AdmittedStore, created_at: str) -> dic
     typed = [(t, _resolve(store, t)[0]["target_id_namespace"]) for t in resolved]
     edges = ur.rankable_edges(ur.drug_edges_for_targets(store, typed))
 
+    binding = store.release_binding if hasattr(store, "release_binding") else {}
+    if not binding:
+        from . import universe_edges as ue
+        binding = ue._release_binding(store) if hasattr(ue, "_release_binding") else {}
+
+    n_no_locator = 0
     for e in edges:
+        # THE LOOKUP KEY, TRUTHFULLY. `assertions_v2.source_locator` builds
+        # `chembl:<release>:drug_mechanism/<mec_id>` from the store's OWN bound provenance, and
+        # REFUSES rather than emitting a locator that resolves to nothing. If it cannot be built,
+        # we say so — `lookup_key_status: not_available` — and W8 falls back to the
+        # molecule_chembl_id, which IS an exact machine lookup key. A null is never dressed as a
+        # key: the first version of this manifest emitted source_locator=None on all 455 rows
+        # while the handoff claimed every row carried an exact lookup key. It did not.
+        try:
+            locator = av2.source_locator(e, binding)
+            status = LOOKUP_KEY_STATED
+        except av2.AssertionV2Error:
+            locator = None
+            status = LOOKUP_KEY_NOT_AVAILABLE
+            n_no_locator += 1
+
         records.append({
             # typed target identity — resolved BY THE STORE
             "target_id": e["target_id"],
             "target_id_namespace": e["target_id_namespace"],
             # source record identity
-            "source_record_id": e.get("source_record_id") or e.get("edge_id"),
-            "mec_id": e.get("mec_id") or e.get("source_row_id"),
-            "assertion_lane": e.get("assertion_lane") or e.get("lane"),
-            # drug identity
+            "source_record_id": e.get("edge_id"),
+            "mec_id": e.get("source_row_id"),
+            "assertion_lane": e.get("lane"),
+            # drug identity — molecule_chembl_id is the EXACT MACHINE LOOKUP KEY
             "molecule_chembl_id": e.get("molecule_chembl_id"),
             "target_chembl_id": e.get("target_chembl_id"),
-            # THE EXACT PUBLIC-SOURCE LOOKUP KEY — what W8 fetches, and where from
-            "source_locator": e.get("source_locator"),
-            "source_release": e.get("source_release"),
+            "molecule_pref_name": e.get("pref_name"),          # SOURCE-VERBATIM name
+            "molecule_type": e.get("molecule_type"),
+            "inchikey": e.get("inchikey"),
+            # the public-source coordinates, or an explicit statement that there are none
+            "source_locator": locator,
+            "lookup_key_status": status,
+            "machine_lookup_key": e.get("molecule_chembl_id"),
+            "machine_lookup_key_kind": "molecule_chembl_id",
+            "source_release": binding.get("chembl_release"),
+            "mechanism_refs": list(e.get("mechanism_refs") or []),
+            "cross_ref_provenance": dict(e.get("cross_ref_provenance") or {}),
             # verbatim, uninterpreted. This manifest asserts no direction.
             "action_type_source": e.get("action_type_source"),
+            "mechanism_of_action": e.get("mechanism_of_action"),
         })
 
     # DETERMINISTIC ORDER, and an order that carries NO CLAIM: by identity, not by any value.
@@ -232,9 +269,25 @@ def build(*, projection_path: str, store: AdmittedStore, created_at: str) -> dic
             # the difference between two other numbers.
             "n_targets_with_prefetch_records": len({(r["target_id_namespace"], r["target_id"])
                                                     for r in records}),
+            "n_targets_with_no_qualifying_drug_evidence_in_the_bound_store":
+                len(resolved) - len({r["target_id"] for r in records}),
             "n_distinct_molecules": len({r["molecule_chembl_id"] for r in records}),
+            "n_records_with_a_stated_source_locator":
+                sum(1 for r in records if r["lookup_key_status"] == LOOKUP_KEY_STATED),
+            "n_records_with_no_source_locator": n_no_locator,
         },
         # ABSENCE IS STATED, never a silent drop: a target nobody can fetch is reported, not lost.
+        # PHRASING MATTERS. "no qualifying drug evidence in the bound store" — NOT "has no drug".
+        # The store is ChEMBL 37 filtered to the general-gene rankable lane; a target absent from
+        # it may still have a drug in a source this store does not bind, in a lane it excludes, or
+        # in a later release. Saying "has no drug" would state a fact about the WORLD when we only
+        # have a fact about THIS STORE, and a reader would stop looking.
+        "absence_means": ("no QUALIFYING drug evidence in the BOUND store "
+                          "(ChEMBL 37, general-gene rankable lane) — NOT 'this target has no "
+                          "drug'. A target may carry evidence in a source this store does not "
+                          "bind, in a lane it excludes, or in a later release."),
+        "targets_with_no_qualifying_drug_evidence_in_the_bound_store": len(resolved) - len(
+            {r["target_id"] for r in records}),
         "not_in_admitted_universe": sorted(not_in_universe),
         "ambiguous_identity": sorted(ambiguous, key=lambda a: str(a["target_id"])),
         "records": records,
