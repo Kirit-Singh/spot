@@ -132,17 +132,25 @@ def load_direct_bundle(bundle_dir: str, *, expect_condition: str,
     if not os.path.exists(ver_path):
         raise DirectSourceError("MISSING_W10", f"no independent admission at {ver_path!r}")
     ver = _read_json(ver_path, "MISSING_W10")
-    # Key on the verification schema's own admission flags, not a guessed verdict string: the
-    # producer ships a placeholder (admitted=false, verifier_id=None, verdict=PENDING); only an
-    # INDEPENDENT verifier that did not produce these bytes may set admitted=true.
+    # The independent admission arrives in one of two shapes, and BOTH are accepted: the Direct
+    # lane's REAL external verification (schema spot.stage02_direct_arm_bundle_verification.v1 —
+    # verdict "ADMIT", a verifier_id, independent_of_generator, n_failed 0, and NO admitted flag)
+    # and the flag style (admitted=true). Either way the admission must be POSITIVE, INDEPENDENT
+    # and clean of gate failures — never the producer's own pending/preflight placeholder, a
+    # self-admission, or a REFUSE.
     verdict = str(ver.get("verdict") or "")
-    if (ver.get("admitted") is not True or ver.get("self_admitted") is True
-            or not ver.get("verifier_id") or verdict == PENDING_VERDICT):
+    admitted = verdict.upper() == "ADMIT" or ver.get("admitted") is True
+    independent = (bool(ver.get("verifier_id")) and ver.get("self_admitted") is not True
+                   and ver.get("independent_of_generator") is not False
+                   and ver.get("is_an_external_admission") is not False)
+    clean = (ver.get("n_failed") in (0, None)) and not ver.get("failed_gates")
+    refused = verdict == PENDING_VERDICT or verdict.upper() in ("REFUSE", "REJECT")
+    if refused or not (admitted and independent and clean):
         raise DirectSourceError(
             "MISSING_W10", f"the Direct bundle at {ver_path!r} is not independently admitted "
-            f"(admitted={ver.get('admitted')!r}, self_admitted={ver.get('self_admitted')!r}, "
-            f"verifier_id={ver.get('verifier_id')!r}, verdict={verdict!r}) — a temporal run may "
-            "not stand on a Direct endpoint no independent lane admitted")
+            f"(verdict={verdict!r}, verifier_id={ver.get('verifier_id')!r}, "
+            f"n_failed={ver.get('n_failed')!r}, self_admitted={ver.get('self_admitted')!r}) — a "
+            "temporal run may not stand on a Direct endpoint no independent lane admitted")
 
     rows = _read_rows(os.path.join(bundle_dir, ROWS_FILE))
     return {

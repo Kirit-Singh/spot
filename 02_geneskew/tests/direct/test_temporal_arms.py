@@ -1966,6 +1966,38 @@ class TestProductionCLIFromDirectBundles:
             src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=w10)
         assert e.value.gate == "WRONG_ENV_LOCK"
 
+    def test_the_REAL_direct_verification_ADMIT_schema_is_accepted(self, tmp_path):
+        # The actual W10 external admission (spot.stage02_direct_arm_bundle_verification.v1)
+        # carries verdict "ADMIT", a verifier_id, independent_of_generator and n_failed=0 —
+        # and NO 'admitted' flag. The gate once keyed on that flag and would have wrongly
+        # refused every real ADMIT; it must accept the verdict form.
+        import json as _json
+
+        from direct.temporal.arms import arm_direct_source as src
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest")
+        open(w10, "w").write(_json.dumps({
+            "schema_version": "spot.stage02_direct_arm_bundle_verification.v1",
+            "verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
+            "independent_of_generator": True, "verdict": "ADMIT",
+            "n_failed": 0, "failed_gates": [], "recompute_mode": "all"}))
+        loaded = src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=w10)
+        assert loaded["w10_verdict"] == "ADMIT"
+
+    def test_ATTACK_a_direct_verification_REFUSE_is_refused(self, tmp_path):
+        # a real report that FAILED a gate (verdict REFUSE, n_failed>0) is not an admission.
+        import json as _json
+
+        from direct.temporal.arms import arm_direct_source as src
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest")
+        open(w10, "w").write(_json.dumps({
+            "schema_version": "spot.stage02_direct_arm_bundle_verification.v1",
+            "verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
+            "independent_of_generator": True, "verdict": "REFUSE",
+            "n_failed": 1, "failed_gates": ["gate_recompute"]}))
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=w10)
+        assert e.value.gate == "MISSING_W10"
+
 
 # =========================================================================== #
 # 11. THE W18 ADAPTER BOUNDARY
