@@ -10,7 +10,7 @@ fixed float rounding, timestamps/labels/machine-local paths excluded).
 
 | file | what it is |
 |---|---|
-| `spot.stage03_drug_candidate_set.v1.schema.json` | **PROVISIONAL, ADAPTER-BOUND.** What Stage 4 is willing to *consume*. Stage 3 has not landed (`03_druglink/` is scaffolding), so this was authored unilaterally by Stage 4 and is **not agreed with Stage 3**. Carries `x-spot-stage3-contract-status`. Expect reconciliation via an adapter + a version bump. |
+| `spot.stage03_drug_candidate_set.v1.schema.json` | **ADAPTER-BOUND.** The Stage-4-internal normalized form — what Stage 4 consumes, *not* Stage 3's wire format (that is `spot.stage03_drug_annotation.v1`). Real Stage-3 bundles are admitted through `analysis/stage3_annotation.py` behind two gates: a byte-for-byte restatement, **and** Stage 3's own `verifier.verify_stage3` out-of-process. Carries `x-spot-stage3-contract-status`. |
 | `spot.stage04_evidence_inputs.v2.schema.json` | **Current.** The evidence input records, one row per actual observation, each bound to a source response hash — plus the v2 acquisition contract (see below). |
 | `spot.stage04_evidence_tables.v2.schema.json` | **Current.** The parquet tables: exact column order, dtypes and sort key. Row/column order is part of the contract — `content_sha256` is taken over the canonical rows in this shape. |
 | `spot.stage04_evidence_inputs.v1.schema.json` | **FROZEN.** Superseded by v2, never regenerated, bytes pinned by a test. |

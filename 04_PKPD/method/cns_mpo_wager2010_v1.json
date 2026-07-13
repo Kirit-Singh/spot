@@ -163,49 +163,10 @@
         "T0_hbd": 1.0,
         "T0_pka_most_basic": 1.0,
         "cns_mpo_published": 5.8
-      },
-      {
-        "drug": "zolpidem",
-        "T0_clogp": 0.99,
-        "T0_clogd_74": 0.57,
-        "T0_tpsa": 0.88,
-        "T0_mw": 1.0,
-        "T0_hbd": 1.0,
-        "T0_pka_most_basic": 1.0,
-        "cns_mpo_published": 5.4
-      },
-      {
-        "drug": "paroxetine",
-        "T0_clogp": 0.38,
-        "T0_clogd_74": 1.0,
-        "T0_tpsa": 0.99,
-        "T0_mw": 1.0,
-        "T0_hbd": 0.83,
-        "T0_pka_most_basic": 0.0,
-        "cns_mpo_published": 4.2
-      },
-      {
-        "drug": "risperidone",
-        "T0_clogp": 1.0,
-        "T0_clogd_74": 0.86,
-        "T0_tpsa": 1.0,
-        "T0_mw": 0.64,
-        "T0_hbd": 1.0,
-        "T0_pka_most_basic": 1.0,
-        "cns_mpo_published": 5.5
-      },
-      {
-        "drug": "methylphenidate",
-        "T0_clogp": 1.0,
-        "T0_clogd_74": 1.0,
-        "T0_tpsa": 0.92,
-        "T0_mw": 1.0,
-        "T0_hbd": 0.83,
-        "T0_pka_most_basic": 0.0,
-        "cns_mpo_published": 4.8
       }
     ],
-    "not_a_spot_claim": "These rows are Wager et al.'s published values for those compounds. They are used ONLY as arithmetic goldens for the scoring engine. Spot makes no brain-permeability, safety or suitability claim about any of these drugs."
+    "not_a_spot_claim": "These rows are Wager et al.'s published values for those compounds. They are used ONLY as arithmetic goldens for the scoring engine. Spot makes no brain-permeability, safety or suitability claim about any of these drugs.",
+    "subset_rationale": "The MINIMUM non-redundant arithmetic vector, not the published table. Wager 2010 is ACS-copyrighted and not in the PMC open-access subset, so spot encodes only what it independently needs to validate the arithmetic. Alprazolam alone exercises every property of the aggregation: a fractional T0 (0.75) from linear interpolation, the equal-weight sum over all six inputs (5.75), and publication rounding at a .x5 boundary (5.75 -> 5.8). The other four published rows re-exercise the same three facts and add no independent check; none of the five distinguishes ROUND_HALF_UP from half-to-even, which is pinned directly in tests/test_cnsmpo.py instead."
   },
   "prohibited_interpretations": [
     "CNS MPO >= 4 does not mean the drug is brain-penetrant.",

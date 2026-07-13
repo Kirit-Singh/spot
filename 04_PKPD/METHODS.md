@@ -385,21 +385,33 @@ the independent source audit recorded.
 
 ## 8. Limitations, and what is *not* done
 
-1. **Fixture-only. No real result.** Every candidate is a labelled `FIXTURE-*`; every
-   evidence record is synthetic and labelled. **No real drug is asserted to be safe,
-   brain-permeable, NEBPI-classified or clinically suitable.** Nothing here is production-ready.
-2. **Stage 3 has not landed.** `03_druglink/` is scaffolding and emits nothing. The Stage-3
-   contract here is **provisional and adapter-bound**, authored unilaterally by Stage 4 and
-   **not agreed with Stage 3** (`stage3_contract_status` is stamped into every artifact).
-   Expected reconciliation: a Stage-3 → Stage-4 **adapter** plus a schema version bump — *not*
-   a silent widening of these models.
-3. **No real-source evidence loader is wired.** Passing a real `--candidate-set` validates
-   against the provisional contract and then **refuses** (`no_real_evidence_adapters_wired`):
-   an empty evidence lane is not a result. Fetching real DailyMed / openFDA / literature
-   records requires independent review first.
-4. **Fail-closed gates.** The production pointer is never written (fixture inputs, fixture
-   sources, research-only namespace, or simply "no real Stage-3 artifact yet"). `selection.json`
-   is always `no_selection_emitted`. **There is no `--force`.**
+The machinery is wired; the *result* is not. Those are different sentences, and conflating them
+is how a reader is told the wrong thing in either direction.
+
+**What IS wired** — and therefore what a reviewer may hold this stage to:
+
+- **Stage-3 → Stage-4 admission**, through **two gates**: Stage 4 restates the bundle
+  byte-for-byte, *and* Stage 3's own `verifier.verify_stage3` must pass **out-of-process**.
+  Schema-valid is not admitted. The adapter is `analysis/stage3_annotation.py`, and
+  `stage3_contract_status` is stamped into every artifact.
+- **Public acquisition adapters** — PubChem, RxNorm, DailyMed, openFDA. Offline unless
+  `--allow-network`; raw bytes cached outside the tree, addressed by SHA-256.
+- **The evidence contract**, v1 (frozen) and v2 (acquisition), and an **independent verifier**
+  that reconstructs every derived claim from the release alone.
+
+**What is NOT done, and is the honest limit of this stage:**
+
+1. **No selection-specific real run. No real result.** Every candidate in the test corpus is a
+   labelled `FIXTURE-*`. **No real drug is asserted to be safe, brain-permeable,
+   NEBPI-classified or clinically suitable**, and none is ranked. A real Stage-4 result is gated
+   on an externally admitted real Stage-3 **v2** bundle.
+2. **No public release.** Nothing here is published or production-advertised.
+3. **Fail-closed gates.** The production pointer is never written (fixture inputs, fixture
+   sources, research-only namespace, or no admitted real Stage-3 artifact). `selection.json` is
+   always `no_selection_emitted`. **There is no `--force`.**
+4. **A screen is not proof.** CNS-MPO is a physicochemical heuristic, not measured CNS exposure;
+   NEBPI classes rest on the evidence actually acquired, and absent evidence stays
+   `not_evaluated` rather than becoming a favourable reading.
 5. **There is no end-to-end golden, and the Wager-2016 row is not one.** No bytes of the 2016
    article were ever acquired or hashed (ACS 403; not in PMC), so it is `not_acquired` and
    nothing is validated against it. The 3.7/2.7/90/375/1/9 → 4.5 row is an internal

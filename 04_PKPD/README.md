@@ -69,7 +69,7 @@ analysis/   the engine — one purpose per module, every file < 500 lines
 method/     source-bound method parameters: the published numbers live here, not in code,
             so editing one moves the method hash and invalidates every cached scorecard set
 schemas/    generated JSON Schema + parquet table contracts (a test guards against drift)
-tests/      1244 tests, no network. tests/fixtures/ holds labelled synthetic public-shaped records
+tests/      the suite; no network. tests/fixtures/ holds labelled synthetic public-shaped records
 outputs/    <scorecard_set_id>/ — 19 artifacts (v1) / 21 (v2), written atomically (gitignored)
 ```
 
@@ -111,12 +111,27 @@ python -m analysis.run_acquire --stage3-bundle <dir> --run-root <dir> \
 ```bash
 cd 04_PKPD
 python -m analysis.run_stage4 --fixtures --outputs-root outputs   # fixture smoke run
-python -m pytest tests/ -q                                        # no network
+python -m pytest tests/ -q                                        # the suite; no network
 python -m analysis.schemas_export                                 # regenerate schemas
 
 # one bounded live probe (TEMODAR/temozolomide — a reference probe, never a candidate)
 SPOT_STAGE4_LIVE=1 SPOT_STAGE4_RUN_ROOT=/tmp/spot-live pytest tests/test_live_reference_smoke.py
 ```
+
+**Green means exit status 0, not a number.** The suite is the gate; a test count in a README is
+stale the commit after it is written, and a stranger cannot tell a dropped test from a deleted
+one. Run it and read the exit code:
+
+```bash
+python -m pytest tests/ -q       ; echo "exit=$?"   # 0 = green
+python -m ruff check analysis/ verifier/ tests/     # 0 = clean
+python -m mypy --ignore-missing-imports analysis/ verifier/
+python -m compileall -q analysis/ verifier/ tests/
+python -m verifier.verify_stage4 <release-dir>      # 0 = the release verifies
+```
+
+Skips are expected on a bare checkout and each one names the cache it wants (below); a skip is
+never a pass.
 
 **Tests that read real public bytes are SUPPLIED, never committed.** The bytes are public but
 are not redistributed here (ChEMBL CC BY-SA 3.0, UniProt CC BY 4.0 — see

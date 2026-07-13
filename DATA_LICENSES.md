@@ -18,9 +18,14 @@ cached outside the working tree under the caller's run root, addressed by SHA-25
 cache inside the tree, and `04_PKPD/tests/test_release_hygiene_scan.py` fails the build if a
 response payload is ever tracked.
 
-**Intended use:** academic / non-commercial (e.g. the Life Sciences hackathon). Not every source
-below grants blanket reuse — the tables say so per source rather than averaging them into one
-claim.
+**There is no project-wide use restriction, because there cannot be one.** Reuse follows **each
+row's own licence and terms**. They genuinely differ, and flattening them into a single blanket
+label was the confusion the audit flagged: one label at once over-restricts the CC0 and CC BY
+sources and under-states the share-alike and no-blanket-licence ones.
+
+**spot's code being MIT does not override anyone's data terms, and their terms do not restrict
+the code.** The two travel separately. Read the row for the source you intend to use; where a row
+and the code disagree, the per-source registry wins (see the boundary note at the end).
 
 ## Fetched at run time — permissive, attribution required
 | Source | License | Primary locator / attribution |

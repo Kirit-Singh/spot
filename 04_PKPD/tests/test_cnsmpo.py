@@ -34,16 +34,25 @@ PUBLISHED_TABLE_1 = {
     "pka_most_basic": ("monotonic_decreasing", 1.0, {"x1": 8.0, "x2": 10.0}),
 }
 
-# Wager 2010, Table 2: "CNS MPO Scores and Individual Transformed Scores (T0) for
-# Selected Drugs."  These are the AUTHORS' published values. Spot asserts nothing about
-# these drugs; they are arithmetic goldens for the scoring engine only.
+# ONE row from Wager 2010, Table 2 ("CNS MPO Scores and Individual Transformed Scores (T0) for
+# Selected Drugs") — the minimum independently necessary arithmetic vector, not the table.
+#
+# The paper is ACS-copyrighted and NOT in the PMC open-access subset, so spot encodes only what it
+# needs to validate its own arithmetic. Alprazolam alone exercises every property of the
+# aggregation the goldens exist to check:
+#
+#   * a fractional T0 (0.75) — linear interpolation actually ran;
+#   * the equal-weight sum over all six inputs (1.00+0.75+1.00+1.00+1.00+1.00 = 5.75);
+#   * publication rounding at a .x5 boundary (5.75 -> 5.8).
+#
+# The four other published rows re-exercise those same three facts and add no independent check.
+# In particular NONE of the five distinguishes ROUND_HALF_UP from half-to-even, so dropping them
+# loses no rounding coverage — that rule is pinned directly, below.
+#
+# Spot asserts nothing about this drug; it is an arithmetic golden for the scoring engine only.
 PUBLISHED_TABLE_2 = [
-    # drug,           T0_ClogP T0_ClogD T0_TPSA T0_MW T0_HBD T0_pKa  CNS MPO
-    ("alprazolam",      1.00, 0.75, 1.00, 1.00, 1.00, 1.00, 5.8),
-    ("zolpidem",        0.99, 0.57, 0.88, 1.00, 1.00, 1.00, 5.4),
-    ("paroxetine",      0.38, 1.00, 0.99, 1.00, 0.83, 0.00, 4.2),
-    ("risperidone",     1.00, 0.86, 1.00, 0.64, 1.00, 1.00, 5.5),
-    ("methylphenidate", 1.00, 1.00, 0.92, 1.00, 0.83, 0.00, 4.8),
+    # drug,         T0_ClogP T0_ClogD T0_TPSA T0_MW T0_HBD T0_pKa  CNS MPO
+    ("alprazolam",    1.00, 0.75, 1.00, 1.00, 1.00, 1.00, 5.8),
 ]
 
 
@@ -353,3 +362,27 @@ def test_score_is_never_promoted_to_permeability_or_probability():
     assert "not measured brain permeability" in guard
     assert "not a probability" in guard
     assert "not an nebpi class" in guard
+
+
+def test_publication_rounding_is_half_up_and_not_bankers():
+    """The rule METHODS states — "Publication rounding is ROUND_HALF_UP (Python's half-to-even
+    does not reproduce printed tables)" — was asserted nowhere.
+
+    The five published goldens never tested it: every one of their totals rounds identically
+    under both rules, so they could not have caught a switch to half-to-even. This pins the rule
+    on the values where the two actually disagree, which is the only place a rounding rule can be
+    tested at all.
+    """
+    from decimal import ROUND_HALF_EVEN, Decimal
+
+    for value, half_up in ((0.5, 1.0), (1.5, 2.0), (2.5, 3.0), (4.5, 5.0)):
+        assert round_half_up(value, 0) == pytest.approx(half_up)
+        bankers = float(Decimal(str(value)).quantize(Decimal("1"), ROUND_HALF_EVEN))
+        if half_up != bankers:                       # 0.5->1 vs 0, 2.5->3 vs 2, 4.5->5 vs 4
+            assert round_half_up(value, 0) != pytest.approx(bankers), (
+                f"round_half_up({value}) agreed with half-to-even ({bankers}) — the published "
+                "tables would not reproduce")
+
+    # and at the 1-dp scale the scorecards actually publish
+    assert round_half_up(5.75, 1) == pytest.approx(5.8)
+    assert round_half_up(0.25, 1) == pytest.approx(0.3)   # half-to-even would give 0.2

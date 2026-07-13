@@ -170,3 +170,65 @@ def test_the_ledger_states_the_sources_stage4_actually_queries():
     assert "US public domain | U.S. FDA" not in ledger
     assert re.search(r"ClinicalTrials\.gov.{0,200}not", ledger, re.S | re.I), (
         "ClinicalTrials.gov must not be relabelled public domain")
+
+
+# ------------------------------------- the re-audit of f8495d5: claims that outlived their truth
+
+# Phrases that were TRUE once and are now false. A doc that says the engine cannot do what it
+# demonstrably does is not a stale sentence, it is a wrong capability claim — and it is exactly
+# what a stranger reads first. Each retired phrase is pinned here so it cannot creep back.
+RETIRED_CLAIMS = {
+    "Stage 3 has not landed":
+        "the two-gate Stage-3 admission is wired and 13 admission tests pass",
+    "is scaffolding and emits nothing":
+        "Stage 3 emits real bundles; Stage 4 admits them",
+    "No real-source evidence loader is wired":
+        "the public acquisition adapters (PubChem, RxNorm, DailyMed, openFDA) are wired",
+    "no_real_evidence_adapters_wired":
+        "this refusal code exists nowhere in the codebase — the doc invented a guard",
+    "academic / non-commercial":
+        "a project-wide non-commercial restriction was never true of the code (MIT) and is not "
+        "how per-source terms work; reuse follows each row's own licence",
+}
+
+
+def test_no_retired_capability_claim_survives_in_a_tracked_doc():
+    """The docs may not deny a capability the code has, nor invent a guard it does not have."""
+    offenders = {}
+    for rel in _tracked("04_PKPD"):
+        if not rel.endswith(".md") or rel.endswith("test_release_hygiene_scan.py"):
+            continue
+        body = _read(rel)
+        hits = [p for p in RETIRED_CLAIMS if p in body]
+        if hits:
+            offenders[rel] = hits
+
+    ledger_hits = [p for p in RETIRED_CLAIMS if p in _read("DATA_LICENSES.md")]
+    if ledger_hits:
+        offenders["DATA_LICENSES.md"] = ledger_hits
+
+    assert not offenders, "\n".join(
+        f"{rel}: {p!r} — {RETIRED_CLAIMS[p]}" for rel, ps in offenders.items() for p in ps)
+
+
+def test_the_ledger_imposes_no_project_wide_noncommercial_restriction():
+    """The original audit's words: these "are not the current production evidence path and create
+    needless restrictions/confusion". Reuse follows each ROW's licence. spot's code is MIT, and
+    MIT does not override anyone's data terms — in either direction."""
+    ledger = _read("DATA_LICENSES.md")
+    assert "non-commercial" not in ledger.split("## ")[0], (
+        "the ledger's preamble still imposes a project-wide non-commercial restriction")
+    assert re.search(r"MIT.{0,160}(does not|never).{0,40}(override|extend|apply)",
+                     ledger, re.S | re.I), (
+        "the ledger must say that code MIT does not override the data terms")
+
+
+def test_the_readme_does_not_hard_code_a_drifting_test_count():
+    """The audit's minor finding 4: "The exact test-count claims in READMEs will drift; prefer
+    verifier command + expected exit status over a hard-coded count." It drifted within one
+    commit — 1244 was stale on arrival (1253 supplied / 1236 bare)."""
+    readme = _read("04_PKPD/README.md")
+    counts = re.findall(r"\b\d{3,5}\s+tests\b", readme)
+    assert not counts, (
+        f"README hard-codes a test count {counts}; it drifts with every commit. State the command "
+        "and its expected exit status instead.")
