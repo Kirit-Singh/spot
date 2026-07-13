@@ -259,6 +259,14 @@ if [ "${#RESULTS_RELS[@]}" -gt 0 ]; then
 fi
 hygiene_scan "${SCAN[@]}"
 say "       clean (${#SCAN[@]} served text artifacts scanned)"
+# Fixture-leak guard: the BUILT served bundles must carry NO demo/fixture identifier or known fixture
+# value. Fixtures are test-only; a served entry that pulls in repository.ts (which imports the
+# stage2/3/4 fixtures) — or any fixture module — bundles their distinctive values, which this catches
+# (import-graph aware by construction; token set is data-driven from src/fixtures).
+command -v node >/dev/null 2>&1 || die "node required for the fixture-leak scan"
+node "$SCRIPT_DIR/scan_dist_no_fixtures.mjs" "$DIST_DIR" "$FRONTEND_DIR/src/fixtures" \
+  || die "fixture/demo identifiers reachable in a served bundle — fixtures must stay test-only (see above)"
+say "       fixture-leak scan clean (served bundles are fixture-free)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Resolve + validate the EXACT copy set (no dist/data, ever)
