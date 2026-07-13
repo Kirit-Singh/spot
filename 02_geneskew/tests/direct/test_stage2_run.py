@@ -343,3 +343,37 @@ def test_confirmed_lane_blocks_parse_against_producer_argparse():
         assert not unknown, f"{label}: flags not in {_PARSER_VALID[prefix]} argparse: {sorted(unknown)}"
         checked += 1
     assert checked >= 4, f"expected >=4 confirmed in-repo lane blocks, saw {checked}"
+
+
+def test_completed_receipts_skip_on_resume(tmp_path, monkeypatch):
+    """Deterministic resume: a phase whose receipt exists AND re-verifies is skipped — its producer
+    run() is NOT re-invoked (native/admitted bytes never rerun/overwritten). A mutated bound output
+    breaks re-verification, so the phase is no longer 'complete' and would run again."""
+    import sys as _sys, json as _j
+    _sys.path.insert(0, ANALYSIS)
+    from direct import stage2_run as S
+    sd = tmp_path / "state"; sd.mkdir()
+    idp = sd / "run_identity.json"; idp.write_text(_j.dumps({"run_identity_sha256": "RID"}))
+    monkeypatch.setattr(S, "identity_path", lambda cfg: str(idp))
+    monkeypatch.setattr(S, "DRY", False)
+
+    inv = tmp_path / "temporal_arm_release.json"; inv.write_text("inv")
+
+    class C:
+        state_dir = str(sd)
+        out = str(tmp_path)
+
+    S._write_receipt(C, "C.direct_admitted", argv=["x"], inputs=[], outputs=[], prereqs=[])
+    S._write_receipt(C, "D.temporal", argv=["run_temporal_arms"], inputs=[],
+                     outputs=[str(inv)], prereqs=["C.direct_admitted"])
+    assert S._completed(C, "D.temporal") is True
+
+    inv.write_text("MUTATED")                       # bound output changed -> not complete
+    assert S._completed(C, "D.temporal") is False
+    inv.write_text("inv")                           # restore -> complete again
+
+    calls = []
+    monkeypatch.setattr(S, "run", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(S, "require_admitted_direct", lambda cfg: None)
+    S.lane_temporal(C)
+    assert calls == [], "a completed D.temporal must skip — the producer run() must not be re-invoked"

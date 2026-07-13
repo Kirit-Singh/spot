@@ -479,6 +479,20 @@ def require_admitted_direct(cfg):
             f"missing/!admit binding for {missing} under {cfg.w10_report_dir}")
 
 
+def _completed(cfg, name):
+    """Resume: a phase whose receipt EXISTS and RE-VERIFIES is done -> skip it. Never rerun a
+    producer or overwrite native/admitted bytes on resume. DRY never skips (topology must always
+    emit every block); a missing or non-verifying receipt is NOT complete (fail-open to running)."""
+    if DRY:
+        return False
+    if not os.path.isfile(_receipt_path(cfg, name)):
+        return False
+    try:
+        return verify_receipt(cfg, name) is True
+    except SchedulerError:
+        return False
+
+
 # ---- phases -----------------------------------------------------------------------------
 def bundle_args(cfg):
     return ["--registry", cfg.registry, "--stage1-release", cfg.stage1_release,
@@ -491,6 +505,8 @@ def bundle_args(cfg):
 
 def lane_direct(cfg):
     _phase("B direct")
+    if all(_completed(cfg, f"B.direct.{c}") for c in CONDITIONS):
+        return   # resume: all Direct bundle receipts verify -> skip (native bytes untouched)
     # ONE authoritative all-conditions run: run_arms --all-conditions derives the condition set from
     # the BOUND Stage-1 release (never a number written here) and produces every condition's
     # content-addressed bundle in a single invocation. Per-condition IMMUTABLE bundle receipts are
@@ -513,6 +529,8 @@ def lane_direct(cfg):
 
 def verify_direct_gate(cfg):
     _phase("C direct/W10 gate (EXTERNAL pinned verifier checkout)")
+    if _completed(cfg, "C.direct_admitted"):
+        return   # resume: W10 admission verifies -> skip (never re-invoke over admitted bytes)
     dv = cfg.direct_verifier
     for cond in CONDITIONS:
         nrep = native_report_path(cfg, cond)
@@ -542,6 +560,8 @@ def verify_direct_gate(cfg):
 
 def lane_step0(cfg):
     _phase("D step0")
+    if _completed(cfg, "D.step0"):
+        return
     require_admitted_direct(cfg)
     for cond in CONDITIONS:
         # Step0 reads the native W10 MASK report (--direct-mask-report) + the Direct bundle and
@@ -560,6 +580,8 @@ def lane_step0(cfg):
 
 def lane_temporal(cfg):
     _phase("D temporal")
+    if _completed(cfg, "D.temporal"):
+        return
     require_admitted_direct(cfg)
     dargs = []
     for cond in CONDITIONS:
@@ -578,6 +600,8 @@ def lane_temporal(cfg):
 
 def lane_pathway(cfg):
     _phase("D pathway")
+    if _completed(cfg, "D.pathway"):
+        return
     require_admitted_direct(cfg)
     for cond in CONDITIONS:
         for src in SOURCES:
@@ -641,6 +665,8 @@ def verify_lanes(cfg):
     pinned external verifier checkouts admit them; `run_release` requires each admitted. The
     primary aggregate cannot complete without these — and needs NO P2S."""
     _phase("E lane admissions (external temporal/pathway)")
+    if _completed(cfg, "E.lane_admissions"):
+        return
     if DRY:
         print("=== PHASE E: release_inventory --lane {temporal,pathway} (PENDING) → external "
               "W11/W4 admissions → {temporal,pathway}_arm_external_admission.json")
@@ -683,6 +709,8 @@ def _expect_pins(cfg):
 
 def lane_aggregate(cfg):
     _phase("F aggregate (run_release --out FILE --verify + separate admission report)")
+    if _completed(cfg, "F.aggregate_admission"):
+        return
     require_admitted_direct(cfg)
     if not DRY:
         verify_receipt(cfg, "E.lane_admissions")   # aggregate IMPOSSIBLE before Phase E receipts exist
@@ -716,7 +744,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m direct.stage2_run")
     ap.add_argument("phase", nargs="?", default="all",
                     choices=["preflight", "direct", "verify-direct-gate", "step0", "temporal",
-                             "pathway", "p2s", "downstream", "aggregate", "all"])
+                             "pathway", "verify-lanes", "p2s", "downstream", "aggregate", "all"])
     args = ap.parse_args(argv)
     cfg = Cfg()
     if args.phase != "preflight" and not DRY and os.path.isfile(identity_path(cfg)):
@@ -738,21 +766,20 @@ def main(argv=None):
         lane_p2s(cfg)
     elif args.phase == "downstream":
         require_admitted_direct(cfg); lane_downstream(cfg)
+    elif args.phase == "verify-lanes":
+        verify_lanes(cfg)          # Phase E, independently resumable
     elif args.phase == "aggregate":
         lane_aggregate(cfg)
     elif args.phase == "all":
+        # A -> B -> C -> D -> E -> F, AUTOMATICALLY. No manual command between producer and verifier:
+        # Phase C is the pinned EXTERNAL W10 invocation (verify_direct_gate), run inline. Every phase
+        # self-skips when its receipt already verifies (deterministic resume; admitted native bytes
+        # are never rerun or overwritten). require_admitted_direct / verify_receipt still fail closed.
         phaseA_preflight(cfg)
-        lane_direct(cfg)
-        if not DRY and not all(w10_admitted(cfg, c) for c in CONDITIONS):
-            sys.stderr.write(
-                "\n=== PHASE B complete. 3 Direct bundles produced, admission PENDING.\n"
-                "=== Run the EXTERNAL pinned Direct verifier + adapter (Phase C) to write "
-                f"{cfg.w10_report_dir}/direct_admission_<cond>.json, then: stage2_run downstream ; "
-                "stage2_run aggregate\n")
-            return 3
-        verify_direct_gate(cfg)
-        lane_downstream(cfg)
-        verify_lanes(cfg)          # Phase E: external temporal(W11)/pathway(W4) admissions
+        lane_direct(cfg)           # Phase B: produce (or skip) the Direct release
+        verify_direct_gate(cfg)    # Phase C: AUTO-invoke the pinned EXTERNAL W10 verifier + adapter
+        lane_downstream(cfg)       # Phase D: step0 -> temporal(--all-pairs) -> pathway
+        verify_lanes(cfg)          # Phase E: external temporal(W11)/pathway(W4) lane admissions
         lane_aggregate(cfg)        # Phase F: primary aggregate — NO P2S in the primary chain
         # P2S is a SEPARATE secondary lane (its own env/code/method identity + admission),
         # invoked independently via the `p2s` subcommand AFTER the primary run. Its absence must
