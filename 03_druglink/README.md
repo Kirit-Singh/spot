@@ -118,17 +118,33 @@ inhibition**.
 
 ## Public acquisition — bounded, frozen, offline-replayable
 
+> ⚠️ **These two commands take `--artifact_class` with an UNDERSCORE.** `run_stage3` and
+> `verify_stage3` take `--artifact-class` with a hyphen. It is inconsistent, it is real,
+> and normalising it gives
+> `error: the following arguments are required: --artifact_class`. Copy these verbatim.
+
 ```bash
 PYTHONPATH=analysis python -m druglink.acquire_public \
-  --artifact-class analysis \
+  --artifact_class analysis \
   --direct-run "$DIRECT_RUN" --direct-inputs-root "$DIRECT_INPUTS_ROOT" \
   --top-per-arm 25 --sources uniprot,chembl --chembl-release CHEMBL_37 \
   --cache-root "$STAGE3_CACHE"
 
 PYTHONPATH=analysis:. python -m druglink.verify_acquisition \
   --cache-root "$STAGE3_CACHE" \
-  --direct-run "$DIRECT_RUN" --direct-inputs-root "$DIRECT_INPUTS_ROOT"
+  --direct-run "$DIRECT_RUN" --direct-inputs-root "$DIRECT_INPUTS_ROOT" \
+  --artifact_class analysis
 ```
+
+Exit **0** = acquired / verified. Exit **2** from `acquire_public` is a **typed refusal**
+(`REFUSED [analysis]: …`), and exit **1** from `verify_acquisition` is a named failing
+gate (e.g. `[FAIL] acquisition_manifest_is_present`) — **never a traceback**. Both refusal
+paths used to raise `AttributeError` instead of refusing, because their `except` tuples
+still named `ac.NamespaceError` from the retired `namespace` vocabulary and Python
+evaluates an `except` tuple only when an exception actually reaches it. A fail-closed path
+that crashes instead of refusing is not fail-closed. `tests/test_cli_refusal_paths.py`
+now drives both CLIs down their refusal paths and resolves every exception each `main()`
+claims to catch.
 
 The target queue is frozen and written to disk **before the first HTTP request** — top
 25 per arm, **independently** by that arm's own rank. No adaptive expansion; **zero
@@ -139,6 +155,38 @@ it was **actually** retrieved. UniProt release comes from the `X-UniProt-Release
 
 Generation **requires a passing acquisition gate**: `load_manifest` runs the offline
 verifier first and refuses to build on unverified evidence, then binds the verdict.
+
+### The pinned fixture bytes are NOT a reusable cache
+
+`tests/fixtures_public/` holds **20 pinned public responses** (15 ChEMBL, 5 UniProt; all
+20 hash-verify against `_index.json`; releases **ChEMBL_37** / **UniProt 2026_02**;
+pinned-set SHA-256 `4a330cd2800f33b3abd23a13f5ac3a2c35a54dad5f550fb8f624cea6369d3aad`).
+
+The **bytes are genuinely real** — exact unmodified responses fetched through the canonical
+URLs `acquire_public` builds, kept with status, headers, licence and attribution. Nothing
+here is synthetic, which is why acquisition records them honestly as `acquired_public`.
+
+They are also a **bounded capture**, and the bound is the whole point: they answer **two
+real genes** (`ENSG00000163599` CTLA4, `ENSG00000134460` IL2RA) plus the genuine *empty*
+no-match response for the fixture's synthetic `ENSG000000002xx` targets, which really do
+have no UniProt entry.
+
+**So they cannot serve a real Stage-2 run, and the way they fail is silent.** The fixture
+transport refuses an unpinned **ChEMBL** URL, but for **UniProt** it serves the empty
+no-match body for *any* unpinned gene — including real ones such as TP53. Pointed at real
+targets it would not crash: every gene but CTLA4/IL2RA would resolve to "no UniProt entry",
+and the result would be a clean, verifier-passing bundle with **zero drug evidence** whose
+emptiness reads as a biological finding. The flag is truthful for the fixture and
+catastrophic for real genes.
+
+The mitigation is structural: **`acquire_public` hardcodes the real network transport and
+exposes no flag to select one**, so the fixture transport is unreachable from the CLI. Any
+real target set therefore **requires a real live acquisition** against UniProt + ChEMBL
+(the command above, which needs network egress). The pinned bytes are parser/acquisition
+fixtures — they are not a cache to copy into `$STAGE3_CACHE`, and they cannot be extended
+offline.
+
+**No real acquisition has been run.** `inputs/` and `outputs/` hold no cache or bundle.
 
 ## Independent verification
 
@@ -156,9 +204,22 @@ content addressing, re-runs Direct's own verifier, re-expands both arms from
 identity, mechanisms, edges and candidates. A nonexistent cache is a **failure**, not an
 empty one; evidence from an adapter it cannot re-parse is **refused**, not blessed.
 
+A clean bundle is **61/61 checks, exit 0**; the gate inventory is pinned at
+`aeb211bc59da0f13…`. The **first** gate is the manifest's own identity —
+`manifest_sha256` is recomputed from the manifest's canonical content (excluding
+`manifest_sha256` itself and the non-semantic `created_at`). Every other integrity check
+reads hashes recorded *in* the manifest, so a manifest that has not proved itself is not a
+trustworthy source for any of them. External review **B6** found that gate missing: a
+forged `manifest_sha256 = "0"*64` passed all 60 checks.
+
+**Schema validation is not admission.** The document schema is `additionalProperties:
+true`, so a bundle can be schema-valid and still refused — the firewall against a
+combined/headline objective lives in the verifier's recursive banned-key scan and the hash
+bundle, not in the JSON Schema. Run this verifier.
+
 ## Layout
 
 `analysis/druglink/` engine · `verifier/` independent verifier · `schemas/` contracts ·
-`tests/` (109 tests; the pinned real UniProt/ChEMBL bytes are **parser/acquisition
-regression data only — never research results**) · `env/` (see the **UNRESOLVED
-portability gap** recorded in the lock header) · `outputs/` gitignored.
+`tests/` (211 tests; the pinned real UniProt/ChEMBL bytes are **parser/acquisition
+regression data only — never research results, and never a reusable cache**) · `env/` (see
+the **UNRESOLVED portability gap** recorded in the lock header) · `outputs/` gitignored.
