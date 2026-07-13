@@ -1,0 +1,58 @@
+// Focused acceptance for a PARTIAL admitted release: Targets is bound to W3's admitted
+// selection-independent Direct+Temporal display projection while Pathways remains intentionally unbound.
+
+import { existsSync } from 'node:fs';
+import { makeSelection, poll, gotoReady, openDrawer, drawerRows, urlOf } from './harness_util.mjs';
+
+const PW_PATH = '/Users/kiritsingh/.spot-orchestrator/node_modules/playwright-core/index.js';
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const base = (process.argv[2] || 'http://100.117.50.59:8347').replace(/\/+$/, '');
+
+function assert(ok, message) { if (!ok) throw new Error(message); }
+
+async function checkSelection(browser, temporal) {
+  const page = await browser.newPage();
+  try {
+    const selected = await makeSelection(page, base, { temporal });
+    assert(selected.ok, `${temporal ? 'temporal' : 'within'} selection failed: ${selected.reason}`);
+    const canvas = await poll(() => page.$('[data-real-canvas][data-route="targets"]'), 15000);
+    assert(canvas, `${temporal ? 'temporal' : 'within'} Targets canvas did not bind`);
+    const result = await page.evaluate(() => ({
+      rows: document.querySelectorAll('main table tbody tr').length,
+      text: document.querySelector('main')?.textContent || '',
+    }));
+    assert(result.rows > 0, `${temporal ? 'temporal' : 'within'} Targets rendered no rows`);
+    assert(!/pending independent admission|not generated|fixture|demo|combined|balanced|p[_ -]?value|q[_ -]?value/i.test(result.text),
+      `${temporal ? 'temporal' : 'within'} Targets canvas contains pending/forbidden text`);
+    await openDrawer(page);
+    const rows = await drawerRows(page);
+    assert(rows.provenance.Verifier === 'admitted', 'Targets drawer is not bound to admitted verifier status');
+    assert(rows.methods['Last run UTC'] === '2026-07-13T20:35:11Z', 'Targets Last run UTC does not match the admitted receipt');
+    assert(!/^—$|unavailable/i.test(rows.methods.Reproduce || ''), 'Targets reproduce command is unavailable');
+    return result.rows;
+  } finally { await page.close(); }
+}
+
+async function main() {
+  assert(existsSync(CHROME), `Chrome missing at ${CHROME}`);
+  const playwright = (await import(PW_PATH)).default;
+  const browser = await playwright.chromium.launch({ executablePath: CHROME, headless: true,
+    args: ['--no-first-run', '--no-default-browser-check', '--disable-component-update', '--disable-background-networking'] });
+  try {
+    const withinRows = await checkSelection(browser, false);
+    const temporalRows = await checkSelection(browser, true);
+    const page = await browser.newPage();
+    try {
+      await gotoReady(page, base, 'pathways.html');
+      assert(!(await page.$('[data-real-canvas][data-route="pathways"]')),
+        'Pathways rendered without an admitted pathway lane');
+    } finally { await page.close(); }
+    const current = await (await fetch(urlOf(base, 'results/current.json'))).json();
+    assert(current.chain.stage2_display_release_id === 'stage2-display-b082df2789c119aa',
+      'current.json does not bind the admitted display release');
+    assert(current.chain.stage2_run_id === null, 'display projection was mislabeled as a production Stage-2 run');
+    console.log(`GO — admitted Targets: within=${withinRows} rows, temporal=${temporalRows} rows; Pathways remains fail-closed.`);
+  } finally { await browser.close(); }
+}
+
+main().catch((error) => { console.error(`NO-GO — ${error.message}`); process.exitCode = 1; });
