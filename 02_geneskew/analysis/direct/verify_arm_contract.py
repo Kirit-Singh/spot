@@ -43,6 +43,18 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import verify_arm_science as S  # noqa: E402  (W10's own canonical mask projection)
+
+# THE VERSION-LOCKED PINS — ids, spec, code hash, solver lock, required gates. Restated in
+# their own module (verify_arm_contract_pins), never borrowed from the verifier's live
+# constants: a pin the adapter took from the thing it normalises is a pin nobody checked.
+from verify_arm_contract_pins import (  # noqa: E402
+    PINNED_SOLVER_LOCK_SHA256,
+    REQUIRED_GATES,
+    W10_SPEC_SHA256,
+    W10_VERIFIER_CODE_SHA256,
+    W10_VERIFIER_ID_BUNDLE,
+    W10_VERIFIER_ID_RELEASE,
+)
 from verify_arm_rules import content_sha256, sha256_file  # noqa: E402
 
 BINDING_SCHEMA = "spot.stage02.direct_admission_binding.v1"
@@ -52,15 +64,6 @@ SCHEMA_PATH = os.path.join(
 SCHEMA_BUNDLE = "spot.stage02_direct_arm_bundle_verification.v1"
 SCHEMA_RELEASE = "spot.stage02_direct_release_verification.v1"
 SCHEMAS = (SCHEMA_BUNDLE, SCHEMA_RELEASE)
-
-# WHICH checker W10 is. Pinned here so a report from another checker cannot pass as W10 —
-# restated, never imported from the verifier's own constants (a pin the adapter borrowed
-# from the thing it normalises is a pin nobody checked).
-W10_VERIFIER_ID_BUNDLE = "spot.stage02.direct.arm_bundle.verifier.v1"
-W10_VERIFIER_ID_RELEASE = "spot.stage02.direct.release.verifier.v1"
-W10_SPEC_SHA256 = "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f"
-PINNED_SOLVER_LOCK_SHA256 = \
-    "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe"
 
 VERDICT_ADMIT = "ADMIT"
 VERDICT_REFUSE = "REFUSE"
@@ -103,6 +106,9 @@ REFUSE_NOT_INDEPENDENT = "the_report_does_not_declare_generator_is_not_verifier"
 REFUSE_WRONG_VERIFIER = "the_report_is_not_from_the_pinned_w10_verifier"
 REFUSE_SPEC_DRIFT = "the_report_was_written_against_a_different_spec"
 REFUSE_GATE_INVENTORY = "the_gate_inventory_hash_does_not_re_derive"
+REFUSE_WRONG_CODE = "the_report_is_not_from_the_pinned_w10_verifier_code"
+REFUSE_GATE_COUNTS = "the_gate_counts_do_not_agree_with_the_gate_list"
+REFUSE_GATE_MISSING = "a_security_critical_gate_is_absent_from_the_inventory"
 REFUSE_MISSING_PROVENANCE = "the_report_is_missing_a_required_provenance_binding"
 REFUSE_WRONG_ENV = "the_environment_lock_is_not_the_pinned_stage2_lock"
 REFUSE_BUNDLE_BYTES = "a_bundle_file_on_disk_does_not_hash_to_the_admitted_value"
@@ -175,6 +181,13 @@ def validate_report(report: Any) -> None:
                 f"{str(report.get('spec_sha256'))[:16]}..., not the pinned "
                 f"{W10_SPEC_SHA256[:16]}...")
 
+    # WHICH CODE ran. A weakened fork keeps the id; it cannot keep the code hash.
+    if report.get("verifier_code_sha256") != W10_VERIFIER_CODE_SHA256:
+        _refuse(REFUSE_WRONG_CODE,
+                f"the report was produced by verifier code "
+                f"{str(report.get('verifier_code_sha256'))[:16]}..., not the pinned "
+                f"{W10_VERIFIER_CODE_SHA256[:16]}...")
+
     verdict = report["verdict"]
     if verdict not in VERDICTS:
         _refuse(REFUSE_UNKNOWN_VERDICT,
@@ -187,9 +200,46 @@ def validate_report(report: Any) -> None:
                 f"failed_gates={report.get('failed_gates')!r}")
 
     inv = report.get("gate_inventory") or []
+    gates = report.get("gates") or []
     if content_sha256(inv) != report.get("gate_inventory_sha256"):
         _refuse(REFUSE_GATE_INVENTORY,
                 "gate_inventory_sha256 does not re-derive from the gate inventory")
+
+    # COUNT CONSISTENCY. n_gates=999 with a 77-gate list, an empty list with n_gates=0, a
+    # padded n_passed — all internally plausible until the counts are checked against the
+    # list they claim to summarise. The inventory IS the gate names, in order.
+    gate_names = [g.get("gate") for g in gates if isinstance(g, dict)]
+    passed = [g for g in gates if isinstance(g, dict) and g.get("passed")]
+    failed_names = [g.get("gate") for g in gates
+                    if isinstance(g, dict) and not g.get("passed")]
+    if not (int(report["n_gates"]) == len(inv) == len(gates)):
+        _refuse(REFUSE_GATE_COUNTS,
+                f"n_gates={report['n_gates']} but the inventory has {len(inv)} names and "
+                f"{len(gates)} gate records")
+    if gate_names != inv:
+        _refuse(REFUSE_GATE_COUNTS,
+                "the gate records are not the gate inventory, in order")
+    if int(report["n_passed"]) != len(passed) \
+            or int(report["n_failed"]) != len(failed_names) \
+            or int(report["n_passed"]) + int(report["n_failed"]) != len(gates):
+        _refuse(REFUSE_GATE_COUNTS,
+                f"n_passed={report['n_passed']}/n_failed={report['n_failed']} do not agree "
+                f"with {len(passed)} passed / {len(failed_names)} failed records")
+    if sorted(report.get("failed_gates") or []) != sorted(failed_names):
+        _refuse(REFUSE_GATE_COUNTS,
+                "failed_gates does not match the gates that record passed=false")
+
+    # THE SECURITY-CRITICAL GATES MUST HAVE RUN. An empty inventory, or a resealed deletion
+    # of the mask / env / bytes gate, leaves an internally-consistent report that never
+    # checked the thing that matters. Pinning the code sha says the report NAMES the right
+    # code; this says its inventory CONTAINS the checks that code is supposed to run.
+    required = REQUIRED_GATES.get(report["verifier_id"], ())
+    haystack = "\n".join(str(n) for n in inv)
+    absent = [r for r in required if r not in haystack]
+    if absent:
+        _refuse(REFUSE_GATE_MISSING,
+                f"{len(absent)} security-critical gate(s) absent from the inventory: "
+                f"{[a[:40] for a in absent[:3]]}")
 
     bound = report["bound_artifact"]
     if not isinstance(bound, dict):
@@ -335,7 +385,61 @@ def normalize(report: dict, bundle_dir: Optional[str] = None) -> dict[str, Any]:
         "n_failed": report["n_failed"],
     }
     binding["binding_sha256"] = content_sha256(binding)
+    validate_binding(binding)
     return binding
+
+
+REFUSE_BINDING_INVALID = "the_normalized_binding_does_not_satisfy_its_own_schema"
+
+# The types the binding schema declares. A field allowed to be null is checked as such;
+# every other required field must be a non-empty string of the stated kind. This is the
+# adapter proving its OWN output conforms — so a release binding whose arm_rows is null, or a
+# bundle binding missing a hash, is caught HERE rather than by a downstream consumer.
+_BINDING_NULLABLE = frozenset({
+    "release_id", "condition", "lane", "stage1_scorer_view_canonical_sha256",
+    "registry_scorer_projection_sha256", "arm_rows_sha256", "mask_sha256", "bundle_id",
+})
+
+
+def validate_binding(binding: dict) -> None:
+    """The adapter validates its OWN normalized output against the published schema."""
+    schema = _load_schema()
+    missing = [f for f in schema["required"] if f not in binding]
+    if missing:
+        _refuse(REFUSE_BINDING_INVALID, f"binding is missing {missing}")
+    # the self-hash
+    derived = content_sha256({k: v for k, v in binding.items() if k != "binding_sha256"})
+    if binding.get("binding_sha256") != derived:
+        _refuse(REFUSE_BINDING_INVALID, "binding_sha256 does not re-derive")
+    # required non-nullable strings must be present and non-empty
+    for f in schema["required"]:
+        v = binding.get(f)
+        if f in _BINDING_NULLABLE:
+            continue
+        if f in ("bundle_verified_on_disk",):
+            if not isinstance(v, bool):
+                _refuse(REFUSE_BINDING_INVALID, f"{f} is not a bool")
+            continue
+        if f in ("n_failed",):
+            if not isinstance(v, int):
+                _refuse(REFUSE_BINDING_INVALID, f"{f} is not an int")
+            continue
+        if f == "direct_bundle_sha256":
+            if not isinstance(v, dict):
+                _refuse(REFUSE_BINDING_INVALID, f"{f} is not an object")
+            continue
+        if not isinstance(v, str) or not v:
+            _refuse(REFUSE_BINDING_INVALID, f"{f} must be a non-empty string, got {v!r}")
+
+
+_SCHEMA_CACHE: dict[str, Any] = {}
+
+
+def _load_schema() -> dict:
+    if "schema" not in _SCHEMA_CACHE:
+        with open(SCHEMA_PATH) as fh:
+            _SCHEMA_CACHE["schema"] = json.load(fh)
+    return _SCHEMA_CACHE["schema"]
 
 
 def load_and_normalize(report_path: str,

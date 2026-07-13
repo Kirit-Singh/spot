@@ -38,18 +38,22 @@ def _seal(report: dict) -> dict:
 
 
 def _synthetic_report() -> dict:
-    """A schema-complete native bundle report — the shape the real verifier emits."""
-    inv = ["g1", "g2"]
+    """A schema-complete, PIN-VALID native bundle report — the shape the real verifier emits.
+
+    Carries the real pinned code sha and the real security-critical gate names, so it is a
+    valid baseline the envelope tests mutate ONE field away from.
+    """
+    inv = list(C.REQUIRED_GATES[C.W10_VERIFIER_ID_BUNDLE])
     return _seal({
         "schema_version": C.SCHEMA_BUNDLE,
         "verifier_id": C.W10_VERIFIER_ID_BUNDLE,
-        "verifier_code_sha256": "3bc55ba5" + "0" * 56,
+        "verifier_code_sha256": C.W10_VERIFIER_CODE_SHA256,
         "spec_sha256": C.W10_SPEC_SHA256,
         "independent_of_generator": True,
         "gate_inventory": inv,
         "gate_inventory_sha256": AR.content_sha256(inv),
-        "gates": [{"gate": "g1", "passed": True}, {"gate": "g2", "passed": True}],
-        "n_gates": 2, "n_passed": 2, "n_failed": 0, "failed_gates": [],
+        "gates": [{"gate": g, "passed": True} for g in inv],
+        "n_gates": len(inv), "n_passed": len(inv), "n_failed": 0, "failed_gates": [],
         "verdict": "ADMIT",
         "bound_artifact": {
             "arm_bundle_run_id": "1ea4013bae69998a",
@@ -82,7 +86,10 @@ class TestTheEnvelopeValidates:
         assert C.disposition(_synthetic_report()) == "admitted"
         r = _synthetic_report()
         r["verdict"] = "REFUSE"
-        r["n_failed"], r["failed_gates"] = 1, ["g2"]
+        r["gates"][-1]["passed"] = False              # a real gate actually failed
+        failed = r["gates"][-1]["gate"]
+        r["n_passed"], r["n_failed"] = r["n_gates"] - 1, 1
+        r["failed_gates"] = [failed]
         _seal(r)
         assert C.disposition(r) == "refused"
 
@@ -172,6 +179,126 @@ class TestTheEnvelopeValidates:
     def test_the_two_byte_admit_stub_refuses(self):
         with pytest.raises(C.ContractError):
             C.validate_report({"verdict": "ADMIT"})
+
+
+class TestTheAdversarialFailOpenCasesAreClosed:
+    """Every case the adversarial review reproduced on e4cf8b9, each now refused by name.
+
+    The theme: a report can be made INTERNALLY CONSISTENT — self-hash valid, inventory hash
+    valid — and still be a fraud. Only a pin the report does not get a vote on, and a check of
+    the counts against the list they summarise, refuse these.
+    """
+
+    def _real_gate_report(self):
+        """A synthetic report carrying the REAL bundle gate inventory + the real code sha."""
+        r = _synthetic_report()
+        r["verifier_code_sha256"] = C.W10_VERIFIER_CODE_SHA256
+        # the real security-critical gate names must be present
+        inv = list(C.REQUIRED_GATES[C.W10_VERIFIER_ID_BUNDLE])
+        r["gate_inventory"] = inv
+        r["gate_inventory_sha256"] = AR.content_sha256(inv)
+        r["gates"] = [{"gate": g, "passed": True} for g in inv]
+        r["n_gates"], r["n_passed"], r["n_failed"], r["failed_gates"] = \
+            len(inv), len(inv), 0, []
+        return _seal(r)
+
+    def test_the_real_gate_report_validates(self):
+        C.validate_report(self._real_gate_report())     # baseline: it passes honestly
+
+    def test_A_a_ZEROED_verifier_code_sha_resealed_REFUSES(self):
+        r = self._real_gate_report()
+        r["verifier_code_sha256"] = "0" * 64
+        _seal(r)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_WRONG_CODE
+
+    def test_A_a_weakened_fork_keeping_the_id_but_wrong_code_REFUSES(self):
+        r = self._real_gate_report()
+        r["verifier_code_sha256"] = "dead" + "0" * 60
+        _seal(r)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_WRONG_CODE
+
+    def test_B_an_EMPTY_gate_inventory_with_n_gates_0_REFUSES(self):
+        r = self._real_gate_report()
+        r["gate_inventory"], r["gates"] = [], []
+        r["gate_inventory_sha256"] = AR.content_sha256([])
+        r["n_gates"] = r["n_passed"] = r["n_failed"] = 0
+        r["failed_gates"] = []
+        _seal(r)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_GATE_MISSING
+
+    def test_B_a_resealed_deletion_of_the_MASK_gate_REFUSES(self):
+        r = self._real_gate_report()
+        mask = next(g for g in r["gate_inventory"] if "MASK's identity" in g)
+        r["gate_inventory"] = [g for g in r["gate_inventory"] if g != mask]
+        r["gates"] = [g for g in r["gates"] if g["gate"] != mask]
+        r["gate_inventory_sha256"] = AR.content_sha256(r["gate_inventory"])
+        r["n_gates"] = r["n_passed"] = len(r["gate_inventory"])
+        _seal(r)                                       # honestly resealed, counts consistent
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_GATE_MISSING
+
+    def test_C_inflated_n_gates_and_n_passed_999_REFUSES(self):
+        r = self._real_gate_report()
+        r["n_gates"] = 999
+        r["n_passed"] = 999
+        _seal(r)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_GATE_COUNTS
+
+    def test_C_padded_n_passed_alone_REFUSES(self):
+        r = self._real_gate_report()
+        r["n_passed"] = r["n_gates"] + 5
+        _seal(r)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_GATE_COUNTS
+
+    def test_C_a_gate_list_that_is_not_the_inventory_REFUSES(self):
+        r = self._real_gate_report()
+        r["gates"][0]["gate"] = "a different name"     # list disagrees with inventory
+        _seal(r)
+        with pytest.raises(C.ContractError) as exc:
+            C.validate_report(r)
+        assert exc.value.reason == C.REFUSE_GATE_COUNTS
+
+    def test_the_pinned_code_sha_RE_DERIVES_from_W10s_own_recipe(self):
+        # the pin is version-locked; a test re-derives it so a stale pin fails loudly rather
+        # than silently refusing W10's own current reports
+        import verify_arm_report as R
+        assert C.W10_VERIFIER_CODE_SHA256 == R.verifier_code_sha256()
+
+    def test_the_release_binding_normalizes_and_satisfies_ITS_OWN_SCHEMA(self):
+        # the exact review case: arm_rows_sha256 is legitimately null for a release, and the
+        # binding must still be schema-valid rather than fail-open on its own contract
+        inv = list(C.REQUIRED_GATES[C.W10_VERIFIER_ID_RELEASE])
+        rel = _seal({
+            "schema_version": C.SCHEMA_RELEASE,
+            "verifier_id": C.W10_VERIFIER_ID_RELEASE,
+            "verifier_code_sha256": C.W10_VERIFIER_CODE_SHA256,
+            "spec_sha256": C.W10_SPEC_SHA256, "independent_of_generator": True,
+            "gate_inventory": inv, "gate_inventory_sha256": AR.content_sha256(inv),
+            "gates": [{"gate": g, "passed": True} for g in inv],
+            "n_gates": len(inv), "n_passed": len(inv), "n_failed": 0, "failed_gates": [],
+            "verdict": "ADMIT",
+            "bound_artifact": {
+                "direct_release_run_id": "abc123",
+                "expected_conditions": ["Rest", "Stim8hr", "Stim48hr"],
+                "stage1_scorer_view_canonical_sha256": "5d1d" + "0" * 60,
+                "solver_lock_sha256": C.PINNED_SOLVER_LOCK_SHA256,
+                "bundles": [{"condition": "Rest", "report_sha256": "aa" * 32}]},
+        })
+        b = C.normalize(rel)               # must not raise on its own schema
+        assert b["subject_kind"] == "release"
+        assert b["arm_rows_sha256"] is None
+        C.validate_binding(b)              # explicitly: the binding is schema-valid
 
     def test_the_schema_file_matches_the_binding(self):
         schema = json.load(open(C.SCHEMA_PATH))
