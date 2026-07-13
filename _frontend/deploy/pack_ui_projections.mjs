@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Offline DETERMINISTIC UI-projection packager. Given an admitted-run pack spec (compact route
-// projections already mapped from the native Stage-2/3/4 bundles, plus each route's admitted RECEIPT
+// projections already mapped from the native Stage-3/4 bundles and W3's admitted compact Stage-2
+// projection, plus each route's admitted RECEIPT
 // fields), it emits the served results/ tree: the compact route projections, the four
 // spot.ui_release_manifest.v1 manifests, and results/current.json with a complete content-addressed
 // inventory. It NEVER invents rows or run metadata — every run field (reproduce command, run UTC,
@@ -12,9 +13,9 @@
 // `pack(spec)` returns the virtual tree in-memory (results-relative path → text) for tests; the CLI
 // wrapper writes it to disk. It writes NOTHING unless invoked with a real spec + output dir.
 //
-// Native→compact field mapping is intentionally OUT OF SCOPE here (see
-// docs W1/W6/W16 handoff): W1/W6 supply compact projections that pass the browser's strict adapters;
-// this packager is the deterministic assembly + content-addressing + manifest/receipt binding step.
+// Stage-2 row mapping is intentionally OUT OF SCOPE here: W3 emits the exact
+// spot.stage02_display_projection.v1 document and its generator≠verifier receipt. This packager
+// preserves those bytes as a compact served artifact and binds them into results/current.json.
 
 import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -49,14 +50,14 @@ const ROUTES = {
   targets: {
     stage_label: 'Targets',
     method_id: 'spot.stage02.direct.masked_program_projection · spot.stage02.pareto.two_arm.v1 · spot.stage02.temporal_cross_condition.v1',
-    projection_path: 'stage02/targets.ui.json',
-    projection_schema: 'spot.ui_projection.stage2.v1',
+    projection_path: 'stage02/stage2_display_projection.json',
+    projection_schema: 'spot.stage02_display_projection.v1',
   },
   pathways: {
     stage_label: 'Pathways',
     method_id: 'spot.stage02.pathway.ranked_arm_enrichment.v2 · spot.stage02.pathway.signature_convergence.v2',
-    projection_path: 'stage02/pathways.ui.json',
-    projection_schema: 'spot.ui_projection.stage2.v1',
+    projection_path: 'stage02/stage2_display_projection.json',
+    projection_schema: 'spot.stage02_display_projection.v1',
   },
   drugs: {
     stage_label: 'Drugs',
@@ -76,9 +77,37 @@ ROUTES.pksafety.projection_schema = 'spot.ui_projection.pksafety.v1';
 const ADMITTED_VERIFIER = new Set(['admit', 'admitted', 'pass', 'passed', 'verified', 'ok']);
 const HEX64 = /^[0-9a-f]{64}$/;
 const UI_RELEASE_SCHEMA = 'spot.ui_release_manifest.v1';
+const STAGE2_METHOD = 'spot.stage02.display_projection.v1';
+const STAGE2_VERIFIER = 'spot.stage02.display_projection.independent_verifier.v1';
+const STAGE2_RECEIPT_PATH = 'stage02/display_projection.verification.json';
+const RELEASE_CONDITIONS = ['Rest', 'Stim8hr', 'Stim48hr'];
+const PATHWAY_SOURCES = ['reactome', 'go_bp'];
+const STAGE2_TOP_KEYS = ['analysis_mode', 'arms', 'authoritative_artifacts_are_the_native_ones',
+  'bindings', 'cap_policy', 'combined_objective', 'cross_arm_score_or_order', 'method_version',
+  'n_arms', 'projection_sha256', 'schema_version', 'selection_id', 'selection_independent'];
+const STAGE2_RECEIPT_KEYS = ['failures', 'generator_is_not_verifier', 'n_arms', 'n_failed',
+  'rebuilt_from_admitted_native_bytes', 'verdict', 'verifier_id'];
 
 function fail(msg) {
   throw new Error('pack: ' + msg);
+}
+function exactKeys(obj, expected, path) {
+  const got = Object.keys(obj).sort();
+  const want = [...expected].sort();
+  if (got.length !== want.length || got.some((key, i) => key !== want[i])) {
+    fail(`${path} has fields [${got.join(', ')}], expected [${want.join(', ')}]`);
+  }
+}
+function rejectStage2ScientificKeys(value, path) {
+  if (Array.isArray(value)) return value.forEach((item, i) => rejectStage2ScientificKeys(item, `${path}[${i}]`));
+  if (!value || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (/^(p|pval|pvalue|q|qval|qvalue|fdr|nominalp|empiricalpvalue|empiricalqvalue|combinedscore|balancedscore|balancedskew|weightedscore|overallrank|pairrank|headlinerank)$/.test(normalized)) {
+      fail(`${path}.${key} is forbidden in the compact Stage-2 projection`);
+    }
+    rejectStage2ScientificKeys(child, `${path}.${key}`);
+  }
 }
 function reqStr(receipt, key, route) {
   const v = receipt ? receipt[key] : undefined;
@@ -128,6 +157,21 @@ function buildManifest(route, def, receipt) {
 function validateProjectionEnvelope(route, def, projection) {
   if (!projection || typeof projection !== 'object' || Array.isArray(projection)) fail(`${route} projection must be an object`);
   if (projection.schema_version !== def.projection_schema) fail(`${route} projection.schema_version must be ${def.projection_schema}`);
+  if (route === 'targets' || route === 'pathways') {
+    exactKeys(projection, STAGE2_TOP_KEYS, `${route} projection`);
+    if (projection.method_version !== STAGE2_METHOD || projection.selection_independent !== true ||
+        projection.selection_id !== null || projection.analysis_mode !== null ||
+        projection.combined_objective !== null || projection.cross_arm_score_or_order !== null ||
+        projection.authoritative_artifacts_are_the_native_ones !== true || !HEX64.test(projection.projection_sha256)) {
+      fail(`${route} compact Stage-2 projection identity/firewall is malformed`);
+    }
+    if (!projection.arms || typeof projection.arms !== 'object' || Array.isArray(projection.arms) ||
+        !Number.isSafeInteger(projection.n_arms) || projection.n_arms !== Object.keys(projection.arms).length) {
+      fail(`${route} compact Stage-2 projection arm count is malformed`);
+    }
+    rejectStage2ScientificKeys(projection.arms, `${route} projection.arms`);
+    return;
+  }
   if (projection.route !== route) fail(`${route} projection.route must be "${route}"`);
 }
 
@@ -149,12 +193,8 @@ function requireBinding(b) {
 
 
 // ── NATIVE → COMPACT projection derivation ──────────────────────────────────────────────────────
-// The packager DERIVES the four compact route projections from the admitted native bundles; compact
-// rows are never hand-authored. These adapters are STRICT on required ids + types and LENIENT on
-// absence (a missing optional value stays null / [] — "missing stays missing", never invented). The
-// native FIELD NAMES below follow the current handoff (§6 Stage-2, §7 Stage-3 v2, §8 Stage-4);
-// PIN THEM against the final producer schemas when W16 (Stage-2), W6 (Stage-3 v2) and W1 (Stage-4)
-// publish — the mapping is the intended pinning point, not a guess to ship blind.
+// Stage-2 rows are already projected and independently verified by W3; this file never re-maps
+// them. Stage-3/4 adapters remain strict on required ids + types and preserve typed absence.
 function nObj(v, path) { if (!v || typeof v !== 'object' || Array.isArray(v)) fail(`${path} must be an object`); return v; }
 function nStr(v, path) { if (typeof v !== 'string' || v.trim() === '') fail(`${path} must be a non-empty string`); return v; }
 function nOptStr(v, path) { if (v === undefined || v === null) return null; if (typeof v !== 'string') fail(`${path} must be a string or null`); return v; }
@@ -236,67 +276,47 @@ function nativeToPkSafetyProjection(nat) {
   };
 }
 
-// Stage-2 native aggregate → compact projection. Converts native base_records[]/arms[] (arrays, §6)
-// into objects keyed by base_key/arm_key WITHOUT changing any value (deterministic reserialization).
-function arrToObj(arr, keyField, path) {
-  if (arr === undefined || arr === null) return {};
-  const obj = {};
-  nArr(arr, path).forEach((e, i) => {
-    nObj(e, `${path}[${i}]`);
-    obj[nStr(e[keyField], `${path}[${i}].${keyField}`)] = e;
-  });
-  return obj;
-}
-function nativeToStage2Bundle(nat, path) {
-  if (nat === undefined || nat === null) return null;
-  nObj(nat, path);
-  const out = { ...nat };
-  if ('base_records' in nat) out.base_records = arrToObj(nat.base_records, 'base_key', `${path}.base_records`);
-  if ('arms' in nat) out.arms = arrToObj(nat.arms, 'arm_key', `${path}.arms`);
-  return out; // arm.records stays a native array (the browser NativeTemporalArm expects an array)
-}
-function mapNativeBundles(nat, path) {
-  if (nat === undefined || nat === null) return {};
-  nObj(nat, path);
-  const out = {};
-  for (const k of Object.keys(nat)) out[k] = nativeToStage2Bundle(nat[k], `${path}.${k}`);
-  return out;
-}
-// Pack-time completeness: the COMPLETE generic release must carry every Direct condition bundle, every
-// ORDERED temporal pair, and every (condition, source) pathway bundle — refuse to emit an incomplete one.
-function assertStage2Complete(conds, sources, direct, temporal, pathway) {
-  for (const c of conds) if (!(c in direct)) fail(`stage-2 incomplete: missing Direct bundle for condition "${c}"`);
-  for (const from of conds) for (const to of conds) {
-    if (from !== to && !(`${from}__${to}` in temporal)) fail(`stage-2 incomplete: missing temporal bundle "${from}__${to}"`);
+function exactList(v, expected, path) {
+  const got = nStrList(v, path);
+  if (got.length !== expected.length || got.some((x, i) => x !== expected[i])) {
+    fail(`${path} must be exactly [${expected.join(', ')}]`);
   }
-  for (const c of conds) for (const s of sources) if (!(`${c}|${s}` in pathway)) fail(`stage-2 incomplete: missing pathway bundle "${c}|${s}"`);
+  return got;
 }
-function nativeToStage2Projection(nat, route) {
-  nObj(nat, 'stage2 native aggregate');
-  const release_conditions = nStrList(nat.release_conditions, 'stage2 native.release_conditions');
-  const pathway_sources = nStrList(nat.pathway_sources, 'stage2 native.pathway_sources');
-  const pathway_source = nStr(nat.pathway_source, 'stage2 native.pathway_source');
-  const directByCondition = mapNativeBundles(nat.directByCondition, 'stage2 native.directByCondition');
-  const temporalByPair = mapNativeBundles(nat.temporalByPair, 'stage2 native.temporalByPair');
-  const pathwayByContext = mapNativeBundles(nat.pathwayByContext, 'stage2 native.pathwayByContext');
-  assertStage2Complete(release_conditions, pathway_sources, directByCondition, temporalByPair, pathwayByContext);
-  return {
-    schema_version: 'spot.ui_projection.stage2.v1', route,
-    run_id: nStr(nat.run_id, 'stage2 native.run_id'),
-    // no top-level analysis_mode — the all-arm release serves both within + temporal; the active
-    // selection decides at join time.
-    release_conditions, pathway_sources, pathway_source,
-    directByCondition, temporalByPair, pathwayByContext,
-  };
+
+function compactStage2Input(routeInput) {
+  nObj(routeInput, 'stage2 route');
+  const projection = nObj(routeInput.projection, 'stage2 route.projection');
+  const displayReceipt = nObj(routeInput.display_verifier_receipt,
+    'stage2 route.display_verifier_receipt');
+  exactKeys(displayReceipt, STAGE2_RECEIPT_KEYS, 'stage2 route.display_verifier_receipt');
+  const release = nObj(routeInput.compact_release, 'stage2 route.compact_release');
+  const runId = nStr(release.run_id, 'stage2 route.compact_release.run_id');
+  const releaseConditions = exactList(release.release_conditions, RELEASE_CONDITIONS,
+    'stage2 route.compact_release.release_conditions');
+  const pathwaySources = exactList(release.pathway_sources, PATHWAY_SOURCES,
+    'stage2 route.compact_release.pathway_sources');
+  const activeSource = nStr(release.active_pathway_source,
+    'stage2 route.compact_release.active_pathway_source');
+  if (!pathwaySources.includes(activeSource)) fail('stage2 active_pathway_source is not released');
+  if (displayReceipt.verifier_id !== STAGE2_VERIFIER ||
+      displayReceipt.generator_is_not_verifier !== true ||
+      displayReceipt.rebuilt_from_admitted_native_bytes !== true ||
+      displayReceipt.verdict !== 'admit' || displayReceipt.n_failed !== 0 ||
+      !Array.isArray(displayReceipt.failures) || displayReceipt.failures.length !== 0 ||
+      displayReceipt.n_arms !== projection.n_arms) {
+    fail('stage2 independent display-verifier receipt is not admitted for this projection');
+  }
+  return { projection, displayReceipt, runId, releaseConditions, pathwaySources, activeSource };
 }
 
 /** Accumulate the admitted cross-stage chain ids from each route's derived projection. */
-function collectChain(route, projection, ids) {
+function collectChain(route, projection, ids, stage2RunId = null) {
   if (route === 'targets' || route === 'pathways') {
-    if (ids.stage2_run_id !== null && ids.stage2_run_id !== projection.run_id) {
-      fail(`chain: stage-2 run_id differs across routes ("${ids.stage2_run_id}" vs "${projection.run_id}")`);
+    if (ids.stage2_run_id !== null && ids.stage2_run_id !== stage2RunId) {
+      fail(`chain: stage-2 run_id differs across routes ("${ids.stage2_run_id}" vs "${stage2RunId}")`);
     }
-    ids.stage2_run_id = projection.run_id;
+    ids.stage2_run_id = stage2RunId;
   } else if (route === 'drugs') {
     ids.stage3_bundle_id = projection.artifact.bundle_id;
     ids._drugsUpstream = projection.artifact.upstream_stage2_run;
@@ -325,17 +345,18 @@ export function deriveCompactProjection(route, native) {
   if (native === undefined || native === null) {
     fail(`${route} native input required — the packager derives compact projections from admitted native bundles, never hand-authored rows`);
   }
-  if (route === 'targets' || route === 'pathways') return nativeToStage2Projection(native, route);
+  if (route === 'targets' || route === 'pathways') {
+    fail(`${route} consumes W3's admitted compact projection via route.projection; it never derives Stage-2 rows`);
+  }
   if (route === 'drugs') return nativeToDrugsProjection(native);
   if (route === 'pksafety') return nativeToPkSafetyProjection(native);
   return fail(`unknown route "${route}"`);
 }
 
 /**
- * Assemble the virtual served results/ tree from a pack spec. Each route supplies its admitted NATIVE
- * bundle + admitted RECEIPT; the packager DERIVES the compact projection, then content-addresses +
- * packages. Returns { tree, current } (results-relative path → text). A route absent from spec.routes is
- * not emitted (unbound). Throws on any malformed native input / missing receipt field / non-admitted verifier.
+ * Assemble the virtual served results/ tree from a pack spec. Stage-2 supplies W3's admitted compact
+ * projection + independent receipt + explicit release order/source/run identity; Stage-3/4 supply their
+ * native bundle. Returns { tree, current } (results-relative path → text).
  */
 export function pack(spec) {
   if (!spec || typeof spec !== 'object') fail('spec must be an object');
@@ -348,12 +369,19 @@ export function pack(spec) {
   for (const route of Object.keys(routesIn)) {
     const def = ROUTES[route];
     if (!def) fail(`unknown route "${route}"`);
-    const { native, receipt } = routesIn[route] || {};
-    const projection = deriveCompactProjection(route, native); // derived from native — never hand-authored
+    const routeInput = routesIn[route] || {};
+    const { native, receipt } = routeInput;
+    const isStage2 = route === 'targets' || route === 'pathways';
+    const compact = isStage2 ? compactStage2Input(routeInput) : null;
+    const projection = compact ? compact.projection : deriveCompactProjection(route, native);
     validateProjectionEnvelope(route, def, projection);
-    collectChain(route, projection, chainIds);
+    collectChain(route, projection, chainIds, compact?.runId ?? null);
 
-    tree[def.projection_path] = JSON.stringify(projection, null, 2);
+    const projectionText = JSON.stringify(projection, null, 2);
+    if (def.projection_path in tree && tree[def.projection_path] !== projectionText) {
+      fail(`${route} projection disagrees with the already-packaged shared Stage-2 projection`);
+    }
+    tree[def.projection_path] = projectionText;
     const projection_content_hash = canonicalHash(projection);
 
     const manifest = buildManifest(route, def, receipt);
@@ -361,7 +389,36 @@ export function pack(spec) {
     tree[manifest_path] = JSON.stringify(manifest, null, 2);
     const content_hash = canonicalHash(manifest);
 
-    routes[route] = { manifest_path, content_hash, projection_path: def.projection_path, projection_content_hash };
+    let compact_stage2 = null;
+    if (compact) {
+      const displayReceiptText = JSON.stringify(compact.displayReceipt, null, 2);
+      if (STAGE2_RECEIPT_PATH in tree && tree[STAGE2_RECEIPT_PATH] !== displayReceiptText) {
+        fail(`${route} verifier receipt disagrees with the already-packaged Stage-2 receipt`);
+      }
+      tree[STAGE2_RECEIPT_PATH] = displayReceiptText;
+      compact_stage2 = {
+        schema_version: 'spot.ui_compact_stage2_release.v1',
+        run_id: compact.runId,
+        release_conditions: compact.releaseConditions,
+        pathway_sources: compact.pathwaySources,
+        active_pathway_source: compact.activeSource,
+        projection_raw_sha256: sha256Hex(projectionText),
+        projection_canonical_sha256: projection_content_hash,
+        projection_self_sha256: projection.projection_sha256,
+        independent_verifier: {
+          verifier_id: STAGE2_VERIFIER,
+          receipt_path: STAGE2_RECEIPT_PATH,
+          receipt_raw_sha256: sha256Hex(displayReceiptText),
+          receipt_canonical_sha256: canonicalHash(compact.displayReceipt),
+        },
+      };
+      const priorStage2 = routes.targets?.compact_stage2 ?? routes.pathways?.compact_stage2;
+      if (priorStage2 && canonicalJson(priorStage2) !== canonicalJson(compact_stage2)) {
+        fail(`${route} compact Stage-2 release metadata disagrees across targets/pathways`);
+      }
+    }
+    routes[route] = { manifest_path, content_hash, projection_path: def.projection_path,
+      projection_content_hash, compact_stage2 };
   }
 
   // inventory: EVERY emitted file (results-relative), raw-file-bytes sha256, sorted — excludes current.json.

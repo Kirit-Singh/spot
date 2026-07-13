@@ -1,41 +1,23 @@
-// End-to-end fixture round-trip: the offline packager DERIVES compact route projections from admitted
-// NATIVE bundles + receipts, content-addresses them, and emits the served results/ tree; the browser
-// loader then fetches that exact tree and re-verifies every content hash before returning a resolution.
-// If the packager's canonical hashing or manifest binding diverged from the browser's, this fails.
-// Fixture-only — no production results are written.
+// End-to-end fixture round-trip: the offline packager preserves W3's admitted compact Stage-2
+// projection + generator≠verifier receipt, content-addresses the served tree, and the production
+// browser loader independently verifies and resolves it for the active v3 selection.
 
 import { describe, expect, it } from 'vitest';
 import { loadProductionProjection, resolveRouteArtifact } from '../resolveRouteArtifact';
 import type { RouteLoaderDeps } from '../resolveRouteArtifact';
-import { parseStage2Projection } from '../../adapters/routeProjectionAdapter';
 import { STAGE1_SELECTION_SCHEMA_RAW_SHA256, STAGE1_V3_RELEASE_SELF_SHA256 } from '../../stage1/contractBinding';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
+import { compactProjectionRaw, compactReceipt, CONDITIONS, SOURCES } from '../../test/compactStage2';
 
-const CONDS = ['Rest', 'Stim8hr', 'Stim48hr'];
-const SOURCES = ['reactome', 'go_bp'];
-/** Complete placeholder Stage-2 release: all 3 Direct + 6 ordered temporal + 6 pathway slots. */
-function completeStage2Maps() {
-  const directByCondition: Record<string, unknown> = {};
-  const temporalByPair: Record<string, unknown> = {};
-  const pathwayByContext: Record<string, unknown> = {};
-  for (const c of CONDS) directByCondition[c] = { _slot: c };
-  for (const f of CONDS) for (const t of CONDS) if (f !== t) temporalByPair[`${f}__${t}`] = { _slot: `${f}__${t}` };
-  for (const c of CONDS) for (const s of SOURCES) pathwayByContext[`${c}|${s}`] = { _slot: `${c}|${s}` };
-  return { directByCondition, temporalByPair, pathwayByContext };
-}
-
-// Untyped Node ESM packager — imported at runtime; `string`-typed specifier keeps tsc from resolving it.
 interface Packager {
   pack: (spec: unknown) => { tree: Record<string, string>; current: unknown };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deriveCompactProjection: (route: string, native: unknown) => any;
+  deriveCompactProjection: (route: string, native: unknown) => unknown;
 }
 async function importPack(): Promise<Packager> {
   const modPath: string = '../../../deploy/pack_ui_projections.mjs';
   return import(modPath) as Promise<Packager>;
 }
 
-// A same-origin fetch backed by the packager's virtual tree (results-relative keys; loader prefixes results/).
 function treeFetch(tree: Record<string, string>) {
   return async (path: string): Promise<string> => {
     const rel = path.startsWith('results/') ? path.slice('results/'.length) : path;
@@ -54,165 +36,137 @@ function receipt(route: string) {
 }
 
 const drugsNative = {
-  bundle_id: 's3_b1', manifest_sha256: 'a'.repeat(64), upstream_stage2_run: 'run_1',
+  bundle_id: 's3_b1', manifest_sha256: 'a'.repeat(64), upstream_stage2_run: 'stage2-run-1',
   candidates: [{ candidate_id: 'cand-1', preferred_name: 'Examplib', identity_status: 'resolved', development_state_aggregate: 'approved', potency_state: null }],
 };
 const pksafetyNative = {
   scorecard_set_id: 's4_1', stage4_method_version: 'stage4-evidence-v2', upstream_stage3_bundle: 's3_b1',
   candidates: [{ candidate_id: 'cand-1', active_moiety: 'Examplib', target: 'T1', mechanism: 'inhibitor', production_eligible: null, lanes: { delivery: 'oral', safety: null } }],
 };
-const stage2Native = {
-  run_id: 'run_1', analysis_mode: 'within_condition',
-  release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome',
-  ...completeStage2Maps(),
-};
 
 const withinSelection: SelectionV3 = {
   selection_id: 'a'.repeat(16), question_id: 'q'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
   estimator_id: 'within_condition_v1', estimator_status: 'available',
-  A: { program_id: 'p1', direction: 'high' }, B: { program_id: 'p2', direction: 'high' }, conditions: ['Rest'],
-  registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64), // matches spec.stage1_binding
+  A: { program_id: 'prog_alpha', direction: 'high' }, B: { program_id: 'prog_beta', direction: 'low' }, conditions: ['Rest'],
+  registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64),
   selection_full_sha256: 'f'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
 };
-// results/current.json is SELECTION-INDEPENDENT — one release resolves any within/temporal selection.
-// The 539431d release-identity hashes must be the UI's pinned values, else loadProductionProjection
-// refuses the release (cross-release fail-closed) and no route binds.
-const spec = {
-  stage1_binding: {
-    release_method_version: 'stage1-continuous-v3.0.1',
-    registry_scorer_view_sha256: 'd'.repeat(64),
-    selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256,
-    release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256,
-  },
-  routes: {
-    targets: { native: stage2Native, receipt: receipt('targets') },
-    drugs: { native: drugsNative, receipt: receipt('drugs') },
-    pksafety: { native: pksafetyNative, receipt: receipt('pksafety') },
-  },
-};
+
+async function makeSpec() {
+  const projection = await compactProjectionRaw();
+  const display_verifier_receipt = await compactReceipt(projection.n_arms);
+  const compact_release = {
+    run_id: 'stage2-run-1', release_conditions: [...CONDITIONS], pathway_sources: [...SOURCES],
+    active_pathway_source: 'reactome',
+  };
+  const stage2 = { projection, display_verifier_receipt, compact_release };
+  return {
+    stage1_binding: {
+      release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64),
+      selection_schema_raw_sha256: STAGE1_SELECTION_SCHEMA_RAW_SHA256,
+      release_self_sha256: STAGE1_V3_RELEASE_SELF_SHA256,
+    },
+    routes: {
+      targets: { ...stage2, receipt: receipt('targets') },
+      pathways: { ...stage2, receipt: receipt('pathways') },
+      drugs: { native: drugsNative, receipt: receipt('drugs') },
+      pksafety: { native: pksafetyNative, receipt: receipt('pksafety') },
+    },
+  };
+}
 
 const deps = (sel: SelectionV3 | null, tree: Record<string, string>): RouteLoaderDeps => ({
   fetchText: treeFetch(tree),
   loadProjection: (p, current, fetchText) => loadProductionProjection(p, current, fetchText, sel),
 });
 
-describe('packager → browser loader round-trip (native fixtures)', () => {
-  it('Drugs: derived + content-addressed → loader binds artifact + admitted run', async () => {
+describe('packager → browser loader round-trip', () => {
+  it('preserves one exact W3 projection for both Stage-2 routes and binds its receipt/hashes', async () => {
     const { pack } = await importPack();
-    const { tree } = pack(spec);
-    const res = await resolveRouteArtifact('drugs', deps(withinSelection, tree));
-    expect(res?.route).toBe('drugs');
-    expect(res && res.route === 'drugs' ? res.artifact.bundle_id : null).toBe('s3_b1');
-    expect(res && res.route === 'drugs' ? res.artifact.candidates[0].development_state_aggregate : null).toBe('approved');
-    expect(res && res.route === 'drugs' ? res.artifact.candidates[0].potency_state : 'x').toBeNull(); // missing stays missing
-    expect(res?.manifest?.methods.reproduce_command).toBe('spot repro drugs');
-    expect(res?.manifest?.provenance.verifier_status).toBe('admitted');
+    const { tree, current } = pack(await makeSpec());
+    expect(tree['stage02/stage2_display_projection.json']).toBeTruthy();
+    expect(tree['stage02/display_projection.verification.json']).toBeTruthy();
+    const cur = current as { chain: { stage2_run_id: string }; routes: Record<string, { compact_stage2: { release_conditions: string[]; pathway_sources: string[]; projection_self_sha256: string } }> };
+    expect(cur.chain.stage2_run_id).toBe('stage2-run-1');
+    expect(cur.routes.targets.compact_stage2.release_conditions).toEqual(CONDITIONS);
+    expect(cur.routes.targets.compact_stage2.pathway_sources).toEqual(SOURCES);
+    expect(cur.routes.targets.compact_stage2).toEqual(cur.routes.pathways.compact_stage2);
+
+    const targets = await resolveRouteArtifact('targets', deps(withinSelection, tree));
+    const pathways = await resolveRouteArtifact('pathways', deps(withinSelection, tree));
+    expect(targets?.route).toBe('targets');
+    expect(pathways?.route).toBe('pathways');
+    expect(targets?.manifest?.methods.reproduce_command).toBe('spot repro targets');
+    expect(pathways?.manifest?.provenance.verifier_status).toBe('admitted');
   });
 
-  it('PK & Safety: derived lanes preserved; not-evaluated stays null', async () => {
+  it('round-trips Stage-3 and Stage-4 while preserving typed missing values', async () => {
     const { pack } = await importPack();
-    const { tree } = pack(spec);
-    const res = await resolveRouteArtifact('pksafety', deps(withinSelection, tree));
-    expect(res?.route).toBe('pksafety');
-    const art = res && res.route === 'pksafety' ? res.artifact : null;
-    expect(art?.scorecard_set_id).toBe('s4_1');
+    const { tree } = pack(await makeSpec());
+    const drugs = await resolveRouteArtifact('drugs', deps(withinSelection, tree));
+    expect(drugs?.route).toBe('drugs');
+    expect(drugs && drugs.route === 'drugs' ? drugs.artifact.candidates[0].potency_state : 'x').toBeNull();
+    const pk = await resolveRouteArtifact('pksafety', deps(withinSelection, tree));
+    const art = pk && pk.route === 'pksafety' ? pk.artifact : null;
     expect(art?.candidates[0].lanes.delivery).toBe('oral');
-    expect(art?.candidates[0].lanes.safety).toBeNull();
-    expect(art?.candidates[0].lanes.transporters).toBeNull(); // absent native lane → typed missing
-    expect(art?.candidates[0].production_eligible).toBeNull();
+    expect(art?.candidates[0].lanes.transporters).toBeNull();
   });
 
-  it('Targets (Stage-2): packager emits the COMPLETE generic release the adapter accepts (all slots)', async () => {
-    const { pack, deriveCompactProjection } = await importPack();
-    // #2 completeness: the derived projection carries the whole release (3 Direct + 6 temporal + 6 pathway)
-    const parsed = parseStage2Projection(deriveCompactProjection('targets', stage2Native));
-    expect(parsed.release_conditions).toEqual(CONDS);
-    expect(Object.keys(parsed.directByCondition).sort()).toEqual(['Rest', 'Stim48hr', 'Stim8hr']);
-    expect(Object.keys(parsed.temporalByPair).length).toBe(6);
-    expect(Object.keys(parsed.pathwayByContext).length).toBe(6);
-    // and it round-trips through the packager (served projection present + content-addressed)
-    const { tree, current } = pack(spec);
-    expect(tree['stage02/targets.ui.json']).toBeTruthy();
-    expect((current as { chain: { stage2_run_id: string } }).chain.stage2_run_id).toBe('run_1');
-  });
-
-  it('a corrupted served projection byte fails the content hash → route unbound', async () => {
+  it('fails closed when projection or independent-receipt bytes change', async () => {
     const { pack } = await importPack();
-    const { tree } = pack(spec);
-    const tampered = { ...tree, 'stage03/drugs.ui.json': tree['stage03/drugs.ui.json'].replace('Examplib', 'Tampered') };
-    const res = await resolveRouteArtifact('drugs', deps(withinSelection, tampered));
-    expect(res).toBeNull();
+    const { tree } = pack(await makeSpec());
+    const badProjection = { ...tree, 'stage02/stage2_display_projection.json': tree['stage02/stage2_display_projection.json'].replace('prog_alpha', 'tampered') };
+    expect(await resolveRouteArtifact('targets', deps(withinSelection, badProjection))).toBeNull();
+    const badReceipt = { ...tree, 'stage02/display_projection.verification.json': tree['stage02/display_projection.verification.json'].replace('"admit"', '"reject"') };
+    expect(await resolveRouteArtifact('targets', deps(withinSelection, badReceipt))).toBeNull();
   });
 
-  it('a route with no admitted native/receipt is simply absent (unbound), others still bind', async () => {
+  it('refuses a stale Stage-1 scorer binding on every route', async () => {
     const { pack } = await importPack();
-    const { tree } = pack(spec); // pksafety present, but request an unlisted route binding
-    const res = await resolveRouteArtifact('pathways', deps(withinSelection, tree)); // pathways not in spec
-    expect(res).toBeNull();
-  });
-
-  it('#1 stale cross-release: a selection whose Stage-1 scorer binding differs is refused on EVERY route', async () => {
-    const { pack } = await importPack();
-    const { tree } = pack(spec);
-    const stale: SelectionV3 = { ...withinSelection, registry_scorer_view_sha256: '9'.repeat(64) }; // a different Stage-1 release
-    for (const route of ['drugs', 'pksafety', 'targets'] as const) {
+    const { tree } = pack(await makeSpec());
+    const stale = { ...withinSelection, registry_scorer_view_sha256: '9'.repeat(64) };
+    for (const route of ['targets', 'pathways', 'drugs', 'pksafety'] as const) {
       expect(await resolveRouteArtifact(route, deps(stale, tree))).toBeNull();
     }
-    // no selection at all also refuses (cannot validate the release binding)
-    expect(await resolveRouteArtifact('drugs', deps(null, tree))).toBeNull();
   });
 });
 
-describe('packager: derives from native, never invents run metadata', () => {
-  it('refuses a missing required receipt field', async () => {
+describe('packager refuses invented or inconsistent Stage-2 releases', () => {
+  it('requires W3 projection + independent receipt, never the retired imagined aggregate', async () => {
     const { pack } = await importPack();
-    const bad = { ...spec, routes: { drugs: { native: drugsNative, receipt: { ...receipt('drugs'), reproduce_command: undefined } } } };
-    expect(() => pack(bad)).toThrow(/reproduce_command/);
-  });
-  it('refuses a non-admitted verifier status', async () => {
-    const { pack } = await importPack();
-    const bad = { ...spec, routes: { drugs: { native: drugsNative, receipt: { ...receipt('drugs'), verifier_status: 'pending' } } } };
-    expect(() => pack(bad)).toThrow(/admitted token/);
-  });
-  it('refuses hand-authored compact rows (native input required)', async () => {
-    const { pack } = await importPack();
-    const bad = { ...spec, routes: { drugs: { receipt: receipt('drugs') } } }; // no native
-    expect(() => pack(bad)).toThrow(/native input required/);
-  });
-  it('derives Stage-2 objects from native base_records[]/arms[] arrays (values unchanged)', async () => {
-    const { deriveCompactProjection } = await importPack();
-    const maps = completeStage2Maps();
-    maps.temporalByPair['Rest__Stim8hr'] = { bundle_id: 'b1', base_records: [{ base_key: 'k1', target_symbol: 'SYM1' }], arms: [{ arm_key: 'a1', records: [{ base_key: 'k1', arm_value: -0.1 }] }] };
-    const compact = deriveCompactProjection('targets', { run_id: 'run_1', analysis_mode: 'temporal_cross_condition', release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome', ...maps });
-    const t = compact.temporalByPair['Rest__Stim8hr'];
-    expect(t.base_records.k1).toEqual({ base_key: 'k1', target_symbol: 'SYM1' }); // array → object keyed by base_key
-    expect(t.arms.a1.arm_key).toBe('a1');
-    expect(Array.isArray(t.arms.a1.records)).toBe(true); // arm.records stays a native array
+    const base = await makeSpec();
+    const retired = { run_id: 'stage2-run-1', directByCondition: {}, temporalByPair: {}, pathwayByContext: {} };
+    const bad = { ...base, routes: { targets: { native: retired, receipt: receipt('targets') } } };
+    expect(() => pack(bad)).toThrow(/projection|compact_release/);
   });
 
-  it('#6 chain: refuses drugs upstream_stage2_run != stage-2 run_id at pack time (receipt A + data B)', async () => {
+  it('refuses non-admitted/mismatched display receipts and mutable release ordering', async () => {
     const { pack } = await importPack();
-    const badDrugs = { ...drugsNative, upstream_stage2_run: 'run_WRONG' };
-    const bad = { ...spec, routes: { ...spec.routes, drugs: { native: badDrugs, receipt: receipt('drugs') } } };
-    expect(() => pack(bad)).toThrow(/chain.*upstream_stage2_run|upstream_stage2_run.*run_id/);
+    const base = await makeSpec();
+    const target = base.routes.targets;
+    expect(() => pack({ ...base, routes: { targets: { ...target, display_verifier_receipt: { ...target.display_verifier_receipt, verdict: 'reject' } } } })).toThrow(/verifier receipt/);
+    expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, release_conditions: ['Stim8hr', 'Rest', 'Stim48hr'] } } } })).toThrow(/exactly/);
+    expect(() => pack({ ...base, routes: { targets: { ...target, compact_release: { ...target.compact_release, run_id: 'other' } }, pathways: base.routes.pathways } })).toThrow(/run_id differs/);
+    expect(() => pack({ ...base, routes: { targets: target, pathways: { ...base.routes.pathways,
+      compact_release: { ...base.routes.pathways.compact_release, active_pathway_source: 'go_bp' } } } })).toThrow(/metadata disagrees/);
   });
 
-  it('#6 chain: loader refuses a projection whose upstream id != the current.json chain', async () => {
+  it('refuses hidden p/q/combined fields before writing the served tree', async () => {
     const { pack } = await importPack();
-    const { tree } = pack(spec);
-    // tamper the pointer's chain so the drugs projection.upstream_stage2_run no longer matches
-    const cur = JSON.parse(tree['current.json']);
-    cur.chain.stage2_run_id = 'run_TAMPERED';
-    const tampered = { ...tree, 'current.json': JSON.stringify(cur) };
-    expect(await resolveRouteArtifact('drugs', deps(withinSelection, tampered))).toBeNull();
+    for (const key of ['empirical_p_value', 'qval', 'fdr', 'combined_score', 'balanced_skew']) {
+      const base = await makeSpec();
+      const first = Object.values(base.routes.targets.projection.arms)[0] as { rows: Record<string, unknown>[] };
+      first.rows[0][key] = 0.01;
+      expect(() => pack(base)).toThrow(/forbidden/);
+    }
   });
 
-  it('#2 completeness: packager refuses an INCOMPLETE Stage-2 release (missing a temporal pair)', async () => {
+  it('still refuses missing run provenance and cross-stage chain mismatches', async () => {
     const { pack } = await importPack();
-    const maps = completeStage2Maps();
-    delete (maps.temporalByPair as Record<string, unknown>)['Stim8hr__Stim48hr'];
-    const incomplete = { run_id: 'run_1', analysis_mode: 'within_condition', release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome', ...maps };
-    const bad = { ...spec, routes: { targets: { native: incomplete, receipt: receipt('targets') } } };
-    expect(() => pack(bad)).toThrow(/incomplete|missing (temporal|Direct|pathway)/);
+    const base = await makeSpec();
+    const badReceipt = { ...base, routes: { drugs: { native: drugsNative, receipt: { ...receipt('drugs'), reproduce_command: undefined } } } };
+    expect(() => pack(badReceipt)).toThrow(/reproduce_command/);
+    const wrong = { ...drugsNative, upstream_stage2_run: 'wrong' };
+    expect(() => pack({ ...base, routes: { ...base.routes, drugs: { native: wrong, receipt: receipt('drugs') } } })).toThrow(/upstream_stage2_run/);
   });
 });

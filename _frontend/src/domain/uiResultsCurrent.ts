@@ -8,6 +8,8 @@
 // FAIL-CLOSED: an absent, malformed, unknown-schema, or Stage-1-mismatched pointer leaves ALL routes
 // unbound. A route simply absent from `routes` is unbound (not an error). No fixture, no fake result.
 
+import type { CompactStage2ReleaseMetadata } from './compactStage2Projection';
+
 export const UI_RESULTS_CURRENT_SCHEMA = 'spot.ui_results_current.v1' as const;
 
 export type ResultRouteKey = 'targets' | 'pathways' | 'drugs' | 'pksafety';
@@ -23,6 +25,8 @@ export interface RouteReleaseEntry {
   projection_path: string | null;
   /** Pinned sha256 over that projection (verified before any row renders), or null. */
   projection_content_hash: string | null;
+  /** Required by the compact Stage-2 targets/pathways routes; absent for Stage 3/4. */
+  compact_stage2: CompactStage2ReleaseMetadata | null;
 }
 
 /** The Stage-1 release/selection identity the downstream results descend from (fail closed on drift). */
