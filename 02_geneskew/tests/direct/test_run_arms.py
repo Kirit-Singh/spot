@@ -311,6 +311,12 @@ class TestThePhysicalContract:
     def test_the_bundle_ships_exactly_the_contract_files(self, bundle):
         # DERIVED from arm_artifacts, never a hardcoded list: the native file set is the thing
         # W10 admitted and W3 keys on, and a list copied into a test drifts from it silently.
+        #
+        # The contract is the SUPERSET (audit BLOCKER 4): the contributor evidence must SHIP,
+        # not merely be hashed — a reader who cannot obtain the contributing guides cannot
+        # reconstruct which guides made the mask that made the deltas. W18's intent (a closed,
+        # no-shim file set W10 and W3 read BY NAME) is preserved, and its five files are still
+        # all here — asserted, not assumed.
         from direct import arm_artifacts
         res, _, _ = bundle
         expected = {arm_artifacts.ROWS_FILE, arm_artifacts.MASKS_FILE,
@@ -318,7 +324,11 @@ class TestThePhysicalContract:
                     arm_artifacts.DONOR_SUPPORT_FILE, arm_artifacts.INPUTS_FILE,
                     arm_artifacts.UNIVERSE_FILE, arm_artifacts.BUNDLE_FILE,
                     arm_artifacts.PROVENANCE_FILE, arm_artifacts.VERIFICATION_FILE}
-        assert set(os.listdir(res["out_dir"])) == expected
+        shipped = set(os.listdir(res["out_dir"]))
+        assert shipped == expected
+        for w18_file in ("arm_bundle.json", "arms.parquet", "masks.parquet",
+                         "provenance.json", "verification.json"):
+            assert w18_file in shipped
 
     def test_the_producer_does_NOT_admit_its_own_output(self, bundle):
         from direct import arm_artifacts
@@ -400,7 +410,12 @@ class TestW10_TheCONTRIBUTORManifestAndTheMASKAreBoundAsBYTES:
     def test_a_RESEALED_mask_mutation_changes_the_bound_hash(self, bundle):
         # the honest-producer attack: alter the masked genes and re-hash. The mask hash is
         # over the mask ROWS, so it moves — and the run id, which covers it, moves with it.
-        from direct import emit as _emit
+        #
+        # INTEGRATION: this now exercises `masks.mask_content_sha256` — the CANONICAL hash the
+        # integrated producer actually binds — not `emit.mask_content_sha256`, which W18's line
+        # bound and which W14 proved unreproducible from the shipped file. A mutation test
+        # aimed at a function the producer no longer calls guards nothing.
+        from direct import masks as _emit
         res, _, prov = bundle
         import pandas as pd
         df = pd.read_parquet(os.path.join(res["out_dir"], "masks.parquet"))

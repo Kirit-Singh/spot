@@ -153,6 +153,9 @@ class TestTheShippedCLIBuildsTheWholeRelease:
             "--source-registry", args.source_registry,
             "--pseudobulk", args.pseudobulk,
             "--lane", "synthetic", "--allow-dirty-tree",
+            # THE PINNED SOLVER LOCK. Every invocation binds it and a run without it REFUSES,
+            # so a test that omitted it would be exercising a path production cannot take.
+            "--env-lock", args.env_lock,
             "--stage1-release", args.stage1_release,
             "--stage1-release-root", args.stage1_release_root])
         assert result["n_physical_bundles"] == 3

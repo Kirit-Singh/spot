@@ -228,6 +228,8 @@ class TestABundleCanActuallyBeBuiltOnTheV3Release:
             "--source-registry", args.source_registry,
             "--pseudobulk", args.pseudobulk,
             "--lane", "synthetic", "--allow-dirty-tree",
+            # the pinned Stage-2 solver lock — bound by every invocation, or the run refuses
+            "--env-lock", args.env_lock,
             "--stage1-release", release_path, "--stage1-release-root", root])
         return run_arms.build_bundle(ns)
 
