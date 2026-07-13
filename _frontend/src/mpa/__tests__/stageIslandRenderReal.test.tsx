@@ -12,7 +12,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { StageIsland } from '../StageIsland';
-import { resolveProductionRealArtifact } from '../renderReal';
+import { resolveProductionRealArtifact } from '../resolveRouteArtifact';
 import type { RealArtifactResolution } from '../renderReal';
 import {
   parseNativeTemporalArmBundle,
@@ -20,6 +20,7 @@ import {
 } from '../../adapters/nativeTemporalArmAdapter';
 import { resolveJoinedView } from '../../repository/joinResolver';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
+import type { PageKey } from '../pages';
 import { fixtureProvenance } from '../../fixtures/synthetic';
 
 const ARM = 'temporal|th17_like|decrease|Rest|Stim48hr';
@@ -80,14 +81,14 @@ function admittedResolution(): RealArtifactResolution {
     w11_verification: { verdict: 'ADMIT', admits_release: 'r'.repeat(64) },
   });
   expect(admission).toBe('admitted'); // guard: the fixture really is admitted
-  return { view, bundles, admission };
+  return { route: 'targets', view, bundles, admission };
 }
 
 function renderIsland(
   loadRealArtifact?:
     | RealArtifactResolution
     | null
-    | (() => Promise<RealArtifactResolution | null> | RealArtifactResolution | null),
+    | ((page: PageKey) => Promise<RealArtifactResolution | null> | RealArtifactResolution | null),
 ) {
   const loader = typeof loadRealArtifact === 'function' ? loadRealArtifact : () => loadRealArtifact ?? null;
   return render(

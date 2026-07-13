@@ -7,7 +7,8 @@
 // Two modes for the result-dependent gates (U06, U08–U12):
 //   pending  (DEFAULT — the shell-deploy gate): the page is honestly PRE-RUN — a compact
 //            neutral pending canvas + a REAL method-DEFINITION drawer (method_id, estimand,
-//            masks/QC, sources, offline reproduce populated; run-status fields unavailable);
+//            masks/QC, sources populated; run-status fields — incl. the reproduce command, which
+//            reproduces only an ADMITTED artifact — unavailable);
 //            ZERO fixture/demo/GENE_A/COMPOUND_A/stale/"awaiting artifact" text anywhere.
 //   admitted (--mode=admitted, after real bundles land): the stronger result/hash checks
 //            (real rows/figures, run-status + artifact hashes populated, last_run_utc bound).
@@ -31,8 +32,10 @@ const ROUTE_LABEL = { '01_page.html': 'Programs', 'targets.html': 'Targets', 'pa
 export { DEFAULT_BASE, ROUTES, DOWNSTREAM, NAV_EXPECTED, STAGE_LABEL };
 
 // Method-DEFINITION fields (populated pre-run) vs RUN-STATUS fields (unavailable until a run).
+// Reproduce is RUN-STATUS, not definition: a command reproduces only an ADMITTED artifact, so it stays
+// unavailable until a run is bound (matches the shipped reproduce=null-when-unbound design + its tests).
 const DEF_METHODS = ['Data / input', 'Estimand', 'Masks / QC', 'Method'];
-const RUNSTATUS_METHODS = ['Last run UTC'];
+const RUNSTATUS_METHODS = ['Last run UTC', 'Reproduce'];
 const RUNSTATUS_PROV = ['Release', 'Raw sha256', 'Canonical', 'Generator', 'Verifier'];
 
 // ── pending method-definition assertion (shared by U08–U11) ──
@@ -40,7 +43,6 @@ function pendingDefProblems(rows) {
   const p = [];
   if (bad(rows.methods['Method'])) p.push('drawer has no real method definition (Method unavailable)');
   for (const k of DEF_METHODS) if (bad(rows.methods[k])) p.push(`method-definition missing "${k}"`);
-  if (bad(rows.methods['Reproduce'])) p.push('offline reproduce command not populated');
   if (rows.sources.length === 0 && bad(rows.methods['Source'])) p.push('sources not populated');
   for (const k of RUNSTATUS_METHODS) if (!bad(rows.methods[k])) p.push(`pre-run claim: run-status "${k}" should be unavailable`);
   for (const k of RUNSTATUS_PROV) if (!bad(rows.provenance[k])) p.push(`pre-run claim: run-status "${k}" should be unavailable`);
@@ -461,9 +463,12 @@ export async function checkU17(browser, base, mode) {
       return { hasCopyBtn: !!copyBtn, cmd, lastRun, clip: typeof navigator.clipboard?.readText === 'function' };
     });
     const notes = [];
-    // reproduce command is a method-DEFINITION field — must be copyable in BOTH modes.
-    if (!info.hasCopyBtn || !info.cmd) notes.push('no manifest-bound reproduce command shown');
-    else if (info.clip) {
+    // reproduce command is a RUN-STATUS field: unavailable until admitted, then copyable + == manifest.
+    if (mode === 'pending') {
+      if (info.hasCopyBtn || info.cmd) notes.push('pending: a reproduce command is shown but no artifact is admitted (must be unavailable until admitted)');
+    } else if (!info.hasCopyBtn || !info.cmd) {
+      notes.push('no manifest-bound reproduce command shown');
+    } else if (info.clip) {
       await page.evaluate(() => document.querySelector('[data-section="methods"] [aria-label="Copy reproduce command"]')?.click());
       const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => null));
       if (clip !== info.cmd) notes.push(`clipboard "${(clip || '∅').slice(0, 40)}" ≠ command "${(info.cmd || '∅').slice(0, 40)}"`);
@@ -475,7 +480,7 @@ export async function checkU17(browser, base, mode) {
       if (!isUtc(info.lastRun)) notes.push(`admitted: Last run UTC invalid: "${info.lastRun || '∅'}"`);
       else { const { json } = await fetchJson(urlOf(base, RELEASE_MANIFEST)); if (json?.generated_utc && info.lastRun === json.generated_utc) notes.push('Last run UTC equals build/deploy time'); }
     }
-    return { gate: 'U17', pass: notes.length === 0, detail: notes.length === 0 ? `${mode}: reproduce command copyable == manifest; Last-run UTC ${mode === 'pending' ? 'honestly unavailable' : 'valid & != build time'}` : notes.join(' | ') };
+    return { gate: 'U17', pass: notes.length === 0, detail: notes.length === 0 ? `${mode}: reproduce command ${mode === 'pending' ? 'honestly unavailable (no admitted artifact)' : 'copyable == manifest'}; Last-run UTC ${mode === 'pending' ? 'honestly unavailable' : 'valid & != build time'}` : notes.join(' | ') };
   });
 }
 

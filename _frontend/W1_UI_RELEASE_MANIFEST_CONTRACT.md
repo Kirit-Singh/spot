@@ -72,6 +72,35 @@ Reject → route stays unbound (static definition + one-line status). Never a pa
 Serve each `manifest` alongside its `content_hash`. A real `resolveProductionRealArtifact()`
 (or its per-route equivalent) fetches the manifest, calls `parseUiReleaseManifest(...)` with the pinned
 `content_hash` + code-bound `stageLabel`/`methodId`, then `mergeAdmittedManifest(staticDef, admitted)`,
-and sets `RealArtifactResolution.manifest` — only when `admission === 'admitted'`.
+and sets `RealRouteResolution.manifest` — only when `admission === 'admitted'`.
+
+## Serving the results tree (pre-run infrastructure — now in place)
+
+The shell now has the full FAIL-CLOSED loading + deploy seam; W1 supplies the bytes:
+
+1. **`results/current.json`** (`spot.ui_results_current.v1`, `src/domain/uiResultsCurrent.ts`) — the SINGLE
+   mutable downstream pointer, served OUTSIDE `data/` (so the pinned Stage-1 digest never moves). It binds:
+   - `stage1_binding` — `{ release_method_version, registry_scorer_view_sha256 }` (the Stage-1 release the
+     results descend from);
+   - `routes[<route>]` — `{ manifest_path, content_hash, projection_path, projection_content_hash }`
+     (per route; a route absent → unbound). Parsed fail-closed by `parseUiResultsCurrent`.
+   - **plus a deploy-only `inventory[]`** — `{ path, sha256 }` for EVERY file under `results/` (except
+     `current.json`). `deploy/validate_results_tree.py` re-hashes each file and REFUSES an unlisted file,
+     hash mismatch, partial tree, missing route manifest, or malformed pointer. (The browser adapter
+     ignores `inventory`; it fetches specific paths and verifies their pinned `content_hash`.)
+2. **Route resolution** (`src/mpa/resolveRouteArtifact.ts`) — `resolveRouteArtifact(page, { fetchText,
+   loadProjection })`: loads `current.json` → the route's ui_release manifest (via `loadRouteReleaseManifest`,
+   fail-closed) → merges → the route's native projection. Returns a route-discriminated
+   `RealRouteResolution` ONLY when the manifest is admitted AND a matching projection is bound; else null.
+   **W1 wires `loadProjection`** to parse the native Stage-2/3/4 bundles into a `RouteProjection`
+   (`{kind:'stage2',view,bundles}` | `{kind:'stage3',artifact:Stage3UiArtifact}` |
+   `{kind:'stage4',artifact:Stage4UiArtifact}`); the pre-run default returns null (route stays unbound).
+   Stage-3/Stage-4 UI models: `src/domain/stage3UiArtifact.ts`, `src/domain/stage4UiArtifact.ts`
+   (native workflow states / evidence lanes; missing stays typed-missing; no `gbm_context`/`directness`/
+   inferred `safe`/`brain penetrant`).
+3. **Deploy** (`deploy/deploy_8347.sh`) — set `SPOT_RESULTS_SRC=<staged results tree>`; the deploy validates
+   it, hygiene-scans every result JSON, copies it under served `results/`, classifies it `downstream-data`
+   in `release_manifest.json`, and remote-byte-verifies it. ABSENT → clean UNBOUND deploy (Stage-1 digest
+   byte-identical). Never put results under `data/`.
 
 _Deployment is HELD until real admitted artifacts arrive; the branch is committed but not redeployed._

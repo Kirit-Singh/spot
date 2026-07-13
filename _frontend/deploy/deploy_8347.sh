@@ -68,6 +68,15 @@ SKIP_REMOTE="${SKIP_REMOTE:-0}"   # local-only run; explicitly NOT a successful 
 PAGES=(targets.html pathways.html drugs.html pksafety.html)
 STATIC_SVG=(favicon.svg icons.svg)
 
+# Optional admitted downstream results/ staging tree — W1 publishes it AFTER a real, verified run. It
+# lives OUTSIDE the git worktree AND OUTSIDE data/, so binding downstream results NEVER perturbs the
+# pinned Stage-1 digest. ABSENT (pre-run) → a clean UNBOUND deploy (0 downstream-data files). PRESENT →
+# it must be content-addressed by results/current.json (schema spot.ui_results_current.v1) carrying a
+# full inventory[] (path + sha256) of EVERY file under it; the deploy re-hashes each file, refuses any
+# unlisted file / hash mismatch / missing route manifest / malformed current.json, hygiene-scans every
+# result JSON, classifies them `downstream-data`, and remote-byte-verifies them like all served bytes.
+RESULTS_SRC="${SPOT_RESULTS_SRC:-}"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +121,36 @@ hygiene_scan() {  # args: files… — token-level (safe for one-line minified b
     printf '%s\n' "$hits" | sed 's/^/  /' | head -60
     die "provenance-hygiene: forbidden strings in served bytes (see above)"
   fi
+}
+
+# Resolve + content-address-validate the OPTIONAL downstream results/ tree. Populates RESULTS_RELS with
+# every result relpath to serve (empty when no tree). FAIL-CLOSED: a present-but-malformed / unmanifested
+# / hash-mismatched / partial tree hard-refuses. Absence is the clean pre-run UNBOUND state (no-op).
+RESULTS_RELS=()
+resolve_results_tree() {
+  RESULTS_RELS=()
+  if [ -z "$RESULTS_SRC" ]; then
+    say "       no downstream results/ tree (SPOT_RESULTS_SRC unset) — clean UNBOUND deploy (0 downstream-data files)"
+    return 0
+  fi
+  [ -d "$RESULTS_SRC" ] || die "SPOT_RESULTS_SRC set but not a directory: $RESULTS_SRC"
+  [ -f "$RESULTS_SRC/current.json" ] || die "results tree present but missing results/current.json (content-address pointer)"
+  command -v python3 >/dev/null 2>&1 || die "python3 required to validate the downstream results tree"
+  # Content-address + inventory-completeness gate (deploy/validate_results_tree.py, unit-tested):
+  # emits `OK` + sorted `FILE <rel>` lines, or a single `ERR <reason>`. It exits 0 either way so the
+  # shell inspects the verdict — a malformed / unmanifested / mismatched / partial tree hard-refuses.
+  local report
+  report="$(python3 "$SCRIPT_DIR/validate_results_tree.py" "$RESULTS_SRC")" || die "downstream results validation could not run"
+  case "$report" in
+    'ERR '*) die "downstream results tree invalid: ${report#ERR }";;
+    OK*)     : ;;
+    *)       die "downstream results validation produced no verdict";;
+  esac
+  while IFS= read -r line; do
+    case "$line" in 'FILE '*) RESULTS_RELS+=("${line#FILE }");; esac
+  done <<< "$report"
+  RESULTS_RELS+=("current.json")  # served first by the browser; classified downstream-data too
+  say "       downstream results tree OK: ${#RESULTS_RELS[@]} content-addressed file(s), no unlisted files"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -208,6 +247,11 @@ while IFS= read -r -d '' f; do
   case "$(basename "$f")" in 01_page.html|targets.html|pathways.html|drugs.html|pksafety.html|favicon.svg|icons.svg|release_manifest.json) continue;; esac
   SCAN+=("$f")   # preserved Stage-1 root files: 01_notebook.html / 01_trace.html / index.html
 done < <(find "$TARGET_ROOT" -maxdepth 1 -type f -print0)
+# Optional downstream results/: validate content-addressing, then hygiene-scan every result JSON too.
+resolve_results_tree
+if [ "${#RESULTS_RELS[@]}" -gt 0 ]; then
+  for rel in "${RESULTS_RELS[@]}"; do SCAN+=("$RESULTS_SRC/$rel"); done
+fi
 hygiene_scan "${SCAN[@]}"
 say "       clean (${#SCAN[@]} served text artifacts scanned)"
 
@@ -215,16 +259,21 @@ say "       clean (${#SCAN[@]} served text artifacts scanned)"
 # 6. Resolve + validate the EXACT copy set (no dist/data, ever)
 # ─────────────────────────────────────────────────────────────────────────────
 say "[6/10] resolving copy set"
-SRC_FILES=(); DST_RELS=()
-add_pair() { SRC_FILES+=("$1"); DST_RELS+=("$2"); }
+SRC_FILES=(); DST_RELS=(); DST_CLASS=()
+# add_pair SRC DST [CLASS] — CLASS defaults to `built`; downstream results are `downstream-data`.
+add_pair() { SRC_FILES+=("$1"); DST_RELS+=("$2"); DST_CLASS+=("${3:-built}"); }
 add_pair "$PUBLIC_DIR/01_page.html" "01_page.html"
 for f in "${PAGES[@]}" "${STATIC_SVG[@]}"; do add_pair "$DIST_DIR/$f" "$f"; done
 while IFS= read -r -d '' a; do add_pair "$a" "assets/${a#"$DIST_DIR/assets/"}"; done < <(find "$DIST_DIR/assets" -type f -print0)
+# Optional downstream results/ (validated above) → served under results/, classified downstream-data.
+if [ "${#RESULTS_RELS[@]}" -gt 0 ]; then
+  for rel in "${RESULTS_RELS[@]}"; do add_pair "$RESULTS_SRC/$rel" "results/$rel" "downstream-data"; done
+fi
 for i in "${!SRC_FILES[@]}"; do
   case "${SRC_FILES[$i]}" in "$DIST_DIR/data/"*) die "copy set includes dist/data — refusing duplicate data";; esac
   case "${DST_RELS[$i]}"  in data/*|data)        die "copy set targets data/ — refusing to touch preserved data";; esac
 done
-say "       ${#SRC_FILES[@]} file(s) staged (0 under data/)"
+say "       ${#SRC_FILES[@]} file(s) staged (0 under data/; $((${#RESULTS_RELS[@]})) downstream-data)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. Snapshot LOCAL data/ BEFORE
@@ -239,7 +288,9 @@ manifest_of_dir "$TARGET_DATA" > "$DATA_BEFORE"
 # 8. Copy into TARGET_ROOT (assets/ rebuilt; data/ never written)
 # ─────────────────────────────────────────────────────────────────────────────
 say "[8/10] laying distribution into target root"
-rm -rf "$TARGET_ROOT/assets"
+# assets/ and results/ are FULLY deploy-managed → removed then re-laid (atomic publish; never a stale
+# bundle). data/ is NEVER touched. When no results tree is staged, results/ is simply absent (unbound).
+rm -rf "$TARGET_ROOT/assets" "$TARGET_ROOT/results"
 for i in "${!SRC_FILES[@]}"; do dst="$TARGET_ROOT/${DST_RELS[$i]}"; mkdir -p "$(dirname "$dst")"; cp -p "${SRC_FILES[$i]}" "$dst"; done
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -250,9 +301,11 @@ manifest_of_dir "$TARGET_DATA" > "$DATA_AFTER"
 diff -q "$DATA_BEFORE" "$DATA_AFTER" >/dev/null || { diff "$DATA_BEFORE" "$DATA_AFTER" || true; die "LOCAL data/ changed during deploy"; }
 [ "$(data_digest_local)" = "$STAGE1_DATA_DIGEST" ] || die "LOCAL data digest drifted from pinned $STAGE1_DATA_DIGEST"
 
-# classified entries: path<TAB>sha256<TAB>class
+# classified entries: path<TAB>sha256<TAB>class — per-file class (built | downstream-data), sorted by path.
 : > "$REL_ENTRIES"
-for rel in $(printf '%s\n' "${DST_RELS[@]}" | LC_ALL=C sort); do printf '%s\t%s\tbuilt\n' "$rel" "$(sha256_of "$TARGET_ROOT/$rel")" >> "$REL_ENTRIES"; done
+for i in "${!DST_RELS[@]}"; do
+  printf '%s\t%s\t%s\n' "${DST_RELS[$i]}" "$(sha256_of "$TARGET_ROOT/${DST_RELS[$i]}")" "${DST_CLASS[$i]}"
+done | LC_ALL=C sort >> "$REL_ENTRIES"
 while IFS= read -r -d '' f; do
   b="$(basename "$f")"
   case "$b" in 01_page.html|targets.html|pathways.html|drugs.html|pksafety.html|favicon.svg|icons.svg|release_manifest.json) continue;; esac

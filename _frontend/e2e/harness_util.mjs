@@ -260,28 +260,56 @@ export async function makeSelection(page, base, { temporal = false } = {}) {
     return !!(progOk && condOk);
   }, temporal), 20000);
   if (!populated) return { ok: false, reason: 'Stage-1 program/condition options never populated (data load exceeded 20s)' };
-  await page.evaluate((temporal) => {
+  // Select REAL portable programs by stable program value (option.value === score_field), NEVER by a
+  // fixed index: Stage-1 deliberately leads the program <select> with a blank placeholder
+  // (`<option value="">— program —</option>`), so index 0 is the placeholder and picking it yields no
+  // valid contrast. Choose two DISTINCT nonempty program values (A ≠ B); conditions carry no
+  // placeholder, so they stay value-driven off the real condition keys.
+  const chosen = await page.evaluate((temporal) => {
     const fire = (el) => el && el.dispatchEvent(new Event('change', { bubbles: true }));
-    const pick = (sel, idx) => {
-      if (!sel || sel.options.length === 0) return;
-      sel.selectedIndex = Math.min(idx, sel.options.length - 1);
-      fire(sel);
-    };
     const q = (s) => document.querySelector(s);
-    pick(q('.axsel.prog[data-ax="A"]'), 0);
+    const realValues = (sel) => (sel ? [...sel.options].map((o) => o.value).filter((v) => v && v.trim() !== '') : []);
+    const setValue = (sel, value) => {
+      if (!sel || value == null) return null;
+      sel.value = value;
+      if (sel.value !== value) return null; // the option must actually exist
+      fire(sel);
+      return sel.value;
+    };
+    const pa = q('.axsel.prog[data-ax="A"]');
     const pb = q('.axsel.prog[data-ax="B"]');
-    pick(pb, pb && pb.options.length > 1 ? 1 : 0);
+    const progA = realValues(pa);
+    const progB = realValues(pb);
+    const vA = progA[0] ?? null;
+    const vB = progB.find((v) => v !== vA) ?? progB[1] ?? null; // a DISTINCT real program for B
+    const aVal = setValue(pa, vA);
+    const bVal = setValue(pb, vB);
+    // Conditions LEAD with a pooled "All" that is DISPLAY-ONLY — a screen needs one real timepoint
+    // (Rest / Stim8hr / Stim48hr), so All/All leaves Identify disabled. Exclude the pooled "All" and
+    // pick real timepoints: the SAME one for a within-condition screen, a DISTINCT ordered pair for a
+    // temporal screen. (Same class of bug as the blank program placeholder — never pick by fixed index.)
     const ca = q('.axsel.cond[data-ax="A"]');
     const cb = q('.axsel.cond[data-ax="B"]');
+    const realConds = (sel) => (sel ? [...sel.options].map((o) => o.value).filter((v) => v && v.trim() !== '' && v !== 'All') : []);
+    const cA = realConds(ca);
+    const cB = realConds(cb);
     if (temporal) {
-      pick(ca, ca && ca.options.length > 1 ? 1 : 0);
-      pick(cb, cb && cb.options.length > 2 ? 2 : 0);
+      setValue(ca, cA[0] ?? null);
+      setValue(cb, cB.find((v) => v !== (cA[0] ?? null)) ?? cB[cB.length - 1] ?? null);
     } else {
-      const i = ca && ca.options.length > 1 ? 1 : 0;
-      pick(ca, i);
-      pick(cb, i);
+      const c = cA[0] ?? null;
+      setValue(ca, c);
+      setValue(cb, c);
     }
+    return { aVal, bVal, condA: ca?.value ?? null, condB: cb?.value ?? null };
   }, temporal);
+  // Explicit precondition: two distinct real programs AND real timepoints (never a blank / pooled "All").
+  if (!chosen.aVal || !chosen.bVal) {
+    return { ok: false, reason: `program selection did not resolve to real values (A="${chosen.aVal ?? ''}", B="${chosen.bVal ?? ''}") — blank placeholder or missing options` };
+  }
+  if (!chosen.condA || chosen.condA === 'All' || !chosen.condB || chosen.condB === 'All') {
+    return { ok: false, reason: `condition did not resolve to a real timepoint (A="${chosen.condA ?? ''}", B="${chosen.condB ?? ''}") — pooled "All" is display-only` };
+  }
   const enabled = await poll(async () => page.evaluate(() => {
     const b = document.getElementById('idgenes');
     return !!b && !b.disabled;

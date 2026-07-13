@@ -32,8 +32,8 @@ import { unavailableManifest } from '../domain/methodsManifest';
 import type { StageMethodsManifest } from '../domain/methodsManifest';
 import { buildStageMethodsManifest } from './stageMethods';
 import { StatePill } from '../shell/chips';
-import { renderReal } from './renderReal';
-import type { RealArtifactResolution } from './renderReal';
+import { renderRouteReal } from './renderReal';
+import type { RealRouteResolution } from './renderReal';
 
 export interface StageIslandProps {
   page: PageKey;
@@ -43,7 +43,7 @@ export interface StageIslandProps {
    * or null when nothing is bound (→ pending state). The admission gate lives inside the loader;
    * StageIsland awaits it and renders pending until it resolves. NEVER demo/fixture.
    */
-  loadRealArtifact?: () => Promise<RealArtifactResolution | null> | RealArtifactResolution | null;
+  loadRealArtifact?: (page: PageKey) => Promise<RealRouteResolution | null> | RealRouteResolution | null;
   // Deprecated demo-entry props — accepted (optional, unused) for test call-site compatibility only;
   // the demo route is retired and none of these are read. No fixture is imported here.
   purpose?: string;
@@ -81,7 +81,7 @@ interface ProdState {
   loading: boolean;
   selection: SelectionV3 | null; // verified v3 (null → prompt); NEVER an unverified/forged contract
   manifest: StageMethodsManifest | null; // real per-tab method-definition manifest
-  real: RealArtifactResolution | null; // admitted artifact (already admission-gated) or null
+  real: RealRouteResolution | null; // admitted route-discriminated artifact (admission-gated) or null
 }
 
 export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandProps) {
@@ -99,7 +99,7 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
       const [selection, manifest, real] = await Promise.all([
         readStage1SelectionV3().catch(() => null), // fail-closed: forged/absent v3 → null
         buildStageMethodsManifest(page).catch(() => null), // real, admission-independent (canonical label)
-        (loadRealArtifact ? Promise.resolve(loadRealArtifact()) : Promise.resolve(null)).catch(() => null),
+        (loadRealArtifact ? Promise.resolve(loadRealArtifact(page)) : Promise.resolve(null)).catch(() => null),
       ]);
       if (cancelled) return;
       // ADMISSION gate: a temporal artifact renders ONLY when admission === 'admitted'.
@@ -155,8 +155,9 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
       methodsManifest={methodsManifest}
     >
       {prod.real ? (
-        // prod.real is only set when admission === 'admitted' (gated above)
-        renderReal(prod.real.view, prod.real.bundles)
+        // prod.real is only set when admission === 'admitted' (gated above); each route renders its
+        // OWN native path — Stage 3/4 never fall through to the Stage-2 tables.
+        renderRouteReal(prod.real)
       ) : (
         <PendingArtifact resolving={prod.loading} />
       )}
