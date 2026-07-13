@@ -161,3 +161,27 @@ def test_a_missing_organ_system_does_not_make_a_v2_bundle_incomplete():
     inputs.safety_records = [r.model_copy(update={"organ_system_evidence": None})
                              for r in inputs.safety_records]
     assert contract_violations(inputs) == []
+
+
+# ------------------------------------------------------- no p/q, no score, no 'safe' flag
+
+def test_the_v2_forbidden_field_names_are_actually_enforced_not_merely_declared():
+    """A forbidden-name list nothing reads is a comment.
+
+    p/q values imply a hypothesis test this stage does not run; an organ-system score would
+    recreate the single combined clinical verdict the whole taxonomy exists to prevent.
+    """
+    from analysis.contract_version import ContractVersion
+    from analysis.method_config import load_method_bundle
+    from analysis.safety import assert_no_forbidden_fields
+
+    method = load_method_bundle(version=ContractVersion.V2)
+    forbidden = set(method.forbidden_fields)
+
+    for name in ("p_value", "q_value", "fdr", "organ_system_score", "toxicity_score",
+                 "is_safe", "composite_score", "clinical_recommendation"):
+        assert name in forbidden, f"{name} is not enforced"
+
+    for name in ("p_value", "q_value", "organ_system_score"):
+        with pytest.raises(Exception):
+            assert_no_forbidden_fields({"lanes": {name: 0.01}}, method.forbidden_fields, "test")
