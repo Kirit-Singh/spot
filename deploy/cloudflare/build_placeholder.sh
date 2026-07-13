@@ -38,20 +38,22 @@ fi
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# Public landing + the deliberately-labelled placeholder page. No app bundle,
-# no Stage-1 data allowlist, and no downstream results are ever copied.
-cp -p "$APP/index.html" "$OUT/index.html"
+# The reviewer landing ships as landing.html — its own control surface, served at "/" by the
+# root Function. It is deliberately NOT index.html: in the full release index.html is an
+# admitted, hash-bound app artifact, and the placeholder uses the same serving model so the
+# two builds never diverge. No app bundle, no Stage-1 data, no downstream results are copied.
+cp -p "$APP/index.html" "$OUT/landing.html"
 cp -p "$STATIC/placeholder.html" "$OUT/01_page.html"
 cp -p "$STATIC/_routes.json" "$OUT/_routes.json"
 cp -p "$STATIC/_headers" "$OUT/_headers"
 cp -p "$STATIC/404.html" "$OUT/404.html"
-cmp -s "$APP/index.html" "$OUT/index.html" || die "landing changed during assembly"
+cmp -s "$APP/index.html" "$OUT/landing.html" || die "landing changed during assembly"
 
 commit="${CF_PAGES_COMMIT_SHA:-$(git -C "$REPO" rev-parse HEAD)}"
 node "$HERE/finalize_pages_dist.mjs" "$OUT" "$commit"
 
 # Fail closed: the served tree must be exactly the approved placeholder set.
 expected="$(printf '%s\n' \
-  01_page.html 404.html _headers _routes.json index.html site_release_manifest.json | sort)"
+  01_page.html 404.html _headers _routes.json landing.html site_release_manifest.json | sort)"
 actual="$(cd "$OUT" && find . -type f | sed 's|^\./||' | sort)"
 [ "$expected" = "$actual" ] || die "unexpected files in placeholder output: $actual"

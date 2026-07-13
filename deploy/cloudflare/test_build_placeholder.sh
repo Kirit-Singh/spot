@@ -23,7 +23,7 @@ expected="$(printf '%s\n' \
   404.html \
   _headers \
   _routes.json \
-  index.html \
+  landing.html \
   site_release_manifest.json | sort)"
 actual="$(cd "$A" && find . -type f | sed 's|^\./||' | sort)"
 if [ "$expected" != "$actual" ]; then
@@ -32,9 +32,12 @@ if [ "$expected" != "$actual" ]; then
   exit 1
 fi
 
-# The landing and the placeholder page are copied byte-for-byte from their sources.
-cmp "$REPO/01_programs/app/index.html" "$A/index.html"
+# The landing and the placeholder page are copied byte-for-byte from their sources. The landing
+# ships as landing.html (a control surface served at "/"), never as index.html — in the full
+# release index.html is an admitted, hash-bound app artifact that must not be overwritten.
+cmp "$REPO/01_programs/app/index.html" "$A/landing.html"
 cmp "$REPO/deploy/cloudflare/static/placeholder.html" "$A/01_page.html"
+[ ! -e "$A/index.html" ] || { echo 'landing must not be shipped as index.html' >&2; exit 1; }
 
 # The post-auth page is deliberately labelled and claims nothing scientific.
 grep -q 'being assembled' "$A/01_page.html"

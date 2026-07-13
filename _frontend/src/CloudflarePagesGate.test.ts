@@ -237,6 +237,34 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     }
   });
 
+  it('serves "/" from the landing control surface, not from the admitted index.html', async () => {
+    // In the full release index.html is an admitted, hash-bound meta-refresh stub into
+    // /01_page.html. Serving the landing by overwriting it would destroy an admitted byte AND
+    // publish an app entry point, so the root route forwards to its own control asset instead.
+    const next = vi.fn(async (input?: Request | string) => new Response(
+      input instanceof Request ? new URL(input.url).pathname : 'no-rewrite',
+    ));
+    const landing = await middleware(context(new Request(`https://${CANONICAL_HOST}/`), production, next));
+    expect(landing.status).toBe(200);
+    expect(await landing.text()).toBe('/landing');
+  });
+
+  it('gates the admitted index.html instead of redirecting it away', async () => {
+    const blocked = await middleware(context(new Request(`https://${CANONICAL_HOST}/index.html`, {
+      headers: { Accept: 'text/html' },
+    }), production));
+    expect(blocked.status).toBe(303);
+    expect(blocked.headers.get('Location')).toBe('/');
+
+    const token = await issueSession(SIGNING_KEY);
+    const next = vi.fn(async () => new Response('admitted index stub'));
+    const admitted = await middleware(context(new Request(`https://${CANONICAL_HOST}/index.html`, {
+      headers: { Accept: 'text/html', Cookie: `${REVIEW_COOKIE}=${token}` },
+    }), production, next));
+    expect(admitted.status).toBe(200);
+    expect(await admitted.text()).toBe('admitted index stub');
+  });
+
   it('sets security headers in Functions rather than relying on _headers', async () => {
     const response = await middleware(context(new Request(`https://${CANONICAL_HOST}/`), production));
     expect(response.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");

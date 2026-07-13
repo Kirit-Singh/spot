@@ -40,8 +40,21 @@ export function productionHostDecision(hostname: string, env: Env): HostDecision
 export interface PagesContext {
   request: Request;
   env: Env;
-  next(): Promise<Response>;
+  // Pages lets a Function forward a REWRITTEN request to the static asset layer. The root
+  // route uses this to serve the reviewer landing from its own control surface, so the
+  // manifest-bound app index.html is never overwritten to make room for it.
+  next(input?: Request | string, init?: RequestInit): Promise<Response>;
 }
+
+// The reviewer landing is served at "/" from this control surface. It is deliberately NOT
+// index.html: in the full release index.html is an admitted, hash-bound meta-refresh stub to
+// /01_page.html, and overwriting it would both destroy an admitted byte and serve an app
+// entry point publicly.
+//
+// EXTENSIONLESS on purpose. Pages canonicalises ".html" URLs, so forwarding to
+// "/landing.html" makes the asset layer answer 308 -> "/landing" and the root route stops
+// serving anything. The file on disk is landing.html; the path it is fetched at is /landing.
+export const LANDING_ASSET = '/landing';
 
 const encoder = new TextEncoder();
 const sensitiveQueryKey = /^(?:access_?code|auth|code|password|session|token)$/i;

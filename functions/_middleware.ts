@@ -1,4 +1,5 @@
 import {
+  LANDING_ASSET,
   PLACEHOLDER_HOST,
   canonicalRedirectTarget,
   expiredSessionCookie,
@@ -50,11 +51,13 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     || (env.SITE_MODE === 'local' && localHostAllowed(url.hostname));
   if (!gated) return operationalFailure();
 
-  if (url.pathname === '/index.html' && (request.method === 'GET' || request.method === 'HEAD')) {
-    return redirect('/', 308);
-  }
+  // "/" is the only public app surface, and it serves the reviewer landing from its own
+  // control asset. index.html is NOT the landing: in the full release it is an admitted,
+  // hash-bound meta-refresh stub into /01_page.html, so it stays a gated app artifact and is
+  // never overwritten. Requesting it directly therefore falls through to the cookie check.
   if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
-    return withSecurityHeaders(await context.next());
+    const landing = new Request(new URL(LANDING_ASSET, url), request);
+    return withSecurityHeaders(await context.next(landing));
   }
   if (url.pathname === '/auth') {
     if (request.method !== 'POST') {
