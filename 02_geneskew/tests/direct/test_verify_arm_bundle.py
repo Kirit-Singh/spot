@@ -33,6 +33,13 @@ import verify_arm_view as AV  # noqa: E402
 # never imports it, and gate_independence proves that against the verifier's own source.
 from direct import run_arms  # noqa: E402
 
+# THE PINNED STAGE-2 SOLVER LOCK. Every run binds it; the verifier re-hashes it and hard-pins
+# it, so the harness must supply the real one — a fixture that skipped it would be testing a
+# configuration the lane refuses.
+LOCK = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "analysis", "stage02_solver_lock.txt")
+
 
 def flip(spec):
     """Flip EVERY effect together — target, guide-slot AND donor-pair.
@@ -56,6 +63,7 @@ def built(synthetic_run, tmp_path):
     def _build(specs=None, **kw):
         args = synthetic_run(specs=specs, **kw)
         args.condition = F.CONDITION
+        args.env_lock = LOCK
         args.out_root = str(tmp_path / f"arms{len(os.listdir(tmp_path))}")
         res = run_arms.build_bundle(args)
         return res, _verifier_args(res["out_dir"], args)
@@ -73,6 +81,7 @@ def _verifier_args(bundle_dir, prod, **over):
         "--registry", prod.registry,
         "--condition", prod.condition,
         "--recompute", "all",
+        "--env-lock", LOCK,
     ]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--target-identity-map", "target_identity_map"),
@@ -201,9 +210,9 @@ class TestAuditBlocker5IsClosedTheIdentityNoLongerNamesAPair:
         # to come back under two ids because an UNUSED pair file was hashed into the
         # identity. Now the pair is not an input at all, so the id cannot move with it.
         a = synthetic_run()
-        a.condition, a.out_root = F.CONDITION, str(tmp_path / "a")
+        a.condition, a.out_root, a.env_lock = F.CONDITION, str(tmp_path / "a"), LOCK
         b = synthetic_run(direction_a="low")     # a DIFFERENT pair question
-        b.condition, b.out_root = F.CONDITION, str(tmp_path / "b")
+        b.condition, b.out_root, b.env_lock = F.CONDITION, str(tmp_path / "b"), LOCK
         ra, rb = run_arms.build_bundle(a), run_arms.build_bundle(b)
 
         assert ra["bundle"]["arm_rows_sha256"] == rb["bundle"]["arm_rows_sha256"], \
@@ -735,6 +744,7 @@ class TestTheCurrentGenericV3ReleaseIsWhatTheVerifierConsumes:
                                                                     tmp_path):
         prod = synthetic_run()
         prod.condition, prod.out_root = F.CONDITION, str(tmp_path / "arms")
+        prod.env_lock = LOCK
         res = run_arms.build_bundle(prod)
         root = str(tmp_path / "release")
         args = _verifier_args(res["out_dir"], prod,
@@ -749,6 +759,7 @@ class TestTheCurrentGenericV3ReleaseIsWhatTheVerifierConsumes:
             self, synthetic_run, tmp_path):
         prod = synthetic_run()
         prod.condition, prod.out_root = F.CONDITION, str(tmp_path / "arms")
+        prod.env_lock = LOCK
         res = run_arms.build_bundle(prod)
         root = str(tmp_path / "release")
         os.makedirs(root)
@@ -766,6 +777,7 @@ class TestTheCurrentGenericV3ReleaseIsWhatTheVerifierConsumes:
         # can reseal. The bundle's own arms then answer to a set the release does not admit.
         prod = synthetic_run()
         prod.condition, prod.out_root = F.CONDITION, str(tmp_path / "arms")
+        prod.env_lock = LOCK
         res = run_arms.build_bundle(prod)
         root = str(tmp_path / "release")
         path = self._stage_v3_release(prod, root)

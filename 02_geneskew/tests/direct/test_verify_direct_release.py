@@ -32,6 +32,14 @@ from direct import arm_release  # noqa: E402
 
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 
+# THE PINNED STAGE-2 SOLVER LOCK. Every run binds it; the verifier re-hashes it and hard-pins
+# it, so the harness must supply the real one — a fixture that skipped it would be testing a
+# configuration the lane refuses.
+LOCK = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "analysis", "stage02_solver_lock.txt")
+
+
 
 @pytest.fixture
 def release(synthetic_run, tmp_path):
@@ -41,6 +49,7 @@ def release(synthetic_run, tmp_path):
     stage1 = V3.stage_release(stage1_root, conditions=CONDITIONS)
     prod.stage1_release = stage1
     prod.stage1_release_root = stage1_root
+    prod.env_lock = LOCK
     prod.out_root = str(tmp_path / "release")
     res = arm_release.build_release(prod)
 
@@ -51,7 +60,7 @@ def release(synthetic_run, tmp_path):
         "--guide-manifest", prod.guide_manifest,
         "--registry", prod.registry,
         "--stage1-v3-release", stage1, "--release-root", stage1_root,
-        "--recompute", "all",
+        "--recompute", "all", "--env-lock", LOCK,
     ]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):

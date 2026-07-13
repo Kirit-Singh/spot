@@ -267,6 +267,74 @@ def gate_consumed_inputs_bound(binding: dict, rep: Report) -> None:
              f"({', '.join(CONSUMED_INPUT_BINDINGS[k] for k in missing + empty)})")
 
 
+# THE PINNED STAGE-2 SOLVER LOCK. Restated here as a LITERAL, never imported from the
+# producer's `envlock`: a pin the checker borrowed from the thing it is checking is a pin
+# nobody checked, and it would move the instant the producer's constant moved.
+PINNED_SOLVER_LOCK_SHA256 = \
+    "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe"
+SOLVER_LOCK_FILENAME = "stage02_solver_lock.txt"
+STAGE1_SOLVER_LOCK_FILENAME = "stage01_solver_lock.txt"
+
+
+def gate_solver_lock(binding: dict, lock_path: Optional[str],
+                     rep: Report) -> Optional[str]:
+    """THE ENVIRONMENT the result was computed in — hashed here, and hard-pinned.
+
+    A result whose environment is unrecorded cannot be reproduced, and one whose environment
+    is UNBOUND can be re-attributed to a different environment after the fact. So the lock is
+    in the run identity, and this gate re-derives it from the bytes rather than reading the
+    number the artifact wrote down.
+
+    The pin is a LITERAL here. The decisive attack is the SELF-CONSISTENT FORGERY: swap the
+    lock file, and honestly reseal the artifact's `environment_lock` block so its `sha256`,
+    its `expected_sha256` and its `verified: true` all agree with each other and the run id
+    re-derives. Everything is internally consistent — and it is still the wrong environment.
+    Self-consistency is not authenticity, so the ONLY thing that can refuse it is a pin the
+    artifact does not get a vote on.
+    """
+    lock = binding.get("environment_lock") or {}
+
+    supplied = bool(lock_path) and os.path.exists(str(lock_path))
+    rep.gate("the Stage-2 solver lock is SUPPLIED to the verifier",
+             supplied,
+             f"no --env-lock on disk at {lock_path!r}; a run whose environment is unrecorded "
+             "cannot be reproduced")
+
+    actual = AR.sha256_file(str(lock_path)) if supplied else None
+    is_stage1 = supplied and os.path.basename(str(lock_path)) == \
+        STAGE1_SOLVER_LOCK_FILENAME
+    hint = (" — that is the STAGE-1 lock: a valid lock for a DIFFERENT environment. The two "
+            "lanes do not run the same environment and their locks are not interchangeable"
+            if is_stage1 else "")
+    rep.gate("the supplied solver lock's BYTES hash to the hard-pinned Stage-2 lock",
+             actual == PINNED_SOLVER_LOCK_SHA256,
+             f"supplied={actual!r} pinned={PINNED_SOLVER_LOCK_SHA256!r}{hint}. A lock whose "
+             "bytes are decided by whoever supplies them pins whatever the supplier wanted")
+
+    rep.gate("the bundle BINDS a solver lock into its run identity",
+             bool(lock) and lock.get("status") == "locked"
+             and lock.get("verified") is True,
+             f"environment_lock={lock or None!r}")
+
+    # THE HARD PIN, applied to the ARTIFACT's own claim. A self-consistent forgery agrees with
+    # itself about everything; it cannot agree with a number it does not get to choose.
+    rep.gate("the lock the bundle bound IS the hard-pinned Stage-2 lock — a self-consistent "
+             "forgery agrees with itself, and that is not the same as being right",
+             lock.get("sha256") == PINNED_SOLVER_LOCK_SHA256,
+             f"bound={lock.get('sha256')!r} pinned={PINNED_SOLVER_LOCK_SHA256!r}")
+    rep.gate("the lock's own EXPECTATION is the hard pin — an artifact may not declare what "
+             "it was supposed to be",
+             lock.get("expected_sha256") == PINNED_SOLVER_LOCK_SHA256,
+             f"declared={lock.get('expected_sha256')!r} "
+             f"pinned={PINNED_SOLVER_LOCK_SHA256!r}")
+
+    rep.gate("the lock the bundle bound is the lock the verifier HASHED — the bytes on disk "
+             "and the bytes in the identity are the same bytes",
+             actual is not None and lock.get("sha256") == actual,
+             f"bound={lock.get('sha256')!r} hashed={actual!r}")
+    return lock.get("sha256")
+
+
 def gate_not_self_admitted(verification: dict, rep: Report) -> None:
     """The PRODUCER may not admit its own output.
 

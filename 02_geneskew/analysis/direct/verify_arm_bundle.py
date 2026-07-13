@@ -169,6 +169,7 @@ def verify(args) -> Report:
     }
     G.gate_inputs(binding, named, rep)
     G.gate_consumed_inputs_bound(binding, rep)
+    solver_lock_sha256 = G.gate_solver_lock(binding, args.env_lock, rep)
     G.gate_support_unavailable(binding, columns, rep)
 
     if args.expect_h5ad_sha256:
@@ -195,6 +196,11 @@ def verify(args) -> Report:
 
     rep.bound = {
         "arm_bundle_run_id": prov.get("arm_bundle_run_id"),
+        # THE ENVIRONMENT, in the verified identity. Temporal anchors its DiD on these
+        # reports, so a report that did not say which environment produced the run would let
+        # two arms computed under different solvers be differenced as if they were not.
+        "solver_lock_sha256": solver_lock_sha256,
+        "solver_lock_pinned_sha256": G.PINNED_SOLVER_LOCK_SHA256,
         "arm_bundle_run_sha256": prov.get("arm_bundle_run_sha256"),
         "condition": condition,
         "lane": binding.get("lane"),
@@ -237,6 +243,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--donor-crosswalk", default=None)
     ap.add_argument("--strict-replay-source", default=None)
     ap.add_argument("--pseudobulk", default=None)
+    ap.add_argument("--env-lock", default=None,
+                    help="the pinned Stage-2 solver lock (analysis/stage02_solver_lock.txt). "
+                         "Its bytes are re-hashed here and hard-pinned; a missing or swapped "
+                         "lock REFUSES.")
     ap.add_argument("--registry", default=None,
                     help="the v3 program registry (the synthetic fixture lane's program "
                          "source; a release-grade lane must bind --stage1-v3-release)")
