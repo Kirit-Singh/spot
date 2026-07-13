@@ -74,6 +74,18 @@ def test_a_conforming_v2_bundle_is_admitted():
     assert not _failed(_verify())
 
 
+def test_the_contract_is_ALIGNED_to_the_producers_shipped_origin_labels():
+    """a1d8958's labels, not the ones I invented.
+
+    `direct_target` keeps v1 continuity; `endpoint_pathway_context` is the addendum's own
+    vocabulary. The defect was FUSION, not naming — and an invented name is not a contract.
+    """
+    assert v2.ORIGIN_DIRECT == "direct_target"
+    assert v2.ORIGIN_TEMPORAL == "temporal_cross_time_measured"
+    assert v2.ORIGIN_PATHWAY == "endpoint_pathway_context"
+    assert len(set(v2.ORIGINS)) == 3
+
+
 def test_the_contract_is_frozen_to_the_ADMITTED_store_and_producer():
     assert v2.ADMITTED_STORE_ID.startswith("bdf41b69")
     assert v2.ADMITTED_PRODUCER_COMMIT.startswith("d268a74")

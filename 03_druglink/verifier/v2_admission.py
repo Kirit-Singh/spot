@@ -47,9 +47,20 @@ CONTRACT_ID = "spot.stage03_v2_admission.v1"
 # --------------------------------------------------------------------------- #
 # The three evidence origins. Typed, disjoint, never merged.
 # --------------------------------------------------------------------------- #
-ORIGIN_DIRECT = "direct_same_time_measured"
+# ALIGNED to the producer's SHIPPED labels at a1d8958. Two differ from the names I froze,
+# and both of their choices are better than mine — so I take theirs, as I did with W2:
+#
+#   direct_target             keeps continuity with the v1 constant already in direction.py
+#   endpoint_pathway_context  is the ADDENDUM's own vocabulary ("endpoint pathway context,
+#                             never temporal enrichment"), which is more precise than my
+#                             invented `pathway_origin_inferred`
+#
+# The one that mattered — the temporal origin — matches exactly. The DEFECT was fusion, not
+# naming, and forcing a rename over strings I invented would be pedantry: an invented name
+# is not a contract, the shipped one is.
+ORIGIN_DIRECT = "direct_target"
 ORIGIN_TEMPORAL = "temporal_cross_time_measured"
-ORIGIN_PATHWAY = "pathway_origin_inferred"
+ORIGIN_PATHWAY = "endpoint_pathway_context"
 ORIGINS = (ORIGIN_DIRECT, ORIGIN_TEMPORAL, ORIGIN_PATHWAY)
 
 MEASURED_ORIGINS = frozenset({ORIGIN_DIRECT, ORIGIN_TEMPORAL})
