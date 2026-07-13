@@ -160,23 +160,71 @@ def check_gene_sets(declared: Any, pinned: Any, source: str,
     return bad
 
 
-def check_code_identity(code: Any, pinned: Any, bundle_id: str) -> list[str]:
-    """Every bundle's code identity, against an INDEPENDENTLY pinned commit + digest.
+# WHICH fields of a bundle's run_binding identify the CODE that produced it.
+#
+# W5's native bundle deliberately binds NO commit and NO clean_tree: its producer "never
+# fabricates a commit or a release it did not read", and leaves externally-pinned
+# identities to the run. That is not a gap to paper over -- it is the same principle that
+# closed the C3 seam, where `clean_tree: true` was believed because the artifact said so.
+# A run does not get to be the witness for its own checkout.
+#
+# So the CHECKOUT is attested by the external pin alone, and what each BUNDLE must bind is
+# what its code actually DID: the method and config hashes. A lane built from code that
+# differs in any way that matters changes these; a lane built from identical code bytes
+# under a different commit sha does not -- and that is the right answer, because the
+# science is then identical.
+# TWO ROLES, KEPT EXPLICIT (owner rule):
+#   code_identity  -- WHICH BUILD produced the bytes (commit + digest + recorded tree
+#                     state, the shared Stage-2 code-digest convention);
+#   method digests -- WHAT THE CODE DID (estimator/method/config hashes).
+# A method hash is not a build: two builds can compute the same method. A build is not a
+# method: the same commit can be asked a different question. Both are bound; neither
+# stands in for the other.
+METHOD_BINDING_FIELDS = ("temporal_method_sha256", "pathway_method_sha256",
+                         "estimator_id", "estimator_version", "direct_method_version",
+                         "direct_config_sha256", "effect_source_sha256")
 
-    ``clean_tree`` used to be believed because the artifact said so. A resealed
-    ``clean_tree: true`` over a different commit is exactly the claim that needs an
-    outside witness, and the manifest is not one.
+
+def method_binding(prov: Any) -> dict:
+    """WHAT the code did: the estimator/method/config digests the bundle binds."""
+    rb = (prov or {}).get("run_binding") or {}
+    out = {k: rb[k] for k in METHOD_BINDING_FIELDS if rb.get(k) is not None}
+    for entry in (rb.get("stage2_inputs") or []):
+        if isinstance(entry, dict) and entry.get("role") in METHOD_BINDING_FIELDS:
+            out[str(entry["role"])] = entry.get("value")
+    return out
+
+
+def code_binding(prov: Any) -> dict:
+    """WHICH BUILD produced the bytes. Required: an unattributable arm came from anywhere."""
+    rb = (prov or {}).get("run_binding") or {}
+    return rb.get("code_identity") or {}
+
+
+def check_code_identity(code: Any, pinned: Any, bundle_id: str) -> list[str]:
+    """A bundle's ``code_identity`` against an INDEPENDENTLY pinned build.
+
+    REQUIRED: an arm nobody can attribute to a build is an arm that could have come from
+    anywhere, and "a lane produced from another commit" is precisely the mutation this
+    exists to stop. The producer RECORDS its tree state; it does not get to declare itself
+    clean — the verifier decides that against the pin.
     """
     bad: list[str] = []
-    if not isinstance(code, dict):
-        return [f"{bundle_id}: the bundle binds no code identity"]
+    if not isinstance(code, dict) or not code:
+        return [f"{bundle_id}: the bundle binds no code_identity, so the build that "
+                "produced its bytes cannot be attributed"]
     if not isinstance(pinned, dict) or not pinned:
         return [f"{bundle_id}: no expected code identity was pinned; a run's code identity "
                 "may not be taken from the run"]
-    for field in ("commit", "manifest_sha256", "canonical_digest"):
-        if field in pinned and code.get(field) != pinned[field]:
-            bad.append(f"{bundle_id}: code {field} is {str(code.get(field))[:16]!r}; the "
-                       f"pinned checkout is {str(pinned[field])[:16]!r}")
+    shared = [f for f in pinned if f in code]
+    if not shared:
+        return [f"{bundle_id}: the pinned code identity {sorted(pinned)[:4]} shares no "
+                f"field with what the bundle binds {sorted(code)[:4]}, so the pin checks "
+                "nothing"]
+    for field in shared:
+        if code[field] != pinned[field]:
+            bad.append(f"{bundle_id}: code {field} is {str(code[field])[:20]!r}; the "
+                       f"pinned build is {str(pinned[field])[:20]!r}")
     return bad
 
 # No p, no q, no FDR produced by spot — at any nesting depth, in any bundle.

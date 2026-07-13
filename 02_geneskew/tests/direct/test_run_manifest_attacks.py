@@ -657,6 +657,63 @@ class TestTheProducerMayNotAdmitItsOwnRun:
         assert V.G_NO_SELF_ADMISSION in doc["failed_gates"]
 
 
+class TestTheNativeStage1AndCodeBindings:
+    """What replaces the pair-based per-arm fields: the bundle's OWN Stage-1 + build."""
+
+    def test_a_bundle_binding_ANOTHER_SCORER_VIEW_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"registry_scorer_view_sha256": "e" * 64}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_PROJECTION in doc["failed_gates"]
+
+    def test_a_bundle_whose_ARMS_STAND_ON_another_program_set_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["direct"][0], "provenance.json",
+               lambda d: d["program_admission"].update(
+                   {"programs": ["treg_like", "th9_like"]}))   # th9 is not admitted
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_PROJECTION in doc["failed_gates"]
+
+    def test_a_bundle_that_binds_NO_code_identity_is_REJECTED(self, tmp_path):
+        # an arm nobody can attribute to a build is an arm that could have come from
+        # anywhere — this is what makes "a lane from another commit" catchable at all
+        run = F.complete_run(tmp_path)
+        _patch(run["pathway"][0], "pathway_provenance.json",
+               lambda d: d["run_binding"].pop("code_identity"))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_CODE in doc["failed_gates"]
+
+    def test_a_bundle_that_RECORDED_a_dirty_tree_is_REJECTED(self, tmp_path):
+        # the producer RECORDS its tree state; the VERIFIER decides the final status
+        run = F.complete_run(tmp_path)
+        _patch(run["direct"][0], "provenance.json",
+               lambda d: d["run_binding"]["code_identity"].update({"clean_tree": False}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_CLEAN in doc["failed_gates"]
+
+    def test_a_bundle_built_by_a_DIFFERENT_METHOD_is_REJECTED(self, tmp_path):
+        # the build and what the code DID are separate roles; neither stands in for the
+        # other, and both must agree across the run
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][3], "temporal_provenance.json",
+               lambda d: d["run_binding"].update(
+                   {"temporal_method_sha256": "f" * 64}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_METHOD in doc["failed_gates"]
+
+
 class TestOneNativeFilenameSet:
     """The legacy ``temporal_arm_*`` names are not the native set and are refused.
 

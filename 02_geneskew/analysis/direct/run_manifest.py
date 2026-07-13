@@ -184,6 +184,10 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
         "code_identity": (prov.get("run_binding") or {}).get("code_identity") or {},
         "selection_release": (
             (prov.get("run_binding") or {}).get("selection_release") or {}),
+        # W5's native Stage-1 binding: HOW the program axis was derived. The verifier
+        # re-derives it against the release rather than reading the bundle's own count.
+        "admitted_programs": (prov.get("program_admission") or {}).get("programs"),
+        "program_admission": prov.get("program_admission") or {},
         "stage2_inputs": (prov.get("run_binding") or {}).get("stage2_inputs") or [],
         "verification_verdict": report.get("verdict"),
         "files": files,

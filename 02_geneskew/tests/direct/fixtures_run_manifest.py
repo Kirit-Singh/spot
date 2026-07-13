@@ -182,13 +182,22 @@ def _code_identity() -> dict[str, Any]:
 
 
 def _selection_release(staged: dict) -> dict[str, Any]:
-    """What the bundle bound: the AUTHORITATIVE release, by its canonical hash."""
-    return {"release_canonical_sha256": staged["release_canonical_sha256"],
-            "registry_scorer_view_canonical_sha256":
+    """W5's NATIVE Stage-1 binding: the scorer view its arms actually stood on."""
+    return {"registry_scorer_view_sha256":
                 staged["release"]["registry_scorer_view_canonical_sha256"],
-            "registry_scorer_projection_sha256":
-                staged["release"]["registry_scorer_projection_sha256"],
-            "selection_schema": staged["release"]["selector"]["selection_schema"]}
+            "programs_derived_from": "bound_stage1_v3_scorer_view",
+            "effect_universe_sha256": _canon("FIXTURE-effect-universe")}
+
+
+def _program_admission(staged: dict, progs: list) -> dict[str, Any]:
+    """W5's NATIVE program_admission block: HOW the axis was derived."""
+    return {"programs_derived_from": "bound_stage1_v3_scorer_view",
+            "programs_copied_from_a_list": False,
+            "program_count_is_derived": True,
+            "registry_scorer_view_sha256":
+                staged["release"]["registry_scorer_view_canonical_sha256"],
+            "programs": sorted(progs),
+            "n_programs": len(progs)}
 
 
 def _inputs() -> list[dict[str, Any]]:
@@ -247,7 +256,6 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
                  programs=None, arms_for=None) -> str:
     """Write ONE FIXTURE all-arm bundle and return its directory."""
     progs = list(staged["programs"] if programs is None else programs)
-    projection = staged["projection"]
 
     if lane == "direct":
         slug, prov_name, ver_name = (
@@ -289,15 +297,13 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
                    else [ctx["condition"], ctx["gene_set_source"]])),
             "program_id": program,
             "desired_change": dc,
-            # the view carries NO per-program hash: this is the canonical hash of that
-            # program's record, which is what the verifier recomputes
-            "program_projection_sha256": projection[program],
+
             # ONE base effect per program/context; the two desired changes are exact sign
             # transforms of it — two logical arms, not two experimental estimates.
             "base_effect_sha256": _canon(f"FIXTURE-base-{program}-{slug}"),
             "arm_values_sha256": _canon(f"FIXTURE-values-{program}-{dc}-{slug}"),
             "n_ranked": ranking["n_ranked"],
-            "derived_from_poles": ORIGINS[dc],
+            # NO role, NO pole, NO pair-derived program id: a reusable arm is PAIR-AGNOSTIC.
             "ranking": _binding(out_dir, rel, ranking),
         }
         if lane == "pathway":
@@ -336,8 +342,17 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
     prov_raw, _ = _write(os.path.join(out_dir, prov_name), {
         "fixture": True,
         "schema_version": f"FIXTURE.spot.stage02_{lane}_provenance.v1",
+        "bundle_id": inv["bundle_id"],
+        "lane": lane,
+        "context": dict(ctx),
+        # W5 native: HOW the program axis was derived, bound so it is checkable
+        "program_admission": _program_admission(staged, progs),
         "run_binding": {
+            # WHICH BUILD produced these bytes (recorded, never self-admitted)...
             "code_identity": _code_identity(),
+            # ...and WHAT THE CODE DID, kept as a separate explicit role
+            "temporal_method_sha256": _canon("FIXTURE-method"),
+            "estimator_id": "FIXTURE.spot.stage02.arm.estimator.v1",
             "selection_release": _selection_release(staged),
             "stage2_inputs": _inputs(),
         },

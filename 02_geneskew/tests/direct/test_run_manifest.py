@@ -191,15 +191,29 @@ class TestTheAuthoritativeReleaseIsTheSourceOfTruth:
         with pytest.raises(T.RunManifestError, match="not staged"):
             run_manifest.load_release(run["release_path"], run["release_root"])
 
-    def test_every_arm_binds_its_programs_SPECIFIED_projection_id(self, tmp_path):
-        # the view carries NO per-program hash, so the id is the canonical hash of that
-        # program's whole record — specified, computed, never read from a missing field
+    def test_a_reusable_arm_is_PAIR_AGNOSTIC(self, tmp_path):
+        # No role, no pole, no pair-derived program id. Requiring one would drag a pair
+        # back into the artifact whose whole purpose is to be reusable.
         run = F.complete_run(tmp_path)
-        rel = run_manifest.load_release(run["release_path"], run["release_root"])
         inv = json.load(open(os.path.join(run["direct"][0], "arm_bundle.json")))
         for arm in inv["arms"]:
-            assert (arm["program_projection_sha256"]
-                    == rel["program_projection_sha256"][arm["program_id"]])
+            assert "derived_from_poles" not in arm
+            assert "program_projection_sha256" not in arm
+            assert "role" not in arm and "pole_direction" not in arm
+            # what it DOES carry is pair-free: the program and which way it must move
+            assert arm["desired_change"] in (T.INCREASE, T.DECREASE)
+            assert arm["arm_key"].split("|")[2] == arm["desired_change"]
+
+    def test_the_bundle_binds_the_STAGE1_identity_its_arms_stand_on(self, tmp_path):
+        # what replaces the per-arm id: the scorer view + the admitted programs, bound at
+        # bundle level and re-derived by the verifier against the release
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        b = run_manifest.bind_bundle(run["direct"][0])
+        assert (b["selection_release"]["registry_scorer_view_sha256"]
+                == rel["registry_scorer_view_canonical_sha256"])
+        assert sorted(b["admitted_programs"]) == rel["programs"]
+        assert b["program_admission"]["programs_copied_from_a_list"] is False
 
     def test_the_release_binds_the_scorer_view_and_projection_it_publishes(self, tmp_path):
         run = F.complete_run(tmp_path)

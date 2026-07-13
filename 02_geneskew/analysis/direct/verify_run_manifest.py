@@ -38,9 +38,16 @@ THREE SEAMS AN INDEPENDENT REVIEW FOUND, AND WHAT CLOSED THEM
   ``{"verdict": "admit"}`` passed. A report is now a TYPED artifact from the PINNED lane
   verifier, carrying its gate inventory, and it must BIND THE BUNDLE IT JUDGED — an ADMIT
   that names no bundle can be copied onto any bundle.
-* ``clean_tree: true`` was believed because the artifact said so. Every bundle's code
-  identity is now compared to an independently pinned commit + digest: a run does not get
-  to be the witness for its own checkout.
+* ``clean_tree: true`` was believed because the artifact said so. A bundle now RECORDS its
+  tree state and its ``code_identity``; the VERIFIER decides the final clean-tree status
+  against an independently pinned build. A run does not get to be the witness for its own
+  checkout.
+
+PAIR AGNOSTICISM. A reusable arm carries NO role, NO pole and NO pair-derived program id,
+and none is required of it — requiring one would drag a pair back into an artifact whose
+whole purpose is to be reusable. What a bundle MUST bind is the Stage-1 identity its arms
+stand on (the release's scorer view + admitted program ids) and the BUILD that produced it
+(``code_identity``), kept explicitly separate from WHAT THE CODE DID (the method digests).
 
 Counts are RECONSTRUCTED, never read: ``n_hits_in_ranking`` is recomputed from the bytes
 the bundle bound (its gene-set membership INTERSECT its arm's ranked target ids).
@@ -86,12 +93,13 @@ G_CODE = "every_bundle_binds_the_IDENTICAL_code_identity"
 G_CLEAN = "the_bound_code_identity_is_a_clean_checkout"
 G_SELECTION = "every_bundle_binds_the_IDENTICAL_selection_release"
 G_INPUTS = "every_bundle_binds_the_IDENTICAL_shared_inputs"
-G_PROJECTION = "every_arm_binds_its_programs_Stage1_scorer_projection"
+G_METHOD = "every_bundle_binds_the_IDENTICAL_method_digest"
+G_PROJECTION = "every_bundle_binds_the_releases_scorer_view_and_admitted_programs"
 G_VERDICT = "every_bundle_ships_an_independent_verification_verdict_of_ADMIT"
 G_GENESET_ID = "the_gene_set_identity_is_source_specific_and_identical_within_a_source"
 G_CONVERGENCE = "each_pathway_bundle_ships_ONE_shared_convergence_artifact"
 G_RECONSTRUCT = "n_hits_in_ranking_RECONSTRUCTS_from_the_bytes_the_bundle_bound"
-G_MAPPING = "the_desired_change_mapping_follows_the_frozen_role_x_pole_table"
+G_MAPPING = "every_arm_is_PAIR_AGNOSTIC_its_key_and_desired_change_agree"
 G_PAIR_VIEW = "no_pair_derived_ordering_is_stored_in_a_reusable_arm_bundle"
 G_COMBINED = "no_combined_balanced_weighted_or_hidden_cross_arm_score_or_order"
 G_NO_PQ = "no_p_q_or_FDR_field_is_produced_by_spot_at_any_depth"
@@ -188,7 +196,7 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     # ---- 2. EVERY BUNDLE, from the bytes on disk ---- #
     bundles = manifest.get("bundles") or []
     filled: dict[str, list[str]] = {lane: [] for lane in R.LANES}
-    ids, codes, selections, inputs = [], [], [], []
+    ids, codes, selections, inputs, methods = [], [], [], [], []
     geneset_by_source: dict[str, list] = {}
     convergences: list[tuple] = []
     missing, bad_bytes, not_all_arm, bad_map = [], [], [], []
@@ -253,23 +261,19 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
 
         for a in arms:
             key = str(a.get("arm_key"))
-            # (d) the desired change follows the FROZEN role x pole table
-            for origin in (a.get("derived_from_poles") or []):
-                spec = R.SPEC_DESIRED_CHANGE.get(
-                    (str(origin.get("role")), str(origin.get("pole_direction"))))
-                if spec is not None and spec != a.get("desired_change"):
-                    bad_map.append(
-                        f"{key}: {origin.get('role')}({origin.get('pole_direction')}) is "
-                        f"a {spec}, but the arm declares {a.get('desired_change')}")
-            # (e) the arm binds its program's Stage-1 scorer projection
-            pid = str(a.get("program_id"))
-            # The view carries NO per-program hash, so the id is the canonical hash of that
-            # program's record, recomputed here from the staged view's own bytes.
-            if projection.get(pid) and a.get("program_projection_sha256") != projection[pid]:
-                bad_projection.append(
-                    f"{key}: binds scorer projection "
-                    f"{str(a.get('program_projection_sha256'))[:16]}; the canonical record "
-                    f"of {pid} in the staged view hashes to {str(projection[pid])[:16]}")
+            # (d) THE ARM IS PAIR-AGNOSTIC. It carries no role, no pole and no pair-derived
+            #     program id, and none is required of it. What must hold is that its key and
+            #     its declared desired_change agree, and that the change is one of the two.
+            dc = a.get("desired_change")
+            if dc not in R.DESIRED_CHANGES:
+                bad_map.append(f"{key}: desired_change {dc!r} is not one of "
+                               f"{list(R.DESIRED_CHANGES)}")
+            elif key.split("|")[2:3] != [str(dc)]:
+                bad_map.append(f"{key}: the key says "
+                               f"{key.split('|')[2:3]} but the arm declares {dc!r}")
+            if str(a.get("program_id")) not in programs:
+                bad_map.append(f"{key}: program {a.get('program_id')!r} is not admitted by "
+                               "the release")
             # (f) RECONSTRUCT the counts from the bound bytes. Never read them.
             ranking = R.load_json(os.path.join(
                 path, (a.get("ranking") or {}).get("path", "")))
@@ -292,9 +296,10 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
                         f"{dict(list(recomputed_hits.items())[:3])}")
 
         binding = prov.get("run_binding") or {}
-        codes.append((bid, R.content_sha256(binding.get("code_identity"))))
+        codes.append((bid, R.content_sha256(R.code_binding(prov))))
         selections.append((bid, R.content_sha256(binding.get("selection_release"))))
         inputs.append((bid, R.content_sha256(binding.get("stage2_inputs"))))
+        methods.append((bid, R.content_sha256(R.method_binding(prov))))
 
         # The report must be a TYPED admission from the PINNED verifier, ABOUT THIS
         # BUNDLE. A file that merely says {"verdict": "admit"} is not one.
@@ -303,8 +308,7 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
             R.file_sha256(os.path.join(path, "arm_bundle.json")),
             R.file_sha256(os.path.join(path, R.PROVENANCE_OF[lane])))
         # Every bundle's code identity, against an INDEPENDENTLY pinned checkout.
-        bad_code += R.check_code_identity(
-            binding.get("code_identity"), expected_code, bid)
+        bad_code += R.check_code_identity(R.code_binding(prov), expected_code, bid)
 
         if lane == R.LANE_PATHWAY:
             src = str(ctx.get("gene_set_source"))
@@ -326,6 +330,26 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     rep.gate(G_BYTES, not bad_bytes, "; ".join(bad_bytes[:4]))
     rep.gate(G_ALL_ARM, not not_all_arm, "; ".join(not_all_arm[:3]))
     rep.gate(G_MAPPING, not bad_map, "; ".join(bad_map[:4]))
+    # THE STAGE-1 BINDING, verified against the release — NOT against a pair.
+    #
+    # A reusable arm is PAIR-AGNOSTIC: it carries no role, no pole and no pair-derived
+    # program id, and W3 must not require one. What it MUST bind is the Stage-1 identity
+    # its arms were projected on — the scorer view this release publishes, and the admitted
+    # program ids. Those are re-derived here from the release's own bytes.
+    want_view = (release or {}).get("registry_scorer_view_canonical_sha256")
+    for b in bundles:
+        sel = b.get("selection_release") or {}
+        bound_view = (sel.get("registry_scorer_view_sha256")
+                      or sel.get("registry_scorer_view_canonical_sha256"))
+        if bound_view != want_view:
+            bad_projection.append(
+                f"{b.get('bundle_id')}: binds scorer view {str(bound_view)[:16]}; this "
+                f"release publishes {str(want_view)[:16]}")
+        admitted = b.get("admitted_programs")
+        if admitted is not None and sorted(admitted) != programs:
+            bad_projection.append(
+                f"{b.get('bundle_id')}: its arms stand on {sorted(admitted)[:3]}…; the "
+                f"release admits {programs[:3]}…")
     rep.gate(G_PROJECTION, not bad_projection, "; ".join(bad_projection[:4]))
     rep.gate(G_RECONSTRUCT, not bad_hits, "; ".join(bad_hits[:3]))
     rep.gate(G_PAIR_VIEW, not pair_stored,
@@ -367,6 +391,7 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     # ---- 4. THE SHARED BINDINGS: identical where the science requires it ---- #
     _one(rep, selections, G_SELECTION, "selection releases")
     _one(rep, inputs, G_INPUTS, "shared input bindings")
+    _one(rep, methods, G_METHOD, "method digests")
 
     # A code identity that differs BETWEEN bundles is caught here; one that differs from
     # the PINNED checkout is caught by ``bad_code`` below. Both are G_CODE: the bundles
@@ -380,13 +405,21 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     # A resealed clean_tree=true over another commit is exactly the claim that needs an
     # outside witness, and the manifest is not one.
     rep.gate(G_CODE, not bad_code, "; ".join(bad_code[:4]))
-    unclean = [b.get("bundle_id") for b in bundles
-               if (b.get("code_identity") or {}).get("clean_tree") is not True]
+    # THE CHECKOUT IS ATTESTED BY THE PIN, NOT BY THE RUN.
+    # A bundle that swore it was clean would be the artifact vouching for itself — the C3
+    # seam. W5's native producer correctly binds no commit and no clean_tree at all: it
+    # never fabricates a commit it did not read. So the witness is the external pin.
+    # The producer RECORDS its tree state; the VERIFIER decides the final clean-tree
+    # status, against the external pin. A bundle that swore it was clean would be the
+    # artifact vouching for itself — the C3 seam.
+    recorded_dirty = [b.get("bundle_id") for b in bundles
+                      if (b.get("code_identity") or {}).get("clean_tree") is False]
     rep.gate(G_CLEAN,
-             not unclean and expected_code.get("clean_tree") is True,
-             f"{len(unclean)} bundle(s) declare a dirty tree; the pinned checkout declares "
-             f"clean_tree={expected_code.get('clean_tree')!r}. A digest over uncommitted "
-             "bytes does not identify the commit printed beside it")
+             expected_code.get("clean_tree") is True and not recorded_dirty,
+             f"the pinned build declares clean_tree={expected_code.get('clean_tree')!r} and "
+             f"{len(recorded_dirty)} bundle(s) RECORDED a dirty tree. A digest over "
+             "uncommitted bytes does not identify the build printed beside it, and a run "
+             "may not vouch for its own checkout")
 
     rep.gate(G_VERDICT, bool(bundles) and not bad_reports,
              "; ".join(bad_reports[:4]))
