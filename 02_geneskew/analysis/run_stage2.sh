@@ -23,7 +23,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-usage: run_stage2.sh [step0|direct|temporal|pathway|all]
+usage: run_stage2.sh [step0|direct|temporal|pathway|verify-pathway|all]
 Required environment (no defaults — an unset input is a refusal, not a guess):
   SEL_DIR  V3_SCHEMA  REGISTRY  STAGE1_RELEASE  DE  GUIDE  DONOR  SGRNA
   MANIFEST  SRCREG  PB  ENV_LOCK  OUT
@@ -231,6 +231,45 @@ lane_pathway() {
   done
 }
 
+# DISCOVER the content-addressed pathway bundle for a (condition, source). Its directory is its
+# run id and cannot be guessed — bundle_index refuses on none or on ambiguity.
+pathway_bundle_for() {
+  local cond="$1" src="$2"
+  if [[ -n "${SPOT_DRY_RUN:-}" ]]; then
+    printf '%s' "<discovered:pathway:$cond:$src>"
+    return 0
+  fi
+  python -m analysis.direct.bundle_index \
+    --root "$OUT/pathway" --condition "$cond" --kind pathway --source "$src"
+}
+
+# INDEPENDENT VERIFICATION (W4). generator != verifier: this is a SEPARATE gate, not part of the
+# producer `all` flow. It reads the SHIPPED bytes and re-derives every claim — V1-V10, the
+# cross-lane Direct mask anchor (re-derived from the shipped masks.parquet), the amended bitmap
+# counts, the per-target QC, the stale-source refusal, and the pinned 2983… solver lock. Exit
+# nonzero on ANY refusal; a deterministic, content-addressed report per bundle. The env lock is
+# NOT passed here — it is read from the shipped provenance and checked against the pin.
+lane_verify_pathway() {
+  local cond src dbundle report pbundle
+  [[ -n "${SPOT_DRY_RUN:-}" ]] || mkdir -p "$OUT/verification"
+  for cond in "${CONDITIONS[@]}"; do
+    dbundle="$(direct_bundle_for "$cond")"
+    report="$W10_REPORT_DIR/direct_mask_report_${cond}.md"
+    for src in "${SOURCES[@]}"; do
+      pbundle="$(pathway_bundle_for "$cond" "$src")"
+      consumes "pathway:$cond:$src"
+      consumes "signatures:$cond"
+      run "verify-pathway:$cond:$src" python -m analysis.direct.verify_signature_matrix \
+        --signature-matrix-root "$SIGROOT" \
+        --bundle "$pbundle" \
+        --de-main "$DE" \
+        --direct-bundle "$dbundle" \
+        --direct-mask-report "$report" \
+        --out "$OUT/verification/pathway_${cond}_${src}.json"
+    done
+  done
+}
+
 main() {
   local what="${1:-all}"
   require_env
@@ -241,6 +280,7 @@ main() {
     direct)   lane_direct ;;
     temporal) lane_temporal ;;
     pathway)  lane_pathway ;;
+    verify-pathway) lane_verify_pathway ;;
     # ORDER IS A DEPENDENCY, not a preference. Direct FIRST, because Step 0 anchors its mask to
     # the Direct bundle and to W10's independent report over it. Step 0 before pathway, because
     # a pathway bundle that rebuilt its own signatures would reintroduce the 29.5 GiB peak the

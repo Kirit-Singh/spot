@@ -28,6 +28,10 @@ SHIPPED bytes off disk — the three shared artifacts and each bundle's `signatu
               a forger who reseals the manifest/ref must also change the run id.
     V_SOLVER_LOCK the Stage-2 deterministic solver lock is bound into run_binding (→ run id) AND
               is the PINNED lock (sha 2983d140…). A missing or swapped lock refuses.
+    V_QC      the per-target signature_qc.parquet re-derives — file, raw hash, content hash, row
+              count, base-passed count — and every matrix target has exactly one QC row.
+    V_STALE_SOURCE the manifest's sources.de_main_sha256 equals the de_main the auditor supplies:
+              a signature root built from another DE source loads and means a different run.
 
 GENERATOR ≠ VERIFIER. It imports NO producer module — only ``h5py``/``numpy``/``json`` and the
 verifier-side ``verify_rules`` / ``verify_run`` (primary h5ad reader) / ``verify_reconstruct``
@@ -93,6 +97,11 @@ V10 = "V10_every_reference_resolves_and_every_shared_artifact_is_referenced"
 V_IDENTITY = "the_signature_ref_is_bound_into_a_rederivable_pathway_run_id"
 V_EXTERNAL_MASK = "the_source_mask_matches_the_external_independent_direct_mask_verification"
 V_SOLVER_LOCK = "the_stage2_solver_lock_is_bound_into_the_run_identity"
+V_QC = "the_per_target_signature_qc_rederives_from_the_shipped_qc_table"
+V_STALE_SOURCE = "the_signature_artifact_was_built_from_the_bound_de_source"
+
+QC_FILE = "signature_qc.parquet"
+QC_KEY = "qc"
 
 # The Stage-2 deterministic solver lock, committed VERBATIM on the producer (W7,
 # stage02_solver_lock.txt @ c1f8e80). Unlike a per-run value, this IS a frozen release pin:
@@ -388,6 +397,21 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
                       "resolved all-ones rows recounted from the bitmap")
         checks.append(_check(V5, not v5, f"{cond}: " + "; ".join(v5[:3])))
 
+        # ---- V_QC: the per-target QC table re-derives (file, hash, rows, content) ----
+        checks.append(_check(V_QC, *_verify_qc(cond_dir, man, m_targets)))
+
+        # ---- V_STALE_SOURCE: the signature root was built from THIS de_main ----
+        # A stale root is the quietest failure: same schema, same hashes, WRONG numbers. The
+        # sha the producer bound must equal the de_main the auditor supplies — reseal-proof,
+        # because the de_main file is the anchor, not a value inside the artifact.
+        want_de = (man.get("sources") or {}).get("de_main_sha256")
+        got_de = R.sha256_file(args.de_main) if os.path.exists(args.de_main) else None
+        checks.append(_check(
+            V_STALE_SOURCE, bool(want_de) and want_de == got_de,
+            f"{cond}: the signature root was built from de_main "
+            f"{str(want_de)[:16]}…, but this run is bound to {str(got_de)[:16]}… — the "
+            "vectors would load and mean a different experiment"))
+
         man["_reread"] = {"targets": m_targets, "values": values, "bitmap": bitmap,
                           "gene_ids": axis, "n_genes": n_genes, "raw_matrix": raw_matrix}
         man_by_cond[cond] = man
@@ -534,6 +558,45 @@ def _verify_solver_lock(bdir):
                        f"Stage-2 solver lock {STAGE2_SOLVER_LOCK_SHA256[:16]}… — a swapped "
                        "lock, however self-consistent after the run id is resealed")
     return True, ""
+
+
+def _verify_qc(cond_dir, manifest, matrix_targets):
+    """The per-target QC table re-derives from the shipped bytes: file, hash, rows, content.
+
+    Without the QC a consumer cannot tell which targets Direct REFUSED — it would project the
+    ones that failed base QC. The QC block binds the raw bytes, a content hash over the rows,
+    the row count and the base-passed count; all four re-derive here from the shipped parquet,
+    and every matrix target must have exactly one QC row.
+    """
+    import pandas as pd
+
+    qc = manifest.get(QC_KEY) or {}
+    path = os.path.join(cond_dir, QC_FILE)
+    if not os.path.exists(path):
+        return False, f"{QC_FILE} is absent: the matrix says what every vector IS and nothing " \
+                      "about which target may be USED"
+    if R.sha256_file(path) != qc.get("raw_sha256"):
+        return False, "the shipped signature_qc.parquet does not hash to the bound raw_sha256"
+    df = pd.read_parquet(path)
+    rows = df.to_dict("records")
+    for r in rows:                                  # NaN (a null that round-tripped) -> None
+        for k, v in list(r.items()):
+            if isinstance(v, float) and v != v:
+                r[k] = None
+    rows.sort(key=lambda r: str(r["target_id"]).encode("utf-8"))
+    problems = []
+    if R.content_sha256(rows) != qc.get("canonical_sha256"):
+        problems.append("the QC rows do not re-derive the bound canonical_sha256")
+    if len(rows) != qc.get("n_rows"):
+        problems.append(f"{len(rows)} QC rows vs bound {qc.get('n_rows')}")
+    n_passed = sum(1 for r in rows if r.get("base_passed"))
+    if n_passed != qc.get("n_base_passed"):
+        problems.append(f"{n_passed} base-passed vs bound {qc.get('n_base_passed')}")
+    qc_targets = sorted(str(r["target_id"]) for r in rows)
+    if qc_targets != sorted(matrix_targets):
+        problems.append("the QC targets are not exactly the matrix targets — a target with a "
+                        "vector but no QC row could be projected past the QC that refused it")
+    return (not problems), "; ".join(problems[:3])
 
 
 def direct_masked_genes(masks_parquet):

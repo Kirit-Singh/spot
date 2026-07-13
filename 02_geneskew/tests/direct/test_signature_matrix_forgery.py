@@ -268,7 +268,7 @@ class TestTheHonestProducerOutputAdmits:
         names = {c["check"] for c in verify(shipped)["checks"]}
         for g in (V.V1, V.V1_REFMAN, V.V2_VALUES, V.V2_BITS, V.V2_CANON, V.V2_ANCHOR,
                   V.V3, V.V4, V.V5, V.V6, V.V7, V.V8, V.V9, V.V10, V.V_IDENTITY,
-                  V.V_EXTERNAL_MASK, V.V_SOLVER_LOCK):
+                  V.V_EXTERNAL_MASK, V.V_SOLVER_LOCK, V.V_QC, V.V_STALE_SOURCE):
             assert g in names, f"gate never ran: {g}"
 
 
@@ -544,6 +544,39 @@ class TestTheCrossLaneAnchor:
         # The anchor is bound, but the auditor does not supply the Direct bundle to re-check it.
         shipped["args"].direct_bundle = None
         assert V.V_EXTERNAL_MASK in failed(verify(shipped))
+
+
+# =========================================================================== #
+# THE PER-TARGET QC + STALE SOURCE (W18 0d41a00)
+# =========================================================================== #
+class TestQCandStaleSource:
+    def test_the_honest_qc_and_source_pass(self, shipped):
+        f = failed(verify(shipped))
+        assert V.V_QC not in f and V.V_STALE_SOURCE not in f
+
+    def test_a_TAMPERED_qc_table_is_REJECTED(self, shipped):
+        import pandas as pd
+        qcp = os.path.join(shipped["cond_dir"], "signature_qc.parquet")
+        df = pd.read_parquet(qcp)
+        df.loc[0, "base_passed"] = not bool(df.loc[0, "base_passed"])   # flip one QC verdict
+        df.to_parquet(qcp)                                              # raw hash NOT resealed
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_QC in failed(r)
+
+    def test_a_MISSING_qc_table_is_REJECTED(self, shipped):
+        os.remove(os.path.join(shipped["cond_dir"], "signature_qc.parquet"))
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_QC in failed(r)
+
+    def test_a_STALE_de_source_is_REJECTED(self, shipped):
+        # the manifest says it was built from de_main X; the auditor supplies de_main Y.
+        man = _man(shipped)
+        man["sources"]["de_main_sha256"] = "e" * 64      # a different DE source
+        write_manifest(shipped, man)
+        sync_identity(shipped)                           # fully resealed: run id re-derives
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_STALE_SOURCE in failed(r)
+        assert V.V_IDENTITY not in failed(r)             # only the de_main anchor catches it
 
 
 # =========================================================================== #
