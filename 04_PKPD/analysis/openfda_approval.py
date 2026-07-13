@@ -58,6 +58,15 @@ class OpenFdaLabelIdentity:
     generic_name: Optional[str]
     label_version: Optional[str]
     last_updated: str
+    # THE SOURCE'S OWN MATCH TOTAL, carried rather than discarded.
+    #
+    # `meta.results.total` is read and fed to `assert_result_set_complete` — and was then thrown
+    # away, so `materialize` had nothing to state and FABRICATED `match_total_reported=1,
+    # result_set_complete=True`. For a SEARCH that is false: openFDA may report forty matches and
+    # hand back one. The number the source actually reported now travels with the record. None
+    # means openFDA reported no total — and None is carried, never 1.
+    match_total_reported: Optional[int] = None
+    records_returned: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +78,9 @@ class ProductApproval:
     unii: Optional[str]
     marketing_statuses: tuple[str, ...]    # sorted, de-duplicated across every product
     n_products: int
+    # openFDA's OWN match total, read by `assert_result_set_complete` and then discarded. Carried.
+    match_total_reported: Optional[int] = None
+    records_returned: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -103,7 +115,8 @@ def parse_openfda_label_identity(raw: bytes, setid: str) -> OpenFdaLabelIdentity
     results = list(payload.get("results") or [])
     meta = ((payload.get("meta") or {}).get("results") or {})
 
-    assert_result_set_complete(total=_int(meta.get("total")), returned=len(results),
+    total = _int(meta.get("total"))
+    assert_result_set_complete(total=total, returned=len(results),
                                what="openFDA label", pin=setid,
                                code="openfda_result_set_truncated", require_total=True)
 
@@ -127,6 +140,10 @@ def parse_openfda_label_identity(raw: bytes, setid: str) -> OpenFdaLabelIdentity
 
     return OpenFdaLabelIdentity(
         set_id=setid,
+        # The source's own numbers, verbatim. None means openFDA reported no total -- and None is
+        # what is carried, never 1.
+        match_total_reported=total,
+        records_returned=len(results),
         # Every application the label declares. TEMODAR: NDA021029 (capsule) + NDA022277 (IV).
         application_numbers=sorted_unique(of.get("application_number") or []),
         unii=uniis[0] if uniis else None,
@@ -143,7 +160,8 @@ def parse_drugsfda(raw: bytes, application_number: str) -> ProductApproval:
     results = list(payload.get("results") or [])
     meta = ((payload.get("meta") or {}).get("results") or {})
 
-    assert_result_set_complete(total=_int(meta.get("total")), returned=len(results),
+    fda_total = _int(meta.get("total"))
+    assert_result_set_complete(total=fda_total, returned=len(results),
                                what="Drugs@FDA application", pin=application_number,
                                code="drugsfda_result_set_truncated", require_total=True)
 
@@ -159,6 +177,8 @@ def parse_drugsfda(raw: bytes, application_number: str) -> ProductApproval:
 
     products = list(row.get("products") or [])
     return ProductApproval(
+        match_total_reported=fda_total,
+        records_returned=len(results),
         application_number=application_number,
         sponsor=_opt(row.get("sponsor_name")),
         unii=(sorted_unique((row.get("openfda") or {}).get("unii") or []) or (None,))[0],
@@ -211,6 +231,16 @@ def acquire_approval(client: Client, run_root: RunRoot,
     records = [
         record_from_response(
             label_resp, run_root=run_root, stable_record_id=setid, suffix="json",
+            # Fetched BY IDENTITY: one named record was asked for and that record came back.
+            # `exactly_one` on a pin — nothing was chosen by position.
+            selection_disposition="exactly_one",
+            # THE SOURCE'S OWN NUMBERS, read in `parse_openfda_label_identity` and no longer
+            # discarded here. openFDA may report forty matches and hand back one; if it does, this
+            # record says so instead of swearing the result set was complete.
+            match_total_reported=label.match_total_reported,
+            records_returned=label.records_returned,
+            result_set_complete=(label.match_total_reported == label.records_returned
+                                 if label.match_total_reported is not None else False),
             release=label.last_updated,
             extraction_transform="openfda_approval.parse_openfda_label_identity:v2",
             adapter_file=__file__,
@@ -225,9 +255,18 @@ def acquire_approval(client: Client, run_root: RunRoot,
             SOURCE_KEY, "drug/drugsfda.json",
             {"search": f'openfda.application_number:"{application_number}"',
              "limit": QUERY_LIMIT})
-        approvals.append(parse_drugsfda(fda_resp.body, application_number))
+        approval = parse_drugsfda(fda_resp.body, application_number)
+        approvals.append(approval)
         records.append(record_from_response(
             fda_resp, run_root=run_root, stable_record_id=application_number, suffix="json",
+            # A SEARCH over Drugs@FDA, matched on the application-number pin. Uniqueness is
+            # DEMONSTRATED against openFDA's own total — never assumed from the endpoint.
+            selection_disposition="exactly_one", selection_pin=application_number,
+            match_total_reported=approval.match_total_reported,
+            records_returned=approval.records_returned,
+            result_set_complete=(approval.match_total_reported == approval.records_returned
+                                 if approval.match_total_reported is not None else False),
+
             release=_last_updated(fda_resp.body),
             extraction_transform="openfda_approval.parse_drugsfda:v2", adapter_file=__file__,
             note=f"Drugs@FDA cross-check for {application_number}. Every product's marketing "

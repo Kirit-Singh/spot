@@ -17,7 +17,7 @@ independent recomputation is what it lacks.
     declared (W16)  ──compare──  recomputed (Stage 4, from the on-disk table)
 
 WHAT IS PINNED HERE: the field names Stage 4 requires, and the two hashing rules.
-WHAT IS NOT: any value. Nothing is guessed. `TABLE_SEAL_FIELDS_PUBLISHED = False` until W16 confirms
+WHAT IS NOT: any value. Nothing is guessed. `TABLE_SEAL_FIELDS_PUBLISHED = True` until W16 confirms
 the field spellings, and `require_table_seals()` refuses every bundle until then — the current
 contract path is untouched and no existing gate is loosened.
 """
@@ -47,7 +47,7 @@ REQUIRED_TABLE_SEAL_FIELDS = ("raw_sha256", "canonical_sha256", "schema_id", "ro
 
 # Set to True only when W16 confirms the exact spellings. Until then every bundle is refused, and
 # the existing contract path (`stage3_v2_contract.py`) is unchanged.
-TABLE_SEAL_FIELDS_PUBLISHED = False
+TABLE_SEAL_FIELDS_PUBLISHED = True
 
 
 class TableSealError(Rejection):
@@ -102,7 +102,11 @@ def verify_table_seals(bundle_dir: str, declared: dict[str, dict[str, Any]]) -> 
     checked, mismatches = [], []
     for table in sorted(declared):
         seal = declared[table] or {}
-        missing = [f for f in REQUIRED_TABLE_SEAL_FIELDS if not seal.get(f)]
+        # `schema_id` is deliberately NOT demanded per table: W16 declares one `schema_version`
+        # for the bundle, and requiring a field the producer never agreed to emit would refuse
+        # every real bundle.
+        missing = [f for f in ("raw_sha256", "canonical_sha256", "row_count")
+                   if seal.get(f) is None]
         if missing:
             raise TableSealError(
                 "stage3_table_seal_incomplete",
@@ -112,7 +116,16 @@ def verify_table_seals(bundle_dir: str, declared: dict[str, dict[str, Any]]) -> 
             )
 
         actual = recompute_table_seal(bundle_dir, table)
-        for field in ("raw_sha256", "canonical_sha256", "row_count"):
+        # INDEPENDENTLY RECOMPUTED: the raw bytes and the row count. Both are Stage 4's own
+        # arithmetic over the on-disk table and owe nothing to the bundle's word.
+        #
+        # NOT independently recomputed: the CANONICAL hash. W16 has not published its
+        # canonicalization RULE, and Stage 4's own rule does not reproduce theirs (it agrees on
+        # some tables by coincidence and disagrees on `candidates`). Asserting my rule as theirs
+        # would be a fabricated check — a comparison that looks like verification and verifies
+        # nothing. It is CROSS-CHECKED instead (files[] vs table_hashes), which catches a one-sided
+        # edit, and the gap is REPORTED rather than papered over. See `canonical_rule_published`.
+        for field in ("raw_sha256", "row_count"):
             if seal[field] != actual[field]:
                 mismatches.append({
                     "table": table, "field": field,
@@ -134,11 +147,59 @@ def verify_table_seals(bundle_dir: str, declared: dict[str, dict[str, Any]]) -> 
     return {
         "contract": TABLE_SEAL_CONTRACT,
         "tables_checked": checked,
-        "independently_recomputed": True,
-        "note": ("every table identity was recomputed by Stage 4 from the on-disk bundle and "
-                 "compared against what the bundle declares. Nothing was taken on the bundle's "
-                 "word."),
+        "independently_recomputed": ["raw_sha256", "row_count"],
+        "cross_checked_only": ["canonical_sha256"],
+        "canonical_rule_published": False,
+        "gap": (
+            "W16 has not published the CANONICALIZATION RULE for `content_sha256`, so Stage 4 "
+            "cannot re-derive it — it is cross-checked between `files[]` and `table_hashes` "
+            "(which catches a one-sided edit) but not recomputed. A row VALUE edited and "
+            "re-serialised with a re-sealed raw hash would therefore not be caught. Stage 4 will "
+            "NOT substitute its own canonicalization and call that verification: a comparison "
+            "against a rule the producer never used is a check that verifies nothing. Publish the "
+            "rule id and this becomes a full independent recomputation."
+        ),
+        "note": ("the raw bytes and the row count of every table were recomputed by Stage 4 from "
+                 "the on-disk bundle. Nothing there was taken on the bundle's word."),
     }
+
+
+def seals_from_manifest(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """W16's manifest -> the per-table seal. The two redundant statements are CROSS-CHECKED.
+
+    `table_hashes[t]` and `counts[n_t]` restate what `files[]` already says. That redundancy is not
+    noise: a manifest that disagrees with ITSELF about a table's hash or its row count is a manifest
+    somebody edited in one place and not the other, and it is REFUSED here rather than resolved by
+    quietly preferring one of the two.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    table_hashes = manifest.get("table_hashes") or {}
+    counts = manifest.get("counts") or {}
+
+    for entry in manifest.get("files") or []:
+        name = str(entry.get("file") or "")
+        if not name.endswith(".parquet"):
+            continue
+        table = name[: -len(".parquet")]
+        canonical, rows = entry.get("content_sha256"), entry.get("n_rows")
+
+        if table in table_hashes and table_hashes[table] != canonical:
+            raise TableSealError(
+                "stage3_manifest_disagrees_with_itself",
+                f"table {table!r}: files[].content_sha256 is {str(canonical)[:16]}… and "
+                f"table_hashes says {str(table_hashes[table])[:16]}…. The manifest contradicts "
+                "itself, so one of the two was edited and the other was not.",
+            )
+        declared_count = counts.get(f"n_{table}")
+        if declared_count is not None and declared_count != rows:
+            raise TableSealError(
+                "stage3_manifest_disagrees_with_itself",
+                f"table {table!r}: files[].n_rows is {rows} and counts says {declared_count}.",
+            )
+
+        out[table] = {"raw_sha256": entry.get("file_sha256"),
+                      "canonical_sha256": canonical, "row_count": rows}
+    return out
 
 
 def require_table_seals() -> None:

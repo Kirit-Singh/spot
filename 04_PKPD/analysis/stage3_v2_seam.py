@@ -213,6 +213,51 @@ def v2_documents(bundle_dir: str) -> dict[str, str]:
             if schema.startswith(STAGE3_V2_SCHEMA)}
 
 
+# A fixture is SYNTHETIC. It exercises the contract; it is never evidence about a drug — and it must
+# never be acquired FOR, because a public request issued on behalf of a synthetic candidate spends a
+# real rate limit on a molecule that does not exist, and returns bytes that would then sit in a
+# manifest looking exactly like evidence.
+FIXTURE_ARTIFACT_CLASS = "fixture"
+
+
+def declared_artifact_class(bundle_dir: str) -> Optional[str]:
+    """What the bundle says it IS. Read from the declaration, never inferred from a filename."""
+    if not os.path.isdir(bundle_dir):
+        return None
+    for name in sorted(os.listdir(bundle_dir)):
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(bundle_dir, name), encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if isinstance(doc, dict) and doc.get("artifact_class"):
+            return str(doc["artifact_class"])
+    return None
+
+
+def assert_not_a_fixture(bundle_dir: str) -> None:
+    """REFUSE a fixture bundle BY NAME, before any request is planned or issued.
+
+    It used to be refused only INCIDENTALLY — the v1 reader could not find `drug_annotation.json`
+    and complained about a missing file. That reads as a broken bundle rather than a synthetic one,
+    and an incidental refusal is a refusal that stops the day the incidental reason goes away.
+    """
+    declared = declared_artifact_class(bundle_dir)
+    if declared != FIXTURE_ARTIFACT_CLASS:
+        return
+    raise Rejection(
+        "stage3_bundle_is_a_fixture",
+        f"this bundle declares artifact_class={declared!r}. A fixture is SYNTHETIC: it exercises "
+        "the contract and is never evidence about a drug. Stage 4 will not acquire public evidence "
+        "for it — a real request issued on behalf of a synthetic candidate spends a real rate limit "
+        "on a molecule that does not exist, and the bytes it returns would sit in a manifest looking "
+        "exactly like evidence. Refused BY NAME, before a single request is planned. Substitute an "
+        "artifact_class=analysis bundle.",
+    )
+
+
 def assert_v2_admissible(bundle_dir: str, *, schema_set_sha256: Optional[str] = None) -> None:
     """The gate. While the contract is unpinned, a v2 bundle is REFUSED — by name, and loudly.
 

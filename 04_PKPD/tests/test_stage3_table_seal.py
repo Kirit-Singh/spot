@@ -65,7 +65,12 @@ def test_a_correctly_sealed_table_is_INDEPENDENTLY_RECOMPUTED_and_admitted(bundl
     receipt = seal.verify_table_seals(bundle["dir"], bundle["declared"])
 
     assert receipt["tables_checked"] == ["candidates"]
-    assert receipt["independently_recomputed"] is True
+    # RAW + ROW_COUNT are Stage 4's own arithmetic. The CANONICAL hash is not: W16 has not published
+    # its canonicalization rule, and asserting Stage 4's own rule as theirs would be a comparison
+    # that looks like verification and verifies nothing.
+    assert receipt["independently_recomputed"] == ["raw_sha256", "row_count"]
+    assert receipt["cross_checked_only"] == ["canonical_sha256"]
+    assert receipt["canonical_rule_published"] is False
     assert "on the bundle's word" in receipt["note"]
 
 
@@ -97,23 +102,25 @@ def test_a_DROPPED_row_is_caught_by_the_row_count(bundle):
     assert "row_count" in fields
 
 
-def test_a_RESERIALISATION_that_changes_a_row_cannot_hide_behind_a_new_raw_hash(bundle):
-    """The subtle one. An attacker who edits a row and re-serialises produces NEW bytes — so a
-    raw-hash-only seal would need updating, and they would update it. The CANONICAL hash is
-    writer-independent: it still disagrees, because the CONTENT changed."""
-    mutated = [dict(r) for r in bundle["rows"]]
-    mutated[0]["arm_rank"] = 99
-    bundle["path"].write_text(json.dumps(mutated, indent=2))          # different bytes AND content
+def test_a_RESERIALISED_ROW_EDIT_is_the_KNOWN_GAP_until_W16_publishes_the_canonical_rule(bundle):
+    """THE honest limit, stated rather than papered over.
 
-    declared = json.loads(json.dumps(bundle["declared"]))
-    declared["candidates"]["raw_sha256"] = seal.raw_sha256(str(bundle["path"]))   # re-sealed raw
+    An attacker who edits a row VALUE, re-serialises, and re-seals the RAW hash changes no row count
+    and no byte-hash that Stage 4 can independently dispute. Only the CANONICAL hash catches it —
+    and Stage 4 cannot recompute W16's canonical hash, because W16 has not published the
+    canonicalization RULE. Stage 4's own rule does not reproduce theirs (it agrees on some tables by
+    coincidence and disagrees on `candidates`).
 
-    with pytest.raises(seal.TableSealError) as exc:
-        seal.verify_table_seals(bundle["dir"], declared)
+    Substituting my rule for theirs would be a fabricated check: a comparison against a rule the
+    producer never used verifies nothing while looking exactly like verification. So the gap is
+    REPORTED, and this test pins the report.
+    """
+    receipt = seal.verify_table_seals(bundle["dir"], bundle["declared"])
 
-    fields = {m["field"] for m in exc.value.context["mismatches"]}
-    assert fields == {"canonical_sha256"}, (
-        "the raw hash was re-sealed and matched; only the CONTENT hash caught the edited row")
+    assert receipt["canonical_rule_published"] is False
+    assert "canonicalization rule" in receipt["gap"].lower()
+    assert "would therefore not be caught" in receipt["gap"]
+    assert "will NOT substitute its own canonicalization" in receipt["gap"]
 
 
 def test_a_MISSING_TABLE_is_refused_rather_than_skipped(bundle):
@@ -127,7 +134,7 @@ def test_a_MISSING_TABLE_is_refused_rather_than_skipped(bundle):
 
 def test_a_PARTIAL_SEAL_is_not_a_seal(bundle):
     """Whichever identity is absent is the one nobody can check."""
-    for field in seal.REQUIRED_TABLE_SEAL_FIELDS:
+    for field in ("raw_sha256", "canonical_sha256", "row_count"):
         declared = json.loads(json.dumps(bundle["declared"]))
         declared["candidates"].pop(field)
 
@@ -137,16 +144,31 @@ def test_a_PARTIAL_SEAL_is_not_a_seal(bundle):
         assert field in str(exc.value)
 
 
-def test_SCHEMA_SET_DRIFT_is_declared_per_table_and_must_be_present(bundle):
-    """A table read under the wrong schema is read wrong. The schema id is part of the seal, so a
-    bundle whose tables drifted to a new schema cannot present itself as the old one."""
-    assert "schema_id" in seal.REQUIRED_TABLE_SEAL_FIELDS
+def test_a_MANIFEST_THAT_DISAGREES_WITH_ITSELF_is_refused(bundle):
+    """W16 states each table's hash and row count TWICE — in `files[]` and again in `table_hashes` /
+    `counts`. That redundancy is not noise: a manifest that contradicts itself is a manifest
+    somebody edited in one place and not the other, and it is REFUSED rather than resolved by
+    quietly preferring one of the two.
 
-    declared = json.loads(json.dumps(bundle["declared"]))
-    declared["candidates"]["schema_id"] = ""
+    NOTE: Stage 4 does NOT demand a per-table `schema_id`. W16 declares ONE `schema_version` for the
+    bundle, and requiring a field the producer never agreed to emit would refuse every real bundle —
+    the same mistake as demanding `artifact_class` of the Stage-2 contract.
+    """
+    manifest = {
+        "files": [{"file": "candidates.parquet", "file_sha256": "a" * 64,
+                   "content_sha256": "b" * 64, "n_rows": 2}],
+        "table_hashes": {"candidates": "c" * 64},          # disagrees with files[]
+        "counts": {"n_candidates": 2},
+    }
     with pytest.raises(seal.TableSealError) as exc:
-        seal.verify_table_seals(bundle["dir"], declared)
-    assert exc.value.code == "stage3_table_seal_incomplete"
+        seal.seals_from_manifest(manifest)
+    assert exc.value.code == "stage3_manifest_disagrees_with_itself"
+
+    manifest["table_hashes"]["candidates"] = "b" * 64
+    manifest["counts"]["n_candidates"] = 99                # now the COUNT disagrees
+    with pytest.raises(seal.TableSealError) as exc:
+        seal.seals_from_manifest(manifest)
+    assert exc.value.code == "stage3_manifest_disagrees_with_itself"
 
 
 def test_the_mismatch_report_SAYS_WHICH_identity_disagreed(bundle):

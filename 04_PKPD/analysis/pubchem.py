@@ -140,11 +140,21 @@ def acquire_pubchem_identity(client: Client, run_root: RunRoot,
     records = [
         record_from_response(
             cid_resp, run_root=run_root, stable_record_id=cid, release=NO_RELEASE, suffix="json",
+            # `compound/name/{name}/cids` is a NAME-TO-LIST query, not a GET by CID. It returns a
+            # LIST, so it is a collect-all in canonical order — nothing chosen, nothing dropped.
+            # Calling it an identity GET would claim an identity the request never asserted.
+            selection_disposition="sorted_unique", selection_pin=cid,
+            records_returned=len(cids),
+
             extraction_transform="pubchem.parse_cids:v1", adapter_file=__file__,
             note=f"name -> CID resolution for {name!r}; exactly one CID, or this record would "
                  "not exist"),
         record_from_response(
             prop_resp, run_root=run_root, stable_record_id=cid, release=NO_RELEASE, suffix="json",
+            # A TRUE identity GET: the property table is fetched BY CID. No result set, so no total
+            # and NO completeness boolean — both stay null rather than being invented.
+            selection_disposition="identity_get", selection_pin=cid, records_returned=1,
+
             extraction_transform="pubchem.parse_properties:v1", adapter_file=__file__,
             note="PubChem-computed descriptors only. No logD7.4 and no most-basic pKa: PubChem "
                  "does not supply them and Stage 4 does not invent them."),

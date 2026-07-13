@@ -81,6 +81,13 @@ def acquire_rxcui(client: Client, run_root: RunRoot,
 
     record = record_from_response(
         resp, run_root=run_root, stable_record_id=rxcuis[0], suffix="json",
+        # Fetched BY IDENTITY: one named record was asked for and that record came back.
+        # `exactly_one` on a pin — nothing was chosen by position.
+        # `rxcui.json?name=...` is a NAME-TO-LIST query: RxNorm returns every RxCUI matching the
+        # name. A collect-all in canonical order — not a GET of one named record.
+        selection_disposition="sorted_unique", selection_pin=rxcuis[0],
+        records_returned=len(rxcuis),
+
         release=_rxnorm_release(resp.body),
         extraction_transform="dailymed_select.parse_rxcuis:v1", adapter_file=__file__,
         note="RxNorm identity crosswalk only. It is not evidence of potency, exposure, safety "
@@ -115,6 +122,18 @@ def parse_spl_listing(raw: bytes) -> list[SplListing]:
             published_date=_opt(row.get("published_date")),
         ))
     return listings
+
+
+def listing_total_reported(raw: bytes) -> Optional[int]:
+    """DailyMed's OWN match count (`metadata.total_elements`), carried instead of discarded.
+
+    `assert_listing_complete` reads this to refuse a partial page — and it was then thrown away, so
+    the emitted record could not state the number the source actually reported and `materialize`
+    fabricated `match_total_reported=1`. The source's own count now travels with the bytes. `None`
+    means DailyMed reported no total, and `None` is what is carried.
+    """
+    total = (_json(raw, "spls.json").get("metadata") or {}).get("total_elements")
+    return total if isinstance(total, int) else None
 
 
 def assert_listing_complete(raw: bytes, listings: list[SplListing]) -> None:
@@ -218,12 +237,26 @@ def acquire_label(client: Client, run_root: RunRoot, name: str, *,
         record_from_response(
             listing_resp, run_root=run_root, stable_record_id=chosen.setid, suffix="json",
             release=f"listing:{len(listings)}_product(s)",
+            # THE DailyMed LISTING is a SEARCH: `total_elements` is the source's own match count,
+            # and it is carried rather than discarded. When it exceeds what the page handed back,
+            # the result set is NOT complete and this record says so.
+            # The LISTING is a genuine SEARCH: `total_elements` is DailyMed's own match count, and
+            # uniqueness must be DEMONSTRATED against what actually arrived. `exactly_one` on a pin,
+            # with the source's numbers — never assumed complete.
+            selection_disposition="exactly_one", selection_pin=chosen.setid,
+            match_total_reported=listing_total_reported(listing_resp.body),
+            records_returned=len(listings),
+            result_set_complete=(listing_total_reported(listing_resp.body) == len(listings)),
             extraction_transform="dailymed_select.parse_spl_listing:v1", adapter_file=__file__,
             note=f"product discovery for {name!r}; selection is deterministic (one product, or "
                  "an explicit pin)"),
         record_from_response(
             spl_resp, run_root=run_root, stable_record_id=chosen.setid, suffix="xml",
             release=f"spl_version={label.label_version}; effective_time={label.effective_date}",
+            # GET /spls/{setid}.xml — a TRUE identity GET. The document IS the record: no result
+            # set, no total, and no completeness boolean. Both stay null rather than being invented.
+            selection_disposition="identity_get", selection_pin=chosen.setid,
+            records_returned=1,
             extraction_transform="label_adapters.parse_dailymed_spl:v1 (nested subsections "
                                  "included; Highlights <excerpt> excluded)",
             adapter_file=__file__, review_status="unreviewed",

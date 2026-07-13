@@ -76,7 +76,8 @@ def _spl_for(moiety_name: str, unii: str = "SYNTHUNII01") -> bytes:
 
 
 def _record(run_root, *, key, raw, stable_id, source_type, transform, origin="fetched_public",
-            state="observed", candidate_id=None):
+            state="observed", candidate_id=None, disposition="exactly_one",
+            match_total=1, returned=1, complete=True):
     relpath, digest = run_root.store(raw, source_key=key)
     return AcquisitionRecord(
         acquisition_record_id=f"acq.{key}.{stable_id}",
@@ -102,6 +103,11 @@ def _record(run_root, *, key, raw, stable_id, source_type, transform, origin="fe
         adapter_code_sha256=ADAPTER_SHA,
         review_status="unreviewed",
         evidence_state=state,
+        # THE SELECTION PROOF, stated by the adapter at fetch — never inferred downstream. An
+        # OBSERVED row that cannot say how it selected is refused.
+        **({"selection_disposition": disposition, "selection_pin": stable_id,
+            "match_total_reported": match_total, "records_returned": returned,
+            "result_set_complete": complete} if state == "observed" else {}),
         # THE typed join. This used to be `stage3_source_record_id` — a Stage-3 SOURCE id doing
         # duty as a candidate id — which is exactly the overload the audit found: a freshly fetched
         # record has no Stage-3 source id, so it matched nothing and contributed nothing.

@@ -92,7 +92,17 @@ class SourceAcquisitionRecord(Strict):
 
     request_url: str
     # The exact, reproducible query — not "I searched ChEMBL". Method + path + sorted params.
+    #
+    # `materialize` used to substitute `rec.source_key` when the query was absent — writing the
+    # STRING "chembl" where a reproducible query belongs. A source key is not a query: nobody can
+    # re-issue it, and a provenance field that cannot be re-issued is decoration.
     canonical_query: str = Field(min_length=1)
+    # Stage 3 stores its canonical query as a HASH, not as text. Carried as a hash, never
+    # reconstructed as text — and never dropped, which is what happened.
+    canonical_query_sha256: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
+    # WHICH Stage-3 source record these bytes came from. Dropped in materialization, so a reused
+    # response could no longer name the upstream row it was carried from.
+    stage3_source_record_id: Optional[str] = None
     # WHO performed the exchange. A reused Stage-3 response was fetched by STAGE 3: Stage 4 holds
     # its bytes and its hash, but never made the request, so it has no HTTP status and no access
     # time of its own. Without this field the record cannot tell the difference between "nobody
@@ -148,11 +158,23 @@ class SourceAcquisitionRecord(Strict):
     # `records_returned` is what actually arrived. A `limit=1` makes those differ — which is why
     # it did not merely risk the wrong record, it removed the evidence that would have shown the
     # risk. A truncated result set cannot prove uniqueness, so it cannot be `observed`.
-    selection_disposition: Optional[Literal["exactly_one", "sorted_unique"]] = None
+    # THREE dispositions, because there are three genuinely different things an adapter can do:
+    #
+    #   identity_get   the request NAMED one record by its stable id (GET /spls/{setid}.xml,
+    #                  /compound/cid/{cid}/...). There is NO RESULT SET, so truncation is not
+    #                  possible and completeness is a property of the ENDPOINT, not of a count.
+    #                  Marking these `exactly_one` and asserting completeness would be asserting a
+    #                  source total nobody reported — an assumption dressed as a proof.
+    #   exactly_one    a SELECTION over a result set, matched on an identity pin. Uniqueness must
+    #                  be DEMONSTRATED: the source's own match total against what actually arrived.
+    #                  A truncated page cannot prove uniqueness.
+    #   sorted_unique  a collect-all in canonical order. Nothing chosen, nothing dropped.
+    selection_disposition: Optional[
+        Literal["identity_get", "exactly_one", "sorted_unique"]] = None
     selection_pin: Optional[str] = None
     match_total_reported: Optional[int] = Field(default=None, ge=0)
     records_returned: Optional[int] = Field(default=None, ge=0)
-    result_set_complete: bool = False
+    result_set_complete: Optional[bool] = None
 
     # Required by `not_found_after_reproducible_search`: the SearchManifest whose acquired
     # bytes ARE the empty response.
@@ -288,6 +310,33 @@ class SourceAcquisitionRecord(Strict):
         selection which never had them cannot be written down as though it did.
         """
         if self.selection_disposition is None:
+            return
+
+        # An IDENTITY GET has no result set. The request named one record by its stable id, and the
+        # endpoint returns that record or nothing — there is nothing to truncate and no total to
+        # report. Completeness here is a property of the ENDPOINT, and it is stated as such rather
+        # than inferred from a count the source never sent.
+        #
+        # It still must name the identity it fetched: a GET with no pin is a GET of nothing.
+        if self.selection_disposition == "identity_get":
+            if not self.selection_pin:
+                raise ValueError(
+                    "selection_disposition='identity_get' must name the stable id it fetched. A "
+                    "request that cannot say which record it asked for cannot say it got that one."
+                )
+            if self.match_total_reported is not None:
+                raise ValueError(
+                    "an identity GET has no result set, so a `match_total_reported` is a count of "
+                    "something that does not exist. If the endpoint DID return a result set, the "
+                    "disposition is `exactly_one` and uniqueness must be demonstrated."
+                )
+            if self.result_set_complete is not None:
+                raise ValueError(
+                    "an identity GET has no result set, so `result_set_complete` has nothing to be "
+                    "true OR false ABOUT. Setting it True is a completeness boolean invented for an "
+                    "endpoint that reports no total — the same assumption-dressed-as-proof this "
+                    "field exists to prevent. Leave it null."
+                )
             return
 
         if self.selection_disposition == "exactly_one" and not self.selection_pin:

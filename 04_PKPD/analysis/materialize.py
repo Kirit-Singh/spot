@@ -146,38 +146,77 @@ def _source_record(rec: AcquisitionRecord) -> SourceRecord:
 
 
 def _selection(rec: AcquisitionRecord) -> dict[str, Any]:
-    """How this record was selected — stated only where the manifest can PROVE it.
+    """The selection proof, READ from the record. Never inferred, never defaulted.
 
-    A fetch BY IDENTITY (`GET /spls/{setid}.xml`, `GET /compound/cid/{cid}/...`) has no result set
-    to truncate: you asked for one named record and that record came back. That is `exactly_one`
-    on a pin, and it is the property that matters — nothing was chosen by position.
+    THE DEFECT THIS REPLACES. This used to decide a fetch was "by identity" if `stable_record_id`
+    happened to appear as a SUBSTRING of `canonical_query`, and then FABRICATE the proof:
 
-    A record whose query was a SEARCH is different, and the current acquisition manifest does not
-    record the source's own match total. So this refuses to claim `exactly_one`: an unproven
-    uniqueness claim is exactly the `limit=1` truncation these fields exist to expose. The record
-    contract agrees and would reject it ("a truncated page cannot prove uniqueness"), which is why
-    the manifest not carrying match totals is a REAL limitation and is left visible here rather
-    than papered over.
+        match_total_reported = 1, records_returned = 1, result_set_complete = True
+
+    For an openFDA SEARCH that is simply false. The source may have reported forty matches and
+    handed back one — `meta.results.total` says so — and this record would have sworn the result set
+    was complete. A fabricated completeness claim is worse than an absent one: it is the exact
+    truncation these fields exist to expose, wearing the proof's clothes. And a substring test is
+    not a proof of anything; a query that merely CONTAINS an id is not a query FOR that id.
+
+    The source's own numbers now travel with the bytes from the fetch. `None` means the source
+    reported no total, and `None` is what is carried — never 1.
     """
-    pin = rec.stable_record_id
-    query = rec.canonical_query or ""
-    fetched_by_identity = bool(pin) and str(pin) in query
-
-    if fetched_by_identity:
-        return {
-            "selection_disposition": "exactly_one",
-            "selection_pin": pin,
-            "match_total_reported": 1,
-            "records_returned": 1,
-            "result_set_complete": True,
-        }
     return {
-        "selection_disposition": None,
-        "selection_pin": pin,
-        "match_total_reported": None,
-        "records_returned": None,
-        "result_set_complete": False,
+        "selection_disposition": rec.selection_disposition,
+        "selection_pin": rec.selection_pin,
+        "match_total_reported": rec.match_total_reported,
+        "records_returned": rec.records_returned,
+        # NEVER `bool(...)`. An identity GET has no result set, so `result_set_complete` is null —
+        # and `bool(None)` rewrites that honest null into `False`, which reads as "we looked and the
+        # result set was INCOMPLETE". That is a different claim from "there was no result set", and
+        # it is a claim the endpoint never made. Absent stays absent, end to end.
+        "result_set_complete": rec.result_set_complete,
     }
+
+
+def _assert_selection_proven(rec: AcquisitionRecord) -> None:
+    """An OBSERVED row must be able to say how its record was selected.
+
+    `selection_disposition = None` bypassed every selection rule: the row asserted nothing, so
+    nothing could refuse it, and a record picked by position was indistinguishable from one pinned
+    by identity. Silence is not a disposition.
+
+    Only `observed` rows are held to this. A `not_evaluated` row selected nothing, and demanding a
+    selection proof from a lane nobody looked at would be demanding evidence of an absence.
+    """
+    if rec.evidence_state != "observed":
+        return
+    if rec.selection_disposition:
+        return
+
+    # A REUSED response was selected by STAGE 3, not by Stage 4 — the same shape as the access
+    # time. Stage 4 did not issue the query and cannot state a disposition for it, so the proof is
+    # DELEGATED, and delegation is only honest if the record can NAME what it is delegating to.
+    # `stage3_source_record_id` is that name, and the record contract already requires it.
+    #
+    # Fabricating a disposition here would be the original defect in a new costume; DEMANDING one
+    # would be demanding that Stage 4 attest to a selection it never made.
+    if rec.origin == "reused_from_stage3":
+        if rec.stage3_source_record_id:
+            return
+        raise MaterializationError(
+            "reused_row_cannot_name_its_upstream_selection",
+            f"acquisition record {rec.acquisition_record_id!r} is a reused Stage-3 response with no "
+            "`selection_disposition` AND no `stage3_source_record_id`. Stage 4 did not select it, so "
+            "it cannot attest to how it was selected — but it must at least name the upstream row "
+            "whose selection it is standing on. An unnamed delegation is not a delegation.",
+        )
+
+    raise MaterializationError(
+        "acquisition_row_without_selection_proof",
+        f"acquisition record {rec.acquisition_record_id!r} was FETCHED by Stage 4, is OBSERVED, and "
+        "states no `selection_disposition`. It cannot say whether its record was pinned by identity "
+        "(`exactly_one`) or collected in full (`sorted_unique`) — so a record chosen by position is "
+        "indistinguishable from one chosen by name, and no selection rule can refuse it. Silence is "
+        "not a disposition. The adapter must record how it selected, and the source's own match "
+        "total: it is read at fetch time and must not be discarded.",
+    )
 
 
 def _why_no_access_time(rec: AcquisitionRecord) -> str:
@@ -192,6 +231,7 @@ def _why_no_access_time(rec: AcquisitionRecord) -> str:
 
 
 def _acquisition_row(rec: AcquisitionRecord) -> SourceAcquisitionRecord:
+    _assert_selection_proven(rec)
     state = (EvidenceObservationState.OBSERVED if rec.evidence_state == "observed"
              else EvidenceObservationState(rec.evidence_state))
     return SourceAcquisitionRecord(
@@ -201,7 +241,13 @@ def _acquisition_row(rec: AcquisitionRecord) -> SourceAcquisitionRecord:
         # built, so only the two real origins reach here.
         origin=cast('Literal["fetched_public", "reused_from_stage3"]', rec.origin),
         request_url=rec.url or "",
-        canonical_query=rec.canonical_query or rec.source_key,
+        # NEVER `or rec.source_key`. A source key is not a query: nobody can re-issue "chembl",
+        # and a provenance field that cannot be re-issued is decoration. Stage 3 stores its query
+        # as a HASH, so a reused record carries the hash and says the text is upstream's.
+        canonical_query=(rec.canonical_query
+                         or f"upstream_canonical_query_sha256:{rec.canonical_query_sha256}"),
+        canonical_query_sha256=rec.canonical_query_sha256,
+        stage3_source_record_id=rec.stage3_source_record_id,
         # NEVER `or ""`. A missing time converted to an empty string is how a fabricated epoch
         # became a crash instead of a caught lie. The absence travels, with its reason.
         accessed_at_utc=rec.accessed_at_utc,

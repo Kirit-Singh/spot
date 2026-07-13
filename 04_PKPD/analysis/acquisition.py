@@ -164,6 +164,32 @@ class AcquisitionRecord(Strict):
     # `1970-01-01` -- is a fabricated provenance claim, and it is what this replaces.
     access_time_not_stated_reason: Optional[str] = None
 
+    # --- THE DETERMINISTIC-SELECTION PROOF, carried from the FETCH ---------------------
+    #
+    # These were computed at fetch and THROWN AWAY. `openfda_approval` reads `meta.results.total`,
+    # `dailymed_select` reads `total_elements`, both feed `assert_result_set_complete` -- and then
+    # the record kept none of it. Downstream, `materialize` "recovered" the proof by INFERRING an
+    # identity fetch from whether `stable_record_id` happened to appear inside `canonical_query`,
+    # and FABRICATED `match_total_reported=1, records_returned=1, result_set_complete=True`.
+    #
+    # For an openFDA SEARCH that is simply false: the source may have reported 40 matches and
+    # handed back one, and the record would have sworn the result set was complete. A fabricated
+    # completeness claim is worse than an absent one -- it is the exact truncation these fields
+    # exist to expose, wearing the proof's clothes.
+    #
+    # So the SOURCE's own numbers travel with the bytes. `None` means the source did not report a
+    # total, and `None` is what is carried -- never 1.
+    # `identity_get` is the third, and it is not a nicety: an endpoint that returns ONE named
+    # record has no result set, so "was the result set complete?" is not a question it can answer.
+    # Without this the adapters had to either lie (`exactly_one` + an assumed completeness) or say
+    # nothing (`None`, which bypasses every selection rule). Both were happening.
+    selection_disposition: Optional[
+        Literal["identity_get", "exactly_one", "sorted_unique"]] = None
+    selection_pin: Optional[str] = None
+    match_total_reported: Optional[int] = Field(default=None, ge=0)
+    records_returned: Optional[int] = Field(default=None, ge=0)
+    result_set_complete: Optional[bool] = None
+
     @model_validator(mode="after")
     def _origin_evidence(self) -> "AcquisitionRecord":
         if self.origin == "fetched_public":
@@ -398,8 +424,30 @@ def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: 
                          review_status: ReviewStatus = "unreviewed",
                          content_sha256: Optional[str] = None,
                          content_hash_rule: Optional[str] = None,
+                         selection_disposition: Optional[
+                             Literal["identity_get", "exactly_one", "sorted_unique"]] = None,
+                         selection_pin: Optional[str] = None,
+                         match_total_reported: Optional[int] = None,
+                         records_returned: Optional[int] = None,
+                         result_set_complete: Optional[bool] = None,
                          note: Optional[str] = None) -> AcquisitionRecord:
     """A fetched response -> a cached, hashed, terms-bound acquisition record.
+
+    THE SELECTION PROOF IS AN ARGUMENT, not an afterthought. This function accepted no disposition
+    and no totals, so every `fetched_public` record was created with them all `None` — and the
+    adapters, which had ALREADY read the source's own numbers (openFDA's `meta.results.total`,
+    DailyMed's `total_elements`) and used them to refuse a truncated page, then threw them away at
+    exactly this line. The proof existed for the length of one function call.
+
+    Downstream, `materialize` "recovered" it by inferring an identity fetch from a SUBSTRING match
+    and fabricating `match_total_reported=1, result_set_complete=True`. Every link in that chain was
+    invisible on its own.
+
+    `None` is still allowed here — a source that reports no total is a real thing, and `None` is the
+    honest answer for it. What is NOT allowed is an OBSERVED fetched row with no DISPOSITION:
+    `materialize._assert_selection_proven` refuses it, because a record that cannot say whether it
+    was pinned by identity or collected in full is a record that cannot be distinguished from one
+    chosen by position.
 
     `release` is passed in by the adapter because only the adapter knows where its source puts
     one: openFDA has `meta.last_updated`, DailyMed has a per-SPL version, and PubChem PUG REST
@@ -417,6 +465,13 @@ def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: 
         source_type=as_source_type(str(entry["source_type"])),
         origin="fetched_public",
         stable_record_id=stable_record_id,
+        # THE PROOF, carried from the adapter that actually issued the query. It was read, used to
+        # refuse a truncated page, and then discarded exactly here.
+        selection_disposition=selection_disposition,
+        selection_pin=selection_pin if selection_pin is not None else stable_record_id,
+        match_total_reported=match_total_reported,
+        records_returned=records_returned,
+        result_set_complete=result_set_complete,
         url=response.url,
         canonical_query=response.canonical_query,
         accessed_at_utc=response.accessed_at_utc,

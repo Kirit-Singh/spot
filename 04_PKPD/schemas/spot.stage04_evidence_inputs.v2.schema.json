@@ -3073,6 +3073,19 @@
           "title": "Canonical Query",
           "type": "string"
         },
+        "canonical_query_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Query Sha256"
+        },
         "conflict_note": {
           "anyOf": [
             {
@@ -3265,9 +3278,16 @@
           "type": "object"
         },
         "result_set_complete": {
-          "default": false,
-          "title": "Result Set Complete",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Set Complete"
         },
         "review_status": {
           "$ref": "#/$defs/ReviewStatus"
@@ -3289,6 +3309,7 @@
           "anyOf": [
             {
               "enum": [
+                "identity_get",
                 "exactly_one",
                 "sorted_unique"
               ],
@@ -3317,6 +3338,18 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Source Record Id",
           "type": "string"
+        },
+        "stage3_source_record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage3 Source Record Id"
         }
       },
       "required": [

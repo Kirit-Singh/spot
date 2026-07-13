@@ -59,6 +59,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .firewall import Rejection
+from .stage3_v2_seam import assert_not_a_fixture, assert_v2_admissible
 from .stage3_contract_v2 import verify_annotation_bundle
 from .stage3_frozen import (
     STAGE3_CONTRACT_SHA256,
@@ -190,6 +191,14 @@ def admit(bundle_dir: str, *, require_external_verifier: bool = False) -> Stage3
     gate 2 has not actually passed. Leave it False only while no real Stage-3 bundle exists,
     and never claim integration-GO on the result.
     """
+    # THE TRUE CHOKE POINT. The v2 seam and the fixture refusal used to live in
+    # `adapt_annotation_bundle` — but `run_acquire` calls `admit()` DIRECTLY, so the acquisition
+    # door never crossed either gate. A seam with a door around it is not a seam, and the test that
+    # claimed every door crossed it passed vacuously. Both gates are here now, before a single byte
+    # of the bundle is read.
+    assert_not_a_fixture(bundle_dir)
+    assert_v2_admissible(bundle_dir)
+
     # GATE 1 — Stage-4's own restatement. Always. Raises Rejection on any refusal.
     doc, tables = verify_annotation_bundle(bundle_dir)
     gates = ["stage4_restatement"]
