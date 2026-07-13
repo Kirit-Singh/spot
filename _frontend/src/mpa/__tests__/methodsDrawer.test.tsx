@@ -72,7 +72,7 @@ describe('contextual Methods & Provenance drawer', () => {
     const { unmount } = renderStage('targets', 'Targets');
     const d1 = openDrawer();
     expect(
-      within(d1).getByText(/Primary human CD4 T cells.*no multi-tissue expression analysis/i),
+      within(d1).getByText(/Primary human CD4 T cells.*no tissue\/organ sampling axis or multi-tissue expression measurements in GWCD4i.*HPA\/GTEx analysis is external/i),
     ).toBeInTheDocument();
     // it lives in the drawer, not as a banner on the canvas
     expect(within(document.querySelector('main')!).queryByText(/CD4 T cells/i)).toBeNull();

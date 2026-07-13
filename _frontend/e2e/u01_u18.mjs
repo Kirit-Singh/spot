@@ -123,7 +123,10 @@ export async function checkU03(browser, base) {
       const want = STAGE_LABEL[r];
       if (!s.open) return problems.push(`${r}: drawer did not open`);
       if (s.stageLabel !== want) problems.push(`${r}: data-stage-label "${s.stageLabel || '∅'}" ≠ "${want}"`);
-      if (!s.title.startsWith(want)) problems.push(`${r}: drawer title "${s.title}" not page-contextual (expected "${want} …")`);
+      // Stage-1 parity: the VISIBLE title is exactly "Methods & provenance" on every route — the
+      // active route is carried semantically (data-stage-label, asserted above, + dialog aria-label),
+      // NOT baked into the title line. (Old assertion expected the title to start with the route.)
+      if (s.title !== 'Methods & provenance') problems.push(`${r}: drawer title "${s.title}" ≠ exact "Methods & provenance" (route is semantic via data-stage-label/aria-label)`);
       sigs[r] = `${s.methodId || '∅'}|${s.codeSha || '∅'}|${s.methodsText}||${s.provText}`;
     });
   }

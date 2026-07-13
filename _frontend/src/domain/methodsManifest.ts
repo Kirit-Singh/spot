@@ -49,15 +49,17 @@ export interface StageMethodsManifest {
 /**
  * The source-tissue fact for a stage — source-backed, never inferred, so it is stated even
  * before an arm is generated. Stage 1/2 (Marson): one experimental source, primary human CD4
- * T cells across donors D1–D4 × Rest/Stim8hr/Stim48hr — NO tissue/organ axis, no multi-tissue
- * expression. Stage-4: organ-system context is emitted only from an admitted structured source
- * field; otherwise not_evaluated/unspecified, never inferred. (Must match SOURCE_TISSUE in
+ * T cells across donors D1–D4 × Rest/Stim8hr/Stim48hr — NO tissue/organ sampling axis or
+ * multi-tissue expression measurements in GWCD4i (the publication's HPA/GTEx tissue-specificity
+ * analysis is external, not part of these admitted single-cell/Perturb-seq measurements).
+ * Stage-4: organ-system context is emitted only from an admitted structured source field;
+ * otherwise not_evaluated/unspecified, never inferred. (Must match SOURCE_TISSUE in
  * stageMethods.ts, which is the hashed value.)
  */
 export function stageSourceTissue(stage_label: string): string | null {
   const s = stage_label.toLowerCase();
   if (s.includes('target') || s.includes('pathway')) {
-    return 'Primary human CD4 T cells (Marson GWCD4i) — one experimental source, across donor/stimulation conditions; no multi-tissue expression analysis.';
+    return 'Primary human CD4 T cells (Marson GWCD4i) — one experimental source, across donor/stimulation conditions; no tissue/organ sampling axis or multi-tissue expression measurements in GWCD4i; the publication\'s HPA/GTEx analysis is external.';
   }
   if (s.includes('drug')) {
     return 'Biological input is the Stage-2 program/perturbation result from the Marson primary-human-CD4 dataset; drug evidence comes from separately listed public sources.';

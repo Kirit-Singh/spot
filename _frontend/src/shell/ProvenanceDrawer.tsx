@@ -245,7 +245,7 @@ function ProvenanceSteps({ p, n, stageLabel, runBound }: { p: ProvenanceBlock; n
             <DefRow label="Verifier" value={p.verifier_status} />
             {p.cs_notebook_url && (
               <Row label="CS notebook">
-                <a href={p.cs_notebook_url} className="font-mono text-[11px] text-accent hover:underline">
+                <a href={p.cs_notebook_url} target="_blank" rel="noopener noreferrer" className="font-mono text-[11px] text-accent hover:underline">
                   {p.cs_notebook_url} ↗
                 </a>
               </Row>

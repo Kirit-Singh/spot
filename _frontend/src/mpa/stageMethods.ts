@@ -65,7 +65,7 @@ const STAGE_LABELS: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string
 // Source-backed tissue fact per page — stated even before an arm is generated (not a per-run value).
 // PINNED INSIDE the hashed manifest so it is tamper-evident; must match domain stageSourceTissue().
 const ST_MARSON_CD4 =
-  'Primary human CD4 T cells (Marson GWCD4i) — one experimental source, across donor/stimulation conditions; no multi-tissue expression analysis.';
+  'Primary human CD4 T cells (Marson GWCD4i) — one experimental source, across donor/stimulation conditions; no tissue/organ sampling axis or multi-tissue expression measurements in GWCD4i; the publication\'s HPA/GTEx analysis is external.';
 const SOURCE_TISSUE: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string> = {
   targets: ST_MARSON_CD4,
   pathways: ST_MARSON_CD4,
@@ -445,8 +445,8 @@ export function stageMethodsRaw(page: PageKey): RawManifest {
  * test if a manifest's verified content legitimately changes.
  */
 export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', string> = {
-  targets: '82345e8f505e52639ae397de0a6848c5ea923aa11420398d4ea86766384c6870',
-  pathways: '9f980bbfdc870f4826448ac71f5e94fe852fd3f6a9149a1f810f1a3262067e5f',
+  targets: '327b90a8f3331e4d205096f7d70f8e01e4d41bc557ad881be149828fb6a463f1',
+  pathways: '3d0294fe0b6d0beb618a477b65a0cd82a736fdd60ef875baf2f6eb9a3864f657',
   drugs: '59017bfb16f7a8a88e44f5f79eac321f04492a1e3c035d76d1298040ffcd1fa9',
   pksafety: '86a186781ee64406f2246771c1815d72fb37049214db1e4a262e858bc40ab50b',
 };

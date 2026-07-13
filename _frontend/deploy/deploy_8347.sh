@@ -49,7 +49,7 @@ REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 STAGE1_DATA_COMMIT="9a2f6cf9ea0cabc1586a23b3649875871cc54f43"
 STAGE1_DATA_DIGEST="edbc8da3a2affc1e4e312c36b7aa1563b218d99669c9577c789a1cc0bdc68ea8"
 STAGE1_PAGE_BASE_SHA="a7fbe178ffa37bb07c409569bcd4f06c4a1c2c8f322610fc8e3bd54752a134ac"   # pin:01_page.html base @ 9a2f6cf9
-STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-8f4255cf08f31d74c51fe0f1f15563e1601f2d79c0c12375b715a155798e61ec}"  # nav retarget + classified citation-year + 0/33-retirement comment corrections
+STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-570a6f07eda39d8a94cae449c0226a35320d6a908c947992ed479564615b5e32}"  # nav retarget + classified citation-year + 0/33-retirement comments + removed /01_notebook.html drawer link
 INVARIANTS=(
   "data/stage01_selectability_v3.json:7c326a86"
   "data/stage01_validation.json:1c14cd28"
@@ -163,6 +163,10 @@ done
 #   1. nav retarget  : nstep / nsep / window.location.assign / the 5 page hrefs / old 02_page stage hrefs
 #   2. citation fix  : the class="cite" header line (2026→2025 year correction; DOI already correct)
 #   3. 0/33 retire   : the two selectability comment lines (retired production-gate number removed)
+#   4. methods surface: remove the standalone "/01_notebook.html" drawer link — the header Methods &
+#                       provenance slide-out is the ONLY primary methods/provenance UI surface (the
+#                       01_notebook.html file remains as an archival/reproducibility artifact, just
+#                       not a UI destination). Only the exact "/01_notebook.html" anchor line.
 # Anything else is a NON-classified change and hard-refuses.
 BASE01="$(mktemp -t spot_base01.XXXXXX)"
 git -C "$SPOT_REPO" show "$STAGE1_DATA_COMMIT:01_programs/app/01_page.html" > "$BASE01" || die "cannot read pinned 01_page.html"
@@ -172,7 +176,8 @@ NAV_ALLOW='(nstep|nsep|window\.location\.assign|href="(01_page|targets|pathways|
 OFFENDING="$(diff -u "$BASE01" "$PUBLIC_DIR/01_page.html" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
   | grep -vE "$NAV_ALLOW" \
   | grep -vE 'class="cite"' \
-  | grep -vE 'No production/research split|PRODUCTION-selectability flag' || true)"
+  | grep -vE 'No production/research split|PRODUCTION-selectability flag' \
+  | grep -vE 'href="/01_notebook\.html"' || true)"
 rm -f "$BASE01"
 [ -z "$OFFENDING" ] || { printf '%s\n' "$OFFENDING" | sed 's/^/         /' >&2; die "01_page.html diff vs $STAGE1_DATA_COMMIT touches NON-classified lines (not nav/citation/0-33-retire)"; }
 say "       spot@$STAGE1_DATA_COMMIT · data digest $STAGE1_DATA_DIGEST · 22 invariants + classified 01_page diff OK"
