@@ -14,21 +14,15 @@ and DERIVES a normalized `spot.stage02.direct_admission_binding.v1` — every va
 re-hashed or re-derived from bytes, never copied and trusted from the report.
 
 INDEPENDENCE RULE (test-enforced): imports nothing from the PRODUCER. It reuses W10's own
-verifier modules (its canonical mask projection, its hash function) because those are the same
-lane; it never imports `run_arms`, `arm_bundle`, `masks` or any generator module.
+verifier modules (its canonical mask projection, its hash function) — same lane — but never
+`run_arms`, `arm_bundle`, `masks` or any generator module.
 
-WHAT THE ADAPTER RE-DERIVES AND WHAT IT REFUSES
------------------------------------------------
-  * the self-hash, re-computed from the report body — a report edited after it was cited;
-  * the verdict token, byte-exact ADMIT / REFUSE — no case-fold, no guess;
-  * an ADMIT that carries failed gates — a verdict against its own evidence;
-  * a self-admission — the producer's pending slot handed in as a verdict;
-  * the report is W10's — pinned verifier_id + spec, so another checker cannot pass as W10;
-  * every bundle file, re-hashed from disk against the report's claim — a stale/swapped bundle;
-  * the mask, re-derived from the shipped masks.parquet and cross-checked against the bundle's
-    own binding — a bundle whose mask table was edited;
-  * the environment lock, against the hard pin — a different environment;
-  * the condition, against the bundle's own provenance — a report about another context.
+It re-derives and refuses fail-closed: the self-hash (edited-after-citing), the verdict token
+(byte-exact, no fold), an ADMIT carrying failed gates, a self-admission slot, a report not
+from the pinned W10 verifier_id/spec/CODE, an inventory that is not the exact production
+gate-profile (a deleted/added/reordered gate), inconsistent gate counts, every bundle file
+re-hashed from disk, the mask re-derived from masks.parquet, the environment lock against the
+pin, and the condition against the bundle's own provenance.
 """
 from __future__ import annotations
 
@@ -44,11 +38,14 @@ if _HERE not in sys.path:
 
 import verify_arm_science as S  # noqa: E402  (W10's own canonical mask projection)
 
-# THE VERSION-LOCKED PINS — ids, spec, code hash, solver lock, required gates. Restated in
-# their own module (verify_arm_contract_pins), never borrowed from the verifier's live
-# constants: a pin the adapter took from the thing it normalises is a pin nobody checked.
+# THE VERSION-LOCKED PINS — restated in their own module, never borrowed from the verifier's
+# live constants (a pin taken from the thing it normalises is a pin nobody checked).
 from verify_arm_contract_pins import (  # noqa: E402
+    GATE_PROFILES,
     PINNED_SOLVER_LOCK_SHA256,
+    PROFILE_BUNDLE_FIXTURE,
+    PROFILE_BUNDLE_PRODUCTION,
+    PROFILE_RELEASE_PRODUCTION,
     REQUIRED_GATES,
     W10_SPEC_SHA256,
     W10_VERIFIER_CODE_SHA256,
@@ -71,7 +68,6 @@ VERDICTS = (VERDICT_ADMIT, VERDICT_REFUSE)
 SELF_ADMISSION_VERDICT = "pending_independent_verification"
 ADMITTED = "admitted"
 REFUSED = "refused"
-
 SELF_HASH_FIELD = "report_sha256"
 BUNDLE_PROVENANCE_FILE = "provenance.json"
 MASKS_FILE = "masks.parquet"
@@ -86,8 +82,7 @@ REQUIRED_BUNDLE_PROVENANCE = (
     "arm_bundle_run_id", "condition", "lane", "arm_rows_sha256",
     "solver_lock_sha256", "artifact_sha256",
 )
-# A RELEASE lane binds the Stage-1 v3 release, so its scorer-view identity must be present.
-# A synthetic bundle has no bound release and legitimately carries a null there.
+# A release lane binds the Stage-1 v3 release; a synthetic bundle has none (null is fine).
 RELEASE_LANES = ("production", "research_only")
 REQUIRED_RELEASE_PROVENANCE = (
     "direct_release_run_id", "expected_conditions",
@@ -109,6 +104,7 @@ REFUSE_GATE_INVENTORY = "the_gate_inventory_hash_does_not_re_derive"
 REFUSE_WRONG_CODE = "the_report_is_not_from_the_pinned_w10_verifier_code"
 REFUSE_GATE_COUNTS = "the_gate_counts_do_not_agree_with_the_gate_list"
 REFUSE_GATE_MISSING = "a_security_critical_gate_is_absent_from_the_inventory"
+REFUSE_GATE_PROFILE = "the_gate_inventory_is_not_the_exact_profile_for_this_invocation"
 REFUSE_MISSING_PROVENANCE = "the_report_is_missing_a_required_provenance_binding"
 REFUSE_WRONG_ENV = "the_environment_lock_is_not_the_pinned_stage2_lock"
 REFUSE_BUNDLE_BYTES = "a_bundle_file_on_disk_does_not_hash_to_the_admitted_value"
@@ -132,6 +128,16 @@ def _refuse(reason: str, message: str):
 def _expected_verifier_id(schema_version: str) -> str:
     return (W10_VERIFIER_ID_BUNDLE if schema_version == SCHEMA_BUNDLE
             else W10_VERIFIER_ID_RELEASE)
+
+
+def _select_profile(schema_version: str, lane, recompute_mode=None) -> str:
+    """WHICH profile this report must match: a release-grade lane is a PROVENANCE record (exact
+    production profile); a synthetic lane is a fixture (lenient). Release is always exact."""
+    if schema_version == SCHEMA_RELEASE:
+        return PROFILE_RELEASE_PRODUCTION
+    if lane in RELEASE_LANES:
+        return PROFILE_BUNDLE_PRODUCTION
+    return PROFILE_BUNDLE_FIXTURE
 
 
 def validate_report(report: Any) -> None:
@@ -205,9 +211,8 @@ def validate_report(report: Any) -> None:
         _refuse(REFUSE_GATE_INVENTORY,
                 "gate_inventory_sha256 does not re-derive from the gate inventory")
 
-    # COUNT CONSISTENCY. n_gates=999 with a 77-gate list, an empty list with n_gates=0, a
-    # padded n_passed — all internally plausible until the counts are checked against the
-    # list they claim to summarise. The inventory IS the gate names, in order.
+    # COUNT CONSISTENCY: n_gates=999 over a 77-gate list, an empty list, a padded n_passed
+    # — plausible until checked against the list they summarise. The inventory IS the names.
     gate_names = [g.get("gate") for g in gates if isinstance(g, dict)]
     passed = [g for g in gates if isinstance(g, dict) and g.get("passed")]
     failed_names = [g.get("gate") for g in gates
@@ -228,18 +233,6 @@ def validate_report(report: Any) -> None:
     if sorted(report.get("failed_gates") or []) != sorted(failed_names):
         _refuse(REFUSE_GATE_COUNTS,
                 "failed_gates does not match the gates that record passed=false")
-
-    # THE SECURITY-CRITICAL GATES MUST HAVE RUN. An empty inventory, or a resealed deletion
-    # of the mask / env / bytes gate, leaves an internally-consistent report that never
-    # checked the thing that matters. Pinning the code sha says the report NAMES the right
-    # code; this says its inventory CONTAINS the checks that code is supposed to run.
-    required = REQUIRED_GATES.get(report["verifier_id"], ())
-    haystack = "\n".join(str(n) for n in inv)
-    absent = [r for r in required if r not in haystack]
-    if absent:
-        _refuse(REFUSE_GATE_MISSING,
-                f"{len(absent)} security-critical gate(s) absent from the inventory: "
-                f"{[a[:40] for a in absent[:3]]}")
 
     bound = report["bound_artifact"]
     if not isinstance(bound, dict):
@@ -264,6 +257,32 @@ def validate_report(report: Any) -> None:
         _refuse(REFUSE_MISSING_PROVENANCE,
                 f"a {bound.get('lane')!r} bundle must name "
                 "stage1_scorer_view_canonical_sha256; it is null")
+
+    # EXECUTION-COMPLETENESS PROFILE. A PRODUCTION report must have run EXACTLY the gate
+    # inventory its invocation runs — a resealed deletion of ANY gate, even a currently
+    # non-critical one, no longer matches and is refused. A FIXTURE report is separately typed
+    # and LENIENT (the critical subset), because a fixture is a test input, not a record.
+    profile_id = _select_profile(schema_version, bound.get("lane"),
+                                 bound.get("recompute_mode"))
+    profile = GATE_PROFILES.get(profile_id, {})
+    if profile.get("match") == "exact":
+        if int(report["n_gates"]) != profile["n_gates"] \
+                or report["gate_inventory_sha256"] != profile["gate_inventory_sha256"]:
+            _refuse(REFUSE_GATE_PROFILE,
+                    f"this is a {profile_id} report but its gate inventory "
+                    f"({int(report['n_gates'])} gates, "
+                    f"{str(report['gate_inventory_sha256'])[:16]}...) is not the profile's "
+                    f"exact ordered inventory ({profile['n_gates']} gates, "
+                    f"{profile['gate_inventory_sha256'][:16]}...) — a gate was added, "
+                    "removed or reordered")
+    else:
+        required = REQUIRED_GATES.get(report["verifier_id"], ())
+        haystack = "\n".join(str(n) for n in inv)
+        absent = [r for r in required if r not in haystack]
+        if absent:
+            _refuse(REFUSE_GATE_MISSING,
+                    f"{len(absent)} security-critical gate(s) absent from the inventory: "
+                    f"{[a[:40] for a in absent[:3]]}")
 
 
 def _rederive_mask_from_disk(bundle_dir: str) -> Optional[str]:
@@ -391,14 +410,15 @@ def normalize(report: dict, bundle_dir: Optional[str] = None) -> dict[str, Any]:
 
 REFUSE_BINDING_INVALID = "the_normalized_binding_does_not_satisfy_its_own_schema"
 
-# The types the binding schema declares. A field allowed to be null is checked as such;
-# every other required field must be a non-empty string of the stated kind. This is the
-# adapter proving its OWN output conforms — so a release binding whose arm_rows is null, or a
-# bundle binding missing a hash, is caught HERE rather than by a downstream consumer.
-_BINDING_NULLABLE = frozenset({
-    "release_id", "condition", "lane", "stage1_scorer_view_canonical_sha256",
-    "registry_scorer_projection_sha256", "arm_rows_sha256", "mask_sha256", "bundle_id",
-})
+# Per required field, the type the binding must carry. Nullable fields (a release subject, or
+# a synthetic bundle, legitimately lacks them) are None; the rest are exact types. The adapter
+# proves its OWN output conforms, so a null-where-a-string-belongs is caught here.
+_BINDING_TYPES = {
+    "release_id": None, "condition": None, "lane": None, "bundle_id": None,
+    "stage1_scorer_view_canonical_sha256": None, "registry_scorer_projection_sha256": None,
+    "arm_rows_sha256": None, "mask_sha256": None,
+    "bundle_verified_on_disk": bool, "n_failed": int, "direct_bundle_sha256": dict,
+}
 
 
 def validate_binding(binding: dict) -> None:
@@ -407,29 +427,19 @@ def validate_binding(binding: dict) -> None:
     missing = [f for f in schema["required"] if f not in binding]
     if missing:
         _refuse(REFUSE_BINDING_INVALID, f"binding is missing {missing}")
-    # the self-hash
     derived = content_sha256({k: v for k, v in binding.items() if k != "binding_sha256"})
     if binding.get("binding_sha256") != derived:
         _refuse(REFUSE_BINDING_INVALID, "binding_sha256 does not re-derive")
-    # required non-nullable strings must be present and non-empty
     for f in schema["required"]:
         v = binding.get(f)
-        if f in _BINDING_NULLABLE:
+        typ = _BINDING_TYPES.get(f, "str")
+        if typ is None:                          # nullable
             continue
-        if f in ("bundle_verified_on_disk",):
-            if not isinstance(v, bool):
-                _refuse(REFUSE_BINDING_INVALID, f"{f} is not a bool")
-            continue
-        if f in ("n_failed",):
-            if not isinstance(v, int):
-                _refuse(REFUSE_BINDING_INVALID, f"{f} is not an int")
-            continue
-        if f == "direct_bundle_sha256":
-            if not isinstance(v, dict):
-                _refuse(REFUSE_BINDING_INVALID, f"{f} is not an object")
-            continue
-        if not isinstance(v, str) or not v:
-            _refuse(REFUSE_BINDING_INVALID, f"{f} must be a non-empty string, got {v!r}")
+        if typ == "str":                         # required non-empty string
+            if not isinstance(v, str) or not v:
+                _refuse(REFUSE_BINDING_INVALID, f"{f} must be a non-empty string, got {v!r}")
+        elif not isinstance(v, typ):
+            _refuse(REFUSE_BINDING_INVALID, f"{f} is not a {typ.__name__}")
 
 
 _SCHEMA_CACHE: dict[str, Any] = {}
