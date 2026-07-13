@@ -23,16 +23,15 @@ import copy
 import json
 import os
 
+import fixtures_stage1_contract as S1
 import pytest
 from direct import stage1_v3 as G
 from direct.hashing import content_hash
 
-CONTRACT_DIR = "/home/tcelab/.spot-runs/20260712T021343Z/stage1-ui-contract"
-SCHEMA_PATH = os.path.join(CONTRACT_DIR, "spot.stage01_selection.v3.schema.json")
-
-pytestmark = pytest.mark.skipif(
-    not os.path.exists(SCHEMA_PATH),
-    reason="the frozen Stage-1 v3 contract is not on this host")
+# The AUTHORITATIVE schema, materialised from git at the pinned Stage-1 commit — never from
+# a path on one developer's machine. The old host path held the STALE f4c2 schema, so this
+# whole module was green against a schema nobody could audit. See fixtures_stage1_contract.
+SCHEMA_PATH = S1.schema_path()
 
 SHA = "a" * 64
 TRUST_KEYS = ("validation_raw_sha256", "validation_semantics_raw_sha256",
@@ -106,6 +105,11 @@ def emit(a="prog_alpha", dir_a="high", b="prog_beta", dir_b="low",
             "active_gate": False},
     }
     doc.update(over)
+    # question_id / arms / estimator: REQUIRED by the v3 schema, and the question_id is
+    # computed by an INDEPENDENT implementation of Stage-1's published recipe (never by the
+    # gate's own derive_question_id — that would prove only that it equals itself). An
+    # explicit override in `over` is kept: that is how the forgery paths are written.
+    S1.complete(doc)
     return reseal(doc)
 
 
@@ -246,10 +250,29 @@ def test_the_execution_status_must_still_FOLLOW_from_the_contract(schema):
 
 
 def test_a_temporal_selection_cannot_borrow_the_within_condition_estimator(schema):
-    """Naming the wrong estimator for the mode is refused by name."""
-    doc = emit(mode=G.MODE_TEMPORAL, estimator_id=G.ESTIMATOR_WITHIN)
-    doc = reseal(doc)
-    assert refusal(doc, schema) == G.REFUSE_MODE_ROUTE
+    """Refused TWICE OVER — and the second layer is the one that matters.
+
+    The repaired f810 schema carries the rule itself ("a temporal mode may never borrow the
+    within-condition estimator"), so the pinned schema now refuses this before the gate's own
+    routing check is reached.
+    """
+    doc = reseal(emit(mode=G.MODE_TEMPORAL, estimator_id=G.ESTIMATOR_WITHIN))
+    assert refusal(doc, schema) == G.REFUSE_SCHEMA
+
+
+def test_the_GATE_refuses_the_borrowed_estimator_even_WITHOUT_the_schema():
+    """Defence in depth: the gate does not delegate this to the schema.
+
+    Validated against a PERMISSIVE schema, so the pinned schema's allOf rule cannot fire and
+    the gate's OWN routing check is the only thing left to catch it. If this were not
+    checked, a loosened schema would silently take the protection away — and routing a
+    cross-condition selection through the within-condition formula returns numbers that look
+    exactly like an answer.
+    """
+    doc = reseal(emit(mode=G.MODE_TEMPORAL, estimator_id=G.ESTIMATOR_WITHIN))
+    with pytest.raises(G.SelectionV3Error) as exc:
+        G.validate(doc, {})
+    assert exc.value.reason == G.REFUSE_MODE_ROUTE
 
 
 def test_the_temporal_estimator_IS_in_the_implemented_set():

@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 
+import fixtures_stage1_contract as S1
 import pytest
 from direct import stage1_v3 as G
 from direct.temporal import run_temporal, verify_temporal
@@ -38,8 +39,9 @@ from fixtures_temporal import (
     temporal_specs,
 )
 
-SCHEMA_PATH = ("/home/tcelab/.spot-runs/20260712T021343Z/stage1-ui-contract/"
-               "spot.stage01_selection.v3.schema.json")
+# The AUTHORITATIVE schema, from git at the pinned Stage-1 commit — not from a host path
+# that happened to hold the STALE pre-repair schema. See fixtures_stage1_contract.
+SCHEMA_PATH = S1.schema_path()
 SHA = "a" * 64
 
 # The GHOST axes: programs the registry ships and the LEGACY contract never names.
@@ -117,6 +119,9 @@ def v3_contract(a=GHOST_A, b=GHOST_B, conditions=(STIM48, REST),
             "selectability_v3_raw_sha256": SHA, "active_gate": False},
     }
     doc.update(over)
+    # question_id / arms / estimator: required by the f810 schema. The question_id is built
+    # by an INDEPENDENT implementation of Stage-1's recipe, never by the gate under test.
+    S1.complete(doc)
     return _reseal(doc)
 
 
