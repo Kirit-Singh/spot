@@ -43,13 +43,16 @@ TARGET_DATA="$TARGET_ROOT/data"
 REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 
 # Pinned Stage-1 data baseline (verified reproducible; see coordinator handoff).
-# Authoritative Stage-1 baseline re-pinned to the CURRENT clean-at-data HEAD (9a2f6cf9). The one
-# intervening commit vs 125ebfc6 is release-hygiene docs/schema OUTSIDE 01_programs/app/: the 22-file
-# data digest AND the base 01_page.html sha are byte-identical at both commits (verified).
-STAGE1_DATA_COMMIT="9a2f6cf9ea0cabc1586a23b3649875871cc54f43"
+# Baseline pinned to the canonical-source cleanup HEAD 184211a (origin/stage1-canonical-ui-cleanup): it
+# brings 01_programs/app/01_page.html up to the live classified UI (five-route nav + sole Methods &
+# provenance drawer + removed /01_notebook.html drawer link) AND the insecure-HTTP sha256 fallback
+# (_sha256js), plus a UI-link hygiene regression scan. The canonical base is therefore now BYTE-IDENTICAL
+# to the nav-retargeted import (both 570a6f07), so the classified 01_page diff below is EMPTY. 184211a does
+# NOT touch 01_programs/app/data/: the 22-file digest is byte-identical to 9a2f6cf9 (verified).
+STAGE1_DATA_COMMIT="184211ac3c359189de894b35576c90d89d20b9ab"
 STAGE1_DATA_DIGEST="edbc8da3a2affc1e4e312c36b7aa1563b218d99669c9577c789a1cc0bdc68ea8"
-STAGE1_PAGE_BASE_SHA="a7fbe178ffa37bb07c409569bcd4f06c4a1c2c8f322610fc8e3bd54752a134ac"   # pin:01_page.html base @ 9a2f6cf9
-STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-570a6f07eda39d8a94cae449c0226a35320d6a908c947992ed479564615b5e32}"  # nav retarget + classified citation-year + 0/33-retirement comments + removed /01_notebook.html drawer link
+STAGE1_PAGE_BASE_SHA="570a6f07eda39d8a94cae449c0226a35320d6a908c947992ed479564615b5e32"   # pin:01_page.html base @ 184211a (== import; canonical cleanup absorbed the classified UI + hash fallback)
+STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-570a6f07eda39d8a94cae449c0226a35320d6a908c947992ed479564615b5e32}"  # nav-retargeted import — now byte-identical to the canonical base
 INVARIANTS=(
   "data/stage01_selectability_v3.json:7c326a86"
   "data/stage01_validation.json:1c14cd28"
@@ -197,6 +200,8 @@ for inv in "${INVARIANTS[@]}"; do
   [ "${got:0:8}" = "$pre" ] || die "invariant $f sha256 ${got:0:8}… != pinned $pre…"
 done
 # 01_page.html: base pin + import pin (the exact-byte guard) + a CLASSIFIED diff vs the pinned commit.
+# At 184211a the canonical base already IS the classified UI (== import, 570a6f07), so this diff is now
+# EMPTY; the classification below is retained as a defense that hard-refuses any FUTURE re-divergence.
 # The byte pin is authoritative; the diff classification proves the changes are ONLY the intended
 # ones, each explicitly allow-listed (never a blanket "any line with href="). Allowed change classes:
 #   1. nav retarget  : nstep / nsep / window.location.assign / the 5 page hrefs / old 02_page stage hrefs
