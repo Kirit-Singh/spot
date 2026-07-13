@@ -121,6 +121,7 @@ def convergence_artifact(*, bundle: dict[str, Any],
                          readout_universe_sha256: str,
                          pairwise_workers: int = convergence.DEFAULT_PAIRWISE_WORKERS,
                          pair_chunk_size: int = convergence.DEFAULT_PAIR_CHUNK_SIZE,
+                         compact_pair_evidence: bool = True,
                          ) -> dict[str, Any]:
     """The ONE convergence claim for this (condition, source). Referenced, never copied.
 
@@ -129,7 +130,8 @@ def convergence_artifact(*, bundle: dict[str, Any],
     change with the direction somebody wishes a program would go.
     """
     pairs = convergence.pairwise_within_sets(
-        bundle, signatures, workers=pairwise_workers, chunk_size=pair_chunk_size)
+        bundle, signatures, workers=pairwise_workers, chunk_size=pair_chunk_size,
+        supportive_only=compact_pair_evidence)
     sets = convergence.converge_sets(bundle, signatures, pairs)
     doc = {
         "schema_version": CONVERGENCE_SCHEMA,

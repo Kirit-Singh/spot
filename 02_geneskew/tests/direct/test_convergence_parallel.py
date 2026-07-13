@@ -65,6 +65,42 @@ def test_complete_convergence_artifact_and_hash_are_unchanged(inputs):
     assert parallel["convergence_method_id"] == convergence.METHOD_ID
 
 
+@pytest.mark.parametrize("case", ["zero", "supportive", "mixed"])
+def test_streamed_supportive_evidence_is_byte_identical_to_full_records(case):
+    base = _vec(0.0)
+    same = _vec(0.1)
+    opposed = {gene: -value for gene, value in base.items()}
+    orthogonal = {gene: (value if i % 2 else -value)
+                  for i, (gene, value) in enumerate(base.items())}
+    signatures_by_case = {
+        "zero": {"T0": base, "T1": opposed, "T2": orthogonal},
+        "supportive": {"T0": base, "T1": same, "T2": _vec(0.2)},
+        "mixed": {"T0": base, "T1": same, "T2": opposed},
+    }
+    signatures = signatures_by_case[case]
+    members = sorted(signatures)
+    bundle = {"sets": {"P:STREAM": {
+        "name": "stream equivalence", "genes_target": members,
+        "genes_in_target_universe": members, "n_genes_target": len(members),
+        "n_genes_in_target_universe": len(members),
+        "n_source_symbols": len(members), "target_source_coverage": 1.0,
+    }}}
+
+    full = pathway_arms.convergence_artifact(
+        bundle=bundle, signatures=signatures, condition="Rest", source="fixture",
+        readout_universe_sha256="c" * 64, pairwise_workers=2,
+        pair_chunk_size=1, compact_pair_evidence=False)
+    streamed = pathway_arms.convergence_artifact(
+        bundle=bundle, signatures=signatures, condition="Rest", source="fixture",
+        readout_universe_sha256="c" * 64, pairwise_workers=2,
+        pair_chunk_size=1, compact_pair_evidence=True)
+
+    assert streamed == full
+    assert streamed["convergence_sha256"] == full["convergence_sha256"]
+    assert json.dumps(streamed, sort_keys=True, separators=(",", ":")) == \
+        json.dumps(full, sort_keys=True, separators=(",", ":"))
+
+
 @pytest.mark.parametrize("workers,chunk", [(0, 10), (-1, 10), (2, 0), (2, -1)])
 def test_invalid_execution_topology_fails_closed(inputs, workers, chunk):
     bundle, signatures = inputs

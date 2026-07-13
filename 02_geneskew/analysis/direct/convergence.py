@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import math
 import multiprocessing as mp
+from collections.abc import Iterator
 from typing import Any, Optional
 
 from . import genesets
@@ -120,13 +121,31 @@ SIZE_DISPOSITIONS = (SIZE_EVALUABLE, SIZE_TOO_LARGE)
 # multiprocessing on a platform without fork.
 DEFAULT_PAIRWISE_WORKERS = 1
 DEFAULT_PAIR_CHUNK_SIZE = 500
-PAIRWISE_EXECUTION_ID = "spot.stage02.convergence.ordered_fork_pair_chunks.v1"
+PAIRWISE_EXECUTION_ID = "spot.stage02.convergence.ordered_streaming_pair_chunks.v2"
 
 _PAIRWISE_SIGNATURES: Optional[dict[str, dict[str, float]]] = None
 
 
 class ConvergenceExecutionError(ValueError):
     """The requested execution topology cannot preserve the frozen computation."""
+
+
+class PairwiseEvidence(list):
+    """Supportive records plus the exact count of all evaluated pairs.
+
+    Non-supportive pair records are not emitted by the convergence artifact and have no
+    effect on its induced graphs.  Keeping millions of those dictionaries in memory is
+    therefore an execution defect, not scientific evidence.  Iteration exposes the
+    supportive records; ``len()`` preserves the exact evaluated-pair count used by the
+    artifact.  The ordinary/full path still returns a plain list for audit comparisons.
+    """
+
+    def __init__(self, supportive_records: list[dict[str, Any]], n_pairs: int):
+        super().__init__(supportive_records)
+        self.n_pairs = int(n_pairs)
+
+    def __len__(self) -> int:
+        return self.n_pairs
 
 
 def _target_members(gene_set: dict[str, Any]) -> list[str]:
@@ -229,11 +248,24 @@ def _pair_chunk(pairs: list[tuple[str, str]]) -> list[dict[str, Any]]:
     return [_pair_record(pair, _PAIRWISE_SIGNATURES) for pair in pairs]
 
 
+def _supportive_pair_chunk(pairs: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    """Fork worker returning only records that can enter the emitted graph."""
+    return [record for record in _pair_chunk(pairs) if record["supportive"]]
+
+
+def _ordered_chunks(ordered: list[tuple[str, str]],
+                    chunk_size: int) -> Iterator[list[tuple[str, str]]]:
+    """Yield contiguous sorted chunks without retaining a second all-pair container."""
+    for start in range(0, len(ordered), chunk_size):
+        yield ordered[start:start + chunk_size]
+
+
 def pairwise_within_sets(bundle: dict[str, Any],
                          signatures: dict[str, dict[str, float]], *,
                          workers: int = DEFAULT_PAIRWISE_WORKERS,
                          chunk_size: int = DEFAULT_PAIR_CHUNK_SIZE,
-                         ) -> list[dict[str, Any]]:
+                         supportive_only: bool = False,
+                         ) -> list[dict[str, Any]] | PairwiseEvidence:
     """Only the pairs a gene set can actually stand on: BOTH endpoints in the same set.
 
     After B1 these are the only pairs convergence ever reads — a cross-set pair cannot
@@ -262,30 +294,41 @@ def pairwise_within_sets(bundle: dict[str, Any],
         raise ConvergenceExecutionError("pair chunk size must be >= 1")
 
     ordered = sorted(wanted)
+    del wanted
     if workers == 1 or len(ordered) <= 1:
-        return [_pair_record(pair, signatures) for pair in ordered]
+        records = [_pair_record(pair, signatures) for pair in ordered]
+        if supportive_only:
+            return PairwiseEvidence(
+                [record for record in records if record["supportive"]], len(ordered))
+        return records
 
     if "fork" not in mp.get_all_start_methods():
         raise ConvergenceExecutionError(
             "parallel convergence requires multiprocessing start method 'fork'; "
             "use workers=1 on this platform")
 
-    chunks = [ordered[i:i + chunk_size]
-              for i in range(0, len(ordered), chunk_size)]
-    n_processes = min(workers, len(chunks))
+    n_chunks = (len(ordered) + chunk_size - 1) // chunk_size
+    n_processes = min(workers, n_chunks)
     global _PAIRWISE_SIGNATURES
     if _PAIRWISE_SIGNATURES is not None:
         raise ConvergenceExecutionError(
             "parallel convergence is already active in this process")
     _PAIRWISE_SIGNATURES = signatures
     try:
-        # map() returns in INPUT order. Each chunk is a contiguous slice of sorted pairs,
-        # and flattening therefore reproduces the serial record order byte-for-byte even
-        # when workers finish out of order.
+        # imap() yields in INPUT order while bounding completed results in flight. Each
+        # chunk is a contiguous slice of sorted pairs, so extending in yield order
+        # reproduces the serial supportive-record order byte-for-byte even when workers
+        # finish out of order.
         ctx = mp.get_context("fork")
+        records: list[dict[str, Any]] = []
+        worker = _supportive_pair_chunk if supportive_only else _pair_chunk
         with ctx.Pool(processes=n_processes) as pool:
-            results = pool.map(_pair_chunk, chunks, chunksize=1)
-        return [record for chunk in results for record in chunk]
+            for chunk_records in pool.imap(
+                    worker, _ordered_chunks(ordered, chunk_size), chunksize=1):
+                records.extend(chunk_records)
+        if supportive_only:
+            return PairwiseEvidence(records, len(ordered))
+        return records
     finally:
         _PAIRWISE_SIGNATURES = None
 
