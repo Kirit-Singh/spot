@@ -98,7 +98,18 @@ STAGE2_UPSTREAM_CONTRACT = {
 #
 # Three, all W16's to close. Named individually so "the seam is closed" never collapses into a
 # vague "not ready yet" that nobody can act on.
+# NOTE ON A MISLEADING NAME, so nobody mistakes it for the v2 admission contract:
+# `analysis/stage3_contract_v2.py` is the "v2" of Stage 4's RESTATEMENT, not of Stage 3's contract.
+# It pins `spot.stage03_drug_annotation.v1/2026-07-12-r8` and reads `drug_annotation.json` with the
+# v1 candidate keys. Everything Stage 4 currently admits — including the selection-view binding — is
+# V1 ONLY. A TRUE v2 admission contract is a SECOND seam: native `drug_annotation.v2.json` +
+# `manifest.v2`, admitted through W16's own v2 external verifier and schema-set pins. Widening v1 to
+# swallow v2 is not an upgrade; it is the misreading this module exists to prevent.
 V2_PIN_BLOCKERS = (
+    "the NATIVE v2 documents: `drug_annotation.v2.json` + `manifest.v2`, admitted by a TRUE v2 "
+    "contract module. `analysis/stage3_contract_v2.py` is misleadingly named — it pins "
+    "spot.stage03_drug_annotation.v1 and restates the OLD candidate keys. It will not be silently "
+    "widened to accept v2.",
     "ONE canonical document filename. W16 currently emits `drug_annotation.v2.json` while its "
     "fixture uses an underscore variant. Stage 4 discovers by DECLARATION so it sees both — but "
     "the v2 ADAPTER must read a real file, and two names for one document is a contract with a "
@@ -130,6 +141,12 @@ STAGE4_REQUIRES_OF_V2 = (
     "spot.stage02_run_manifest_verification.v1 report carrying verdict=admit, "
     "generator_is_not_verifier=true, n_failed=0, hashes equal, topology/release/admission true — "
     "NOT an invented aggregate envelope",
+    "the SELECTION-VIEW contract: which selection, which question, which analysis mode and "
+    "condition, and the EXACT selected arm keys — plus per-candidate arm membership, so Stage 4 "
+    "can carry only the candidates inside the selected view. Stage 4 binds these from v1's "
+    "`upstream.direct_selection_id` / `direct_question_id` / `direct_lane` / "
+    "`direct_analysis_condition` / `desired_arms`; the v2 names must be COORDINATED, not guessed. "
+    "Without it a Stage-4 release is a global candidate display, not the answer to a question",
     "an immutable candidate identifier per candidate, stable across the whole chain",
     "per-source provenance: locator, license/terms, raw_sha256, and the source's own release",
     "an explicit typed ORIGIN per lever, so a MEASURED and an INFERRED origin are never fused",

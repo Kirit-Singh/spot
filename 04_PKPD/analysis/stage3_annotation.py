@@ -43,6 +43,7 @@ from .contracts import (
 )
 from .firewall import Rejection, compute_candidate_rows_sha256
 from .stage3_admission import NOT_RUN, admit
+from .selection_view import SelectionView, bind_selection_view
 from .stage3_v2_seam import assert_v2_admissible
 from .stage3_contract_v2 import (
     ACQUISITION_STATUSES,
@@ -125,6 +126,9 @@ class AnnotationAdmission:
     admitted_as_candidates: int
     not_queued: int
     candidate_set: Optional[Stage3DrugCandidateSet]
+    # THE question this bundle answers. A release with no selection view is a global candidate
+    # display, not an answer -- see analysis/selection_view.py.
+    selection_view: Optional[SelectionView] = None
     queued: list[QueuedCandidate] = field(default_factory=list)
     not_queued_reasons: dict[str, str] = field(default_factory=dict)
     source_records: dict[str, SourceRecord] = field(default_factory=dict)
@@ -230,6 +234,22 @@ def adapt_annotation_bundle(bundle_dir: str, *,
 
     science = _science_refs(tables)
 
+    # The GLOBAL candidate universe. Every queued candidate is admitted — no selection filtering
+    # happens here, and that is deliberate.
+    #
+    # I got this wrong first: I filtered at admission and refused candidates outside the active
+    # selection. That makes the release a SINGLETON SELECTION and throws away the reason the store
+    # exists. Acquiring a public label and a PubChem record is the expensive part of Stage 4, and
+    # it is selection-INDEPENDENT: the same bytes answer every selection over the same candidate.
+    # Filter here and a second question means a second full acquisition of evidence Stage 4 already
+    # holds.
+    #
+    # So the store is global and reusable, and SELECTION IS A PROJECTION — a deterministic function
+    # over the store plus the verified active selection (`selection_view.select`). The candidate ->
+    # arm provenance is preserved on every candidate so a browser can filter ANY selection without
+    # a rerun.
+    selection_view = bind_selection_view(doc)
+
     queued = [c for c in candidates if c.get("stage4_assessment_status") == QUEUED]
     not_queued = {c["candidate_id"]: c.get("stage4_assessment_reason") or "not_queued"
                   for c in candidates if c.get("stage4_assessment_status") != QUEUED}
@@ -268,6 +288,7 @@ def adapt_annotation_bundle(bundle_dir: str, *,
         ))
 
     admission = AnnotationAdmission(
+        selection_view=selection_view,
         bundle_id=doc["bundle_id"],
         bundle_dir=os.path.abspath(bundle_dir),
         schema_version=doc["schema_version"],

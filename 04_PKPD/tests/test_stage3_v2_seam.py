@@ -280,7 +280,11 @@ def test_every_pin_blocker_is_NAMED_and_actionable():
     assert "schema-set sha256" in joined
     assert "verifier.verify_stage3" in joined, "the wrong-verifier hazard is not named"
     assert "DISP_NON_RANKABLE_ASSERTION" in joined, "the stale fixture constant is not named"
-    assert len(V2_PIN_BLOCKERS) == 4
+    assert "manifest.v2" in joined, "the native v2 manifest is not named"
+    assert "misleadingly named" in joined, (
+        "the seam must say that stage3_contract_v2.py pins V1 despite its name — otherwise the "
+        "next reader will take it for the v2 admission contract and widen it")
+    assert len(V2_PIN_BLOCKERS) == 5
 
 
 # ------------------------- the handoff to W16 must never drift from what the code enforces
@@ -316,7 +320,7 @@ def test_the_W16_handoff_agrees_with_the_SEAM_and_claims_no_readiness():
     assert "schema-set sha256" in doc
     assert "verify_stage3" in doc, "the wrong-verifier hazard must be spelled out to W16"
     assert "DISP_NON_RANKABLE_ASSERTION" in doc
-    assert len(V2_PIN_BLOCKERS) == 4
+    assert len(V2_PIN_BLOCKERS) == 5
 
     # the exact upstream contract, not a paraphrase
     assert STAGE2_UPSTREAM_CONTRACT["manifest_schema"] in doc
