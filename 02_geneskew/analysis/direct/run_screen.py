@@ -317,8 +317,14 @@ def _context(args, lane: str, selection, release, axis: dict[str, Any],
 
     splits = donors.complementary_splits(sorted(donor_mods))
     splits["n_pairs"] = len(donor_mods)
+    # getattr, like `lane` / `stage1_release` / `target_identity_map` above: this ONE context
+    # builder serves every entry point, and a caller that does not define an optional input
+    # has not supplied it. Reading it as a bare attribute made the all-arm CLI die with
+    # AttributeError while every test passed, because the test fixture's dataclass happened
+    # to declare a field the real parser did not.
     crosswalk = donors.donor_crosswalk(
-        splits["donor_tokens"], io_data.load_donor_crosswalk(args.donor_crosswalk))
+        splits["donor_tokens"],
+        io_data.load_donor_crosswalk(getattr(args, "donor_crosswalk", None)))
 
     return {
         "lane": lane, "selection": selection, "release": release,

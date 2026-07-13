@@ -34,6 +34,7 @@ from typing import Any
 
 from . import (
     arm_bundle,
+    arm_inputs,
     config,
     disposition,
     emit,
@@ -179,7 +180,11 @@ def build_bundle(args) -> dict[str, Any]:
                                  base_by_program=base)
     doc = arm_bundle.build(condition=cond, view=view, base_by_program=base, rows=rows)
 
-    manifest = rs.stage2_input_manifest(args)
+    # THE BUNDLE'S OWN input manifest — never the pair path's. `stage2_input_manifest` hashes
+    # `args.selection`, which both crashed this CLI (no such flag) and made a supposedly
+    # pair-independent identity move with a pair the bundle never loaded.
+    manifest = arm_inputs.bundle_input_manifest(args)
+    arm_inputs.assert_no_pair_input(manifest)
     binding = {
         "runner_id": RUNNER_ID,
         "lane": ctx["lane"],
@@ -259,6 +264,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--guide-manifest", default=None)
     ap.add_argument("--source-registry", default=None)
     ap.add_argument("--target-identity-map", default=None)
+    # CONSUMED, therefore DECLARED. The context builder reads this; the parser used not to
+    # define it, so the only entry point a human can invoke died with AttributeError while
+    # the in-process tests — which pass a dataclass that declares it — stayed green.
+    ap.add_argument("--donor-crosswalk", default=None)
     ap.add_argument("--lane", default=config.LANE_PRODUCTION, choices=list(config.LANES))
     ap.add_argument("--strict-replay", action="store_true")
     ap.add_argument("--strict-replay-source", default=None)
