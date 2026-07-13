@@ -714,6 +714,101 @@ class TestTheNativeStage1AndCodeBindings:
         assert V.G_METHOD in doc["failed_gates"]
 
 
+class TestTheFiveRequiredNegatives:
+    """The producer's per-bundle report is a PREFLIGHT. It admits nothing.
+
+    An adversarial probe walked a clean 15-bundle run past this verifier with ZERO producer
+    inventories and ZERO external admissions — and it was ADMITTED. It also resealed a
+    role/value `stage2_inputs` list, and resealed a ranking with two ranks SWAPPED, and both
+    were ADMITTED with n_failed=0.
+
+    The reason is the same each time: every artifact the aggregate was reading lives inside
+    the producer's own output directory, and a file cannot testify that some other process
+    made it. These five negatives are the acceptance criteria.
+    """
+
+    def test_1_PRODUCER_PREFLIGHT_ALONE_admits_nothing(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        os.remove(os.path.join(run["root"], F.ADMISSION_FILE))   # keep the preflights
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_EXTERNAL_ADMISSION in doc["failed_gates"]
+
+    def test_2_a_MISSING_PRODUCER_INVENTORY_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        os.remove(os.path.join(run["root"], F.INVENTORY_FILE))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_INVENTORY in doc["failed_gates"]
+
+    def test_3_a_RESEALED_stage2_inputs_ROLE_LIST_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"].update({"stage2_inputs": [
+                   {"role": "direct_config_sha256", "value": "x" * 64}]}))
+        F.seal_release(run)                       # fully consistent reseal
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_KEYED_PROVENANCE in doc["failed_gates"]
+
+    def test_4_a_RESEALED_RANK_SWAP_is_REFUSED(self, tmp_path):
+        """Counts survive a swap. The evidence does not."""
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        arm = inv["arms"][0]
+        rpath = os.path.join(d, arm["ranking"]["path"])
+
+        ranking = json.load(open(rpath))
+        ranked = [r for r in ranking["records"] if r["rank"] is not None]
+        ranked[0]["rank"], ranked[1]["rank"] = ranked[1]["rank"], ranked[0]["rank"]
+        with open(rpath, "w") as fh:
+            json.dump(ranking, fh, indent=2, sort_keys=True)
+
+        # RESEAL EVERYTHING: the arm's ranking binding, the bundle, the inventory, the
+        # envelope. Every hash is now self-consistent; every count is unchanged.
+        arm["ranking"] = F._binding(d, arm["ranking"]["path"], ranking)
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh, indent=2, sort_keys=True)
+        F.seal_release(run)
+
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_RANKS in doc["failed_gates"]
+
+    def test_5_an_EXTERNAL_ADMIT_for_ANOTHER_RELEASE_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        F.write_external_admission(run, release_id="d" * 64)   # admits a different release
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_EXTERNAL_BINDS in doc["failed_gates"]
+
+    def test_a_producer_that_ADMITS_ITSELF_in_its_inventory_is_REFUSED(self, tmp_path):
+        # 'pending' is the only honest producer state
+        run = F.complete_run(tmp_path)
+        path = os.path.join(run["root"], F.INVENTORY_FILE)
+        doc_i = json.load(open(path))
+        doc_i["external_admission"]["status"] = "admit"
+        doc_i["release_id"] = F._canon(
+            {k: v for k, v in doc_i.items() if k != "release_id"})
+        with open(path, "w") as fh:
+            json.dump(doc_i, fh, indent=2, sort_keys=True)
+        F.write_external_admission(run)
+
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_INVENTORY in doc["failed_gates"]
+
+
 class TestOneNativeFilenameSet:
     """The legacy ``temporal_arm_*`` names are not the native set and are refused.
 

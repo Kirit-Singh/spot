@@ -150,7 +150,9 @@ LANE_VERIFIERS = {
                "schema_version": "FIXTURE.spot.stage02_direct_verification.v1",
                "required_gates": ["screen_rows_reconstruct_from_the_inputs",
                                   "every_arm_ranks_over_its_own_population"]},
-    "temporal": {"verifier_id": "FIXTURE.spot.stage02.temporal.verifier.v1",
+    # the REAL independent verifier id: W5's producer signs its PREFLIGHT with this, and
+    # W11's root envelope signs the ADMISSION with it. Only the envelope admits.
+    "temporal": {"verifier_id": "spot.stage02.temporal.arm.independent_verifier.v1",
                  "schema_version": "FIXTURE.spot.stage02_temporal_verification.v1",
                  "required_gates": ["endpoints_reconstruct",
                                     "the_did_is_a_difference_of_two_arm_values"]},
@@ -200,9 +202,13 @@ def _program_admission(staged: dict, progs: list) -> dict[str, Any]:
             "n_programs": len(progs)}
 
 
-def _inputs() -> list[dict[str, Any]]:
-    return [{"name": n, "sha256": _canon(f"FIXTURE-input-{n}"), "size_bytes": 1}
-            for n in ("GWCD4i.DE_stats.h5ad", "sgrna_library_metadata.suppl_table.csv")]
+def _inputs() -> dict[str, Any]:
+    """A FIXED KEYED OBJECT. The role/value list it replaced is refused, not parsed."""
+    return {
+        "direct_method_version": "FIXTURE-direct-v1",
+        "direct_config_sha256": _canon("FIXTURE-direct-config"),
+        "effect_source_sha256": _canon("FIXTURE-effect-source"),
+    }
 
 
 def _ranking(program: str, dc: str, ctx: dict) -> dict[str, Any]:
@@ -217,8 +223,13 @@ def _ranking(program: str, dc: str, ctx: dict) -> dict[str, Any]:
               + FIXTURE_SETS["FIXTURE-SET-2"] + ["OTHER_1"])
     sign = 1.0 if dc == INCREASE else -1.0
     records = [{"target_id": t, "arm_value": sign * (len(ranked) - i),
-                "evaluable": True, "rank": i + 1}
+                "evaluable": True, "rank": None}
                for i, t in enumerate(ranked)]
+    # THE FROZEN RULE: value DESCENDING, ties broken on target_id ASCENDING. The verifier
+    # re-derives exactly this, so a resealed rank-SWAP cannot hide behind matching counts.
+    for i, r in enumerate(sorted(records,
+                                 key=lambda r: (-r["arm_value"], r["target_id"]))):
+        r["rank"] = i + 1
     # RETAINED, never dropped: present in the rows, absent from the ranking.
     records.append({"target_id": UNRANKABLE_MEMBER, "arm_value": None,
                     "evaluable": False, "rank": None})
@@ -387,7 +398,7 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
     pathway = [build_bundle(root, "pathway",
                             {"condition": c, "gene_set_source": s}, staged)
                for c in conds for s in sources]
-    return {"root": root, "staged": staged,
+    out = {"root": root, "staged": staged,
             "release_path": staged["release_path"],
             "release_root": staged["release_root"],
             "expect_release_sha256": staged["release_canonical_sha256"],
@@ -397,3 +408,100 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
             "direct": direct, "temporal": temporal, "pathway": pathway,
             "conditions": list(conds), "sources": list(sources),
             "programs": list(staged["programs"])}
+    write_inventory(out)
+    write_external_admission(out)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# THE ROOT ARTIFACTS. The producer's per-bundle report is a PREFLIGHT; these are what an
+# admission actually rests on.
+# --------------------------------------------------------------------------- #
+INVENTORY_FILE = "temporal_arm_release.json"
+ADMISSION_FILE = "temporal_arm_external_admission.json"
+INDEPENDENT_VERIFIER_ID = "spot.stage02.temporal.arm.independent_verifier.v1"
+
+
+def _bundle_entry(root: str, d: str) -> dict[str, Any]:
+    rel_dir = os.path.relpath(d, root).replace(os.sep, "/")
+    inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+    files, rankings = {}, {}
+    for name in ("arm_bundle.json", "temporal_provenance.json",
+                 "temporal_verification.json"):
+        p = os.path.join(d, name)
+        files[name] = {"raw_sha256": _raw(p),
+                       "canonical_sha256": _canon(json.load(open(p)))}
+    for arm in inv["arms"]:
+        rel = arm["ranking"]["path"]
+        p = os.path.join(d, rel)
+        rankings[rel] = {"raw_sha256": _raw(p),
+                         "canonical_sha256": _canon(json.load(open(p)))}
+    return {"bundle_key": f"{inv['context']['from_condition']}->"
+                          f"{inv['context']['to_condition']}",
+            "bundle_id": inv["bundle_id"],
+            "from_condition": inv["context"]["from_condition"],
+            "to_condition": inv["context"]["to_condition"],
+            "relative_dir": rel_dir, "files": files, "rankings": rankings}
+
+
+def write_inventory(run: dict) -> str:
+    """W5's IMMUTABLE, CONTENT-ADDRESSED six-bundle inventory. status is always PENDING."""
+    root = run["root"]
+    entries = [_bundle_entry(root, d) for d in run["temporal"]]
+    doc = {
+        "fixture": True,
+        "schema_version": "spot.stage02_temporal_arm_release.v1",
+        "release_id_rule": "sha256(canonical JSON excluding release_id)",
+        "analysis_mode": "temporal_cross_condition",
+        "stage1_binding": {"release_canonical_sha256":
+                           run["staged"]["release_canonical_sha256"]},
+        "n_bundles": len(entries),
+        "n_logical_arms": sum(len(json.load(open(os.path.join(d, "arm_bundle.json")))
+                                  ["arms"]) for d in run["temporal"]),
+        "arm_keys": sorted(a["arm_key"] for d in run["temporal"]
+                           for a in json.load(open(os.path.join(d, "arm_bundle.json")))
+                           ["arms"]),
+        "bundles": sorted(entries, key=lambda b: b["bundle_key"]),
+        # 'pending' is the ONLY honest producer state: a producer cannot truthfully emit
+        # the external verdict on itself.
+        "external_admission": {
+            "status": "pending",
+            "required_verifier_id": INDEPENDENT_VERIFIER_ID,
+            "required_report_schema_version":
+                "spot.stage02_temporal_arm_verifier_report.v1",
+        },
+    }
+    doc["release_id"] = _canon(doc)
+    path = os.path.join(root, INVENTORY_FILE)
+    _write(path, doc)
+    return path
+
+
+def write_external_admission(run: dict, release_id=None, verdict="ADMIT") -> str:
+    """W11's SEPARATE envelope. The independent verifier alone emits this."""
+    root = run["root"]
+    inv_path = os.path.join(root, INVENTORY_FILE)
+    inv = json.load(open(inv_path))
+    doc = {
+        "fixture": True,
+        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "verifier_id": INDEPENDENT_VERIFIER_ID,
+        "verdict": verdict,
+        "binds": {
+            "producer_release_id": release_id or inv["release_id"],
+            "producer_release_raw_sha256": _raw(inv_path),
+            "stage1_release_sha256": run["staged"]["release_canonical_sha256"],
+        },
+    }
+    doc["report_id"] = _canon(doc)
+    path = os.path.join(root, ADMISSION_FILE)
+    _write(path, doc)
+    return path
+
+
+def seal_release(run: dict) -> dict:
+    """Re-derive the inventory from the bytes on disk, then re-admit it. Used after a
+    mutation, so an attack has to survive a FULLY consistent reseal."""
+    write_inventory(run)
+    write_external_admission(run)
+    return run

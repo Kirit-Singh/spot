@@ -68,7 +68,9 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import verify_bundle_scan as S  # noqa: E402  (the per-bundle scan)
 import verify_manifest_rules as R  # noqa: E402  (independent reimplementation)
+import verify_release_envelope as E  # noqa: E402  (the inventory + the external envelope)
 
 VERIFIER_ID = "spot.stage02.run_manifest.verifier.v1"
 SCHEMA_VERSION = "spot.stage02_run_manifest_verification.v1"
@@ -106,6 +108,11 @@ G_NO_PQ = "no_p_q_or_FDR_field_is_produced_by_spot_at_any_depth"
 G_SELF_HASH = "the_aggregate_manifest_sha256_recomputes_from_its_own_content"
 G_COMPLETE = "topology_complete_is_true_only_when_every_slot_is_filled_exactly_once"
 G_NO_SELF_ADMISSION = "the_PRODUCER_never_self_declares_release_admission"
+G_INVENTORY = "the_PRODUCER_ROOT_INVENTORY_is_present_self_hashing_and_byte_true"
+G_EXTERNAL_ADMISSION = "an_INDEPENDENT_ROOT_ADMISSION_ENVELOPE_admits_this_release"
+G_EXTERNAL_BINDS = "the_external_admission_BINDS_THIS_EXACT_producer_inventory"
+G_KEYED_PROVENANCE = "stage2_inputs_is_a_FIXED_KEYED_OBJECT_never_a_role_value_list"
+G_RANKS = "every_declared_RANK_rederives_from_that_arms_own_values"
 
 
 def _one(rep, pairs, gate, what):
@@ -118,9 +125,10 @@ def _one(rep, pairs, gate, what):
 
 def verify(*, manifest_path: str, bundles_root: str, release_path: str,
            release_root: str, expect_release_sha256: str, expect_gene_sets_path: str,
-           expect_verifiers_path: str, expected_code_identity_path: str
-           ) -> dict[str, Any]:
+           expect_verifiers_path: str, expected_code_identity_path: str,
+           release_root_dir: str = None) -> dict[str, Any]:
     rep = R.Report()
+    root = release_root_dir or bundles_root
     expect_verifiers = R.load_json(expect_verifiers_path) or {}
     expected_code = R.load_json(expected_code_identity_path) or {}
     manifest = R.load_json(manifest_path)
@@ -196,134 +204,22 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
     # ---- 2. EVERY BUNDLE, from the bytes on disk ---- #
     bundles = manifest.get("bundles") or []
     filled: dict[str, list[str]] = {lane: [] for lane in R.LANES}
-    ids, codes, selections, inputs, methods = [], [], [], [], []
-    geneset_by_source: dict[str, list] = {}
-    convergences: list[tuple] = []
-    missing, bad_bytes, not_all_arm, bad_map = [], [], [], []
-    bad_projection, pair_stored, forbidden, unloadable, bad_hits = [], [], [], [], []
-    bad_reports, bad_code, bad_gene_sets, batch_stored = [], [], [], []
-
-    for b in bundles:
-        lane, bid = b.get("lane"), str(b.get("bundle_id"))
-        ids.append(bid)
-        path = (R.find_bundle_dir(bundles_root, str(b.get("out_dir")))
-                if b.get("out_dir") else None)
-        if lane not in R.LANES or path is None:
-            missing.append(f"{bid}: bundle directory {b.get('out_dir')!r} not found")
-            continue
-
-        # (a) the required files exist and LOAD. An expected filename holding arbitrary
-        #     bytes is not an artifact, however neatly it hashes.
-        for fn in R.BUNDLE_FILES[lane]:
-            fp = os.path.join(path, fn)
-            if not os.path.exists(fp):
-                missing.append(f"{bid}: missing {fn}")
-            elif R.load_json(fp) is None:
-                unloadable.append(f"{bid}/{fn}: not readable JSON — arbitrary bytes "
-                                  "under an expected filename are not an artifact")
-
-        # (b) EVERY file the bundle bound still hashes to what it bound.
-        for fn, bound_sha in sorted((b.get("files") or {}).items()):
-            fp = os.path.join(path, fn)
-            if not os.path.exists(fp):
-                missing.append(f"{bid}: bound {fn} is absent")
-            elif R.file_sha256(fp) != bound_sha:
-                bad_bytes.append(f"{bid}/{fn}: bound {str(bound_sha)[:16]}, on disk "
-                                 f"{R.file_sha256(fp)[:16]}")
-
-        inv = R.load_json(os.path.join(path, "arm_bundle.json"))
-        prov = R.load_json(os.path.join(path, R.PROVENANCE_OF[lane]))
-        report = R.load_json(os.path.join(path, R.REPORT_OF[lane]))
-        if not isinstance(inv, dict) or not isinstance(prov, dict) \
-                or not isinstance(report, dict):
-            continue
-
-        forbidden += R.forbidden_keys(inv) + R.forbidden_keys(prov)
-        pair_stored += R.pair_derived_keys(inv)
-        batch_stored += R.batch_keys(inv)
-
-        # (c) the bundle is an ALL-ARM bundle for its context
-        ctx = inv.get("context") or {}
-        arms = inv.get("arms") or []
-        want_keys = {R.arm_key(lane, p, dc, ctx)
-                     for p in programs for dc in R.DESIRED_CHANGES}
-        got_keys = [str(a.get("arm_key")) for a in arms]
-        if sorted(got_keys) != sorted(want_keys):
-            not_all_arm.append(
-                f"{bid}: carries {len(got_keys)} arms; an all-arm bundle for this context "
-                f"is {len(want_keys)} ({len(programs)} programs x 2 desired changes). A "
-                "pair-specific bundle leaves the rest of its slots empty")
-        filled[lane] += got_keys
-
-        membership = (R.load_json(os.path.join(
-            path, ((inv.get("bindings") or {}).get("gene_set_membership") or {})
-            .get("path", ""))) if lane == R.LANE_PATHWAY else None)
-
-        for a in arms:
-            key = str(a.get("arm_key"))
-            # (d) THE ARM IS PAIR-AGNOSTIC. It carries no role, no pole and no pair-derived
-            #     program id, and none is required of it. What must hold is that its key and
-            #     its declared desired_change agree, and that the change is one of the two.
-            dc = a.get("desired_change")
-            if dc not in R.DESIRED_CHANGES:
-                bad_map.append(f"{key}: desired_change {dc!r} is not one of "
-                               f"{list(R.DESIRED_CHANGES)}")
-            elif key.split("|")[2:3] != [str(dc)]:
-                bad_map.append(f"{key}: the key says "
-                               f"{key.split('|')[2:3]} but the arm declares {dc!r}")
-            if str(a.get("program_id")) not in programs:
-                bad_map.append(f"{key}: program {a.get('program_id')!r} is not admitted by "
-                               "the release")
-            # (f) RECONSTRUCT the counts from the bound bytes. Never read them.
-            ranking = R.load_json(os.path.join(
-                path, (a.get("ranking") or {}).get("path", "")))
-            # RETAINED-ROW semantics (W5): every target stays in the rows with rank null
-            # when it is not rankable, so n_ranked is a count of RANKS, not of rows.
-            if a.get("n_ranked") is not None and \
-                    int(a["n_ranked"]) != R.n_ranked(ranking):
-                bad_hits.append(
-                    f"{key}: declares n_ranked={a.get('n_ranked')}, but the bound ranking "
-                    f"carries {R.n_ranked(ranking)} non-null ranks over "
-                    f"{len(R.arm_records(ranking))} retained rows")
-            if lane == R.LANE_PATHWAY:
-                recomputed_hits = R.reconstruct_hits(membership, ranking)
-                claimed_hits = {str(k): int(v) for k, v in
-                                (a.get("n_hits_by_set") or {}).items()}
-                if claimed_hits != recomputed_hits:
-                    bad_hits.append(
-                        f"{key}: declares hits {dict(list(claimed_hits.items())[:3])}; "
-                        f"recomputing from the bound membership and ranking bytes gives "
-                        f"{dict(list(recomputed_hits.items())[:3])}")
-
-        binding = prov.get("run_binding") or {}
-        codes.append((bid, R.content_sha256(R.code_binding(prov))))
-        selections.append((bid, R.content_sha256(binding.get("selection_release"))))
-        inputs.append((bid, R.content_sha256(binding.get("stage2_inputs"))))
-        methods.append((bid, R.content_sha256(R.method_binding(prov))))
-
-        # The report must be a TYPED admission from the PINNED verifier, ABOUT THIS
-        # BUNDLE. A file that merely says {"verdict": "admit"} is not one.
-        bad_reports += R.check_report(
-            report, lane, bid, expect_verifiers,
-            R.file_sha256(os.path.join(path, "arm_bundle.json")),
-            R.file_sha256(os.path.join(path, R.PROVENANCE_OF[lane])))
-        # Every bundle's code identity, against an INDEPENDENTLY pinned checkout.
-        bad_code += R.check_code_identity(R.code_binding(prov), expected_code, bid)
-
-        if lane == R.LANE_PATHWAY:
-            src = str(ctx.get("gene_set_source"))
-            geneset_by_source.setdefault(src, []).append(
-                (bid, R.content_sha256(inv.get("gene_sets"))))
-            # ...and the gene-set identity FIELD BY FIELD against the pinned source.
-            bad_gene_sets += R.check_gene_sets(
-                inv.get("gene_sets"), pinned.get(src), src, bid)
-            conv = inv.get("convergence") or {}
-            cpath = os.path.join(path, "convergence.json")
-            convergences.append((
-                bid, str(conv.get("convergence_id")),
-                {str(a.get("convergence_id")) for a in arms if a.get("convergence_id")},
-                conv.get("sha256"),
-                R.file_sha256(cpath) if os.path.exists(cpath) else None))
+    found = S.scan(bundles=bundles, bundles_root=bundles_root, programs=programs,
+                   projection=projection, pinned=pinned,
+                   expect_verifiers=expect_verifiers, expected_code=expected_code)
+    filled, ids = found["filled"], found["ids"]
+    codes, selections = found["codes"], found["selections"]
+    inputs, methods = found["inputs"], found["methods"]
+    geneset_by_source, convergences = found["geneset_by_source"], found["convergences"]
+    missing, bad_bytes, not_all_arm = (found["missing"], found["bad_bytes"],
+                                       found["not_all_arm"])
+    bad_map, bad_projection = found["bad_map"], found["bad_projection"]
+    pair_stored, forbidden, unloadable = (found["pair_stored"], found["forbidden"],
+                                          found["unloadable"])
+    bad_hits, bad_reports, bad_code = (found["bad_hits"], found["bad_reports"],
+                                       found["bad_code"])
+    bad_gene_sets, batch_stored = found["bad_gene_sets"], found["batch_stored"]
+    bad_keyed, bad_ranks = found["bad_keyed"], found["bad_ranks"]
 
     rep.gate(G_FILES, not missing and not unloadable,
              "; ".join((missing + unloadable)[:4]))
@@ -352,6 +248,8 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
                 f"release admits {programs[:3]}…")
     rep.gate(G_PROJECTION, not bad_projection, "; ".join(bad_projection[:4]))
     rep.gate(G_RECONSTRUCT, not bad_hits, "; ".join(bad_hits[:3]))
+    rep.gate(G_RANKS, not bad_ranks, "; ".join(bad_ranks[:3]))
+    rep.gate(G_KEYED_PROVENANCE, not bad_keyed, "; ".join(bad_keyed[:3]))
     rep.gate(G_PAIR_VIEW, not pair_stored,
              f"a reusable arm bundle stores pair-derived ordering(s) {pair_stored[:5]}; "
              "Pareto tiers and concordance labels are join-time display only")
@@ -450,6 +348,35 @@ def verify(*, manifest_path: str, bundles_root: str, release_path: str,
                         "is per (condition, source)")
     rep.gate(G_CONVERGENCE, not bad_conv, "; ".join(bad_conv[:4]))
 
+    # ---- 5b. THE PRODUCER INVENTORY + THE INDEPENDENT ADMISSION ENVELOPE ---- #
+    #
+    # An adversarial probe walked a clean 15-bundle run past this verifier with ZERO
+    # inventories and ZERO external admissions and was ADMITTED. The per-bundle
+    # temporal_verification.json looked independent — but the PRODUCER writes it, in its own
+    # directory, signed with whatever id it chooses. A file cannot testify that some other
+    # process made it. So a release is admitted only on TWO artifacts the producer's
+    # preflight cannot supply, and BOTH are required.
+    n_temporal_bundles = len(want[R.LANE_TEMPORAL]) // (2 * len(programs)) \
+        if programs else 0
+    inventory, bad_inv = E.check_inventory(
+        root, expect_bundles=n_temporal_bundles,
+        expect_arms=len(want[R.LANE_TEMPORAL]))
+    rep.gate(G_INVENTORY, not bad_inv, "; ".join(bad_inv[:4]))
+
+    pinned_temporal = (expect_verifiers.get(R.LANE_TEMPORAL) or {}).get("verifier_id")
+    envelope, bad_env = E.check_external_admission(root, inventory, pinned_temporal)
+    rep.gate(G_EXTERNAL_ADMISSION,
+             envelope is not None and not [b for b in bad_env if "binds" not in b],
+             "; ".join(bad_env[:3]))
+    rep.gate(G_EXTERNAL_BINDS,
+             envelope is not None and inventory is not None
+             and not [b for b in bad_env if "admission of something else" in b
+                      or "binds inventory bytes" in b],
+             "; ".join([b for b in bad_env
+                        if "admission of something else" in b
+                        or "binds inventory bytes" in b][:3])
+             or ("no external admission envelope to bind" if envelope is None else ""))
+
     # ---- 6. NO COMBINED OBJECTIVE, and COMPLETENESS ---- #
     rep.gate(G_COMBINED,
              manifest.get("combined_objective") is None
@@ -529,6 +456,10 @@ def main(argv=None) -> int:
                     help="the independently pinned checkout (commit + digest) every bundle "
                          "must have been built from; a run's code identity may not be "
                          "taken from the run")
+    ap.add_argument("--release-inventory-root", default=None,
+                    help="the run ROOT holding the producer inventory "
+                         "(temporal_arm_release.json) and the INDEPENDENT external "
+                         "admission envelope. Defaults to --bundles-root.")
     ap.add_argument("--report", default=None, help="write the verdict here (JSON)")
     args = ap.parse_args(argv)
 
@@ -538,7 +469,8 @@ def main(argv=None) -> int:
                      expect_release_sha256=args.expect_release_sha256,
                      expect_gene_sets_path=args.expect_gene_sets,
                      expect_verifiers_path=args.expect_verifiers,
-                     expected_code_identity_path=args.expected_code_identity)
+                     expected_code_identity_path=args.expected_code_identity,
+                     release_root_dir=args.release_inventory_root)
     except Exception as exc:                    # a crash IS a verification failure
         rep = R.Report()
         rep.gate(f"verifier_completed({type(exc).__name__})", False, str(exc))
