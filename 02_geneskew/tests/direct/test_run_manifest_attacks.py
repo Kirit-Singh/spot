@@ -1771,3 +1771,55 @@ def test_the_verifier_does_not_take_the_TOPOLOGY_from_the_manifest_it_audits(tmp
     assert report["conditions"] == run["conditions"]
     assert report["n_expected_arm_slots"] == 300
     assert V.G_PATHWAY_SLOTS in report["failed_gates"]
+
+
+# --------------------------------------------------------------------------- #
+# THE STAGE-3 HANDOFF RECEIPT. The admission report exports the exact consumable
+# paths a Stage-3 v2 consumer binds DIRECTLY off the admitted release.
+# --------------------------------------------------------------------------- #
+def _verify_cli(run, manifest_path, report):
+    return V.main([
+        "--manifest", manifest_path, "--bundles-root", run["root"],
+        "--release", run["release_path"], "--release-root", run["release_root"],
+        "--expect-release-sha256", run["expect_release_sha256"],
+        "--expect-gene-sets", run["pinned_gene_sets"],
+        "--expect-verifiers", run["pinned_verifiers"],
+        "--expected-code-identity", run["expected_code_identity"],
+        "--release-inventory-root", run["root"],
+        "--env-lock", run["env_lock"],
+        "--expect-env-lock-sha256", F.env_lock_sha256(run),
+        "--report", report])
+
+
+class TestTheStage3HandoffReceipt:
+    def test_the_receipt_EXPORTS_the_four_consumable_paths_on_ADMIT(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        mpath = _manifest(tmp_path, run)["path"]
+        doc = _verify(run, mpath)
+        assert doc["verdict"] == V.R.ADMIT, doc["failed_gates"]
+        h = doc["stage3_inputs"]
+        assert h["schema_version"] == "spot.stage02.stage3_handoff.v1"
+        assert h["consume_only_when_admitted"] is True
+        assert h["admitted"] is True
+        assert os.path.samefile(h["manifest"], mpath)
+        assert os.path.samefile(h["bundles_root"], run["root"])
+        assert os.path.samefile(h["stage1_release"], run["release_path"])
+
+    def test_a_REJECTED_run_marks_the_handoff_NOT_admitted(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        # break the direct lane admission -> REJECT (integration model: direct_release_admission)
+        os.remove(os.path.join(run["root"], "direct_release_admission.json"))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["stage3_inputs"]["admitted"] is False
+
+    def test_main_fills_the_receipts_OWN_path(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        mpath = _manifest(tmp_path, run)["path"]
+        report = os.path.join(str(tmp_path), "aggregate_admission.json")
+        rc = _verify_cli(run, mpath, report)
+        assert rc == 0
+        doc = json.load(open(report))
+        assert doc["verdict"] == V.R.ADMIT
+        assert os.path.samefile(doc["stage3_inputs"]["report"], report)
+        assert os.path.samefile(doc["stage3_inputs"]["manifest"], mpath)
