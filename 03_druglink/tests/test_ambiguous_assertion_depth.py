@@ -31,7 +31,7 @@ def _failed(rep):
 def _assertion(mec, rankable, **over):
     a = {"source_row_id": mec, "action_type_source": "INHIBITOR", "variant_id": None,
          "general_gene_rankable": rankable,
-         "disposition": ce.DISP_AMBIGUOUS_SOURCE_ASSERTION}
+         "ambiguity_disposition": ce.DISP_AMBIGUOUS_NONRANKABLE}
     a.update(over)
     return a
 
@@ -116,7 +116,7 @@ def test_the_scan_does_not_care_what_the_CONTAINER_is_called():
 def test_a_NON_ambiguous_row_may_still_rank_its_assertions():
     """The gate must not refuse everything — resolved identities still produce evidence."""
     row = {"target_id": "ENSG_OK", "disposition": "drug_evidence",
-           "drugs": [{"assertions": [_assertion(99, True, disposition=None)]}]}
+           "drugs": [{"assertions": [_assertion(99, True, ambiguity_disposition=None)]}]}
     rep = Report()
     ce.check_no_rankable_assertion_inside_an_ambiguous_row(rep, [row])
     assert not _failed(rep)
@@ -124,10 +124,10 @@ def test_a_NON_ambiguous_row_may_still_rank_its_assertions():
 
 def test_a_preserved_ambiguous_assertion_must_be_NAMED():
     rows = [_ambiguous_row("ENSG_Z", False)]
-    rows[0]["ambiguous_source_assertions"][0].pop("disposition")
+    rows[0]["ambiguous_source_assertions"][0].pop("ambiguity_disposition")
     rep = Report()
     ce.check_no_rankable_assertion_inside_an_ambiguous_row(rep, rows)
-    assert any("named" in n for n in _failed(rep))
+    assert any("NAMED" in n for n in _failed(rep))
 
 
 def test_the_real_mec_ids_and_genes_are_pinned():

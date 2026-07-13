@@ -29,9 +29,10 @@ def _failed(rep):
 # --------------------------------------------------------------------------- #
 # 1. Exact denominators.
 # --------------------------------------------------------------------------- #
-REAL = {"n_assertion_occurrences": 2262, "n_unique_source_mec_ids": 2258,
-        "n_general_rankable_assertions": 2227, "n_variant_specific_assertions": 29,
-        "n_ambiguous_copy_assertions": 6}
+REAL = {"assertion_counts": {
+    "n_total_stored_occurrences": 2262, "n_unique_source_mechanism_rows": 2258,
+    "n_general_drug_assertions": 2227, "n_variant_specific_assertions": 29,
+    "n_ambiguous_assertion_occurrences": 6, "n_ambiguous_unique_source_rows": 2}}
 
 
 def test_the_real_denominators_reconcile():
@@ -44,24 +45,30 @@ def test_the_real_denominators_reconcile():
 
 def test_a_total_that_is_really_a_subtotal_is_refused():
     """`n_total_drug_assertions: 2227` while 2,262 occurrences exist."""
+    import copy
+    m = copy.deepcopy(REAL)
+    m["n_total_drug_assertions"] = 2227
     rep = Report()
-    ce.check_denominators_are_exact(
-        rep, {**REAL, "n_total_drug_assertions": 2227})
+    ce.check_denominators_are_exact(rep, m)
     assert any("only the rankable subset" in n for n in _failed(rep))
 
 
 @pytest.mark.parametrize("field", ce.REQUIRED_DENOMINATORS)
 def test_a_missing_denominator_is_refused(field):
-    m = dict(REAL)
-    del m[field]
+    import copy
+    m = copy.deepcopy(REAL)
+    del m["assertion_counts"][field]
     rep = Report()
     ce.check_denominators_are_exact(rep, m)
     assert _failed(rep)
 
 
 def test_denominators_that_do_not_reconcile_are_refused():
+    import copy
+    m = copy.deepcopy(REAL)
+    m["assertion_counts"]["n_ambiguous_assertion_occurrences"] = 0
     rep = Report()
-    ce.check_denominators_are_exact(rep, {**REAL, "n_ambiguous_copy_assertions": 0})
+    ce.check_denominators_are_exact(rep, m)
     assert any("RECONCILE" in n for n in _failed(rep))
 
 

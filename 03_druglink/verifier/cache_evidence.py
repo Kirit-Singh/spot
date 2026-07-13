@@ -236,7 +236,12 @@ def check_one_mec_id_is_not_spread_across_genes(
 # container, however honestly that container is named. A gate that holds only at the depth
 # you happened to look at is not a gate.
 # --------------------------------------------------------------------------- #
-DISP_AMBIGUOUS_SOURCE_ASSERTION = "ambiguous_identity_source_assertion"
+# W2's SHIPPED name. Mine was invented, and an invented name is not a contract — the
+# producer's is. (I made exactly this mistake reading the source audit from a summary:
+# `target_taxon` instead of `tax_id`. A verifier that checks for names nobody emits
+# fails correct producers and passes nothing.)
+DISP_AMBIGUOUS_NONRANKABLE = "ambiguous_identity_nonrankable"
+AMBIGUITY_DISPOSITION_KEYS = ("ambiguity_disposition", "disposition")
 
 # The real occurrences, pinned so they cannot silently return.
 CALMODULIN_GENES = ("ENSG00000143933", "ENSG00000160014", "ENSG00000198668")
@@ -281,13 +286,15 @@ def check_no_rankable_assertion_inside_an_ambiguous_row(
         if row.get("disposition") != DISP_AMBIGUOUS_IDENTITY:
             continue
         for path, node in _assertion_nodes(row):
-            if node.get("disposition") not in (DISP_AMBIGUOUS_SOURCE_ASSERTION,
-                                               DISP_AMBIGUOUS_IDENTITY):
+            named = any("ambiguous" in str(node.get(k) or "").lower()
+                        for k in AMBIGUITY_DISPOSITION_KEYS)
+            if not named:
                 unnamed.append(f"{row.get('target_id')}{path[1:]}")
     rep.check(
-        f"every preserved ambiguous assertion carries the named "
-        f"{DISP_AMBIGUOUS_SOURCE_ASSERTION!r} disposition (preserved-but-unlabelled is how "
-        "it gets read as ordinary evidence)",
+        "every preserved ambiguous assertion carries a NAMED ambiguity disposition "
+        "(preserved-but-unlabelled is how a copied assertion gets read as ordinary "
+        "evidence). Any key in AMBIGUITY_DISPOSITION_KEYS naming ambiguity satisfies "
+        "this — the producer's name is the contract, not the verifier's",
         not unnamed, f"{len(unnamed)} unnamed: {unnamed[:3]}")
 
 
@@ -308,18 +315,21 @@ def check_no_rankable_assertion_inside_an_ambiguous_row(
 # reader would use to notice it was excluded. The denominators must be named for what they
 # COUNT, not for what the producer happened to want in the numerator.
 # --------------------------------------------------------------------------- #
-REQUIRED_DENOMINATORS = (
-    "n_assertion_occurrences",      # every copy, every depth
-    "n_unique_source_mec_ids",
-    "n_general_rankable_assertions",
-    "n_variant_specific_assertions",
-    "n_ambiguous_copy_assertions",
-)
+# W2's SHIPPED denominator names, in the nested `assertion_counts` block.
+DENOM_BLOCK = "assertion_counts"
+DENOM_OCCURRENCES = "n_total_stored_occurrences"
+DENOM_UNIQUE = "n_unique_source_mechanism_rows"
+DENOM_GENERAL = "n_general_drug_assertions"
+DENOM_VARIANT = "n_variant_specific_assertions"
+DENOM_AMBIGUOUS = "n_ambiguous_assertion_occurrences"
+REQUIRED_DENOMINATORS = (DENOM_OCCURRENCES, DENOM_UNIQUE, DENOM_GENERAL,
+                         DENOM_VARIANT, DENOM_AMBIGUOUS)
 
 
 def check_denominators_are_exact(rep: Report, metrics: dict[str, Any]) -> None:
     """A 'total' that is really a subtotal hides the thing it excluded."""
-    missing = [d for d in REQUIRED_DENOMINATORS if d not in metrics]
+    counts = metrics.get(DENOM_BLOCK) or metrics
+    missing = [d for d in REQUIRED_DENOMINATORS if d not in counts]
     rep.check(
         "the cache reports EXACT denominators (occurrences, unique mec_ids, general, "
         "variant, ambiguous) — a field named `n_total_*` that actually counts only the "
@@ -330,10 +340,8 @@ def check_denominators_are_exact(rep: Report, metrics: dict[str, Any]) -> None:
     if missing:
         return
 
-    occ = metrics["n_assertion_occurrences"]
-    parts = (metrics["n_general_rankable_assertions"]
-             + metrics["n_variant_specific_assertions"]
-             + metrics["n_ambiguous_copy_assertions"])
+    occ = counts[DENOM_OCCURRENCES]
+    parts = (counts[DENOM_GENERAL] + counts[DENOM_VARIANT] + counts[DENOM_AMBIGUOUS])
     rep.check(
         "the denominators RECONCILE: general + variant + ambiguous == occurrences",
         occ == parts, f"{parts} != {occ}")
