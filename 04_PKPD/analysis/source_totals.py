@@ -112,7 +112,22 @@ def assert_totals_bound(records: Iterable[Any]) -> None:
 
         rid = getattr(record, "acquisition_record_id", "?")
         source_key = str(getattr(record, "source_key", ""))
-        cls = query_class(source_key, str(getattr(record, "canonical_query", "")))
+        canonical_query = str(getattr(record, "canonical_query", ""))
+        cls = query_class(source_key, canonical_query)
+
+        # An endpoint nobody has classified is refused BEFORE it can be accepted. Without this a
+        # new adapter — or a new path on an existing source — falls through both rules and is
+        # admitted with no total requirement AND no invented-total check: the one shape that
+        # escapes the gate entirely. Whether a source reports a match total is a fact about that
+        # endpoint, so a new one is a decision someone makes on the record, not a default.
+        if cls == UNKNOWN:
+            raise Rejection(
+                "source_endpoint_unclassified",
+                f"{rid!r}: {source_key!r} endpoint {canonical_query!r} is in neither "
+                f"SEARCH_LIST_ENDPOINTS nor DIRECT_ENDPOINTS. Stage 4 does not guess whether an "
+                "endpoint reports a match total — guessing 'no' would excuse a dropped total, and "
+                "guessing 'yes' would demand an invented one. Classify it in source_totals.py "
+                "against the source's actual response shape, then re-run.")
 
         # The typed proof of selection, and the count of what arrived, are ALWAYS required: we
         # always know how we chose and how many rows we parsed.

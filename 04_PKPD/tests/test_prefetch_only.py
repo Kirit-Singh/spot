@@ -271,6 +271,58 @@ def test_a_direct_endpoint_may_not_assert_completeness_it_cannot_derive():
     assert exc.value.code == "source_total_invented"
 
 
+# --- an UNCLASSIFIED endpoint escapes both rules, so it is refused before either runs -------
+
+@pytest.mark.parametrize("source_key,query", [
+    # a NEW path on a source we already use — falls under neither prefix
+    ("pubchem", "assay/aid/1234/description/JSON"),
+    ("dailymed", "drugnames.json?drug_name=x"),
+    ("openfda", "drug/event.json?search=x"),
+    # a source we have never classified at all
+    ("newsource", "whatever/1"),
+])
+def test_an_unclassified_endpoint_is_refused_before_it_can_be_accepted(source_key, query):
+    """THE BYPASS. An endpoint in neither list falls through both branches: no total is demanded
+    (so a dropped total is excused) and no invented-total check runs (so a stamped 1 sails
+    through). It is the one shape that escapes the gate entirely, so it is refused by name."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec(source_key, query)])
+    assert exc.value.code == "source_endpoint_unclassified"
+    assert query in exc.value.detail
+
+
+def test_an_unclassified_endpoint_cannot_smuggle_a_stamped_total_through():
+    """The bypass, exercised with the exact payload it would have laundered: an invented total=1
+    on an endpoint that reports none. It must die at the classification gate, not be accepted."""
+    from analysis.source_totals import assert_totals_bound
+
+    with pytest.raises(Rejection) as exc:
+        assert_totals_bound([_Rec("pubchem", "assay/aid/1234/JSON", match_total_reported=1,
+                                  records_returned=1, result_set_complete=True)])
+    assert exc.value.code == "source_endpoint_unclassified"
+
+
+def test_every_endpoint_the_adapters_actually_call_is_classified():
+    """The gate only helps if the real chain passes it. Every canonical query the four adapters
+    issue must classify — otherwise the first live run would refuse on our own endpoints."""
+    from analysis.source_totals import DIRECT, SEARCH_LIST, query_class
+
+    real = [
+        ("pubchem", "compound/name/temozolomide/cids/JSON", DIRECT),
+        ("pubchem", "compound/cid/5394/property/InChIKey/JSON", DIRECT),
+        ("rxnorm", "rxcui.json?name=temozolomide&search=0", DIRECT),
+        ("dailymed", "spls.json?drug_name=temozolomide&pagesize=100", SEARCH_LIST),
+        ("dailymed", "spls/046a9011-3911-4d3f-a15f-fbb56d5aad56.xml", DIRECT),
+        ("openfda", 'drug/label.json?limit=25&search=openfda.spl_set_id:"x"', SEARCH_LIST),
+        ("openfda", 'drug/drugsfda.json?limit=25&search=openfda.application_number:"x"',
+         SEARCH_LIST),
+    ]
+    for source_key, query, expected in real:
+        assert query_class(source_key, query) == expected, f"{source_key} {query} is unclassified"
+
+
 def test_the_selection_proof_and_the_returned_count_are_always_required():
     """However the endpoint behaves, we always know HOW we selected and HOW MANY rows we parsed."""
     from analysis.source_totals import assert_totals_bound
