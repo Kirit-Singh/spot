@@ -103,7 +103,10 @@ ROUNDING_RULE = "half_even_6dp"
 # and every emitted set record, so removing or changing it moves the method/run identity.
 CONVERGENCE_SIZE_POLICY_ID = (
     "spot.stage02.pathway.convergence_size_governance.prospective.v1")
-MIN_CONVERGENCE_SET_SIZE = genesets.MIN_SET_SIZE
+# Convergence itself has always required two distinct perturbations. The gene-set
+# enrichment lane's MIN_SET_SIZE=3 is a separate rule; importing it here would silently
+# invalidate the existing two-member intra-pathway control while fixing an upper-bound bug.
+MIN_CONVERGENCE_SET_SIZE = MIN_PERTURBATIONS_FOR_CONVERGENCE
 MAX_CONVERGENCE_SET_SIZE = genesets.MAX_SET_SIZE
 SIZE_EVALUABLE = "evaluable"
 SIZE_TOO_SMALL = "non_evaluable_set_too_small"

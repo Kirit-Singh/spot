@@ -144,7 +144,7 @@ def test_size_policy_and_limits_are_bound_into_artifact_and_hash():
     assert doc["schema_version"] == "spot.stage02_pathway_convergence.v2"
     assert doc["convergence_method_id"] == convergence.METHOD_ID
     assert doc["convergence_size_policy_id"] == convergence.CONVERGENCE_SIZE_POLICY_ID
-    assert doc["min_convergence_set_size"] == 3
+    assert doc["min_convergence_set_size"] == 2
     assert doc["max_convergence_set_size"] == 500
     assert doc["n_convergence_evaluable_sets"] == 0
     assert doc["n_convergence_non_evaluable_sets"] == 1

@@ -124,7 +124,7 @@
                 "const": 500
               },
               "min_convergence_set_size": {
-                "const": 3
+                "const": 2
               },
               "min_perturbations_for_convergence": {
                 "const": 2
