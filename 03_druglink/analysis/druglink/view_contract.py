@@ -29,7 +29,7 @@ WHAT MAY NEVER CROSS THE SEAM
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from . import artifact_class as ac
 from . import bundle_v2 as bv2
@@ -38,11 +38,20 @@ from . import pathway_context_v2 as pc2
 from . import schemas
 from . import selection_view as sv
 from .hashing import contains_local_path
+from .view_store import (  # noqa: F401  (the store's invariant is enforced where the store is)
+    GATE_ROLE_IN_THE_STORE,
+    GATE_SELECTION_IN_THE_STORE,
+    ROLE_COLUMN,
+    STORE_IDENTITY_VERIFIER_ID,
+    check_store_is_selection_independent,
+    checks as store_identity_checks,
+)
 
-# The one annotation the projection stamps on a row: EVERY role THIS question gives its arm.
-# A LIST, because one reusable arm can carry BOTH roles — away_from_A(high) and toward_B(low) are
-# both `decrease`, and Stage 1 admits that selection. A scalar would report only the first.
-ROLE_COLUMN = "selection_roles"
+# ROLE_COLUMN — the one annotation the projection stamps on a row: EVERY role THIS question gives
+# its arm. A LIST, because one reusable arm can carry BOTH roles — away_from_A(high) and
+# toward_B(low) are both `decrease`, and Stage 1 admits that selection. A scalar would report only
+# the first. It is DEFINED in `view_store`, beside the refusal that keeps it OUT of the store, so
+# the column the view adds and the column the store forbids can never drift apart.
 
 # The candidate's VIEW-SCOPED evidence, alongside (never instead of) the store's global fields.
 VIEW_CANDIDATE_COLUMNS: tuple[str, ...] = (
@@ -82,8 +91,6 @@ MAX_STRING_LEN = 16_384
 GATE_UNKNOWN_FIELD = "the_view_carries_a_field_the_projection_contract_does_not_have"
 GATE_LOCAL_PATH = "the_view_carries_a_machine_local_or_absolute_filesystem_path"
 GATE_UNBOUNDED = "the_view_carries_a_payload_no_browser_can_be_asked_to_render"
-GATE_ROLE_IN_THE_STORE = "a_selection_role_leaked_into_the_global_store"
-GATE_SELECTION_IN_THE_STORE = "a_selection_identity_leaked_into_the_global_store"
 
 
 class ViewContractError(ValueError):
@@ -161,41 +168,6 @@ def check_browser_safe(view: Mapping[str, Any]) -> None:
     _check_strings(view)
 
 
-def check_store_is_selection_independent(document: Mapping[str, Any],
-                                         tables: Mapping[str, Iterable[Mapping[str, Any]]]
-                                         ) -> None:
-    """THE ARCHITECTURAL INVARIANT: no question's identity may exist in the GLOBAL store.
-
-    If a selection_id, a question_id or an A/B role has leaked into the release, the store has
-    stopped being reusable: it now encodes ONE question's answer, and every other question is
-    either wrong or a re-run. The leak is silent — the bundle still verifies, the tables still
-    hash — so it is checked here, on the emitted bytes, rather than trusted to a convention.
-    """
-    for role in cv2.SELECTION_ROLES:
-        for key, path in bv2._keys(document):
-            if role in key.lower():
-                _refuse(GATE_ROLE_IN_THE_STORE,
-                        f"the GLOBAL bundle document carries the selection role {role!r} at "
-                        f"{path}. A role is a property of a QUESTION. Written into the store, the "
-                        "arm stops being reusable and every other question that would have used "
-                        "it is silently wrong.")
-    for name, rows in sorted(tables.items()):
-        for row in rows:
-            for column in row:
-                low = str(column).lower()
-                if any(role in low for role in cv2.SELECTION_ROLES) \
-                        or low in (ROLE_COLUMN, "selection_role"):
-                    _refuse(GATE_ROLE_IN_THE_STORE,
-                            f"the GLOBAL table {name!r} carries the join-time column {column!r}. "
-                            "Roles are assigned when a selection joins two arms, and they never "
-                            "travel back into the store.")
-                if low in ("selection_id", "question_id"):
-                    _refuse(GATE_SELECTION_IN_THE_STORE,
-                            f"the GLOBAL table {name!r} carries {column!r}. A release that names "
-                            "a selection holds ONE question's answer, and is no longer the "
-                            "reusable, selection-independent store every other question needs.")
-
-
 def validate(view: Mapping[str, Any]) -> Mapping[str, Any]:
     """The whole contract: the schema, the rows, and the browser firewall. All three."""
     schemas.validate(dict(view), sv.VIEW_SCHEMA, context="stage3_selection_view")
@@ -216,6 +188,11 @@ def contract() -> dict[str, Any]:
         "strict": True,
         "an_unknown_field_is_a_refusal_not_an_extra": True,
         "no_machine_local_paths": True,
+        # WHAT THE PRODUCER PROVED BEFORE IT PROJECTED. The view's `store` block is not a copy of
+        # the bundle's claims about itself: every hash in it was re-derived from the rows in hand
+        # and re-read from the store on disk, and these are the gates that had to pass first.
+        "store_identity_verifier_id": STORE_IDENTITY_VERIFIER_ID,
+        "store_identity_checks": store_identity_checks(),
         "max_rows_per_table": MAX_ROWS_PER_TABLE,
         "max_string_length": MAX_STRING_LEN,
         "guarantees": sv.guarantees(),

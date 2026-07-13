@@ -55,8 +55,13 @@ from . import direction as dr
 from . import pathway_context_v2 as pc2
 from . import selection_v3 as s3
 from . import stage2_aggregate as sa
+from . import view_store as vst
 from . import workflow as wf
 from .hashing import content_hash, file_sha256, without
+from .view_store import (  # noqa: F401  (one front door for the projection's refusals)
+    StoreIdentityError,
+    ViewRefusal,
+)
 
 VIEW_SCHEMA = "spot.stage03_selection_view.v1"
 VIEW_METHOD_ID = "spot.stage03.selection_view.projection.v1"
@@ -80,12 +85,8 @@ GATE_STALE_SELECTION = \
 GATE_STALE_BUNDLE = "the_v2_bundle_was_not_built_over_the_aggregate_presented"
 
 
-class SelectionViewError(ValueError):
+class SelectionViewError(ViewRefusal):
     """A named, fail-closed refusal. No view is produced and nothing is written."""
-
-    def __init__(self, gate: str, message: str) -> None:
-        super().__init__(f"[{gate}] {message}")
-        self.gate = gate
 
 
 def _refuse(gate: str, message: str) -> None:
@@ -271,10 +272,26 @@ def _counts(name: str, store_rows: Sequence[Any], view_rows: Sequence[Any]) -> d
 
 def materialize(*, selection: s3.VerifiedSelection, aggregate: sa.AdmittedAggregate,
                 document: Mapping[str, Any], tables: Mapping[str, Sequence[Mapping[str, Any]]],
-                manifest: Mapping[str, Any], admission: Mapping[str, Any],
+                manifest: Mapping[str, Any], admission: Mapping[str, Any], bundle_dir: str,
                 arms: Optional[asel.SelectedArms] = None) -> dict[str, Any]:
-    """The view. A pure function of (admitted store, verified selection). Writes NOTHING."""
+    """The view. A pure function of (admitted store, verified selection). Writes NOTHING.
+
+    FAIL CLOSED FIRST, PROJECT SECOND. Before a single row is filtered, TWO refusals run and
+    neither can admit what the other would refuse:
+
+    * the QUESTION must be about the release in hand (:func:`check_not_stale`);
+    * the BYTES must be the ones the document's hashes NAME — all eight tables re-derived from
+      the rows in hand AND re-read from the store on disk, and the store must carry no
+      selection's identity at any depth (:func:`druglink.view_store.bind`).
+
+    The ``store`` block that comes back is what the view PUBLISHES: every hash in it was
+    re-derived here. Copying ``document["table_hashes"]`` would let the view be built over
+    MUTATED rows while publishing the digest of the rows it is NOT over — a hash you copy is not
+    a hash you checked.
+    """
     check_not_stale(selection, aggregate=aggregate, manifest=manifest, document=document)
+    store_identity = vst.bind(document=document, tables=tables, aggregate=aggregate,
+                              bundle_dir=bundle_dir)
     arms = arms or asel.resolve(selection, aggregate, manifest=manifest)
 
     gene_keys = set(arms.gene_arm_keys)
@@ -347,19 +364,19 @@ def materialize(*, selection: s3.VerifiedSelection, aggregate: sa.AdmittedAggreg
             "directional_evidence_statuses": slot.get("directional_evidence_statuses", []),
         })
 
-    return _document(selection=selection, arms=arms, aggregate=aggregate, document=document,
+    return _document(selection=selection, arms=arms, document=document,
                      admission=admission, origin=origin, view_rows=view_rows, store=store,
-                     arm_evidence=arm_evidence)
+                     arm_evidence=arm_evidence, store_identity=store_identity)
 
 
 def _document(*, selection: s3.VerifiedSelection, arms: asel.SelectedArms,
-              aggregate: sa.AdmittedAggregate, document: Mapping[str, Any],
+              document: Mapping[str, Any],
               admission: Mapping[str, Any], origin: str,
               view_rows: Mapping[str, list[dict[str, Any]]],
               store: Mapping[str, list[dict[str, Any]]],
-              arm_evidence: list[dict[str, Any]]) -> dict[str, Any]:
+              arm_evidence: list[dict[str, Any]],
+              store_identity: Mapping[str, Any]) -> dict[str, Any]:
     """The view document. Content-addressed; no paths, no clock, no re-ranking."""
-    method = document.get("method") or {}
     view: dict[str, Any] = {
         "schema_version": VIEW_SCHEMA,
         "artifact_class": document.get("artifact_class"),
@@ -369,23 +386,11 @@ def _document(*, selection: s3.VerifiedSelection, arms: asel.SelectedArms,
         "selection": selection.binding(),
         "selected_arms": arms.binding(),
 
-        # --- WHAT STORE IT WAS PROJECTED FROM ----------------------------------------- #
-        "store": {
-            "bundle_id": document.get("bundle_id"),
-            "bundle_schema": document.get("schema_version"),
-            "canonical_content_sha256": document.get("canonical_content_sha256"),
-            "table_hashes": dict(document.get("table_hashes") or {}),
-            "stage2_manifest_self_hash": aggregate.manifest_self_hash,
-            "stage2_manifest_raw_sha256": aggregate.manifest_raw_sha256,
-            "stage2_manifest_canonical_sha256": aggregate.manifest_canonical_sha256,
-            "stage1_release_sha256": aggregate.stage1_release_sha256,
-            "universe_store_id": (document.get("universe_store") or {}).get("store_id"),
-            "method_sha256": content_hash(method),
-            "code_tree_sha256": method.get("code_tree_sha256"),
-            "schemas_sha256": method.get("schemas_sha256"),
-            "direction_vocabulary_digest": method.get("direction_vocabulary_digest"),
-            "selection_view_vocabulary_digest": content_hash(vocabularies()),
-        },
+        # --- EXACTLY WHICH BYTES THIS IS A PROJECTION OF ------------------------------- #
+        # Every hash here was RE-DERIVED by `view_store.bind` from the rows in hand and the
+        # store on disk, and PROVEN equal to what the document declares. None of it is copied.
+        "store": {**dict(store_identity),
+                  "selection_view_vocabulary_digest": content_hash(vocabularies())},
         "admission": dict(admission),
 
         # --- THE ANSWER --------------------------------------------------------------- #
@@ -429,6 +434,11 @@ def guarantees() -> dict[str, Any]:
         "filtered_out_rows_are_reported_as_counts_never_silently_dropped": True,
         "a_cached_view_is_regenerable_from_the_store_and_discardable": True,
         "row_order_is_by_content_id_and_is_not_a_ranking": True,
+        # THE TWO REFUSALS THAT RUN BEFORE A SINGLE ROW IS PROJECTED. Named here because a
+        # consumer must be able to tell a view that CHECKED its store from one that merely
+        # republished the store's own claims about itself.
+        "the_stores_eight_table_hashes_are_re_derived_before_projection_never_copied": True,
+        "the_global_store_carries_no_selection_identity_at_any_depth": True,
     }
 
 

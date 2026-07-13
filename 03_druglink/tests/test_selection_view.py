@@ -294,9 +294,7 @@ class TestEveryRefusalIsANamedGateThatFires:
         document = json.loads(json.dumps(world["document"]))
         document["stage2_aggregate"]["manifest_self_hash"] = "0" * 64
         with pytest.raises(sv.SelectionViewError) as exc:
-            sv.materialize(selection=sel, aggregate=world["aggregate"], document=document,
-                           tables=world["tables"], manifest=world["manifest"],
-                           admission=world["admission"])
+            _view(world, sel, document=document)
         assert sv.GATE_STALE_BUNDLE in str(exc.value)
 
     def test_an_aggregate_with_NO_receipt_is_UNADMITTED(self, world):

@@ -119,11 +119,27 @@ the *store*, not this question. Open it via `store.bundle_id`.
 
 | field | meaning |
 |---|---|
-| `bundle_id`, `canonical_content_sha256` | the global v2 bundle this was projected from (document file `drug_annotation.v2.json`; bundle manifest `manifest.json`; **both** carry `artifact_class`) |
-| `table_hashes` | the store's own per-table content hashes |
+| `bundle_id`, `canonical_content_sha256`, `document_sha256` | the global v2 bundle this was projected from (document file `drug_annotation.v2.json`; bundle manifest `manifest.json`; **both** carry `artifact_class`) |
+| `store_manifest_sha256` | the store manifest's **own** identity, recomputed from its bytes — never read out of it |
+| `table_hashes` | the content hash of **all EIGHT** tables — **RE-DERIVED**, not copied (see below) |
+| `table_hashes_are_re_derived_not_copied`, `n_tables_verified` (`8`) | what the producer proved before it projected |
+| `store_identity_verifier_id`, `store_identity_checks` | who re-derived them, and every gate that ran |
 | `stage2_manifest_self_hash` / `_raw_` / `_canonical_` | the admitted Stage-2 aggregate |
 | `method_sha256`, `code_tree_sha256`, **`schemas_sha256`** | the method identity. `schemas_sha256` **is** the schema identity — bind that one |
 | `universe_store_id`, `direction_vocabulary_digest` | the universe and the direction vocabulary every edge was classified under |
+
+### The view is a projection of bytes it CHECKED
+
+`materialize()` **fails closed before a single row is projected**. It re-derives all **eight**
+table hashes from the rows in hand **and** re-reads them off the store on disk, and refuses by
+name unless both equal what the bundle document declares. It also refuses any store carrying a
+`selection_id`, a `question_id` or an A/B role — **at any depth, in a key or a value**.
+
+This is not ceremony. Before it, a mutated row (`arm_rank: 999`, written after the document was
+addressed) produced a view over the **mutated** bytes that still published the hash of the bytes
+it was **not** over. **A hash you copy is not a hash you checked.** So `view.store.table_hashes`
+is a number the producer computed from the rows it actually projected — and a consumer can
+recompute it from the bundle and get the same answer.
 
 `view.admission` carries the W3 **receipt** — the JOIN — binding the aggregate manifest, the
 aggregate report **and** the bridge, by **raw AND canonical** bytes.

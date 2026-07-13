@@ -290,7 +290,9 @@
         "a_null_rank_is_never_a_zero_and_never_sorts_as_best",
         "filtered_out_rows_are_reported_as_counts_never_silently_dropped",
         "a_cached_view_is_regenerable_from_the_store_and_discardable",
-        "row_order_is_by_content_id_and_is_not_a_ranking"
+        "row_order_is_by_content_id_and_is_not_a_ranking",
+        "the_stores_eight_table_hashes_are_re_derived_before_projection_never_copied",
+        "the_global_store_carries_no_selection_identity_at_any_depth"
       ],
       "type": "object"
     },
@@ -609,7 +611,7 @@
     },
     "store": {
       "additionalProperties": false,
-      "description": "WHAT WAS PROJECTED. The GLOBAL, selection-independent v2 bundle \u2014 addressed by id, never copied into the view, and never modified by it. `provenance` is deliberately not projected: it describes the store, not this question, and a reader opens the bundle by id.",
+      "description": "EXACTLY WHICH BYTES THIS IS A PROJECTION OF. The GLOBAL, selection-independent v2 bundle \u2014 addressed by id, never copied into the view, never modified by it. Every hash here is RE-DERIVED by the producer from the rows it projected AND re-read from the store on disk, then proven equal to what the bundle document declares. A COPIED table hash would let a view be built over mutated rows while publishing the digest of rows it is not over. `provenance` is not projected \u2014 it describes the store, not this question \u2014 but it IS hashed and verified: all eight tables are.",
       "properties": {
         "bundle_id": {
           "type": "string"
@@ -632,8 +634,14 @@
             "null"
           ]
         },
+        "document_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
         "method_sha256": {
           "$ref": "#/$defs/sha256"
+        },
+        "n_tables_verified": {
+          "const": 8
         },
         "schemas_sha256": {
           "type": [
@@ -659,8 +667,65 @@
         "stage2_manifest_self_hash": {
           "$ref": "#/$defs/sha256"
         },
+        "store_identity_checks": {
+          "description": "The gates that RAN before a single row was projected. A gate nobody can enumerate is a gate nobody can notice the absence of.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 8,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "store_identity_verifier_id": {
+          "const": "spot.stage03.selection_view.store_identity.v1"
+        },
+        "store_manifest_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "The store manifest's OWN identity, recomputed from its bytes \u2014 never read out of it (audit finding B6)."
+        },
         "table_hashes": {
+          "additionalProperties": false,
+          "description": "The content hash of every table in the store \u2014 ALL EIGHT, including the ones this question does not project. Re-derived, then compared with the document's declaration; a mismatch is a refusal, never a reconciliation.",
+          "properties": {
+            "arm_slots": {
+              "$ref": "#/$defs/sha256"
+            },
+            "arm_summaries": {
+              "$ref": "#/$defs/sha256"
+            },
+            "candidates": {
+              "$ref": "#/$defs/sha256"
+            },
+            "dispositions": {
+              "$ref": "#/$defs/sha256"
+            },
+            "pathway_context": {
+              "$ref": "#/$defs/sha256"
+            },
+            "provenance": {
+              "$ref": "#/$defs/sha256"
+            },
+            "source_records": {
+              "$ref": "#/$defs/sha256"
+            },
+            "target_drug_edges": {
+              "$ref": "#/$defs/sha256"
+            }
+          },
+          "required": [
+            "arm_slots",
+            "arm_summaries",
+            "candidates",
+            "dispositions",
+            "pathway_context",
+            "provenance",
+            "source_records",
+            "target_drug_edges"
+          ],
           "type": "object"
+        },
+        "table_hashes_are_re_derived_not_copied": {
+          "const": true
         },
         "universe_store_id": {
           "type": [
@@ -673,9 +738,15 @@
         "bundle_id",
         "bundle_schema",
         "canonical_content_sha256",
-        "table_hashes",
+        "document_sha256",
+        "method_sha256",
+        "n_tables_verified",
         "stage2_manifest_self_hash",
-        "method_sha256"
+        "store_identity_checks",
+        "store_identity_verifier_id",
+        "store_manifest_sha256",
+        "table_hashes",
+        "table_hashes_are_re_derived_not_copied"
       ],
       "type": "object"
     },

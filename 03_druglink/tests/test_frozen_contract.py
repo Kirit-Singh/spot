@@ -29,6 +29,10 @@ import os
 
 import pytest
 
+from druglink import artifacts_v2 as av2
+from druglink import env
+from druglink import schemas
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_DIR = os.path.abspath(os.path.join(_HERE, "..", "schemas"))
 
@@ -81,19 +85,35 @@ FROZEN_CONTRACT_SHA256 = \
 #    A schema that refuses the real thing and admits the forgery is worse than no schema. Fixed,
 #    re-pinned, and reported.
 #
+# --- THE STORE-IDENTITY ROUND (this commit). v1 STILL did not budge. -----------------------
+#
+# `spot.stage03_selection_view.v1` was CORRECTED. Its `store` block let a view publish a
+# `table_hashes` map it had COPIED out of the bundle document and never re-derived — so a view
+# built over MUTATED rows still shipped the digest of the rows it was NOT over. The block now
+# names all EIGHT tables, the document, the store manifest, the verifier that re-derived them,
+# and the gates that ran. See `druglink.view_store`.
+#
+# AND THE SCHEMA-SET DIGEST ITSELF WAS AMBIGUOUS. This file used to pin a PRIVATE digest of the
+# schema directory, while every emitted bundle published a DIFFERENT one (`method.schemas_sha256`,
+# from `druglink.schemas.schemas_tree`). Both were called "the schema set". The value handed to
+# Stage 4 in the ee4810c commit message (3f23a901…) was the private one — a number that appears
+# in NO artifact — while the fixture carried the real one (b618022e…), which nothing pinned and
+# which then went STALE when the v2 schema was corrected the following commit. Neither number was
+# a lie; the LABEL was. There is now ONE schema-set identity, and it is the one in the artifacts.
+#
 # WHAT THE STAGE-4 OWNER MUST BE TOLD, before any v2 bundle is admitted downstream:
-#     schema set   db4b3557… -> 3f23a901…      (selection-view ADDED; v2 corrected)
-#     v1 contract  361d0833…  UNCHANGED        (what Stage 4 binds today — verify this first)
-#     v2 contract  28a331b3… -> 6ad784ab…      (still NOT consumed by Stage 4)
-#     view schema  a652f4e0…  NEW              (W12 / W6 consume this)
+#     schema set   23559703…   (= method.schemas_sha256 in EVERY bundle — compare it there)
+#     v1 contract  361d0833…   UNCHANGED, and it has never moved (verify this first)
+#     v2 contract  e6b537d7…   UNCHANGED this round (still NOT consumed by Stage 4)
+#     view schema  a652f4e0… -> abd65920…      (W12 / W6 consume this — RE-PINNED)
 FROZEN_SCHEMA_SET_SHA256 = \
-    "3541044d5a1d33b15cb658d6cf24375b4115a61899e8daab4a5d8e3b2047c1c8"
+    "235597035ed2a11a0a59d68ad9a5d716205a24d71aaebbcd7103106c8605f83f"
 FROZEN_V2_CONTRACT = "spot.stage03_drug_annotation.v2"
 FROZEN_V2_CONTRACT_SHA256 = \
     "e6b537d7ff23519bdef67d4078c0fd3782ade73b97e1ff6e802486b549aa8b61"
 FROZEN_VIEW_CONTRACT = "spot.stage03_selection_view.v1"
 FROZEN_VIEW_CONTRACT_SHA256 = \
-    "a652f4e043c9235c42d1301a3bd7e53c7f2db0c2f57d5cbe4310d9fd2dd291ee"
+    "abd659208d648797e7474e66db3f6ccbc0980170700e9a746632b94c2f928d2e"
 
 # The verifier's gate inventory on a clean bundle (sorted check names, newline-joined).
 # NEW at r8, closing the class of defect B6 belonged to: the freeze pinned the contract
@@ -126,14 +146,21 @@ def _sha256(path: str) -> str:
 
 
 def _schema_set_sha256() -> str:
-    """Sorted name + per-file hash, so a RENAME or a DELETION moves the digest too."""
-    h = hashlib.sha256()
-    for name in sorted(n for n in os.listdir(SCHEMA_DIR) if n.endswith(".json")):
-        h.update(name.encode())
-        h.update(b"\0")
-        h.update(_sha256(os.path.join(SCHEMA_DIR, name)).encode())
-        h.update(b"\n")
-    return h.hexdigest()
+    """THE PRODUCER'S OWN SCHEMA-SET DIGEST — the one every bundle publishes.
+
+    THERE USED TO BE TWO. This test hashed the schema directory with its own private loop
+    (sorted name + per-file hash), while every emitted artifact carried a DIFFERENT number:
+    ``method.schemas_sha256``, from :func:`druglink.schemas.schemas_tree`. Two digests over the
+    same directory, both called "the schema set" in the round's commit messages — so the number
+    handed to the Stage-4 owner (``3f23a901…``) appeared in no artifact anywhere, and the number
+    that DID appear in every bundle (``b618022e…``) was never pinned by anything. An external
+    reviewer read one, recomputed the other, and could not reconcile them. They were both
+    "right"; the LABEL was wrong, and a pin nobody can find in an artifact protects nothing.
+
+    So the freeze now pins the digest the artifacts actually carry. One schema set, one identity,
+    checkable in any bundle a consumer opens.
+    """
+    return schemas.schemas_tree()["schemas_sha256"]
 
 
 def test_the_generic_stage4_contract_is_byte_frozen():
@@ -148,6 +175,34 @@ def test_the_whole_schema_set_is_byte_frozen():
     got = _schema_set_sha256()
     assert got == FROZEN_SCHEMA_SET_SHA256, (
         f"the schemas/ set changed: {got} != pinned {FROZEN_SCHEMA_SET_SHA256}" + _UNFREEZE)
+
+
+def test_the_pinned_schema_set_is_the_one_EVERY_BUNDLE_PUBLISHES():
+    """The pin and the artifact must be the SAME number, or the pin is about nothing.
+
+    A freeze on a digest no emitted artifact carries cannot be checked by the consumer it exists
+    to protect: Stage 4 opens a bundle, reads ``method.schemas_sha256``, and must be able to
+    compare it with what it was told.
+    """
+    assert env.method_block()["schemas_sha256"] == FROZEN_SCHEMA_SET_SHA256
+
+
+def test_the_published_W12_VIEW_FIXTURE_names_the_CURRENT_schema_set():
+    """The example W12 and W6 build against may not carry a STALE schema identity.
+
+    It did. The fixture was emitted at ee4810c, the v2 schema was corrected the next commit, and
+    the checked-in view kept publishing the OLD ``schemas_sha256`` — naming a schema set that no
+    longer existed. Nothing caught it: the fixture's shape test compares KEYS, not values, and
+    the schema-set pin lived in a digest the fixture did not use. A published artifact that names
+    the wrong method identity is reproducible only by accident.
+    """
+    with open(os.path.join(_HERE, "..", "selection_view.fixture.v1.json"), encoding="utf-8") as fh:
+        view = json.load(fh)
+    got = view["store"]["schemas_sha256"]
+    assert got == FROZEN_SCHEMA_SET_SHA256, (
+        f"the published selection-view fixture names schema set {got} but the schemas on disk "
+        f"hash to {FROZEN_SCHEMA_SET_SHA256}. Regenerate it: "
+        "python 03_druglink/tests/emit_view_fixture.py")
 
 
 def test_the_verifier_gate_inventory_is_frozen(tmp_path, analysis_build, direct_run,
@@ -268,8 +323,23 @@ def test_the_selection_view_contract_is_byte_frozen():
     # The three typed origins survive the projection, and stay separable.
     assert set(view["$defs"]["origin_type"]["enum"]) == {
         "direct_target", "temporal_cross_time_measured", "endpoint_pathway_context"}
+
+    # THE VIEW MUST NAME THE BYTES IT IS A PROJECTION OF — all EIGHT tables, the document, and
+    # the store manifest. Required in the schema, so a view that goes back to COPYING the
+    # bundle's own claims about itself cannot validate.
+    store = view["properties"]["store"]
+    for field in ("table_hashes", "table_hashes_are_re_derived_not_copied", "document_sha256",
+                  "store_manifest_sha256", "store_identity_verifier_id", "store_identity_checks",
+                  "n_tables_verified"):
+        assert field in store["required"], f"the view store block dropped {field!r}" + _UNFREEZE
+    assert store["properties"]["n_tables_verified"]["const"] == 8
+    assert sorted(store["properties"]["table_hashes"]["required"]) == sorted(av2.SCIENTIFIC_TABLES)
+    assert len(av2.SCIENTIFIC_TABLES) == 8
+
     # The guarantees are REQUIRED, so a view that quietly drops one fails its own schema.
-    for promise in ("the_view_never_re_ranks_or_re_orders_the_store",
+    for promise in ("the_stores_eight_table_hashes_are_re_derived_before_projection_never_copied",
+                    "the_global_store_carries_no_selection_identity_at_any_depth",
+                    "the_view_never_re_ranks_or_re_orders_the_store",
                     "the_view_never_promotes_an_evidence_class",
                     "the_view_never_writes_back_to_the_store",
                     "arm_keys_are_matched_by_exact_string_equality_never_by_prefix"):

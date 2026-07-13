@@ -49,6 +49,12 @@ def build_view(root: str) -> dict:
     document = bv2.build_document(
         artifact_class="fixture", aggregate=aggregate, store=store, report=report,
         table_hashes=av2.table_content_hashes(tables), tables=tables)
+    # The store is BOUND TO DISK first: the materializer re-derives all eight table hashes from
+    # these bytes before it projects a row, and refuses if they are not the ones the document
+    # names. A view whose store nobody re-hashed republishes a digest it never checked.
+    bundle_dir = av2.write_bundle(
+        output_root=os.path.join(root, "bundle"), artifact_class="fixture", document=document,
+        doc_id=document["bundle_id"], tables=tables, created_at="2026-07-13T00:00:00Z")
 
     release = paths["manifest_doc"]["stage1_v3_release"]
     programs = list(aggregate.program_ids)
@@ -64,7 +70,7 @@ def build_view(root: str) -> dict:
 
     view = sv.materialize(
         selection=selection, aggregate=aggregate, document=document, tables=tables,
-        manifest=paths["manifest_doc"],
+        manifest=paths["manifest_doc"], bundle_dir=bundle_dir,
         admission=sv.admit_receipt(paths["receipt"], aggregate=aggregate,
                                    report_path=paths["report"]))
     vc.validate(view)                    # it leaves only if it satisfies its own contract

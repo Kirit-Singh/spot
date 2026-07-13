@@ -58,10 +58,18 @@ def world(tmp_path_factory):
         report=bv2.bind_report(paths["report"], aggregate),
         table_hashes=av2.table_content_hashes(tables), tables=tables)
 
+    # THE STORE IS WRITTEN TO DISK, because the materializer RE-DERIVES its eight table hashes
+    # from those bytes before it projects a single row. A view over rows nobody re-hashed would
+    # publish the digest of rows it is not over.
+    bundle_dir = av2.write_bundle(
+        output_root=str(root / "bundle"), artifact_class="fixture", document=document,
+        doc_id=document["bundle_id"], tables=tables, created_at="2026-07-13T00:00:00Z")
+
     admission = sv.admit_receipt(paths["receipt"], aggregate=aggregate,
                                  report_path=paths["report"])
     return {"paths": paths, "aggregate": aggregate, "tables": tables, "document": document,
-            "manifest": paths["manifest_doc"], "admission": admission, "root": str(root)}
+            "manifest": paths["manifest_doc"], "admission": admission, "root": str(root),
+            "bundle_dir": bundle_dir}
 
 
 def _selection(world, *, a, b, mode, conditions, a_dir="high", b_dir="high", **kw):
@@ -78,10 +86,12 @@ def _verified(world, **kw):
     return s3.verify(_selection(world, **kw))
 
 
-def _view(world, selection):
+def _view(world, selection, **kw):
+    kw.setdefault("document", world["document"])
+    kw.setdefault("tables", world["tables"])
+    kw.setdefault("bundle_dir", world["bundle_dir"])
     return sv.materialize(selection=selection, aggregate=world["aggregate"],
-                          document=world["document"], tables=world["tables"],
-                          manifest=world["manifest"], admission=world["admission"])
+                          manifest=world["manifest"], admission=world["admission"], **kw)
 
 
 def _programs(world):
