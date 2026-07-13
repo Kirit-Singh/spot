@@ -207,3 +207,79 @@ def test_pathway_context_never_promotes_a_candidate_into_a_question():
                       arm_summaries=[], pathway_context=ctx)
     assert "pathway|P|increase|Rest|GO-BP" not in truth["arm_keys"]
     assert truth["pathway_context_arm_keys"] == []
+
+
+# --------------------------------------------------------------------------- #
+# EDGES ARE THE TRUTH. Summaries reconcile, bidirectionally and exactly.
+# --------------------------------------------------------------------------- #
+def test_deleting_ALL_arm_summaries_is_REFUSED(view):
+    """Presence used to be checked one way only, so deleting every summary passed."""
+    bad = copy.deepcopy(view)
+    bad["tables"]["arm_summaries"] = []
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_EDGE_WITHOUT_A_SUMMARY
+
+
+def test_deleting_EDGES_but_keeping_a_stale_summary_is_REFUSED(view):
+    """A summary summarises an edge. It can never be the evidence that an edge does not exist."""
+    bad = copy.deepcopy(view)
+    cid = _cands(bad)[0]["candidate_id"]
+    bad["tables"]["target_drug_edges"] = [
+        r for r in bad["tables"]["target_drug_edges"] if r.get("candidate_id") != cid]
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_SUMMARY_WITHOUT_AN_EDGE
+
+
+def test_a_summary_that_does_not_reconcile_with_its_edges_is_REFUSED(view):
+    bad = copy.deepcopy(view)
+    bad["tables"]["arm_summaries"][0]["n_edges"] = 99
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_SUMMARY_DOES_NOT_RECONCILE
+
+
+def test_MOVING_an_arm_from_observed_to_opposed_is_REFUSED(view):
+    """The arm set does not change; the hashes reseal; THE SCIENCE REVERSES. Nothing else notices."""
+    bad = copy.deepcopy(view)
+    bad["tables"]["arm_summaries"][0]["arm_evidence_state"] = "opposed"
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_TYPED_STATE_NOT_THE_EVIDENCE
+
+
+@pytest.mark.parametrize("table", ["target_drug_edges", "arm_summaries"])
+def test_wrong_selection_roles_on_any_row_is_REFUSED(view, table):
+    """A role is a property of the QUESTION, assigned at join time — re-derived on every row."""
+    bad = copy.deepcopy(view)
+    bad["tables"][table][0]["selection_roles"] = ["away_from_A", "toward_B"]
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_ROLE_ON_A_ROW_NOT_THE_SELECTIONS
+
+
+# --------------------------------------------------------------------------- #
+# v2 IS v2. A v1 receipt may not pass for it.
+# --------------------------------------------------------------------------- #
+def test_the_rule_is_v2_and_v1_cannot_masquerade_as_it():
+    assert cm.MEMBERSHIP_SCHEMA.endswith(".v2")
+    assert cm.MEMBERSHIP_RULE_ID.endswith(".v2")
+    assert cm.MEMBERSHIP_VERIFIER_ID.endswith(".v2")
+    live = {cm.MEMBERSHIP_SCHEMA, cm.MEMBERSHIP_RULE_ID, cm.MEMBERSHIP_VERIFIER_ID}
+    assert not (live & cm.RETIRED_MEMBERSHIP_IDS), (
+        "a v1 id is live again: a receipt for the old, weaker rule would pass for the new one — "
+        "which is how a weakened gate travels under a trusted name")
+
+
+def test_weakening_the_rule_MOVES_the_view_identity():
+    """If the identity did not move, the binding would be decorative and the rule could be deleted
+    tomorrow while every existing receipt still looked valid."""
+    from unittest import mock
+
+    from druglink import selection_view as sv
+    from druglink.hashing import content_hash
+    before = content_hash(sv.vocabularies())
+    with mock.patch.object(cm, "MEMBERSHIP_RULE_ID", "spot.stage03.candidate_membership.WEAK.v9"):
+        after = content_hash(sv.vocabularies())
+    assert before != after

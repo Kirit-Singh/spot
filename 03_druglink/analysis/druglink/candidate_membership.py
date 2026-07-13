@@ -46,9 +46,19 @@ from typing import Any, Iterable, Mapping, Sequence
 from . import direction as dr
 from . import workflow as wf
 
-MEMBERSHIP_SCHEMA = "spot.stage03_candidate_membership.v1"
-MEMBERSHIP_RULE_ID = "spot.stage03.candidate_membership.exact_arm_key.v1"
-MEMBERSHIP_VERIFIER_ID = "spot.stage03.candidate_membership.verifier.v1"
+# v2, NOT v1. The rule changed MATERIALLY — from comparing the candidate's claims against each
+# other, to RE-DERIVING membership from target_drug_edges; plus a typed pathway-context domain,
+# typed evidence-state columns, bidirectional edge<->summary reconciliation, and ordered roles and
+# endpoints. A v1 id on v2 semantics would let a receipt for the old, weaker rule pass for the new
+# one — which is precisely how a weakened gate travels under a trusted name.
+MEMBERSHIP_SCHEMA = "spot.stage03_candidate_membership.v2"
+MEMBERSHIP_RULE_ID = "spot.stage03.candidate_membership.evidence_rederived.v2"
+MEMBERSHIP_VERIFIER_ID = "spot.stage03.candidate_membership.verifier.v2"
+RETIRED_MEMBERSHIP_IDS = frozenset({
+    "spot.stage03_candidate_membership.v1",
+    "spot.stage03.candidate_membership.exact_arm_key.v1",
+    "spot.stage03.candidate_membership.verifier.v1",
+})
 
 # TWO DOMAINS, NEVER MIXED. Membership is decided by the GENE origins; the pathway origin is
 # CONTEXT and is checked against the selection's context arms alone.
@@ -77,6 +87,14 @@ GATE_ARM_DROPPED = "a_shown_candidate_lost_an_arm_the_selection_gives_it"
 GATE_NO_SELECTED_ARMS = "the_view_names_no_selected_arm_keys_so_nothing_can_belong_to_it"
 GATE_SUMMARY_WITHOUT_AN_EDGE = \
     "an_arm_summary_claims_an_arm_no_target_drug_edge_supports"
+GATE_EDGE_WITHOUT_A_SUMMARY = \
+    "a_target_drug_edge_has_no_arm_summary_reconciling_it"
+GATE_SUMMARY_DOES_NOT_RECONCILE = \
+    "an_arm_summary_does_not_reconcile_with_the_edges_it_summarises"
+GATE_TYPED_STATE_NOT_THE_EVIDENCE = \
+    "an_arms_typed_evidence_state_is_not_the_state_its_edges_carry"
+GATE_ROLE_ON_A_ROW_NOT_THE_SELECTIONS = \
+    "a_row_carries_selection_roles_that_are_not_the_roles_this_selection_assigns_its_arm"
 GATE_FOREIGN_PATHWAY_CONTEXT = \
     "a_shown_candidate_carries_pathway_context_the_selection_does_not_name"
 GATE_ROLE_NOT_THE_SELECTIONS = \
@@ -226,6 +244,8 @@ def check_view_membership(view: Mapping[str, Any]) -> None:
                     "The drug may be real — it is being shown as an answer to a question it has no "
                     "evidence in.")
 
+        _reconcile(view, cid, selected_arms)
+
         by_origin = cand.get("view_arm_keys_by_origin") or {}
         shown_gene = _keys(k for o, ks in by_origin.items() if str(o) in GENE_ORIGINS
                            for k in (ks or []))
@@ -274,6 +294,67 @@ def check_view_membership(view: Mapping[str, Any]) -> None:
                     f"in are assigned {sorted(expected)!r} by this selection. A role is a property "
                     "of the QUESTION, assigned at join time — never a property the candidate "
                     "carries with it.")
+
+
+# STATE_FOR_FIELD: the typed column an arm belongs in, given the state its EDGES carry.
+STATE_TO_FIELD: dict[str, str] = {state: field for field, state in MEMBERSHIP_FOR_STATE.items()}
+
+
+def _reconcile(view: Mapping[str, Any], cid: str, selected_arms: Mapping[str, Any]) -> None:
+    """EDGES ARE THE TRUTH. Summaries reconcile with them, bidirectionally and exactly.
+
+    Deleting every summary once still ADMITTED: presence was checked one way only. And a wrong
+    `selection_roles` on an edge OR a summary sailed through, because nothing re-derived them.
+    """
+    tables = view.get("tables") or {}
+    edges = _rows_for(tables.get("target_drug_edges") or [], cid)
+    summaries = _rows_for(tables.get("arm_summaries") or [], cid)
+
+    by_arm: dict[str, list[Mapping[str, Any]]] = {}
+    for e in edges:
+        by_arm.setdefault(str(e["arm_key"]), []).append(e)
+    sum_by_arm: dict[str, list[Mapping[str, Any]]] = {}
+    for r in summaries:
+        sum_by_arm.setdefault(str(r["arm_key"]), []).append(r)
+
+    # EVERY EDGE'S ARM MUST HAVE A SUMMARY. (Deleting all summaries used to pass.)
+    for arm, group in sorted(by_arm.items()):
+        rows = sum_by_arm.get(arm)
+        if not rows:
+            _refuse(GATE_EDGE_WITHOUT_A_SUMMARY,
+                    f"candidate {cid!r} has {len(group)} edge(s) in {arm!r} and NO arm_summary "
+                    "reconciling them. Presence was checked in one direction only, so deleting "
+                    "every summary passed.")
+        summary = rows[0]
+
+        # THE TYPED STATE IS THE EVIDENCE'S, not the summary's claim.
+        states = {str(e.get("directional_evidence_status")) for e in group}
+        claimed_state = str(summary.get("arm_evidence_state"))
+        if claimed_state not in states:
+            _refuse(GATE_TYPED_STATE_NOT_THE_EVIDENCE,
+                    f"candidate {cid!r} arm {arm!r}: the summary says {claimed_state!r}, but its "
+                    f"edges carry {sorted(states)!r}. Moving an arm from observed to opposed while "
+                    "the arm set and the hashes are resealed changes the SCIENCE and nothing else "
+                    "would have noticed.")
+
+        edge_ids = {str(e.get("edge_id")) for e in group}
+        claimed_ids = {str(x) for x in (summary.get("edge_ids") or [])}
+        if claimed_ids != edge_ids or int(summary.get("n_edges") or -1) != len(edge_ids):
+            _refuse(GATE_SUMMARY_DOES_NOT_RECONCILE,
+                    f"candidate {cid!r} arm {arm!r}: the summary names edge_ids "
+                    f"{sorted(claimed_ids)!r} / n_edges={summary.get('n_edges')!r}, but the edges "
+                    f"present are {sorted(edge_ids)!r}.")
+
+    # AND EVERY ROW'S selection_roles ARE THE SELECTION'S, RE-DERIVED. Never the row's word.
+    for row in list(edges) + list(summaries):
+        arm = str(row.get("arm_key"))
+        expected = roles_of(selected_arms, arm)
+        claimed = _keys(row.get("selection_roles") or [])
+        if claimed != expected:
+            _refuse(GATE_ROLE_ON_A_ROW_NOT_THE_SELECTIONS,
+                    f"candidate {cid!r}: a row in {arm!r} claims roles {sorted(claimed)!r}, but "
+                    f"this selection assigns that arm {sorted(expected)!r}. A role is a property "
+                    "of the QUESTION, assigned at join time.")
 
 
 def _check_selection_coherence(view: Mapping[str, Any],
@@ -379,6 +460,10 @@ def vocabularies() -> dict[str, Any]:
         # gate read only the candidate's claims — a lie in a published field, and worse than no
         # field, because a consumer reads fields.
         "membership_is_rederived_from_target_drug_edges_only": True,
+        "edge_summary_reconciliation_is_bidirectional_and_exact": True,
+        "typed_evidence_state_comes_from_the_edges_not_the_summary": True,
+        "selection_roles_are_rederived_on_every_row": True,
+        "retired_membership_ids": sorted(RETIRED_MEMBERSHIP_IDS),
         "arm_summaries_reconcile_but_never_promote_membership": True,
         "roles_are_assigned_by_the_selection_at_join_time": True,
         "ordered_endpoints_must_match_the_arms_contexts": True,

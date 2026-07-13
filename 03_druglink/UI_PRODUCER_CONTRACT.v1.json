@@ -1,0 +1,122 @@
+{
+  "authoritative_paths": {
+    "global_store_bundle": "<OUT>/s3_<id>/drug_annotation.v2.json  (+ 8 parquet tables)",
+    "published_example_view": "03_druglink/selection_view.fixture.v1.json",
+    "selection_view": "<OUT>/selection_view.<view_id>.json"
+  },
+  "candidate_typed_fields": [
+    "arm_keys",
+    "inverse_direction_hypothesis_arm_keys",
+    "observed_perturbation_arm_keys",
+    "opposed_arm_keys",
+    "pathway_hypothesis_arm_keys",
+    "unresolved_arm_keys"
+  ],
+  "consumer_verification_entry_point": "druglink.view_contract.validate(view)",
+  "contract_sha256": "78b6f31a9a56abfc76a1b869cbc8823d8be216086ad8986015699ea10ea05384",
+  "evidence_rows": {
+    "arm_summaries": [
+      "candidate_id",
+      "arm_key",
+      "origin_type",
+      "arm_evidence_state",
+      "edge_ids",
+      "n_edges",
+      "selection_roles"
+    ],
+    "pathway_context": [
+      "target_id",
+      "target_id_namespace",
+      "arm_key"
+    ],
+    "target_drug_edges": [
+      "candidate_id",
+      "arm_key",
+      "origin_type",
+      "directional_evidence_status",
+      "edge_id",
+      "selection_roles"
+    ]
+  },
+  "gates": [
+    "a_candidate_is_shown_for_a_selection_it_has_no_evidence_in",
+    "a_candidates_published_arm_membership_is_not_what_the_evidence_produces",
+    "a_row_carries_selection_roles_that_are_not_the_roles_this_selection_assigns_its_arm",
+    "a_shown_candidate_carries_an_arm_the_selection_does_not_name",
+    "a_shown_candidate_carries_pathway_context_the_selection_does_not_name",
+    "a_shown_candidate_lost_an_arm_the_selection_gives_it",
+    "a_shown_candidates_roles_are_not_the_roles_this_selection_assigns_its_arms",
+    "a_target_drug_edge_has_no_arm_summary_reconciling_it",
+    "an_arm_summary_claims_an_arm_no_target_drug_edge_supports",
+    "an_arm_summary_does_not_reconcile_with_the_edges_it_summarises",
+    "an_arms_typed_evidence_state_is_not_the_state_its_edges_carry",
+    "the_selections_ordered_endpoints_are_not_the_ordered_contexts_of_its_arms",
+    "the_view_names_no_selected_arm_keys_so_nothing_can_belong_to_it"
+  ],
+  "identity_rules": {
+    "membership_rule_bound_into": "selection_view.vocabularies() -> hashed into every view id",
+    "projection_seal": "per-table raw_sha256 (store file bytes) + content_sha256 (projected rows) + row_count + schema_id",
+    "view_content_sha256": "content_hash(view minus view_id/view_content_sha256), row-order canonicalised per table",
+    "view_id": "view_content_sha256[:16]"
+  },
+  "membership": {
+    "admission_requires_the_full_hash_bound_view_and_a_receipt_naming_this_gate": true,
+    "arm_summaries_reconcile_but_never_promote_membership": true,
+    "display_name_match_permitted": false,
+    "edge_summary_reconciliation_is_bidirectional_and_exact": true,
+    "global_arms_field": "arm_keys",
+    "global_store_stays_global_display_is_a_projection": true,
+    "match_rule": "exact_string_equality_on_the_whole_arm_key",
+    "membership_is_rederived_from_target_drug_edges_only": true,
+    "membership_rule_id": "spot.stage03.candidate_membership.evidence_rederived.v2",
+    "membership_schema": "spot.stage03_candidate_membership.v2",
+    "membership_verifier_id": "spot.stage03.candidate_membership.verifier.v2",
+    "ordered_endpoints_must_match_the_arms_contexts": true,
+    "pathway_context_field": "pathway_context_arm_keys",
+    "pathway_context_is_checked_against_pathway_context_arm_keys_not_gene_arms": true,
+    "pathway_context_never_promotes_a_candidate_into_a_question": true,
+    "prefix_match_permitted": false,
+    "retired_membership_ids": [
+      "spot.stage03.candidate_membership.exact_arm_key.v1",
+      "spot.stage03.candidate_membership.verifier.v1",
+      "spot.stage03_candidate_membership.v1"
+    ],
+    "roles_are_assigned_by_the_selection_at_join_time": true,
+    "selected_arms_field": "gene_arm_keys",
+    "selection_roles_are_rederived_on_every_row": true,
+    "shown_arms_field": "view_arm_keys_by_origin",
+    "shown_equals_global_intersect_selected": true,
+    "this_gate_alone_is_not_admission": true,
+    "typed_evidence_state_comes_from_the_edges_not_the_summary": true,
+    "typed_membership_fields": [
+      "inverse_direction_hypothesis_arm_keys",
+      "observed_perturbation_arm_keys",
+      "opposed_arm_keys",
+      "pathway_hypothesis_arm_keys",
+      "unresolved_arm_keys"
+    ]
+  },
+  "ordered_roles": {
+    "A": "away_from_A (conditions[0])",
+    "B": "toward_B (conditions[-1])"
+  },
+  "schema_version": "spot.stage03_ui_producer_contract.v1",
+  "selected_arms_fields": [
+    "gene_arm_keys",
+    "pathway_context_arm_keys",
+    "arms.A",
+    "arms.B",
+    "one_arm_carries_both_roles"
+  ],
+  "this_gate_alone_is_not_admission": true,
+  "view": {
+    "view_method_id": "spot.stage03.selection_view.projection.v1",
+    "view_schema": "spot.stage03_selection_view.v1"
+  },
+  "view_scoped_candidate_fields": [
+    "view_arm_keys_by_origin",
+    "view_roles",
+    "view_edge_ids",
+    "view_n_edges_by_origin"
+  ]
+}
