@@ -72,11 +72,10 @@ def build_pathway(args) -> dict[str, Any]:
     created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
     # B3: a Stage-1 v3 WITHIN-CONDITION selection drives this lane natively too.
+    # B2: THE SAME selection-load + admission, THE SAME binding and THE SAME release gate
+    # the screen and the preflight run. One loader, three callers.
     from . import stage1_v3
-    v3 = stage1_v3.load_selection(args, expect_mode=stage1_v3.MODE_WITHIN)
-
-    # THE SAME binding and THE SAME release gate the screen runs.
-    ctx = rs.prepare(args, v3=v3)
+    ctx = rs.load_and_prepare(args, expect_mode=stage1_v3.MODE_WITHIN)
     from . import preflight
     verdict = preflight.assess(args, ctx)
     if verdict["verdict"] != preflight.GO:

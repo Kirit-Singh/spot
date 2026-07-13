@@ -52,6 +52,7 @@ from . import manifest as mf
 from . import projection as proj
 from . import selection as sel_mod
 from . import universe as uni
+from .hashing import file_sha256
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -88,6 +89,45 @@ def _b(v) -> Optional[bool]:
 # There is no separate "audit loader". A preflight that validated something other than
 # what the run consumes would be a preflight of a different program.
 # --------------------------------------------------------------------------- #
+def load_and_prepare(args, *, expect_mode: str) -> dict[str, Any]:
+    """THE selection-load + admission path. Preflight and the build BOTH call this.
+
+    B2. ``preflight.run`` used to call ``prepare(args)`` with no v3 argument, while the build
+    called ``stage1_v3.load_selection(...)`` first and then ``prepare(args, v3=...)``. So a
+    ``--preflight-only`` run carrying a v3 contract bound the LEGACY selection, certified
+    THAT, and returned GO — for a run production would then execute against entirely
+    different programs. A preflight of a different program certifies nothing about this one,
+    and a GO makes it worse than no preflight at all.
+
+    There is now no second loader to drift from: the preflight cannot check a weaker or a
+    different contract than the build, because it has no way to.
+    """
+    from . import stage1_v3
+    v3 = stage1_v3.load_selection(args, expect_mode=expect_mode)
+    return prepare(args, v3=v3)
+
+
+def legacy_selection_block(args, v3) -> dict[str, Any]:
+    """WHETHER the legacy contract was supplied, and whether it was CONSUMED.
+
+    When a v3 contract is present it IS the selection and the legacy file is ignored — that
+    is the point. But "ignored" must be VISIBLE: the invocation matrix passes both, and a
+    reader who sees a legacy contract on the command line is entitled to know it did nothing.
+    So it is hashed and declared unconsumed, rather than leaving a reader to infer from the
+    absence of evidence that it had no effect. Bound, not hidden.
+    """
+    path = getattr(args, "selection", None)
+    if not path:
+        return {"supplied": False, "consumed": False, "sha256": None,
+                "superseded_by": None}
+    return {
+        "supplied": True,
+        "consumed": v3 is None,
+        "sha256": file_sha256(path),
+        "superseded_by": ("stage1_v3_selection_contract" if v3 is not None else None),
+    }
+
+
 def prepare(args, v3=None) -> dict[str, Any]:
     """Bind every input up to (and NOT including) any dense effect-layer read.
 
@@ -167,8 +207,14 @@ def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
 
     axis = stage1_v3.bind_axis(v3, release)
     id_check = {
-        "rule_id": stage1_v3.STAGE1_SELECTION_ID_NOT_REDERIVABLE,
+        # The LIVE rule (m2). This carried STAGE1_SELECTION_ID_NOT_REDERIVABLE — a RETIRED
+        # constant whose value literally begins "RETIRED:" — so every v3 run stamped its own
+        # identity with the claim that its selection_id was a citation nobody could
+        # recompute. The id IS re-derived, and the run now says which rule did it.
+        "rule_id": stage1_v3.SELECTION_ID_RULE_ID,
+        "rule": stage1_v3.SELECTION_ID_RULE,
         "selection_id": v3.selection_id,
+        "selection_id_rederived": stage1_v3.derive_selection_id(v3.raw),
         # RE-DERIVED, not carried: the run identity is about to bind this hash, and a hash
         # verified once then passed around as a string is a string.
         "full_contract_content_sha256": stage1_v3.reverify_full_contract_hash(v3.raw),
@@ -428,13 +474,12 @@ def build_screen(args) -> dict:
     # selection — the axis is built from ITS poles and its full-contract hash is bound.
     # A temporal contract is refused by name: the two estimators answer different
     # questions and their numbers look alike.
+    #
+    # B2: this is THE loader, and the preflight calls the very same one. The production
+    # firewall, the Stage-1 binding, the pooled-main evidence domain, the manifest and the
+    # gene universe are all bound here, BEFORE any dense layer is read.
     from . import stage1_v3
-    v3 = stage1_v3.load_selection(args, expect_mode=stage1_v3.MODE_WITHIN)
-
-    # PRODUCTION FIREWALL, Stage-1 binding, the pooled-main evidence domain, the
-    # manifest and the gene universe — all bound BEFORE any dense layer is read, by the
-    # same ``prepare`` the preflight runs.
-    ctx = prepare(args, v3=v3)
+    ctx = load_and_prepare(args, expect_mode=stage1_v3.MODE_WITHIN)
 
     # ...and then the SAME gate the preflight applies, over the SAME ctx, BEFORE the
     # dense read and before a single artifact exists. A build that could skip this
@@ -499,7 +544,11 @@ def build_screen(args) -> dict:
         # commit printed beside it.
         code_identity=code_identity_for(
             lane, getattr(args, "allow_dirty_tree", False)),
-        stage1_v3=stage1_v3.binding_block(ctx.get("v3")))
+        stage1_v3=stage1_v3.binding_block(ctx.get("v3")),
+        # B2: the legacy contract is BOUND even when it is ignored. The invocation matrix
+        # passes both, and a reader who sees one on the command line is entitled to know it
+        # did nothing — rather than inferring it from an absence of evidence.
+        legacy_selection=legacy_selection_block(args, ctx.get("v3")))
     run_id, run_sha = runid.run_id_of(binding)
 
     for rows in (screen_rows, mask_rows, guide_rows, donor_rows, contrib_rows):

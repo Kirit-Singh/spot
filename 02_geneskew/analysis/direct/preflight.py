@@ -26,7 +26,7 @@ import json
 import os
 from typing import Any
 
-from . import config, domain, gate, run_screen
+from . import config, domain, gate, run_screen, stage1_v3
 from . import manifest as mf
 
 SCHEMA_VERSION = "spot.stage02_direct_preflight.v1"
@@ -164,7 +164,10 @@ def run(args) -> dict[str, Any]:
     than a traceback.
     """
     try:
-        ctx = run_screen.prepare(args)
+        # THE SAME selection-load + admission the build runs. Not a parallel "audit loader":
+        # a preflight that bound a different contract than production would certify a
+        # different run, and its GO would be worse than no preflight at all.
+        ctx = run_screen.load_and_prepare(args, expect_mode=stage1_v3.MODE_WITHIN)
     except Exception as exc:                     # a refusal IS the answer
         return {
             "schema_version": SCHEMA_VERSION,
@@ -250,6 +253,11 @@ def assess(args, ctx: dict[str, Any]) -> dict[str, Any]:
             "stage3_eligible": ctx["axis"]["stage3_eligible"],
             "production_gate_passed": ctx["axis"]["production_gate_passed"],
         },
+        # WHAT CONTRACT WAS CERTIFIED. The identical block the build binds into its run
+        # identity — so "the preflight passed" is checkable against "the build ran this",
+        # rather than being two assertions about two things that share a name.
+        "stage1_v3": stage1_v3.binding_block(ctx.get("v3")),
+        "legacy_selection": run_screen.legacy_selection_block(args, ctx.get("v3")),
         "evidence_domain": run_screen._domain_block(ctx),
         "contributor_manifest": _manifest_block(ctx),
         "support_contract": support,
