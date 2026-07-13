@@ -84,13 +84,57 @@ class LandingContractTest(unittest.TestCase):
         self.assertNotIn("value", field)
         self.assertNotRegex(self.html, re.compile(r"(?:code|password)\s*={2,3}", re.I))
         self.assertNotRegex(self.html, re.compile(r"location\.(?:assign|replace|href).*01_page", re.I))
-        external = []
+
+    def test_page_issues_no_third_party_request(self) -> None:
+        # The guarantee is that the page FETCHES nothing third-party. An <a href> is a
+        # user-initiated navigation and issues no request, so outbound links are allowed;
+        # anything that would load a resource (script, stylesheet, font, image, iframe)
+        # or post a form must stay first-party.
+        fetching = []
         for tag, attrs in self.parser.tags:
-            for key in ("src", "href", "action"):
+            for key in ("src", "action"):
                 value = attrs.get(key) or ""
                 if re.match(r"https?://", value, re.I):
-                    external.append((tag, key, value))
-        self.assertEqual(external, [])
+                    fetching.append((tag, key, value))
+            if tag != "a":
+                value = attrs.get("href") or ""
+                if re.match(r"https?://", value, re.I):
+                    fetching.append((tag, "href", value))
+        self.assertEqual(fetching, [])
+
+    def test_outbound_links_cannot_leak_the_opener_or_referrer(self) -> None:
+        anchors = [
+            attrs
+            for tag, attrs in self.parser.tags
+            if tag == "a" and re.match(r"https?://", attrs.get("href") or "", re.I)
+        ]
+        self.assertTrue(anchors, "expected the About links to be present")
+        for anchor in anchors:
+            self.assertTrue((anchor.get("href") or "").startswith("https://github.com/"))
+            self.assertEqual(anchor.get("target"), "_blank")
+            rel = anchor.get("rel") or ""
+            self.assertIn("noopener", rel)
+            self.assertIn("noreferrer", rel)
+
+    def test_reveal_and_about_are_progressive_enhancements(self) -> None:
+        # Both ship hidden and are unhidden by script, so no dead control is offered
+        # when JavaScript is unavailable, and neither may submit the form.
+        for control_id in ("reveal-code", "about-open"):
+            control = self.parser.one("button", id=control_id)
+            self.assertEqual(control.get("type"), "button")
+            self.assertIn("hidden", control)
+            self.assertIsNotNone(control.get("aria-label"))
+        self.assertIn("reveal.hidden=false", self.html)
+        self.assertIn("openAbout.hidden=false", self.html)
+        # The field must still be shipped masked; only the toggle may reveal it.
+        self.assertEqual(self.parser.one("input", id="access-code").get("type"), "password")
+
+    def test_attribution_lives_in_the_about_dialog(self) -> None:
+        # The root surface stays a bare wordmark + mark: no footer, no banner. The
+        # credit is reachable only through the About control.
+        self.assertIn("Kirit Singh . 2026", self.html)
+        self.assertNotIn("<footer", self.html)
+        self.parser.one("dialog", id="about")
 
     def test_keyboard_and_error_feedback_hooks_exist(self) -> None:
         self.assertIn("event.key==='Escape'", self.html)

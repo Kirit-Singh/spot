@@ -101,15 +101,81 @@ describe('reviewer landing interaction', () => {
     expect(input).toHaveFocus()
   })
 
-  it('contains no external runtime resource or client-side code check', () => {
+  it('issues no third-party request, though it may link out', () => {
     mountLanding()
     const input = document.querySelector('#access-code')
-    const external = [...document.querySelectorAll('[src],[href],[action]')]
-      .flatMap((element) => ['src', 'href', 'action'].map((name) => element.getAttribute(name)))
+    // Anything that FETCHES must be first-party. An <a href> is a user-initiated
+    // navigation and issues no request, so outbound links are permitted.
+    const fetching = [...document.querySelectorAll('[src],[action]')]
+      .flatMap((element) => ['src', 'action'].map((name) => element.getAttribute(name)))
+      .filter((value) => /^https?:\/\//i.test(value || ''))
+    const nonAnchorHref = [...document.querySelectorAll('[href]')]
+      .filter((element) => element.tagName !== 'A')
+      .map((element) => element.getAttribute('href'))
       .filter((value) => /^https?:\/\//i.test(value || ''))
 
-    expect(external).toEqual([])
+    expect(fetching).toEqual([])
+    expect(nonAnchorHref).toEqual([])
     expect(input).not.toHaveAttribute('value')
     expect(landingHtml).not.toMatch(/(?:code|password)\s*={2,3}/i)
+  })
+
+  it('toggles the access code between masked and visible without submitting', () => {
+    mountLanding()
+    const input = document.querySelector('#access-code') as HTMLInputElement
+    const reveal = document.querySelector('#reveal-code') as HTMLButtonElement
+
+    // Ships hidden, unhidden by script, and must never act as a submit button.
+    expect(reveal.type).toBe('button')
+    expect(reveal.hidden).toBe(false)
+    expect(input.type).toBe('password')
+    expect(reveal).toHaveAttribute('aria-pressed', 'false')
+    expect(reveal).toHaveAccessibleName('Show access code')
+
+    fireEvent.click(reveal)
+    expect(input.type).toBe('text')
+    expect(reveal).toHaveAttribute('aria-pressed', 'true')
+    expect(reveal).toHaveAccessibleName('Hide access code')
+
+    fireEvent.click(reveal)
+    expect(input.type).toBe('password')
+    expect(reveal).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('opens an About dialog listing GitHub and contact, and closes again', () => {
+    mountLanding()
+    const open = document.querySelector('#about-open') as HTMLButtonElement
+    const dialog = document.querySelector('#about') as HTMLDialogElement
+    dialog.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
+    dialog.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
+
+    expect(open.type).toBe('button')
+    expect(open.hidden).toBe(false)
+    expect(open).toHaveAccessibleName('About spot')
+    expect(dialog.open).toBe(false)
+
+    fireEvent.click(open)
+    expect(dialog.showModal).toHaveBeenCalledOnce()
+
+    const links = [...dialog.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+    expect(links).toEqual([
+      'https://github.com/Kirit-Singh/spot',
+      'https://github.com/Kirit-Singh/spot/issues/new',
+    ])
+    for (const anchor of dialog.querySelectorAll('a')) {
+      expect(anchor.getAttribute('rel')).toContain('noopener')
+      expect(anchor.getAttribute('rel')).toContain('noreferrer')
+    }
+
+    fireEvent.click(document.querySelector('#about-close') as HTMLButtonElement)
+    expect(dialog.close).toHaveBeenCalledOnce()
+  })
+
+  it('credits the author inside the About dialog, not on the landing itself', () => {
+    mountLanding()
+    // The root stays a bare wordmark + mark; the credit lives behind the About control.
+    expect(document.querySelector('footer')).toBeNull()
+    expect(document.querySelector('#about .credit')).toHaveTextContent('Kirit Singh . 2026')
+    expect(document.querySelector('main')).not.toHaveTextContent('Kirit Singh')
   })
 })

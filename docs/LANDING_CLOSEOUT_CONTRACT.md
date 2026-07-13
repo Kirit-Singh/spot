@@ -6,13 +6,17 @@ This is a closeout-only surface. It must not be merged into or deployed over the
 
 - Canonical origin: `https://spotpathways.com`.
 - `https://spotpathway.com/<path>?<query>` permanently redirects to the same path and query on `https://spotpathways.com` before authentication or cookie handling.
-- Public routes: `/` and `POST /auth` only. The landing is self-contained and makes no third-party requests.
+- Public routes: `/` and `POST /auth` only. The landing **issues no third-party request**: nothing that fetches — script, stylesheet, font, image, iframe, form action — may be off-origin. Outbound `<a href>` links in the About dialog are permitted, because an anchor issues no request until the reviewer chooses to follow it; the tests enforce exactly this distinction rather than banning every external URL.
 - Reviewer routes: `/01_page.html` and every other shipped app page, asset, manifest, and data artifact. An unauthenticated deep link returns to `/`; it must never expose app bytes first.
 - Successful access always returns `303 Location: /01_page.html`.
 
 ## Visual contract
 
-The root page contains only a centered `spot` wordmark and its clickable dot, followed by the access control when expanded. It has no subtitle, footer, announcement, warning, or editorial banner.
+The root page contains only a centered `spot` wordmark and its clickable mark, followed by the access control when expanded. It has **no footer, subtitle, announcement, warning, or editorial banner** — attribution and description live behind the About control, not on the surface.
+
+When expanded, the control row is: the code field, a reveal (eye) toggle, the submit arrow, and an About "i" button to its right. The reveal toggle swaps the field between `password` and `text` so a reviewer can check what they typed; the field is always *shipped* masked and the toggle is the only thing that unmasks it. Both the reveal and About controls are progressive enhancements — they ship `hidden` and are unhidden by the inline script, so no dead control is ever presented when JavaScript is unavailable, and both are `type="button"` so neither can submit the form.
+
+About opens a native `<dialog>`: a one-line description, a links list (GitHub, and Contact routed to a GitHub issue so no personal address is published), and the credit `Kirit Singh . 2026`. Outbound links are `target="_blank" rel="noopener noreferrer"`.
 
 Reuse the Stage-1 source-of-truth tokens from `01_programs/app/01_page.html`: warm background `#FAF9F7`, ink `#1E1B16`, teal accent `#3E7D8C`, line `#E7E3DC`, the `Newsreader` font stack for the wordmark, the `IBM Plex Mono` stack for the access control, and the existing focus ring. The landing must not call Google Fonts or any other third party; closeout may self-host admitted font files, otherwise the declared system fallbacks apply. The mark is the exact current tab geometry: a `16 × 16` viewBox, warm rounded-square background (`rx=4`), and centered teal circle (`cx=8`, `cy=8`, `r=4.6`). Do not use the unrelated purple-bolt `favicon.svg`.
 
