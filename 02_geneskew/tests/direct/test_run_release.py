@@ -159,17 +159,39 @@ class TestTheFourAssemblyAttacks:
             run_release.assemble(_Args(run, tmp_path))
 
     def test_a_SWAPPED_LANE_bundle_is_REFUSED(self, tmp_path):
-        """A temporal bundle relabelled `direct`: the counts still look right."""
+        """A temporal bundle re-badged as Direct: the lane counts would still look right.
+
+        The lane is the bundle's SCHEMA now, not a top-level `lane` key — so the swap that
+        has to be refused is a swapped `schema_version`. It is refused because a re-badged
+        bundle cannot produce the re-badged lane's identity: a temporal bundle carries
+        `bundle_id`, and Direct names its bundles `arm_bundle_run_id`. The counts never get
+        a chance to look right.
+        """
         run = F.complete_run(tmp_path)
         d = run["temporal"][0]
         inv = json.load(open(os.path.join(d, "arm_bundle.json")))
-        inv["lane"] = "direct"                     # now discovered as a 4th Direct bundle
+        inv["schema_version"] = "spot.stage02_direct_arm_bundle.v1"   # a 4th Direct bundle?
         with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
             json.dump(inv, fh, indent=2, sort_keys=True)
-        F.seal_release(run)
 
-        with pytest.raises(RunManifestError, match="exactly 3|exactly 6"):
+        # The refusal comes at the FIRST step that has to read the re-badged bundle — the
+        # inventory — and that is the point: it never reaches a stage where the counts could
+        # look right.
+        with pytest.raises(RunManifestError,
+                           match="arm_bundle_run_id|exactly 3|exactly 6"):
+            F.seal_release(run)
             run_release.assemble(_Args(run, tmp_path))
+
+    def test_an_UNKNOWN_bundle_schema_is_REFUSED_not_guessed(self, tmp_path):
+        """A fourth contract is a bundle nobody can read. It is refused, never inferred."""
+        run = F.complete_run(tmp_path)
+        d = run["direct"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        inv["schema_version"] = "spot.stage02_direct_arm_bundle.v2"   # one digit
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh, indent=2, sort_keys=True)
+        with pytest.raises(RunManifestError, match="names no known lane"):
+            run_release.discover(run["root"], "direct")
 
 
 class TestTheProducerShipsPENDINGAndStaysThatWay:

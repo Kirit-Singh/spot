@@ -52,6 +52,7 @@ import subprocess
 import sys
 from typing import Any, Optional
 
+from . import bundle_shapes as BS
 from . import release_inventory as RI
 from . import run_manifest
 from .arm_topology import LANES, RunManifestError, load_release
@@ -76,20 +77,21 @@ def _git(repo: str, *args: str) -> Optional[str]:
 
 
 def discover(root: str, lane: str) -> list[str]:
-    """Bundle directories for ONE lane. A directory is a bundle iff it says it is."""
+    """Bundle directories for ONE lane, by the bundle's OWN SCHEMA.
+
+    Not by a top-level `lane` key: only the temporal producer emits one. Direct names itself
+    `spot.stage02_direct_arm_bundle.v1` and pathway `spot.stage02_pathway_arm_bundle.v1`, and
+    an aggregate that looked for `lane` found neither — so a 15-bundle release was 6 bundles
+    and a fixture. The schema is the one field every producer does write.
+    """
     found = []
     for base, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        if "arm_bundle.json" not in files:
+        if BS.BUNDLE_FILE not in files:
             continue
-        try:
-            with open(os.path.join(base, "arm_bundle.json")) as fh:
-                if json.load(fh).get("lane") == lane:
-                    found.append(base)
-        except (OSError, ValueError):
-            raise RunManifestError(
-                f"{base}: arm_bundle.json is not readable JSON — a directory that cannot "
-                "be opened is not a bundle") from None
+        norm = BS.read(base)
+        if norm and norm["lane"] == lane:
+            found.append(base)
     return sorted(found)
 
 

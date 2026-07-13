@@ -12,6 +12,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import bundle_shapes as BS  # noqa: E402  (the three NATIVE bundle shapes)
 import verify_bundle_rules as B  # noqa: E402
 import verify_manifest_rules as R  # noqa: E402
 import verify_release_rules as W  # noqa: E402  (the W5-audit rules)
@@ -80,9 +81,23 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         pair_stored += R.pair_derived_keys(inv)
         batch_stored += R.batch_keys(inv)
 
-        # (c) the bundle is an ALL-ARM bundle for its context
-        ctx = inv.get("context") or {}
-        arms = inv.get("arms") or []
+        # (c) the bundle is an ALL-ARM bundle for its context.
+        #
+        # The context comes from the bundle's NATIVE shape, via the same normalizer the
+        # producer side uses — `inv.get("context")` is a temporal-ism, and reading it here
+        # gave Direct and pathway an EMPTY context, so `want_keys` was built over the wrong
+        # slots and the all-arm check compared two sets of keys that could never match.
+        try:
+            norm = BS.normalize(inv, where=bid)
+        except BS.RunManifestError as exc:
+            missing.append(str(exc))
+            continue
+        if norm["lane"] != lane:
+            missing.append(f"{bid}: the manifest calls this a {lane} bundle; its own schema "
+                           f"{norm['schema_version']!r} makes it {norm['lane']}")
+            continue
+        ctx = norm["context"]
+        arms = norm["arms"]
         want_keys = {R.arm_key(lane, p, dc, ctx)
                      for p in programs for dc in R.DESIRED_CHANGES}
         got_keys = [str(a.get("arm_key")) for a in arms]

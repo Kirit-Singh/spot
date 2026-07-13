@@ -357,11 +357,17 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
                                     for sid, genes in membership.items()}
         arms.append(arm)
 
+    # THE LANE'S NATIVE SHAPE — not a generic one. Direct names itself by `condition` +
+    # `arm_bundle_run_id`; temporal by `lane` + `bundle_id` + `context`; pathway by
+    # `condition` + `source` + `pathway_run_id`. A fixture that invented a common schema
+    # would agree with the consumer instead of the producer, and prove nothing.
     inv: dict[str, Any] = {
         "fixture": True,
-        "schema_version": "spot.stage02_arm_bundle.v1",
-        "lane": lane,
-        "context": ctx,
+        "schema_version": {
+            "direct": "spot.stage02_direct_arm_bundle.v1",
+            "temporal": "spot.stage02_temporal_arm_bundle.v1",
+            "pathway": "spot.stage02_pathway_arm_bundle.v1",
+        }[lane],
         "stage1_v3_release": {
             "release_canonical_sha256": staged["release_canonical_sha256"],
             "programs": sorted(progs),
@@ -370,6 +376,14 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         "n_arms": len(arms),
         "arms_are_independent": True,
     }
+    if lane == "direct":
+        inv["condition"] = ctx["condition"]
+    elif lane == "temporal":
+        inv["lane"] = "temporal"
+        inv["context"] = dict(ctx)
+    else:
+        inv["condition"] = ctx["condition"]
+        inv["source"] = ctx["gene_set_source"]
     if lane == "pathway":
         inv["bindings"] = bindings
         inv["gene_sets"] = dict(gene_set_identity(ctx["gene_set_source"]),
@@ -377,13 +391,16 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         inv["convergence"] = {
             "convergence_id": convergence_id,
             "sha256": _raw(os.path.join(out_dir, "convergence.json"))}
-    inv["bundle_id"] = f"FIXTURE-{_canon(inv)[:16]}"
+    # the lane's NATIVE id field
+    native_id = f"FIXTURE-{_canon(inv)[:16]}"
+    inv[{"direct": "arm_bundle_run_id", "temporal": "bundle_id",
+         "pathway": "pathway_run_id"}[lane]] = native_id
     arm_raw, _ = _write(os.path.join(out_dir, "arm_bundle.json"), inv)
 
     prov_raw, _ = _write(os.path.join(out_dir, prov_name), {
         "fixture": True,
         "schema_version": f"FIXTURE.spot.stage02_{lane}_provenance.v1",
-        "bundle_id": inv["bundle_id"],
+        "bundle_id": _norm(inv)["bundle_id"],
         "lane": lane,
         "context": dict(ctx),
         # W5 native: HOW the program axis was derived, bound so it is checkable
@@ -420,7 +437,7 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         "verifier_id": f"spot.stage02.{lane}_arm.producer_preflight.v1",
         "is_an_external_admission": False,
         "verdict": "pending_independent_verification",
-        "bundle_id": inv["bundle_id"],
+        "bundle_id": native_id,
         "binds": {"arm_bundle_sha256": arm_raw, "provenance_sha256": prov_raw},
         "checks": [{"gate": g, "status": "pass"} for g in pin["required_gates"]],
         "n_failed": 0,
@@ -482,6 +499,16 @@ PRODUCER_FILES_OF = {
 }
 
 
+def _norm(doc: dict) -> dict:
+    """Read a fixture bundle the way the CONSUMERS read a real one: through the normalizer.
+
+    The fixtures now wear each producer's NATIVE shape, so nothing here may reach for a
+    top-level `bundle_id`/`context` — only temporal has them.
+    """
+    from direct import bundle_shapes as BS
+    return BS.normalize(doc, where="fixture")
+
+
 def _bundle_entry(root: str, d: str, lane: str = "temporal") -> dict[str, Any]:
     rel_dir = os.path.relpath(d, root).replace(os.sep, "/")
     inv = json.load(open(os.path.join(d, "arm_bundle.json")))
@@ -498,9 +525,9 @@ def _bundle_entry(root: str, d: str, lane: str = "temporal") -> dict[str, Any]:
         p = os.path.join(d, rel)
         rankings[rel] = {"raw_sha256": _raw(p),
                          "canonical_sha256": _canon(json.load(open(p)))}
-    ctx = inv["context"]
+    ctx = _norm(inv)["context"]
     return {"bundle_key": "|".join(f"{k}={v}" for k, v in sorted(ctx.items())),
-            "bundle_id": inv["bundle_id"], "context": dict(ctx),
+            "bundle_id": _norm(inv)["bundle_id"], "context": dict(ctx),
             "relative_dir": rel_dir, "files": files, "rankings": rankings}
 
 

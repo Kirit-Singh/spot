@@ -116,13 +116,16 @@ def _bind_artifact(out_dir: str, binding: Any, what: str) -> dict[str, Any]:
 
 
 def bind_bundle(out_dir: str) -> dict[str, Any]:
-    """Bind ONE all-arm bundle: its context, its arms, its bindings, its admission."""
-    bundle = _load(os.path.join(out_dir, "arm_bundle.json"), "arm inventory")
+    """Bind ONE all-arm bundle: its context, its arms, its bindings, its admission.
 
-    lane = bundle.get("lane")
-    if lane not in LANES:
-        raise RunManifestError(
-            f"bundle declares lane {lane!r}; expected one of {list(LANES)}")
+    The lane, the id and the context come from ``bundle_shapes.normalize`` — each producer
+    names them differently, and only one of the three emits a top-level ``lane``.
+    """
+    from . import bundle_shapes as BS
+
+    bundle = _load(os.path.join(out_dir, "arm_bundle.json"), "arm inventory")
+    norm = BS.normalize(bundle, where=out_dir)
+    lane = norm["lane"]
     names = BUNDLE_FILES[lane]
 
     # A reusable arm may not carry a pair's ordering. REFUSED, not filtered: a bundle that
@@ -176,9 +179,9 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
 
     return {
         "lane": lane,
-        "bundle_id": str(bundle.get("bundle_id")),
+        "bundle_id": norm["bundle_id"],
         "out_dir": os.path.basename(out_dir.rstrip(os.sep)),
-        "context": bundle.get("context") or {},
+        "context": norm["context"],
         "arm_keys": sorted(str(a.get("arm_key")) for a in arms),
         "n_arms": len(arms),
         "stage1_v3_release": bundle.get("stage1_v3_release") or {},

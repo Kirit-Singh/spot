@@ -16,6 +16,7 @@ import shutil
 
 import fixtures_run_manifest as F
 import pytest
+from direct import bundle_shapes as BS
 from direct import run_manifest
 from direct import verify_run_manifest as V
 from direct.hashing import content_hash
@@ -319,8 +320,9 @@ class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
     @staticmethod
     def _forge(run, source, **fields):
         for d in run["pathway"]:
-            inv = json.load(open(os.path.join(d, "arm_bundle.json")))
-            if inv["context"]["gene_set_source"] != source:
+            # the pathway lane's NATIVE shape names this `source`, at the top level — there
+            # is no nested `context`; only temporal has one
+            if BS.read(d)["context"]["gene_set_source"] != source:
                 continue
             _patch(d, "arm_bundle.json",
                    lambda doc: doc["gene_sets"].update(fields))
