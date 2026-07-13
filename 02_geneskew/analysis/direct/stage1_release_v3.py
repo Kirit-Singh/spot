@@ -61,7 +61,30 @@ LOADER_ID = "spot.stage02.direct.stage01_v3_release_loader.v1"
 REQUIRED_COMPONENTS = ("registry_v3", "validation", "gate_spec",
                        SCORER_VIEW_COMPONENT, "effect_universe")
 
+# --------------------------------------------------------------------------- #
+# THE ADMITTED RELEASE. The loader below PROVES a release from its own bytes — self hash,
+# every component raw + canonical, the admitted set re-derived from base_portable. That
+# makes a release internally consistent; it does not make it THE release.
+#
+# A forger who reseals a release passes every one of those checks. So the authoritative
+# consumer path additionally pins WHICH release it is bound to, by raw bytes and by self
+# hash, as published by the INDEPENDENT Stage-1 audit of 539431dd.
+#
+# `admit` is opt-in (None = prove-from-bytes only) because the negative tests must be able
+# to build deliberately-broken synthetic releases and reach the invariant each one targets.
+# The authoritative path passes ADMITTED_STAGE1_V3 and a swapped release is refused by name.
+# --------------------------------------------------------------------------- #
+STAGE1_CONTRACT_COMMIT = "539431dd8d87a3d763fb69ab44ed44bc98631d5a"
+ADMITTED_STAGE1_V3 = {
+    "commit": STAGE1_CONTRACT_COMMIT,
+    "release_raw_sha256":
+        "0c336546db10746bba1569ccc6bef7dedf9679effd24e17d0c07a5ab04dbef73",
+    "release_self_sha256":
+        "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11",
+}
+
 REFUSE_NOT_V3 = "not_a_stage01_v3_release"
+REFUSE_NOT_ADMITTED = "the_release_is_not_the_admitted_stage1_v3_release"
 REFUSE_SELF_HASH = "release_self_hash_does_not_cover_its_own_bytes"
 REFUSE_COMPONENT_MISSING = "a_required_component_is_not_served_under_the_release_root"
 REFUSE_COMPONENT_RAW = "a_component_does_not_match_its_pinned_raw_sha256"
@@ -251,16 +274,32 @@ _KIND_FOR_LANE = {
 }
 
 
-def load(release_path: str, *, root: str, lane: str) -> Stage1V3Release:
+def load(release_path: str, *, root: str, lane: str,
+         admit: Optional[dict[str, Any]] = None) -> Stage1V3Release:
     """Load and PROVE the authoritative Stage-1 generic release.
 
     ``root`` is the EXPLICIT staged release root that component paths resolve under. It is a
     required argument and never inferred from the release's own location: the release is
     handed to Stage-2 as a staged copy, and a loader that guessed its root could be walked
     into a different tree by a relative path.
+
+    ``admit`` PINS WHICH RELEASE. Everything else this loader does proves a release is
+    internally consistent — and a forger who reseals one passes all of it. Pass
+    ``ADMITTED_STAGE1_V3`` on the authoritative path and a release that is not the one the
+    independent audit signed off is refused BY NAME. ``None`` keeps the loader generic, which
+    is what the synthetic negative fixtures need.
     """
     _require(os.path.exists(release_path), REFUSE_NOT_V3,
              f"Stage-1 v3 release not found: {os.path.basename(release_path)}")
+
+    if admit is not None:
+        raw = file_sha256(release_path)
+        declared = str(admit["release_raw_sha256"]).lower()
+        _require(raw == declared, REFUSE_NOT_ADMITTED,
+                 f"the release at {os.path.basename(release_path)!r} hashes to {raw}, not "
+                 f"the admitted {declared} (Stage-1 {str(admit['commit'])[:7]}). Proving a "
+                 "release consistent is not the same as proving it is THE release: a forger "
+                 "reseals a consistent one")
     with open(release_path) as fh:
         try:
             release = json.load(fh)
@@ -280,6 +319,15 @@ def load(release_path: str, *, root: str, lane: str) -> Stage1V3Release:
     _require(declared_self == derived_self, REFUSE_SELF_HASH,
              f"the release's {SELF_HASH_FIELD} does not cover its own bytes (declared "
              f"{declared_self}, independently derived {derived_self})")
+
+    # The admitted SELF hash, checked against the one we just DERIVED — not against the one
+    # the document declares. A release that was re-serialised (different bytes, same content)
+    # would slip past the raw pin above; this is what catches it.
+    if admit is not None:
+        want_self = str(admit["release_self_sha256"]).lower()
+        _require(derived_self == want_self, REFUSE_NOT_ADMITTED,
+                 f"the release's independently derived self hash is {derived_self}, not the "
+                 f"admitted {want_self} (Stage-1 {str(admit['commit'])[:7]})")
 
     components = release.get("components") or {}
     missing = [c for c in REQUIRED_COMPONENTS if c not in components]

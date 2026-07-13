@@ -266,6 +266,11 @@ def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
 
     axis = stage1_v3.bind_axis(v3, release)
     id_check = {
+        # WHICH contract produced this identity. Read by the verifier, which re-derives a v3
+        # run's question_id with the v3 recipe and a legacy run's with the legacy one — the
+        # two are different hashes of different content, and a verifier that applied the
+        # wrong one would report a mismatch on an honest run (or, worse, pass a forged one).
+        "contract": "stage1_v3",
         # The LIVE rule (m2). This carried STAGE1_SELECTION_ID_NOT_REDERIVABLE — a RETIRED
         # constant whose value literally begins "RETIRED:" — so every v3 run stamped its own
         # identity with the claim that its selection_id was a citation nobody could
@@ -274,6 +279,13 @@ def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
         "rule": stage1_v3.SELECTION_ID_RULE,
         "selection_id": v3.selection_id,
         "selection_id_rederived": stage1_v3.derive_selection_id(v3.raw),
+        # The CONTRACT'S question_id — re-derived from the biology it names, never carried.
+        # Stage-2 used to substitute its own selection_biology_sha256 here, so the identifier
+        # that says WHICH QUESTION was asked never travelled and was never checked.
+        "question_id": v3.question_id,
+        "question_id_rule_id": stage1_v3.QUESTION_ID_RULE_ID,
+        "question_id_rederived": stage1_v3.derive_question_id(v3.raw),
+        "endpoints": v3.bound["endpoints"],
         # RE-DERIVED, not carried: the run identity is about to bind this hash, and a hash
         # verified once then passed around as a string is a string.
         "full_contract_content_sha256": stage1_v3.reverify_full_contract_hash(v3.raw),

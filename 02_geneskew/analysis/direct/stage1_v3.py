@@ -63,7 +63,20 @@ from .hashing import content_hash, file_sha256
 
 SCHEMA_ID = "spot.stage01_selection.v3"
 # The PINNED schema. A schema that can be swapped is not a schema.
-SCHEMA_SHA256 = "f4c2c2cc83b739ffba48286e22a7471cb5f83f0ff15e06f2bb377817382ad8e8"
+#
+# This pin was STALE. It named a schema (`f4c2c2cc…`) that Stage-1 had already superseded,
+# and the only copy of those bytes lived on ONE developer's machine — so the gate validated
+# every contract against a schema no commit records and no auditor could read. The pin now
+# names the schema the repaired Stage-1 contract actually ships, and its bytes are checked
+# before it is used.
+SCHEMA_SHA256 = "f8104283d7139ed47059978751dbed33e8426c920ba0d8086082eda9c43f4c1d"
+STAGE1_CONTRACT_COMMIT = "539431dd8d87a3d763fb69ab44ed44bc98631d5a"
+
+# Named as RETIRED, not deleted: a reader who meets this hash in an archived artifact must
+# learn it was withdrawn, rather than conclude the pin never moved.
+RETIRED_SCHEMA_SHA256 = (
+    "RETIRED:f4c2c2cc83b739ffba48286e22a7471cb5f83f0ff15e06f2bb377817382ad8e8"
+    " — the pre-repair schema; it carried no question_id, no arms and no estimator block")
 
 STAGE1_METHOD_VERSION = "stage1-continuous-v3.0.1"
 
@@ -125,6 +138,9 @@ REFUSE_CONDITIONS = "condition_count_does_not_match_the_analysis_mode"
 REFUSE_SELECTION_ID = "selection_id_does_not_derive_from_its_own_canonical_content"
 REFUSE_V3_NOT_WIRED = "entry_point_does_not_define_the_v3_selection_flags"
 REFUSE_DEGENERATE_AXIS = "the_two_poles_are_the_same_axis"
+REFUSE_QUESTION_ID = "question_id_does_not_derive_from_the_biology_it_names"
+REFUSE_DUPLICATE_ENDPOINT = "a_cross_condition_comparison_names_one_condition_twice"
+REFUSE_ESTIMATOR_INCOHERENT = "the_estimator_block_contradicts_the_contract_it_rides_on"
 
 
 # --------------------------------------------------------------------------- #
@@ -175,6 +191,94 @@ def axis_identity(bound: dict[str, Any]) -> list[str]:
     return [i for pole in ("A", "B")
             for i in pole_identities(bio[pole]["program_id"], bio[pole]["direction"],
                                      conditions)]
+
+# --------------------------------------------------------------------------- #
+# THE CONTRACT'S ENDPOINTS — and why they are not `axis_identity`.
+#
+# Two different questions are asked of the same contract, and conflating them is what broke
+# this consumer:
+#
+#   * WHAT WAS ASKED (here). The ordered pair of ENDPOINTS. Pole A sits at conditions[0],
+#     pole B at conditions[-1] — for a within-condition selection those are the same
+#     condition; for a temporal one they are the FROM and the TO. This is the biological
+#     question, and it is what `question_id` hashes.
+#   * WHAT MUST BE MEASURED (`axis_identity`). Each pole at EVERY condition it is evaluated
+#     at, because a temporal pair is only executable if each pole is selectable at each
+#     endpoint it is compared across.
+#
+# The consumer used to refuse a contract whose two poles shared a (program, direction) —
+# full stop, in EVERY mode. But the endpoint disambiguates them: the SAME program in the
+# SAME direction at Rest vs Stim48hr is two distinct endpoints and a perfectly good temporal
+# question ("does this program's skew move with activation?"), and it is one Stage-1 emits.
+# Refusing it meant the consumer rejected valid science that the producer was shipping.
+#
+# The honest rule is the WHOLE tuple, on BOTH endpoints: refuse only when
+# (program, direction, condition) is IDENTICAL on both poles — one axis, named twice, whose
+# two arms are anti-correlated by construction.
+# --------------------------------------------------------------------------- #
+ENDPOINT_RULE_ID = "spot.stage01.endpoint_identity.a_at_first_b_at_last.v1"
+ENDPOINT_RULE = (
+    "pole A sits at conditions[0] and pole B at conditions[-1]; the two poles are the same "
+    "axis only when (program_id, direction, condition) is identical on BOTH endpoints — the "
+    "same program+direction at DIFFERENT conditions is a valid temporal question")
+
+
+def endpoints(doc: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """WHAT THE CONTRACT ASKED: the ordered (program, direction, condition) endpoints."""
+    c = doc["canonical_content"]
+    conds = list(c["conditions"])
+    return {
+        "A": {"program_id": str(c["A"]["program_id"]),
+              "direction": str(c["A"]["direction"]), "condition": str(conds[0])},
+        "B": {"program_id": str(c["B"]["program_id"]),
+              "direction": str(c["B"]["direction"]), "condition": str(conds[-1])},
+    }
+
+
+# --------------------------------------------------------------------------- #
+# THE QUESTION_ID — the contract's OWN biology-only identity, re-derived (not substituted).
+#
+# This consumer used to SUBSTITUTE its own `selection_biology_sha256` for the contract's
+# `question_id`: it never read the field, never re-derived it, and never checked it. So the
+# one identifier that says WHICH BIOLOGICAL QUESTION was asked travelled from Stage-1 to
+# Stage-3 completely unverified, and a contract could carry any question_id at all — or a
+# question_id belonging to a different question — without anything noticing.
+#
+# The recipe is Stage-1's, published in the contract's own schema and in its producer:
+#
+#   question_id = sha256(canonical_json({
+#       "A": {program_id, direction, condition: conditions[0]},
+#       "B": {program_id, direction, condition: conditions[-1]},
+#       "analysis_mode": mode}))[:16]
+#
+# It binds NO method and NO input, so the SAME biological question keeps ONE question_id
+# across method / registry / source revisions. That is exactly what makes it different from
+# `selection_id`, which hashes `canonical_content` and therefore DOES bind the scorer view,
+# the source h5ad and the method version. Both are carried, both are re-derived, and they
+# are never allowed to stand in for one another.
+# --------------------------------------------------------------------------- #
+QUESTION_ID_RULE_ID = "spot.stage01.question_id.sha256_of_ordered_biology_first16.v1"
+QUESTION_ID_RULE = (
+    "question_id = sha256(canonical_json({A:{program_id,direction,condition:conditions[0]}, "
+    "B:{program_id,direction,condition:conditions[-1]}, analysis_mode}))[:16] — biology "
+    "only, with NO method or input binding (that is selection_id's job)")
+QUESTION_ID_LEN = 16
+
+
+def question_content(doc: dict[str, Any]) -> dict[str, Any]:
+    """The EXACT ordered, biology-only content Stage-1 hashes. Nothing else may enter it."""
+    ends = endpoints(doc)
+    return {
+        "A": ends["A"],
+        "B": ends["B"],
+        "analysis_mode": str(doc["canonical_content"]["analysis_mode"]),
+    }
+
+
+def derive_question_id(doc: dict[str, Any]) -> str:
+    """Re-derive the question_id from the biology the contract names. Never read it."""
+    return content_hash(question_content(doc))[:QUESTION_ID_LEN]
+
 
 # THE RULE, published (m2). It was previously declared non-derivable and carried
 # unchecked; an independent audit published the recipe and it is now enforced.
@@ -290,10 +394,12 @@ def selection_biology(doc: dict[str, Any]) -> dict[str, Any]:
 def selection_biology_sha256(doc: dict[str, Any]) -> str:
     """Stage-2's OWN key for the biology it actually read.
 
-    Stage-1's ``selection_id`` derivation is not published in the frozen contract, so
-    Stage-2 cannot recompute it and does not pretend to. It keys its own results on this
-    instead, so two different selections can never share a stage2_run_id — whatever their
-    selection_ids happen to say.
+    This is a THIRD hash, and it is not a substitute for either contract id. Stage-1's
+    ``selection_id`` AND ``question_id`` are both re-derived and enforced above; this one is
+    Stage-2's own, so that two different selections can never share a stage2_run_id whatever
+    their contract ids happen to say. It once stood in for ``question_id`` — which meant the
+    contract's own question identity was never checked and never travelled. It does not any
+    more; the three are carried side by side and none may impersonate another.
     """
     return content_hash(selection_biology(doc))
 
@@ -364,24 +470,10 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
                         "contract names two different biologies, and whichever one is "
                         "read first decides what gets measured")
 
-    # ---- the two poles must be TWO AXES, not one axis named twice ----
-    # Identity is the WHOLE tuple (program, direction, condition) — see POLE_IDENTITY_RULE.
-    # The poles of a v3 contract are evaluated at the SAME conditions, so they are the same
-    # axis exactly when program AND direction agree. The same program in OPPOSITE directions
-    # is a legitimate axis and is not refused here: that is a biology question the contract
-    # is entitled to ask, and the bridge does not get a vote.
-    if (str(c["A"]["program_id"]), str(c["A"]["direction"])) == \
-            (str(c["B"]["program_id"]), str(c["B"]["direction"])):
-        _refuse(REFUSE_DEGENERATE_AXIS,
-                f"both poles are {c['A']['program_id']!r} in direction "
-                f"{c['A']['direction']!r} across conditions {list(c['conditions'])}, so "
-                "they are ONE axis. away_from_A and toward_B would be its two opposite "
-                "arms — anti-correlated by construction — and the convergence between them "
-                "would be an artefact of the contract, not a finding")
-
     # ---- the CONDITION COUNT is decided by the mode, not by the caller ----
     mode = str(c["analysis_mode"])
-    n_cond = len(c["conditions"])
+    conditions = [str(x) for x in c["conditions"]]
+    n_cond = len(conditions)
     if mode == MODE_WITHIN and n_cond != 1:
         _refuse(REFUSE_CONDITIONS,
                 f"{MODE_WITHIN} names {n_cond} condition(s); a within-condition estimate "
@@ -390,6 +482,53 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
         _refuse(REFUSE_CONDITIONS,
                 f"{MODE_TEMPORAL} names {n_cond} condition(s); a cross-condition "
                 "estimate compares exactly two, in order")
+
+    # An IMPOSSIBLE tuple: a cross-condition comparison of a condition with ITSELF. Stage-1
+    # de-duplicates its conditions before it decides the mode, so ["Rest","Rest"] collapses
+    # to within_condition and this contract could never have been produced. Left unrefused
+    # it would collapse both endpoints onto one condition and drive a difference-in-
+    # differences of Rest against Rest — a difference of nothing, reported as a measurement.
+    if mode == MODE_TEMPORAL and conditions[0] == conditions[-1]:
+        _refuse(REFUSE_DUPLICATE_ENDPOINT,
+                f"{MODE_TEMPORAL} names {conditions[0]!r} at BOTH endpoints. Stage-1 "
+                "de-duplicates conditions before choosing the mode, so this contract could "
+                "not have been produced by it; a cross-condition estimate of a condition "
+                "against itself is a difference of nothing")
+
+    # ---- the two poles must be TWO ENDPOINTS, not one endpoint named twice ----
+    # Identity is the WHOLE tuple (program, direction, condition) — see ENDPOINT_RULE. Pole A
+    # sits at conditions[0] and pole B at conditions[-1], so the SAME program in the SAME
+    # direction at DIFFERENT conditions is TWO endpoints and a valid temporal question: the
+    # consumer used to refuse exactly that, and so rejected science Stage-1 was shipping.
+    # The same program in OPPOSITE directions is likewise a legitimate axis — that is a
+    # biology question the contract is entitled to ask, and the bridge does not get a vote.
+    ends = endpoints(doc)
+    if ends["A"] == ends["B"]:
+        _refuse(REFUSE_DEGENERATE_AXIS,
+                f"both poles are the identical endpoint {ends['A']['program_id']!r} / "
+                f"{ends['A']['direction']!r} @ {ends['A']['condition']!r}, so they are ONE "
+                "axis. away_from_A and toward_B would be its two opposite arms — "
+                "anti-correlated by construction — and the convergence between them would "
+                "be an artefact of the contract, not a finding")
+
+    # ---- the QUESTION_ID must derive from the BIOLOGY it names ----
+    # Checked HERE — once the biology is known to be internally coherent (the two blocks
+    # agree) and well-formed (the endpoints are two real endpoints). A stale question_id on
+    # a contract whose blocks already contradict each other is a CONSEQUENCE; the split is
+    # the defect, and the refusal names the defect.
+    #
+    # The id itself used to be ignored entirely: the consumer substituted its own biology
+    # hash and never read the field. An id nobody recomputes is a label, and this label is
+    # the one that says WHICH QUESTION was asked — it travels to Stage-3 and it keys the
+    # science there.
+    declared_q = str(doc["question_id"])
+    derived_q = derive_question_id(doc)
+    if declared_q != derived_q:
+        _refuse(REFUSE_QUESTION_ID,
+                f"question_id is {declared_q!r} but the biology this contract names "
+                f"derives {derived_q!r} (rule: {QUESTION_ID_RULE}). A question_id that does "
+                "not follow from its own poles could be pointed at a different question and "
+                "keep its name — and Stage-3 keys on it")
 
     # ---- EVERY POLE, against the CURRENT effect universe ----
     for pole in ("A", "B"):
@@ -416,6 +555,26 @@ def validate(doc: dict[str, Any], schema: dict[str, Any],
         _refuse(REFUSE_MODE_ROUTE,
                 f"analysis_mode {mode!r} routes to {ESTIMATOR_FOR_MODE[mode]!r}, but the "
                 f"contract names estimator_id {estimator!r}")
+
+    # ---- the ESTIMATOR BLOCK must not contradict the contract it rides on ----
+    # The block was carried and never read. It names an estimator_id, an analysis_mode, an
+    # n_conditions and a status of its OWN, so a contract could route as within-condition at
+    # the top level while its bound estimator block said temporal — and whichever one a
+    # reader consulted decided what they thought had been measured. These are IMPOSSIBLE
+    # tuples: Stage-1 derives the block FROM the contract, so a disagreement means one of
+    # the two was edited afterwards.
+    est = doc["estimator"]
+    for field, expected in (("estimator_id", estimator),
+                            ("analysis_mode", mode),
+                            ("n_conditions", n_cond),
+                            ("status", str(doc["estimator_status"]))):
+        if str(est[field]) != str(expected):
+            _refuse(REFUSE_ESTIMATOR_INCOHERENT,
+                    f"the bound estimator block declares {field}={est[field]!r}, but the "
+                    f"contract declares {expected!r}. Stage-1 derives the block FROM the "
+                    "contract; a block that disagrees with it was edited afterwards, and a "
+                    "reader who trusted the block would believe a different measurement had "
+                    "been made")
 
     declared = str(doc["estimator_status"])
     built = estimator in IMPLEMENTED_ESTIMATORS
@@ -465,13 +624,28 @@ def bind(doc: dict[str, Any]) -> dict[str, Any]:
         "canonical_content_sha256": canonical_content_sha256(doc),
         "selection_full_sha256": doc["selection_full_sha256"],
         "full_contract_content_sha256": doc["full_contract_content_sha256"],
-        # ...and the key Stage-2 DOES use: the biology it actually read.
+        # THE CONTRACT'S OWN biology-only question identity. RE-DERIVED and CHECKED — never
+        # substituted. It is DISTINCT from selection_id (which binds the method, the scorer
+        # view and the source) and from selection_biology_sha256 (Stage-2's own key), and
+        # all three are carried so that none of them can quietly stand in for another.
+        "question_id": doc["question_id"],
+        "question_id_rederived": derive_question_id(doc),
+        "question_id_rule_id": QUESTION_ID_RULE_ID,
+        "question_id_rule": QUESTION_ID_RULE,
+        # WHAT WAS ASKED: the ordered endpoints the question_id is taken over.
+        "endpoints": endpoints(doc),
+        "endpoint_rule_id": ENDPOINT_RULE_ID,
+        # ...and the key Stage-2 DOES use for its own results: the biology it actually read.
         "selection_biology_sha256": selection_biology_sha256(doc),
         "biology": selection_biology(doc),
         "analysis_mode": c["analysis_mode"],
         "conditions": list(c["conditions"]),
         "estimator_id": doc["estimator_id"],
         "estimator_status": doc["estimator_status"],
+        # The METHOD the contract declares it was admitted against, carried verbatim so a
+        # verifier can compare it with the method Stage-2 actually executes. It is BOUND,
+        # not believed: Stage-2 decides what Stage-2 has built (IMPLEMENTED_ESTIMATORS).
+        "estimator": dict(doc["estimator"]),
         "execution_status": doc["execution_status"],
         "stage1_method_version": c["stage1_method_version"],
         "dataset_id": c["dataset_id"],
@@ -565,7 +739,12 @@ def as_selection(bound: dict[str, Any], doc: dict[str, Any],
         analysis_mode=str(bound["analysis_mode"]),
         conditions=conditions,
         analysis_condition=conditions[0],
-        question_id=str(bound["selection_biology_sha256"]),
+        # THE CONTRACT'S question_id — re-derived and enforced by `validate`. This used to be
+        # `selection_biology_sha256`: Stage-2 substituted its OWN key for the identifier the
+        # contract actually carries, so the question_id that reaches Stage-3 was never the
+        # one Stage-1 minted, and the contract's own field was never checked against
+        # anything at all.
+        question_id=str(bound["question_id"]),
         selection_id=str(bound["selection_id"]),
         registry_sha256=str(bound["registry_scorer_view_sha256"]),
         stage1_method_version=str(bound["stage1_method_version"]),
@@ -678,9 +857,16 @@ def binding_block(v3, full_contract_sha256: Optional[str] = None
     block = {
         "schema_version": v3.bound["schema_version"],
         "selection_id": v3.selection_id,
+        # BOTH ids travel, and they answer different questions: `question_id` says WHICH
+        # BIOLOGY was asked about (stable across method revisions), `selection_id` says WHICH
+        # CONTRACT asked it (bound to the scorer view, the source and the method version).
+        # A run that bound only one of them could not be re-attributed to the other.
+        "question_id": v3.question_id,
+        "question_id_rule_id": QUESTION_ID_RULE_ID,
         "selection_biology_sha256": v3.selection_biology_sha256,
         "analysis_mode": v3.analysis_mode,
         "conditions": list(v3.conditions),
+        "endpoints": v3.bound["endpoints"],
         "estimator_id": v3.estimator_id,
         "execution_status": v3.execution_status,
         "poles": {"A": {"program_id": v3.a.program_id, "direction": v3.a.direction},

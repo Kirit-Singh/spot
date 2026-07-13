@@ -22,18 +22,23 @@ import json
 import os
 import subprocess
 
+import fixtures_stage1_contract as S1
 import fixtures_v3_release as V3
 import pytest
 from direct import scorer_view, trust
 from direct import stage1_release_v3 as rel
 from fixtures_direct import _PINNED_LOCK
 
-# The frozen Stage-1 pins. Re-derived by the loader from bytes; asserted here so a drift in
-# either side is a loud test failure rather than a quiet re-attribution.
-REAL_SELF_HASH = "9bc851709595adb0953a3affffa8c2bbb1fd8355112fbd9565b4b97deb29866d"
+# The frozen Stage-1 pins, REPINNED to the repaired contract (539431dd). They named the
+# SUPERSEDED release (55899ac / self 9bc85170…), so Stage-2's release binding was stale in
+# exactly the way its schema pin was. Re-derived by the loader from bytes; asserted here so a
+# drift on either side is a loud failure rather than a quiet re-attribution.
+REAL_SELF_HASH = S1.RELEASE_SELF_SHA256
+REAL_RAW_SHA256 = S1.RELEASE_RAW_SHA256
 REAL_SCORER_VIEW = "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c"
 REAL_SCORER_PROJECTION = "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85"
-REAL_COMMIT = "55899ac5fb780cdbcc638092fde7a53478f92070"
+REAL_COMMIT = S1.STAGE1_COMMIT
+SUPERSEDED_COMMIT = "55899ac5fb780cdbcc638092fde7a53478f92070"
 REAL_ADMITTED = ["cd4_ctl_like", "diff_activated", "diff_checkpoint", "diff_memory",
                  "diff_naive", "tfh_like", "th17_like", "th1_like", "th2_like",
                  "treg_like"]
@@ -43,31 +48,8 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")
 
 
 def _stage_real_release(root: str) -> str:
-    """Materialise the genuine 55899ac release + components into a staged root."""
-    release_rel = "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json"
-    try:
-        blob = subprocess.run(["git", "-C", REPO, "show", f"{REAL_COMMIT}:{release_rel}"],
-                              capture_output=True, check=True).stdout
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pytest.skip(f"Stage-1 {REAL_COMMIT[:7]} is not fetched in this worktree")
-
-    dest = os.path.join(root, release_rel)
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    with open(dest, "wb") as fh:
-        fh.write(blob)
-
-    release = json.loads(blob)
-    for comp in release["components"].values():
-        path = comp.get("path")
-        if not path:
-            continue                       # declared, not served (the scores parquet)
-        out = os.path.join(root, path)
-        os.makedirs(os.path.dirname(out), exist_ok=True)
-        got = subprocess.run(["git", "-C", REPO, "show", f"{REAL_COMMIT}:{path}"],
-                             capture_output=True, check=True).stdout
-        with open(out, "wb") as fh:
-            fh.write(got)
-    return dest
+    """Materialise the genuine 539431dd release + components into a staged root."""
+    return S1.stage_release(root)
 
 
 class TestTheRealStage1Release:
@@ -77,7 +59,57 @@ class TestTheRealStage1Release:
     def loaded(self, tmp_path):
         root = str(tmp_path / "staged")
         path = _stage_real_release(root)
-        return rel.load(path, root=root, lane="production")
+        # ADMITTED, not merely proved: the authoritative path pins WHICH release it loads.
+        return rel.load(path, root=root, lane="production",
+                        admit=rel.ADMITTED_STAGE1_V3)
+
+    def test_the_release_RAW_bytes_are_the_ones_the_audit_signed(self, tmp_path):
+        root = str(tmp_path / "staged")
+        assert rel.file_sha256(_stage_real_release(root)) == REAL_RAW_SHA256
+
+    def test_the_admitted_pin_names_the_repaired_contract_not_the_superseded_one(self):
+        assert rel.ADMITTED_STAGE1_V3["commit"] == REAL_COMMIT != SUPERSEDED_COMMIT
+        assert rel.ADMITTED_STAGE1_V3["release_raw_sha256"] == REAL_RAW_SHA256
+        assert rel.ADMITTED_STAGE1_V3["release_self_sha256"] == REAL_SELF_HASH
+
+    def test_the_SUPERSEDED_release_is_REFUSED_by_the_admission_pin(self, tmp_path):
+        """A forger reseals a CONSISTENT release. Consistency is not identity.
+
+        The superseded 55899ac release passes every byte-proof this loader makes — its self
+        hash covers its own bytes, its components match their pins. Only the admission pin
+        can tell it apart from the release the audit actually signed.
+        """
+        root = str(tmp_path / "staged")
+        release_rel = ("01_programs/analysis/stage2_bridge/release/"
+                       "stage01_v3_release.json")
+        try:
+            blob = subprocess.run(
+                ["git", "-C", REPO, "show", f"{SUPERSEDED_COMMIT}:{release_rel}"],
+                capture_output=True, check=True).stdout
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pytest.skip(f"Stage-1 {SUPERSEDED_COMMIT[:7]} is not fetched in this worktree")
+        dest = os.path.join(root, release_rel)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as fh:
+            fh.write(blob)
+        for comp in json.loads(blob)["components"].values():
+            path = comp.get("path")
+            if not path:
+                continue
+            out = os.path.join(root, path)
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            got = subprocess.run(["git", "-C", REPO, "show",
+                                  f"{SUPERSEDED_COMMIT}:{path}"],
+                                 capture_output=True, check=True).stdout
+            with open(out, "wb") as fh:
+                fh.write(got)
+
+        with pytest.raises(rel.Stage1ReleaseError) as exc:
+            rel.load(dest, root=root, lane="production", admit=rel.ADMITTED_STAGE1_V3)
+        assert exc.value.reason == rel.REFUSE_NOT_ADMITTED
+
+        # ...and WITHOUT the pin it loads perfectly happily. That is the whole point.
+        assert rel.load(dest, root=root, lane="production") is not None
 
     def test_the_authoritative_v3_release_LOADS(self, loaded):
         assert loaded.kind == "production"

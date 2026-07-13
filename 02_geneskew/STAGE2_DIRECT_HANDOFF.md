@@ -55,9 +55,12 @@ counts, and found two defects of mine in the module splits (a `NameError` under
 
 ### 1. Gate B — Stage-1 v3 selection adapter (`stage1_v3.py`)
 
-Validates against the **pinned** schema (`f4c2c2cc…`, checked before use — a schema that
-can be swapped validates whatever the swapper wanted). Routes `within_condition`; refuses
-`temporal_cross_condition` as `awaiting_estimator`.
+Validates against the **pinned** schema (`f8104283…` — the repaired Stage-1 contract at
+`539431dd`; checked before use, because a schema that can be swapped validates whatever the
+swapper wanted). The previous pin, `f4c2c2cc…`, was **stale**: it named a superseded schema
+whose only copy lived outside the repo, and it carried no `question_id`, no `arms` and no
+`estimator` block. Routes `within_condition` and `temporal_cross_condition`; re-derives and
+enforces BOTH contract ids (`question_id`, `selection_id`).
 
 That refusal is the most important thing in the module. The two estimators answer
 different questions, and the within-condition projection would happily consume a temporal

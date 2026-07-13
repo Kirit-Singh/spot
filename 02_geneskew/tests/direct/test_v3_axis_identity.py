@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import os
 
+import fixtures_stage1_contract as S1
 import pytest
 from direct import stage1_v3 as G
 from test_cli_v3 import GHOST_A, GHOST_B, v3_run  # noqa: F401  (fixture)
@@ -94,12 +95,34 @@ class TestADegenerateAxisIsREFUSED:
             G.validate(doc, schema)
         assert exc.value.reason == G.REFUSE_DEGENERATE_AXIS
 
-    def test_it_is_refused_for_a_TEMPORAL_contract_too(self, schema):
-        doc = emit(a="prog_alpha", dir_a="low", b="prog_alpha", dir_b="low",
-                   mode=G.MODE_TEMPORAL, conditions=["Rest", "Stim48hr"])
+    def test_the_SAME_program_and_direction_at_DIFFERENT_times_is_ADMITTED(self, schema):
+        """THE INVERTED TEST — this file used to assert the opposite, against its own rule.
+
+        The docstring at the top of this module states it plainly: *the same program and
+        direction at a DIFFERENT condition is a DIFFERENT axis*. The test that stood here
+        asserted that such a contract was REFUSED as degenerate — so the consumer rejected
+        the very comparison the temporal estimator exists to make ("does this program's skew
+        move between Stim8hr and Stim48hr?"), and Stage-1 was emitting it.
+
+        Pole A sits at conditions[0] and pole B at conditions[-1]. Two different endpoints
+        are two different axes, whatever the program and direction say.
+        """
+        bound = G.validate(emit(a="prog_alpha", dir_a="low", b="prog_alpha", dir_b="low",
+                                mode=G.MODE_TEMPORAL,
+                                conditions=["Stim8hr", "Stim48hr"]), schema)
+        assert bound["endpoints"]["A"] == {"program_id": "prog_alpha",
+                                           "direction": "low", "condition": "Stim8hr"}
+        assert bound["endpoints"]["B"] == {"program_id": "prog_alpha",
+                                           "direction": "low", "condition": "Stim48hr"}
+        assert bound["endpoints"]["A"] != bound["endpoints"]["B"]
+
+    def test_a_TEMPORAL_contract_naming_ONE_condition_TWICE_is_refused(self, schema):
+        """The endpoints would collapse: a difference-in-differences of Rest against Rest."""
+        doc = emit(a="prog_alpha", dir_a="high", b="prog_beta", dir_b="low",
+                   mode=G.MODE_TEMPORAL, conditions=["Rest", "Rest"])
         with pytest.raises(G.SelectionV3Error) as exc:
             G.validate(doc, schema)
-        assert exc.value.reason == G.REFUSE_DEGENERATE_AXIS
+        assert exc.value.reason == G.REFUSE_DUPLICATE_ENDPOINT
 
     def test_the_SAME_program_in_OPPOSITE_directions_is_a_real_axis_and_ADMITS(
             self, schema):
@@ -116,12 +139,20 @@ class TestADegenerateAxisIsREFUSED:
 
 
 def _directed(doc, dir_a, dir_b):
-    """The same contract with explicit pole directions, resealed so it stays self-consistent."""
+    """The same contract with explicit pole directions, resealed so it stays self-consistent.
+
+    The direction is part of the BIOLOGY, so changing it moves the question_id and the arms'
+    desired_change. An honest producer re-derives both; dropping them and re-completing is
+    how we say that. (Leaving a stale question_id here would test the question_id gate by
+    accident, instead of the selectability evidence this file is about.)
+    """
     doc = copy.deepcopy(doc)
     for pole, direction in (("A", dir_a), ("B", dir_b)):
         doc["canonical_content"][pole]["direction"] = direction
         doc["poles"][pole]["direction"] = direction
-    return reseal(doc)
+    for derived in ("question_id", "arms", "estimator"):
+        doc.pop(derived, None)
+    return reseal(S1.complete(doc))
 
 
 class TestTheSelectabilityEvidenceCarriesTheWholeTuple:

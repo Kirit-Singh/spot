@@ -282,16 +282,59 @@ def verify_stage1_gates(binding, by_sha, axis_doc, prov, cond, rep):
                   prov.get("stage3_eligible") is False)
 
 
-def verify_identity(prov, binding, axis_doc, run_dir, rep):
-    q = R.content_sha256({
+def _v3_question_id(axis_doc, v3):
+    """The v3 recipe, re-derived from the axis THAT ACTUALLY RAN.
+
+    A v3 contract's question_id hashes the ordered ENDPOINTS — pole A at conditions[0], pole
+    B at conditions[-1] — plus the analysis_mode. It is 16 hex and carries no lane prefix.
+    That is a different hash of different content from the legacy id below, so a verifier
+    that applied the legacy recipe to a v3 run would call an honest run forged.
+
+    The BIOLOGY comes from ``axis_doc`` — the axis the run actually screened, panels and all
+    — and never from the contract's own say-so. The ORDER and the MODE come from the v3
+    binding block, which is hashed into ``run_binding_sha256`` and therefore into the run id:
+    editing it to match a forged question_id renames the run's own directory.
+    """
+    conds = list(v3["conditions"])
+    return R.content_sha256({
         "A": {"program_id": axis_doc["A"]["program_id"],
-              "direction": axis_doc["A"]["direction"]},
+              "direction": axis_doc["A"]["direction"], "condition": conds[0]},
         "B": {"program_id": axis_doc["B"]["program_id"],
-              "direction": axis_doc["B"]["direction"]},
-        "analysis_condition": prov["analysis_condition"]})[:32]
-    prefix = {"synthetic": "fx_", "research_only": "rq_"}.get(binding["lane"], "")
-    rep.check("question_id re-derives from the biology alone",
-              prov["question_id"] == prefix + q)
+              "direction": axis_doc["B"]["direction"], "condition": conds[-1]},
+        "analysis_mode": v3["analysis_mode"]})[:16]
+
+
+def verify_identity(prov, binding, axis_doc, run_dir, rep):
+    # WHICH contract drove this run decides WHICH recipe re-derives its question_id. The two
+    # are not interchangeable: the legacy id is 32 hex over (poles, analysis_condition) with
+    # a lane prefix; the v3 id is 16 hex over the ordered endpoints and the mode. A v3 run
+    # was previously unverifiable here — it stamped a 64-hex biology hash that no recipe on
+    # this path could reproduce — so this check could only ever have failed on it.
+    #
+    # Branched on the RUN BINDING, not on a free-standing provenance field: the binding is
+    # hashed into the run id, so a run cannot lie about which contract drove it in order to
+    # be checked by the laxer recipe.
+    v3 = binding.get("stage1_v3")
+    if v3:
+        rep.check("question_id re-derives from the v3 biology alone (ordered endpoints)",
+                  prov["question_id"] == _v3_question_id(axis_doc, v3))
+        # ...and the endpoints the contract bound must be the biology that actually ran. The
+        # question_id above is derived from the AXIS, so a v3 block naming other poles would
+        # otherwise sit in the run identity unchallenged.
+        rep.check("the v3 endpoints name the axis that actually ran",
+                  all(v3["endpoints"][p]["program_id"] == axis_doc[p]["program_id"]
+                      and v3["endpoints"][p]["direction"] == axis_doc[p]["direction"]
+                      for p in ("A", "B")))
+    else:
+        q = R.content_sha256({
+            "A": {"program_id": axis_doc["A"]["program_id"],
+                  "direction": axis_doc["A"]["direction"]},
+            "B": {"program_id": axis_doc["B"]["program_id"],
+                  "direction": axis_doc["B"]["direction"]},
+            "analysis_condition": prov["analysis_condition"]})[:32]
+        prefix = {"synthetic": "fx_", "research_only": "rq_"}.get(binding["lane"], "")
+        rep.check("question_id re-derives from the biology alone",
+                  prov["question_id"] == prefix + q)
     full = R.content_sha256(binding)
     rep.check("run_binding_sha256 is the hash of the binding content",
               full == prov["run_binding_sha256"])
