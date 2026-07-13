@@ -202,3 +202,91 @@ def mask_rows_for_emit(est: Estimate, mask: dict, universe: Iterable[str],
                              r["target_id"], str(r["masked_gene_ensembl"]),
                              r["mask_reason"], str(r["guide_id"])))
     return rows
+
+
+# --------------------------------------------------------------------------- #
+# THE CANONICAL MASK TABLE — one order, used to serialize AND to hash.
+#
+# W10's counterexample: the bound mask hash was taken over the rows in the order the producer
+# happened to build them (`mask_rows_for_emit` sorts only WITHIN one estimate; the full list is
+# a concatenation in target-iteration order), while the shipped `masks.parquet` was written
+# through a sort over six of the fourteen identity columns.
+#
+# Two consequences, and they are the same defect seen from either end:
+#
+#   * a verifier reading the shipped file could NOT reproduce `mask_sha256` — the one thing
+#     binding it exists to permit;
+#   * the same rows in a different order gave a DIFFERENT bound hash, so the bundle's identity
+#     moved without a single number changing.
+#
+# The six-column sort was not even a total order: two rows tying on it were left in whatever
+# order the producer iterated, so the shipped BYTES were input-order-dependent too.
+#
+# So there is now ONE canonical table. It is sorted over the FULL identity column tuple, the
+# parquet is serialized FROM it, and the hash is taken OF it. A reader of the file can apply
+# the same projection and get the bound hash — which is the whole point.
+# --------------------------------------------------------------------------- #
+MASK_ORDER_RULE_ID = "spot.stage02.direct.mask_row_order.full_identity_columns.v1"
+MASK_ORDER_RULE = (
+    "mask rows are ordered by the FULL identity column tuple (MASK_ROW_COLUMNS), nulls last "
+    "within each column; the shipped parquet is serialized from that exact table and "
+    "mask_sha256 is the canonical content hash of that exact table")
+
+# Every column that identifies a mask row. The run id is NOT one of them: it is assigned after
+# the mask is known, and a mask that changed when it was named would not be a mask.
+MASK_ROW_COLUMNS = (
+    "estimate_type", "estimate_id", "released_estimate_id", "target_id",
+    "target_ensembl", "condition", "donor_pair", "guide_id",
+    "masked_gene_ensembl", "mask_reason", "distance", "in_gene_universe",
+    "source_row_hash", "mask_unresolved_reason",
+)
+
+RUN_ID_COLUMNS = ("run_id", "arm_bundle_run_id")
+
+
+def _norm(v: Any) -> Any:
+    """The value as a READER of the shipped parquet must see it.
+
+    Parquet round-trips a missing float to NaN and an integer to numpy int64, so hashing the
+    in-memory dicts would bind numbers nobody reading the file could reproduce — the same
+    "a count nobody can recount" defect this lane has been bitten by before.
+    """
+    if isinstance(v, (str, bytes)):
+        return v.decode() if isinstance(v, bytes) else v
+    if hasattr(v, "item"):                       # numpy / pandas scalar -> python primitive
+        try:
+            v = v.item()
+        except (ValueError, AttributeError):
+            pass
+    if v is None:
+        return None
+    try:
+        if v != v:                               # NaN, and pandas NA
+            return None
+    except (TypeError, ValueError):
+        return None
+    if isinstance(v, bool):
+        return bool(v)
+    if isinstance(v, float):
+        return float(v)
+    if isinstance(v, int):
+        return int(v)
+    return str(v)
+
+
+def _order_key(row: dict[str, Any]) -> tuple:
+    """A TOTAL order over the identity columns. Nulls last, and never a tie left to chance."""
+    return tuple((row[c] is None, "" if row[c] is None else str(row[c]))
+                 for c in MASK_ROW_COLUMNS)
+
+
+def canonical_mask_rows(rows: Iterable[dict]) -> list[dict]:
+    """THE mask table: projected onto the identity columns, normalised, totally ordered."""
+    out = [{c: _norm(r.get(c)) for c in MASK_ROW_COLUMNS} for r in rows]
+    out.sort(key=_order_key)
+    return out
+
+
+def mask_content_sha256(rows: Iterable[dict]) -> str:
+    """The mask's content hash, taken over the canonical table the producer also ships."""
+    return content_hash(canonical_mask_rows(rows))

@@ -53,6 +53,25 @@ from . import manifest as mf
 from . import projection as proj
 from . import run_screen as rs
 from . import universe as uni
+
+# THE NATIVE FILE SET lives in `arm_artifacts` — "what the bundle ships" is a thing with a
+# definition, not a list of string literals inside a build function. Re-exported here because
+# `run_arms.MASKS_FILE` is the name W3 and the verifier already reach for.
+from .arm_artifacts import (
+    BUNDLE_FILE,
+    CONTRIB_FILE,
+    DONOR_SUPPORT_FILE,
+    GUIDE_SUPPORT_FILE,
+    INPUTS_FILE,
+    MASKS_FILE,
+    PROVENANCE_FILE,
+    ROWS_FILE,
+    UNIVERSE_FILE,
+    VERDICT_PENDING,
+    VERIFICATION_FILE,
+    artifact_manifest,
+    verification_placeholder,
+)
 from .hashing import canonical_json, content_hash, file_sha256, sha256_hex
 
 SCHEMA_REQUEST = "spot.stage02_arm_bundle_request.v1"
@@ -60,69 +79,10 @@ SCHEMA_PROVENANCE = "spot.stage02_arm_bundle_provenance.v1"
 RUNNER_ID = "spot.stage02.direct.all_arm_runner.v1"
 BUNDLE_RUN_ID_LEN = 16
 
-SCHEMA_VERIFICATION = "spot.stage02_arm_bundle_verification.v1"
-
-# THE NATIVE FILE SET. These names are the interface W3 reads and W10 verifies; they are not
-# an implementation detail of this module. `verification.json` is written as a PLACEHOLDER —
-# the producer must never admit its own output.
-ROWS_FILE = "arms.parquet"
-MASKS_FILE = "masks.parquet"
-CONTRIB_FILE = "contributing_guides.parquet"
-GUIDE_SUPPORT_FILE = "guide_support.parquet"
-DONOR_SUPPORT_FILE = "donor_support.parquet"
-INPUTS_FILE = "input_manifest.json"
-UNIVERSE_FILE = "gene_universe.json"
-BUNDLE_FILE = "arm_bundle.json"
-PROVENANCE_FILE = "provenance.json"
-VERIFICATION_FILE = "verification.json"
-
-VERDICT_PENDING = "pending_independent_verification"
-
 
 def _raw_of(path: Optional[str]) -> Optional[str]:
     """The raw byte hash of a pinned input, or None when it was not supplied."""
     return file_sha256(path) if path and os.path.exists(path) else None
-
-
-def artifact_manifest(out_dir: str) -> list[dict[str, Any]]:
-    """Every file this bundle shipped, by RELATIVE name and raw hash.
-
-    Relative, always: a machine-local path in an artifact is a citation nobody else can
-    follow, and it would make the same science produced on two hosts cite two different
-    bundles.
-    """
-    return sorted(
-        [{"name": name, "size_bytes": os.path.getsize(os.path.join(out_dir, name)),
-          "raw_sha256": file_sha256(os.path.join(out_dir, name))}
-         for name in os.listdir(out_dir) if name != VERIFICATION_FILE],
-        key=lambda e: e["name"])
-
-
-def verification_placeholder(bundle_run_id: str, doc: dict[str, Any]) -> dict[str, Any]:
-    """NOT a verdict. The slot an INDEPENDENT verifier fills, and the producer never does.
-
-    A generator that admits its own output is not a gate — it is the same process asserting
-    twice. So this ships un-admitted, names no verifier, and states the files a verifier must
-    read back off disk. Whoever replaces it must be code that did not produce these bytes.
-    """
-    return {
-        "schema_version": SCHEMA_VERIFICATION,
-        "arm_bundle_run_id": bundle_run_id,
-        "verifier_id": None,
-        "verdict": VERDICT_PENDING,
-        "admitted": False,
-        "self_admitted": False,
-        "produced_by": RUNNER_ID,
-        "verified_paths": [BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE, MASKS_FILE,
-                           CONTRIB_FILE, GUIDE_SUPPORT_FILE, DONOR_SUPPORT_FILE,
-                           INPUTS_FILE, UNIVERSE_FILE],
-        # what a verifier is expected to re-derive, stated by the producer as a CLAIM —
-        # never as evidence that it holds
-        "arm_rows_sha256": doc["arm_rows_sha256"],
-        "n_expected_arm_slots": doc["n_expected_arm_slots"],
-        "n_arm_slots": doc["n_arm_slots"],
-        "n_arm_rows": doc["n_arm_rows"],
-    }
 
 
 def request_block(args, ctx: dict[str, Any], view: dict[str, Any]) -> dict[str, Any]:
@@ -288,7 +248,12 @@ def build_bundle(args) -> dict[str, Any]:
     manifest = arm_inputs.bundle_input_manifest(args)
     arm_inputs.assert_no_pair_input(manifest)
 
-    mask_sha = emit.mask_content_sha256(scanned["mask_rows"])
+    # ONE canonical mask table: the parquet is serialized FROM it and mask_sha256 is taken OF
+    # it. The old binding hashed the rows in the order the producer happened to build them
+    # while the file shipped them under a different sort — so a verifier reading masks.parquet
+    # could not reproduce the hash, and reordering identical rows moved the bundle id.
+    canonical_masks = masks.canonical_mask_rows(scanned["mask_rows"])
+    mask_sha = masks.mask_content_sha256(scanned["mask_rows"])
     binding = {
         "runner_id": RUNNER_ID,
         "lane": ctx["lane"],
@@ -318,7 +283,10 @@ def build_bundle(args) -> dict[str, Any]:
         "target_identity_map": identity.binding_block(
             getattr(args, "target_identity_map", None)),
         "mask_sha256": mask_sha,
-        "n_mask_rows": len(scanned["mask_rows"]),
+        # WHICH recipe produced that hash. A hash whose ordering rule is not named is a number
+        # nobody else can recompute, however carefully they read the file.
+        "mask_order_rule_id": masks.MASK_ORDER_RULE_ID,
+        "n_mask_rows": len(canonical_masks),
         "support_contract": ctx["support_contract"],
         "evidence_domain": rs._domain_block(ctx),
         "release_gate": verdict["release_gate"],
@@ -334,8 +302,9 @@ def build_bundle(args) -> dict[str, Any]:
     os.makedirs(out_dir, exist_ok=True)
     for r in rows:
         r["arm_bundle_run_id"] = bundle_run_id
-    for evidence in ("mask_rows", "contrib_rows", "guide_rows", "donor_rows"):
+    for evidence in ("contrib_rows", "guide_rows", "donor_rows"):
         arm_support.stamp(scanned[evidence], bundle_run_id)
+    arm_support.stamp(canonical_masks, bundle_run_id)
 
     emit.write_json(os.path.join(out_dir, BUNDLE_FILE),
                     dict(doc, arm_bundle_run_id=bundle_run_id))
@@ -345,9 +314,10 @@ def build_bundle(args) -> dict[str, Any]:
     # THE EVIDENCE SHIPS. Binding the hash of bytes nobody can hold is the same defect as
     # citing a gene-set file that only exists on the producer's disk: a verifier could check
     # the mask hashed to X and have no way to obtain X.
-    emit.write_parquet(scanned["mask_rows"], os.path.join(out_dir, MASKS_FILE),
-                       ["estimate_type", "estimate_id", "target_id",
-                        "masked_gene_ensembl", "mask_reason", "guide_id"])
+    # sort_by=[] ON PURPOSE: these rows are ALREADY the canonical table, in the one order the
+    # bound hash was taken over. Re-sorting here on a partial key — six of the fourteen
+    # identity columns — is exactly what let the shipped order drift from the hashed one.
+    emit.write_parquet(canonical_masks, os.path.join(out_dir, MASKS_FILE), [])
     emit.write_parquet(scanned["contrib_rows"], os.path.join(out_dir, CONTRIB_FILE),
                        ["estimate_type", "estimate_id", "target_id", "guide_id"])
     emit.write_parquet(scanned["guide_rows"], os.path.join(out_dir, GUIDE_SUPPORT_FILE),
@@ -384,7 +354,7 @@ def build_bundle(args) -> dict[str, Any]:
     # gate. This is a PLACEHOLDER: an independent verifier reads the files back off disk and
     # replaces it with a real verdict. Until it does, the bundle is not admitted.
     emit.write_json(os.path.join(out_dir, VERIFICATION_FILE),
-                    verification_placeholder(bundle_run_id, doc))
+                    verification_placeholder(bundle_run_id, doc, RUNNER_ID))
 
     return {
         "arm_bundle_run_id": bundle_run_id,

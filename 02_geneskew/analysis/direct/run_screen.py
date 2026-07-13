@@ -587,6 +587,21 @@ def build_screen(args) -> dict:
     ordered = proj.emit_order(screen_rows)
 
     # ---- identifiers: masks and inputs are bound BEFORE the run is named ----
+    #
+    # SUPERSEDED, AND KNOWINGLY LEFT ALONE. `emit.mask_content_sha256` hashes the mask rows in
+    # the order they were BUILT, while `masks.parquet` below is written under a partial
+    # `sort_by`. So this pair screen's `mask_sha256` is taken over an order its own shipped
+    # file does not preserve: a reader of that file cannot reproduce this number, and the same
+    # rows in a different order would give a different run_id.
+    #
+    # The reusable-bundle lane fixes this properly — `masks.canonical_mask_rows` defines ONE
+    # total order over the full identity columns, serializes the parquet from that exact table
+    # and hashes that exact table (see `masks.MASK_ORDER_RULE_ID`, used by `run_arms`).
+    #
+    # It is NOT retrofitted here on purpose: changing this call changes every legacy run_id,
+    # and this pair screen is superseded rather than production. Silently re-identifying
+    # artifacts other work is pinned to would be a worse defect than the one it fixes. The
+    # legacy screen is NOT release-grade until it adopts the canonical mask order.
     mask_sha = emit.mask_content_sha256(mask_rows)
     guide_manifest_block = mf.provenance_block(manifest_doc)
     binding = runid.build_run_binding(
