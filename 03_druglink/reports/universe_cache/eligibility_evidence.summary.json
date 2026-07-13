@@ -1,0 +1,4 @@
+{
+  "note": "compact summary; full target_eligibility_evidence.json (3.5MB, sha in manifest) stays in out-of-Git data cache",
+  "eligibility_evidence_sha256_bound_in_manifest": true
+}

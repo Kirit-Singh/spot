@@ -1,0 +1,53 @@
+{
+  "content_sha256": "fbe09b9e87124e78c35cd984186180d949c0f23776184fed91b60e8fcdad2ee6",
+  "coverage": {
+    "coverage_denominator_note": "general drug evidence is built over ENSG targets with UNAMBIGUOUS identity and NULL-variant assertions only; symbol-only => unsupported_namespace; shared-accession => ambiguous_identity; variant assertions are preserved but non-rankable; never reported as ENSG coverage",
+    "n_ambiguous_identity": 86,
+    "n_drug_evidence": 505,
+    "n_ensg": 11522,
+    "n_general_drug_assertions": 2227,
+    "n_no_drug_evidence": 10931,
+    "n_symbol_only_unsupported_namespace": 4,
+    "n_targets_total": 11526,
+    "n_variant_specific_assertions": 29
+  },
+  "created_at": "2026-07-13T07:28:10Z",
+  "extraction": {
+    "eligibility_evidence_sha256": "cf5d70884240d2e8ba9c2c5c60a986cf1ec665e73d2ae821d47495dff174167c",
+    "extraction_query_sha256": "a5ad29d22c0edba601c00ab2b95845aadabf5bd25c663dabbf48159650d98be0",
+    "store_rows_sha256": "6c88b53a0bf2752149bfb033c2c7f8ff7c3aa2bbd28d4316a292a38693ef31e1"
+  },
+  "license_packaging": {
+    "cache_data_is_not_code_mit_license": true,
+    "chembl_derived_layer_license": "CC BY-SA 3.0",
+    "sharealike_scope_is_a_release_compliance_question": true,
+    "uniprot_derived_layer_license": "CC BY 4.0"
+  },
+  "releases": {
+    "chembl": {
+      "attribution": "ChEMBL (https://www.ebi.ac.uk/chembl/), EMBL-EBI. Data licensed CC BY-SA 3.0. REQUIRED.ATTRIBUTION: preserve ChEMBL IDs and clearly display the ChEMBL release. Cite Mendez D. et al., Nucleic Acids Res. 2019;47(D1):D930-D940, DOI 10.1093/nar/gky1075.",
+      "derived_layer": "chembl_drug_evidence",
+      "doi": "10.6019/CHEMBL.database.37",
+      "license": "CC BY-SA 3.0",
+      "source_release": "CHEMBL_37",
+      "source_sha256": "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281"
+    },
+    "uniprot": {
+      "attribution": "The UniProt Consortium. UniProtKB (https://www.uniprot.org). Database content licensed CC BY 4.0.",
+      "derived_layer": "uniprot_identity",
+      "license": "CC BY 4.0",
+      "source_release": "2026_02",
+      "source_sha256": "0741a54986fa746e36f4377fc316cdc81e65c75aa770c8f22fc26e93f1cc6ca5"
+    }
+  },
+  "run_independent": true,
+  "schema_version": "spot.stage03_universe_manifest.v1",
+  "store_id": "446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d",
+  "universe_binding": {
+    "n_ensg": 11522,
+    "n_symbol_only": 4,
+    "n_targets_total": 11526,
+    "typed_universe": true,
+    "universe_targets_sha256": "5fdbaf585a246489a5f2dfcb9450553370d435b1757b2247d972f79be75193af"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "chembl_source_sha256": "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281",
+  "coverage": {
+    "coverage_denominator_note": "general drug evidence is built over ENSG targets with UNAMBIGUOUS identity and NULL-variant assertions only; symbol-only => unsupported_namespace; shared-accession => ambiguous_identity; variant assertions are preserved but non-rankable; never reported as ENSG coverage",
+    "n_ambiguous_identity": 86,
+    "n_drug_evidence": 505,
+    "n_ensg": 11522,
+    "n_general_drug_assertions": 2227,
+    "n_no_drug_evidence": 10931,
+    "n_symbol_only_unsupported_namespace": 4,
+    "n_targets_total": 11526,
+    "n_variant_specific_assertions": 29
+  },
+  "eligibility_counts": {
+    "by_disposition": {
+      "eligible_human_single_protein": 5869,
+      "reject_nonhuman_target_taxon": 5186
+    },
+    "n_eligible": 5869,
+    "n_rejected": 5186,
+    "n_total": 11055
+  },
+  "eligibility_evidence_sha256": "cf5d70884240d2e8ba9c2c5c60a986cf1ec665e73d2ae821d47495dff174167c",
+  "finished_utc": "2026-07-13T07:28:11Z",
+  "manifest_content_sha256": "fbe09b9e87124e78c35cd984186180d949c0f23776184fed91b60e8fcdad2ee6",
+  "n_drug_evidence_targets": 505,
+  "n_total_drug_assertions": 2227,
+  "peak_rss_mb": 136.7,
+  "sqlite_bytes": 30480314368,
+  "sqlite_name": "chembl_37.db",
+  "started_utc": "2026-07-13T07:26:30Z",
+  "steps": {
+    "build_store_s": 1.7,
+    "extract_tar_s": 95.0,
+    "verify_source_bytes_s": 2.8
+  },
+  "store_id": "446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d",
+  "store_rows_sha256": "6c88b53a0bf2752149bfb033c2c7f8ff7c3aa2bbd28d4316a292a38693ef31e1",
+  "uniprot_source_sha256": "0741a54986fa746e36f4377fc316cdc81e65c75aa770c8f22fc26e93f1cc6ca5",
+  "verify_ok": true,
+  "verify_violations": [],
+  "wall_clock_s": 100.3
+}
