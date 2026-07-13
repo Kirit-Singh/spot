@@ -5,29 +5,30 @@ Direct 3 condition bundles, temporal 6 ordered pairs, pathway 6 condition x sour
 to every byte each bundle stands on, and content-addressed so that editing any of it changes
 its name.
 
-THE RECONCILIATION (deliberate, and the two shapes are NOT the same)
--------------------------------------------------------------------
-Two independent verifiers already ship, and they admit a release in two different ways.
-Neither is wrong, and neither is bent to match the other:
+THE PRODUCER NEVER ADMITS ITSELF — IN ANY LANE
+---------------------------------------------
+Every lane's inventory is IMMUTABLE and ships PENDING:
 
-  ADMIT_IN_PLACE   (Direct, W10)   `direct_release.json`
-      The producer writes the inventory UN-ADMITTED (`verdict: pending_independent_verification`,
-      `admitted: false`, `self_admitted: false`, `verifier_id: null`) and the independent
-      verifier fills those four fields in, in the same file. This is only honest because the
-      artifact's own hash — `direct_release_sha256` — is taken over the body EXCLUDING those
-      four fields: admitting a release therefore cannot change what the release IS. A reader
-      who did not know that would think the verifier had rewritten the producer's artifact.
+    verdict: pending_independent_verification | admitted: false
+    self_admitted: false                      | verifier_id: null
 
-  SEPARATE_ENVELOPE (temporal, W11 99eaa81; pathway)
-      The producer's inventory is IMMUTABLE and stays `pending` forever. The independent
-      verifier emits a SEPARATE content-addressed envelope that BINDS that inventory by id
-      and raw hash. Nothing the producer wrote is ever touched.
+and the independent verifier emits a SEPARATE, content-addressed report that BINDS that
+inventory by its hash. Nothing the producer wrote is ever touched by an admission.
 
-The envelope form is the stronger of the two — an artifact nobody may rewrite is easier to
-reason about than one whose hash is carefully blind to the fields that get rewritten — so
-pathway (which has no producer yet) takes it. Direct keeps its in-place form because it is
-ALREADY SHIPPED AND ADMITTED, and bending W10's contract to match a preference would
-invalidate an admission that is currently valid. The aggregate reads both, natively.
+I previously modelled Direct as ADMIT_IN_PLACE — the verifier filling those four fields into
+`direct_release.json` itself. That was WRONG, and it was wrong in the dangerous direction:
+W10 does not fill them in, it GATES them ("the PRODUCER did not admit its own release — it
+ships un-admitted", `verify_direct_release.py`). So an aggregate that tolerated an admitted
+producer file would have been tolerating a file somebody had EDITED. It is now refused.
+
+The lane admissions, all SEPARATE:
+
+    direct    direct_release.json  (pending, immutable)
+              + direct_release_admission.json   spot.stage02_direct_release_verification.v1
+    temporal  temporal_arm_release.json
+              + temporal_arm_external_admission.json      (W11 99eaa81)
+    pathway   pathway_arm_release.json
+              + pathway_arm_external_admission.json
 """
 from __future__ import annotations
 
@@ -50,16 +51,18 @@ INVENTORY_FILE_OF = {
     LANE_PATHWAY: "pathway_arm_release.json",
 }
 
-ADMIT_IN_PLACE = "admit_in_place"
 SEPARATE_ENVELOPE = "separate_envelope"
-ADMISSION_MODE_OF = {
-    LANE_DIRECT: ADMIT_IN_PLACE,
-    LANE_TEMPORAL: SEPARATE_ENVELOPE,
-    LANE_PATHWAY: SEPARATE_ENVELOPE,
+ADMISSION_MODE_OF = {lane: SEPARATE_ENVELOPE
+                     for lane in (LANE_DIRECT, LANE_TEMPORAL, LANE_PATHWAY)}
+
+# The lane's independent admission report — a SEPARATE artifact, never the inventory.
+ADMISSION_FILE_OF = {
+    LANE_DIRECT: "direct_release_admission.json",
+    LANE_TEMPORAL: "temporal_arm_external_admission.json",
+    LANE_PATHWAY: "pathway_arm_external_admission.json",
 }
 
-# The four fields an ADMIT_IN_PLACE verifier fills in, and which the artifact's own hash is
-# therefore blind to. This is what makes admitting a release identity-preserving.
+# The fields the producer ships un-filled, and which its own hash is blind to.
 ADMISSION_FIELDS = ("verdict", "admitted", "self_admitted", "verifier_id")
 
 VERDICT_PENDING = "pending_independent_verification"

@@ -172,6 +172,59 @@ class TestTheFourAssemblyAttacks:
             run_release.assemble(_Args(run, tmp_path))
 
 
+class TestTheProducerShipsPENDINGAndStaysThatWay:
+    """The correction. W10 does NOT fill in `direct_release.json` — it GATES that nobody did.
+
+    I had modelled Direct as "admitted in place": the verifier writing verdict/admitted/
+    self_admitted/verifier_id into the producer's own file. That was wrong, and wrong in the
+    dangerous direction — an aggregate that TOLERATED an admitted producer file would have
+    been tolerating a file somebody had EDITED. The admission is a SEPARATE report.
+    """
+
+    def test_the_producer_release_is_PENDING_and_the_admission_is_SEPARATE(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        prod = json.load(open(os.path.join(run["root"], "direct_release.json")))
+
+        assert prod["verdict"] == "pending_independent_verification"
+        assert prod["admitted"] is False
+        assert prod["self_admitted"] is False
+        assert prod["verifier_id"] is None
+
+        # ...and the admission is a DIFFERENT artifact, which BINDS it
+        adm = json.load(open(os.path.join(run["root"],
+                                          "direct_release_admission.json")))
+        assert adm["schema_version"] == "spot.stage02_direct_release_verification.v1"
+        assert adm["verdict"] == "ADMIT"                    # native, uppercase
+        assert (adm["bound_artifact"]["direct_release_sha256"]
+                == prod["direct_release_sha256"])
+
+    def test_an_ADMITTED_producer_file_is_REFUSED(self, tmp_path):
+        # exactly what my earlier model would have waved through
+        run = F.complete_run(tmp_path)
+        path = os.path.join(run["root"], "direct_release.json")
+        prod = json.load(open(path))
+        prod.update({"verdict": "ADMIT", "admitted": True,
+                     "verifier_id": "spot.stage02.direct.release.verifier.v1"})
+        with open(path, "w") as fh:
+            json.dump(prod, fh, indent=2, sort_keys=True)
+
+        with pytest.raises(RunManifestError, match="NOT independently admitted"):
+            run_release.assemble(_Args(run, tmp_path))
+
+    def test_an_admission_bound_to_ANOTHER_release_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = os.path.join(run["root"], "direct_release_admission.json")
+        adm = json.load(open(path))
+        adm["bound_artifact"]["direct_release_sha256"] = "9" * 64
+        adm["report_sha256"] = F._canon(
+            {k: v for k, v in adm.items() if k != "report_sha256"})
+        with open(path, "w") as fh:
+            json.dump(adm, fh, indent=2, sort_keys=True)
+
+        with pytest.raises(RunManifestError, match="NOT independently admitted"):
+            run_release.assemble(_Args(run, tmp_path))
+
+
 class TestTheCapturedCLI:
     def test_the_CLI_REFUSES_without_every_explicit_input(self):
         buf = io.StringIO()
