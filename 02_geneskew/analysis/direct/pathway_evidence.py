@@ -14,8 +14,10 @@ provenance. A count nobody can recount is a claim.
 
 So the bundle now CARRIES the evidence the counts are taken from:
 
-  * the gene-set MEMBERSHIP actually used (per set: its target-namespace members, and the
-    number of source symbols the published set had);
+  * the FULL MAPPED MEMBERSHIP of each set, in BOTH namespaces, BEFORE this run's universes
+    intersected it — plus the number of source symbols the published set had. The
+    intersections the producer used ship beside it, explicitly labelled as its DECLARED
+    OUTPUTS, so a verifier can re-derive them instead of adopting them;
   * the perturbation-TARGET universe — the ranked population membership is tested in;
   * each ARM's RANKING — the ordered target ids, their canonical scores and their ranks.
     This is the arm-evaluable universe, and it is exactly what ``n_hits_in_ranking`` counts
@@ -48,10 +50,10 @@ SIGNATURE_COLUMNS = ("target_id", "gene_id", "value")
 # about the same universes rather than two things that share a word.
 COUNT_RULE_ID = "spot.stage02.pathway.member_counts_are_recounted_from_the_bound_bytes.v1"
 COUNT_RULE = (
-    "n_genes_in_target_universe = |set members INTERSECT target universe| ; "
-    "n_hits_in_ranking = |set members INTERSECT that arm's ranked targets| ; "
-    "n_ranked = |that arm's ranked targets| — every one recounted from the bound evidence, "
-    "never read from the record")
+    "n_genes_in_target_universe = |FULL mapped genes_target INTERSECT the bound target "
+    "universe| ; n_hits_in_ranking = |FULL mapped genes_target INTERSECT that arm's ranked "
+    "targets| ; n_ranked = |that arm's ranked targets| — recounted from the PRE-INTERSECTION "
+    "membership, never from the producer's already-intersected output")
 
 
 def arm_rankings(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -70,13 +72,39 @@ def arm_rankings(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
 
 
 def membership(bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """The gene-set membership USED, in the TARGET namespace, per set."""
+    """The FULL mapped membership of each set — BEFORE any universe intersection.
+
+    The first cut of this emitted ``genes_in_target_universe`` (the ALREADY-INTERSECTED set)
+    under the name ``genes_target``, which made the recount circular: intersecting an
+    already-intersected set with the same universe returns itself, so
+    ``n_genes_in_target_universe`` would have "re-derived" to agree with ANY declared value.
+    A check that cannot fail is not a check.
+
+    So what ships is the full mapped membership in each namespace — the crosswalk's output,
+    before this run's universes touched it. An independent verifier intersects THESE against
+    the bound target and readout universes and gets a number the producer did not choose.
+
+    The intersections the producer actually used ship too, as DECLARED OUTPUTS — clearly
+    named as such. They are the producer's answer, not the evidence for it.
+    """
     if bundle is None:
         return {}
     return {
         set_id: {
-            "genes_target": sorted(str(g) for g in s["genes_in_target_universe"]),
+            # THE EVIDENCE: full, mapped, pre-intersection.
+            "genes_target": sorted(str(g) for g in s["genes_target"]),
+            "genes_readout": sorted(str(g) for g in s["genes_readout"]),
+            "n_genes_target": s["n_genes_target"],
+            "n_genes_readout": s["n_genes_readout"],
             "n_source_symbols": s["n_source_symbols"],
+            # THE PRODUCER'S DECLARED OUTPUTS: what it says the intersections came to.
+            # Re-derivable from the evidence above; never a substitute for it.
+            "declared_genes_in_target_universe": sorted(
+                str(g) for g in s["genes_in_target_universe"]),
+            "declared_n_genes_in_target_universe": s["n_genes_in_target_universe"],
+            "declared_genes_in_readout_universe": sorted(
+                str(g) for g in s["genes_in_universe"]),
+            "declared_n_genes_in_readout_universe": s["n_genes_in_universe"],
         }
         for set_id, s in sorted(bundle["sets"].items())
     }

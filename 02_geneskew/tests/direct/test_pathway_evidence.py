@@ -51,12 +51,38 @@ class TestTheBundleCarriesWhatItCounted:
         assert os.path.exists(os.path.join(out, "pathway_evidence.json"))
         assert os.path.exists(os.path.join(out, "pathway_signatures.parquet"))
 
-    def test_it_carries_the_membership_used(self, built):
+    def test_it_carries_the_FULL_PRE_INTERSECTION_membership(self, built):
         _, evidence, _, doc = built
         assert set(evidence["membership"]) == {r["set_id"] for r in doc["records"]}
         for m in evidence["membership"].values():
             assert isinstance(m["genes_target"], list)
+            assert isinstance(m["genes_readout"], list)
             assert m["n_source_symbols"] is not None
+
+    def test_the_membership_is_NOT_already_intersected_with_the_universe(self, built):
+        # The bug in the first cut: `genes_target` held the ALREADY-INTERSECTED set, so
+        # intersecting it with the same universe returned itself and the recount agreed with
+        # ANY declared value. The full membership is a SUPERSET of the intersection, and at
+        # least one set here must actually prove it.
+        _, evidence, _, _ = built
+        universe = set(evidence["target_universe"])
+        strictly_larger = 0
+        for m in evidence["membership"].values():
+            full = set(m["genes_target"])
+            declared = set(m["declared_genes_in_target_universe"])
+            assert declared == full & universe        # the producer's output re-derives...
+            assert declared <= full                   # ...and the evidence is not the output
+            if full - universe:
+                strictly_larger += 1
+        assert strictly_larger, \
+            "no set has a member outside the target universe, so this fixture cannot tell " \
+            "a pre-intersection membership from an intersected one"
+
+    def test_the_declared_intersections_are_LABELLED_as_the_producers_output(self, built):
+        _, evidence, _, _ = built
+        for m in evidence["membership"].values():
+            assert "declared_n_genes_in_target_universe" in m
+            assert "declared_n_genes_in_readout_universe" in m
 
     def test_it_carries_BOTH_universes_and_they_are_DIFFERENT_populations(self, built):
         _, evidence, _, _ = built
