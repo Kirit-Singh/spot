@@ -114,19 +114,33 @@ def _direct_store(root, condition, arms, n=150, admit=True):
 
 
 def _temporal_store(root, frm, to, arms, n=120):
-    d = os.path.join(root, "temporal", f"{frm}__{to}")
+    """A temporal bundle in the NATIVE shape: bundle_key, and every arm binding its ranking."""
+    rel = f"{frm}__to__{to}"
+    d = os.path.join(root, "temporal", rel)
     os.makedirs(os.path.join(d, "rankings"), exist_ok=True)
+
+    arm_entries = []
+    for j, key in enumerate(arms):
+        path = f"rankings/arm_{j}.json"
+        body = {"arm_key": key,
+                "records": [{"target_id": f"ENSG{i:011d}", "arm_value": 1.0 - i / 500.0,
+                             "rank": i + 1, "evaluable": True} for i in range(n)]}
+        with open(os.path.join(d, path), "w") as fh:
+            json.dump(body, fh, indent=2, sort_keys=True)
+        arm_entries.append({"arm_key": key,
+                            "ranking": {"path": path,
+                                        "raw_sha256": file_sha256(os.path.join(d, path)),
+                                        "canonical_sha256": content_hash(body)}})
+
     with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
         json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
-                   "bundle_id": f"T-{frm}-{to}", "lane": "temporal",
-                   "context": {"from_condition": frm, "to_condition": to}}, fh)
-    for j, key in enumerate(arms):
-        with open(os.path.join(d, "rankings", f"arm_{j}.json"), "w") as fh:
-            json.dump({"arm_key": key,
-                       "records": [{"target_id": f"ENSG{i:011d}", "arm_value": 1.0 - i / 500.0,
-                                    "rank": i + 1, "evaluable": True} for i in range(n)]}, fh)
-    external_admission(root, "temporal", [{"bundle_id": f"T-{frm}-{to}",
-                                           "files": {}, "rankings": {}}])
+                   "bundle_id": f"T-{frm}-{to}", "bundle_key": rel, "lane": "temporal",
+                   "context": {"from_condition": frm, "to_condition": to},
+                   "arms": arm_entries}, fh, indent=2, sort_keys=True)
+
+    external_admission(root, "temporal",
+                       [{"bundle_id": f"T-{frm}-{to}", "relative_dir": rel,
+                         "files": {}, "rankings": {}}])
     return d
 
 
@@ -189,11 +203,15 @@ def external_admission(root, lane, bundles, *, gates=None, stage1=None, inv_over
                  "method": "spot.stage02.temporal.method.v1",
                  "native_release_root": "output/temporal",
                  "per_program_projection_sha256": "p" * 64,
-                 "producer_release_canonical_sha256": content_hash(inv),
+                 # DERIVED, exactly as the real verifier derives them
+                 "producer_release_canonical_sha256": content_hash(
+                     json.loads(open(ip, "rb").read())),
                  "producer_release_file": spec["inventory"],
                  "producer_release_id": inv["release_id"],
                  "producer_release_raw_sha256": raw,
-                 "rankings_digest": "r" * 64,
+                 "rankings_digest": (LA._rankings_digest(
+                     os.path.join(root, "temporal"), inv, content_hash, file_sha256)
+                     or "r" * 64),
                  "registry_scorer_projection_sha256":
                      s1["registry_scorer_projection_sha256"],
                  "selector_condition_sequence": ["Rest", "Stim8hr", "Stim48hr"],
@@ -764,12 +782,11 @@ class TestTheEXTERNALEnvelopeIsValidatedNotJustHashed:
         self._refused(root, sp, LA.G_EMPTY_INVENTORY)
 
     @pytest.mark.parametrize("field", ["generator_is_not_verifier", "fail_closed"])
-    def test_W4_must_ASSERT_independence_and_fail_closed(self, tmp_path, field):
-        """W4's envelope carries these (ef136a9). W11's is not known to, and REQUIRING them of
-        W11 would refuse the real release — a fail-closed bug is still a bug. So the assertion
-        set is PER LANE, and stated."""
+    def test_BOTH_lanes_must_ASSERT_independence_and_fail_closed(self, tmp_path, field):
+        """The REAL W11 envelope carries both (confirmed on admission.json), as W4's does. An
+        empty assert set under-checked exactly the two claims a forged envelope would omit."""
         assert field in LA.EXTERNAL["pathway"]["asserts"]
-        assert LA.EXTERNAL["temporal"]["asserts"] == ()
+        assert field in LA.EXTERNAL["temporal"]["asserts"]
 
     def test_an_INVENTED_pending_field_on_the_native_inventory_is_REFUSED(self, tmp_path):
         """The native inventory has NO top-level verdict/admitted/self_admitted. A producer
