@@ -57,6 +57,14 @@ re-derives the hash, and only then does publication proceed. **No upload happens
 | Stage-2 arms/pathway artifact(s) | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | pending |
 | Stage-3 / Stage-4 artifact(s) | _pending_ (not yet implemented) | _pending_ | _pending_ | _pending_ | _pending_ | pending |
 
+Assembly is fail-closed and mechanical — see `deploy/RELEASE_ASSEMBLY.md`:
+```bash
+python3 deploy/assemble_release.py --spec <release_spec.json> --staging-dir <abs dir outside repo>
+deploy/handoff_release.sh <staging-dir>      # one-command handoff; re-verifies, never uploads
+```
+`deploy/release_spec.template.json` ships `PENDING` on every lane, so it refuses until the
+orchestrator supplies the real admitted paths + receipts. Do not invent a path or a hash.
+
 Publish gate — all must be true before any upload:
 - [ ] every row above filled with a real path + hash (no `_pending_`)
 - [ ] each hash re-derived by an independent verifier (generator ≠ verifier), exit 0

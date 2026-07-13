@@ -1,0 +1,34 @@
+{
+  "_comment": "Release spec TEMPLATE for deploy/assemble_release.py. The orchestrator fills in the EXACT admitted artifact paths and verifier receipts. As shipped this template REFUSES: every lane is PENDING and every src is null. Nothing here is a real path or hash - do not invent them. 'expected_sha256' is optional; when present it must match the bytes on disk or the assembly refuses. Leave it null rather than guessing.",
+  "release_id": null,
+  "lanes": {
+    "stage1": {
+      "status": "PENDING",
+      "receipt": {"src": null, "dst": "lanes/stage1/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": "stage1_artifact.json", "expected_sha256": null}
+      ]
+    },
+    "stage2": {
+      "status": "PENDING",
+      "receipt": {"src": null, "dst": "lanes/stage2/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": "stage2_artifact.json", "expected_sha256": null}
+      ]
+    },
+    "stage3": {
+      "status": "PENDING",
+      "receipt": {"src": null, "dst": "lanes/stage3/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": "stage3_artifact.json", "expected_sha256": null}
+      ]
+    },
+    "stage4": {
+      "status": "PENDING",
+      "receipt": {"src": null, "dst": "lanes/stage4/receipt.json", "expected_sha256": null},
+      "artifacts": [
+        {"src": null, "dst": "stage4_artifact.json", "expected_sha256": null}
+      ]
+    }
+  }
+}

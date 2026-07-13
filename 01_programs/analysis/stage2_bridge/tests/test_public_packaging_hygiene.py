@@ -46,7 +46,13 @@ SCANNED_FILES = [
     "docs/history/README.md",
     "docs/PUBLIC_PACKAGING_CHECKLIST.md",
     "01_programs/analysis/test_selection_v3_browser.mjs",
+    "deploy/RELEASE_ASSEMBLY.md",
+    "deploy/release_spec.template.json",
+    "deploy/handoff_release.sh",
 ]
+
+# deploy/assemble_release.py and deploy/tests/ are deliberately NOT scanned: like this file,
+# they carry the machine-path patterns as detection logic / refusal fixtures.
 
 # frozen, hash-pinned artifact that legitimately still carries a build-time machine path,
 # deferred to the coordinated reseal (docs/PUBLIC_PACKAGING_CHECKLIST.md). NOT scanned.
