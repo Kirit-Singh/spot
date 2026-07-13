@@ -76,7 +76,14 @@ def _git(repo: str, *args: str) -> Optional[str]:
 
 
 def discover(root: str, lane: str) -> list[str]:
-    """Bundle directories for ONE lane. A directory is a bundle iff it says it is."""
+    """Bundle directories for ONE lane, by NATIVE schema — not a top-level ``lane`` field.
+
+    The real Direct and pathway producers write NO top-level ``lane``; keying on it found
+    nothing on real bytes. ``bundle_normalize.classify_lane`` reads each bundle's native
+    schema (``spot.stage02_{direct,temporal,pathway}_arm_bundle.v1``) and returns its lane;
+    an unrecognised shape is not this lane and is skipped.
+    """
+    from . import bundle_normalize as BN
     found = []
     for base, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
@@ -84,12 +91,13 @@ def discover(root: str, lane: str) -> list[str]:
             continue
         try:
             with open(os.path.join(base, "arm_bundle.json")) as fh:
-                if json.load(fh).get("lane") == lane:
-                    found.append(base)
+                doc = json.load(fh)
         except (OSError, ValueError):
             raise RunManifestError(
                 f"{base}: arm_bundle.json is not readable JSON — a directory that cannot "
                 "be opened is not a bundle") from None
+        if BN.classify_lane(doc) == lane:
+            found.append(base)
     return sorted(found)
 
 

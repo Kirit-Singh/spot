@@ -131,10 +131,12 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
     """Bind ONE all-arm bundle: its context, its arms, its bindings, its admission."""
     bundle = _load(os.path.join(out_dir, "arm_bundle.json"), "arm inventory")
 
-    lane = bundle.get("lane")
-    if lane not in LANES:
-        raise RunManifestError(
-            f"bundle declares lane {lane!r}; expected one of {list(LANES)}")
+    from . import bundle_normalize as BN
+    try:
+        norm = BN.normalize(bundle)
+    except BN.BundleShapeError as exc:
+        raise RunManifestError(str(exc)) from None
+    lane = norm["lane"]
     names = BUNDLE_FILES[lane]
 
     # A reusable arm may not carry a pair's ordering. REFUSED, not filtered: a bundle that
@@ -177,21 +179,33 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
                 "missing artifact would certify an incomplete run as complete")
 
     # ---- the BYTES every count is derived from ---- #
-    bindings = {what: _bind_artifact(out_dir, (bundle.get("bindings") or {}).get(what),
-                                     what)
-                for what in BUNDLE_BINDINGS[lane]}
+    # LANE-AWARE. A bundle-level ``bindings`` block (temporal-style / the test battery)
+    # is bound in full where present; a native Direct/pathway bundle carries none.
+    bindings = {}
+    bindings_block = bundle.get("bindings")
+    if bindings_block is not None:
+        for what in BUNDLE_BINDINGS[lane]:
+            bindings[what] = _bind_artifact(out_dir, bindings_block.get(what), what)
+    # Per arm: temporal binds a ranking FILE; native Direct/pathway arms carry a content
+    # hash IN the arm (arm_rows_sha256 / records_sha256) and ship no per-arm file.
     arms = bundle.get("arms") or []
+    key_field = norm["arm_key_field"]
     for arm in arms:
-        key = str(arm.get("arm_key"))
-        bindings[f"{key}::{ARM_BINDING}"] = _bind_artifact(
-            out_dir, arm.get(ARM_BINDING), f"{key} {ARM_BINDING}")
+        key = str(arm.get(key_field))
+        ranking = arm.get(ARM_BINDING)
+        if isinstance(ranking, dict):
+            bindings[f"{key}::{ARM_BINDING}"] = _bind_artifact(
+                out_dir, ranking, f"{key} {ARM_BINDING}")
+        else:
+            content = arm.get(BN.ARM_CONTENT_HASH_FIELD.get(lane, ""))
+            bindings[f"{key}::arm_content_sha256"] = {"sha256": str(content)}
 
     return {
         "lane": lane,
-        "bundle_id": str(bundle.get("bundle_id")),
+        "bundle_id": norm["bundle_id"],
         "out_dir": os.path.basename(out_dir.rstrip(os.sep)),
-        "context": bundle.get("context") or {},
-        "arm_keys": sorted(str(a.get("arm_key")) for a in arms),
+        "context": norm["context"],
+        "arm_keys": sorted(norm["arm_keys"]),
         "n_arms": len(arms),
         "stage1_v3_release": bundle.get("stage1_v3_release") or {},
         "gene_sets": bundle.get("gene_sets"),
