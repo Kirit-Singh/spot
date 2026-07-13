@@ -251,19 +251,24 @@ class Client:
         raise last
 
     def _respect_rate_limit(self, source_key: str) -> None:
-        """Space requests to one host. Politeness here is what keeps a long queue from throttling."""
+        """Space requests to ONE host. Politeness is what keeps a long queue from being throttled.
+
+        The wait is COMPUTED under the lock and SLEPT outside it. Sleeping while holding the lock
+        would serialise every host behind whichever one was slowest — four hosts would become one
+        queue, and a 455-candidate warm-up would take four times as long for no reason.
+        """
         if self.min_interval_s <= 0:
             return
+        host_key = host(source_key)
         with self._lock:
-            host_key = host(source_key)
             previous = self._last_request.get(host_key)
             now = self._clock()
-            if previous is not None:
-                wait = self.min_interval_s - (now - previous)
-                if wait > 0:
-                    self._sleep(wait)
-                    now = self._clock()
-            self._last_request[host_key] = now
+            wait = 0.0 if previous is None else self.min_interval_s - (now - previous)
+            # Reserve this host's next slot before releasing the lock, so two workers cannot both
+            # decide they may go now.
+            self._last_request[host_key] = now + max(wait, 0.0)
+        if wait > 0:
+            self._sleep(wait)
 
     def _now(self) -> str:
         clock = getattr(self.transport, "clock", None)
