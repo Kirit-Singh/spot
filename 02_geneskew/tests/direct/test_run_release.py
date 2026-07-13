@@ -17,6 +17,7 @@ import shutil
 import fixtures_run_manifest as F
 import pytest
 from direct import release_inventory as RI
+from direct import bundle_normalize as BN
 from direct import run_release
 from direct.arm_topology import RunManifestError
 
@@ -126,6 +127,18 @@ class TestOnlyADMITTEDBytesEnterARelease:
         with pytest.raises(RunManifestError, match="NOT independently admitted"):
             run_release.assemble(_Args(run, tmp_path))
 
+    def test_a_MISSING_condition_binding_leaves_the_DIRECT_lane_UNADMITTED(self, tmp_path):
+        """W10 admits a BUNDLE at a time, so the LANE is admitted only when EVERY condition
+        is. A Direct release missing one condition's binding is not a smaller release — it is
+        an unadmitted one."""
+        import glob
+        run = F.complete_run(tmp_path)
+        victim = sorted(glob.glob(os.path.join(run["root"], "direct_admission_*.json")))[0]
+        os.remove(victim)
+
+        with pytest.raises(RunManifestError, match="NOT independently admitted"):
+            run_release.assemble(_Args(run, tmp_path))
+
 
 class TestTheFourAssemblyAttacks:
     def test_MISSING_a_bundle_is_REFUSED(self, tmp_path):
@@ -159,16 +172,52 @@ class TestTheFourAssemblyAttacks:
             run_release.assemble(_Args(run, tmp_path))
 
     def test_a_SWAPPED_LANE_bundle_is_REFUSED(self, tmp_path):
-        """A temporal bundle relabelled `direct`: the counts still look right."""
+        """A temporal bundle re-badged as Direct: the lane counts would still look right.
+
+        The lane a bundle belongs to is its SCHEMA, so the swap that has to be refused is a
+        swapped `schema_version`. In this aggregate the Direct lane is admitted CONDITION BY
+        CONDITION (W3's typed adapter), so a temporal bundle wearing the Direct schema reads
+        as a fourth Direct "condition" that no per-condition binding admits — and an
+        un-admitted lane is not a release. The counts never get a chance to look right.
+        """
         run = F.complete_run(tmp_path)
         d = run["temporal"][0]
         inv = json.load(open(os.path.join(d, "arm_bundle.json")))
-        inv["lane"] = "direct"                     # now discovered as a 4th Direct bundle
+        inv["schema_version"] = "spot.stage02_direct_arm_bundle.v1"   # a 4th Direct bundle?
         with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
             json.dump(inv, fh, indent=2, sort_keys=True)
-        F.seal_release(run)
 
-        with pytest.raises(RunManifestError, match="exactly 3|exactly 6"):
+        # The re-badged bundle carries no Direct `condition`/`arm_bundle_run_id`, so the
+        # typed adapter sees a Direct condition it has NO admission binding for (and the
+        # normalizer would reject its missing native identity) — either way it never reaches
+        # a stage where the counts could look right.
+        with pytest.raises((RunManifestError, BN.BundleShapeError),
+                           match="arm_bundle_run_id|exactly 3|exactly 6|"
+                                 "NO admission binding|ships no Direct bundle"):
+            F.seal_release(run)
+            run_release.assemble(_Args(run, tmp_path))
+
+    def test_an_UNKNOWN_bundle_schema_is_REFUSED_not_guessed(self, tmp_path):
+        """A fourth contract is a bundle nobody can read. It is refused, never inferred."""
+        run = F.complete_run(tmp_path)
+        d = run["direct"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        inv["schema_version"] = "spot.stage02_direct_arm_bundle.v2"   # one digit
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh, indent=2, sort_keys=True)
+
+        # An unrecognised schema is not this lane: `classify_lane` returns None and the
+        # directory is not discovered as a bundle at all. So the lane comes up SHORT rather
+        # than admitting a bundle nobody can read — which is the same refusal, reached one
+        # step earlier.
+        assert BN.classify_lane(inv) is None
+        assert d not in run_release.discover(run["root"], "direct")
+
+        # ...and the refusal fires EARLIER than the count: W10 admits a BUNDLE, so that
+        # condition's binding now names a bundle this release does not ship. An unreadable
+        # bundle cannot be admitted, and a release cannot ship an admission for it.
+        with pytest.raises(RunManifestError,
+                           match="exactly 3|ships no Direct bundle for"):
             run_release.assemble(_Args(run, tmp_path))
 
 
@@ -182,6 +231,14 @@ class TestTheProducerShipsPENDINGAndStaysThatWay:
     """
 
     def test_the_producer_release_is_PENDING_and_the_admission_is_SEPARATE(self, tmp_path):
+        """The producer's `direct_release.json` still ships PENDING and immutable — W10 does
+        not fill it in. And the admission is a DIFFERENT artifact entirely: W1's flat
+        per-condition binding, which admits a BUNDLE, not a release document."""
+        import glob
+        from direct.verify_lane_admission import (
+            DIRECT_BINDING_SCHEMA,
+            DIRECT_VERIFIER_ID,
+        )
         run = F.complete_run(tmp_path)
         prod = json.load(open(os.path.join(run["root"], "direct_release.json")))
 
@@ -190,34 +247,56 @@ class TestTheProducerShipsPENDINGAndStaysThatWay:
         assert prod["self_admitted"] is False
         assert prod["verifier_id"] is None
 
-        # ...and the admission is a DIFFERENT artifact, which BINDS it
-        adm = json.load(open(os.path.join(run["root"],
-                                          "direct_release_admission.json")))
-        assert adm["schema_version"] == "spot.stage02_direct_release_verification.v1"
-        assert adm["verdict"] == "ADMIT"                    # native, uppercase
-        assert (adm["bound_artifact"]["direct_release_sha256"]
-                == prod["direct_release_sha256"])
+        # ...and the admission is ONE FLAT BINDING PER CONDITION
+        paths = sorted(glob.glob(os.path.join(run["root"], "direct_admission_*.json")))
+        assert len(paths) == 3                       # one per Direct condition bundle
+        for p in paths:
+            adm = json.load(open(p))
+            assert adm["binding_schema"] == DIRECT_BINDING_SCHEMA
+            assert adm["subject_kind"] == "bundle"   # it admits a BUNDLE, not a release doc
+            assert adm["native_verdict"] == "ADMIT"  # native, uppercase, byte-exact
+            assert adm["verifier_id"] == DIRECT_VERIFIER_ID
+            assert isinstance(adm["code_identity"], str)     # a STRING, never a dict
+            # ...and it names the exact bundle it admitted
+            assert adm["bundle_id"]
 
-    def test_an_ADMITTED_producer_file_is_REFUSED(self, tmp_path):
-        # exactly what my earlier model would have waved through
+    def test_a_binding_that_admits_ANOTHER_BUNDLE_is_REFUSED(self, tmp_path):
+        """An admission of another bundle is an admission of something else."""
+        import glob
         run = F.complete_run(tmp_path)
-        path = os.path.join(run["root"], "direct_release.json")
-        prod = json.load(open(path))
-        prod.update({"verdict": "ADMIT", "admitted": True,
-                     "verifier_id": "spot.stage02.direct.release.verifier.v1"})
+        path = sorted(glob.glob(os.path.join(run["root"], "direct_admission_*.json")))[0]
+        adm = json.load(open(path))
+        adm["bundle_id"] = "SOME-OTHER-BUNDLE"
+        adm["binding_sha256"] = F._canon(
+            {k: v for k, v in adm.items() if k != "binding_sha256"})
         with open(path, "w") as fh:
-            json.dump(prod, fh, indent=2, sort_keys=True)
+            json.dump(adm, fh, indent=2, sort_keys=True)
 
         with pytest.raises(RunManifestError, match="NOT independently admitted"):
             run_release.assemble(_Args(run, tmp_path))
 
-    def test_an_admission_bound_to_ANOTHER_release_is_REFUSED(self, tmp_path):
+    def test_a_RESEALED_binding_with_a_forged_verdict_is_REFUSED(self, tmp_path):
+        import glob
         run = F.complete_run(tmp_path)
-        path = os.path.join(run["root"], "direct_release_admission.json")
+        path = sorted(glob.glob(os.path.join(run["root"], "direct_admission_*.json")))[0]
         adm = json.load(open(path))
-        adm["bound_artifact"]["direct_release_sha256"] = "9" * 64
-        adm["report_sha256"] = F._canon(
-            {k: v for k, v in adm.items() if k != "report_sha256"})
+        adm["native_verdict"] = "REFUSE"
+        adm["binding_sha256"] = F._canon(
+            {k: v for k, v in adm.items() if k != "binding_sha256"})
+        with open(path, "w") as fh:
+            json.dump(adm, fh, indent=2, sort_keys=True)
+
+        with pytest.raises(RunManifestError, match="NOT independently admitted"):
+            run_release.assemble(_Args(run, tmp_path))
+
+    def test_a_TAMPERED_binding_fails_its_OWN_hash(self, tmp_path):
+        import glob
+        run = F.complete_run(tmp_path)
+        path = sorted(glob.glob(os.path.join(run["root"], "direct_admission_*.json")))[0]
+        adm = json.load(open(path))
+        adm["n_failed"] = 0
+        adm["bundle_verified_on_disk"] = True
+        adm["code_identity"] = "TAMPERED"          # changed, hash NOT recomputed
         with open(path, "w") as fh:
             json.dump(adm, fh, indent=2, sort_keys=True)
 

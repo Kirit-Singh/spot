@@ -20,6 +20,72 @@ from typing import Any, Optional
 
 LANE_DIRECT, LANE_TEMPORAL, LANE_PATHWAY = "direct", "temporal", "pathway"
 LANES = (LANE_DIRECT, LANE_TEMPORAL, LANE_PATHWAY)
+
+# --------------------------------------------------------------------------- #
+# THE THREE NATIVE BUNDLE SHAPES — RESTATED HERE, never imported from the producer.
+#
+# The producer has its own `bundle_normalize`. This is deliberately a SECOND, independent copy:
+# a verifier that imported the producer's normalizer would identify a lane exactly the way
+# the producer does, agree with it by construction, and be unable to catch it mis-identifying
+# one. That is the whole point of a second implementation — it can disagree.
+#
+# Read off each producer's own bytes:
+#   Direct   fc9bdcd  spot.stage02_direct_arm_bundle.v1   condition            arm_bundle_run_id
+#   temporal 2021d90  spot.stage02_temporal_arm_bundle.v1 from_/to_condition   bundle_id
+#   pathway  2435b92  spot.stage02_pathway_arm_bundle.v1  condition + source   pathway_run_id
+#
+# ONLY temporal emits a top-level `lane` or `bundle_id`. A verifier that keyed off those
+# found Direct and pathway to have an EMPTY context, and then built the expected arm keys
+# over the wrong slots.
+# --------------------------------------------------------------------------- #
+NATIVE_BUNDLE_SHAPE = {
+    LANE_DIRECT: {"schema": "spot.stage02_direct_arm_bundle.v1",
+                  "id_field": "arm_bundle_run_id", "context_fields": ("condition",),
+                  "arm_key_field": "arm_key"},
+    LANE_TEMPORAL: {"schema": "spot.stage02_temporal_arm_bundle.v1",
+                    "id_field": "bundle_id",
+                    "context_fields": ("from_condition", "to_condition"),
+                    "arm_key_field": "arm_key"},
+    LANE_PATHWAY: {"schema": "spot.stage02_pathway_arm_bundle.v1",
+                   "id_field": "pathway_run_id",
+                   "context_fields": ("condition", "source"),
+                   # the pathway lane names its arm key `pathway_arm_key`. Reading `arm_key`
+                   # here found None on every pathway arm, so every slot read as empty.
+                   "arm_key_field": "pathway_arm_key"},
+}
+_LANE_BY_SCHEMA = {v["schema"]: k for k, v in NATIVE_BUNDLE_SHAPE.items()}
+_CONTEXT_ALIAS = {"source": "gene_set_source"}
+
+
+def native_lane_of(doc: Any) -> Any:
+    """WHICH LANE wrote this bundle, by the only field all three producers emit."""
+    if not isinstance(doc, dict):
+        return None
+    return _LANE_BY_SCHEMA.get(str(doc.get("schema_version")))
+
+
+def native_view(doc: Any) -> Any:
+    """``{lane, bundle_id, context, arms}`` from a bundle's NATIVE shape, or None.
+
+    None means "this is not a bundle any known producer wrote" — refuse it; never guess.
+    """
+    lane = native_lane_of(doc)
+    if lane is None:
+        return None
+    spec = NATIVE_BUNDLE_SHAPE[lane]
+    nested = doc.get("context") if isinstance(doc.get("context"), dict) else {}
+    context = {}
+    for field in spec["context_fields"]:
+        value = doc.get(field, nested.get(field))
+        if value is None:
+            return None                      # a bundle that will not say which slot it fills
+        context[_CONTEXT_ALIAS.get(field, field)] = value
+    bundle_id = doc.get(spec["id_field"])
+    if not bundle_id:
+        return None
+    return {"lane": lane, "bundle_id": str(bundle_id), "context": context,
+            "arms": doc.get("arms") or [], "schema_version": doc.get("schema_version"),
+            "arm_key_field": spec["arm_key_field"]}
 INCREASE, DECREASE = "increase", "decrease"
 DESIRED_CHANGES = (INCREASE, DECREASE)
 ADMIT, REJECT, PASS, FAIL = "admit", "reject", "pass", "fail"

@@ -157,7 +157,7 @@ def pinned_gene_sets(tmp_path, sources) -> str:
 # WHO may admit an arm, and WHAT they must have checked. Pinned OUTSIDE the run: a forger
 # writes the report, so the report cannot also be the authority on who wrote it.
 LANE_VERIFIERS = {
-    "direct": {"verifier_id": "spot.stage02.direct.release.verifier.v1",
+    "direct": {"verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
                "schema_version": "FIXTURE.spot.stage02_direct_verification.v1",
                "required_gates": ["screen_rows_reconstruct_from_the_inputs",
                                   "every_arm_ranks_over_its_own_population"]},
@@ -359,7 +359,13 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
 
     inv: dict[str, Any] = {
         "fixture": True,
-        "schema_version": "spot.stage02_arm_bundle.v1",
+        # The Direct lane wears W10's NATIVE bundle schema so W3's typed adapter
+        # (verify_lane_admission.adapt_direct) can read `shipped` from it: it keys on
+        # exactly this schema + a bare top-level `condition` + `arm_bundle_run_id`. The
+        # generic `lane`/`context`/`bundle_id` are kept ALONGSIDE so the (generic-shape)
+        # per-bundle scanner and the inventory reader still read the same slot.
+        "schema_version": ("spot.stage02_direct_arm_bundle.v1" if lane == "direct"
+                           else "spot.stage02_arm_bundle.v1"),
         "lane": lane,
         "context": ctx,
         "stage1_v3_release": {
@@ -370,6 +376,8 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         "n_arms": len(arms),
         "arms_are_independent": True,
     }
+    if lane == "direct":
+        inv["condition"] = ctx["condition"]        # W10's bare top-level condition
     if lane == "pathway":
         inv["bindings"] = bindings
         # The producer binds the gene-set identity UNDER the method block it hashes -- in
@@ -383,7 +391,10 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         inv["convergence"] = {
             "convergence_id": convergence_id,
             "sha256": _raw(os.path.join(out_dir, "convergence.json"))}
-    inv["bundle_id"] = f"FIXTURE-{_canon(inv)[:16]}"
+    _nid = f"FIXTURE-{_canon(inv)[:16]}"
+    inv["bundle_id"] = _nid
+    if lane == "direct":
+        inv["arm_bundle_run_id"] = _nid            # W10's native Direct identity
     arm_raw, _ = _write(os.path.join(out_dir, "arm_bundle.json"), inv)
 
     run_binding = {
@@ -580,7 +591,8 @@ def write_external_admission(run: dict, release_id=None, verdict="ADMIT",
     inv = json.load(open(inv_path))
     doc = {
         "fixture": True,
-        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "schema_version": NATIVE_ADMISSION[lane]["schema_version"]
+                          if lane != "direct" else LANE_VERIFIERS[lane]["schema_version"],
         "verifier_id": NATIVE_ADMISSION[lane]["verifier_id"]
                        if lane != "direct" else LANE_VERIFIERS[lane]["verifier_id"],
         "verdict": verdict,
@@ -616,15 +628,15 @@ def seal_release(run: dict) -> dict:
 # The native verdict is the exact uppercase token `ADMIT` — W3 reads it as it is.
 # --------------------------------------------------------------------------- #
 NATIVE_ADMISSION = {
-    # W10's SEPARATE release-verification report. The producer's direct_release.json is
-    # never touched: it ships pending, and W10 gates that it stays pending.
+    # W1's REAL Direct binding: ONE FLAT FILE PER CONDITION, admitting a BUNDLE. The
+    # producer's direct_release.json is never touched — it ships pending and stays pending;
+    # the LANE admission is W3's typed per-condition binding, read by adapt_direct.
     "direct": {
-        "file": "direct_release_admission.json",
-        "schema_version": "spot.stage02_direct_release_verification.v1",
-        "verifier_id": "spot.stage02.direct.release.verifier.v1",
-        "self_hash_field": "report_sha256",
-        "excludes": ("report_sha256",),
-        "binds_producer": "direct_release.json",
+        "file": "direct_admission_<condition>.json",
+        "schema_version": "spot.stage02.direct_admission_binding.v1",
+        "verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
+        "self_hash_field": "binding_sha256",
+        "excludes": ("binding_sha256",),
     },
     "temporal": {
         "file": "temporal_arm_external_admission.json",
@@ -634,7 +646,7 @@ NATIVE_ADMISSION = {
     },
     "pathway": {
         "file": "pathway_arm_external_admission.json",
-        "schema_version": "spot.stage02_temporal_arm_external_admission.v1",
+        "schema_version": "spot.stage02_pathway_arm_external_admission.v1",
         "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
         "self_hash_field": "report_id", "excludes": ("report_id",),
     },
@@ -646,28 +658,39 @@ def write_native_admission(run: dict, lane: str, *, verdict="ADMIT", admitted=Tr
     """The lane's NATIVE admission, in that lane's OWN vocabulary. Never transliterated."""
     spec = NATIVE_ADMISSION[lane]
     root = run["root"]
-    if spec.get("binds_producer"):
-        # W10's separate report: it ADMITS the producer's release, and BINDS it by hash.
-        prod = json.load(open(os.path.join(root, spec["binds_producer"])))
-        body = {
-            "fixture": True,
-            "schema_version": spec["schema_version"],
-            "verifier_id": verifier_id or spec["verifier_id"],
-            "independent_of_generator": True,
-            "verdict": verdict,
-            "admitted": admitted,
-            "self_admitted": self_admitted,
-            "n_failed": 0,
-            "failed_gates": [],
-            "bound_artifact": {
-                "direct_release_sha256": prod["direct_release_sha256"],
-                "direct_release_run_id": prod["direct_release_run_id"],
-            },
-        }
-        doc = dict(body, report_sha256=_canon(body))
-        path = os.path.join(root, spec["file"])
-        _write(path, doc)
-        return path
+    if lane == "direct":
+        # W1's REAL shape: ONE FLAT BINDING PER CONDITION. W10 admits a BUNDLE at a time,
+        # and W1's adapter normalizes each native report into `direct_admission_<condition>
+        # .json`. There is no single `direct_release_admission.json`, and `code_identity` is
+        # a STRING. The exact fields are W3's verify_lane_admission.adapt_direct contract.
+        from direct.verify_lane_admission import (
+            DIRECT_BINDING_PREFIX,
+            DIRECT_BINDING_SCHEMA,
+            DIRECT_VERIFIER_ID,
+        )
+        last = ""
+        for d in run["direct"]:
+            bundle = json.load(open(os.path.join(d, "arm_bundle.json")))
+            cond = str(bundle["condition"])
+            body = {
+                "fixture": True,
+                "binding_schema": DIRECT_BINDING_SCHEMA,
+                "subject_kind": "bundle",
+                "condition": cond,
+                "bundle_id": bundle["arm_bundle_run_id"],
+                "native_verdict": verdict,
+                "disposition": "admitted" if admitted else "refused",
+                "n_failed": 0,
+                "bundle_verified_on_disk": True,
+                "self_admitted": self_admitted,
+                "verifier_id": verifier_id or DIRECT_VERIFIER_ID,
+                "verifier_code_sha256": "w" * 64,
+                "code_identity": "FIXTURE-code-identity",      # a STRING, not a dict
+            }
+            doc = dict(body, binding_sha256=_canon(body))
+            last = os.path.join(root, f"{DIRECT_BINDING_PREFIX}{cond}.json")
+            _write(last, doc)
+        return last
     inv_path = os.path.join(root, INVENTORY_FILE_OF[lane])
     inv = json.load(open(inv_path))
 

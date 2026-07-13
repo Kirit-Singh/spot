@@ -88,7 +88,16 @@ INVENTORY_SCHEMA_OF = {
     "pathway": "spot.stage02_pathway_arm_release.v1",
 }
 INVENTORY_SCHEMA = INVENTORY_SCHEMA_OF["temporal"]
-ADMISSION_SCHEMA = "spot.stage02_temporal_arm_external_admission.v1"
+
+# ONE ADMISSION SCHEMA PER LANE. A single shared constant meant the pathway lane demanded a
+# report that declared itself to be about TEMPORAL bytes — and the envelope would have taken
+# it.
+ADMISSION_SCHEMA_OF = {
+    "direct": "spot.stage02_direct_release_verification.v1",
+    "temporal": "spot.stage02_temporal_arm_external_admission.v1",
+    "pathway": "spot.stage02_pathway_arm_external_admission.v1",
+}
+ADMISSION_SCHEMA = ADMISSION_SCHEMA_OF["temporal"]      # the legacy default; lanes pass theirs
 
 PENDING = "pending"
 PRODUCER_VERDICT_PENDING = "pending_independent_verification"
@@ -227,6 +236,9 @@ def check_external_admission(root: str, inventory: Optional[dict],
     bad: list[str] = []
     INVENTORY_FILE = INVENTORY_FILE_OF[lane]
     ADMISSION_FILE = ADMISSION_FILE_OF[lane]
+    # THIS LANE'S schema — not temporal's. The function already knew its lane; it just never
+    # used it here, so a pathway admission declaring itself `_temporal_` was taken.
+    ADMISSION_SCHEMA = ADMISSION_SCHEMA_OF[lane]
     path = os.path.join(root, ADMISSION_FILE)
     if not os.path.exists(path):
         return None, [

@@ -1574,7 +1574,7 @@ class TestGate20TheNativeVerdictIsTypedNotTransliterated:
         assert block["aggregate_disposition"] == "admitted"  # the aggregate's own word
         assert block["transliterated"] is False
         assert block["native_verifier_id"] == (
-            "spot.stage02.direct.release.verifier.v1")
+            "spot.stage02.direct.arm_bundle.verifier.v1")
         assert doc["admission"]["mapping_rule_id"] == (
             "spot.stage02.run_manifest.lane_admission_map.v1")
 
@@ -1636,8 +1636,12 @@ class TestGate20TheNativeVerdictIsTypedNotTransliterated:
         assert V.G_LANE_ADMISSION in doc["failed_gates"]
 
     def test_a_MISSING_lane_admission_is_REFUSED(self, tmp_path):
+        import glob
         run = F.complete_run(tmp_path)
-        os.remove(os.path.join(run["root"], "direct_release.json"))
+        # the LANE ADMISSION is W1's per-condition binding — not the producer's
+        # `direct_release.json`, which W10 never touches and never binds.
+        for p_ in glob.glob(os.path.join(run["root"], "direct_admission_*.json")):
+            os.remove(p_)
         doc = _verify(run, _manifest(tmp_path, run)["path"])
 
         assert doc["verdict"] == V.R.REJECT
@@ -1859,9 +1863,14 @@ class TestTheStage3HandoffReceipt:
         assert os.path.samefile(h["stage1_release"], run["release_path"])
 
     def test_a_REJECTED_run_marks_the_handoff_NOT_admitted(self, tmp_path):
+        import glob
         run = F.complete_run(tmp_path)
-        # break the direct lane admission -> REJECT (integration model: direct_release_admission)
-        os.remove(os.path.join(run["root"], "direct_release_admission.json"))
+        # break the Direct lane admission -> REJECT. W1's real shape is ONE FLAT BINDING PER
+        # CONDITION (`direct_admission_<condition>.json`), so removing ONE leaves the LANE
+        # unadmitted: a Direct release missing one condition's binding is not a smaller
+        # release, it is an unadmitted one.
+        os.remove(sorted(glob.glob(
+            os.path.join(run["root"], "direct_admission_*.json")))[0])
         doc = _verify(run, _manifest(tmp_path, run)["path"])
         assert doc["verdict"] == V.R.REJECT
         assert doc["stage3_inputs"]["admitted"] is False
