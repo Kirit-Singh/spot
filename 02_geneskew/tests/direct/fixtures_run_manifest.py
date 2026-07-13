@@ -460,10 +460,12 @@ def complete_run(tmp_path, staged=None) -> dict[str, Any]:
 # THE ROOT ARTIFACTS. The producer's per-bundle report is a PREFLIGHT; these are what an
 # admission actually rests on.
 # --------------------------------------------------------------------------- #
-INVENTORY_FILE_OF = {"direct": "direct_arm_release.json",
+# EVERY lane: an IMMUTABLE pending inventory + a SEPARATE independent admission report.
+INVENTORY_FILE_OF = {"direct": "direct_release.json",
                      "temporal": "temporal_arm_release.json",
                      "pathway": "pathway_arm_release.json"}
-ADMISSION_FILE_OF = {"direct": "direct_arm_external_admission.json",
+ADMIT_IN_PLACE_LANES = ()
+ADMISSION_FILE_OF = {"direct": "direct_release_admission.json",
                      "temporal": "temporal_arm_external_admission.json",
                      "pathway": "pathway_arm_external_admission.json"}
 INVENTORY_FILE = INVENTORY_FILE_OF["temporal"]
@@ -506,11 +508,12 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
     """The IMMUTABLE, CONTENT-ADDRESSED per-lane inventory. status is always PENDING."""
     root = run["root"]
     entries = [_bundle_entry(root, d, lane) for d in run[lane]]
+    schema = ("spot.stage02_direct_release.v1" if lane == "direct"
+              else "spot.stage02_temporal_arm_release.v1" if lane == "temporal"
+              else "spot.stage02_pathway_arm_release.v1")
     doc = {
         "fixture": True,
-        "schema_version": f"spot.stage02_{lane}_arm_release.v1"
-                          if lane != "temporal"
-                          else "spot.stage02_temporal_arm_release.v1",
+        "schema_version": schema,
         "release_id_rule": "sha256(canonical JSON excluding release_id)",
         "analysis_mode": "temporal_cross_condition",
         "stage1_binding": {"release_canonical_sha256":
@@ -531,7 +534,16 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
                 "spot.stage02_temporal_arm_verifier_report.v1",
         },
     }
-    doc["release_id"] = _canon(doc)
+    if lane == "direct":
+        # W10's producer shape: ships UN-ADMITTED and stays that way. W10 GATES this.
+        body = dict(doc)
+        doc = dict(body, direct_release_run_id=_canon(body)[:16],
+                   verdict="pending_independent_verification", admitted=False,
+                   self_admitted=False, verifier_id=None)
+        doc["direct_release_sha256"] = _canon(body)
+    else:
+        doc["external_admission"] = {"status": "pending"}
+        doc["release_id"] = _canon(doc)
     path = os.path.join(root, INVENTORY_FILE_OF[lane])
     _write(path, doc)
     return path
@@ -568,9 +580,10 @@ def seal_release(run: dict) -> dict:
     """Re-derive every lane's inventory from the bytes on disk, then re-admit each. Used
     after a mutation, so an attack has to survive a FULLY consistent reseal."""
     for lane in ("direct", "temporal", "pathway"):
-        write_inventory(run, lane)
-        write_external_admission(run, lane=lane)
-        write_native_admission(run, lane)      # the lane's NATIVE, typed admission
+        write_inventory(run, lane)             # IMMUTABLE, and always PENDING
+        if lane != "direct":
+            write_external_admission(run, lane=lane)
+        write_native_admission(run, lane)      # the lane's SEPARATE independent admission
     return run
 
 
@@ -580,13 +593,15 @@ def seal_release(run: dict) -> dict:
 # The native verdict is the exact uppercase token `ADMIT` — W3 reads it as it is.
 # --------------------------------------------------------------------------- #
 NATIVE_ADMISSION = {
+    # W10's SEPARATE release-verification report. The producer's direct_release.json is
+    # never touched: it ships pending, and W10 gates that it stays pending.
     "direct": {
-        "file": "direct_release.json",
-        "schema_version": "spot.stage02_direct_release.v1",
+        "file": "direct_release_admission.json",
+        "schema_version": "spot.stage02_direct_release_verification.v1",
         "verifier_id": "spot.stage02.direct.release.verifier.v1",
-        "self_hash_field": "direct_release_sha256",
-        "excludes": ("direct_release_sha256", "direct_release_run_id", "verdict",
-                     "admitted", "self_admitted", "verifier_id"),
+        "self_hash_field": "report_sha256",
+        "excludes": ("report_sha256",),
+        "binds_producer": "direct_release.json",
     },
     "temporal": {
         "file": "temporal_arm_external_admission.json",
@@ -608,6 +623,28 @@ def write_native_admission(run: dict, lane: str, *, verdict="ADMIT", admitted=Tr
     """The lane's NATIVE admission, in that lane's OWN vocabulary. Never transliterated."""
     spec = NATIVE_ADMISSION[lane]
     root = run["root"]
+    if spec.get("binds_producer"):
+        # W10's separate report: it ADMITS the producer's release, and BINDS it by hash.
+        prod = json.load(open(os.path.join(root, spec["binds_producer"])))
+        body = {
+            "fixture": True,
+            "schema_version": spec["schema_version"],
+            "verifier_id": verifier_id or spec["verifier_id"],
+            "independent_of_generator": True,
+            "verdict": verdict,
+            "admitted": admitted,
+            "self_admitted": self_admitted,
+            "n_failed": 0,
+            "failed_gates": [],
+            "bound_artifact": {
+                "direct_release_sha256": prod["direct_release_sha256"],
+                "direct_release_run_id": prod["direct_release_run_id"],
+            },
+        }
+        doc = dict(body, report_sha256=_canon(body))
+        path = os.path.join(root, spec["file"])
+        _write(path, doc)
+        return path
     inv_path = os.path.join(root, INVENTORY_FILE_OF[lane])
     inv = json.load(open(inv_path))
 

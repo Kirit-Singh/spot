@@ -34,6 +34,9 @@ from typing import Any, Optional
 
 MAPPING_RULE_ID = "spot.stage02.run_manifest.lane_admission_map.v1"
 
+# The producer's honest state, in every lane. It never fills in its own verdict.
+PRODUCER_PENDING = "pending_independent_verification"
+
 # THE AGGREGATE'S canonical dispositions.
 ADMITTED = "admitted"
 REFUSED = "refused"
@@ -46,14 +49,23 @@ REFUSED = "refused"
 # content hash precisely so that admitting it does not change what it is.
 # --------------------------------------------------------------------------- #
 NATIVE = {
+    # W10 does NOT fill in the producer's release. It GATES that the producer's
+    # `direct_release.json` stays pending and un-admitted, and emits a SEPARATE
+    # release-verification report. The aggregate consumes THAT.
     "direct": {
-        "file": "direct_release.json",
-        "schema_version": "spot.stage02_direct_release.v1",
+        "file": "direct_release_admission.json",
+        "schema_version": "spot.stage02_direct_release_verification.v1",
         "verifier_id": "spot.stage02.direct.release.verifier.v1",
         "admit_token": "ADMIT",
-        "self_hash_field": "direct_release_sha256",
-        "self_hash_excludes": ("direct_release_sha256", "direct_release_run_id",
-                               "verdict", "admitted", "self_admitted", "verifier_id"),
+        "self_hash_field": "report_sha256",
+        "self_hash_excludes": ("report_sha256",),
+        # ...and it must be an admission OF the producer's release, which must itself still
+        # be un-admitted. An admission that named no artifact could be moved onto any.
+        "binds_producer": {
+            "file": "direct_release.json",
+            "producer_hash_field": "direct_release_sha256",
+            "report_hash_path": ("bound_artifact", "direct_release_sha256"),
+        },
     },
     "temporal": {
         "file": "temporal_arm_external_admission.json",
@@ -136,13 +148,51 @@ def adapt(root: str, lane: str) -> tuple:
     elif disposition != ADMITTED:
         bad.append(f"[{lane}] native verdict {native!r} does not map to {ADMITTED!r}")
 
-    # THE PRODUCER DID NOT ADMIT ITSELF. `admitted` is the independent verifier's to set.
-    if doc.get("admitted") is not True:
+    # WHERE THE REPORT CARRIES THEM, the affirmative fields must say so.
+    if "admitted" in doc and doc.get("admitted") is not True:
         bad.append(f"[{lane}] admitted={doc.get('admitted')!r}; an independent admission "
                    "says so in the field that means it")
-    if doc.get("self_admitted") is not False:
+    if "self_admitted" in doc and doc.get("self_admitted") is not False:
         bad.append(f"[{lane}] self_admitted={doc.get('self_admitted')!r} — a release that "
                    "admitted itself was never independently admitted")
+
+    # THE PRODUCER'S RELEASE MUST STILL BE UN-ADMITTED, and this report must be an admission
+    # OF IT. The producer never fills its own verdict in — W10 gates exactly that — so an
+    # aggregate that found an admitted producer file has found one somebody edited.
+    producer_state: dict[str, Any] = {}
+    binds = spec.get("binds_producer")
+    if binds:
+        ppath = os.path.join(root, binds["file"])
+        prod = _load(ppath)
+        if prod is None:
+            bad.append(f"[{lane}] the producer release {binds['file']} is absent or "
+                       "unreadable; there is nothing for this report to be about")
+        else:
+            producer_state = {
+                "verdict": prod.get("verdict"),
+                "admitted": prod.get("admitted"),
+                "self_admitted": prod.get("self_admitted"),
+                "verifier_id": prod.get("verifier_id"),
+            }
+            if (prod.get("admitted") is not False
+                    or prod.get("self_admitted") is not False
+                    or prod.get("verifier_id") is not None
+                    or prod.get("verdict") != PRODUCER_PENDING):
+                bad.append(
+                    f"[{lane}] the producer's {binds['file']} is not un-admitted "
+                    f"(verdict={prod.get('verdict')!r}, admitted={prod.get('admitted')!r}, "
+                    f"self_admitted={prod.get('self_admitted')!r}). The producer ships "
+                    "PENDING and immutable; a verdict in it is one somebody wrote there")
+
+            want = prod.get(binds["producer_hash_field"])
+            got: Any = doc
+            for key in binds["report_hash_path"]:
+                got = (got or {}).get(key) if isinstance(got, dict) else None
+            if got != want:
+                bad.append(
+                    f"[{lane}] this report admits release {str(got)[:16]}; the producer's "
+                    f"release is {str(want)[:16]}. An admission that names another artifact "
+                    "is an admission of something else")
 
     # THE BOUND HASH. Recomputed over the body the verifier did NOT fill in, so admitting an
     # artifact cannot change what that artifact IS.
@@ -167,5 +217,7 @@ def adapt(root: str, lane: str) -> tuple:
         "transliterated": False,
         "admitted": doc.get("admitted"),
         "self_admitted": doc.get("self_admitted"),
+        # the producer's release, as it still stands: PENDING, and never self-admitted
+        "producer_release": producer_state,
     }
     return block, bad
