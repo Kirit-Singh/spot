@@ -1,0 +1,33 @@
+{
+  "_comment": "Shape reference for the release manifest that deploy/assemble_release.py emits as MANIFEST.json in the staging dir, and that deploy/handoff_release.sh independently re-verifies and SEALS (writing SEAL.json). This template is NOT a manifest: every measured value is null because nothing has been produced. Do not hand-fill it - the assembler fills it from real bytes, and any hand-written hash would be an invented hash.",
+  "schema_id": "spot.public_release_manifest.v1",
+  "release_id": null,
+  "generator": "deploy/assemble_release.py",
+  "created_utc": null,
+  "lanes": {
+    "stage1": {"status": null, "receipt_sha256": null, "artifact_count": null, "route": "/01_page.html"},
+    "stage2": {"status": null, "receipt_sha256": null, "artifact_count": null, "route": "/02_page.html"},
+    "stage3": {"status": null, "receipt_sha256": null, "artifact_count": null, "route": "/03_page.html"},
+    "stage4": {"status": null, "receipt_sha256": null, "artifact_count": null, "route": "/04_page.html"}
+  },
+  "routes": {},
+  "dist": null,
+  "hf": {
+    "card": "STAGE1_V3_DATASET_CARD.template.md",
+    "manifest": "stage1_release_hf_manifest.template.json",
+    "immutable_source_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6",
+    "stage1_release_hf_revision": null
+  },
+  "file_count": null,
+  "files": [
+    {"_shape": "one entry per staged file; all values MEASURED from the bytes",
+     "path": null, "sha256": null, "size": null, "lane": null, "role": null}
+  ],
+  "manifest_content_sha256": null,
+  "uploaded": false,
+  "_seal": {
+    "sealed_by": "deploy/handoff_release.sh",
+    "emits": "SEAL.json (sealed, seal_utc, manifest_content_sha256, verified_file_count, uploaded:false)",
+    "note": "The seal certifies the CONTENT was independently re-verified. It is not a publication: uploaded stays false."
+  }
+}

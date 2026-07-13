@@ -72,3 +72,26 @@ The staged copy is re-hashed after the copy; any drift refuses.
 
 `handoff_release.sh` re-hashes every staged file against the manifest and re-derives the content
 address independently (generator ≠ verifier). Any drift refuses with exit 2.
+
+## Excluded from every release (internal-path scan)
+Never staged, whatever a spec says — refused on **both** the source path and the release path:
+prefetch-only / cache (`cache/`, `.cache/`, `prefetch/`, `*_cache/`, `pipeline/datasets/`),
+private logs / run scratch (`logs/`, `*.log`), build junk (`__pycache__/`, `.ipynb_checkpoints/`),
+VCS (`.git/`), raw source matrices (`*.h5ad`, `*.h5mu`) and credentials (`.env`, `*.pem`, `*.key`,
+`.netrc`). No token is ever read or printed.
+
+Build-staging dirs (`_t8_staging`) and OS temp dirs are deliberately **not** excluded by name: the
+Stage-1 scores parquet legitimately lives under a staging dir, and a real run stages from a temp
+dir — excluding those would refuse real results. The classes are also declared in
+`schemas/artifact_provenance.json` → `excluded_from_release`.
+
+## Per-artifact provenance
+`schemas/artifact_provenance.json` records, for every public artifact (Stage-1 scores / display /
+contracts, Stage-2 Direct / Temporal / Pathway), what it is, the exact rerun command, its
+independent verifier, and its license — with `sha256`, `rerun_utc` and `admitted` all **null/false**
+until a real run fills them. It ships inside the release under `public/schemas/`.
+
+## Seal
+`handoff_release.sh` re-verifies every staged byte, re-derives the content address, then writes
+`SEAL.json` (`sealed`, `seal_utc`, `manifest_content_sha256`, `verified_file_count`,
+`uploaded: false`). The seal certifies the **content**, not a publication — nothing is uploaded.

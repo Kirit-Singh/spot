@@ -49,6 +49,7 @@ REPO_PUBLIC_ALLOWLIST = [
     "DATA_LICENSES.md",
     "schemas/README.md",
     "schemas/source_license_inventory.json",
+    "schemas/artifact_provenance.json",
     "schemas/paper_concordance_run_receipt.schema.json",
     "01_programs/README.md",
     "02_geneskew/README.md",
@@ -63,6 +64,21 @@ REPO_PUBLIC_ALLOWLIST = [
 
 DENY_EXTENSIONS = {".env", ".pem", ".key", ".p12", ".pfx", ".crt", ".h5ad", ".h5mu", ".pyc"}
 DENY_BASENAMES = {".env", ".npmrc", ".netrc", "id_rsa", "id_ed25519", "credentials"}
+
+# Internal / non-public classes that never reach a public release, whatever a spec says.
+# Checked on BOTH the source path (prefetch-only + cache + private logs + build junk) and the
+# destination path (nothing internal-looking may land in the public tree).
+#
+# Deliberately NOT excluded by path: build-staging dirs (e.g. _t8_staging) and OS temp dirs.
+# A legitimate produced artifact (the Stage-1 scores parquet) lives under a staging dir, and a
+# real run stages from a temp dir — excluding those by name would refuse real results.
+EXCLUDE_PATTERNS = [
+    ("cache_or_prefetch", re.compile(r"(^|/)(\.?cache|prefetch|[A-Za-z0-9_.-]*_cache)(/|$)", re.I)),
+    ("private_log", re.compile(r"(^|/)logs?(/|$)|\.log$", re.I)),
+    ("build_junk", re.compile(r"(^|/)(__pycache__|\.ipynb_checkpoints)(/|$)", re.I)),
+    ("vcs", re.compile(r"(^|/)\.git(/|$)", re.I)),
+    ("dataset_prefetch", re.compile(r"(^|/)pipeline/datasets(/|$)", re.I)),
+]
 
 SECRET_PATTERNS = [
     ("hf_token", re.compile(r"\bhf_[A-Za-z0-9]{34,}")),
@@ -213,6 +229,17 @@ def check_deny(path: str) -> list[str]:
     return out
 
 
+def check_excluded(src: str, dst: str) -> list[str]:
+    """Prefetch-only / cache / private-log / build-junk paths never reach a public release."""
+    out = []
+    for label, path in (("source", src.replace(os.sep, "/")), ("release", dst.replace(os.sep, "/"))):
+        for name, pat in EXCLUDE_PATTERNS:
+            if pat.search(path):
+                out.append(f"{os.path.basename(dst)}: excluded {name} on the {label} path "
+                           f"(prefetch-only/cache/private logs are never published)")
+    return out
+
+
 def _plan_file(src, dst, lane, role, expected, problems) -> dict | None:
     if not src:
         problems.append(f"[{lane}/{role}] no source path supplied for {dst} (slot still pending)")
@@ -221,6 +248,7 @@ def _plan_file(src, dst, lane, role, expected, problems) -> dict | None:
         problems.append(f"[{lane}/{role}] missing file: {dst}")
         return None
     problems.extend(f"[{lane}/{role}] {p}" for p in check_deny(src))
+    problems.extend(f"[{lane}/{role}] {p}" for p in check_excluded(src, dst))
     problems.extend(f"[{lane}/{role}] {p}" for p in scan_text(src))
     actual = sha256_file(src)
     if expected is not None and expected != actual:

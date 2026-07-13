@@ -22,10 +22,12 @@ if [[ ! -f "$MANIFEST" ]]; then
   exit 2
 fi
 
-python3 - "$STAGING" <<'PY'
+SEAL_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+python3 - "$STAGING" "$SEAL_UTC" <<'PY'
 import hashlib, json, os, sys
 
-staging = sys.argv[1]
+staging, seal_utc = sys.argv[1], sys.argv[2]
 with open(os.path.join(staging, "MANIFEST.json"), encoding="utf-8") as fh:
     m = json.load(fh)
 
@@ -75,6 +77,25 @@ if problems:
 
 print(f"re-verified {len(files)} files; manifest_content_sha256 = {rederived}")
 print("lanes: " + ", ".join(f"{k}={v['status']}" for k, v in sorted(m["lanes"].items())))
+
+# SEAL: only written after the bytes were independently re-verified above. It is a seal on the
+# CONTENT, not a publication -- uploaded stays false and nothing leaves this machine.
+seal = {
+    "schema_id": "spot.release_seal.v1",
+    "sealed": True,
+    "seal_utc": seal_utc,
+    "sealed_by": "deploy/handoff_release.sh (independent re-verification; generator != verifier)",
+    "release_id": m.get("release_id"),
+    "manifest_content_sha256": rederived,
+    "verified_file_count": len(files),
+    "lanes": {k: v["status"] for k, v in sorted(m["lanes"].items())},
+    "routes": m.get("routes") or {},
+    "uploaded": False,
+}
+with open(os.path.join(staging, "SEAL.json"), "w", encoding="utf-8") as fh:
+    json.dump(seal, fh, indent=2, sort_keys=True, ensure_ascii=True)
+    fh.write("\n")
+print(f"sealed -> SEAL.json ({seal_utc}); uploaded=false")
 PY
 
 cat <<EOF

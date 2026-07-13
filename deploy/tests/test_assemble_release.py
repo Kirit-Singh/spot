@@ -343,6 +343,56 @@ def test_shipped_closeout_spec_refuses_with_pending_lanes(tmp_path):
         assert f"[{lane}] status is 'PENDING'" in msg
 
 
+# ------------------------------------------------- excluded / internal-path scan
+@pytest.mark.parametrize("relpath", [
+    "cache/blob.json",
+    ".cache/blob.json",
+    "prefetch/blob.json",
+    "drug_cache/blob.json",
+    "logs/run.json",
+    "run.log",
+    "__pycache__/x.json",
+    "pipeline/datasets/blob.json",
+])
+def test_prefetch_cache_and_private_logs_are_excluded(tmp_path, relpath):
+    src = tmp_path / "internal" / relpath
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text('{"internal":1}', encoding="utf-8")
+    spec = _spec(tmp_path, stage3={"artifacts": [{"src": str(src), "dst": "s3.json"}]})
+    assert "excluded" in _refuses(tmp_path, spec)
+
+
+def test_internal_dst_path_is_excluded_even_from_a_clean_source(tmp_path):
+    """A clean source may not be published UNDER an internal-looking release path."""
+    src = _artifact(tmp_path, "stage3", body='{"ok":1}', name="clean.json")
+    spec = _spec(tmp_path, stage3={"artifacts": [{"src": src, "dst": "cache/clean.json"}]})
+    assert "excluded cache_or_prefetch on the release path" in _refuses(tmp_path, spec)
+
+
+def test_build_staging_source_is_NOT_excluded(tmp_path):
+    """The Stage-1 scores parquet legitimately lives under a build-staging dir; excluding
+    staging/temp by name would refuse a real result."""
+    src = tmp_path / "_t8_staging" / "stage01_scores_full.json"
+    src.parent.mkdir(parents=True)
+    src.write_text('{"scores":1}', encoding="utf-8")
+    spec = _spec(tmp_path, stage1={"artifacts": [{"src": str(src), "dst": "stage01_scores_full.json"}]})
+    ar.assemble(spec, _staging(tmp_path), run_utc="2026-07-13T00:00:00Z")   # must NOT refuse
+
+
+def test_artifact_provenance_ships_and_declares_no_invented_values(tmp_path):
+    prov = json.loads(open(os.path.join(REPO, "schemas/artifact_provenance.json"), encoding="utf-8").read())
+    assert "schemas/artifact_provenance.json" in ar.REPO_PUBLIC_ALLOWLIST
+    for a in prov["artifacts"]:
+        assert a["sha256"] is None and a["rerun_utc"] is None and a["admitted"] is False, \
+            f"{a['id']}: no artifact may carry a hash/timestamp/admission before a real run"
+    lanes = {a["lane"] for a in prov["artifacts"]}
+    assert {"stage1", "stage2"} <= lanes
+    kinds = {a["id"] for a in prov["artifacts"]}
+    for required in ("stage1_scores_full", "stage1_display_overlay",
+                     "stage2_arm_direct", "stage2_arm_temporal", "stage2_arm_pathway"):
+        assert required in kinds
+
+
 def test_non_empty_staging_refused_and_never_deleted(tmp_path):
     staging = tmp_path / "staging"
     staging.mkdir()

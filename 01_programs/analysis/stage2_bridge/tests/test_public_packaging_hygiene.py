@@ -37,6 +37,7 @@ SCANNED_FILES = [
     "schemas/README.md",
     "schemas/paper_concordance_run_receipt.schema.json",
     "schemas/source_license_inventory.json",
+    "schemas/artifact_provenance.json",
     "01_programs/README.md",
     "02_geneskew/README.md",
     "03_druglink/README.md",
@@ -49,6 +50,7 @@ SCANNED_FILES = [
     "deploy/RELEASE_ASSEMBLY.md",
     "deploy/release_spec.template.json",
     "deploy/release_spec.closeout.json",
+    "deploy/MANIFEST.template.json",
     "deploy/handoff_release.sh",
 ]
 
