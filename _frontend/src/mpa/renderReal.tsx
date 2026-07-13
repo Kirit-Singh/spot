@@ -16,12 +16,14 @@ import type { JoinedView, ResolvedBundles } from '../repository/joinResolver';
 import type { StageMethodsManifest } from '../domain/methodsManifest';
 import type { DirectArm, DesiredDirectionDisposition, PathwayArm, PathwayArmRecord } from '../domain/reusableArm';
 import type { NativeTemporalArm, NativeTemporalArmBundle } from '../domain/nativeTemporalArm';
+import type { CompactStage2SelectionView } from '../domain/compactStage2Projection';
 import type { Stage3UiArtifact, Stage3Candidate } from '../domain/stage3UiArtifact';
 import type { Stage4UiArtifact, Stage4Candidate } from '../domain/stage4UiArtifact';
 import { STAGE4_LANE_KEYS } from '../domain/stage4UiArtifact';
 import { joinRowIdentity, desiredDirectionDisposition } from '../repository/armIdentity';
 import { nativeTemporalIdentity } from '../adapters/nativeTemporalArmAdapter';
 import { StatePill } from '../shell/chips';
+import { renderCompactPathways, renderCompactTargets } from './renderCompactStage2';
 
 /** A resolved, admission-gated real artifact the island renders, DISCRIMINATED by route. Never demo. */
 interface ResolutionCommon {
@@ -31,13 +33,17 @@ interface ResolutionCommon {
   manifest?: StageMethodsManifest | null;
 }
 export type RealRouteResolution =
-  | (ResolutionCommon & { route: 'targets'; view: JoinedView; bundles: ResolvedBundles })
-  | (ResolutionCommon & { route: 'pathways'; view: JoinedView; bundles: ResolvedBundles })
+  | (ResolutionCommon & { route: 'targets'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles })
+  | (ResolutionCommon & { route: 'pathways'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles })
   | (ResolutionCommon & { route: 'drugs'; artifact: Stage3UiArtifact })
   | (ResolutionCommon & { route: 'pksafety'; artifact: Stage4UiArtifact });
 
 /** @deprecated legacy name retained for existing import sites; use RealRouteResolution. */
 export type RealArtifactResolution = RealRouteResolution;
+
+function isCompactStage2(view: CompactStage2SelectionView | JoinedView): view is CompactStage2SelectionView {
+  return 'schema_version' in view && view.schema_version === 'spot.ui_compact_stage2_selection_view.v1';
+}
 
 // ── shared cell formatting (a null value is a compact neutral em-dash, never invented) ──
 function num(n: number | null): string {
@@ -347,9 +353,11 @@ function Field({ label, value }: { label: string; value: string }) {
 export function renderRouteReal(res: RealRouteResolution): React.ReactNode {
   switch (res.route) {
     case 'targets':
-      return renderTargets(res.view, res.bundles);
+      return isCompactStage2(res.view)
+        ? renderCompactTargets(res.view)
+        : renderTargets(res.view, res.bundles ?? {});
     case 'pathways':
-      return renderPathways(res.view);
+      return isCompactStage2(res.view) ? renderCompactPathways(res.view) : renderPathways(res.view);
     case 'drugs':
       return renderDrugs(res.artifact);
     case 'pksafety':

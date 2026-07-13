@@ -6,10 +6,12 @@
 // ui_release manifest and native projection are each independently content-verified downstream
 // (parseUiReleaseManifest / the projection loader) against the hashes this pointer pins.
 
+import type { CompactStage2ReleaseMetadata } from '../domain/compactStage2Projection';
+import { COMPACT_STAGE2_VERIFIER } from '../domain/compactStage2Projection';
 import type { ResultChain, RouteReleaseEntry, Stage1Binding, UiResultsCurrent, ResultRouteKey } from '../domain/uiResultsCurrent';
 import { RESULT_ROUTE_KEYS, UI_RESULTS_CURRENT_SCHEMA } from '../domain/uiResultsCurrent';
 import { fail } from './errors';
-import { isObject, optStr, str } from './guards';
+import { arr, isObject, optStr, str } from './guards';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -28,7 +30,69 @@ function optHex64(v: unknown, path: string): string | null {
   return hex64(v, path);
 }
 
-function routeEntry(v: unknown, path: string): RouteReleaseEntry {
+function relativePath(v: unknown, path: string): string {
+  const s = reqStr(v, path);
+  if (s.startsWith('/') || s.includes('..') || s.includes('://') || /[?#]/.test(s)) {
+    fail('malformed', `${path} must be a same-origin relative path`);
+  }
+  return s;
+}
+
+function exactStrings(v: unknown, expected: readonly string[], path: string): string[] {
+  const got = arr(v, path).map((x, i) => str(x, `${path}[${i}]`));
+  if (got.length !== expected.length || got.some((x, i) => x !== expected[i])) {
+    fail('malformed', `${path} must be exactly [${expected.join(', ')}]`);
+  }
+  return got;
+}
+
+function exactKeys(v: Record<string, unknown>, expected: readonly string[], path: string): void {
+  const got = Object.keys(v).sort();
+  const want = [...expected].sort();
+  if (got.length !== want.length || got.some((key, i) => key !== want[i])) {
+    fail('malformed', `${path} fields [${got.join(', ')}] do not equal [${want.join(', ')}]`);
+  }
+}
+
+function compactStage2Metadata(v: unknown, path: string): CompactStage2ReleaseMetadata {
+  if (!isObject(v)) fail('malformed', `${path} must be an object`);
+  exactKeys(v, ['active_pathway_source', 'independent_verifier', 'pathway_sources',
+    'projection_canonical_sha256', 'projection_raw_sha256', 'projection_self_sha256',
+    'release_conditions', 'run_id', 'schema_version'], path);
+  if (str(v.schema_version, `${path}.schema_version`) !== 'spot.ui_compact_stage2_release.v1') {
+    fail('unknown_schema_version', `${path}.schema_version must be spot.ui_compact_stage2_release.v1`);
+  }
+  const conditions = exactStrings(v.release_conditions, ['Rest', 'Stim8hr', 'Stim48hr'], `${path}.release_conditions`);
+  const sources = exactStrings(v.pathway_sources, ['reactome', 'go_bp'], `${path}.pathway_sources`);
+  const active = str(v.active_pathway_source, `${path}.active_pathway_source`);
+  if (!sources.includes(active)) fail('malformed', `${path}.active_pathway_source is not in pathway_sources`);
+  if (!isObject(v.independent_verifier)) fail('malformed', `${path}.independent_verifier must be an object`);
+  const verifier = v.independent_verifier;
+  exactKeys(verifier, ['receipt_canonical_sha256', 'receipt_path', 'receipt_raw_sha256',
+    'verifier_id'], `${path}.independent_verifier`);
+  const verifierId = str(verifier.verifier_id, `${path}.independent_verifier.verifier_id`);
+  if (verifierId !== COMPACT_STAGE2_VERIFIER) {
+    fail('verifier_not_admitted', `${path}.independent_verifier.verifier_id is not the compact-display verifier`);
+  }
+  return {
+    schema_version: 'spot.ui_compact_stage2_release.v1',
+    run_id: reqStr(v.run_id, `${path}.run_id`),
+    release_conditions: conditions as CompactStage2ReleaseMetadata['release_conditions'],
+    pathway_sources: sources as CompactStage2ReleaseMetadata['pathway_sources'],
+    active_pathway_source: active as CompactStage2ReleaseMetadata['active_pathway_source'],
+    projection_raw_sha256: hex64(v.projection_raw_sha256, `${path}.projection_raw_sha256`),
+    projection_canonical_sha256: hex64(v.projection_canonical_sha256, `${path}.projection_canonical_sha256`),
+    projection_self_sha256: hex64(v.projection_self_sha256, `${path}.projection_self_sha256`),
+    independent_verifier: {
+      verifier_id: COMPACT_STAGE2_VERIFIER,
+      receipt_path: relativePath(verifier.receipt_path, `${path}.independent_verifier.receipt_path`),
+      receipt_raw_sha256: hex64(verifier.receipt_raw_sha256, `${path}.independent_verifier.receipt_raw_sha256`),
+      receipt_canonical_sha256: hex64(verifier.receipt_canonical_sha256, `${path}.independent_verifier.receipt_canonical_sha256`),
+    },
+  };
+}
+
+function routeEntry(v: unknown, path: string, route: ResultRouteKey, chain: ResultChain): RouteReleaseEntry {
   if (!isObject(v)) fail('malformed', `${path} must be an object`);
   const projection_path = optStr(v.projection_path, `${path}.projection_path`);
   const projection_content_hash = optHex64(v.projection_content_hash, `${path}.projection_content_hash`);
@@ -36,11 +100,28 @@ function routeEntry(v: unknown, path: string): RouteReleaseEntry {
   if ((projection_path === null) !== (projection_content_hash === null)) {
     fail('malformed', `${path}.projection_path and projection_content_hash must both be present or both absent`);
   }
+  const stage2Route = route === 'targets' || route === 'pathways';
+  const compact_stage2 = v.compact_stage2 == null ? null : compactStage2Metadata(v.compact_stage2, `${path}.compact_stage2`);
+  if (stage2Route && projection_path !== null && compact_stage2 === null) {
+    fail('malformed', `${path}.compact_stage2 is required for a bound compact Stage-2 route`);
+  }
+  if (!stage2Route && compact_stage2 !== null) {
+    fail('malformed', `${path}.compact_stage2 is only valid on targets/pathways routes`);
+  }
+  if (compact_stage2) {
+    if (compact_stage2.run_id !== chain.stage2_run_id) {
+      fail('content_hash_mismatch', `${path}.compact_stage2.run_id does not match chain.stage2_run_id`);
+    }
+    if (compact_stage2.projection_canonical_sha256 !== projection_content_hash) {
+      fail('content_hash_mismatch', `${path}.compact_stage2 projection canonical hash does not match projection_content_hash`);
+    }
+  }
   return {
     manifest_path: reqStr(v.manifest_path, `${path}.manifest_path`),
     content_hash: hex64(v.content_hash, `${path}.content_hash`),
     projection_path,
     projection_content_hash,
+    compact_stage2,
   };
 }
 
@@ -82,7 +163,13 @@ export function parseUiResultsCurrent(raw: unknown): UiResultsCurrent {
     if (!(RESULT_ROUTE_KEYS as readonly string[]).includes(key)) {
       fail('malformed', `routes has an unknown route key "${key}"`);
     }
-    routes[key as ResultRouteKey] = routeEntry(routesRaw[key], `routes.${key}`);
+    const route = key as ResultRouteKey;
+    routes[route] = routeEntry(routesRaw[key], `routes.${key}`, route, chain);
+  }
+  const targetMeta = routes.targets?.compact_stage2;
+  const pathwayMeta = routes.pathways?.compact_stage2;
+  if (targetMeta && pathwayMeta && JSON.stringify(targetMeta) !== JSON.stringify(pathwayMeta)) {
+    fail('content_hash_mismatch', 'targets/pathways compact Stage-2 release metadata disagree');
   }
 
   return { schema: UI_RESULTS_CURRENT_SCHEMA, stage1_binding, chain, routes };

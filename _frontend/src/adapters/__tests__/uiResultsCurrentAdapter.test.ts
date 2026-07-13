@@ -14,7 +14,16 @@ const BINDING = {
   release_self_sha256: 'c'.repeat(64),
 };
 const CHAIN = { stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null };
-const ENTRY = { manifest_path: 'results/manifests/targets.ui_release.json', content_hash: H, projection_path: null, projection_content_hash: null };
+const ENTRY = { manifest_path: 'results/manifests/targets.ui_release.json', content_hash: H, projection_path: null, projection_content_hash: null, compact_stage2: null };
+const COMPACT = {
+  schema_version: 'spot.ui_compact_stage2_release.v1', run_id: 'run_1',
+  release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'], pathway_sources: ['reactome', 'go_bp'], active_pathway_source: 'reactome',
+  projection_raw_sha256: 'd'.repeat(64), projection_canonical_sha256: H, projection_self_sha256: 'e'.repeat(64),
+  independent_verifier: {
+    verifier_id: 'spot.stage02.display_projection.independent_verifier.v1',
+    receipt_path: 'stage02/display.verify.json', receipt_raw_sha256: 'f'.repeat(64), receipt_canonical_sha256: '1'.repeat(64),
+  },
+};
 
 describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   it('accepts a valid pointer and preserves route entries', () => {
@@ -31,9 +40,9 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   });
 
   it('accepts a fully-bound projection (path + hash together)', () => {
-    const entry = { ...ENTRY, projection_path: 'results/stage02/release.json', projection_content_hash: H };
+    const entry = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H, compact_stage2: COMPACT };
     const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: entry } });
-    expect(c.routes.targets?.projection_path).toBe('results/stage02/release.json');
+    expect(c.routes.targets?.projection_path).toBe('stage02/release.json');
   });
 
   it('rejects a non-object', () => {
@@ -74,5 +83,36 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
     const halfB = { ...ENTRY, projection_path: null, projection_content_hash: H };
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: halfA } })).toThrow(AdapterError);
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: halfB } })).toThrow(AdapterError);
+  });
+
+  it('requires exact compact release metadata for bound Stage-2 routes and cross-checks run/hash', () => {
+    const base = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H };
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: base } })).toThrow(/compact_stage2/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: { ...base, compact_stage2: { ...COMPACT, run_id: 'other' } } } })).toThrow(/run_id/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: { ...base, compact_stage2: { ...COMPACT, projection_canonical_sha256: '2'.repeat(64) } } } })).toThrow(/canonical hash/);
+  });
+
+  it('rejects reordered release metadata and compact metadata on Stage-3/4 routes', () => {
+    const base = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H };
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { pathways: { ...base, compact_stage2: { ...COMPACT, release_conditions: ['Stim8hr', 'Rest', 'Stim48hr'] } } } })).toThrow(/exactly/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { drugs: { ...base, compact_stage2: COMPACT } } })).toThrow(/only valid/);
+  });
+
+  it('rejects unknown compact metadata and verifier fields', () => {
+    const base = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H };
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: {
+      targets: { ...base, compact_stage2: { ...COMPACT, inferred_order: ['Rest'] } },
+    } })).toThrow(/fields/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: {
+      targets: { ...base, compact_stage2: { ...COMPACT, independent_verifier: { ...COMPACT.independent_verifier, verdict: 'admit' } } },
+    } })).toThrow(/fields/);
+  });
+
+  it('rejects different compact release metadata across targets and pathways', () => {
+    const base = { ...ENTRY, projection_path: 'stage02/release.json', projection_content_hash: H };
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: {
+      targets: { ...base, compact_stage2: COMPACT },
+      pathways: { ...base, compact_stage2: { ...COMPACT, active_pathway_source: 'go_bp' } },
+    } })).toThrow(/metadata disagree/);
   });
 });

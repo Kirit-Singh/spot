@@ -9,6 +9,7 @@
 // carry only the Stage-1 selection contract). No fixture, no demo.
 
 import type { PageKey } from './pages';
+import type { CompactStage2SelectionView } from '../domain/compactStage2Projection';
 import type { JoinedView, ResolvedBundles } from '../repository/joinResolver';
 import type { Stage3UiArtifact } from '../domain/stage3UiArtifact';
 import type { Stage4UiArtifact } from '../domain/stage4UiArtifact';
@@ -18,9 +19,10 @@ import type { RealRouteResolution } from './renderReal';
 import type { SelectionV3 } from '../adapters/selectionV3Adapter';
 import { parseUiResultsCurrent } from '../adapters/uiResultsCurrentAdapter';
 import { mergeAdmittedManifest, parseUiReleaseManifest } from '../adapters/uiReleaseManifestAdapter';
-import { parseDrugsProjection, parsePkSafetyProjection, parseStage2Projection, resolveStage2Bundles } from '../adapters/routeProjectionAdapter';
+import { parseDrugsProjection, parsePkSafetyProjection } from '../adapters/routeProjectionAdapter';
+import { parseCompactDisplayReceipt, parseCompactStage2Projection } from '../adapters/compactStage2ProjectionAdapter';
 import { resultRouteKeyForPage } from '../domain/uiResultsCurrent';
-import { resolveJoinedView } from '../repository/joinResolver';
+import { resolveCompactStage2Selection } from '../repository/compactStage2Resolver';
 import { canonicalJson, sha256Hex } from '../stage1/canonical';
 import { STAGE1_SELECTION_SCHEMA_RAW_SHA256, STAGE1_V3_RELEASE_SELF_SHA256 } from '../stage1/contractBinding';
 import { readStage1SelectionV3 } from './contrastTitle';
@@ -34,7 +36,7 @@ const underResults = (relPath: string): string => `${RESULTS_ROOT}${relPath}`;
 
 /** A route's native canvas projection — a Stage-2 join view, or a Stage-3/Stage-4 UI artifact. */
 export type RouteProjection =
-  | { kind: 'stage2'; view: JoinedView; bundles: ResolvedBundles }
+  | { kind: 'stage2'; view: CompactStage2SelectionView | JoinedView; bundles?: ResolvedBundles }
   | { kind: 'stage3'; artifact: Stage3UiArtifact }
   | { kind: 'stage4'; artifact: Stage4UiArtifact };
 
@@ -176,8 +178,10 @@ export async function loadProductionProjection(
   if (current.stage1_binding.release_self_sha256 !== STAGE1_V3_RELEASE_SELF_SHA256) return null;
 
   let raw: unknown;
+  let projectionText: string;
   try {
-    raw = JSON.parse(await fetchText(underResults(entry.projection_path)));
+    projectionText = await fetchText(underResults(entry.projection_path));
+    raw = JSON.parse(projectionText);
   } catch {
     return null; // 404 / malformed JSON
   }
@@ -205,16 +209,21 @@ export async function loadProductionProjection(
       if (artifact.scorecard_set_id !== chain.stage4_scorecard_set_id) return null;
       return { kind: 'stage4', artifact };
     }
-    // Stage-2 (targets | pathways): the UNIFIED all-arm release carries EVERY Direct / temporal / pathway
-    // slot (completeness enforced in parseStage2Projection); it declares NO top-level analysis mode — the
-    // ACTIVE selection decides within_condition vs temporal_cross_condition at join time. Select the
-    // requested slice from the admitted bundles + the stored selection (selection + bindings verified above).
-    const proj = parseStage2Projection(raw);
-    if (proj.run_id !== chain.stage2_run_id) return null; // chain: this projection is not the admitted run
-    const bundles = resolveStage2Bundles(proj, selection);
-    if (!bundles) return null; // requested condition/pair not in the release → refuse (never render empty)
-    const view = resolveJoinedView(selection, bundles, proj.pathway_source, proj.release_conditions);
-    return { kind: 'stage2', view, bundles };
+    // Stage-2 (targets | pathways): W3's compact all-arm prefix, selected at join time. Release
+    // order/source/run identity comes ONLY from the explicit route metadata — never inferred from keys.
+    const meta = entry.compact_stage2;
+    if (!meta || meta.run_id !== chain.stage2_run_id) return null;
+    if ((await sha256Hex(projectionText)) !== meta.projection_raw_sha256) return null;
+    if ((await sha256Hex(canonicalJson(raw))) !== meta.projection_canonical_sha256) return null;
+    const proj = await parseCompactStage2Projection(raw, meta.projection_self_sha256);
+
+    const receiptText = await fetchText(underResults(meta.independent_verifier.receipt_path));
+    if ((await sha256Hex(receiptText)) !== meta.independent_verifier.receipt_raw_sha256) return null;
+    const receiptRaw = JSON.parse(receiptText) as unknown;
+    if ((await sha256Hex(canonicalJson(receiptRaw))) !== meta.independent_verifier.receipt_canonical_sha256) return null;
+    parseCompactDisplayReceipt(receiptRaw, proj.n_arms);
+
+    return { kind: 'stage2', view: resolveCompactStage2Selection(proj, meta, selection) };
   } catch {
     return null; // strict-parse rejection / view-resolution failure → unbound
   }
