@@ -17,6 +17,7 @@ import shutil
 import fixtures_run_manifest as F
 import pytest
 from direct import release_inventory as RI
+from direct import bundle_normalize as BN
 from direct import run_release
 from direct.arm_topology import RunManifestError
 
@@ -177,7 +178,11 @@ class TestTheFourAssemblyAttacks:
         # The refusal comes at the FIRST step that has to read the re-badged bundle — the
         # inventory — and that is the point: it never reaches a stage where the counts could
         # look right.
-        with pytest.raises(RunManifestError,
+        # W1's normalizer types this refusal as BundleShapeError: a re-badged bundle cannot
+        # produce the re-badged lane's identity (temporal names its bundles `bundle_id`;
+        # Direct names them `arm_bundle_run_id`), so the counts never get a chance to look
+        # right.
+        with pytest.raises((RunManifestError, BN.BundleShapeError),
                            match="arm_bundle_run_id|exactly 3|exactly 6"):
             F.seal_release(run)
             run_release.assemble(_Args(run, tmp_path))
@@ -190,8 +195,15 @@ class TestTheFourAssemblyAttacks:
         inv["schema_version"] = "spot.stage02_direct_arm_bundle.v2"   # one digit
         with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
             json.dump(inv, fh, indent=2, sort_keys=True)
-        with pytest.raises(RunManifestError, match="names no known lane"):
-            run_release.discover(run["root"], "direct")
+
+        # An unrecognised schema is not this lane: `classify_lane` returns None and the
+        # directory is not discovered as a bundle at all. So the lane comes up SHORT rather
+        # than admitting a bundle nobody can read — which is the same refusal, reached one
+        # step earlier.
+        assert BN.classify_lane(inv) is None
+        assert d not in run_release.discover(run["root"], "direct")
+        with pytest.raises(RunManifestError, match="exactly 3"):
+            run_release.assemble(_Args(run, tmp_path))
 
 
 class TestTheProducerShipsPENDINGAndStaysThatWay:

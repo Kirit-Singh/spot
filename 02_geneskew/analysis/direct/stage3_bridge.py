@@ -347,9 +347,10 @@ def _pathway_contexts(bundle_dir: str, context: dict, namespace_of: dict) -> lis
 
 def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
     """Build the bridge from the ADMITTED release. Writes ONLY into ``bridge_root``."""
+    import json
     import os
 
-    from . import bundle_shapes as BS
+    from . import bundle_normalize as BN
 
     aggregate, manifest, _report = preconditions(bundles_root)
 
@@ -361,15 +362,17 @@ def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
     rows, contexts, native = [], [], {}
     for base, dirs, files in os.walk(bundles_root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        if BS.BUNDLE_FILE not in files:
+        if "arm_bundle.json" not in files:
             continue
-        norm = BS.read(base)
-        if norm is None:
+        try:
+            with open(os.path.join(base, "arm_bundle.json")) as fh:
+                norm = BN.normalize(json.load(fh))
+        except (OSError, ValueError, BN.BundleShapeError):
             continue
         lane, ctx = norm["lane"], norm["context"]
         rel = os.path.relpath(base, bundles_root).replace(os.sep, "/")
 
-        names, source = [BS.BUNDLE_FILE], None
+        names, source = ["arm_bundle.json"], None
         if lane == "direct":
             rows += _direct_rows(base, ctx)
             names += ["arms.parquet", TARGET_IDENTITY_FILE]
@@ -424,36 +427,45 @@ def _direct_bundles_by_condition(bundles_root: str) -> dict:
     import json
     import os
 
-    from . import bundle_shapes as BS
+    from . import bundle_normalize as BN
 
     out: dict = {}
     for base, dirs, files in os.walk(bundles_root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        if BS.BUNDLE_FILE not in files:
+        if "arm_bundle.json" not in files:
             continue
         try:
-            with open(os.path.join(base, BS.BUNDLE_FILE)) as fh:
+            with open(os.path.join(base, "arm_bundle.json")) as fh:
                 doc = json.load(fh)
         except (OSError, ValueError):
             continue
-        if BS.lane_of(doc) == "direct":
+        if BN.classify_lane(doc) == "direct":
             out[str(doc.get("condition"))] = base
     return out
 
 
 def _release_namespaces(bundles_root: str) -> dict:
-    """target_id -> namespace, from every Direct bundle's SHARED identity artifact."""
+    """target_id -> namespace, from every Direct bundle's SHARED identity artifact.
+
+    The SAME declared identity the typed target evidence uses — so a pathway leading edge and
+    a Direct row can never disagree about who a target is.
+    """
+    import json
     import os
 
-    from . import bundle_shapes as BS
+    from . import bundle_normalize as BN
 
     out: dict = {}
     for base, dirs, files in os.walk(bundles_root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        if BS.BUNDLE_FILE not in files:
+        if "arm_bundle.json" not in files:
             continue
-        norm = BS.read(base)
-        if norm and norm["lane"] == "direct":
+        try:
+            with open(os.path.join(base, "arm_bundle.json")) as fh:
+                norm = BN.normalize(json.load(fh))
+        except (OSError, ValueError, BN.BundleShapeError):
+            continue
+        if norm["lane"] == "direct":
             for tid, rec in _identity_of(base).items():
                 out[tid] = rec["target_id_namespace"]
     return out

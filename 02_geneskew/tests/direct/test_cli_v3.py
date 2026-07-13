@@ -27,7 +27,6 @@ import os
 import pytest
 from direct import cli as direct_cli
 from direct import run_pathway, stage1_v3
-from direct.temporal import cli as temporal_cli
 from fixtures_pathway import write_gene_sets
 from fixtures_spec import TARGET_GENES, UNIVERSE
 from test_temporal_v3 import SCHEMA_PATH, v3_contract
@@ -177,27 +176,22 @@ class TestThePathwayCLIAcceptsAndUSESTheV3Flags:
             assert json.load(fh)["run_binding"]["stage1_v3"] is None
 
 
-class TestTheTemporalCLIStillWorks:
-    def test_it_still_defines_the_flags(self):
-        # it was the only lane that did; it must not regress
-        parser_src = temporal_cli.main.__doc__ or ""
-        assert parser_src is not None      # the real assertion is the run below
-
-    def test_all_three_lanes_now_define_the_v3_flags(self):
-        """The gap was that only ONE of three entry points was wired."""
-        import argparse
+class TestTheStage2CLIsDefineTheV3Flags:
+    def test_the_direct_and_pathway_lanes_define_the_v3_flags(self):
+        """The gap this guards: an entry point that silently lacked the v3 flags. The temporal
+        lane's CLI is now ``direct.temporal.arms.run_temporal_arms`` with its OWN flag set
+        (``--stage1-view``/``--direct-bundle`` — see test_temporal_arms); W18 owns adding it to
+        the invocation matrix, so it is not asserted against the v3-selection flags here."""
         import contextlib
         import io
 
-        for name, mod in (("direct", direct_cli), ("temporal", temporal_cli),
-                          ("pathway", run_pathway)):
+        for name, mod in (("direct", direct_cli), ("pathway", run_pathway)):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf), pytest.raises(SystemExit):
                 mod.main(["--help"])
             helptext = buf.getvalue()
             assert "--stage1-v3-selection" in helptext, f"{name} CLI lacks the flag"
             assert "--stage1-v3-schema" in helptext, f"{name} CLI lacks the flag"
-        assert argparse  # noqa: B018
 
 
 class TestAMissingFlagIsAWiringBugNotSilence:
@@ -234,11 +228,8 @@ MATRIX_FLAGS = {
         "--source-registry", "--stage1-release", "--lane", "--strict-replay",
         "--pseudobulk", "--env-lock", "--out-root", "--preflight-only",
         "--allow-dirty-tree"]),
-    "temporal": ("direct.temporal.cli", [
-        "--stage1-v3-selection", "--stage1-v3-schema", "--selection", "--registry",
-        "--de-main", "--by-guide", "--by-donors", "--sgrna", "--guide-manifest",
-        "--source-registry", "--stage1-release", "--lane", "--strict-replay",
-        "--pseudobulk", "--out-root", "--conditions", "--batch-policy"]),
+    # the temporal lane's CLI is now direct.temporal.arms.run_temporal_arms with its own flag
+    # set (--stage1-view/--direct-bundle/…); W18 owns wiring it into the invocation matrix.
     "pathway": ("direct.run_pathway", [
         "--stage1-v3-selection", "--stage1-v3-schema", "--selection", "--registry",
         "--de-main", "--by-guide", "--by-donors", "--sgrna", "--guide-manifest",

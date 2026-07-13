@@ -189,7 +189,10 @@ class TestEveryProductionEntryPointACCEPTSTheFlag:
         "direct.signature_matrix",    # Step 0
         "direct.cli",
         "direct.run_pathway",
-        "direct.temporal.cli",        # 6 temporal invocations (W5's lane)
+        # the PRODUCTION temporal lane. `direct.temporal.cli` — the retired flat lane — no
+        # longer exists in this tree, and a gate that named it was checking a module nobody
+        # can run: `--help` returned nothing, and "no flags found" is not "flag missing".
+        "direct.temporal.arms.run_temporal_arms",
     ])
     def test_it_defines_env_lock(self, module):
         import subprocess

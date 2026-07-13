@@ -15,6 +15,12 @@ release's, not ours.
 """
 from __future__ import annotations
 
+# THE LANE'S OWN ARM-KEY FIELD. The pathway producer names it `pathway_arm_key` — a fixture
+# that wrote `arm_key` on a pathway bundle would be the only thing in the release that did,
+# and every pathway arm slot would read as empty.
+ARM_KEY_FIELD = {"direct": "arm_key", "temporal": "arm_key",
+                 "pathway": "pathway_arm_key"}
+
 import hashlib
 import json
 import os
@@ -331,7 +337,7 @@ def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
         ranking = _ranking(program, dc, ctx)
         rel = f"rankings/{program}__{dc}.json"
         arm: dict[str, Any] = {
-            "arm_key": "|".join(
+            ARM_KEY_FIELD[lane]: "|".join(
                 [lane, program, dc]
                 + ([ctx["condition"]] if lane == "direct" else
                    [ctx["from_condition"], ctx["to_condition"]] if lane == "temporal"
@@ -505,8 +511,8 @@ def _norm(doc: dict) -> dict:
     The fixtures now wear each producer's NATIVE shape, so nothing here may reach for a
     top-level `bundle_id`/`context` — only temporal has them.
     """
-    from direct import bundle_shapes as BS
-    return BS.normalize(doc, where="fixture")
+    from direct import bundle_normalize as BS
+    return BS.normalize(doc)
 
 
 def _bundle_entry(root: str, d: str, lane: str = "temporal") -> dict[str, Any]:
@@ -548,7 +554,7 @@ def write_inventory(run: dict, lane: str = "temporal") -> str:
         "n_bundles": len(entries),
         "n_logical_arms": sum(len(json.load(open(os.path.join(d, "arm_bundle.json")))
                                   ["arms"]) for d in run[lane]),
-        "arm_keys": sorted(a["arm_key"] for d in run[lane]
+        "arm_keys": sorted(a[ARM_KEY_FIELD[lane]] for d in run[lane]
                            for a in json.load(open(os.path.join(d, "arm_bundle.json")))
                            ["arms"]),
         "bundles": sorted(entries, key=lambda b: b["bundle_key"]),

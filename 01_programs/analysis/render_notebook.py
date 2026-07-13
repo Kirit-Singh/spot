@@ -177,8 +177,8 @@ header = (
     '<a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" '
     'target="_blank" rel="noopener">CZI Virtual Cells Platform</a> (Marson perturb-seq) and is '
     'redistributed on Hugging Face (public, MIT); the clustering is spot-specific and paper-inspired, '
-    'not a verbatim reproduction. RNA program-compatibility does not demonstrate lineage stability, '
-    'protein expression, cytotoxicity, or suppressive function.</div>'
+    # scope disclaimer ("does not demonstrate lineage stability…") lives once, in the method body (stage1_pipeline.py)
+    'not a verbatim reproduction.</div>'
     f'<div class="sub" style="margin-top:9px;font-size:11.5px">Rendered from '
     f'<code>stage1_pipeline.py</code> on <b>{now}</b>.</div></div>'
 )

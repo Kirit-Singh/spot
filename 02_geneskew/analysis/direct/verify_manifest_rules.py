@@ -24,7 +24,7 @@ LANES = (LANE_DIRECT, LANE_TEMPORAL, LANE_PATHWAY)
 # --------------------------------------------------------------------------- #
 # THE THREE NATIVE BUNDLE SHAPES — RESTATED HERE, never imported from the producer.
 #
-# The producer has its own `bundle_shapes`. This is deliberately a SECOND, independent copy:
+# The producer has its own `bundle_normalize`. This is deliberately a SECOND, independent copy:
 # a verifier that imported the producer's normalizer would identify a lane exactly the way
 # the producer does, agree with it by construction, and be unable to catch it mis-identifying
 # one. That is the whole point of a second implementation — it can disagree.
@@ -40,13 +40,18 @@ LANES = (LANE_DIRECT, LANE_TEMPORAL, LANE_PATHWAY)
 # --------------------------------------------------------------------------- #
 NATIVE_BUNDLE_SHAPE = {
     LANE_DIRECT: {"schema": "spot.stage02_direct_arm_bundle.v1",
-                  "id_field": "arm_bundle_run_id", "context_fields": ("condition",)},
+                  "id_field": "arm_bundle_run_id", "context_fields": ("condition",),
+                  "arm_key_field": "arm_key"},
     LANE_TEMPORAL: {"schema": "spot.stage02_temporal_arm_bundle.v1",
                     "id_field": "bundle_id",
-                    "context_fields": ("from_condition", "to_condition")},
+                    "context_fields": ("from_condition", "to_condition"),
+                    "arm_key_field": "arm_key"},
     LANE_PATHWAY: {"schema": "spot.stage02_pathway_arm_bundle.v1",
                    "id_field": "pathway_run_id",
-                   "context_fields": ("condition", "source")},
+                   "context_fields": ("condition", "source"),
+                   # the pathway lane names its arm key `pathway_arm_key`. Reading `arm_key`
+                   # here found None on every pathway arm, so every slot read as empty.
+                   "arm_key_field": "pathway_arm_key"},
 }
 _LANE_BY_SCHEMA = {v["schema"]: k for k, v in NATIVE_BUNDLE_SHAPE.items()}
 _CONTEXT_ALIAS = {"source": "gene_set_source"}
@@ -79,7 +84,8 @@ def native_view(doc: Any) -> Any:
     if not bundle_id:
         return None
     return {"lane": lane, "bundle_id": str(bundle_id), "context": context,
-            "arms": doc.get("arms") or [], "schema_version": doc.get("schema_version")}
+            "arms": doc.get("arms") or [], "schema_version": doc.get("schema_version"),
+            "arm_key_field": spec["arm_key_field"]}
 INCREASE, DECREASE = "increase", "decrease"
 DESIRED_CHANGES = (INCREASE, DECREASE)
 ADMIT, REJECT, PASS, FAIL = "admit", "reject", "pass", "fail"

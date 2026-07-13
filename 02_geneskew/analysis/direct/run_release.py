@@ -52,7 +52,6 @@ import subprocess
 import sys
 from typing import Any, Optional
 
-from . import bundle_shapes as BS
 from . import release_inventory as RI
 from . import run_manifest
 from .arm_topology import LANES, RunManifestError, load_release
@@ -77,20 +76,27 @@ def _git(repo: str, *args: str) -> Optional[str]:
 
 
 def discover(root: str, lane: str) -> list[str]:
-    """Bundle directories for ONE lane, by the bundle's OWN SCHEMA.
+    """Bundle directories for ONE lane, by NATIVE schema — not a top-level ``lane`` field.
 
-    Not by a top-level `lane` key: only the temporal producer emits one. Direct names itself
-    `spot.stage02_direct_arm_bundle.v1` and pathway `spot.stage02_pathway_arm_bundle.v1`, and
-    an aggregate that looked for `lane` found neither — so a 15-bundle release was 6 bundles
-    and a fixture. The schema is the one field every producer does write.
+    The real Direct and pathway producers write NO top-level ``lane``; keying on it found
+    nothing on real bytes. ``bundle_normalize.classify_lane`` reads each bundle's native
+    schema (``spot.stage02_{direct,temporal,pathway}_arm_bundle.v1``) and returns its lane;
+    an unrecognised shape is not this lane and is skipped.
     """
+    from . import bundle_normalize as BN
     found = []
     for base, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
-        if BS.BUNDLE_FILE not in files:
+        if "arm_bundle.json" not in files:
             continue
-        norm = BS.read(base)
-        if norm and norm["lane"] == lane:
+        try:
+            with open(os.path.join(base, "arm_bundle.json")) as fh:
+                doc = json.load(fh)
+        except (OSError, ValueError):
+            raise RunManifestError(
+                f"{base}: arm_bundle.json is not readable JSON — a directory that cannot "
+                "be opened is not a bundle") from None
+        if BN.classify_lane(doc) == lane:
             found.append(base)
     return sorted(found)
 

@@ -171,13 +171,13 @@ class TestTheRunBindingCarriesTheCodeIdentity:
         assert ci["canonical_digest"] == code_digest.run_binding()["canonical_digest"]
         assert ci["manifest_sha256"] == code_digest.run_binding()["manifest_sha256"]
 
-    def test_the_temporal_run_binds_it(self, temporal_run):
-        from direct.temporal import run_temporal
-        res = run_temporal.build_temporal(temporal_run())
-        with open(os.path.join(res["out_dir"], "temporal_provenance.json")) as fh:
-            prov = json.load(fh)
-        ci = prov["run_binding"]["code_identity"]
+    def test_the_temporal_arm_bundle_binds_it(self):
+        # the temporal lane is the reusable-arm producer now; its bundle records the SAME
+        # shared code-identity tuple, via the one code_digest convention.
+        from direct.temporal.arms import arm_bundle
+        ci = arm_bundle.code_identity()
         assert ci["canonical_digest"] == code_digest.run_binding()["canonical_digest"]
+        assert ci["manifest_sha256"] == code_digest.run_binding()["manifest_sha256"]
 
     def test_the_run_id_MOVES_when_the_code_identity_moves(self, synthetic_run):
         # The tuple is bound INTO the identity, not merely printed beside it.

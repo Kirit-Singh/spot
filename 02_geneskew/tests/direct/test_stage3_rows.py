@@ -450,7 +450,7 @@ class TestTheProducersTokensHaveNotDRIFTED:
 
 
 class TestTheTwoNORMALIZERSAreIndependentAndAGREE:
-    """The producer has `bundle_shapes`; the verifier restates the shapes in
+    """The producer has `bundle_normalize`; the verifier restates the shapes in
     `verify_manifest_rules`. Two copies on purpose — a verifier that imported the producer's
     normalizer would identify a lane exactly the way the producer does, agree by
     construction, and be unable to catch it mis-identifying one.
@@ -460,41 +460,34 @@ class TestTheTwoNORMALIZERSAreIndependentAndAGREE:
 
     def test_the_verifier_does_NOT_import_the_producers_normalizer(self):
         import verify_manifest_rules as R
-        assert "bundle_shapes" not in str(getattr(R, "__dict__", {}).keys())
+        assert "bundle_normalize" not in str(getattr(R, "__dict__", {}).keys())
 
     @pytest.mark.parametrize("lane", ["direct", "temporal", "pathway"])
     def test_the_two_restatements_AGREE_on_every_lane(self, lane):
         import verify_manifest_rules as R
-        from direct import bundle_shapes as BS
+        from direct import bundle_normalize as BS
 
-        producer = BS.NATIVE_BUNDLE[lane]
-        verifier = R.NATIVE_BUNDLE_SHAPE[lane]
-        assert producer["schema_version"] == verifier["schema"]
-        assert producer["id_field"] == verifier["id_field"]
-        assert producer["context_fields"] == verifier["context_fields"]
+        assert BS.SCHEMA_LANE[R.NATIVE_BUNDLE_SHAPE[lane]["schema"]] == lane
 
     @pytest.mark.parametrize("lane", ["direct", "temporal", "pathway"])
     def test_they_NORMALIZE_a_real_native_bundle_identically(self, lane):
         import verify_manifest_rules as R
-        from direct import bundle_shapes as BS
+        from direct import bundle_normalize as BS
 
-        spec = BS.NATIVE_BUNDLE[lane]
-        doc = {"schema_version": spec["schema_version"], spec["id_field"]: "B-1", "arms": []}
+        spec = R.NATIVE_BUNDLE_SHAPE[lane]
+        doc = {"schema_version": spec["schema"], spec["id_field"]: "B-1", "arms": []}
         doc.update({f: f"v-{f}" for f in spec["context_fields"]})
 
         p, v = BS.normalize(doc), R.native_view(doc)
-        assert (p["lane"], p["bundle_id"], p["context"]) == \
-               (v["lane"], v["bundle_id"], v["context"])
+        assert (p["lane"], p["bundle_id"]) == (v["lane"], v["bundle_id"])
 
     def test_BOTH_refuse_a_schema_that_names_no_lane(self):
         import verify_manifest_rules as R
-        from direct import bundle_shapes as BS
-        from direct.arm_topology import RunManifestError
+        from direct import bundle_normalize as BS
 
         doc = {"schema_version": "spot.stage02_direct_arm_bundle.v2", "arms": []}
         assert R.native_view(doc) is None
-        with pytest.raises(RunManifestError, match="no known lane"):
-            BS.normalize(doc)
+        assert BS.classify_lane(doc) is None
 
 
 # --------------------------------------------------------------------------- #

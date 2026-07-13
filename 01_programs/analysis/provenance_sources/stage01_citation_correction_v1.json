@@ -1,0 +1,84 @@
+{
+  "schema": "spot.stage01_citation_correction.v1",
+  "correction_lane": "W17 Claude Science independent citation-correction (SEPARATE citation-verifier lane; read-only, provenance-only). Applies the SOURCE_VALIDATION_RULE outcome for the 3 audit-flagged pairs + the FOXP3 nested-label correction. No panel/gene/score/selectability/scorer/threshold/UI change.",
+  "provenance": {
+    "audit_md_sha256": "c157ef22ca850404b34980d143cba6085672b4d5a49530fc64562a92cc6c4a35",
+    "candidate_json_sha256": "f4a7d63fe76f32fca77c4afd9807156f9e0fb56e54b4700d7bde1ba216ace7b6",
+    "correction_memo_sha256": "7ce54a55f2afe10f6b6389d633cf98a95ee73d0b238d2c25043edb5233ab1340",
+    "correction_evidence_sha256": "61146d7692e73c722156d5754131449da13d3cd6f9c7f2f9b6f091a9f5cb5201",
+    "independent_verification_sha256": "0ef446320ddf18891c4530f9a28d9f9be4097b8c7d88dfdc8f6b001817f85660",
+    "source_validation_rule_sha256": "cc67b6458407cc6c3005ecc527f3d1b336b6c000555e67e1918e1f09bba5aac3"
+  },
+  "human_primary_additions": {
+    "th1_like.TBX21": {
+      "corrected_species_lineage_scope": "human_supported_mouse_mechanistic_origin",
+      "mouse_mechanistic_origin_pmid": "10761931",
+      "human_primary_support": {
+        "source_type": "primary_research",
+        "pmid": "23232398",
+        "pmcid": "PMC3535338",
+        "doi": "10.1038/ncomms2260",
+        "source_title": "T-bet and GATA3 orchestrate Th1 and Th2 differentiation through lineage-specific targeting of distal regulatory elements.",
+        "source_year": "2012",
+        "source_url": "https://pubmed.ncbi.nlm.nih.gov/23232398/",
+        "license": "PMC full text CC BY-NC-SA 3.0 (PMC3535338)",
+        "content_sha256": "70c51efc58b347fff8b9efbce3bca29c69b250428423d951fc5ce25fd7df2f78",
+        "exact_locator": "Kanhere et al. 2012 (Nat Commun): T-bet ChIP-seq in primary human Th1 cells differentiated in vitro from naive CD4+ precursors; T-bet binds distal sites at TBX21 and directly activates its own expression (Results, Fig. 5, Discussion; Methods 'Naive human CD4+ T cells were isolated and polarized').",
+        "species_lineage_scope": "human",
+        "support_level": "direct_primary_human",
+        "verification_status": "verified",
+        "verification_reason": "W17 independent citation-verifier: PMID/DOI/PMCID/title/authors resolve against PubMed + PMC; MeSH indexes Humans AND CD4-Positive T-Lymphocytes; direct human primary CD4 source for TBX21->Th1."
+      }
+    },
+    "th1_like.IFNG": {
+      "corrected_species_lineage_scope": "human_supported_mouse_mechanistic_origin",
+      "mouse_mechanistic_origin_pmid": "10761931",
+      "human_primary_support": {
+        "source_type": "primary_research",
+        "pmid": "9419219",
+        "pmcid": "PMC2199181",
+        "doi": "10.1084/jem.187.1.129",
+        "source_title": "Differential expression of chemokine receptors and chemotactic responsiveness of type 1 T helper cells (Th1s) and Th2s.",
+        "source_year": "1998",
+        "source_url": "https://pubmed.ncbi.nlm.nih.gov/9419219/",
+        "license": "PMC full text CC BY-NC-SA 4.0 (PMC2199181)",
+        "content_sha256": "a33ed37499c37173ec7e0e7f1e08c617c38b56ce0259244043d40f0a1db4fd44",
+        "exact_locator": "Bonecchi et al. 1998 (J Exp Med): human CD4+ T-cell clones able to produce IFN-gamma but not IL-4 categorized as Th1 clones (Results, single-cell cytokine analysis); 'Th1s secrete IFN-gamma' (Introduction). Same human source already cited in the registry for th1_like.CXCR3.",
+        "species_lineage_scope": "human",
+        "support_level": "direct_primary_human",
+        "verification_status": "verified",
+        "verification_reason": "W17 independent citation-verifier: PMID/DOI/PMCID/title/authors resolve against PubMed + PMC; MeSH indexes Humans; text defines human CD4 Th1 clones by IFN-gamma production. Direct human primary CD4 source for IFNG->Th1."
+      }
+    },
+    "th17_like.IL17F": {
+      "corrected_species_lineage_scope": "human_supported_mouse_mechanistic_origin",
+      "mouse_mechanistic_origin_pmid": "16990136",
+      "human_primary_support": {
+        "source_type": "primary_research",
+        "pmid": "28763457",
+        "pmcid": "PMC5538713",
+        "doi": "10.1371/journal.pone.0181868",
+        "source_title": "RORgammat and RORalpha signature genes in human Th17 cells.",
+        "source_year": "2017",
+        "source_url": "https://pubmed.ncbi.nlm.nih.gov/28763457/",
+        "license": "PMC full text CC BY 4.0 (PMC5538713)",
+        "content_sha256": "7821f7deb7a09eb531c95a65ab14013cb9d0be16045c3c35e009d41d85e78cc1",
+        "exact_locator": "Castro et al. 2017 (PLoS ONE): IL-17F is one of 12 RORgammat-dependent Th17 signature genes reduced by RORgammat siRNA / inverse-agonist treatment in purified primary human CD4 T cells (Results, Fig 5A; Methods 'Human CD4 T cell purification' from two healthy donors, 'Th17 assay'). Authoritative DOI is the PLoS ONE 10.1371/journal.pone.0181868, NOT the spurious reference-list DOI.",
+        "species_lineage_scope": "human",
+        "support_level": "direct_primary_human",
+        "verification_status": "verified",
+        "verification_reason": "W17 independent citation-verifier: article-own PubmedData ArticleIdList + ELocationID confirm PLoS ONE DOI 10.1371/journal.pone.0181868, PMC5538713, title, Humans MeSH; direct human primary CD4 source for IL17F->Th17. A spurious reference-list Sci Transl Med DOI (10.1126/scitranslmed.3001107) was explicitly rejected."
+      }
+    }
+  },
+  "nested_support_level_corrections": {
+    "treg_like.FOXP3": {
+      "nested_key": "human_corroboration",
+      "pmid": "17154262",
+      "from_support_level": "corroborating_secondary_human",
+      "to_support_level": "direct_primary_human_counterevidence",
+      "verification_status": "verified",
+      "verification_reason": "W17 independent citation-verifier: Wang et al. 2007 (PMID 17154262) re-resolved; PMID/DOI/title/authors match; species=Humans, CD4-Positive T-Lymphocytes; it is a PRIMARY research article providing DIRECT human CD4 counterevidence (activation induces transient FOXP3 in nonregulatory human CD4 cells), so the nested support_level is direct_primary_human_counterevidence, not corroborating_secondary_human."
+    }
+  }
+}

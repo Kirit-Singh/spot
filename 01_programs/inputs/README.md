@@ -12,5 +12,7 @@ No data is bundled here (repo policy: public data only). This stage's inputs are
   embedded with scVI + Leiden (the "embedding tier"; see the stage README). `reproduce.sh`
   fetches it from Hugging Face at the pinned revision and verifies its SHA-256; it is *not*
   committed to the repo (**~3.84 GB**). Point `SPOT_DATA` at the directory holding it.
-- **Marker panels:** the differentiation + function panels (Masopust et al., Tables 1 & 3)
-  live in the code (`../analysis/stage1_pipeline.py`), not as separate files.
+- **Marker panels:** the differentiation + function panels live in the code
+  (`../analysis/stage1_pipeline.py`), not as separate files. They are **separately curated + cited**
+  (per-marker primary provenance in the v3 registry `marker_provenance`); Masopust et al. is a
+  **naming framework only**, never the panel source.

@@ -31,11 +31,25 @@ INVENTORY_RULE = (
     "so a new pair-captured tree cannot arrive unnoticed")
 
 # WHAT THE PRODUCTION PACKAGE IS. Everything else is refused.
-ALLOWED_ENTRIES = (
+# The PRIMARY producer, its runbook, and pinned environment (the code-identity digest root).
+PRIMARY_ENTRIES = (
     "direct",                     # the generic producer
     "run_stage2.sh",              # the runbook
     "stage02_solver_lock.txt",    # the pinned environment
 )
+
+# The SECONDARY production lane, admitted ON PURPOSE and bound here EXPLICITLY (not a loose
+# allowlist widening): p2s_arms is the perturb-to-state secondary method. It is run-OPTIONAL,
+# leaves the Direct ranks byte-identical whether invoked or not, and was INDEPENDENTLY
+# ADMITTED by W10 (verifier-code pinned; forged/missing/truncated pins refused). It ships in
+# the package and is bound into the repo-wide Stage-2 identity, but it is NOT an arm-release
+# member. It is named here, and ONLY here, so a second undeclared directory still cannot
+# arrive unnoticed.
+SECONDARY_PRODUCTION = (
+    "p2s_arms",                   # W10-admitted secondary perturb-to-state lane (run-optional)
+)
+
+ALLOWED_ENTRIES = PRIMARY_ENTRIES + SECONDARY_PRODUCTION
 
 # Named so a refusal SAYS what it found rather than only that it found something.
 KNOWN_LEGACY = (
@@ -59,10 +73,13 @@ def scan(package_root: str) -> dict[str, Any]:
                      if not e.startswith(("__pycache__", ".")))
     unexpected = [e for e in entries if e not in ALLOWED_ENTRIES]
     legacy = [e for e in unexpected if e in KNOWN_LEGACY]
+    secondary = [e for e in entries if e in SECONDARY_PRODUCTION]
     return {
         "inventory_rule_id": INVENTORY_RULE_ID,
         "entries": entries,
         "allowed": list(ALLOWED_ENTRIES),
+        "primary": list(PRIMARY_ENTRIES),
+        "secondary_production": secondary,
         "unexpected": unexpected,
         "legacy_present": legacy,
         "clean": not unexpected,

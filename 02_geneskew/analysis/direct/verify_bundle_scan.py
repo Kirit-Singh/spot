@@ -102,7 +102,8 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
         arms = norm["arms"]
         want_keys = {R.arm_key(lane, p, dc, ctx)
                      for p in programs for dc in R.DESIRED_CHANGES}
-        got_keys = [str(a.get("arm_key")) for a in arms]
+        akf = norm["arm_key_field"]          # pathway names it `pathway_arm_key`
+        got_keys = [str(a.get(akf)) for a in arms]
         if sorted(got_keys) != sorted(want_keys):
             not_all_arm.append(
                 f"{bid}: carries {len(got_keys)} arms; an all-arm bundle for this context "
@@ -117,7 +118,7 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
             .get("path", ""))) if lane == R.LANE_PATHWAY else None)
 
         for a in arms:
-            key = str(a.get("arm_key"))
+            key = str(a.get(akf))
             # (d) THE ARM IS PAIR-AGNOSTIC. It carries no role, no pole and no pair-derived
             #     program id, and none is required of it. What must hold is that its key and
             #     its declared desired_change agree, and that the change is one of the two.

@@ -1,0 +1,83 @@
+{
+  "schema": "spot.stage01_full_release_verification.v1",
+  "method_version": "stage1-continuous-v3.0.1",
+  "purpose": "Hash-bound full-release attestation for the Stage-1 v3.0.1 measurement bundle. Binds code, environment, inputs and outputs, and states scope (verified vs pending). This is NOT a selectability/T8 decision and NOT a claim that any program is biologically valid or that panel provenance is confirmed.",
+  "code": {
+    "gen_stage1_t8.py": "0d8ad04bb43390e7e1c63e30dc5566f74ba4adf474c2f192afac5e505ea8023b",
+    "stage1_t8_derive.py": "28c196f6de7f9c42454e8fc33064b72a6cc00d99be152ed968e3e39e53ecf44a",
+    "verify_stage1_t8.py": "2574638eafd31a9b8fc99431070caac07f8de15aa3f86cfbaf35aad97773df74",
+    "stage1_t8_preflight.py": "2351a33e8e4cfe3c1d7d57fb62944718aee78a377600f1f76d479836bf921357",
+    "test_stage1_t8.py": "b0a0fbb4371f1b38512a13c48bd38ff017d79ab05678890f3b21185a14e96d4c",
+    "gen_full_release_verification.py": "d59e0109798fd21bee2e3fb16e240ebc6a952465a70967da03ffec68f7c3c380",
+    "gen_stage1_provenance.py": "f3ef4d01421906687875c63bc87002e6bf0598ee845ea3009521f45d407e7572",
+    "verify_stage1_provenance.py": "40fa59ac26f61e1accc92ae8bd70ccd96f0929446be7a2eda0346455dcf735a7",
+    "test_stage1_provenance.py": "47b8be513e36e975d1774504b0a218e6ecdfb4ecba1b812ebe324745b2a0b78e",
+    "note": "Generator, independent verifier and mutation suite are distinct files (generator != verifier)."
+  },
+  "environment": {
+    "solver_lock_raw_sha256": "d394692d839e248a3823e6bb5f16acd9bbad9cc876b713820b68f126195dc7e3",
+    "lock_kind": "conda --explicit (linux-64) + in-env pip freeze",
+    "scoring_env": "tcefold conda env 'scvi_gpu'; python 3.11.15; numpy 2.3.3 / pandas 2.2.3 / scipy 1.15.2 / scanpy 1.11.5 / anndata 0.12.19 / h5py 3.16.0 / pyarrow 24.0.0 (numerical stack pip-installed).",
+    "scoring_env_verified": "reproduces the frozen scores_canonical_content_sha256 43c4296d this session, and its pip pins match 01_programs/README.md's tested lock."
+  },
+  "inputs_by_hash": {
+    "validation_raw_sha256": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+    "gate_spec_raw_sha256": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
+    "input_manifest_raw_sha256": "3b13488716a366676813bff567da91f216a426c94bd1fe43c22824f73b26d521",
+    "control_method_raw_sha256": "02a94b07a19901ec41e9e26c25ce156b80c0cf67b35a17f00cf8ca6087699971",
+    "controls_v3_raw_sha256": "79764283a3429a103ed87a41b88a0c094fac84a7f46eebcb034d156e8573de75",
+    "bins_v3_raw_sha256": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
+    "control_eligible_pool_raw_sha256": "70072addb7c8c323eda8b110d1efe6d2670f8a00dfe6138e36a5ea7f79db541a",
+    "v2_registry_raw_sha256": "8356cfb9311f34738f9de4f10e8189d39a43a38fbc97b34a9d4ad3e9bd243101",
+    "v3_registry_raw_sha256": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664",
+    "scores_full_parquet_raw_sha256": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
+    "scores_canonical_content_sha256": "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316",
+    "coordinates_barcode_plus_xy_sha256": "c3d3a0a752614470693a0148ba37a45cf20aba290a6e54b4f7fa0bc468a6605b",
+    "barcode_set_sha256": "1224312e52231f4b2e07c192b39c6f9c69dd6e2d5b8bd64d936c17a9b2435a93"
+  },
+  "outputs_by_hash": {
+    "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+    "validation_semantics_raw_sha256": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026",
+    "current_raw_sha256": "a0b4369b8d6193b6721ebc6cbb24239d5f53fc278e7c2d636c97ead979a8b20c",
+    "release_manifest_raw_sha256": "ad0baf75737b52e55ccf9ff81bd7df76a069f65cc1df0f1ed1a9582fc55469bf",
+    "umap_coordinates_raw_sha256": "a7164168aaf61466ca699e1b00633c37ecef88705db443fb7fb0d00a86ccbbf6",
+    "umap_overlay_v3_raw_sha256": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
+    "summary_v3_raw_sha256": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
+    "recovery_receipt_raw_sha256": "9a73316f8e31f7f067a87eb558b3c39dded1c6d1b6c0afdab78608e0d8fcc565"
+  },
+  "constituent_and_view_evidence": {
+    "semantics_amendment": "stage1-validation-semantics-definedness-v1",
+    "constituent_main_json_gz_raw_sha256": "66166c1e5f8fc88c60cd730e0bbd5f1e0b1be497506d46bd125f7b3a69aa1e2c",
+    "constituent_main_parquet_raw_sha256": "8bdce731c810b3519fb14e290847a6d130f4bc8a94b999916fa022c2bc1b4b57",
+    "constituent_main_content_canonical_sha256": "1813cab50df528391d5e07dc2503afd65c1d30cbdb2fa1934e2e25840bd2076a",
+    "constituent_overlay_donor_json_gz_raw_sha256": "595fed635e339b168be991c4f1a0b25649d188e2a67f9430b5530cb53c07b8d1",
+    "constituent_overlay_donor_content_canonical_sha256": "10e76d83cb76ca7316a0578bba95f7f311685a25feb9e2b772beb1cd610d67df",
+    "stage2_registry_view_raw_sha256": "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f",
+    "marker_diagnostics_raw_sha256": "b43936167b2903f283a35970b2708d93b1ff78a11e2e83a0995adca7fe7ec56c",
+    "generic_selection_schema": "spot.stage01_selection.v3",
+    "selection_current_served": null,
+    "note": "Per-constituent definedness evidence (independently reconstructed from .X on tcefold), the corrected semantics amendment, the citation-invariant Stage-2 scoring view, and the marker-level/LOMO diagnostics (use_for_eligibility=false). Stage-1 is a generic selector: NO fixed selection is served as current (spot.stage01_selection.v3 is emitted on demand; the retired demo is removed). All hash-bound; the immutable validation is unchanged."
+  },
+  "independently_verified": {
+    "selectability_records": "33 records exact-matched to an independent re-derivation from the immutable validation (multiset of failure details; not subset); counts recomputed from rows.",
+    "validation_semantics": "841 rows exact-matched to an independent re-derivation; definedness read from the hash-bound constituent evidence (8 wholly + 2 partial undefined; 9 zero-numerator rows stay defined); the deleted zero-value/name heuristic is not used.",
+    "scores_canonical_content_sha256": true,
+    "overlay_equals_full": true,
+    "coordinates_sha256_reproduced": true,
+    "controls_symbol_multiset_match": true,
+    "summary_regenerated_from_parquet": true,
+    "coefficient_internal_consistency": true,
+    "solver_lock_captured": true
+  },
+  "scope_and_limits": {
+    "measurement_bundle": "measurement_bundle_lockable is TRUE (inputs+registry+scores+summary+code+verifier+mutation suite+solver lock all present and independently verified). This does NOT imply any selectable pair, identity confirmation, or downstream availability.",
+    "production_stage2_ready": "FALSE — 0/33 program-condition pairs cleared the frozen production gate.",
+    "panel_provenance": "PRIMARY_LOCATORS_VERIFIED_BOUNDED — all 53 measured marker-program pairs carry a bounded primary-source locator in the v3 registry marker_provenance/panel_provenance (18 prior-ledger + 14 lineage + 21 state/CTL completions; source SHAs pinned in registry panel_provenance.source_artifacts and enforced by verify_stage1_provenance.py). This is a bounded association/RNA-level provenance fact only: it does NOT change the scorer, any score, the 0/33 production result, overlay/app deployment, or the candidate pointer, and Masopust remains naming-only.",
+    "overlay_release": "overlay_release_ok is FALSE — the v3 overlay is built and proven overlay==full but is NOT deployed/served; overlay deployment is a separate gate.",
+    "coefficients_from_method": "Registry coefficients are checked for internal consistency here; recomputing them from the frozen method requires the pinned h5ad and is the scoring-tier reproduce's job.",
+    "earlier_limited_observation": "stage01_validation_independent_check.json remains an intentionally LIMITED sampled observation and is not broadened by this record.",
+    "reproducibility": "Heavy artifacts (parquet, v3 overlay, coordinates, v3 registry, v3 summary) are gitignored release-staging outputs bound here by hash; the reproduce chain regenerates them from pinned inputs."
+  },
+  "recovery_receipt_all_pass": true,
+  "self_canonical_sha256": "b7b6fd1c1f84e9030a22ca6ad1776b89d144d0b128b1907efb3c4db9186e7be3"
+}

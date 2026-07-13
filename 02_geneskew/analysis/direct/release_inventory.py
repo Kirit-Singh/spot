@@ -145,22 +145,31 @@ def build(*, lane: str, bundle_dirs: list[str], root: str, expect_bundles: int,
             f"the {lane} release ships {len(bundle_dirs)} bundle(s); this lane is exactly "
             f"{expect_bundles}. A release that is 'nearly' complete is not one")
 
-    from . import bundle_shapes as BS
-
     entries, ids, arm_keys = [], [], []
     for d in sorted(bundle_dirs):
-        norm = BS.read(d)                      # the lane's NATIVE shape, normalized
-        if norm is None:
-            raise RunManifestError(f"{d}: no {BS.BUNDLE_FILE} — this is not a bundle")
+        import json
+        inv_path = os.path.join(d, "arm_bundle.json")
+        if not os.path.exists(inv_path):
+            raise RunManifestError(f"{d}: no arm_bundle.json — this is not a bundle")
+        with open(inv_path) as fh:
+            inv = json.load(fh)
+        # NATIVE identity: read the REAL producer fields (Direct arm_bundle_run_id,
+        # pathway pathway_run_id, pathway_arm_key), never a top-level lane/bundle_id the
+        # real producers do not write.
+        from . import bundle_normalize as BN
+        try:
+            norm = BN.normalize(inv)
+        except BN.BundleShapeError as exc:
+            raise RunManifestError(f"{d}: {exc}") from None
         bid = norm["bundle_id"]
         ids.append(bid)
-        arm_keys += [str(a.get("arm_key")) for a in norm["arms"]]
+        arm_keys += list(norm["arm_keys"])
         files, rankings = _files_of(d)
         entries.append({
             "bundle_id": bid,
             "context": dict(norm["context"]),
             "relative_dir": os.path.relpath(d, root).replace(os.sep, "/"),
-            "n_arms": norm["n_arms"],
+            "n_arms": len(inv.get("arms") or []),
             "files": files,
             "rankings": rankings,
         })

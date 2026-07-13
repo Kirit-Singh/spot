@@ -208,18 +208,27 @@ def _package_dir():
     return os.path.dirname(os.path.abspath(trust.__file__))
 
 
+# SHARED CONTRACT modules: the written admission/firewall contract a verifier reimplements
+# AGAINST and reads its subject through (``load_shipped``, ``forbidden_keys``). Producers and
+# verifiers use it alike; it generates nothing, so importing it does not make a verifier an
+# echo of the producer. ``admission`` moved to the package root in the GATE-7 cleanup (it had
+# lived in ``temporal.admission``, a subdir this flat scan never saw).
+SHARED_CONTRACT = frozenset({"admission"})
+
+
 def _module_stems():
     """Every module in the package, split into VERIFIER and PRODUCER by name.
 
     Discovered, never listed. The hand-written version of this guard named six verifier
     modules and eighteen producer modules, so it silently stopped covering the lane the
     moment either side grew — and both did. A guard whose scope is a literal is a guard
-    that decays.
+    that decays. Shared-contract modules are neither side and are excluded from both.
     """
     stems = [f[:-3] for f in sorted(os.listdir(_package_dir()))
              if f.endswith(".py") and f != "__init__.py"]
     verifiers = [s for s in stems if s.startswith("verify_")]
-    producers = [s for s in stems if not s.startswith("verify_")]
+    producers = [s for s in stems
+                 if not s.startswith("verify_") and s not in SHARED_CONTRACT]
     return verifiers, producers
 
 
