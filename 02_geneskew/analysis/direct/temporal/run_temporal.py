@@ -19,6 +19,7 @@ ran — that is asserted, not asserted-ish, by the invariance test.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 from typing import Any, Optional
 
@@ -77,16 +78,15 @@ def _comparison_block(from_cond: str, to_cond: str,
             **{k: verdict[k] for k in _COMPARISON_FIELDS}}
 
 
-def v3_conditions(args) -> Optional[list[str]]:
-    """The ORDERED condition pair a Stage-1 v3 temporal contract names (B3).
+def load_v3(args):
+    """THE ONE VERIFIED TYPED V3 OBJECT, or None (B3).
 
-    A ``temporal_cross_condition`` selection names exactly two conditions, in order —
-    that IS the comparison it asked for. Executing the whole 6-pair cross-product for a
-    contract that asked for one directed pair would answer a question nobody put, and
-    would bind a run to a selection it did not honour.
-
-    Absent a v3 contract (the fixture / legacy path), this returns None and the runner
-    computes every ordered pair the release can support.
+    It carries the BIOLOGY (poles), the ORDER (from -> to) and the IDENTITY (full-contract
+    hash) together, and everything downstream takes all three from it. The retired code
+    reached in for the CONDITIONS alone and then executed the legacy contract's axes: a
+    valid v3 request for ``GHOST_A -> GHOST_B, Stim48hr -> Rest`` came back scored on
+    ``diff_naive``/``th17_like``, in BOTH directions, bound to the legacy selection — and
+    it ADMITTED. A contract you obey selectively is a contract you do not obey.
     """
     path = getattr(args, "stage1_v3_selection", None)
     schema = getattr(args, "stage1_v3_schema", None)
@@ -101,38 +101,34 @@ def v3_conditions(args) -> Optional[list[str]]:
             "schema has been checked against nothing")
     # The FULL v3 gate: schema pin, content hash, one-biology, condition count, routing,
     # estimator availability and the execution status that must FOLLOW from all of it.
-    bound = stage1_v3.load(path, schema)
-    mode = bound.get("analysis_mode")
-    if mode != stage1_v3.MODE_TEMPORAL:
+    with open(path) as fh:
+        doc = json.load(fh)
+    bound = stage1_v3.validate(doc, stage1_v3.load_schema(schema))
+    if bound["analysis_mode"] != stage1_v3.MODE_TEMPORAL:
         raise ValueError(
             f"this is the TEMPORAL runner, but the v3 selection declares analysis_mode "
-            f"{mode!r}. A within-condition selection is not executed here — the two "
-            "estimators answer different questions and their numbers look alike")
-    conds = list(bound["conditions"])
-    if len(conds) != 2:
-        raise ValueError(
-            f"a {stage1_v3.MODE_TEMPORAL} selection names exactly two conditions, in "
-            f"order; this one names {conds}")
-    return conds
+            f"{bound['analysis_mode']!r}. A within-condition selection is not executed "
+            "here — the two estimators answer different questions and their numbers look "
+            "alike")
+    lane = getattr(args, "lane", None) or "production"
+    return stage1_v3.as_selection(bound, doc, lane)
 
 
 def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, Any]:
-    """Compute every ordered cross-condition comparison the release can support.
+    """Compute the cross-condition comparison(s) this run was ASKED for.
 
-    When a Stage-1 v3 ``temporal_cross_condition`` contract is supplied, the ORDERED PAIR
-    it names is what gets computed — the contract asked a question, and this answers that
-    question rather than a superset of it.
+    With a Stage-1 v3 ``temporal_cross_condition`` contract: EXACTLY the ordered pair it
+    names — one direction, scored on ITS poles, bound to ITS full-contract hash. Without
+    one (the legacy/fixture path): every ordered pair the release can support.
     """
     created_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
     pol = policy.load(getattr(args, "batch_policy", None))
-    contract_pair = v3_conditions(args)
-    if contract_pair and conditions is None:
-        conditions = contract_pair
+    v3 = load_v3(args)
 
-    # THE SAME binding and THE SAME release gate the within-condition build runs. A
-    # temporal run that could stand on inputs the screen would have refused would be a
-    # back door around the gate.
-    ctx = rs.prepare(args)
+    # THE SAME binding and THE SAME release gate the within-condition build runs — but
+    # when a v3 contract is present it IS the selection, and the axis is built from ITS
+    # poles. Nothing is taken from args.selection.
+    ctx = rs.prepare(args, v3=v3)
     from .. import preflight
     verdict = preflight.assess(args, ctx)
     if verdict["verdict"] != preflight.GO:
@@ -146,7 +142,15 @@ def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, An
 
     # ---- the endpoints: the UNCHANGED within-condition pass, once per condition ----
     released = sorted(ctx["identities_by_condition"])
-    conds = sorted(conditions) if conditions else released
+    if v3 is not None:
+        if conditions is not None:
+            raise ValueError(
+                "a v3 contract already names the comparison; an explicit --conditions "
+                "would silently answer a different question under its identity")
+        # THE REQUESTED DIRECTION. Not sorted, not symmetrised, not expanded.
+        conds = list(v3.conditions)
+    else:
+        conds = sorted(conditions) if conditions else released
     unknown = [c for c in conds if c not in released]
     if unknown:
         raise ValueError(
@@ -161,10 +165,15 @@ def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, An
         by_condition[cond] = _rows_by_target(built["screen"])
         endpoint_rows += built["screen"]
 
-    # ---- the comparisons: EVERY ordered pair, both directions, none refused ----
+    # ---- the comparisons ----
+    # WITH a v3 contract: EXACTLY the direction it asked for. One pair, in order. Emitting
+    # the reverse as well would answer a question nobody put, under an identity that says
+    # they asked for one thing (B3).
+    # WITHOUT one: every ordered pair the release supports, both directions, none refused.
     programs = {"A": ctx["axis"]["A"]["program_id"],
                 "B": ctx["axis"]["B"]["program_id"]}
-    pairs = pol.ordered_pairs(conds)
+    pairs = ([(v3.from_condition, v3.to_condition)] if v3 is not None
+             else pol.ordered_pairs(conds))
     temporal_rows: list[dict[str, Any]] = []
     for from_cond, to_cond in pairs:
         batch = pol.classify_pair(from_cond, to_cond)
@@ -184,14 +193,31 @@ def build_temporal(args, conditions: Optional[list[str]] = None) -> dict[str, An
     binding = {
         "temporal_method": method_block(pol),
         "temporal_method_sha256": method_sha,
-        # B3: the ANALYSIS MODE and the ORDERED CONDITION PAIR the Stage-1 v3 contract
-        # asked for, bound into the run identity. A run that answered a different
-        # comparison from the one it was asked must not be able to keep this id.
-        "analysis_mode": ("temporal_cross_condition" if contract_pair
+        # B3: the ANALYSIS MODE, the ORDERED PAIR, the PROGRAMS and the v3 FULL-CONTRACT
+        # HASH, all bound into the run identity. A run that answered a different
+        # comparison — a different direction, a different axis, a different contract —
+        # cannot keep this id.
+        "analysis_mode": ("temporal_cross_condition" if v3 is not None
                           else "temporal_cross_condition_all_released_pairs"),
-        "stage1_v3_contract_conditions": contract_pair,
         "conditions": conds,
         "comparisons": [records.comparison_id(a, b) for a, b in pairs],
+        "stage1_v3": (None if v3 is None else {
+            "schema_version": v3.bound["schema_version"],
+            "selection_id": v3.selection_id,
+            # RE-DERIVED from the contract's own content at bind time, not copied
+            "full_contract_content_sha256": ctx["id_check"][
+                "full_contract_content_sha256"],
+            "selection_biology_sha256": v3.selection_biology_sha256,
+            "analysis_mode": v3.analysis_mode,
+            "from_condition": v3.from_condition,
+            "to_condition": v3.to_condition,
+            "estimator_id": v3.estimator_id,
+            "execution_status": v3.execution_status,
+            "poles": {"A": {"program_id": v3.a.program_id,
+                            "direction": v3.a.direction},
+                      "B": {"program_id": v3.b.program_id,
+                            "direction": v3.b.direction}},
+        }),
         "selection": {
             "selection_id": ctx["selection"].selection_id,
             "question_id": ctx["selection"].question_id,

@@ -86,6 +86,7 @@ class TestTheVerifierIsNotVacuous:
 
         report = reverify(out, prov, mutate)
         assert report["verdict"] == verify_temporal.REJECT
+        # the reverse COMPARISON ran, so this target's reverse RECORD must exist
         assert "reversing_the_pair_negates_the_did" in failed(report)
 
     def test_a_forged_reliability_badge_is_caught(self, artifact):
@@ -145,7 +146,7 @@ class TestTheVerifierIsNotVacuous:
 
         report = reverify(out, prov, mutate)
         assert report["verdict"] == verify_temporal.REJECT
-        assert "all_ordered_pairs_both_directions_present" in failed(report)
+        assert "the_emitted_comparisons_are_exactly_the_declared_ones" in failed(report)
 
     def test_a_combined_temporal_objective_is_caught(self, artifact):
         out, prov = artifact

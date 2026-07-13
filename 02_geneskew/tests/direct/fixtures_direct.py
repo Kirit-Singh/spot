@@ -112,7 +112,7 @@ def program_names(prefix: str = "fx_", program_ids=None) -> tuple[str, str]:
 
 
 def _write_registry(path: str, extra: dict = None, prefix: str = "fx_",
-                    program_ids=None) -> str:
+                    program_ids=None, extra_programs=None) -> str:
     from direct.hashing import file_sha256
     name_a, name_b = program_names(prefix, program_ids)
     # NOTE: no ``production_selectable`` here. The frozen Stage-1 result has ZERO
@@ -127,6 +127,10 @@ def _write_registry(path: str, extra: dict = None, prefix: str = "fx_",
     ]
     for p in programs:
         p.update(extra or {})
+    # Programs the registry SHIPS but the legacy selection does not name. A v3 contract
+    # can then name a DIFFERENT axis than the legacy contract, which is the only way to
+    # prove which one a run actually executed (B3).
+    programs += list(extra_programs or [])
     reg = {
         "schema_version": "spot.stage01_program_registry.v3",
         "method_version": "stage1-continuous-v3.0.1",

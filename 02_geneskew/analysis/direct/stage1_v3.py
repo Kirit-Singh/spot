@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from . import config, convergence, enrichment, pathway
@@ -368,6 +369,177 @@ def bind(doc: dict[str, Any]) -> dict[str, Any]:
         "combined_objective": None,
         "poles_separate": True,
     }
+
+
+# --------------------------------------------------------------------------- #
+# B3 — THE ONE VERIFIED TYPED V3 OBJECT.
+#
+# The temporal runner used to reach into a v3 contract, pull out its CONDITIONS, and then
+# execute everything else from the LEGACY `args.selection`: legacy poles, legacy axis,
+# legacy analysis_condition, legacy run binding. A valid v3 request for
+# `GHOST_A -> GHOST_B, Stim48hr -> Rest` therefore came back with the `diff_naive` /
+# `th17_like` axes, BOTH directions, and no trace of the v3 contract in its identity — and
+# it still ADMITTED. It answered a different question and called it an answer.
+#
+# So there is now exactly ONE object, produced by the FULL v3 gate, and it carries the
+# biology, the ORDER and the identity together. Nothing downstream may take one of those
+# from the contract and the others from somewhere else.
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class V3Selection:
+    """A validated v3 contract, in the shape the Stage-2 lanes consume.
+
+    Duck-compatible with ``selection.Selection`` on the fields the run binding reads, so a
+    v3 run is not a second code path through emit/provenance — it is the same path with a
+    contract that actually says what was asked for.
+    """
+    a: Any                       # selection.Pole
+    b: Any                       # selection.Pole
+    lane: str
+    analysis_mode: str
+    conditions: tuple[str, ...]  # ORDERED. For temporal: (from_condition, to_condition).
+    analysis_condition: str      # the FROM endpoint; a within-condition run's one condition
+    question_id: str
+    selection_id: str
+    registry_sha256: str
+    stage1_method_version: str
+    contract_sha256: str         # the v3 FULL-CONTRACT content hash
+    selection_biology_sha256: str
+    estimator_id: str
+    execution_status: str
+    bound: dict[str, Any]        # the whole validated v3 bind()
+    raw: dict[str, Any]
+
+    # the legacy Selection carries these; a v3 contract binds its Stage-1 trust
+    # differently (trust_bindings / provenance_bindings), so they are explicitly absent
+    # rather than silently faked
+    stage1_input_manifest_sha256: Optional[str] = None
+    stage1_code_sha256: Optional[str] = None
+    stage1_validation_sha256: Optional[str] = None
+
+    @property
+    def from_condition(self) -> str:
+        return self.conditions[0]
+
+    @property
+    def to_condition(self) -> str:
+        return self.conditions[-1]
+
+    @property
+    def is_temporal(self) -> bool:
+        return self.analysis_mode == MODE_TEMPORAL
+
+
+def as_selection(bound: dict[str, Any], doc: dict[str, Any],
+                 lane: str) -> V3Selection:
+    """The validated v3 contract, as the ONE object the lanes execute."""
+    from .selection import Pole
+
+    poles = bound["poles"]
+    conditions = tuple(bound["conditions"])
+    return V3Selection(
+        a=Pole(program_id=str(poles["A"]["program_id"]),
+               direction=str(poles["A"]["direction"])),
+        b=Pole(program_id=str(poles["B"]["program_id"]),
+               direction=str(poles["B"]["direction"])),
+        lane=lane,
+        analysis_mode=str(bound["analysis_mode"]),
+        conditions=conditions,
+        analysis_condition=conditions[0],
+        question_id=str(bound["selection_biology_sha256"]),
+        selection_id=str(bound["selection_id"]),
+        registry_sha256=str(bound["registry_scorer_view_sha256"]),
+        stage1_method_version=str(bound["stage1_method_version"]),
+        contract_sha256=str(bound["full_contract_content_sha256"]),
+        selection_biology_sha256=str(bound["selection_biology_sha256"]),
+        estimator_id=str(bound["estimator_id"]),
+        execution_status=str(bound["execution_status"]),
+        bound=bound,
+        raw=doc,
+    )
+
+
+def reverify_full_contract_hash(doc: dict[str, Any]) -> str:
+    """Recompute the v3 full-contract hash from the contract's OWN content, and prove it.
+
+    ``validate`` already checks this at load. It is re-checked HERE, at the point the run
+    identity binds it, because a hash that is verified once and then carried around as a
+    string is a string — and the run binding is exactly where a swapped one would land.
+    """
+    payload = {k: v for k, v in doc.items() if k != "full_contract_content_sha256"}
+    derived = content_hash(payload)
+    declared = str(doc.get("full_contract_content_sha256"))
+    if derived != declared:
+        _refuse(REFUSE_CONTENT_HASH,
+                f"full_contract_content_sha256 is {declared!r} but the contract's own "
+                f"content hashes to {derived!r}")
+    return derived
+
+
+def bind_axis(sel: V3Selection, release) -> dict[str, Any]:
+    """The A/B axis, built from THE V3 CONTRACT'S OWN POLES. Never from a legacy one.
+
+    Same registry lookup, same panel/control extraction and the same independently
+    derived selectability the within-condition binder applies — but keyed on the programs
+    the v3 contract actually named. This is what makes ``GHOST_A -> GHOST_B`` come back as
+    GHOST_A and GHOST_B rather than as whatever the legacy contract happened to say.
+
+    For a TEMPORAL selection the gate is evaluated at BOTH endpoints: a pair is only
+    executable if each pole is selectable at each condition it is being compared across.
+    """
+    from . import config as _cfg
+    from .selection import SelectionError
+
+    out: dict[str, Any] = {
+        "release_kind": release.kind,
+        "registry_hash_binding": "independently_derived_canonical_content",
+        "gate_evidence": release.gate_evidence,
+        "may_confer_stage3_eligibility": release.may_confer_stage3_eligibility,
+        "analysis_mode": sel.analysis_mode,
+        "conditions": list(sel.conditions),
+    }
+    selectability: dict[str, Any] = {}
+    for key, pole in (("A", sel.a), ("B", sel.b)):
+        prog = release.programs.get(pole.program_id)
+        if prog is None:
+            raise SelectionError(
+                f"v3 selection: program {pole.program_id!r} ({key}) is not in the bound "
+                "Stage-1 registry. The contract names an axis the release does not ship, "
+                "and a run that substituted a different one would answer a different "
+                "question")
+        per_condition = {}
+        for cond in sel.conditions:
+            per_condition[cond] = (pole.program_id, cond) in release.selectable_pairs
+        selectability[key] = {
+            "program_conditions": [f"{pole.program_id}|{c}" for c in sel.conditions],
+            "selectable_derived_by_condition": per_condition,
+            "rule_id": _cfg.SELECTABILITY_RULE_ID,
+            "stored_boolean_read": False,
+        }
+        panel = prog.get("panel_ensembl")
+        control = prog.get("control_ensembl")
+        if not (isinstance(panel, list) and panel):
+            raise SelectionError(
+                f"registry program {pole.program_id!r}: panel_ensembl missing")
+        if not (isinstance(control, list) and control):
+            raise SelectionError(
+                f"registry program {pole.program_id!r}: control_ensembl missing")
+        out[key] = {
+            "program_id": pole.program_id,
+            "direction": pole.direction,
+            "sign": pole.sign,
+            "panel": [str(g) for g in panel],
+            "control": [str(g) for g in control],
+        }
+    out["selectability"] = selectability
+    out["namespace"] = ("production" if release.kind == "production"
+                        else _cfg.RESEARCH_NAMESPACE if release.kind == "research"
+                        else "synthetic")
+    out["production_eligible"] = (release.kind == "production")
+    out["stage3_eligible"] = (release.kind == "production")
+    out["may_write_production_pointer"] = release.may_write_production_pointer
+    out["production_gate_passed"] = bool(release.selectable_pairs)
+    return out
 
 
 def load(path: str, schema_path: str,

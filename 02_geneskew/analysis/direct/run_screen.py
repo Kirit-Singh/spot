@@ -87,12 +87,26 @@ def _b(v) -> Optional[bool]:
 # There is no separate "audit loader". A preflight that validated something other than
 # what the run consumes would be a preflight of a different program.
 # --------------------------------------------------------------------------- #
-def prepare(args) -> dict[str, Any]:
-    """Bind every input up to (and NOT including) any dense effect-layer read."""
+def prepare(args, v3=None) -> dict[str, Any]:
+    """Bind every input up to (and NOT including) any dense effect-layer read.
+
+    ``v3`` is a VALIDATED ``stage1_v3.V3Selection`` — the one typed object produced by the
+    full v3 gate. When present it IS the selection: the axis is built from ITS poles, the
+    condition(s) are ITS ordered conditions, and the run identity binds ITS full-contract
+    hash. Nothing is taken from ``args.selection``.
+
+    That is the whole of the B3 fix. The temporal runner used to pull only the CONDITIONS
+    out of a v3 contract and then execute the legacy contract's axes — so a v3 request for
+    ``GHOST_A -> GHOST_B`` came back scored on whatever programs the legacy file named, and
+    admitted. A contract you obey selectively is a contract you do not obey.
+    """
     lane = getattr(args, "lane", None) or config.LANE_PRODUCTION
     if lane not in config.LANES:
         raise sel_mod.SelectionError(
             f"unknown lane {lane!r}; expected one of {list(config.LANES)}")
+
+    if v3 is not None:
+        return _prepare_v3(args, v3, lane)
 
     if lane == config.LANE_PRODUCTION:
         selection = sel_mod.load_production_selection(args.selection)
@@ -121,7 +135,54 @@ def prepare(args) -> dict[str, Any]:
 
     axis = sel_mod.bind_release(selection, release)
     id_check = sel_mod.recomputed_ids(selection)
-    cond = selection.analysis_condition
+    return _context(args, lane, selection, release, axis, id_check,
+                    cond=selection.analysis_condition)
+
+
+def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
+    """Bind a run whose selection IS the verified v3 contract (B3).
+
+    The axis comes from the v3 contract's OWN poles; the analysis condition is the FROM
+    endpoint of its ORDERED pair; the identity carries its full-contract hash, re-derived
+    here rather than copied.
+    """
+    from . import stage1_v3
+
+    if lane != v3.lane:
+        raise sel_mod.SelectionError(
+            f"production firewall: caller requested lane {lane!r} but the v3 selection "
+            f"was loaded for lane {v3.lane!r}")
+    if not getattr(args, "stage1_release", None) and lane != config.LANE_SYNTHETIC:
+        raise sel_mod.SelectionError(
+            "a v3 run requires --stage1-release; an unbound Stage-1 is an untrusted "
+            "Stage-1")
+    if lane == config.LANE_PRODUCTION:
+        release = trust.load_production_release(args.stage1_release)
+    elif lane == config.LANE_RESEARCH:
+        release = trust.load_research_release(args.stage1_release)
+    else:
+        release = trust.load_fixture_release(
+            args.registry, args.stage1_validation, args.stage1_gate_spec)
+
+    axis = stage1_v3.bind_axis(v3, release)
+    id_check = {
+        "rule_id": stage1_v3.STAGE1_SELECTION_ID_NOT_REDERIVABLE,
+        "selection_id": v3.selection_id,
+        # RE-DERIVED, not carried: the run identity is about to bind this hash, and a hash
+        # verified once then passed around as a string is a string.
+        "full_contract_content_sha256": stage1_v3.reverify_full_contract_hash(v3.raw),
+        "selection_biology_sha256": v3.selection_biology_sha256,
+        "analysis_mode": v3.analysis_mode,
+        "conditions": list(v3.conditions),
+    }
+    ctx = _context(args, lane, v3, release, axis, id_check, cond=v3.analysis_condition)
+    ctx["v3"] = v3
+    return ctx
+
+
+def _context(args, lane: str, selection, release, axis: dict[str, Any],
+             id_check: dict[str, Any], cond: str) -> dict[str, Any]:
+    """Everything downstream of the selection binding. ONE implementation, two callers."""
     identity_map = identity.load_identity_map(getattr(args, "target_identity_map", None))
 
     # ---- the GLOBAL, all-condition pooled-main identity universe (METADATA ONLY) ----

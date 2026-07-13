@@ -94,7 +94,7 @@ def synthetic_run(tmp_path):
                source_records_fn=None, source_records_recite=False,
                source_replay_fn=None, source_rows_fn=None,
                source_replay_report=None, strict_replay=None,
-               conditions=(CONDITION,),
+               conditions=(CONDITION,), extra_programs=None,
                **selection_overrides) -> RunArgs:
         specs = specs or default_specs()
         conditions = tuple(conditions)
@@ -106,7 +106,8 @@ def synthetic_run(tmp_path):
         prefix = default_prefix if program_prefix is None else program_prefix
         registry = os.path.join(d, "registry.json")
         registry_sha = _write_registry(registry, extra=registry_extra, prefix=prefix,
-                                       program_ids=program_ids)
+                                       program_ids=program_ids,
+                                       extra_programs=extra_programs)
         names = F.program_names(prefix, program_ids)
         # Stage-1 gate evidence: the hard gates are RE-DERIVED from these rows.
         val_path, gate_path = write_stage1_gates(

@@ -189,14 +189,23 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
                            f"{did} != {b} - {a}")
     checks.append(_check("did_equals_to_minus_from", not bad, "; ".join(bad[:5])))
 
-    # ---- 2. ANTISYMMETRY: reversing the pair negates the estimate, exactly ----
+    # ---- 2. ANTISYMMETRY: where BOTH directions were run, one negates the other ----
+    # A v3 run emits exactly the ONE direction its contract asked for (B3), so the reverse
+    # record legitimately does not exist. Its absence is checked against the DECLARED
+    # SCOPE below (check 5), which is the stronger statement: the artifact must contain
+    # exactly the comparisons its own binding says it ran — no more, no fewer.
     bad = []
     index = {(r.target_id, r.from_condition, r.to_condition): r
              for _, r in df.iterrows()}
+    run_pairs = set(zip(df.from_condition, df.to_condition))
     for (target, a_cond, b_cond), row in index.items():
+        if (b_cond, a_cond) not in run_pairs:
+            continue                      # the reverse direction was never requested
         mirror = index.get((target, b_cond, a_cond))
         if mirror is None:
-            bad.append(f"{target}: {a_cond}->{b_cond} has no reverse record")
+            # the reverse COMPARISON ran, but this target's reverse RECORD is missing
+            bad.append(f"{target}: {a_cond}->{b_cond} has no reverse record, though "
+                       f"{b_cond}->{a_cond} was run")
             continue
         for arm in ARMS:
             x, y = _num(row[f"{arm}_temporal_did"]), _num(mirror[f"{arm}_temporal_did"])
@@ -246,13 +255,47 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
     checks.append(_check("batch_verdict_rederives_from_composition", not bad,
                          "; ".join(bad[:5])))
 
-    # ---- 5. every ordered pair is present, and NONE was refused ----
+    # ---- 5. THE ARTIFACT CONTAINS EXACTLY THE COMPARISONS IT SAYS IT RAN ----
+    # Stronger than "all ordered pairs present", and it is what B3 actually needs: an
+    # artifact must answer the question its own binding says it was asked, and no other.
+    # A run that silently emitted the reverse direction — or dropped a requested one —
+    # fails here whether it was a v3 single-direction run or a full 6-pair sweep.
+    binding = provenance["run_binding"]
     pairs = set(zip(df.from_condition, df.to_condition))
-    conds = sorted(set(df.from_condition) | set(df.to_condition))
-    expected_pairs = {(a, b) for a in conds for b in conds if a != b}
-    checks.append(_check("all_ordered_pairs_both_directions_present",
-                         pairs == expected_pairs,
-                         f"missing {sorted(expected_pairs - pairs)}"))
+    declared = {tuple(c["comparison_id"].split("__to__"))
+                for c in provenance["comparisons"]}
+    checks.append(_check(
+        "the_emitted_comparisons_are_exactly_the_declared_ones", pairs == declared,
+        f"emitted-not-declared {sorted(pairs - declared)}; "
+        f"declared-not-emitted {sorted(declared - pairs)}"))
+
+    # ---- 5b. B3: a v3 run answered the CONTRACT'S question, on the CONTRACT'S axes ----
+    v3 = binding.get("stage1_v3")
+    if v3 is not None:
+        want_pair = (v3["from_condition"], v3["to_condition"])
+        checks.append(_check(
+            "a_v3_run_emits_only_the_contracts_requested_direction",
+            pairs == {want_pair},
+            f"the contract asked for {want_pair}; the artifact emitted {sorted(pairs)}"))
+        want_a, want_b = (v3["poles"]["A"]["program_id"],
+                          v3["poles"]["B"]["program_id"])
+        got_a = set(df["A_program_id"].unique())
+        got_b = set(df["B_program_id"].unique())
+        checks.append(_check(
+            "a_v3_run_is_scored_on_the_contracts_own_poles",
+            got_a == {want_a} and got_b == {want_b},
+            f"the contract named A={want_a} B={want_b}; the artifact was scored on "
+            f"A={sorted(got_a)} B={sorted(got_b)}"))
+        checks.append(_check(
+            "the_v3_full_contract_hash_is_bound",
+            len(str(v3.get("full_contract_content_sha256", ""))) == 64,
+            "a v3 run that does not bind the contract it executed can be pointed at "
+            "another contract afterwards"))
+        checks.append(_check(
+            "the_v3_analysis_mode_is_temporal",
+            v3["analysis_mode"] == "temporal_cross_condition"
+            and binding["analysis_mode"] == "temporal_cross_condition"))
+
     checks.append(_check("no_comparison_was_refused",
                          not bool(df["refused"].any()),
                          "a refused comparison is a hidden confound"))
