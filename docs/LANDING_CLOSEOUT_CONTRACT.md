@@ -31,6 +31,10 @@ The dot has a 48-pixel interaction box even though the visible circle is smaller
 
 The reviewer code is provisioned as a Cloudflare encrypted secret and is never emitted into HTML, JavaScript, Git, a URL, or an analytics/log field. The static form posts `application/x-www-form-urlencoded` data to the exact endpoint `/auth`; the Pages Function performs a constant-time comparison and rate limiting and must never log the request body.
 
+The code is a **shared deployment secret, not a saved site credential**. The field stays `type="password"` so it is masked on screen, but it must not invite password-manager autofill: it declares `autocomplete="one-time-code"` and opts out of the major managers (`data-1p-ignore`, `data-lpignore="true"`, `data-bwignore`, `data-form-type="other"`). With `autocomplete="current-password"` a manager silently overwrites the typed code with a saved password for the host, which surfaces to the reviewer as the generic “Code not recognized.” and is indistinguishable from a wrong code.
+
+Because a pasted code routinely carries a leading/trailing space or newline, the Function bounds the raw body length and then compares the **trimmed** submitted value against the **trimmed** configured secret (a secret provisioned via `echo code | … secret put` carries a trailing newline). Trimming is confined to surrounding whitespace; an internally altered code is still rejected.
+
 On success, issue a signed, opaque session in a host-only cookie named with a `__Host-` prefix and attributes `Secure; HttpOnly; SameSite=Lax; Path=/`. Do not place the access code or session in `localStorage` or `sessionStorage`. The session middleware must run before serving every reviewer page and artifact, not only `/01_page.html`.
 
 Wrong, missing, or malformed codes receive the same generic redirect and visible response. The POST response and protected responses use `Cache-Control: no-store`. Requests from the singular domain never receive a reviewer cookie; they redirect to the plural canonical host first.

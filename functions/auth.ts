@@ -42,7 +42,10 @@ async function submittedCode(request: Request): Promise<string | null> {
   const body = await readBoundedBody(request);
   if (body === null) return null;
   const values = new URLSearchParams(body).getAll('code');
-  return values.length === 1 && values[0].length <= 256 ? values[0] : null;
+  if (values.length !== 1 || values[0].length > 256) return null;
+  // Copy-paste of a shared code routinely carries a leading/trailing space or newline.
+  // Bound the raw length first, then compare on the trimmed value.
+  return values[0].trim();
 }
 
 async function readBoundedBody(request: Request): Promise<string | null> {
@@ -115,7 +118,9 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   } catch {
     return invalidAccess();
   }
-  if (candidate === null || !await constantTimeSecretEqual(candidate, env.ACCESS_CODE)) return invalidAccess();
+  // Trim the configured secret too: a value provisioned via `echo code | ... secret put`
+  // carries a trailing newline, which would otherwise never match anything.
+  if (candidate === null || !await constantTimeSecretEqual(candidate, env.ACCESS_CODE.trim())) return invalidAccess();
 
   const token = await issueSession(env.SESSION_SIGNING_KEY);
   return redirect('/01_page.html', 303, sessionCookie(token));

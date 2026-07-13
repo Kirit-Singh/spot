@@ -67,6 +67,18 @@ class LandingContractTest(unittest.TestCase):
         self.assertIn("required", field)
         self.parser.one("button", **{"type": "submit", "aria-label": "Open spot"})
 
+    def test_access_field_does_not_invite_password_manager_autofill(self) -> None:
+        # The reviewer code is a shared deployment secret, not a saved site credential.
+        # A lone type=password field with autocomplete="current-password" lets a password
+        # manager silently overwrite the typed code, which surfaces as "Code not recognized."
+        field = self.parser.one("input", id="access-code")
+        self.assertEqual(field.get("type"), "password")  # still masked on screen
+        self.assertNotEqual(field.get("autocomplete"), "current-password")
+        self.assertEqual(field.get("autocomplete"), "one-time-code")
+        self.assertIn("data-1p-ignore", field)
+        self.assertEqual(field.get("data-lpignore"), "true")
+        self.assertIn("data-bwignore", field)
+
     def test_access_code_is_not_shipped_to_the_browser(self) -> None:
         field = self.parser.one("input", id="access-code")
         self.assertNotIn("value", field)

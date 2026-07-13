@@ -171,6 +171,31 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     expect(unexpectedHost.status).toBe(503);
   });
 
+  it('accepts a pasted code carrying surrounding whitespace', async () => {
+    for (const submitted of [` ${ACCESS_CODE}`, `${ACCESS_CODE} `, `  ${ACCESS_CODE}  `, `\t${ACCESS_CODE}\r\n`]) {
+      const response = await auth(context(postAuth(submitted), production));
+      expect(response.status, JSON.stringify(submitted)).toBe(303);
+      expect(response.headers.get('Location'), JSON.stringify(submitted)).toBe('/01_page.html');
+      expect(response.headers.get('Set-Cookie') ?? '', JSON.stringify(submitted)).toContain(`${REVIEW_COOKIE}=`);
+    }
+  });
+
+  it('tolerates a configured secret stored with a trailing newline', async () => {
+    const padded: Env = { SITE_MODE: 'production', ACCESS_CODE: `${ACCESS_CODE}\n`, SESSION_SIGNING_KEY: SIGNING_KEY };
+    const response = await auth(context(postAuth(ACCESS_CODE), padded));
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('/01_page.html');
+  });
+
+  it('still rejects a wrong, internally-altered, or blank code after trimming', async () => {
+    for (const bad of ['wrong', ACCESS_CODE.replace('-', ' '), '   ', '']) {
+      const response = await auth(context(postAuth(bad), production));
+      expect(response.status, JSON.stringify(bad)).toBe(303);
+      expect(response.headers.get('Location'), JSON.stringify(bad)).toBe('/?access=invalid');
+      expect(response.headers.has('Set-Cookie'), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it('sets security headers in Functions rather than relying on _headers', async () => {
     const response = await middleware(context(new Request(`https://${CANONICAL_HOST}/`), production));
     expect(response.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
