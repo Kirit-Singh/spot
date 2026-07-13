@@ -101,14 +101,62 @@ def scorer_view(tmp_path, programs=None) -> str:
     return path
 
 
+def gene_set_identity(source: str) -> dict[str, Any]:
+    """The FULL identity of one gene-set source. The pin and the bundle share this."""
+    return {
+        "release_id": f"FIXTURE-{source}-release-v1",
+        "raw_sha256": _canon(f"FIXTURE-raw-{source}"),
+        "canonical_sha256": _canon(f"FIXTURE-canon-{source}"),
+        "gene_id_namespace": "ensembl_gene_id",
+        "target_id_namespace": "ensembl_gene_id",
+        "gene_set_license": f"FIXTURE-licence-{source}",
+        "effect_universe_sha256": _canon("FIXTURE-effect-universe"),
+        "target_universe_sha256": _canon("FIXTURE-target-universe"),
+    }
+
+
 def pinned_gene_sets(tmp_path) -> str:
-    """The FIXTURE pinned source identities: the source universe, from outside the run."""
-    doc = {src: {"fixture": True,
-                 "raw_sha256": _canon(f"FIXTURE-raw-{src}"),
-                 "canonical_sha256": _canon(f"FIXTURE-canon-{src}")}
-           for src in FIXTURE_SOURCES}
+    """The FIXTURE pinned source identities: release, hashes, namespaces, licence and
+    universe bindings — the whole identity, from OUTSIDE the run.
+
+    A source NAME is not an identity. Checking only that the two sources differ let a
+    forged 'reactome' pass, because nothing ever compared it to the Reactome that was
+    actually pinned.
+    """
+    doc = {src: dict(gene_set_identity(src), fixture=True) for src in FIXTURE_SOURCES}
     path = os.path.join(str(tmp_path), "FIXTURE_pinned_gene_sets.json")
     _write(path, doc)
+    return path
+
+
+# WHO may admit an arm, and WHAT they must have checked. Pinned OUTSIDE the run: a forger
+# writes the report, so the report cannot also be the authority on who wrote it.
+LANE_VERIFIERS = {
+    "direct": {"verifier_id": "FIXTURE.spot.stage02.direct.verifier.v1",
+               "schema_version": "FIXTURE.spot.stage02_direct_verification.v1",
+               "required_gates": ["screen_rows_reconstruct_from_the_inputs",
+                                  "every_arm_ranks_over_its_own_population"]},
+    "temporal": {"verifier_id": "FIXTURE.spot.stage02.temporal.verifier.v1",
+                 "schema_version": "FIXTURE.spot.stage02_temporal_verification.v1",
+                 "required_gates": ["endpoints_reconstruct",
+                                    "the_did_is_a_difference_of_two_arm_values"]},
+    "pathway": {"verifier_id": "FIXTURE.spot.stage02.pathway.verifier.v1",
+                "schema_version": "FIXTURE.spot.stage02_pathway_verification.v1",
+                "required_gates": ["coverage_and_per_arm_eligibility_rederive",
+                                   "no_convergence_claim_rests_on_a_non_member"]},
+}
+
+
+def pinned_verifiers(tmp_path) -> str:
+    path = os.path.join(str(tmp_path), "FIXTURE_pinned_verifiers.json")
+    _write(path, LANE_VERIFIERS)
+    return path
+
+
+def expected_code_identity(tmp_path) -> str:
+    """The pinned checkout every bundle must have been built from."""
+    path = os.path.join(str(tmp_path), "FIXTURE_expected_code_identity.json")
+    _write(path, _code_identity())
     return path
 
 
@@ -244,18 +292,15 @@ def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
     }
     if lane == "pathway":
         inv["bindings"] = bindings
-        inv["gene_sets"] = {
-            "gene_set_source": ctx["gene_set_source"],
-            "release_id": f"FIXTURE-{ctx['gene_set_source']}-release",
-            "raw_sha256": _canon(f"FIXTURE-raw-{ctx['gene_set_source']}"),
-            "canonical_sha256": _canon(f"FIXTURE-canon-{ctx['gene_set_source']}")}
+        inv["gene_sets"] = dict(gene_set_identity(ctx["gene_set_source"]),
+                                gene_set_source=ctx["gene_set_source"])
         inv["convergence"] = {
             "convergence_id": convergence_id,
             "sha256": _raw(os.path.join(out_dir, "convergence.json"))}
     inv["bundle_id"] = f"FIXTURE-{_canon(inv)[:16]}"
-    _write(os.path.join(out_dir, "arm_bundle.json"), inv)
+    arm_raw, _ = _write(os.path.join(out_dir, "arm_bundle.json"), inv)
 
-    _write(os.path.join(out_dir, prov_name), {
+    prov_raw, _ = _write(os.path.join(out_dir, prov_name), {
         "fixture": True,
         "schema_version": f"FIXTURE.spot.stage02_{lane}_provenance.v1",
         "run_binding": {
@@ -264,12 +309,19 @@ def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
             "stage2_inputs": _inputs(),
         },
     })
+    # A TYPED admission from the pinned lane verifier, BINDING THE BUNDLE IT JUDGED.
+    # A file that merely says {"verdict": "admit"} is not an independent admission.
+    pin = LANE_VERIFIERS[lane]
     _write(os.path.join(out_dir, ver_name), {
         "fixture": True,
-        "schema_version": f"FIXTURE.spot.stage02_{lane}_verification.v1",
-        "verifier_id": f"FIXTURE.spot.stage02.{lane}.verifier",
+        "schema_version": pin["schema_version"],
+        "verifier_id": pin["verifier_id"],
         "generator_is_not_verifier": True,
-        "checks": [], "n_failed": 0, "verdict": "admit",
+        "fail_closed": True,
+        "bundle_id": inv["bundle_id"],
+        "binds": {"arm_bundle_sha256": arm_raw, "provenance_sha256": prov_raw},
+        "checks": [{"gate": g, "status": "pass"} for g in pin["required_gates"]],
+        "n_failed": 0, "failed_gates": [], "verdict": "admit",
     })
     return out_dir
 
@@ -290,6 +342,8 @@ def complete_run(tmp_path, scorer_path=None) -> dict[str, Any]:
                for c in conds for s in FIXTURE_SOURCES]
     return {"root": root, "scorer_view": scorer_path,
             "pinned_gene_sets": pinned_gene_sets(tmp_path),
+            "pinned_verifiers": pinned_verifiers(tmp_path),
+            "expected_code_identity": expected_code_identity(tmp_path),
             "batch_policy": POLICY_PATH,
             "direct": direct, "temporal": temporal, "pathway": pathway,
             "conditions": conds, "sources": list(FIXTURE_SOURCES)}

@@ -9,16 +9,32 @@ FROZEN AGAINST ``ROUND4_ADDENDUM.md`` sha256
 
 WHAT IT REFUSES TO TAKE FROM THE MANIFEST UNDER TEST
 ----------------------------------------------------
-Everything that decides what COMPLETE means. If the expected topology came from the
-document being audited, a forger would declare a smaller run and pass. So each dimension
-of the expectation is loaded from a SEPARATE pinned artifact:
+Everything that decides what COMPLETE means, WHO may admit an arm, and WHAT the run was
+built from. If any of that came from the document being audited, a forger would simply
+declare it and pass. So each is loaded from a SEPARATE pinned artifact:
 
-    admitted programs   <- the v3 generic release / scorer view   (--scorer-view)
-    condition universe  <- the frozen temporal batch policy        (--batch-policy)
-    gene-set sources    <- the pinned source identities            (--expect-gene-sets)
+    admitted programs   <- the v3 generic release / scorer view  (--scorer-view)
+    condition universe  <- the frozen temporal batch policy       (--batch-policy)
+    gene-set identities <- the pinned source identities           (--expect-gene-sets)
+    lane verifiers      <- the pinned verifier + gate inventory   (--expect-verifiers)
+    code identity       <- the pinned checkout                    (--expected-code-identity)
 
 The manifest's own ``conditions``, ``gene_set_sources``, ``scorer_view``, counts,
 ``complete`` flag and ``manifest_sha256`` are CHECKED against those. None is believed.
+
+THREE SEAMS AN INDEPENDENT REVIEW FOUND, AND WHAT CLOSED THEM
+-------------------------------------------------------------
+* A gene-set source NAME is not an identity. Checking only that the two sources differed
+  and agreed within themselves let a FORGED "reactome" pass, because nothing compared it
+  to the Reactome that was actually pinned. Now every field — release, raw and canonical
+  hash, both namespaces, licence, both universe bindings — is compared to the pin.
+* ``report["verdict"] == "admit"`` is a string, not an admission. A two-byte file saying
+  ``{"verdict": "admit"}`` passed. A report is now a TYPED artifact from the PINNED lane
+  verifier, carrying its gate inventory, and it must BIND THE BUNDLE IT JUDGED — an ADMIT
+  that names no bundle can be copied onto any bundle.
+* ``clean_tree: true`` was believed because the artifact said so. Every bundle's code
+  identity is now compared to an independently pinned commit + digest: a run does not get
+  to be the witness for its own checkout.
 
 Counts are RECONSTRUCTED, never read: ``n_hits_in_ranking`` is recomputed from the bytes
 the bundle bound (its gene-set membership INTERSECT its arm's ranked target ids).
@@ -83,8 +99,12 @@ def _one(rep, pairs, gate, what):
 
 
 def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
-           batch_policy_path: str, expect_gene_sets_path: str) -> dict[str, Any]:
+           batch_policy_path: str, expect_gene_sets_path: str,
+           expect_verifiers_path: str, expected_code_identity_path: str
+           ) -> dict[str, Any]:
     rep = R.Report()
+    expect_verifiers = R.load_json(expect_verifiers_path) or {}
+    expected_code = R.load_json(expected_code_identity_path) or {}
     manifest = R.load_json(manifest_path)
     if not isinstance(manifest, dict):
         rep.gate(G_SELF_HASH, False, "the manifest is not a readable JSON document")
@@ -134,11 +154,12 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
     # ---- 2. EVERY BUNDLE, from the bytes on disk ---- #
     bundles = manifest.get("bundles") or []
     filled: dict[str, list[str]] = {lane: [] for lane in R.LANES}
-    ids, codes, selections, inputs, verdicts = [], [], [], [], []
+    ids, codes, selections, inputs = [], [], [], []
     geneset_by_source: dict[str, list] = {}
     convergences: list[tuple] = []
     missing, bad_bytes, not_all_arm, bad_map = [], [], [], []
     bad_projection, pair_stored, forbidden, unloadable, bad_hits = [], [], [], [], []
+    bad_reports, bad_code, bad_gene_sets = [], [], []
 
     for b in bundles:
         lane, bid = b.get("lane"), str(b.get("bundle_id"))
@@ -229,12 +250,24 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
         codes.append((bid, R.content_sha256(binding.get("code_identity"))))
         selections.append((bid, R.content_sha256(binding.get("selection_release"))))
         inputs.append((bid, R.content_sha256(binding.get("stage2_inputs"))))
-        verdicts.append((bid, report.get("verdict")))
+
+        # The report must be a TYPED admission from the PINNED verifier, ABOUT THIS
+        # BUNDLE. A file that merely says {"verdict": "admit"} is not one.
+        bad_reports += R.check_report(
+            report, lane, bid, expect_verifiers,
+            R.file_sha256(os.path.join(path, "arm_bundle.json")),
+            R.file_sha256(os.path.join(path, R.PROVENANCE_OF[lane])))
+        # Every bundle's code identity, against an INDEPENDENTLY pinned checkout.
+        bad_code += R.check_code_identity(
+            binding.get("code_identity"), expected_code, bid)
 
         if lane == R.LANE_PATHWAY:
             src = str(ctx.get("gene_set_source"))
             geneset_by_source.setdefault(src, []).append(
                 (bid, R.content_sha256(inv.get("gene_sets"))))
+            # ...and the gene-set identity FIELD BY FIELD against the pinned source.
+            bad_gene_sets += R.check_gene_sets(
+                inv.get("gene_sets"), pinned.get(src), src, bid)
             conv = inv.get("convergence") or {}
             cpath = os.path.join(path, "convergence.json")
             convergences.append((
@@ -282,22 +315,34 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
              f"{n_filled}/{n_want} logical arm slots filled exactly once")
 
     # ---- 4. THE SHARED BINDINGS: identical where the science requires it ---- #
-    _one(rep, codes, G_CODE, "code identities")
     _one(rep, selections, G_SELECTION, "selection releases")
     _one(rep, inputs, G_INPUTS, "shared input bindings")
 
-    dirty = [b.get("bundle_id") for b in bundles
-             if (b.get("code_identity") or {}).get("clean_tree") is not True]
-    rep.gate(G_CLEAN, not dirty,
-             f"{len(dirty)} bundle(s) were taken from a dirty tree; a digest over "
-             "uncommitted bytes does not identify the commit printed beside it")
+    # A code identity that differs BETWEEN bundles is caught here; one that differs from
+    # the PINNED checkout is caught by ``bad_code`` below. Both are G_CODE: the bundles
+    # must agree with each other AND with a witness outside the run.
+    if len({v for _bid, v in codes}) > 1:
+        bad_code.append(
+            f"{len({v for _bid, v in codes})} distinct code identities across the "
+            "bundles; these outputs were not built from one checkout")
 
-    rejected = [bid for bid, v in verdicts if v != R.ADMIT]
-    rep.gate(G_VERDICT, bool(verdicts) and not rejected,
-             f"bundle(s) {rejected[:4]} carry no independent verdict of ADMIT")
+    # The code identity is compared to an INDEPENDENTLY PINNED checkout, not believed.
+    # A resealed clean_tree=true over another commit is exactly the claim that needs an
+    # outside witness, and the manifest is not one.
+    rep.gate(G_CODE, not bad_code, "; ".join(bad_code[:4]))
+    unclean = [b.get("bundle_id") for b in bundles
+               if (b.get("code_identity") or {}).get("clean_tree") is not True]
+    rep.gate(G_CLEAN,
+             not unclean and expected_code.get("clean_tree") is True,
+             f"{len(unclean)} bundle(s) declare a dirty tree; the pinned checkout declares "
+             f"clean_tree={expected_code.get('clean_tree')!r}. A digest over uncommitted "
+             "bytes does not identify the commit printed beside it")
+
+    rep.gate(G_VERDICT, bool(bundles) and not bad_reports,
+             "; ".join(bad_reports[:4]))
 
     # ---- 5. GENE SETS + THE SHARED CONVERGENCE ---- #
-    bad_gs = []
+    bad_gs = list(bad_gene_sets)
     for src, entries in sorted(geneset_by_source.items()):
         if len({h for _b, h in entries}) > 1:
             bad_gs.append(f"{src}: its bundles bind DIFFERENT gene-set identities")
@@ -354,7 +399,16 @@ def main(argv=None) -> int:
     ap.add_argument("--batch-policy", required=True,
                     help="the frozen batch policy: the condition universe")
     ap.add_argument("--expect-gene-sets", required=True,
-                    help="the pinned gene-set source identities: the source universe")
+                    help="the pinned gene-set source identities: the source universe, and "
+                         "the exact release/hash/namespace/licence/universe bindings every "
+                         "bundle of that source must declare")
+    ap.add_argument("--expect-verifiers", required=True,
+                    help="the pinned per-lane verifier identity and required gate "
+                         "inventory: WHO may admit an arm, and WHAT they must have checked")
+    ap.add_argument("--expected-code-identity", required=True,
+                    help="the independently pinned checkout (commit + digest) every bundle "
+                         "must have been built from; a run's code identity may not be "
+                         "taken from the run")
     ap.add_argument("--report", default=None, help="write the verdict here (JSON)")
     args = ap.parse_args(argv)
 
@@ -362,7 +416,9 @@ def main(argv=None) -> int:
         doc = verify(manifest_path=args.manifest, bundles_root=args.bundles_root,
                      scorer_view_path=args.scorer_view,
                      batch_policy_path=args.batch_policy,
-                     expect_gene_sets_path=args.expect_gene_sets)
+                     expect_gene_sets_path=args.expect_gene_sets,
+                     expect_verifiers_path=args.expect_verifiers,
+                     expected_code_identity_path=args.expected_code_identity)
     except Exception as exc:                    # a crash IS a verification failure
         rep = R.Report()
         rep.gate(f"verifier_completed({type(exc).__name__})", False, str(exc))

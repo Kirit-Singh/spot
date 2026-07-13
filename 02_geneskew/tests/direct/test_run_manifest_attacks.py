@@ -48,7 +48,9 @@ def _verify(run, manifest_path):
     return V.verify(manifest_path=manifest_path, bundles_root=run["root"],
                     scorer_view_path=run["scorer_view"],
                     batch_policy_path=run["batch_policy"],
-                    expect_gene_sets_path=run["pinned_gene_sets"])
+                    expect_gene_sets_path=run["pinned_gene_sets"],
+                    expect_verifiers_path=run["pinned_verifiers"],
+                    expected_code_identity_path=run["expected_code_identity"])
 
 
 def _clone(src, dst_name):
@@ -293,6 +295,135 @@ def test_a_PARTIAL_run_is_never_release_admissible(tmp_path):
     assert doc["verdict"] == V.R.REJECT
     assert V.G_PATHWAY_SLOTS in doc["failed_gates"]
     assert doc["n_arm_slots"] == 280
+
+
+# --------------------------------------------------------------------------- #
+# THE THREE FAIL-OPEN SEAMS an independent review found in 8263431+511f672.
+#
+# Each of these PASSED the first verifier. None of them is nonsense: they are the forgeries
+# that fit the shape of the check that was being made.
+# --------------------------------------------------------------------------- #
+class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
+    """SEAM 1: the source NAME matched, so a forged release passed."""
+
+    @staticmethod
+    def _forge(run, source, **fields):
+        for d in run["pathway"]:
+            inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+            if inv["context"]["gene_set_source"] != source:
+                continue
+            _patch(d, "arm_bundle.json",
+                   lambda doc: doc["gene_sets"].update(fields))
+
+    def test_a_FORGED_release_under_the_right_source_name_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        # every bundle of this source gets the SAME forged identity, so it is
+        # self-consistent and still differs from the other source — the old check passed
+        self._forge(run, "reactome",
+                    release_id="FIXTURE-reactome-release-v99-NOT-THE-PINNED-ONE",
+                    raw_sha256="c" * 64, canonical_sha256="d" * 64)
+        doc = _verify(run, _forge_complete(
+            _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_GENESET_ID in doc["failed_gates"]
+
+    @pytest.mark.parametrize("field,value", [
+        ("gene_set_license", "FIXTURE-a-licence-we-never-pinned"),
+        ("gene_id_namespace", "hgnc_symbol"),
+        ("target_universe_sha256", "e" * 64),
+    ])
+    def test_every_bound_field_of_the_identity_is_compared(self, tmp_path, field, value):
+        # a set of HGNC symbols tested against an Ensembl universe overlaps in almost
+        # nothing, and "no enrichment" is the answer you get. That is a failed join
+        # wearing a null result, and the namespace is part of the identity for that reason.
+        run = F.complete_run(tmp_path)
+        self._forge(run, "go_bp", **{field: value})
+        doc = _verify(run, _forge_complete(
+            _manifest(tmp_path, run, allow_partial=True)["path"]))
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_GENESET_ID in doc["failed_gates"]
+
+
+class TestAnAdmitStringIsNotAnIndependentAdmission:
+    """SEAM 2: ``report["verdict"] == "admit"`` was the whole check."""
+
+    def test_a_two_line_ADMIT_STUB_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        with open(os.path.join(run["direct"][0], "verification.json"), "w") as fh:
+            json.dump({"verdict": "admit"}, fh)      # the bundle will bind these bytes
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+    def test_a_report_from_the_WRONG_VERIFIER_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_verification.json",
+               lambda d: d.update({"verifier_id": "FIXTURE.a.verifier.nobody.pinned"}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+    def test_a_report_that_JUDGED_ANOTHER_BUNDLE_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        # a genuine, fully-typed ADMIT — for a different bundle. Copied across.
+        donor = json.load(open(os.path.join(run["direct"][1], "verification.json")))
+        with open(os.path.join(run["direct"][0], "verification.json"), "w") as fh:
+            json.dump(donor, fh, indent=2, sort_keys=True)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+    def test_an_ADMIT_that_RAN_NO_GATES_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["pathway"][0], "pathway_verification.json",
+               lambda d: d.update({"checks": []}))   # admitted, having checked nothing
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+    def test_an_ADMIT_carrying_FAILED_GATES_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["direct"][2], "verification.json",
+               lambda d: d.update({"n_failed": 2, "failed_gates": ["a", "b"]}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_VERDICT in doc["failed_gates"]
+
+
+class TestCleanTreeIsNotSomethingTheRunGetsToAssert:
+    """SEAM 3: ``clean_tree: true`` was believed because the artifact said so."""
+
+    def test_a_RESEALED_clean_tree_over_ANOTHER_COMMIT_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        # EVERY bundle resealed to the same other commit: internally consistent, still
+        # claiming a clean checkout. Only a witness outside the run can catch it.
+        for d in run["direct"] + run["temporal"] + run["pathway"]:
+            name = ("provenance.json" if d in run["direct"] else
+                    "temporal_provenance.json" if d in run["temporal"]
+                    else "pathway_provenance.json")
+            _patch(d, name, lambda doc: doc["run_binding"]["code_identity"].update(
+                {"commit": "9" * 40, "clean_tree": True,
+                 "canonical_digest": "9999999999999999"}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_CODE in doc["failed_gates"]
+
+    def test_a_DIRTY_tree_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["direct"][0], "provenance.json",
+               lambda d: d["run_binding"]["code_identity"].update({"clean_tree": False}))
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_CLEAN in doc["failed_gates"]
 
 
 class TestTheVerifierIsIndependentOfTheProducer:
