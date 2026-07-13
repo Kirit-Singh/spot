@@ -4,7 +4,7 @@ import { StatePill } from '../shell/chips';
 
 interface PlotPoint {
   id: string;
-  symbol: string | null;
+  symbol: string;
   side: 'decrease' | 'increase';
   shift: number;
   rank: number;
@@ -51,7 +51,7 @@ function Tooltip({ point }: { point: PlotPoint | null }) {
   const href = hpaUrl(point.id);
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 font-mono text-[10px] text-ink-2" aria-live="polite">
-      <strong className="text-ink">{point.symbol ?? '—'}</strong>
+      <strong className="text-ink">{point.symbol}</strong>
       <span>{point.id}</span>
       <span>signed shift {fmt(point.shift)}</span>
       <span>{point.side}</span>
@@ -69,7 +69,7 @@ export function EffectRankPlot({ facet }: { facet: CompactEffectRankFacet }) {
   const yMax = Math.max(1e-9, ...points.map((p) => p.evidence));
   const x = (v: number) => M.left + ((v + xMax) / (2 * xMax)) * plotW;
   const y = (v: number) => M.top + (1 - v / yMax) * plotH;
-  const top = (p: PlotPoint) => p.rank <= 5 && p.symbol !== null;
+  const top = (p: PlotPoint) => p.rank <= 5;
 
   return (
     <section aria-label={`${facet.program_id} effect-rank facet`} className="min-w-0 rounded-lg border border-line bg-surface">
@@ -96,12 +96,12 @@ export function EffectRankPlot({ facet }: { facet: CompactEffectRankFacet }) {
           <text transform={`translate(12 ${M.top + plotH / 2}) rotate(-90)`} textAnchor="middle" className="fill-ink-2 font-mono text-[9.5px]">Rank evidence −log10(rank/N)</text>
           {points.map((p) => {
             const href = hpaUrl(p.id);
-            const label = `${p.symbol ?? p.id}, ${p.side}, signed shift ${fmt(p.shift)}, rank ${p.rank} of ${p.nRanked}`;
+            const label = `${p.symbol}, ${p.side}, signed shift ${fmt(p.shift)}, rank ${p.rank} of ${p.nRanked}`;
             const glyph = (
               <g>
                 <circle cx={x(p.shift)} cy={y(p.evidence)} r={top(p) ? 3.4 : 2.2}
                   fill={p.side === 'increase' ? '#2D7C8E' : '#D69834'} opacity={top(p) ? 1 : 0.62} />
-                <title>{`${p.symbol ?? 'unmapped'} · ${p.id} · signed shift ${fmt(p.shift)} · ${p.side} · rank ${p.rank}/${p.nRanked} · rank evidence ${fmt(p.evidence)}`}</title>
+                <title>{`${p.symbol} · ${p.id} · signed shift ${fmt(p.shift)} · ${p.side} · rank ${p.rank}/${p.nRanked} · rank evidence ${fmt(p.evidence)}`}</title>
                 {top(p) && <text x={x(p.shift) + (p.side === 'increase' ? 5 : -5)} y={y(p.evidence) - 4}
                   textAnchor={p.side === 'increase' ? 'start' : 'end'} className="fill-ink font-mono text-[8.5px]">{p.symbol}</text>}
               </g>

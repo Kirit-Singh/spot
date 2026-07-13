@@ -47,6 +47,14 @@ describe('CompactStage2Projection — exact W3 producer contract', () => {
     }
   });
 
+  it('rejects a display row without its frozen symbol instead of guessing in the browser', async () => {
+    const raw = await compactProjectionRaw();
+    const arm = Object.values(raw.arms)[0] as { rows: Record<string, unknown>[] };
+    arm.rows[0].target_symbol = null;
+    await reseal(raw);
+    await expect(parseCompactStage2Projection(raw)).rejects.toThrow(/target_symbol/);
+  });
+
   it('allows only the producer null sentinels for combined/cross-arm output', async () => {
     const raw = await compactProjectionRaw();
     (raw as Record<string, unknown>).combined_objective = 0.5;

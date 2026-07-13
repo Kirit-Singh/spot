@@ -16,8 +16,8 @@ export type CompactLane = 'direct' | 'temporal' | 'pathway';
 
 export interface CompactTargetRow {
   target_id: string;
-  /** Frozen symbol from the projection's bound Stage-1 effect-universe crosswalk; null if unmapped. */
-  target_symbol: string | null;
+  /** Frozen one-to-one symbol from the projection's bound Stage-1 effect-universe crosswalk. */
+  target_symbol: string;
   rank: number;
   arm_value: number | null;
 }

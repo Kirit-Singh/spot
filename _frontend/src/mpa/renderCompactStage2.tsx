@@ -67,7 +67,7 @@ function GeneArmTable({ arm }: { arm: CompactTargetArm }) {
             {arm.rows.map((row) => (
               <tr key={`${row.target_id}:${row.rank}`} className="border-t border-line">
                 <td className={TD}>{row.rank}</td>
-                <td className={TD}>{row.target_symbol ?? '—'}</td>
+                <td className={TD}>{row.target_symbol}</td>
                 <td className={TD}>{row.target_id}</td>
                 {showValue && <td className={TD}>{value(row.arm_value)}</td>}
               </tr>

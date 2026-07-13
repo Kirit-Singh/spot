@@ -75,7 +75,7 @@ function targetRow(v: unknown, path: string): CompactTargetRow {
   const rank = uint(v.rank, `${path}.rank`);
   if (rank < 1) fail('malformed', `${path}.rank must be >= 1`);
   return { target_id: nonempty(v.target_id, `${path}.target_id`),
-    target_symbol: nullableStr(v.target_symbol, `${path}.target_symbol`),
+    target_symbol: nonempty(v.target_symbol, `${path}.target_symbol`),
     rank, arm_value: nullableNum(v.arm_value, `${path}.arm_value`) };
 }
 
