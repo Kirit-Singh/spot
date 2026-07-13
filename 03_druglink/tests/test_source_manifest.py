@@ -190,3 +190,67 @@ def test_a_frozen_extractor_with_all_six_predicates_passes():
         "sql_text": GOOD_SQL, "sql_sha256": "a" * 64,
         "component_cardinality_proved": True})
     assert not _failed(rep)
+
+
+# --------------------------------------------------------------------------- #
+# W2 e298770 — the regenerated cache's identities, pinned.
+# --------------------------------------------------------------------------- #
+def test_w2s_chembl_source_sha_equals_the_publishers():
+    """Independently confirmed against my pre-acquisition pin."""
+    assert sm.CHEMBL["publisher_sha256"] == CHEMBL_SHA
+
+
+def test_w2s_store_identities_are_pinned():
+    assert sm.W2_PRODUCER_COMMIT.startswith("e298770")
+    assert sm.W2_STORE_ID.startswith("446c3b78")
+    assert sm.W2_ELIGIBILITY_EVIDENCE_SHA256.startswith("cf5d7088")
+
+
+def test_the_eligibility_evidence_was_SHIPPED_and_REPLAYED():
+    """The store lives on tcefold; Git carries only the compact reports. Copied and audited.
+
+    I first concluded the store was absent because I checked only tcedirector — it was on
+    tcefold all along. Checking one host and calling an artifact missing is the same error
+    as trusting a claim without checking: both substitute a convenient answer for a look.
+    """
+    assert sm.W2_EVIDENCE_SHIPPED is True
+    assert sm.W2_STORE_PATH.startswith("tcefold:")
+
+
+def test_all_11055_eligibility_verdicts_replay_with_zero_mismatches():
+    r = sm.W2_REPLAY
+    assert r["eligibility_records_replayed"] == 11_055
+    assert r["verdict_mismatches"] == 0
+
+
+def test_ambiguous_shared_accessions_carry_NO_drug_evidence_in_the_real_store():
+    r = sm.W2_REPLAY
+    assert r["ambiguous_identity_rows"] == 86
+    assert r["ambiguous_rows_carrying_drug_evidence"] == 0
+
+
+def test_all_29_variant_assertions_are_excluded_from_general_ranking():
+    """Including the 10 that carry the -1 UNDEFINED MUTATION sentinel."""
+    r = sm.W2_REPLAY
+    assert r["variant_assertions"] == 29
+    assert r["variant_assertions_leaking_into_general_ranking"] == 0
+    assert r["variant_undefined_mutation_sentinels"] == 10
+
+
+def test_w2s_coverage_arithmetic_reconciles():
+    """505 drug-evidence + 10,931 none + 86 ambiguous = 11,522 ENSG; + 4 symbol = 11,526.
+
+    Nothing vanished to make a denominator look tidy.
+    """
+    c = sm.W2_COUNTS
+    assert c["drug_evidence_targets"] + 10_931 + c["ambiguous_identity"] == 11_522
+    assert 11_522 + c["unsupported_namespace"] == c["universe_total"] == 11_526
+
+
+def test_w2s_eligibility_counts_sum():
+    c = sm.W2_COUNTS
+    assert c["eligible"] + c["rejected"] == c["chembl_mappings_evaluated"] == 11_055
+
+
+def test_the_29_variant_assertions_are_the_ones_the_gate_must_exclude():
+    assert sm.W2_COUNTS["variant_specific_assertions"] == 29
