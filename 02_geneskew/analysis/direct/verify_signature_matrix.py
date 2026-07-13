@@ -776,6 +776,9 @@ def _deterministic_report(result: dict[str, Any]) -> dict[str, Any]:
         "fail_closed": True,
         "n_bundles": result.get("n_bundles"),
         "n_conditions": result.get("n_conditions"),
+        # the RE-DERIVED run ids this report stands for — a machine-independent content hash, not
+        # a path — so the release aggregate can bind THIS report to a specific bundle identity.
+        "run_ids": result.get("run_ids"),
         "verdict": result.get("verdict"),
         "n_failed": result.get("n_failed"),
         "gates": [{"check": c["check"], "status": c["status"]}
@@ -817,6 +820,18 @@ def main(argv=None) -> int:
                   "checks": [{"check": "verifier_completed_without_error",
                               "status": FAIL,
                               "detail": f"{type(exc).__name__}: {exc}"}]}
+
+    # RE-DERIVE the run id of every bundle this report covers, from its own run_binding — never
+    # the declared id (a forged id is exactly what V_IDENTITY rejects, so an admitted report's
+    # re-derived id is trustworthy). The release aggregate binds the report to the bundle by this.
+    run_ids = []
+    for bdir in args.bundles:
+        pp = os.path.join(bdir, PROVENANCE_FILE)
+        if os.path.exists(pp):
+            rb = (json.load(open(pp)).get("run_binding") or {})
+            if rb:
+                run_ids.append(R.content_sha256(rb)[:RUN_ID_LEN])
+    result["run_ids"] = sorted(set(run_ids))
 
     report = _deterministic_report(result)
     report_bytes = json.dumps(report, sort_keys=True, separators=(",", ":")).encode()

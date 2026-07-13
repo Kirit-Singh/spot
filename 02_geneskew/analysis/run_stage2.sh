@@ -23,7 +23,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-usage: run_stage2.sh [step0|direct|temporal|pathway|verify-pathway|all]
+usage: run_stage2.sh [step0|direct|temporal|pathway|verify-pathway|verify-release|all]
 Required environment (no defaults — an unset input is a refusal, not a guess):
   SEL_DIR  V3_SCHEMA  REGISTRY  STAGE1_RELEASE  DE  GUIDE  DONOR  SGRNA
   MANIFEST  SRCREG  PB  ENV_LOCK  OUT
@@ -270,6 +270,36 @@ lane_verify_pathway() {
   done
 }
 
+# RELEASE-LEVEL INDEPENDENT VERIFICATION (W4). The per-bundle gate above admits ONE cell; this
+# admits the RELEASE. It is anchored OUTWARD, never to the bundles it judges: the condition x
+# source UNIVERSE comes from the authoritative Stage-1 v3 release ($STAGE1_RELEASE), each cell's
+# local validity from the INDEPENDENT per-bundle report emitted by verify-pathway (never the
+# producer's own pathway_verification.json), the solver lock from the pinned constant, and the
+# PENDING producer inventory is byte-bound and re-derived. It emits a lane-specific
+# content-addressed pathway_arm_external_admission.json (ADMIT/REFUSE, exit nonzero on refusal).
+# A SEPARATE gate that DEPENDS on verify-pathway (the six reports must already exist): the
+# producer does not admit its own release.
+lane_verify_release() {
+  local cond src pbundle
+  local -a bargs=()
+  for cond in "${CONDITIONS[@]}"; do
+    for src in "${SOURCES[@]}"; do
+      pbundle="$(pathway_bundle_for "$cond" "$src")"
+      bargs+=(--bundle "$pbundle")
+      bargs+=(--bundle-report "$OUT/verification/pathway_${cond}_${src}.json")
+      consumes "pathway:$cond:$src"
+      consumes "verify-pathway:$cond:$src"
+    done
+  done
+  consumes "pathway-release-inventory"
+  [[ -n "${SPOT_DRY_RUN:-}" ]] || mkdir -p "$OUT/verification"
+  run "verify-release" python -m analysis.direct.verify_pathway_release \
+    "${bargs[@]}" \
+    --release "$STAGE1_RELEASE" \
+    --inventory "$OUT/pathway/pathway_arm_release.json" \
+    --out "$OUT/verification/pathway_arm_external_admission.json"
+}
+
 main() {
   local what="${1:-all}"
   require_env
@@ -281,6 +311,7 @@ main() {
     temporal) lane_temporal ;;
     pathway)  lane_pathway ;;
     verify-pathway) lane_verify_pathway ;;
+    verify-release) lane_verify_release ;;
     # ORDER IS A DEPENDENCY, not a preference. Direct FIRST, because Step 0 anchors its mask to
     # the Direct bundle and to W10's independent report over it. Step 0 before pathway, because
     # a pathway bundle that rebuilt its own signatures would reintroduce the 29.5 GiB peak the
