@@ -88,6 +88,7 @@ REQUIRED_BUNDLE_GATES = frozenset({
     "V4_amended_bitmap_counts_and_source_mask_identity_rederive_and_are_bound",
     "V5_all_zero_is_unresolved_and_the_resolved_all_ones_set_rederives_from_the_bitmap",
     "V6_convergence_rederives_with_the_sorted_gene_left_fold",
+    "V6b_convergence_size_domain_rederives_from_bound_gene_sets_and_signatures",
     "V7_member_target_ids_rederive_from_the_bound_gene_sets",
     "V8_no_pathway_bundle_ships_signature_bytes",
     "V9_no_forbidden_key_at_any_depth",

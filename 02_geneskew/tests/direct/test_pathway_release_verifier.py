@@ -32,7 +32,8 @@ TARGET_U = "70" * 32                                 # the ONE perturbation univ
 W3C = "/home/tcelab/worktrees/spot-stage2-w3c/02_geneskew"
 
 BUNDLE_GATES = [SM.V1, SM.V1_REFMAN, SM.V2_VALUES, SM.V2_BITS, SM.V2_CANON, SM.V2_ANCHOR,
-                SM.V2_FINITE, SM.V3, SM.V4, SM.V5, SM.V6, SM.V7, SM.V8, SM.V9, SM.V10,
+                SM.V2_FINITE, SM.V3, SM.V4, SM.V5, SM.V6, SM.V6_SIZE, SM.V7, SM.V8, SM.V9,
+                SM.V10,
                 SM.V_IDENTITY, SM.V_EXTERNAL_MASK, SM.V_SOLVER_LOCK, SM.V_QC, SM.V_STALE_SOURCE,
                 SM.V_RELEASE_ROOT]
 
@@ -273,7 +274,7 @@ class TestTheHonestReleaseAdmits:
 
     def test_the_pinned_gate_inventory_matches_the_producer_verifier(self):
         assert VR.REQUIRED_BUNDLE_GATES == set(BUNDLE_GATES)
-        assert len(VR.REQUIRED_BUNDLE_GATES) == 21
+        assert len(VR.REQUIRED_BUNDLE_GATES) == 22
 
     def test_it_binds_exactly_two_gene_set_source_artifacts(self, release):
         art = _verify(release)["body"]["gene_set_source_artifacts"]

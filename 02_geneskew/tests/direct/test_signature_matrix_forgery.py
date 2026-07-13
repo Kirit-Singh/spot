@@ -282,7 +282,7 @@ class TestTheHonestProducerOutputAdmits:
     def test_every_gate_ran(self, shipped):
         names = {c["check"] for c in verify(shipped)["checks"]}
         for g in (V.V1, V.V1_REFMAN, V.V2_VALUES, V.V2_BITS, V.V2_CANON, V.V2_ANCHOR,
-                  V.V3, V.V4, V.V5, V.V6, V.V7, V.V8, V.V9, V.V10, V.V_IDENTITY,
+                  V.V3, V.V4, V.V5, V.V6, V.V6_SIZE, V.V7, V.V8, V.V9, V.V10, V.V_IDENTITY,
                   V.V_EXTERNAL_MASK, V.V_SOLVER_LOCK, V.V_QC, V.V_STALE_SOURCE,
                   V.V_RELEASE_ROOT):
             assert g in names, f"gate never ran: {g}"

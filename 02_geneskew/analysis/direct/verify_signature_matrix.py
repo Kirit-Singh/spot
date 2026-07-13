@@ -23,6 +23,8 @@ SHIPPED bytes off disk — the three shared artifacts and each bundle's `signatu
               SIGNATURE, never an unmasked vector.
     V6        convergence re-derives from (matrix, bitmap) with the sorted-gene left fold,
               BITWISE — a 5e-07 numpy drift is a refusal.
+    V6_SIZE   the >500 endpoint ceiling re-derives from the SHIPPED gene sets and bitmap;
+              oversized sets are present but can carry no convergence evidence.
     V7        member_target_ids re-derive from the bound gene sets ∩ condition targets ∩ resolved.
     V8        no pathway bundle ships signature bytes.
     V9        the recursive no-p/q/FDR firewall over every shipped document.
@@ -96,6 +98,7 @@ V3 = "V3_gene_axis_order_and_hash_rederive_from_de_main"
 V4 = "V4_amended_bitmap_counts_and_source_mask_identity_rederive_and_are_bound"
 V5 = "V5_all_zero_is_unresolved_and_the_resolved_all_ones_set_rederives_from_the_bitmap"
 V6 = "V6_convergence_rederives_with_the_sorted_gene_left_fold"
+V6_SIZE = "V6b_convergence_size_domain_rederives_from_bound_gene_sets_and_signatures"
 V7 = "V7_member_target_ids_rederive_from_the_bound_gene_sets"
 V8 = "V8_no_pathway_bundle_ships_signature_bytes"
 V9 = "V9_no_forbidden_key_at_any_depth"
@@ -106,6 +109,20 @@ V_SOLVER_LOCK = "the_stage2_solver_lock_is_bound_into_the_run_identity"
 V_QC = "the_per_target_signature_qc_rederives_from_the_shipped_qc_table"
 V_STALE_SOURCE = "the_signature_artifact_was_built_from_the_bound_de_source"
 V_RELEASE_ROOT = "the_pathway_stage1_release_is_the_one_the_direct_arms_were_built_on"
+
+# Independent copies of the scientific contract. Importing the producer constants here would
+# let generator and verifier agree by sharing the same bug.
+CONVERGENCE_SCHEMA = "spot.stage02_pathway_convergence.v2"
+CONVERGENCE_METHOD_ID = "spot.stage02.pathway.signature_convergence.v3"
+CONVERGENCE_SIZE_POLICY_ID = \
+    "spot.stage02.pathway.convergence_size_governance.prospective.v1"
+CONVERGENCE_SIZE_BASIS = (
+    "pathway_members_intersect_perturbation_target_universe_intersect_available_"
+    "perturbation_signature_targets")
+MAX_CONVERGENCE_SET_SIZE = 500
+SIZE_EVALUABLE = "evaluable"
+SIZE_TOO_LARGE = "non_evaluable_set_too_large"
+MIN_SOURCE_COVERAGE = 0.50
 
 QC_FILE = "signature_qc.parquet"
 QC_KEY = "qc"
@@ -447,6 +464,8 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
         man = man_by_cond.get(r["condition"])
         if man is None or "_reread" not in man:
             checks.append(_check(V6, False, f"{bdir}: its condition's matrix did not verify"))
+            checks.append(_check(
+                V6_SIZE, False, f"{bdir}: its condition's matrix did not verify"))
             continue
         rr = man["_reread"]
 
@@ -460,10 +479,12 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
             conv = _json(conv_path)
             checks.append(_check(V6, *_verify_convergence(conv, rr,
                                                           r.get("reduction_order_id"))))
+            checks.append(_check(V6_SIZE, *_verify_convergence_size(conv, rr, gs_path)))
             hits = admission.forbidden_keys(r) + admission.forbidden_keys(conv)
             checks.append(_check(V9, not hits, f"{bdir}: forbidden keys {sorted(set(hits))[:6]}"))
         else:
             checks.append(_check(V6, False, f"{bdir}: no convergence.json"))
+            checks.append(_check(V6_SIZE, False, f"{bdir}: no convergence.json"))
 
         # V_IDENTITY: the ref (incl. its cross-lane anchor) IS bound into a re-derivable
         # pathway_run_id — so a forger who edits the anchor must also change the run id.
@@ -545,6 +566,157 @@ def _verify_convergence(conv, rr, reduction_order_id):
                            f"{sim}/{n_shared} != emitted {p.get('similarity')}/"
                            f"{p.get('n_shared_unmasked_genes')}")
     return True, ""
+
+
+def _verify_convergence_size(conv, rr, gs_path):
+    """Re-derive the max-only endpoint domain without importing producer code.
+
+    Endpoints are pathway members in the perturbation-target universe that have a non-zero
+    signature bitmap in this condition. The DE-readout axis supplies vector coordinates; it
+    does not filter endpoint membership. The SHIPPED source bytes and bitmap are the anchors.
+    """
+    if not os.path.exists(gs_path):
+        return False, "the bound gene-set source copy is not shipped in the bundle"
+    try:
+        bundle = VR.parse_bundle(_json(gs_path))
+    except Exception as exc:                                      # noqa: BLE001
+        return False, f"the shipped gene-set source does not parse: {exc}"
+
+    problems = []
+    top_expected = {
+        "schema_version": CONVERGENCE_SCHEMA,
+        "convergence_method_id": CONVERGENCE_METHOD_ID,
+        "convergence_size_policy_id": CONVERGENCE_SIZE_POLICY_ID,
+        "convergence_size_basis": CONVERGENCE_SIZE_BASIS,
+        "max_convergence_set_size": MAX_CONVERGENCE_SET_SIZE,
+    }
+    for key, expected in top_expected.items():
+        if conv.get(key) != expected:
+            problems.append(f"top-level {key}={conv.get(key)!r}, expected {expected!r}")
+
+    declared_records = conv.get("sets")
+    if not isinstance(declared_records, list):
+        return False, "convergence.sets is not a list"
+    ids = [str(r.get("set_id")) for r in declared_records if isinstance(r, dict)]
+    if len(ids) != len(set(ids)):
+        problems.append("convergence.sets contains duplicate set ids")
+    expected_ids = sorted(bundle["sets"])
+    if sorted(ids) != expected_ids:
+        missing = sorted(set(expected_ids) - set(ids))[:3]
+        extra = sorted(set(ids) - set(expected_ids))[:3]
+        problems.append(f"convergence.sets is not the shipped source set inventory "
+                        f"(missing {missing}, extra {extra})")
+    records = {str(r.get("set_id")): r for r in declared_records if isinstance(r, dict)}
+
+    # A non-zero bitmap is an available perturbation signature. This does not inspect or
+    # filter on pathway genes in the DE-readout coordinate axis.
+    available = {str(target) for target, row in zip(rr["targets"], rr["bitmap"])
+                 if bool(np.asarray(row, dtype=np.uint8).any())}
+    expected_endpoints: dict[str, list[str]] = {}
+    n_evaluable = 0
+    for set_id in expected_ids:
+        source = bundle["sets"][set_id]
+        target_members = sorted(set(source["genes_target"]))
+        readout_members = sorted(set(source["genes_readout"]))
+        endpoints = sorted(set(target_members) & available)
+        expected_endpoints[set_id] = endpoints
+        n_target, n_readout, n_endpoint = (
+            len(target_members), len(readout_members), len(endpoints))
+        n_source = source.get("n_source_symbols")
+        target_cov = round(n_target / n_source, 6) if n_source else None
+        readout_cov = round(n_readout / n_source, 6) if n_source else None
+        if target_cov is None:
+            global_disp = "descriptive_only_source_coverage_unknown"
+        elif target_cov >= MIN_SOURCE_COVERAGE:
+            global_disp = "rankable"
+        else:
+            global_disp = "descriptive_only_low_source_coverage"
+        evaluable = n_endpoint <= MAX_CONVERGENCE_SET_SIZE
+        n_evaluable += int(evaluable)
+
+        record = records.get(set_id)
+        if record is None:
+            continue
+        expected_fields = {
+            "method_id": CONVERGENCE_METHOD_ID,
+            "convergence_size_policy_id": CONVERGENCE_SIZE_POLICY_ID,
+            "convergence_size_basis": CONVERGENCE_SIZE_BASIS,
+            "max_convergence_set_size": MAX_CONVERGENCE_SET_SIZE,
+            "n_genes_in_set": n_target,
+            "n_source_symbols": n_source,
+            "n_genes_in_target_universe": n_target,
+            "n_genes_in_readout_universe": n_readout,
+            "target_source_coverage": target_cov,
+            "readout_source_coverage": readout_cov,
+            "global_coverage_disposition": global_disp,
+            "global_coverage_policy_passed": global_disp == "rankable",
+            "n_measured_convergence_endpoints": n_endpoint,
+            "n_measured_perturbations": n_endpoint,
+            "measured_perturbations": endpoints,
+            "convergence_evaluable": evaluable,
+            "convergence_claim_eligible": evaluable,
+            "convergence_size_disposition": SIZE_EVALUABLE if evaluable else SIZE_TOO_LARGE,
+        }
+        for key, expected in expected_fields.items():
+            if record.get(key) != expected:
+                problems.append(f"{set_id}: {key}={record.get(key)!r}, expected {expected!r}")
+                if len(problems) >= 12:
+                    break
+
+        pair_support = record.get("pairwise_support")
+        if not isinstance(pair_support, list):
+            problems.append(f"{set_id}: pairwise_support is not a list")
+        else:
+            endpoint_set = set(endpoints)
+            if any(p.get("target_a") not in endpoint_set or p.get("target_b") not in endpoint_set
+                   for p in pair_support if isinstance(p, dict)):
+                problems.append(f"{set_id}: pairwise support leaves the re-derived endpoint set")
+
+        if not evaluable:
+            refused = {
+                "convergent": False,
+                "convergence_refused_reason": SIZE_TOO_LARGE,
+                "n_supporting_perturbations": 0,
+                "supporting_perturbations": [],
+                "n_intra_set_components": 0,
+                "intra_set_components": [],
+                "n_supportive_pairs": 0,
+                "pairwise_support": [],
+            }
+            for key, expected in refused.items():
+                if record.get(key) != expected:
+                    problems.append(f"{set_id}: oversized set carries {key}={record.get(key)!r}; "
+                                    f"expected {expected!r}")
+        elif record.get("convergence_refused_reason") == SIZE_TOO_LARGE:
+            problems.append(f"{set_id}: an in-domain set is falsely marked oversized")
+
+    if conv.get("n_sets") != len(expected_ids):
+        problems.append("top-level n_sets does not equal the shipped source inventory")
+    if conv.get("n_convergence_evaluable_sets") != n_evaluable:
+        problems.append("top-level n_convergence_evaluable_sets does not re-derive")
+    if conv.get("n_convergence_non_evaluable_sets") != len(expected_ids) - n_evaluable:
+        problems.append("top-level n_convergence_non_evaluable_sets does not re-derive")
+
+    # Re-derive the unique pair workload. Oversized sets contribute no entries by design;
+    # this catches a producer that emits empty root records but still computes their ~50M pairs.
+    resolved_targets = sorted(available)
+    target_index = {target: i for i, target in enumerate(resolved_targets)}
+    adjacency = np.zeros((len(resolved_targets), len(resolved_targets)), dtype=np.bool_)
+    for set_id, endpoints in expected_endpoints.items():
+        if len(endpoints) > MAX_CONVERGENCE_SET_SIZE or len(endpoints) < 2:
+            continue
+        arr = np.fromiter((target_index[g] for g in endpoints), dtype=np.int32)
+        ii, jj = np.triu_indices(len(arr), 1)
+        adjacency[arr[ii], arr[jj]] = True
+    expected_pairs = int(np.count_nonzero(adjacency))
+    if conv.get("n_intra_set_pairs") != expected_pairs:
+        problems.append(f"n_intra_set_pairs={conv.get('n_intra_set_pairs')!r}, expected "
+                        f"{expected_pairs} after excluding oversized sets")
+
+    content = {k: v for k, v in conv.items() if k != "convergence_sha256"}
+    if conv.get("convergence_sha256") != R.content_sha256(content):
+        problems.append("convergence_sha256 does not re-derive from the shipped convergence")
+    return (not problems), "; ".join(problems[:12])
 
 
 def _verify_identity(bdir, ref_on_disk):
