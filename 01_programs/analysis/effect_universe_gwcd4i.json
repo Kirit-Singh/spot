@@ -2,7 +2,7 @@
 "provenance": {
 "source": "GWCD4i.DE_stats.h5ad var (gene_ids=Ensembl gene ID, gene_name=symbol)",
 "dataset": "marson2025_gwcd4_perturbseq (Genome-scale perturb-seq, primary human CD4+ T cells; bioRxiv 2025.12.23.696273)",
-"host_path": "tcedirector:/home/tcelab/datasets/marson2025_gwcd4_perturbseq/GWCD4i.DE_stats.h5ad",
+"host_path": "${SPOT_MARSON_DATA_ROOT}/GWCD4i.DE_stats.h5ad",
 "role": "Stage-2 perturbation-effect universe (symbol<->Ensembl crosswalk only; no expression or statistics bundled)",
 "n_genes": 10282
 },

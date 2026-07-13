@@ -47,6 +47,16 @@ def _canon_json(p): return canonical.canonical_content_sha256(json.load(open(p))
 def _rel(p): return os.path.relpath(p, REPO)
 
 
+def _effect_scientific_sha(path):
+    effect = json.load(open(path))
+    projection = {
+        "n_genes": effect["provenance"]["n_genes"],
+        "symbols_sha256": effect["symbols_sha256"],
+        "symbol_to_ensembl": effect["symbol_to_ensembl"],
+    }
+    return canonical.content_hash(projection)
+
+
 def _selfhash(obj, field):
     d = {k: v for k, v in obj.items() if k != field}
     return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
@@ -90,8 +100,13 @@ def build_release() -> dict:
             "stage2_registry_view": _component(os.path.join(DATA, "stage01_stage2_registry_view.json"),
                                                "executable_scorer_view",
                                                extra={"note": "canonical == registry_scorer_view_canonical_sha256; what selection_id binds"}),
-            "effect_universe": _component(os.path.join(ANALYSIS, "effect_universe_gwcd4i.json"),
-                                          "effect_universe_target_space"),
+            "effect_universe": _component(
+                os.path.join(ANALYSIS, "effect_universe_gwcd4i.json"),
+                "effect_universe_target_space",
+                extra={"scientific_projection_sha256": _effect_scientific_sha(
+                    os.path.join(ANALYSIS, "effect_universe_gwcd4i.json")
+                )},
+            ),
             "scores_parquet": {"role": "continuous_program_scores_396k",
                                "canonical_content_sha256": reg["scores_canonical_content_sha256"],
                                "raw_sha256_staged": prot["raw_sha256"]["scores_parquet_staged"],

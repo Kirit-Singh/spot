@@ -51,9 +51,10 @@
     },
     "effect_universe": {
       "path": "01_programs/analysis/effect_universe_gwcd4i.json",
-      "raw_sha256": "d27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b",
-      "canonical_content_sha256": "8fd8ba97fd9e19455ff75a29645a18c932773d601ce6aa21e352f718a1313eea",
-      "role": "effect_universe_target_space"
+      "raw_sha256": "a4137759b450c3f6fd6de6b18beb80b03986b3c0a7ca02e3a29eb311908d8574",
+      "canonical_content_sha256": "457202c634a529ad1bacc91a78ba38384e6fe2902d1c8cccd4ed416699f1406d",
+      "role": "effect_universe_target_space",
+      "scientific_projection_sha256": "6bafbb80b6d85450d7a65e1b2fe44233c1880ae1e108e098b701f2436b14fcb5"
     },
     "scores_parquet": {
       "role": "continuous_program_scores_396k",
@@ -71,5 +72,5 @@
       "active_gate": false
     }
   },
-  "self_release_sha256": "47931ffa61c280f8dab72313cbe02ef0a19ec341ced59dd1fbe9ce02e33c731a"
+  "self_release_sha256": "3e80581aa9b351a991279b19645c32bce2d83c34a626f877b3e513319821c29b"
 }

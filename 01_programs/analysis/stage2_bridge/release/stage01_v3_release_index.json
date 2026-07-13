@@ -17,7 +17,7 @@
     "owner_decision": "OWNER-CONFIRMABLE: the A/B pair + directions determine the biological hypothesis; confirm or override before authorizing the real run (alternatives: B=cd4_ctl_like; direction variants)."
   },
   "release_bundle": "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json",
-  "release_self_release_sha256": "47931ffa61c280f8dab72313cbe02ef0a19ec341ced59dd1fbe9ce02e33c731a",
+  "release_self_release_sha256": "3e80581aa9b351a991279b19645c32bce2d83c34a626f877b3e513319821c29b",
   "selection_schema": "01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json",
   "registry": "01_programs/app/data/stage01_program_registry_v3.json",
   "selections": [

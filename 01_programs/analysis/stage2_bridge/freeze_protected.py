@@ -57,6 +57,12 @@ def compute_baseline() -> dict:
     reg = json.load(open(os.path.join(DATA, "stage01_program_registry_v3.json")))
     val = json.load(open(os.path.join(DATA, "stage01_validation.json")))
     sel = json.load(open(os.path.join(DATA, "stage01_selectability_v3.json")))
+    effect = json.load(open(os.path.join(ANALYSIS, "effect_universe_gwcd4i.json")))
+    effect_scientific = {
+        "n_genes": effect["provenance"]["n_genes"],
+        "symbols_sha256": effect["symbols_sha256"],
+        "symbol_to_ensembl": effect["symbol_to_ensembl"],
+    }
 
     raw = {}
     for name, (root, fn) in PROTECTED_RAW.items():
@@ -84,6 +90,10 @@ def compute_baseline() -> dict:
         "stage2_view_canonical_sha256": rv.build_and_hash()[2],
         "validation_direct_canonical_content_sha256": canonical.canonical_content_sha256(val),
         "selectability_direct_canonical_content_sha256": canonical.canonical_content_sha256(sel),
+        # The raw effect-universe artifact also carries non-scientific acquisition
+        # metadata. Protect the gene mapping separately so path/provenance-only edits
+        # cannot masquerade as a scientific change.
+        "effect_universe_scientific_sha256": canonical.content_hash(effect_scientific),
     }
 
 

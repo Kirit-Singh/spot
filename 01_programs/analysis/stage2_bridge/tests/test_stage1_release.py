@@ -22,6 +22,7 @@ SCORES_CANONICAL = "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d5
 VALIDATION_RAW = "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371"
 SELECTABILITY_RAW = "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420"
 SCORER_VIEW = "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c"
+EFFECT_SCIENTIFIC = "6bafbb80b6d85450d7a65e1b2fe44233c1880ae1e108e098b701f2436b14fcb5"
 
 
 def _rel(): return json.load(open(os.path.join(REL, "stage01_v3_release.json")))
@@ -42,6 +43,7 @@ def test_release_binds_the_frozen_scientific_pins():
     assert b["registry_scorer_view_canonical_sha256"] == SCORER_VIEW == rv.build_and_hash()[2]
     assert b["components"]["validation"]["raw_sha256"] == VALIDATION_RAW
     assert b["components"]["selectability_v3"]["raw_sha256"] == SELECTABILITY_RAW
+    assert b["components"]["effect_universe"]["scientific_projection_sha256"] == EFFECT_SCIENTIFIC
     # every component names both a raw and (for JSON) a canonical hash
     for name, c in b["components"].items():
         assert "raw_sha256" in c or "raw_sha256_staged" in c, name

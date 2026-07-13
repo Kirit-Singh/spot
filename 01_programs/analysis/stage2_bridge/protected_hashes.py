@@ -66,6 +66,18 @@ def check_protected() -> list[str]:
         cur = canonical.file_sha256(p) if os.path.exists(p) else None
         if cur != want.get(name):
             fails.append(f"protected raw drift: {name} baseline={want.get(name)} current={cur}")
+    effect = json.load(open(os.path.join(ANALYSIS, "effect_universe_gwcd4i.json")))
+    effect_scientific = {
+        "n_genes": effect["provenance"]["n_genes"],
+        "symbols_sha256": effect["symbols_sha256"],
+        "symbol_to_ensembl": effect["symbol_to_ensembl"],
+    }
+    effect_sha = canonical.content_hash(effect_scientific)
+    if effect_sha != base.get("effect_universe_scientific_sha256"):
+        fails.append(
+            "effect universe scientific drift: "
+            f"baseline={base.get('effect_universe_scientific_sha256')} current={effect_sha}"
+        )
     # derived scorer invariants (registry byte-identity implies these, but check anyway)
     reg = json.load(open(os.path.join(DATA, "stage01_program_registry_v3.json")))
     reg_minus_top = {k: v for k, v in reg.items() if k != "registry_sha256"}

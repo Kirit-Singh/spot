@@ -1,13 +1,19 @@
 {
   "_note": "Frozen pre-change baseline. Every value here MUST be reproduced at verification; a mismatch means a protected scorer/numeric artifact moved.",
   "_schema": "spot.stage2_bridge.protected_baseline.v1",
+  "effect_universe_metadata_reseal": {
+    "current_raw_sha256": "a4137759b450c3f6fd6de6b18beb80b03986b3c0a7ca02e3a29eb311908d8574",
+    "prior_raw_sha256": "d27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b",
+    "reason": "machine-local host_path replaced by SPOT_MARSON_DATA_ROOT; 10,282-gene scientific projection unchanged"
+  },
+  "effect_universe_scientific_sha256": "6bafbb80b6d85450d7a65e1b2fe44233c1880ae1e108e098b701f2436b14fcb5",
   "raw_sha256": {
     "activation_association": "fd1d9bb0a53ad7ecbde1d9999ccc9bdf8be1cc765f6ff4ef4619a662c4a63c22",
     "bins_v3_csv": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
     "control_eligible_pool": "70072addb7c8c323eda8b110d1efe6d2670f8a00dfe6138e36a5ea7f79db541a",
     "control_method": "02a94b07a19901ec41e9e26c25ce156b80c0cf67b35a17f00cf8ca6087699971",
     "controls_v3_csv": "79764283a3429a103ed87a41b88a0c094fac84a7f46eebcb034d156e8573de75",
-    "effect_universe": "d27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b",
+    "effect_universe": "a4137759b450c3f6fd6de6b18beb80b03986b3c0a7ca02e3a29eb311908d8574",
     "gate_spec": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
     "input_manifest": "3b13488716a366676813bff567da91f216a426c94bd1fe43c22824f73b26d521",
     "registry_v3": "193ead24cf9b161c024614d54ab87b0152b21f7da67d9069205f9dd313e3b860",
