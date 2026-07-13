@@ -133,12 +133,12 @@ describe('compact Stage-2 route rendering', () => {
     expect(bodyRows()).toHaveLength(20);
     expect(bodyText()).not.toContain('A_DEC_11');
 
-    fireEvent.click(within(canvas).getAllByRole('button', { name: /in both arms/ })[0]);
+    fireEvent.click(within(canvas).getAllByRole('button', { name: /^In both/ })[0]);
     // one control drives both tables, so the columns stay comparable
     expect(bodyRows()).toHaveLength(2);
     for (const row of bodyRows()) expect(row.textContent).toContain('both');
 
-    fireEvent.click(within(canvas).getAllByRole('button', { name: /^all/ })[0]);
+    fireEvent.click(within(canvas).getAllByRole('button', { name: /^All/ })[0]);
     expect(bodyRows()).toHaveLength(24); // every emitted row still reachable
 
     // columns are laid out fixed, not sized to whichever rows happen to be shown, so switching

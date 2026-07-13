@@ -71,6 +71,8 @@ function rowsFor(arm: CompactTargetArm, mode: RowMode, bothArmIds: ReadonlySet<s
   return arm.rows;
 }
 
+/** Stage-1's `.seg` grammar (Show cells · condition): one bordered group, a rule between each button,
+ *  12.5px/500 Inter Tight, accent fill on the active one. */
 function RowModeControl({
   mode,
   bothCount,
@@ -83,23 +85,23 @@ function RowModeControl({
   onMode: (mode: RowMode) => void;
 }) {
   const options: { key: RowMode; label: string }[] = [
-    { key: 'top10', label: `top ${TOP_N}` },
-    ...(bothCount > 0 ? [{ key: 'both' as const, label: `in both arms · ${shown(bothCount)}` }] : []),
-    { key: 'all', label: `all ${shown(cap)}` },
+    { key: 'top10', label: `Top ${TOP_N}` },
+    ...(bothCount > 0 ? [{ key: 'both' as const, label: `In both · ${shown(bothCount)}` }] : []),
+    { key: 'all', label: `All ${shown(cap)}` },
   ];
   return (
     <div
       role="group"
       aria-label="Rows shown"
-      className="flex items-center overflow-hidden rounded-md border border-line"
+      className="flex items-center overflow-hidden rounded-[9px] border border-line"
     >
-      {options.map((option) => (
+      {options.map((option, i) => (
         <button
           key={option.key}
           type="button"
           aria-pressed={mode === option.key}
           onClick={() => onMode(option.key)}
-          className={`px-2 py-0.5 font-mono text-[9.5px] ${
+          className={`px-2.5 py-1 text-[12.5px] font-medium ${i > 0 ? 'border-l border-line' : ''} ${
             mode === option.key ? 'bg-accent text-white' : 'text-ink-2 hover:text-accent'
           }`}
         >
@@ -312,13 +314,10 @@ export function TargetsCanvas({
       data-route="targets"
       className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
     >
-      <div className="text-[11.5px] text-muted">
-        Select or hover a gene in the map or table for detail · click to pin it across both facets
-      </div>
-
       {/* One column per program: its facet, and directly beneath it the arm that facet's objective
-          selected. The two columns never share an axis or a score — only a hovered/pinned gene. */}
-      <div className="grid min-w-0 grid-cols-1 items-start gap-3 xl:grid-cols-2">
+          selected. The two columns never share an axis or a score — only a hovered/pinned gene.
+          The column gap is wide enough to seat the arrow run between the two facets. */}
+      <div className="grid min-w-0 grid-cols-1 items-start gap-3 xl:grid-cols-2 xl:gap-x-8">
         {view.effectRankFacets.map((facet, index) => (
           <div key={facet.role} className="flex min-w-0 flex-col gap-3">
             <div className="relative min-w-0">
@@ -331,8 +330,9 @@ export function TargetsCanvas({
                 onHover={setHovered}
                 onPin={setPinned}
               />
+              {/* seated exactly in the 32px column gap (-right-8 + w-8), never overlapping either card */}
               {index === 0 && (
-                <span className="absolute -right-[15px] bottom-16 top-14 hidden xl:block">
+                <span className="absolute -right-8 bottom-20 top-16 hidden w-8 xl:block">
                   <TransitionArrows from={name(a.program_id)} to={name(b.program_id)} />
                 </span>
               )}

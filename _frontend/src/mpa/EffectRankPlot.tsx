@@ -63,16 +63,29 @@ function hpaUrl(id: string): string | null {
 /** Emphasis is bound to top-five rank, independent of whether a display label was drawn. */
 const isTopFive = (p: PlotPoint): boolean => p.rank <= 5;
 
+/** Stage-1's `.ctchip` grammar: the From / To poles keep the identity they were selected with. */
+function PoleChip({ role }: { role: 'A' | 'B' }) {
+  const from = role === 'A';
+  return (
+    <span
+      className="inline-flex h-5 items-center justify-center rounded-[5px] px-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.03em] text-white"
+      style={{ background: from ? 'rgb(45,124,142)' : 'rgb(214,152,52)' }}
+    >
+      {from ? 'From' : 'To'}
+    </span>
+  );
+}
+
 function Legend({ bothCount }: { bothCount: number }) {
   return (
     <span className="flex items-center gap-3 font-mono text-[10.5px] text-muted">
       <span className="flex items-center gap-1">
         <svg width="7" height="7" aria-hidden="true"><circle cx="3.5" cy="3.5" r="3.5" fill={DECREASE} /></svg>
-        desired decrease
+        decreasing
       </span>
       <span className="flex items-center gap-1">
         <svg width="7" height="7" aria-hidden="true"><circle cx="3.5" cy="3.5" r="3.5" fill={INCREASE} /></svg>
-        desired increase
+        increasing
       </span>
       {bothCount > 0 && (
         <span className="flex items-center gap-1">
@@ -105,10 +118,16 @@ function DetailCard({ point: p, pinned, inBoth }: { point: PlotPoint | null; pin
   const href = p ? hpaUrl(p.id) : null;
   return (
     <div
-      className="min-h-[56px] border-t border-line px-3 py-2 font-mono text-[10.5px]"
+      className={`flex min-h-[56px] flex-col border-t border-line px-3 py-2 font-mono text-[10.5px] ${
+        p ? '' : 'items-center justify-center'
+      }`}
       aria-live="polite"
     >
-      {!p ? null : (
+      {!p ? (
+        <span className="text-center text-[11px] text-muted">
+          Select or hover a gene in the map or table for detail · click to pin it across both facets
+        </span>
+      ) : (
         <>
           <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <strong className="text-[11px] text-ink">{p.symbol}</strong>
@@ -193,9 +212,7 @@ export function EffectRankPlot({
       className="flex min-w-0 flex-col rounded-lg border border-line bg-surface"
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
-        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted">
-          program {facet.role}
-        </span>
+        <PoleChip role={facet.role} />
         {programLabel && programLabel !== facet.program_id && (
           <span className="text-[13.5px] font-semibold text-ink">{programLabel}</span>
         )}
