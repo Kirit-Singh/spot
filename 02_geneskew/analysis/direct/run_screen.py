@@ -180,6 +180,39 @@ def prepare(args, v3=None) -> dict[str, Any]:
                     cond=selection.analysis_condition)
 
 
+def prepare_bundle(args, *, cond: str) -> dict[str, Any]:
+    """Bind an ALL-ARM bundle run: a LANE and a CONTEXT, and NO pair.
+
+    The owner's topology decision, made real: a physical bundle's identity may not be a
+    function of an A/B pair. So this path never loads a pair selection and never builds an
+    axis — the admitted programs come from the bound release's scorer view, and the same
+    release, manifest, mask universe and evidence domain are bound as everywhere else.
+
+    ``ctx["selection"]`` and ``ctx["axis"]`` are None, and that is the POINT: a bundle that
+    could not be built without a pair would not be a reusable bundle, it would be a pair's
+    run with extra columns.
+    """
+    lane = getattr(args, "lane", None) or config.LANE_PRODUCTION
+    if lane not in config.LANES:
+        raise sel_mod.SelectionError(f"unknown lane {lane!r}")
+    if not getattr(args, "stage1_release", None) and lane != config.LANE_SYNTHETIC:
+        raise sel_mod.SelectionError(
+            "an arm-bundle run requires --stage1-release: the admitted program set is "
+            "DERIVED from the bound release's scorer view, and an unbound release cannot "
+            "say which programs it admits")
+    if lane == config.LANE_PRODUCTION:
+        release = trust.load_production_release(args.stage1_release)
+    elif lane == config.LANE_RESEARCH:
+        release = trust.load_research_release(args.stage1_release)
+    else:
+        release = trust.load_fixture_release(
+            args.registry, args.stage1_validation, args.stage1_gate_spec)
+
+    ctx = _context(args, lane, None, release, None, {}, cond=cond)
+    ctx["bundle_scoped"] = True
+    return ctx
+
+
 def _prepare_v3(args, v3, lane: str) -> dict[str, Any]:
     """Bind a run whose selection IS the verified v3 contract (B3).
 
@@ -289,7 +322,10 @@ def _context(args, lane: str, selection, release, axis: dict[str, Any],
 
     return {
         "lane": lane, "selection": selection, "release": release,
-        "axis": _restrict_axis(axis, gene_universe["gene_ids"]),
+        # An ALL-ARM bundle ctx has no axis: its programs come from the scorer view, and
+        # each one's panel/control is restricted to this universe where it is projected.
+        "axis": (None if axis is None
+                 else _restrict_axis(axis, gene_universe["gene_ids"])),
         "id_check": id_check, "cond": cond,
         "identities": identities, "identities_by_condition": identities_by_condition,
         "global_scopes": global_scopes, "n_global_scopes": len(global_scopes),

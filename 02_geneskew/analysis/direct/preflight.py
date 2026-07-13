@@ -243,7 +243,11 @@ def assess(args, ctx: dict[str, Any]) -> dict[str, Any]:
         "result_artifacts_written": 0,
         "checks": list(CHECKS),
         "failures": failures,
-        "stage1": {
+        # An ALL-ARM bundle ctx has NO pair — no selection and no axis — so the block that
+        # describes the pair is absent rather than faked. The CHECKS above are identical
+        # either way: the manifest, the support contract, the strict replay and the release
+        # gate have nothing to do with which pair was asked about.
+        "stage1": ({
             "selection_id": ctx["selection"].selection_id,
             "question_id": ctx["selection"].question_id,
             "analysis_condition": ctx["cond"],
@@ -252,7 +256,12 @@ def assess(args, ctx: dict[str, Any]) -> dict[str, Any]:
             "production_eligible": ctx["axis"]["production_eligible"],
             "stage3_eligible": ctx["axis"]["stage3_eligible"],
             "production_gate_passed": ctx["axis"]["production_gate_passed"],
-        },
+        } if ctx.get("selection") is not None else {
+            "bundle_scoped": True,
+            "names_a_program_pair": False,
+            "analysis_condition": ctx["cond"],
+            "release_kind": ctx["release"].kind,
+        }),
         # WHAT CONTRACT WAS CERTIFIED. The identical block the build binds into its run
         # identity — so "the preflight passed" is checkable against "the build ran this",
         # rather than being two assertions about two things that share a name.
