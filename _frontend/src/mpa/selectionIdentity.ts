@@ -32,7 +32,9 @@ export interface SelectionIdentity {
  * refused there).
  */
 export function selectionIdentity(sel: SelectionV3): SelectionIdentity {
-  const plan = joinPlan(selectionToJoinInput(sel, 'reactome')); // gene arm keys are source-independent
+  // Reactome is PARKED; the critical path is GO-BP only. This source argument is inert here — gene arm
+  // keys are source-independent (only pathway arm keys carry the source), so this cannot change identity.
+  const plan = joinPlan(selectionToJoinInput(sel, 'go_bp'));
   if (plan.gene_arm_keys[0] === plan.gene_arm_keys[1]) {
     throw new Error('identical full endpoints — both poles resolve to the same arm; refuse');
   }
