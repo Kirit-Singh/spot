@@ -30,8 +30,14 @@ from fixtures_spec import TARGET_GENES, UNIVERSE
 DIRECT_MASK = "a" * 64          # the Direct bundle's DECLARED mask hash (a run value)
 
 
-def _direct_bundle(tmp_path, mask_sets, *, mask_sha=DIRECT_MASK, run_id="dir123"):
-    """A stand-in for an ADMITTED Direct bundle: masks.parquet + provenance.json (W18's shape)."""
+def _direct_bundle(tmp_path, mask_sets, *, mask_sha=DIRECT_MASK, run_id="dir123",
+                   release_hashes=None, release_kind=None):
+    """A stand-in for an ADMITTED Direct bundle: masks.parquet + provenance.json (W18's shape).
+
+    When ``release_hashes`` is given it carries the Stage-1 v3 release the Direct arms were built
+    on (``arm_bundle_request.stage1_release_hashes``) — the external anchor the pathway lane's
+    release cross-check reads through Step 0's mask anchor.
+    """
     import pandas as pd
     d = tmp_path / "direct"
     d.mkdir(parents=True, exist_ok=True)
@@ -45,9 +51,12 @@ def _direct_bundle(tmp_path, mask_sets, *, mask_sha=DIRECT_MASK, run_id="dir123"
             rows.append({"estimate_type": "main", "target_id": t,
                          "masked_gene_ensembl": g, "mask_reason": "target"})
     pd.DataFrame(rows).to_parquet(d / "masks.parquet")
+    binding = {"mask_sha256": mask_sha}
+    if release_hashes is not None:
+        binding["arm_bundle_request"] = {"stage1_release_hashes": dict(release_hashes),
+                                         "stage1_release_kind": release_kind}
     (d / "provenance.json").write_text(json.dumps({
-        "arm_bundle_run_id": run_id,
-        "run_binding": {"mask_sha256": mask_sha}}))
+        "arm_bundle_run_id": run_id, "run_binding": binding}))
     return str(d)
 
 
@@ -86,17 +95,23 @@ def shipped(synthetic_run, tmp_path):
         "analysis", "stage02_solver_lock.txt")
 
     # THE CROSS-LANE ANCHOR (W18 5628f84). The Direct masks.parquet is the SAME mask_sets this
-    # lane derives, so an honest matrix is anchored and admits; a forged one disagrees.
+    # lane derives, so an honest matrix is anchored and admits; a forged one disagrees. The
+    # Direct bundle also carries the STAGE-1 RELEASE the arms were built on (W18 898a786), so the
+    # pathway lane's release cross-check has a real, external release to compare against.
+    release_hashes = dict(ctx["release"].hashes)
+    release_kind = ctx["release"].kind
     main = io_data.load_main(args.de_main, "StimX")
     mask_sets = sm.mask_sets_for_condition(args, "StimX", main)
-    args.direct_bundle = _direct_bundle(tmp_path, mask_sets)
+    args.direct_bundle = _direct_bundle(tmp_path, mask_sets,
+                                        release_hashes=release_hashes,
+                                        release_kind=release_kind)
     args.direct_mask_report = _w10_report(tmp_path)
 
     sm.build_condition(args, "StimX", args.signature_matrix_root)
     res = run_pathway_arms.build_pathway_arms(args)
     return {"args": args, "matrix_root": args.signature_matrix_root,
             "bundle_dir": res["out_dir"], "cond": "StimX", "tmp_path": tmp_path,
-            "mask_sets": mask_sets,
+            "mask_sets": mask_sets, "release_hashes": release_hashes,
             "cond_dir": os.path.join(args.signature_matrix_root, "StimX")}
 
 
@@ -268,7 +283,8 @@ class TestTheHonestProducerOutputAdmits:
         names = {c["check"] for c in verify(shipped)["checks"]}
         for g in (V.V1, V.V1_REFMAN, V.V2_VALUES, V.V2_BITS, V.V2_CANON, V.V2_ANCHOR,
                   V.V3, V.V4, V.V5, V.V6, V.V7, V.V8, V.V9, V.V10, V.V_IDENTITY,
-                  V.V_EXTERNAL_MASK, V.V_SOLVER_LOCK, V.V_QC, V.V_STALE_SOURCE):
+                  V.V_EXTERNAL_MASK, V.V_SOLVER_LOCK, V.V_QC, V.V_STALE_SOURCE,
+                  V.V_RELEASE_ROOT):
             assert g in names, f"gate never ran: {g}"
 
 
@@ -544,6 +560,84 @@ class TestTheCrossLaneAnchor:
         # The anchor is bound, but the auditor does not supply the Direct bundle to re-check it.
         shipped["args"].direct_bundle = None
         assert V.V_EXTERNAL_MASK in failed(verify(shipped))
+
+
+# =========================================================================== #
+# THE STAGE-1 RELEASE ROOT BINDING (W18 898a786)
+# =========================================================================== #
+def _set_pathway_release(shipped, hashes, *, kind="fixture"):
+    """Forge the pathway run's bound Stage-1 release, fully resealing the run id."""
+    prov_path = os.path.join(shipped["bundle_dir"], V.PROVENANCE_FILE)
+    prov = _json(prov_path)
+    b = prov["run_binding"]
+    if hashes is None:
+        b.pop("stage1_release_hashes", None)
+    else:
+        b["stage1_release_hashes"] = dict(hashes)
+        b["stage1_release_kind"] = kind
+    full = R.content_sha256(b)
+    prov["pathway_run_id"], prov["pathway_run_sha256"] = full[:V.RUN_ID_LEN], full
+    with open(prov_path, "w") as fh:
+        json.dump(prov, fh, sort_keys=True)
+
+
+class TestTheStage1ReleaseRoot:
+    def test_the_honest_release_matches_the_direct_arms(self, shipped):
+        r = verify(shipped)
+        assert V.V_RELEASE_ROOT not in failed(r), sorted(failed(r))
+
+    def test_a_MISSING_release_is_REJECTED(self, shipped):
+        _set_pathway_release(shipped, None)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_RELEASE_ROOT in failed(r)
+
+    def test_a_MISMATCHED_release_is_REJECTED(self, shipped):
+        # a real-looking but different release (one hash flipped)
+        other = dict(shipped["release_hashes"])
+        other["registry_raw_sha256"] = "9" * 64
+        _set_pathway_release(shipped, other)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_RELEASE_ROOT in failed(r)
+
+    def test_a_STALE_release_is_REJECTED(self, shipped):
+        # every component from an OLDER release: none matches the Direct arms
+        stale = {k: ("0" * 64 if k.endswith("sha256") else "stage1-continuous-v2.9.0")
+                 for k in shipped["release_hashes"]}
+        _set_pathway_release(shipped, stale)
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_RELEASE_ROOT in failed(r)
+
+    def test_a_FULLY_RESEALED_release_is_REJECTED(self, shipped):
+        # forge the pathway release AND the anchor's copy, reseal manifest/ref/run id — every
+        # hash inside the pathway bundle agrees with itself. Only the EXTERNAL Direct bundle
+        # provenance still names the true release, and V_RELEASE_ROOT reads it.
+        fake = {k: ("f" * 64 if k.endswith("sha256") else "stage1-forged-v9")
+                for k in shipped["release_hashes"]}
+        man = _man(shipped)
+        anchor = man.get("direct_mask_anchor") or {}
+        anchor["direct_stage1_release_hashes"] = dict(fake)      # reseal the anchor's copy too
+        man["direct_mask_anchor"] = anchor
+        write_manifest(shipped, man)
+        sync_identity(shipped)
+        _set_pathway_release(shipped, fake)                      # and the run binding
+        r = verify(shipped)
+        assert r["verdict"] == V.REJECT and V.V_RELEASE_ROOT in failed(r)
+        assert V.V_IDENTITY not in failed(r)                     # self-consistent run id
+
+    def test_the_numerical_bytes_are_UNCHANGED_by_the_release_binding(self, shipped):
+        # for identical admitted inputs the signature matrix's precision-bearing digests do not
+        # depend on the release metadata — the release binds identity, not numbers.
+        man = _man(shipped)
+        assert len(man["matrix"]["values_sha256"]) == 64
+        assert len(man["mask"]["bits_sha256"]) == 64
+        # the same condition rebuilt from the same inputs hashes the same (determinism)
+        from direct import io_data
+        from direct import signature_matrix as sm
+        a = shipped["args"]
+        m2 = sm.build_condition(a, "StimX", str(shipped["tmp_path"] / "again"))
+        assert m2["matrix"]["values_sha256"] == man["matrix"]["values_sha256"]
+        assert m2["mask"]["bits_sha256"] == man["mask"]["bits_sha256"]
+        _ = io_data
 
 
 # =========================================================================== #

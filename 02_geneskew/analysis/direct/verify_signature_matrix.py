@@ -32,6 +32,9 @@ SHIPPED bytes off disk — the three shared artifacts and each bundle's `signatu
               count, base-passed count — and every matrix target has exactly one QC row.
     V_STALE_SOURCE the manifest's sources.de_main_sha256 equals the de_main the auditor supplies:
               a signature root built from another DE source loads and means a different run.
+    V_RELEASE_ROOT the pathway's stage1_release_hashes are the ones the ADMITTED Direct bundle
+              records its arms were built on (checked against the external Direct provenance):
+              a missing/stale/mismatched/resealed release describes a different experiment.
 
 GENERATOR ≠ VERIFIER. It imports NO producer module — only ``h5py``/``numpy``/``json`` and the
 verifier-side ``verify_rules`` / ``verify_run`` (primary h5ad reader) / ``verify_reconstruct``
@@ -99,6 +102,7 @@ V_EXTERNAL_MASK = "the_source_mask_matches_the_external_independent_direct_mask_
 V_SOLVER_LOCK = "the_stage2_solver_lock_is_bound_into_the_run_identity"
 V_QC = "the_per_target_signature_qc_rederives_from_the_shipped_qc_table"
 V_STALE_SOURCE = "the_signature_artifact_was_built_from_the_bound_de_source"
+V_RELEASE_ROOT = "the_pathway_stage1_release_is_the_one_the_direct_arms_were_built_on"
 
 QC_FILE = "signature_qc.parquet"
 QC_KEY = "qc"
@@ -451,6 +455,11 @@ def verify(*, matrix_root, bundle_dirs, args) -> dict[str, Any]:
         # and it is the PINNED lock — not a loose file, not a swapped one, not absent.
         checks.append(_check(V_SOLVER_LOCK, *_verify_solver_lock(bdir)))
 
+        # V_RELEASE_ROOT: the pathway enriches the SAME Stage-1 release the Direct arms came
+        # from — checked against the EXTERNAL Direct bundle's provenance, so a resealed release
+        # (self-consistent inside the pathway bundle) is refused.
+        checks.append(_check(V_RELEASE_ROOT, *_verify_release_root(bdir, man, args)))
+
     # ---- V10 ----
     all_matrix_raw = {m["_reread"]["raw_matrix"] for m in man_by_cond.values()
                       if "_reread" in m}
@@ -558,6 +567,51 @@ def _verify_solver_lock(bdir):
                        f"Stage-2 solver lock {STAGE2_SOLVER_LOCK_SHA256[:16]}… — a swapped "
                        "lock, however self-consistent after the run id is resealed")
     return True, ""
+
+
+def _verify_release_root(bdir, manifest, args):
+    """The pathway's Stage-1 release IS the one the Direct arms it enriches were built on.
+
+    An enrichment computed over a different Stage-1 release than the ranking it enriches
+    describes a different experiment — and every hash inside the pathway bundle would still
+    agree with itself. So the release is checked against TWO things the pathway bundle does not
+    own: the anchor the producer carried from the Direct bundle, and — reseal-proof — the
+    EXTERNAL Direct bundle's own provenance, which a pathway forger cannot rewrite.
+    """
+    prov_path = os.path.join(bdir, PROVENANCE_FILE)
+    if not os.path.exists(prov_path):
+        return False, f"{bdir}: no {PROVENANCE_FILE} to carry the release binding"
+    binding = _json(prov_path).get("run_binding") or {}
+    mine = binding.get("stage1_release_hashes")
+    if not mine:
+        return False, ("the pathway run binds no stage1_release_hashes — a bundle that does "
+                       "not name the Stage-1 release it was computed against could be "
+                       "re-attributed to another one")
+    if not binding.get("stage1_release_kind"):
+        return False, "the pathway run binds no stage1_release_kind"
+    problems = []
+
+    # (a) the release the producer carried from the Direct bundle into the mask anchor
+    anchor = (manifest.get("direct_mask_anchor") or {})
+    declared = anchor.get("direct_stage1_release_hashes")
+    if declared and dict(declared) != dict(mine):
+        problems.append("the pathway release is not the one carried in the Direct mask anchor")
+
+    # (b) RESEAL-PROOF: the EXTERNAL Direct bundle's own provenance. The pathway forger owns
+    # neither this file nor the Direct arms; a resealed pathway release still disagrees with it.
+    bundle_dir = getattr(args, "direct_bundle", None)
+    if bundle_dir:
+        dprov_path = os.path.join(bundle_dir, "provenance.json")
+        if not os.path.exists(dprov_path):
+            problems.append("the Direct bundle ships no provenance to anchor the release to")
+        else:
+            db = (_json(dprov_path).get("run_binding") or {})
+            direct_rel = (db.get("arm_bundle_request") or {}).get("stage1_release_hashes") \
+                or db.get("stage1_release_hashes")
+            if direct_rel and dict(direct_rel) != dict(mine):
+                problems.append("the pathway release is not the release the ADMITTED Direct "
+                                "bundle records its arms were built on")
+    return (not problems), "; ".join(problems[:3])
 
 
 def _verify_qc(cond_dir, manifest, matrix_targets):
