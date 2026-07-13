@@ -61,19 +61,44 @@ afterwards.
 """
 from __future__ import annotations
 
-import os
 from typing import Any, Mapping, Sequence
 
 from . import artifacts_v2 as av2
-from . import candidates_v2 as cv2
-from . import pathway_context_v2 as pc2
 from . import schemas
-from .hashing import canonical_json, content_hash, file_sha256, table_hash, without
-from .view_store import ROLE_COLUMN
+from .hashing import content_hash, without
+from .view_projection_tables import (  # noqa: F401  (the TABLE contract and the identity of one
+    ANNOTATION_COLUMNS,                #  projected table live next door; `view_projection` stays
+    GATE_DUPLICATE_ROW,                #  the one front door — every name here is imported from
+    GATE_ORDERED_BLOCK_REORDERED,      #  THIS module by druglink, the verifier and the tests, and
+    GATE_RAW_BYTES_ARE_NOT_THE_STORES, #  must keep resolving here. A linter cannot see a public
+    GATE_ROW_COUNT_MOVED,              #  API, only an unread name: do not let --fix strip these.)
+    GATE_ROW_IS_NOT_A_STORE_ROW,
+    GATE_ROWS_ARE_NOT_THE_SEALED_ROWS,
+    GATE_SCHEMA_SET_DRIFT,
+    GATE_SEAL_IDENTITY,
+    GATE_SEALED_TABLE_NOT_PROJECTED,
+    GATE_STALE_RECEIPT,
+    GATE_STORE_TABLE_NOT_ON_DISK,
+    GATE_TABLE_NOT_SEALED,
+    GATE_VIEW_IDENTITY,
+    ROW_COLUMNS,
+    ROW_ORDER_CARRIES_MEANING,
+    SEALED_TABLES,
+    TABLE_SCHEMA_PREFIX,
+    VIEW_CANDIDATE_COLUMNS,
+    ProjectionSealError,
+    _check_no_duplicates,
+    _refuse,
+    _row_identity,
+    arm_evidence_order_hash,
+    projected_content_hash,
+    schema_set_digest,
+    table_identity,
+    table_schema_id,
+)
 
 PROJECTION_SEAL_SCHEMA = "spot.stage03_selection_view.projection_seal.v1"
 PROJECTION_VERIFIER_ID = "spot.stage03.selection_view.projection_identity.v1"
-TABLE_SCHEMA_PREFIX = "spot.stage03_selection_view.table."
 
 # THE SCHEMA SET, BOUND EXACTLY — the digest EVERY bundle publishes as `method.schemas_sha256`,
 # re-derived from the schema files on disk by `druglink.schemas.schemas_tree`.
@@ -95,145 +120,10 @@ TABLE_SCHEMA_PREFIX = "spot.stage03_selection_view.table."
 # `spot.stage03_drug_annotation.v1` (361d0833…), the generic contract Stage 4 binds to, is
 # BYTE-IDENTICAL and did not budge.
 PINNED_SCHEMAS_SHA256 = \
-    "b19f26cb1992b1c4bf1cca74ab720e6b1cc219e8d540de1a0c422210c00810bf"
-
-# The candidate's VIEW-SCOPED evidence, alongside (never instead of) the store's global fields.
-VIEW_CANDIDATE_COLUMNS: tuple[str, ...] = (
-    "view_arm_keys_by_origin", "view_n_edges_by_origin", "view_roles", "view_edge_ids",
-    "view_stage3_evidence_classes", "view_directional_evidence_statuses",
-    "view_observed_perturbation_support", "view_arm_ranks",
-)
-
-# EVERY column a projected row may carry. DERIVED from the producer's own column tuples
-# (`candidates_v2` / `pathway_context_v2`), so the seal and the tables it seals cannot drift.
-ROW_COLUMNS: dict[str, frozenset[str]] = {
-    "arm_slots": frozenset(cv2.ARM_SLOT_COLUMNS) | {ROLE_COLUMN},
-    "target_drug_edges": frozenset(cv2.EDGE_COLUMNS) | {ROLE_COLUMN},
-    "arm_summaries": frozenset(cv2.ARM_SUMMARY_COLUMNS) | {ROLE_COLUMN},
-    "candidates": frozenset(cv2.CANDIDATE_COLUMNS) | frozenset(VIEW_CANDIDATE_COLUMNS),
-    "pathway_context": frozenset(pc2.CONTEXT_COLUMNS) | {ROLE_COLUMN},
-    "source_records": frozenset(cv2.SOURCE_RECORD_COLUMNS),
-    "dispositions": frozenset(cv2.DISPOSITION_COLUMNS) | {ROLE_COLUMN},
-}
-SEALED_TABLES: tuple[str, ...] = tuple(sorted(ROW_COLUMNS))
-
-# The join-time annotations. Stripped to recover the STORE row a projected row must still be.
-ANNOTATION_COLUMNS: frozenset[str] = frozenset({ROLE_COLUMN}) | frozenset(VIEW_CANDIDATE_COLUMNS)
-
-# WHERE ORDER IS MEANING, and where it is not. Published in the view, because a consumer must be
-# able to tell which of its lists it may safely re-sort.
-ROW_ORDER_CARRIES_MEANING: dict[str, Any] = {
-    "tables": False,
-    "tables_reason": ("every projected table is ordered by CONTENT ID, which is not a ranking; a "
-                      "row set is a SET and its content hash is row-order-invariant. A DUPLICATE "
-                      "row identity is still refused: a set cannot hold the same row twice, and a "
-                      "duplicate double-counts the evidence it carries"),
-    "arm_evidence": True,
-    "arm_evidence_reason": ("index 0 is the arm this question moves AWAY FROM (away_from_A) and "
-                            "index 1 the arm it moves TOWARD (toward_B); a consumer that reads "
-                            "positionally is reading the question's poles, so the ordered "
-                            "(arm_key, role) pairing is sealed and a swap is refused"),
-}
-
-GATE_TABLE_NOT_SEALED = "a_projected_table_carries_no_identity_of_its_own"
-GATE_SEALED_TABLE_NOT_PROJECTED = "the_seal_names_a_table_the_view_does_not_carry"
-GATE_ROWS_ARE_NOT_THE_SEALED_ROWS = "the_projected_rows_are_not_the_rows_the_seal_names"
-GATE_ROW_COUNT_MOVED = "the_projection_holds_a_different_number_of_rows_than_the_seal_names"
-GATE_DUPLICATE_ROW = "the_projection_holds_the_same_row_identity_twice"
-GATE_ORDERED_BLOCK_REORDERED = "the_ordered_arm_evidence_was_reordered_and_its_order_is_its_meaning"
-GATE_SCHEMA_SET_DRIFT = "the_projection_was_sealed_under_a_different_schema_set"
-GATE_SEAL_IDENTITY = "the_projection_seal_does_not_hash_to_the_identity_it_publishes"
-GATE_VIEW_IDENTITY = "the_view_does_not_hash_to_the_identity_it_publishes"
-GATE_STALE_RECEIPT = "the_receipt_presented_was_written_about_a_different_projection"
-
-# The gates only a verifier WITH THE STORE ON DISK can run. Named here so the vocabulary is one
-# vocabulary, and published in the view so a consumer can tell which gates a bare contract check
-# did NOT run — an unenumerated gate is a gate nobody can notice the absence of.
-GATE_STORE_TABLE_NOT_ON_DISK = "the_seal_names_a_store_table_that_is_not_on_disk"
-GATE_RAW_BYTES_ARE_NOT_THE_STORES = "the_sealed_raw_bytes_are_not_the_store_table_bytes_on_disk"
-GATE_ROW_IS_NOT_A_STORE_ROW = "a_projected_row_is_not_a_row_the_store_holds"
-
-
-class ProjectionSealError(ValueError):
-    """A named, fail-closed refusal. The projection does not leave, and is not consumed."""
-
-    def __init__(self, gate: str, message: str) -> None:
-        super().__init__(f"[{gate}] {message}")
-        self.gate = gate
-
-
-def _refuse(gate: str, message: str) -> None:
-    raise ProjectionSealError(gate, message)
-
+    "fc7ed2674dd62472ecf619b922c135d66070828941520455e5a3cb287392c551"
 
 # --------------------------------------------------------------------------- #
-# 1. The identity of ONE projected table.
-# --------------------------------------------------------------------------- #
-def table_schema_id(name: str) -> str:
-    return f"{TABLE_SCHEMA_PREFIX}{name}.v1"
-
-
-def schema_set_digest() -> str:
-    """The COLUMN contract of every projected table. An added, renamed or dropped column moves
-    it — which is schema-set drift, and it is a refusal rather than a surprise downstream."""
-    return content_hash({name: sorted(cols) for name, cols in sorted(ROW_COLUMNS.items())})
-
-
-def projected_content_hash(name: str, rows: Sequence[Mapping[str, Any]]) -> str:
-    """The canonical content of the PROJECTED ROWS. Every column: the display-only ones the
-    store's content hash excludes (a mislabelled symbol still reaches a rendered page) and the
-    join-time role annotation (it is part of the answer this question was given).
-
-    ROW-ORDER-INVARIANT, by the same total order the store uses. A permutation is not a finding.
-    """
-    return table_hash([dict(r) for r in rows], av2.TABLES[name][1])
-
-
-def _row_identity(name: str, row: Mapping[str, Any]) -> str:
-    return canonical_json([row.get(k) for k in av2.TABLES[name][1]])
-
-
-def _check_no_duplicates(name: str, rows: Sequence[Mapping[str, Any]]) -> None:
-    seen: set[str] = set()
-    for row in rows:
-        ident = _row_identity(name, row)
-        if ident in seen:
-            _refuse(GATE_DUPLICATE_ROW,
-                    f"the projected table {name!r} holds the row identity {ident} twice. A row "
-                    "set is a SET: the same row projected twice double-counts every piece of "
-                    "evidence it carries, and a consumer counting rows would read one measurement "
-                    "as two.")
-        seen.add(ident)
-
-
-def table_identity(name: str, rows: Sequence[Mapping[str, Any]], *,
-                   bundle_dir: str) -> dict[str, Any]:
-    """EXACT identity for one projected table. Raw AND canonical; they fail differently."""
-    path = os.path.join(bundle_dir, f"{name}.parquet")
-    if not os.path.isfile(path):
-        _refuse(GATE_STORE_TABLE_NOT_ON_DISK,
-                f"the projection would seal {name!r}, but the store has no {name}.parquet. A "
-                "projection OF nothing is not a projection, and a seal over bytes that are not "
-                "there names nothing.")
-    _check_no_duplicates(name, rows)
-    return {
-        "schema_id": table_schema_id(name),
-        "row_count": len(rows),
-        # The PROJECTED rows — the subset in this view, every column.
-        "content_sha256": projected_content_hash(name, rows),
-        # The STORE table's RAW FILE BYTES — the bytes this subset was drawn FROM.
-        "raw_sha256": file_sha256(path),
-    }
-
-
-def arm_evidence_order_hash(arm_evidence: Sequence[Mapping[str, Any]]) -> str:
-    """The ORDERED (arm_key, role) pairing. Index 0 is A, index 1 is B — and that IS the science:
-    swap them and the question is asking to move away from the arm it meant to move toward."""
-    return content_hash([[str(a.get("arm_key")), str(a.get("role"))] for a in arm_evidence])
-
-
-# --------------------------------------------------------------------------- #
-# 2. THE SEAL. Built by the producer, over the rows it actually projected.
+# 1. THE SEAL. Built by the producer, over the rows it actually projected.
 # --------------------------------------------------------------------------- #
 def seal(*, view_rows: Mapping[str, Sequence[Mapping[str, Any]]],
          arm_evidence: Sequence[Mapping[str, Any]], bundle_dir: str) -> dict[str, Any]:
@@ -283,7 +173,7 @@ def bound_schemas_sha256() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# 3. THE CHECK. Re-derived from the view's OWN rows. No disk; refuses a post-seal edit.
+# 2. THE CHECK. Re-derived from the view's OWN rows. No disk; refuses a post-seal edit.
 # --------------------------------------------------------------------------- #
 def check(view: Mapping[str, Any]) -> None:
     """Every sealed value RECOMPUTED from the rows the view actually ships, and compared.
@@ -458,7 +348,7 @@ def _check_view_identity(view: Mapping[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 4. What the seal PROMISES, and which gates it ran.
+# 3. What the seal PROMISES, and which gates it ran.
 # --------------------------------------------------------------------------- #
 def checks() -> list[str]:
     """The gates a CONTRACT check runs — with the bytes alone, anywhere they travel."""

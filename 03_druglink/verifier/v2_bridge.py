@@ -32,6 +32,7 @@ cannot survive is the rebuild from bytes the forger does not own.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import Any, Optional
@@ -79,11 +80,17 @@ PHENOCOPY_CLASS_OF = {
 # re-derived loosely. A pathway record is a GENE-SET ENRICHMENT: it has no target, no arm value,
 # no modality and no rank, and a context that smuggles one in is a set-level number being handed
 # a direction it never had.
+# W3's OWN allowlist, restated. It said `coverage`, and the pathway producer's field is
+# `target_source_coverage`; and it omitted `source_artifact` (the gene-set membership artifact the
+# context is bound to) entirely. Both are fields W3's real producer emits on every context, so a
+# real bridge tripped "a field the schema does not have" 480 times — a stale restatement refusing
+# the genuine artifact. The FORBIDDEN set is what actually guards the firewall, and it is exact.
 CTX_ALLOWED = frozenset({
     "schema_version", "lane", "arm_key", "program_id", "context", "gene_set_id",
-    "native_set_id_field", "source", "enrichment_value", "coverage", "convergence_ref",
-    "leading_edge", "n_leading_edge", "n_leading_edge_joinable",
-    "is_a_crispri_target_row", "may_be_matched_to_a_drug_as_a_target", "links_to_targets_via",
+    "native_set_id_field", "source", "source_artifact", "enrichment_value",
+    "target_source_coverage", "convergence_ref", "leading_edge", "n_leading_edge",
+    "n_leading_edge_joinable", "is_a_crispri_target_row",
+    "may_be_matched_to_a_drug_as_a_target", "links_to_targets_via",
 })
 CTX_FORBIDDEN = frozenset({
     "arm_value", "desired_target_modulation", "phenocopy_class", "evaluable", "rank",
@@ -156,9 +163,19 @@ def native_rows(aggregate: dict[str, Any]) -> dict[tuple[str, str, str], dict[st
 
     Taken from the arms this verifier already re-admitted from the bundle bytes — never from the
     bridge's own copy of them. This is the map the bridge is checked AGAINST.
+
+    THE MEASURED LANES ONLY. A pathway arm's ranking rows are NOT target evidence: the pathway
+    lane's grain is (arm x GENE SET), it carries no CRISPRi sign, and W3's bridge deliberately
+    emits ZERO target rows for it — the lane contributes typed CONTEXT and nothing else.
+    Including them here made every real bridge look as though it had DROPPED 720 rows, which is
+    a fail-CLOSED refusal of exactly the artifact this gate exists to admit. Worse, the only way
+    to satisfy it would be for a bridge to ship pathway target rows — the one thing that must
+    never exist, because a gene set would then be handed to a drug search as a target.
     """
     out: dict[tuple[str, str, str], dict[str, Any]] = {}
     for arm in aggregate["arms"]:
+        if str(arm["lane"]) not in C.MEASURED_LANES:
+            continue
         for rec in arm["records"]:
             key = (str(arm["lane"]), str(arm["arm_key"]), str(rec.get("target_id")))
             out[key] = rec
@@ -207,7 +224,50 @@ def admit_bridge(rep: Report, *, bridge_root: str,
 
     if rows is None or not ok:
         return None
-    return {"bridge": doc, "raw_sha256": raw, "bridge_sha256": derived, "rows": rows}
+    return {"bridge": doc, "raw_sha256": raw, "canonical_sha256": _canonical(doc),
+            "bridge_sha256": derived, "rows": rows,
+            "report_raw_sha256": _raw_sha256(os.path.join(bridge_root, BRIDGE_REPORT_FILE)),
+            "receipt_raw_sha256": _raw_sha256(os.path.join(bridge_root, RECEIPT_FILE))}
+
+
+def _raw_sha256(path: str) -> Optional[str]:
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+# The bundle must NAME the bridge it was typed by. Without this the SAME aggregate and store under
+# a DIFFERENT admitted bridge emit a BYTE-IDENTICAL bundle wearing the same id — and the bridge is
+# the ONLY source of every row's target namespace and perturbation modality, so every typed
+# identity in it would trace to an artifact the bundle never mentions.
+GATE_BUNDLE_NAMES_ANOTHER_BRIDGE = "the_bundle_does_not_name_the_bridge_that_typed_its_rows"
+
+BRIDGE_BINDING_FIELDS = {
+    "bridge_raw_sha256": "raw_sha256",
+    "bridge_canonical_sha256": "canonical_sha256",
+    "bridge_sha256": "bridge_sha256",
+    "bridge_report_raw_sha256": "report_raw_sha256",
+    "receipt_raw_sha256": "receipt_raw_sha256",
+}
+
+
+def check_bundle_names_this_bridge(rep: Report, *, doc: dict[str, Any],
+                                   bridge: dict[str, Any]) -> bool:
+    """The bundle's declared bridge binding IS the bridge on disk. Re-derived, never read."""
+    bound = ((doc.get("stage2_aggregate") or {}).get("stage3_bridge") or {})
+    wrong = [f"{field}={str(bound.get(field))[:16]}… (on disk "
+             f"{str(bridge.get(source))[:16]}…)"
+             for field, source in sorted(BRIDGE_BINDING_FIELDS.items())
+             if bound.get(field) != bridge.get(source)]
+    return _gate(
+        rep, GATE_BUNDLE_NAMES_ANOTHER_BRIDGE,
+        "the bundle NAMES the exact bridge, bridge report and receipt its typed rows came from "
+        "— every hash re-derived from the bytes on disk. The bridge is the only source of target "
+        "identity and perturbation modality, so a bundle that named a different one (or none) "
+        "would carry identities traceable to an artifact nobody can reopen",
+        bound.get("bridge_raw_sha256") is not None and not wrong,
+        f"{len(wrong)} disagree: {wrong[:3]}" if wrong else "the bundle binds NO bridge at all")
 
 
 def _check_reports(rep: Report, *, bridge_root: str, bridge_raw: str, bridge_canonical: str,

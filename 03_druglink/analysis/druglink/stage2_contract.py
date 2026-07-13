@@ -52,6 +52,39 @@ CONTEXT_FIELDS = ("condition", "from_condition", "to_condition", "pathway_source
 NATIVE_PATHWAY_SOURCE_KEY = "gene_set_source"
 ARM_BUNDLE_FILE = "arm_bundle.json"
 
+# EACH LANE'S OWN ARM-KEY FIELD — Stage-2's ``ARM_KEY_FIELD``, not a guess. The pathway producer
+# names its key ``pathway_arm_key``; Direct and temporal name theirs ``arm_key``.
+#
+# Reading ``arm_key`` on every lane was wrong, and it failed CLOSED on a current pathway bundle:
+# the arm resolved to None and the release refused its own topology. The older release spelled it
+# ``arm_key`` on all three lanes, so BOTH spellings resolve here — exactly as W3's own bridge
+# producer does (``rec.get("pathway_arm_key") or rec.get("arm_key")``). This is the lane's
+# declared field, read where the producer writes it; it is not an alias layer that would let a
+# renamed field pass unnoticed, because a bundle that declares NEITHER is still a refusal.
+NATIVE_ARM_KEY_FIELD = {LANE_DIRECT: "arm_key", LANE_TEMPORAL: "arm_key",
+                        LANE_PATHWAY: "pathway_arm_key"}
+
+GATE_ARM_KEY_CONFLICT: str = "one_arm_declares_two_different_arm_keys"
+
+
+def native_arm_key(lane: str, arm: dict[str, Any]) -> str:
+    """The arm's key, from the field ITS OWN LANE declares it in.
+
+    IF BOTH SPELLINGS ARE PRESENT AND DISAGREE, THAT IS A REFUSAL — never a preference. Two keys
+    are two claims about which arm this row belongs to, and picking one is guessing which claim is
+    true: the join would then be exact in form and wrong in fact, and every ranking row under it
+    would be attached to the wrong arm.
+    """
+    native = arm.get(NATIVE_ARM_KEY_FIELD.get(lane, "arm_key"))
+    legacy = arm.get("arm_key")
+    if native and legacy and str(native) != str(legacy):
+        _refuse(GATE_ARM_KEY_CONFLICT,
+                f"an arm on the {lane!r} lane declares "
+                f"{NATIVE_ARM_KEY_FIELD.get(lane, 'arm_key')}={native!r} AND arm_key={legacy!r}. "
+                "Two keys that disagree are two claims about which arm this is; preferring one "
+                "would make the join exact in form and wrong in fact.")
+    return str(native or legacy or "")
+
 # Named gates. Every refusal names one, so it can be grepped, tested and cited.
 GATE_ARTIFACT_NOT_ON_DISK: str = "aggregate_artifact_is_not_on_disk"
 GATE_MANIFEST_UNREADABLE: str = "aggregate_artifact_is_not_readable_json"
@@ -163,6 +196,15 @@ class AdmittedAggregate:
     arms: tuple[LoadedArm, ...]
     program_ids: tuple[str, ...]
     counts: dict[str, Any] = field(default_factory=dict)
+    # WHICH BRIDGE TYPED THESE ARMS. Empty until :func:`stage2_bridge.typed_aggregate` fills it.
+    #
+    # It is NOT decoration. The bridge is the ONLY source of every row's target namespace and
+    # perturbation modality, so a bundle that did not NAME its bridge could be rebuilt from a
+    # DIFFERENT admitted bridge — different identities, different assay — and come out BYTE-
+    # IDENTICAL, with the same id. Every typed row would then trace its identity to an artifact
+    # the bundle never mentions. So the binding travels into the document, into `provenance`, and
+    # into the BUNDLE ID: a different bridge is a different bundle, or "bound" means nothing.
+    bridge_binding: dict[str, Any] = field(default_factory=dict)
 
 
 
@@ -378,7 +420,7 @@ def load_bundle_arms(bundle: AdmittedBundle, full: str, entry: dict[str, Any], *
                         f"arm inventory of bundle {bundle.bundle_key!r}")
     arms: list[LoadedArm] = []
     for arm in (doc.get("arms") or ()):
-        arm_key = str(arm.get("arm_key") or "")
+        arm_key = native_arm_key(bundle.lane, arm)
         program_id, change = arm.get("program_id"), arm.get("desired_change")
         if not arm_key or not program_id or change not in DESIRED_CHANGES:
             _refuse(GATE_INCOMPLETE_TOPOLOGY,

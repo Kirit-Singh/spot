@@ -55,14 +55,16 @@ TEMPORAL_ARM_BUNDLE = "spot.stage02_temporal_arm_bundle.v1"
 DIRECT_ARM_BUNDLE = "spot.stage02_direct_arm_bundle.v1"
 ARM_BUNDLE_SCHEMAS = (DIRECT_ARM_BUNDLE, TEMPORAL_ARM_BUNDLE)
 
-# The temporal lanes now have CLEAN HEADS — W5 62fbf8b, W11 61ee45b, W3 71f50f1 — but the
-# independent detached-clone matrix is still RUNNING. A clean head is not a green report:
-# the whole point of the matrix is that the lanes are checked against each other from a
-# fresh clone, and "each lane's own suite passes" is exactly the self-consistency it exists
-# to rule out. So the loader stays SHUT until that report is green, at which point Stage 3
-# binds the exact inventory + root admission + aggregate identities.
+# The temporal lanes have CLEAN HEADS — W5 62fbf8b, W11 61ee45b, W3 71f50f1. Recorded, and
+# deliberately NOT a gate: a clean head is not an admission.
+#
+# `DETACHED_CLONE_MATRIX_GREEN` used to live here — a Boolean in Stage-3's OWN SOURCE that
+# claimed a state no artifact had ever verified. It is DELETED. Production is gated on
+# `v2_input_loader._require_admitted_aggregate`, against the on-disk Stage-2 aggregate and the
+# SEPARATE independent report that admitted it. A gate a developer can flip by editing a line is
+# not a gate; a gate an artifact must satisfy is. `test_v2_production_gate` fails the build if a
+# source-code Boolean ever comes back.
 TEMPORAL_HEADS = {"W5": "62fbf8b", "W11": "61ee45b", "W3": "71f50f1"}
-DETACHED_CLONE_MATRIX_GREEN = False          # flipped only by the independent report
 
 PROVISIONAL_SOURCES = {
     TEMPORAL_ARM_BUNDLE: (

@@ -131,6 +131,9 @@ def verify(*, bundle: str, stage2_aggregate_manifest: str, stage2_aggregate_repo
                      "contract did not admit")
         return rep
 
+    # THE BUNDLE MUST NAME THE BRIDGE IT WAS TYPED BY — these exact bytes.
+    br.check_bundle_names_this_bridge(rep, doc=doc, bridge=bridge)
+
     rebuilt = vb.reconstruct(rep, aggregate=aggregate, store=store,
                              bridge_rows=bridge["rows"], artifact_class=artifact_class,
                              modality_digest=modality_digest)

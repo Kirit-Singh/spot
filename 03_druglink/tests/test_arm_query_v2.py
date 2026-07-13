@@ -241,13 +241,15 @@ def test_the_two_evidence_classes_are_disjoint():
 # --------------------------------------------------------------------------- #
 # The temporal loader stays SHUT until the independent matrix is green.
 # --------------------------------------------------------------------------- #
-def test_the_temporal_loader_is_still_gated_on_the_detached_clone_matrix():
-    """W5/W11/W3 have clean heads. That is not the same as a green report.
+def test_the_clean_heads_are_RECORDED_and_are_not_a_gate():
+    """W5/W11/W3 have clean heads. That is not the same as an admission — and it is not a gate.
 
-    Each lane's own suite passing is precisely the self-consistency the cross-lane matrix
-    exists to rule out — the same failure this lane has now met four times (B6, M4b, the
-    temporal verification_ref, and the producer's own `pending` release).
+    The Boolean that used to live here (`DETACHED_CLONE_MATRIX_GREEN`) asserted, in Stage-3's own
+    source, a state no artifact had ever verified. It is gone. Production is gated on the ADMITTED
+    Stage-2 aggregate, read from disk.
     """
-    assert aq.DETACHED_CLONE_MATRIX_GREEN is False
+    assert not hasattr(aq, "DETACHED_CLONE_MATRIX_GREEN"), (
+        "a source-code Boolean is back: a gate a developer can flip by editing a line is not a "
+        "gate")
     assert aq.TEMPORAL_HEADS == {"W5": "62fbf8b", "W11": "61ee45b", "W3": "71f50f1"}
     assert "still RUNNING" in aq.PROVISIONAL_SOURCES[aq.TEMPORAL_ARM_BUNDLE]

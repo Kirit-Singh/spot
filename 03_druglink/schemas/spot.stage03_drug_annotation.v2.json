@@ -1010,6 +1010,9 @@
             "stage2_aggregate_manifest",
             "stage2_independent_report",
             "stage2_lane_artifact",
+            "stage2_stage3_bridge",
+            "stage2_stage3_bridge_report",
+            "stage2_stage3_receipt",
             "stage1_release",
             "universe_store",
             "universe_store_artifact",
@@ -1261,7 +1264,7 @@
     },
     "stage2_aggregate_binding": {
       "additionalProperties": false,
-      "description": "The Stage-2 admission chain, as the bundle id commits to it: report(ADMIT, independent) -> manifest (raw AND canonical) -> every lane artifact's bytes -> the Stage-1 release it stands on.",
+      "description": "The Stage-2 admission chain, as the bundle id commits to it: report(ADMIT, independent) -> manifest (raw AND canonical) -> every lane artifact's bytes -> the Stage-1 release it stands on -> and the W3 STAGE-3 BRIDGE that typed every measured row. The bridge is the ONLY source of a row's target namespace and perturbation modality, so a bundle that did not name it could be rebuilt from a DIFFERENT admitted bridge and come out byte-identical.",
       "properties": {
         "independent_report": {
           "additionalProperties": false,
@@ -1356,6 +1359,78 @@
         },
         "topology_is_derived_not_declared": {
           "const": true
+        },
+        "stage3_bridge": {
+          "type": "object",
+          "description": "The bridge, the SEPARATE report that admitted it, and the RECEIPT that joins it to this aggregate \u2014 every hash re-derivable from the bytes on disk. A report without a receipt is an ADMIT that names no release.",
+          "required": [
+            "bridge_raw_sha256",
+            "bridge_canonical_sha256",
+            "bridge_sha256",
+            "bridge_report_raw_sha256",
+            "receipt_raw_sha256",
+            "independent_verifier_id",
+            "verdict",
+            "receipt_is_required"
+          ],
+          "properties": {
+            "schema_version": {
+              "type": "string"
+            },
+            "rule_id": {
+              "type": "string"
+            },
+            "bridge_raw_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bridge_canonical_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bridge_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "bridge_report_raw_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "receipt_raw_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "independent_verifier_id": {
+              "type": "string"
+            },
+            "verdict": {
+              "const": "admit"
+            },
+            "n_typed_rows": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "n_pathway_contexts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "supplies": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "may_never_change_a_native_fact": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "receipt_is_required": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1369,7 +1444,8 @@
         "n_arm_slots",
         "program_ids",
         "topology_is_derived_not_declared",
-        "pair_roles_assigned"
+        "pair_roles_assigned",
+        "stage3_bridge"
       ],
       "type": "object"
     },

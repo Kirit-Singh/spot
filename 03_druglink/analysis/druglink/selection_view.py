@@ -46,8 +46,6 @@ WHAT SURVIVES THE PROJECTION
 """
 from __future__ import annotations
 
-import json
-import os
 from typing import Any, Mapping, Optional, Sequence
 
 from . import arm_selection as asel
@@ -58,7 +56,18 @@ from . import stage2_aggregate as sa
 from . import view_projection as vp
 from . import view_store as vst
 from . import workflow as wf
-from .hashing import content_hash, file_sha256
+from .hashing import content_hash
+from .selection_admission import (  # noqa: F401  (ADMISSION lives next door; the view is still
+    GATE_NO_RECEIPT,                #  the one front door — every name below stays importable
+    GATE_RECEIPT_BINDS_NO_BRIDGE,   #  from `druglink.selection_view`, where callers expect it)
+    GATE_RECEIPT_BINDS_OTHER_BYTES,
+    GATE_STALE_BUNDLE,
+    GATE_STALE_SELECTION,
+    RECEIPT_SCHEMA,
+    SelectionViewError,
+    admit_receipt,
+    check_not_stale,
+)
 from .view_store import (  # noqa: F401  (one front door for the projection's refusals)
     StoreIdentityError,
     ViewRefusal,
@@ -66,7 +75,6 @@ from .view_store import (  # noqa: F401  (one front door for the projection's re
 
 VIEW_SCHEMA = "spot.stage03_selection_view.v1"
 VIEW_METHOD_ID = "spot.stage03.selection_view.projection.v1"
-RECEIPT_SCHEMA = "spot.stage02_stage3_receipt.v1"
 
 # The tables the view PROJECTS, and the column each is filtered on. `provenance` is deliberately
 # ABSENT: it describes the GLOBAL bundle, not this question, and the view binds the bundle by id
@@ -77,114 +85,10 @@ PROJECTED_TABLES = ("arm_slots", "target_drug_edges", "arm_summaries", "candidat
 # The fields whose absence is a STATED value rather than a silence.
 STATE_NO_DRUG_EVIDENCE = "target_carries_no_source_drug_assertion"
 
-GATE_NO_RECEIPT = "the_stage2_aggregate_was_not_admitted_by_a_receipt"
-GATE_RECEIPT_BINDS_OTHER_BYTES = \
-    "the_receipt_binds_bytes_that_are_not_the_aggregate_presented"
-GATE_RECEIPT_BINDS_NO_BRIDGE = "the_receipt_binds_no_bridge_so_it_joins_nothing"
-GATE_STALE_SELECTION = \
-    "the_selection_was_minted_against_a_different_stage1_release_than_the_aggregate"
-GATE_STALE_BUNDLE = "the_v2_bundle_was_not_built_over_the_aggregate_presented"
-
-
-class SelectionViewError(ViewRefusal):
-    """A named, fail-closed refusal. No view is produced and nothing is written."""
-
-
-def _refuse(gate: str, message: str) -> None:
-    raise SelectionViewError(gate, message)
-
-
 # --------------------------------------------------------------------------- #
-# 1. ADMISSION. The receipt is the JOIN, and it must be about THESE bytes.
-# --------------------------------------------------------------------------- #
-def admit_receipt(receipt_path: str, *, aggregate: sa.AdmittedAggregate,
-                  report_path: str) -> dict[str, Any]:
-    """The W3 receipt, re-opened and REQUIRED to bind the aggregate in hand.
-
-    The aggregate report names a verdict; the RECEIPT names the BYTES. An ADMIT that binds no
-    bytes is an opinion about some other artifact, and a receipt over a DIFFERENT aggregate is a
-    handoff for a release nobody cleared — which looks exactly like one that was.
-    """
-    if not receipt_path or not os.path.isfile(receipt_path):
-        _refuse(GATE_NO_RECEIPT,
-                f"no Stage-2 -> Stage-3 receipt at {receipt_path!r}. There is no fixture "
-                "fallback and no 'admitted by default': a store whose admission nobody can read "
-                "is a store nobody admitted, and a view over it would carry the authority of an "
-                "admission that does not exist.")
-    try:
-        with open(receipt_path, "r", encoding="utf-8") as fh:
-            receipt = json.load(fh)
-    except (OSError, json.JSONDecodeError) as exc:
-        _refuse(GATE_NO_RECEIPT, f"the receipt at {receipt_path!r} is not readable JSON: {exc}")
-
-    if not isinstance(receipt, dict) or receipt.get("schema_version") != RECEIPT_SCHEMA:
-        _refuse(GATE_NO_RECEIPT,
-                f"the receipt declares schema_version="
-                f"{(receipt or {}).get('schema_version') if isinstance(receipt, dict) else None!r}"
-                f"; the native join is {RECEIPT_SCHEMA!r}. A document W3 never emitted is not "
-                "evidence W3 admitted anything.")
-
-    agg = receipt.get("aggregate") or {}
-    manifest = agg.get("manifest") or {}
-    report = agg.get("report") or {}
-    report_raw = file_sha256(report_path) if os.path.isfile(report_path) else None
-
-    if (manifest.get("raw_sha256") != aggregate.manifest_raw_sha256
-            or manifest.get("canonical_sha256") != aggregate.manifest_canonical_sha256
-            or report.get("raw_sha256") != report_raw):
-        _refuse(GATE_RECEIPT_BINDS_OTHER_BYTES,
-                f"the receipt binds manifest raw={str(manifest.get('raw_sha256'))[:16]}… / "
-                f"canonical={str(manifest.get('canonical_sha256'))[:16]}… and report "
-                f"raw={str(report.get('raw_sha256'))[:16]}…, but the aggregate presented hashes "
-                f"to raw={aggregate.manifest_raw_sha256[:16]}… / "
-                f"canonical={aggregate.manifest_canonical_sha256[:16]}… and its report to "
-                f"{str(report_raw)[:16]}…. Raw AND canonical are both required: raw alone would "
-                "miss a re-serialisation that changes meaning, canonical alone would let the "
-                "shipped file differ from what was judged.")
-
-    bridge = receipt.get("bridge") or {}
-    if not (bridge.get("raw_sha256") and bridge.get("canonical_sha256")):
-        _refuse(GATE_RECEIPT_BINDS_NO_BRIDGE,
-                "the receipt binds no bridge by raw AND canonical hash. The receipt IS the join: "
-                "the bridge report returns a verdict but names no bytes, so a receipt that binds "
-                "only the aggregate would let an ADMIT travel with a handoff it was never about.")
-
-    return {"receipt_schema": RECEIPT_SCHEMA,
-            "aggregate_manifest_raw_sha256": str(manifest["raw_sha256"]),
-            "aggregate_manifest_canonical_sha256": str(manifest["canonical_sha256"]),
-            "aggregate_report_raw_sha256": str(report["raw_sha256"]),
-            "bridge_raw_sha256": str(bridge["raw_sha256"]),
-            "bridge_canonical_sha256": str(bridge["canonical_sha256"]),
-            "aggregate_verifier_id": aggregate.verifier_id,
-            "aggregate_verdict": aggregate.verdict}
-
-
-def check_not_stale(selection: s3.VerifiedSelection, *, aggregate: sa.AdmittedAggregate,
-                    manifest: Mapping[str, Any],
-                    document: Mapping[str, Any]) -> None:
-    """The question, the release and the bundle must all be about the SAME science."""
-    release = manifest.get("stage1_v3_release") or {}
-    pinned = release.get("registry_scorer_view_canonical_sha256")
-    if pinned and selection.registry_scorer_view_sha256 \
-            and str(pinned) != selection.registry_scorer_view_sha256:
-        _refuse(GATE_STALE_SELECTION,
-                f"the selection was minted against Stage-1 scorer view "
-                f"{selection.registry_scorer_view_sha256[:16]}…, but the aggregate was computed "
-                f"against {str(pinned)[:16]}…. The programs the question names are not the "
-                "programs these arms were measured on. A STALE selection projected onto a newer "
-                "release returns arms that are real, ranked and about something else.")
-
-    bound = (document.get("stage2_aggregate") or {}).get("manifest_self_hash")
-    if str(bound) != aggregate.manifest_self_hash:
-        _refuse(GATE_STALE_BUNDLE,
-                f"the v2 bundle was built over aggregate {str(bound)[:16]}…, but the aggregate "
-                f"presented semantically hashes to {aggregate.manifest_self_hash[:16]}…. The "
-                "arms the view would filter are not the arms the bundle's edges were built from, "
-                "so every row would be joined against a release it did not come from.")
-
-
-# --------------------------------------------------------------------------- #
-# 2. THE PROJECTION. Filter + annotate. Nothing else.
+# THE PROJECTION. Filter + annotate. Nothing else.
+# (ADMISSION — the receipt gates and the staleness gates that run BEFORE a single row is
+#  filtered — is :mod:`druglink.selection_admission`, re-exported above.)
 # --------------------------------------------------------------------------- #
 def _rows(tables: Mapping[str, Sequence[Mapping[str, Any]]], name: str) -> list[dict[str, Any]]:
     return [dict(r) for r in tables.get(name, ())]

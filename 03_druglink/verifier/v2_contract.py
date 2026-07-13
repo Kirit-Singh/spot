@@ -36,6 +36,11 @@ from __future__ import annotations
 from typing import Any
 
 from . import v2_admission as v2
+from .v2_admission import (  # noqa: F401  (one front door: `v2_store` reads it off THIS module)
+    ADMISSION_REPORT_SHA256,
+    ADMITTED_PRODUCER_COMMIT,
+    ADMITTED_STORE_ID,
+)
 from .v2_direction import (  # noqa: F401  (one front door for the restated vocabulary)
     ABUNDANCE_REDUCTION,
     ACTION_ABUNDANCE_REDUCTION,

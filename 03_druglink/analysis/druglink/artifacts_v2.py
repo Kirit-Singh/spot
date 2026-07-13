@@ -103,6 +103,14 @@ NULLABLE_INT_COLUMNS = ("arm_rank", "mec_id", "variant_id")
 
 GATE_TABLE_NOT_ON_DISK = "a_table_re_read_from_disk_is_not_the_table_that_was_hashed"
 GATE_ID_COLLISION = "an_existing_bundle_with_this_id_has_different_content"
+GATE_BUNDLE_NAMES_NO_BRIDGE = "the_bundle_would_not_name_the_bridge_that_typed_its_rows"
+
+# Every hash the bundle must carry ABOUT ITS BRIDGE. The bridge is the ONLY source of a measured
+# row's target namespace and perturbation modality, so a bundle that named none could be rebuilt
+# from a DIFFERENT admitted bridge — different identities, a different assay — and come out
+# byte-identical, wearing the same id. `stage2_bridge.typed_aggregate` puts it there.
+REQUIRED_BRIDGE_BINDING = ("bridge_raw_sha256", "bridge_canonical_sha256", "bridge_sha256",
+                           "bridge_report_raw_sha256", "receipt_raw_sha256")
 
 
 # --------------------------------------------------------------------------- #
@@ -307,6 +315,16 @@ def emit(*, output_root: str, artifact_class: str, aggregate: AdmittedAggregate,
          created_at: Optional[str] = None) -> dict[str, Any]:
     """Build the v2 evidence set from the ADMITTED inputs and bind it atomically to disk."""
     ac.require(artifact_class)
+    missing = [f for f in REQUIRED_BRIDGE_BINDING
+               if not (aggregate.bridge_binding or {}).get(f)]
+    if missing:
+        raise ArtifactV2Error(
+            GATE_BUNDLE_NAMES_NO_BRIDGE,
+            f"the aggregate names no bridge ({missing}). Every measured row's target namespace "
+            "and perturbation modality come ONLY from the bridge, so a bundle that did not name "
+            "it could be rebuilt from a DIFFERENT admitted bridge and come out byte-identical, "
+            "wearing the same id — and every typed identity in it would trace to an artifact "
+            "nobody can reopen. Pass the aggregate through stage2_bridge.typed_aggregate")
     report = bind_report(report_path, aggregate)
     tables = cv2.build(artifact_class=artifact_class, aggregate=aggregate, store=store)
     tables["provenance"] = provenance_rows(
