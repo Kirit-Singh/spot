@@ -481,10 +481,12 @@ class TestNoForbiddenFields:
 
     def test_the_inherited_exemptions_are_only_the_scorer_view_hashes(self):
         # These match /score/ only because "scorer" contains "score". They are Stage-1
-        # scorer VIEW content hashes; nothing ranks or gates on them. Exact-spelling exempt.
+        # scorer VIEW content hashes (plus the two Direct bundles' scorer-view hashes bound in
+        # endpoint_source); nothing ranks or gates on them. Exact-spelling exempt.
         assert arm_admission.INHERITED_FIREWALL_EXCEPTIONS == {
             "registry_scorer_view_sha256", "scorer_view_raw_sha256",
-            "scorer_view_canonical_sha256", "registry_scorer_projection_sha256"}
+            "scorer_view_canonical_sha256", "registry_scorer_projection_sha256",
+            "from_scorer_view_sha256", "to_scorer_view_sha256"}
         raw = {h.rsplit(".", 1)[-1] for h in direct_admission.forbidden_keys(FX.build())}
         assert raw <= arm_admission.INHERITED_FIREWALL_EXCEPTIONS
         assert arm_admission.inherited_forbidden_keys(FX.build()) == []
@@ -1717,10 +1719,15 @@ def _direct_base_delta(program_id, target_i, cond):
     return deltas[program_id]["delta"], deltas[program_id]
 
 
-def _write_direct_bundle(tmp_path, cond, *, dirname=None, tamper=None):
-    """A SYNTHETIC admitted Direct all-arm bundle (spot.stage02_direct_arm_bundle.v1) for one
-    condition, with increase/decrease rows whose base_delta is the masked projection."""
-    from direct.hashing import canonical_num
+def _write_direct_bundle(tmp_path, cond, *, dirname=None, tamper=None, env_sha=None):
+    """A SYNTHETIC admitted Direct all-arm bundle in the REAL multi-file shape
+    (spot.stage02_direct_arm_bundle.v1): base_delta rows in ``arms.parquet``, the doc +
+    manifest in ``arm_bundle.json``, the ``run_binding`` in ``provenance.json``, and the
+    producer's PENDING ``verification.json`` placeholder. The independent admission is a
+    SEPARATE report (returned path) — an admit the producer never writes itself."""
+    import pandas as pd
+    from direct.hashing import canonical_num, content_hash
+    from direct.temporal.arms import arm_env
     rows = []
     for pid in FX.PORTABLE_IDS:
         for i, tid in enumerate(FX.TARGETS):
@@ -1738,13 +1745,32 @@ def _write_direct_bundle(tmp_path, cond, *, dirname=None, tamper=None):
                     "n_control_surviving": d["n_control_surviving"]})
     if tamper:
         tamper(rows)
-    doc = {"schema_version": "spot.stage02_direct_arm_bundle.v1",
-           "bundle_id": f"direct-{cond}", "condition": cond, "rows": rows}
+    run_id = f"direct-{cond}"
+    arm_rows_sha256 = content_hash(rows)
     d = tmp_path / (dirname or f"direct_{cond}")
     d.mkdir()
+    pd.DataFrame(rows).to_parquet(d / "arms.parquet")
+    doc = {"schema_version": "spot.stage02_direct_arm_bundle.v1",
+           "arm_bundle_run_id": run_id, "condition": cond,
+           "arm_rows_sha256": arm_rows_sha256, "n_arm_rows": len(rows)}
     (d / "arm_bundle.json").write_text(json.dumps(doc))
+    (d / "provenance.json").write_text(json.dumps({"run_binding": {
+        "condition": cond, "scorer_view_sha256": "5" * 64, "gene_universe_sha256": "6" * 64,
+        "environment_lock": {"sha256": env_sha or arm_env.AUTHORITATIVE_ENV_LOCK_SHA256},
+        "arm_rows_sha256": arm_rows_sha256}}))
+    # the producer's placeholder: un-admitted, names no verifier — never a verdict
+    (d / "verification.json").write_text(json.dumps({
+        "schema_version": "spot.stage02_arm_bundle_verification.v1",
+        "arm_bundle_run_id": run_id, "verifier_id": None,
+        "verdict": "pending_independent_verification",
+        "admitted": False, "self_admitted": False}))
+    # the SEPARATE independent admission (what --w10-report points at)
     w10 = tmp_path / f"w10_{cond}.json"
-    w10.write_text(json.dumps({"verdict": "ADMIT", "bundle_id": f"direct-{cond}"}))
+    w10.write_text(json.dumps({
+        "schema_version": "spot.stage02_arm_bundle_verification.v1",
+        "arm_bundle_run_id": run_id,
+        "verifier_id": "spot.stage02_direct_arm.independent_verifier.v1",
+        "verdict": "admit", "admitted": True, "self_admitted": False}))
     return str(d), str(w10)
 
 
@@ -1800,6 +1826,55 @@ class TestProductionCLIFromDirectBundles:
             es = bundle["endpoint_source"]
             assert es["endpoint_source"] == "two_admitted_direct_all_arm_bundles"
             assert es["from_direct_bundle_id"] and es["to_direct_bundle_id"]
+
+    def test_THREE_HEAD_the_cli_release_passes_W5_then_W11_then_W3(self, tmp_path):
+        """The DETACHED three-head replay on the REAL production path. HEAD W5: the CLI
+        differences two admitted Direct all-arm bundles per ordered pair into the six-bundle
+        release. HEAD W11: an independent verifier reopens each shipped bundle's bytes,
+        re-derives, and ADMITS — writing NO per-bundle verification file (the aggregate forbids
+        one). HEAD W3: the run-manifest aggregate's own gates read the shipped release GREEN in
+        a subprocess that never imports W5 code."""
+        import subprocess
+
+        from direct.hashing import sha256_hex
+        from direct.temporal.arms import run_temporal_arms
+        if not os.path.exists(_AUTH_LOCK):
+            pytest.skip("authoritative Stage-2 solver lock not staged")
+        if not os.path.isdir(_RUNMANIFEST):
+            pytest.skip("run-manifest worktree not available for cross-contract proof")
+        vp, rp = self._view_release(tmp_path)
+        out = str(tmp_path / "out")
+        # HEAD W5 — the producer differences two Direct bundles per pair
+        rc = run_temporal_arms.main(
+            ["--stage1-view", vp, "--stage1-release", rp] + self._direct_args(tmp_path)
+            + ["--env-lock", _AUTH_LOCK, "--conditions", "FixRest,FixStim8,FixStim48",
+               "--out-root", out, "--all-pairs"])
+        assert rc == 0
+        man = json.loads(open(os.path.join(out, "temporal_arm_release.json")).read())
+        assert man["n_bundles"] == 6 and man["n_logical_arms"] == 120
+        # HEAD W11 — reopen the shipped bytes and independently ADMIT, per bundle, in memory
+        for b in man["bundles"]:
+            d = os.path.join(out, b["relative_dir"])
+            result = arm_admission.verify_shipped(d)
+            assert result["admitted"] is True
+            bundle = json.loads(open(os.path.join(d, arm_emit.BUNDLE_FILENAME)).read())
+            report = arm_report.build_report(
+                result, bundle_id=bundle["bundle_id"],
+                arm_bundle_sha256=sha256_hex(
+                    open(os.path.join(d, arm_emit.BUNDLE_FILENAME), "rb").read()),
+                provenance_sha256=sha256_hex(
+                    open(os.path.join(d, arm_emit.PROVENANCE_FILENAME), "rb").read()))
+            assert report["verdict"] == arm_report.ADMIT and report["n_failed"] == 0
+            # the independent admission is NEVER a per-bundle file — the aggregate forbids it
+            assert not os.path.exists(os.path.join(d, arm_emit.VERIFICATION_FILENAME))
+        # HEAD W3 — the run-manifest aggregate reads the shipped release GREEN, detached
+        proc = subprocess.run(
+            [sys.executable, "-c", _CROSS_CHECK, out],
+            env={**os.environ, "PYTHONPATH": _RUNMANIFEST}, capture_output=True, text=True)
+        if "SKIP:" in proc.stdout:
+            pytest.skip(f"run-manifest API drift: {proc.stdout.strip()}")
+        assert proc.returncode == 0 and "GREEN" in proc.stdout, \
+            f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
 
     def test_EQUIVALENCE_the_DiD_from_direct_base_deltas_equals_raw_projection(
             self, tmp_path):
@@ -1872,11 +1947,34 @@ class TestProductionCLIFromDirectBundles:
         assert e.value.gate == "DUPLICATE_MISMATCH"
 
     def test_ATTACK_missing_w10_report_refused(self, tmp_path):
+        # w10_report=None falls back to the bundle's OWN verification.json, which ships as the
+        # producer's un-admitted placeholder (admitted=false) — so a temporal run on it refuses.
         from direct.temporal.arms import arm_direct_source as src
         bd, _ = _write_direct_bundle(tmp_path, "FixRest")
         with pytest.raises(src.DirectSourceError) as e:
             src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=None)
         assert e.value.gate == "MISSING_W10"
+
+    def test_ATTACK_self_admitted_w10_report_refused(self, tmp_path):
+        # a report that admits itself (self_admitted=true) is a generator asserting twice.
+        from direct.temporal.arms import arm_direct_source as src
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest")
+        import json as _json
+        doc = _json.loads(open(w10).read())
+        doc["self_admitted"] = True
+        open(w10, "w").write(_json.dumps(doc))
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=w10)
+        assert e.value.gate == "MISSING_W10"
+
+    def test_ATTACK_direct_bundle_under_wrong_env_lock_refused(self, tmp_path):
+        # every lane binds the SAME authoritative Stage-2 solver lock; a Direct bundle solved
+        # under any other lock may not seed a temporal endpoint.
+        from direct.temporal.arms import arm_direct_source as src
+        bd, w10 = _write_direct_bundle(tmp_path, "FixRest", env_sha="9" * 64)
+        with pytest.raises(src.DirectSourceError) as e:
+            src.load_direct_bundle(bd, expect_condition="FixRest", w10_report=w10)
+        assert e.value.gate == "WRONG_ENV_LOCK"
 
 
 # =========================================================================== #

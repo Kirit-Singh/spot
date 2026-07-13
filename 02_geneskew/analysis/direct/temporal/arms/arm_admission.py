@@ -66,7 +66,9 @@ ARM_NEGATIVE_DECLARATIONS = {"bundle_carries_role_or_pole": False}
 # ``scorer_value`` to walk through.
 INHERITED_FIREWALL_EXCEPTIONS = frozenset({
     "registry_scorer_view_sha256", "scorer_view_raw_sha256",
-    "scorer_view_canonical_sha256", "registry_scorer_projection_sha256"})
+    "scorer_view_canonical_sha256", "registry_scorer_projection_sha256",
+    # the two Direct bundles' scorer-view hashes, bound in endpoint_source
+    "from_scorer_view_sha256", "to_scorer_view_sha256"})
 
 
 def inherited_forbidden_keys(obj: Any) -> list[str]:
