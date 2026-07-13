@@ -1,7 +1,15 @@
 # W16 → W3: the exact Stage-3 v2 CLI contract
 
-Stage-3's v2 CLI is wired and fail-closed. This is the exact surface it binds, so you can
-generate bytes it will consume without a second round-trip.
+**STATUS: this is the REQUIRED CONTRACT, not a working integration.** The flag surface is
+committed and the v2 path FAILS CLOSED, but the `--stage2-bridge` / `--stage2-bridge-report`
+CONSUMER is not implemented: nothing yet re-hashes `bridge_sha256`, binds the bridge report to
+those bytes, cross-binds the bridge to the aggregate, or re-checks arm values against the native
+rankings. Passing the bridge today produces a NAMED REFUSAL (exit 3, nothing written) — Stage-3
+will not run while silently ignoring a bridge it was handed.
+
+This document is published NOW so you can generate against the exact surface. It becomes "wired"
+only when the implementation, the focused end-to-end, and the independent verifier are committed
+and green. We will tell you when that lands.
 
 ## The invocation
 
@@ -28,8 +36,8 @@ missing input is a named refusal (exit 2), and **nothing is written**.
 | aggregate manifest | `spot.stage02_run_manifest.v3_topology_only` | **recomputes** the semantic self-hash (content_sha256 excluding `created_at`, `manifest_sha256`, `path`). Never reads the claim. |
 | aggregate report | `spot.stage02_run_manifest_verification.v1` | binds `verdict=="admit"`, `n_failed==0`, `generator_is_not_verifier==true`, `topology_complete`, `release_admissible`, `admission.status=="admitted"`, `manifest_sha256 == manifest_sha256_recomputed` |
 | native bundles + ranking files | `records:[{target_id, arm_value, evaluable, rank}]` | reads `arm_value` **from here** — the authoritative value |
-| **bridge** | `spot.stage02_stage3_bridge.v1` | re-hashes `bridge_sha256`; takes **identity + modality** from here |
-| **bridge report** | (your separate bridge verifier) | admits the bridge from **this**, never from the bridge itself |
+| **bridge** | `spot.stage02_stage3_bridge.v1` | *(to be implemented)* re-hash `bridge_sha256`; take **identity + modality** from here |
+| **bridge report** | (your separate bridge verifier) | *(to be implemented)* admit the bridge from **this**, never from the bridge itself |
 
 ### The rule that makes the bridge safe
 

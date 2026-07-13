@@ -313,7 +313,31 @@ def run(*, artifact_class: str, direct_run_dir: str, direct_inputs_root: str,
 
 
 V2_REQUIRED = ("--stage2-manifest", "--stage2-report", "--bundles-root", "--stage1-release",
-               "--universe-store")
+               "--universe-store", "--stage2-bridge", "--stage2-bridge-report")
+
+# The bridge CONSUMER is not implemented yet. The flags exist (the contract is published to W3
+# and they are generating against it), but nothing in this module reads them.
+#
+# An accepted-and-ignored flag is worse than a missing one: a caller who passes --stage2-bridge
+# would get a run that silently never honoured it, and an artifact that looks like it was built
+# on admitted identity and modality when it was not. So the v2 path REFUSES BY NAME until the
+# consumer lands. It is not "wired" — it is declared, and it says so.
+GATE_BRIDGE_CONSUMER_NOT_IMPLEMENTED = "the_stage3_bridge_consumer_is_not_implemented_yet"
+
+
+def bridge_consumer_ready() -> bool:
+    """Can Stage-3 actually ADMIT and CONSUME the bridge (not merely accept its path)?
+
+    False. `stage2_contract` has no bridge admitter: nothing re-hashes `bridge_sha256`, nothing
+    binds the separate bridge report to those exact bytes, nothing cross-binds the bridge to the
+    aggregate, and nothing re-checks the bridge's arm_value against the native ranking file.
+
+    This reports a fact about THIS module — whether the consumer exists — and it is checked by a
+    test that greps for the admitter. It is NOT an artifact-admission gate. (An artifact gate
+    must never be a Boolean in Stage-3's own source; that was `DETACHED_CLONE_MATRIX_GREEN`, and
+    retiring it is why the aggregate is now admitted from disk.)
+    """
+    return hasattr(sa, "admit_bridge")
 
 
 def _v2_main(args) -> int:
@@ -336,6 +360,19 @@ def _v2_main(args) -> int:
               "no fixture fallback and no default: Stage 3 stands on Stage-2's admitted "
               "aggregate and the admitted universe store, or it does not run.")
         return 2
+
+    # Fail closed rather than silently ignore the bridge the caller supplied. The native ranking
+    # rows carry {target_id, arm_value, evaluable, rank} — no namespace, no modality — so an
+    # analysis built without the bridge would have to INVENT both. It will not.
+    if not bridge_consumer_ready():
+        print(f"REFUSED [{args.artifact_class}]: [{GATE_BRIDGE_CONSUMER_NOT_IMPLEMENTED}] the "
+              "bridge consumer is not implemented. Stage-3 will not run a v2 analysis while "
+              "ignoring the bridge: the native arms carry no target namespace and no "
+              "perturbation modality, and those facts exist ONLY in the bridge. Building "
+              "without it would mean inferring identity and defaulting a modality from a "
+              "config constant — a setting wearing the costume of an assay. No bundle was "
+              "written.")
+        return 3
 
     try:
         aggregate = sa.admit_aggregate(
