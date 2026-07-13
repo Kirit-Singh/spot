@@ -165,39 +165,70 @@ def test_preflight_refuses_rebaseline_in_same_run_root(tmp_path):
     assert "no rebaseline" in res.stderr.lower() or "different run identity" in res.stderr.lower()
 
 
-def test_w10_admitted_rejects_forged_bindings(tmp_path):
-    """Exact owner forgery: a full-body-self-hashed binding with correct binding_schema but
-    native_verdict=REFUSE + disposition=admitted, omitting contract fields, must be REFUSED. Also
-    a complete-fields-but-REFUSE binding must be refused (verdict/disposition consistency)."""
-    import sys as _sys
+def test_preflight_refuses_over_a_tampered_stored_body(tmp_path):
+    """Explicit re-preflight over a body-tampered stored manifest (declared scalar kept) must
+    REFUSE — phaseA re-derives the stored self-hash, not just a scalar compare."""
+    import json
+    r = _real_run_dir(tmp_path); env = _env_for(r)
+    assert _run(["preflight"], env).returncode == 0
+    mp = r / "out" / ".state" / "run_identity.json"
+    m = json.loads(mp.read_text())
+    m["lane"] = "tampered"              # edit the body but KEEP the declared run_identity_sha256
+    mp.write_text(json.dumps(m))
+    res = _run(["preflight"], env)
+    assert res.returncode == 3
+    assert "tampered" in res.stderr.lower()
+
+
+def test_w10_admitted_no_fallback_and_rejects_forgeries(tmp_path, monkeypatch):
+    """Production has NO offline fallback: a missing/refusing adapter, or any fresh≠stored
+    difference, is False. Offline tests MOCK an authoritative adapter success. Covers: no-adapter
+    refusal, acceptance, forged CACHED binding, and post-bundle mutation."""
+    import sys as _sys, json as _j
     _sys.path.insert(0, ANALYSIS)
     from direct import stage2_run as S
     d = tmp_path / "w"; d.mkdir()
+    bundle = tmp_path / "bundle"; bundle.mkdir()
+    (bundle / "arm_bundle.json").write_text(_j.dumps({"arm_bundle_run_id": "BUN1"}))
+    monkeypatch.setattr(S, "direct_bundle_for", lambda cfg, cond: str(bundle))
 
     class C:
         w10_report_dir = str(d)
-        direct_verifier = str(tmp_path / "no_verifier")   # offline -> fallback path
+        direct_verifier = str(tmp_path / "no_verifier")
 
-    def _sealed(b):
-        import json as _j
+    def sealed(b):
         b["binding_sha256"] = S.content_sha256({k: v for k, v in b.items() if k != "binding_sha256"})
         return b
 
-    # (a) the owner's exact forgery: REFUSE+admitted, omits source_report*/spec/lane/solver_lock/...
-    forged = _sealed({
-        "binding_schema": S.BINDING_SCHEMA, "subject_kind": "release",
-        "native_verdict": "REFUSE", "disposition": "admitted",
-        "verifier_id": S.W10_BUNDLE_VERIFIER_ID, "verifier_code_sha256": S.W10_VERIFIER_CODE,
-        "condition": "Rest", "bundle_id": "abc123", "binding_sha256": "x"})
-    (d / "direct_admission_Rest.json").write_text(__import__("json").dumps(forged))
+    def valid():
+        return sealed({"binding_schema": S.BINDING_SCHEMA, "subject_kind": "bundle",
+                       "native_verdict": "ADMIT", "disposition": "admitted", "n_failed": 0,
+                       "bundle_verified_on_disk": True, "verifier_id": S.W10_BUNDLE_VERIFIER_ID,
+                       "verifier_code_sha256": S.W10_VERIFIER_CODE, "condition": "Rest",
+                       "bundle_id": "BUN1", "arm_rows_sha256": "a", "mask_sha256": "m"})
+
+    def store(obj):
+        (d / "direct_admission_Rest.json").write_text(_j.dumps(obj))
+
+    # (1) NO FALLBACK: adapter unavailable/refuses -> False even for a perfectly valid stored binding
+    store(valid()); monkeypatch.setattr(S, "_rerun_adapter", lambda cfg, cond: None)
     assert S.w10_admitted(C, "Rest") is False
 
-    # (b) complete required fields but native_verdict=REFUSE (must fail the semantic consistency)
-    full = {k: "v" for k in S._BINDING_REQUIRED}
-    full.update({"binding_schema": S.BINDING_SCHEMA, "subject_kind": "bundle",
-                 "native_verdict": "REFUSE", "disposition": "admitted", "n_failed": 0,
-                 "bundle_verified_on_disk": True, "verifier_id": S.W10_BUNDLE_VERIFIER_ID,
-                 "verifier_code_sha256": S.W10_VERIFIER_CODE, "condition": "Stim8hr"})
-    _sealed(full)
-    (d / "direct_admission_Stim8hr.json").write_text(__import__("json").dumps(full))
-    assert S.w10_admitted(C, "Stim8hr") is False
+    # (2) adapter SUCCEEDS + fresh == stored valid ADMIT -> True
+    vb = valid(); store(vb); monkeypatch.setattr(S, "_rerun_adapter", lambda cfg, cond: dict(vb))
+    assert S.w10_admitted(C, "Rest") is True
+
+    # (3) forged CACHED binding (REFUSE+admitted) but fresh authoritative differs -> False
+    store(sealed({**valid(), "native_verdict": "REFUSE"}))
+    monkeypatch.setattr(S, "_rerun_adapter", lambda cfg, cond: dict(vb))
+    assert S.w10_admitted(C, "Rest") is False
+
+    # (4) post-bundle mutation: fresh re-derivation differs from the stored binding -> False
+    store(vb); mut = sealed({**valid(), "arm_rows_sha256": "MUTATED"})
+    monkeypatch.setattr(S, "_rerun_adapter", lambda cfg, cond: dict(mut))
+    assert S.w10_admitted(C, "Rest") is False
+
+    # (5) adapter succeeds but the native verdict is REFUSE (fresh==stored, both refused) -> False
+    rf = sealed({**valid(), "native_verdict": "REFUSE", "disposition": "refused"})
+    store(rf); monkeypatch.setattr(S, "_rerun_adapter", lambda cfg, cond: dict(rf))
+    assert S.w10_admitted(C, "Rest") is False

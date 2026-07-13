@@ -158,7 +158,7 @@ def build_run_identity(cfg: Cfg) -> dict:
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
                 "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",
-            "direct_verifier_head": "9965d64e50cd4a38fb6067a35c00bd7a5a7babef",  # W10 FINAL adapter (FULL commit)
+            "direct_verifier_head": "dd11300026d3bddcfdf108545d0b7553e7d05e9f0",  # W10 FINAL adapter (6 release cross-pins)
             "direct_verifier_tree_sha256": (("tree:" + tree_sha256(cfg.direct_verifier))
                                             if (not DRY and os.path.isdir(cfg.direct_verifier))
                                             else "<unbound>"),
@@ -203,11 +203,20 @@ def phaseA_preflight(cfg: Cfg):
     os.makedirs(cfg.state_dir, exist_ok=True)
     if os.path.isfile(identity_path(cfg)):
         existing = json.load(open(identity_path(cfg)))
-        if existing.get("run_identity_sha256") != manifest["run_identity_sha256"]:
+        existing_body = {k: v for k, v in existing.items() if k != "run_identity_sha256"}
+        manifest_body = {k: v for k, v in manifest.items() if k != "run_identity_sha256"}
+        # integrity: re-derive the STORED body's self-hash — a body tamper that kept the declared
+        # scalar is caught here (not just a scalar comparison)
+        if content_sha256(existing_body) != existing.get("run_identity_sha256"):
+            raise SchedulerError(
+                f"preflight REFUSED: the stored run-identity manifest in this OUT ({cfg.out}) is "
+                "tampered (its body does not re-derive its declared self-hash)")
+        # identity: the fresh manifest body must equal the stored body field-by-field
+        if existing_body != manifest_body:
             raise SchedulerError(
                 f"preflight REFUSED: a DIFFERENT run identity already exists in this OUT ({cfg.out}) "
                 "— no rebaseline/overwrite in the same run root; use a fresh OUT")
-        return   # identical re-preflight is a no-op; the stored identity is write-once
+        return   # genuinely identical re-preflight is a no-op; the stored identity is write-once
     with open(identity_path(cfg), "w") as fh:
         json.dump(manifest, fh, sort_keys=True, indent=2)
     _write_receipt(cfg, "A.preflight", argv=["preflight"], inputs=[], outputs=[identity_path(cfg)],
@@ -328,15 +337,6 @@ def native_report_path(cfg, cond):
 BINDING_SCHEMA = "spot.stage02.direct_admission_binding.v1"
 W10_VERIFIER_CODE = "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
 W10_BUNDLE_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
-# W10's PUBLISHED per-bundle contract (its authoritative field list) — NOT a hand-picked subset.
-# Every one is required non-null on a bundle admission; the schema file (when present) is the
-# authoritative validator and this replicates it for offline/test use.
-_BINDING_REQUIRED = (
-    "binding_schema", "source_report_sha256", "source_report_schema", "subject_kind",
-    "native_verdict", "disposition", "verifier_id", "verifier_code_sha256", "spec_sha256",
-    "solver_lock_sha256", "scorer_view_sha256", "n_failed", "direct_bundle_sha256",
-    "bundle_verified_on_disk", "binding_sha256", "bundle_id", "condition", "lane",
-    "arm_rows_sha256", "mask_sha256", "stage1_scorer_view_canonical_sha256")
 
 
 def _rerun_adapter(cfg, cond):
@@ -392,13 +392,12 @@ def _binding_semantics_ok(cfg, cond, b):
 
 
 def w10_admitted(cfg, cond):
-    """STRONGEST fail-closed rule: RE-RUN the pinned adapter against the native report + discovered
-    bundle, load its FRESH normalized output, and require CANONICAL EQUALITY to the stored binding
-    before testing the admission semantics. A resealed/forged stored binding (e.g. native_verdict
-    REFUSE + disposition admitted, or omitted contract fields) cannot equal a fresh re-derivation;
-    a forged native report makes the adapter refuse (no fresh binding). When the adapter is
-    unavailable offline, fall back to the FULL published-contract field set + the same semantics —
-    never a hand-picked subset."""
+    """STRONGEST fail-closed rule — NO production fallback. RE-RUN the pinned adapter on the native
+    report + discovered bundle and require its FRESH output to equal the stored binding canonically,
+    then the admission semantics. A MISSING adapter, a NONZERO adapter (native-report refusal /
+    tampered bytes), an UNREADABLE output, or ANY fresh≠stored difference is False — there is no
+    offline path that could accept a resealed cached binding. Offline tests MOCK an authoritative
+    adapter success; production always re-derives from source."""
     stored_p = w10_binding_path(cfg, cond)
     if not os.path.isfile(stored_p):
         return False
@@ -407,14 +406,11 @@ def w10_admitted(cfg, cond):
     except Exception:
         return False
     fresh = _rerun_adapter(cfg, cond)
-    if fresh is not None:                                # authoritative re-derivation available
-        if content_sha256(fresh) != content_sha256(stored):
-            return False                                # stored binding != fresh adapter output
-        return _binding_semantics_ok(cfg, cond, fresh)
-    # offline fallback: the full published required-field contract + the same semantics
-    if not isinstance(stored, dict) or any(stored.get(k) in (None, "") for k in _BINDING_REQUIRED):
+    if fresh is None:                                    # missing / refused / unreadable → REFUSE
         return False
-    return _binding_semantics_ok(cfg, cond, stored)
+    if content_sha256(fresh) != content_sha256(stored):  # forged/resealed/mutated stored binding
+        return False
+    return _binding_semantics_ok(cfg, cond, fresh)
 
 
 def require_admitted_direct(cfg):
