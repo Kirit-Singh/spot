@@ -173,11 +173,30 @@ def _sensitivity_runs(args, universe_gene_ids, signatures, mask_by_target,
         run_matrix(ml, f"donorpair_{m}")
 
 
+def load_program_registry(path):
+    """The Stage-1 programs, and the registry hash a run BINDS.
+
+    ``direct.io_data.load_registry`` returns a FOUR-key dict
+    (``programs, file_sha256, declared_sha256, raw``). This used to be unpacked into THREE
+    names -- ``programs, reg_sha, reg = ...`` -- which raises ``ValueError: too many values
+    to unpack`` on the first line of work ``build()`` does. ``direct.io_data`` changed under
+    this lane and nothing caught it, because no test ever called ``build()``. So the load is
+    a NAMED function now: the contract it depends on is one a test can reach.
+
+    The bound hash is the DERIVED ``file_sha256``, never the registry's self-declared
+    ``registry_sha256``. Per ``direct.trust``: "a file cannot contain its own hash; a
+    self-declared hash proves nothing and is trivially forged". ``declared_sha256`` is
+    deliberately NOT bound here.
+    """
+    doc = io_data.load_registry(path)
+    return doc["programs"], doc["file_sha256"]
+
+
 def build(args):
     t0 = time.time()
     def log(msg): print(f"[{round(time.time()-t0,1)}s] {msg}", flush=True)
 
-    programs, reg_sha, reg = io_data.load_registry(args.registry)
+    programs, reg_sha = load_program_registry(args.registry)
     contrast_id = args.contrast_id
     out_dir = os.path.join(args.out_root, contrast_id, "perturb2state")
     os.makedirs(out_dir, exist_ok=True)
