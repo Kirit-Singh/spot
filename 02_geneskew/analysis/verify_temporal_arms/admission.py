@@ -287,7 +287,8 @@ def _rankings_digest(docs: list[dict[str, Any]]) -> str:
 
 def write_envelope(*, report: dict[str, Any], inventory: Optional[dict[str, Any]],
                    docs: list[dict[str, Any]], bundle_root: str, verifier_id: str,
-                   rules_id: str, id_len: int) -> Optional[str]:
+                   rules_id: str, id_len: int,
+                   admission_out: Optional[str] = None) -> Optional[str]:
     """THE EXTERNAL ADMISSION ENVELOPE — ONE file, at the RELEASE ROOT.
 
     Written by THIS lane, after reopening the shipped bytes, and never inside a producer
@@ -370,9 +371,23 @@ def write_envelope(*, report: dict[str, Any], inventory: Optional[dict[str, Any]
     # already knows how to check one knows how to check the other.
     envelope["report_id_rule"] = "sha256(canonical JSON excluding report_id)"
     envelope["report_id"] = content_hash(envelope)
-    path = os.path.join(root, schema.ENVELOPE_FILENAME)
+    # WHERE THE ADMISSION LANDS IS THE CALLER'S CHOICE — WHAT IT SAYS IS NOT.
+    #
+    # The verifier READS the producer's native release root and never writes into it. Where
+    # the verdict is FILED is a different question, and it belongs to whoever is filing it:
+    # an aggregate keeps its receipts at its own root, beside the other lanes'. So
+    # ``admission_out`` names the file, and the default stays beside the inventory.
+    #
+    # The path is not the binding, and it never was. The envelope binds the producer's
+    # release id and the exact inventory bytes, so a reader who has the admission can always
+    # get back to the release it admits — from anywhere in the tree.
+    path = str(admission_out) if admission_out \
+        else os.path.join(root, schema.ENVELOPE_FILENAME)
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(path, "wb") as fh:
         fh.write(canonical_json(envelope).encode("utf-8"))
-    return schema.ENVELOPE_FILENAME
+    return os.path.relpath(path, root) if not admission_out else path
 
 

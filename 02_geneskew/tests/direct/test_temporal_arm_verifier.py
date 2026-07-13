@@ -352,6 +352,147 @@ class TestTheDirectEndpointSource:
         assert report["verdict"] == verify.REJECT
         assert "no_fixture_json_may_stand_in_for_a_direct_bundle" in gates(report)
 
+    def test_the_REAL_native_W10_report_is_ADMITTED_with_no_booleans_at_all(self, tmp_path):
+        """W10's native report carries NO ``admitted`` and NO ``self_admitted``. It never did.
+        Requiring them is requiring fields that do not exist — a FALSE REFUSAL of a sound
+        report (rc17 MISSING_W10).
+
+        It does not need them. A boolean is a claim; this report ships the thing the claim
+        would have stood for — it is self-hashed, it lists every gate it ran, it records that
+        it never imported the generator, and its ``bound_artifact`` says WHICH bundle it
+        admitted, by condition, by rows hash, by solver lock and by a map of every file's
+        sha256. Checking THAT against the bundle in hand is strictly stronger than trusting a
+        flag, because a flag can be set by anyone about anything."""
+        from verify_temporal_arms import direct_source
+        from verify_temporal_arms.failures import Failures
+
+        release_root, bundle_root, _ = _staged(tmp_path)
+        direct, _, _ = _CTX[str(tmp_path)]
+        cond = FX.CONDITIONS[0]
+        d = direct[cond]
+
+        with open(os.path.join(d, "arm_bundle.json")) as fh:
+            doc = json.load(fh)
+
+        # the PURE native report: no admitted, no self_admitted, nothing invented
+        pure = os.path.join(str(tmp_path), "w10_native.json")
+        rep = FX.w10_report(d, cond, doc["arm_bundle_run_id"], doc["arm_rows_sha256"],
+                            legacy_booleans=False)
+        assert "admitted" not in rep and "self_admitted" not in rep
+        assert rep["verdict"] == "ADMIT"
+        with open(pure, "w") as fh:
+            fh.write(canonical.canonical_json(rep))
+
+        f = Failures()
+        got = direct_source.load(f, cond, d, pure)
+        assert got is not None
+        assert f.items == [], f.items          # not one refusal on a sound native report
+        assert "the_w10_report_sha256_covers_its_own_content" in f.evaluated
+        assert "the_w10_report_admitted_THESE_arm_rows" in f.evaluated
+
+    def _native(self, tmp_path, cond, mutate=None):
+        """A pure native W10 report for one condition, optionally tampered with."""
+        direct, _, _ = _CTX[str(tmp_path)]
+        d = direct[cond]
+        with open(os.path.join(d, "arm_bundle.json")) as fh:
+            doc = json.load(fh)
+        rep = FX.w10_report(d, cond, doc["arm_bundle_run_id"], doc["arm_rows_sha256"],
+                            legacy_booleans=False, mutate=mutate)
+        path = os.path.join(str(tmp_path), f"w10_{cond}_x.json")
+        with open(path, "w") as fh:
+            fh.write(canonical.canonical_json(rep))
+        return d, path
+
+    def _load(self, tmp_path, cond, mutate=None, tamper_file=None):
+        from verify_temporal_arms import direct_source
+        from verify_temporal_arms.failures import Failures
+
+        d, path = self._native(tmp_path, cond, mutate)
+        if tamper_file:
+            tamper_file(path)
+        f = Failures()
+        direct_source.load(f, cond, d, path)
+        return {x["gate"] for x in f.items}
+
+    def test_a_w10_report_whose_self_hash_does_not_cover_it_is_refused(self, tmp_path):
+        """A report that could be edited after it was cited is a claim, not a result: the
+        verdict could be swapped for a friendlier one after the fact."""
+        _staged(tmp_path)
+
+        def swap_verdict(path):
+            with open(path) as fh:
+                rep = json.load(fh)
+            rep["verdict"] = "ADMIT"          # already ADMIT; the point is the hash is stale
+            rep["n_passed"] = 99
+            with open(path, "w") as fh:
+                json.dump(rep, fh)
+
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0], tamper_file=swap_verdict)
+        assert "the_w10_report_sha256_covers_its_own_content" in gates_
+
+    def test_a_w10_report_that_REFUSED_the_bundle_is_not_an_admission(self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b.update(
+                                {"verdict": "REFUSE", "n_failed": 1,
+                                 "failed_gates": ["some gate"]}))
+        assert "the_w10_report_actually_ADMITS_this_direct_bundle" in gates_
+
+    def test_an_ADMIT_with_a_FAILED_gate_is_not_an_admit(self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b.update(
+                                {"n_failed": 1, "failed_gates": ["a gate that failed"]}))
+        assert "the_w10_report_actually_ADMITS_this_direct_bundle" in gates_
+
+    def test_a_w10_report_that_IMPORTED_the_generator_is_the_generators_own_opinion(
+            self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b.update(
+                                {"independent_of_generator": False}))
+        assert "the_w10_report_was_written_by_a_lane_that_did_not_produce_the_bytes" in \
+            gates_
+
+    def test_a_w10_report_about_ANOTHER_CONDITION_admits_something_else(self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b["bound_artifact"].update(
+                                {"condition": FX.CONDITIONS[1]}))
+        assert "the_w10_report_admitted_THIS_condition" in gates_
+
+    def test_a_w10_report_about_OTHER_ROWS_admits_other_numbers(self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b["bound_artifact"].update(
+                                {"arm_rows_sha256": "a" * 64}))
+        assert "the_w10_report_admitted_THESE_arm_rows" in gates_
+
+    def test_a_w10_report_admitting_a_bundle_solved_under_another_lock_is_refused(
+            self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b["bound_artifact"].update(
+                                {"solver_lock_sha256": "b9284e63" + "0" * 56}))
+        assert "the_w10_report_admitted_a_bundle_solved_under_the_authoritative_lock" in \
+            gates_
+
+    def test_a_w10_ARTIFACT_MAP_that_no_longer_matches_the_bytes_is_refused(self, tmp_path):
+        """The admission is of bytes that are no longer on disk."""
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b["bound_artifact"]["artifact_sha256"].update(
+                                {"arm_bundle.json": "c" * 64}))
+        assert "every_file_the_w10_report_admitted_still_hashes_to_what_it_admitted" in \
+            gates_
+
+    def test_a_w10_report_binding_NO_artifact_map_cannot_be_checked(self, tmp_path):
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b["bound_artifact"].update(
+                                {"artifact_sha256": {}}))
+        assert "the_w10_artifact_map_names_the_files_it_admitted" in gates_
+
     def test_the_producers_own_PLACEHOLDER_verification_admits_nothing(self, tmp_path):
         """Every Direct bundle ships a ``verification.json`` that says, in its own bytes,
         that it is NOT an admission: admitted=false, verifier_id=null, verdict pending.
@@ -372,19 +513,19 @@ class TestTheDirectEndpointSource:
         report = _verify(release_root, bundle_root, w10_reports=as_w10)
         assert report["verdict"] == verify.REJECT
         assert {"the_w10_report_is_not_the_producers_own_placeholder",
-                "the_w10_report_actually_ADMITS_this_direct_bundle"} & gates(report)
+                "the_w10_report_is_the_native_independent_direct_verifiers_report"} & \
+            gates(report)
 
-    def test_a_SELF_ADMITTED_report_is_refused(self, tmp_path):
-        release_root, bundle_root, _ = _staged(tmp_path)
-        _, w10, _ = _CTX[str(tmp_path)]
-        with open(w10[FX.CONDITIONS[0]]) as fh:
-            rep = json.load(fh)
-        rep["self_admitted"] = True
-        with open(w10[FX.CONDITIONS[0]], "w") as fh:
-            json.dump(rep, fh)
-        report = _verify(release_root, bundle_root)
-        assert report["verdict"] == verify.REJECT
-        assert "the_w10_report_actually_ADMITS_this_direct_bundle" in gates(report)
+    def test_a_report_signed_by_SOMEBODY_ELSE_is_not_the_direct_verifiers_admission(
+            self, tmp_path):
+        """The admission has to come from the lane that verifies Direct bundles. A report
+        signed by any other id is a report about something else, however green it looks."""
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b.update(
+                                {"verifier_id":
+                                 "spot.stage02.temporal.arm.independent_verifier.v1"}))
+        assert "the_w10_report_is_the_native_independent_direct_verifiers_report" in gates_
 
     def test_a_direct_bundle_solved_under_the_WRONG_env_lock_is_refused(self, tmp_path):
         """Two endpoints solved by two different solvers are not a difference of one screen."""
@@ -439,19 +580,14 @@ class TestTheDirectEndpointSource:
         assert report["verdict"] == verify.REJECT
         assert "the_w10_report_actually_ADMITS_this_direct_bundle" in gates(report)
 
-    def test_a_w10_report_that_names_NO_verifier_is_refused(self, tmp_path):
-        """An admission nobody signed is an admission nobody made."""
-        release_root, bundle_root, _ = _staged(tmp_path)
-        _, w10, _ = _CTX[str(tmp_path)]
-        path = w10[FX.CONDITIONS[0]]
-        with open(path) as fh:
-            rep = json.load(fh)
-        rep["verifier_id"] = None
-        with open(path, "w") as fh:
-            json.dump(rep, fh)
-        report = _verify(release_root, bundle_root)
-        assert report["verdict"] == verify.REJECT
-        assert "the_w10_report_actually_ADMITS_this_direct_bundle" in gates(report)
+    def test_a_report_under_the_PLACEHOLDER_SLOT_schema_is_not_an_admission(self, tmp_path):
+        """The empty slot's schema is not the report's schema. A document wearing it is an
+        empty slot, whatever it says in it."""
+        _staged(tmp_path)
+        gates_ = self._load(tmp_path, FX.CONDITIONS[0],
+                            mutate=lambda b: b.update(
+                                {"schema_version": "spot.stage02_arm_bundle_verification.v1"}))
+        assert "the_w10_report_is_the_native_independent_direct_verifiers_report" in gates_
 
     def test_two_direct_arms_that_DISAGREE_about_their_shared_base_delta_are_refused(
             self, tmp_path):

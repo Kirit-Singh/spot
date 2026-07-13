@@ -55,6 +55,14 @@ def main(argv=None) -> int:
                     help="WRITE the external admission envelope — ONE file at the release "
                          "root. This lane writes the verdict, after reopening the shipped "
                          "bytes; the producer's bundle dirs and preflight are never touched.")
+    ap.add_argument("--admission-out", default=None, metavar="FILE",
+                    help="WHERE to file the external admission. Default: beside the "
+                         "producer's inventory, under --bundle-root. An aggregate that keeps "
+                         "its receipts at its own root points this there — the verifier "
+                         "still READS the producer's native root and still writes nothing "
+                         "into it. The path is not the binding: the admission binds the "
+                         "producer's release id and the exact inventory bytes, so a reader "
+                         "can get back to the release from anywhere in the tree.")
     ap.add_argument("--producer-checkout", default=None,
                     help="the PINNED checkout the producer ran from. Its code identity is "
                          "RE-DERIVED here and the final clean-tree status is decided here: "
@@ -127,6 +135,7 @@ def main(argv=None) -> int:
         expect_scorer_view_prefix=args.expect_scorer_view_prefix,
         expect_scorer_projection_prefix=args.expect_scorer_projection_prefix,
         sign=args.sign,
+        admission_out=args.admission_out,
         producer_checkout=args.producer_checkout,
         env_lock=args.env_lock,
         direct_bundles=_pairs(args.direct_bundle),

@@ -52,10 +52,22 @@ ROWS_FILE = "arms.parquet"
 PROVENANCE_FILE = "provenance.json"
 VERIFICATION_FILE = "verification.json"
 
-# THE PRODUCER'S PLACEHOLDER. It is not an admission and must never be read as one: it says
-# so itself (admitted=false, verifier_id=null, verdict=pending). A real W10 report is a
-# SEPARATE artifact, written by a lane that did not produce these bytes.
+# THE PRODUCER'S PLACEHOLDER SLOT. Not an admission, and it says so itself: it ships with a
+# PENDING verdict under the SLOT schema, waiting for an independent lane to fill it.
 PENDING_VERDICT = "pending_independent_verification"
+VERIFICATION_SLOT_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
+
+# THE REAL W10 REPORT. Its own schema, its own id, and — the point — its own EVIDENCE.
+#
+# It carries no ``admitted`` boolean, and it does not need one: a boolean is a claim, and
+# this report ships the thing the claim would have been about. It is self-hashed, it lists
+# every gate it ran, it records that it did not import the generator, and its
+# ``bound_artifact`` says WHICH bundle it is about — by condition, by rows hash, by solver
+# lock, and by a map of every file's sha256. So the admission is checked against the bundle
+# in hand rather than taken on the word of a flag that could be set by anyone.
+W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
+W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
+W10_ADMIT = "ADMIT"
 
 AUTHORITATIVE_ENV_LOCK_SHA256 = (
     "2983d140941f13d223dad93bae71434663882f23f25f6717c3debe59d2711abe")
@@ -165,7 +177,7 @@ def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], 
                 declared_rows == str(expect_rows_sha256), where,
                 f"the release bound rows {str(expect_rows_sha256)[:16]}…")
 
-    _w10(f, condition, str(bundle_dir), w10_path, expect_w10_sha256)
+    _w10(f, condition, str(bundle_dir), w10_path, expect_w10_sha256, declared_rows)
 
     return {"bundle_id": doc.get("arm_bundle_run_id"), "condition": str(condition),
             "raw_sha256": raw, "arm_rows_sha256": declared_rows,
@@ -173,30 +185,37 @@ def load(f, condition: str, bundle_dir: Optional[str], w10_path: Optional[str], 
 
 
 def _w10(f, condition: str, bundle_dir: str, w10_path: Optional[str],
-         expect_w10_sha256: Optional[str]) -> None:
-    """The INDEPENDENT admission. The producer's own placeholder is NOT one.
+         expect_w10_sha256: Optional[str], rows_sha256: Optional[str]) -> None:
+    """The INDEPENDENT admission — validated against its OWN evidence, not a boolean.
 
-    Every Direct bundle ships a ``verification.json`` that says, in its own bytes, that it is
-    not an admission: ``admitted=false``, ``verifier_id=null``, verdict PENDING. Reading it
-    as a verdict would let a producer admit itself simply by shipping a file with the right
-    name in the right place — which is the whole defect this lane exists to prevent. So a
-    REAL report is required, it must come from somewhere else, and it is READ, not hashed.
+    W10's report carries no ``admitted`` flag, and requiring one would be requiring a field
+    that does not exist: a false refusal of a sound report. It does not need one. A boolean is
+    a claim; this report ships the thing the claim would have been about — it is self-hashed,
+    it names every gate it ran, it records that it never imported the generator, and its
+    ``bound_artifact`` says WHICH bundle it admitted, by condition, by rows hash, by solver
+    lock and by a map of every file's sha256.
+
+    So the admission is checked against the bundle IN HAND. That is strictly stronger than a
+    flag, because a flag can be set by anyone about anything.
+
+    The producer's own ``verification.json`` is still refused, by path and by content: it
+    ships PENDING under the SLOT schema and is an empty slot, not a verdict.
     """
     where = f"direct:{condition}"
     placeholder = os.path.join(bundle_dir, VERIFICATION_FILE)
 
     if not f.check("an_independent_w10_admission_accompanies_every_direct_bundle",
                    bool(w10_path) and os.path.exists(str(w10_path)), where,
-                   "no W10 report was supplied. The producer's own verification.json is a "
-                   "PLACEHOLDER, not an admission: a temporal run may not stand on a Direct "
+                   "no W10 report was supplied. The producer's own verification.json is an "
+                   "empty SLOT, not an admission: a temporal run may not stand on a Direct "
                    "endpoint that no independent lane admitted"):
         return
 
     f.check("the_w10_report_is_not_the_producers_own_placeholder",
             os.path.abspath(str(w10_path)) != os.path.abspath(placeholder), where,
-            "the supplied W10 report IS the producer's in-bundle placeholder. A producer "
-            "that could admit itself by shipping a file with the right name in the right "
-            "place would not be admitted by anybody")
+            "the supplied W10 report IS the producer's in-bundle placeholder slot. A "
+            "producer that could admit itself by shipping a file with the right name in the "
+            "right place would not be admitted by anybody")
 
     raw = file_sha256(str(w10_path))
     if expect_w10_sha256:
@@ -207,12 +226,81 @@ def _w10(f, condition: str, bundle_dir: str, w10_path: Optional[str],
 
     rep = _json(str(w10_path))
     verdict = str(rep.get("verdict") or "")
+
+    if not f.check("the_w10_report_is_the_native_independent_direct_verifiers_report",
+                   rep.get("schema_version") == W10_REPORT_SCHEMA
+                   and rep.get("verifier_id") == W10_VERIFIER_ID
+                   and rep.get("schema_version") != VERIFICATION_SLOT_SCHEMA
+                   and verdict != PENDING_VERDICT, where,
+                   f"schema {rep.get('schema_version')!r} / verifier "
+                   f"{rep.get('verifier_id')!r} / verdict {verdict!r}. The admission is the "
+                   f"NATIVE {W10_REPORT_SCHEMA!r} report; the producer's PENDING slot is not "
+                   "one, and neither is anything else"):
+        return
+
+    # THE VERDICT, and the gates behind it. An ADMIT with a failed gate is not an admit.
     f.check("the_w10_report_actually_ADMITS_this_direct_bundle",
-            rep.get("admitted") is True and rep.get("self_admitted") is not True
-            and bool(rep.get("verifier_id")) and verdict != PENDING_VERDICT, where,
-            f"admitted={rep.get('admitted')!r} self_admitted={rep.get('self_admitted')!r} "
-            f"verifier_id={rep.get('verifier_id')!r} verdict={verdict!r}. A report that is "
-            "merely PRESENT admits nothing, and hashing it does not read it")
+            verdict == W10_ADMIT and int(rep.get("n_failed") or 0) == 0
+            and not (rep.get("failed_gates") or []), where,
+            f"verdict={verdict!r} n_failed={rep.get('n_failed')!r} "
+            f"failed_gates={(rep.get('failed_gates') or [])[:3]}")
+    f.check("the_w10_report_was_written_by_a_lane_that_did_not_produce_the_bytes",
+            rep.get("independent_of_generator") is True, where,
+            "a report that imported the generator is the generator's opinion of itself")
+
+    # THE SELF-HASH. A report that could be edited after it was cited is a claim, not a
+    # result: the verdict could be swapped for a friendlier one, or the report re-attributed
+    # to a bundle it is not about.
+    body = {k: v for k, v in rep.items() if k != "report_sha256"}
+    f.check("the_w10_report_sha256_covers_its_own_content",
+            rep.get("report_sha256") == content_hash(body), where,
+            f"shipped {str(rep.get('report_sha256'))[:16]}…, its own content hashes to "
+            f"{content_hash(body)[:16]}…")
+    f.check("the_w10_gate_inventory_hash_covers_the_gates_it_lists",
+            rep.get("gate_inventory_sha256")
+            == content_hash(list(rep.get("gate_inventory") or [])), where, "")
+
+    _w10_bound(f, rep, condition, bundle_dir, rows_sha256, where)
+
+
+def _w10_bound(f, rep: dict[str, Any], condition: str, bundle_dir: str,
+               rows_sha256: Optional[str], where: str) -> None:
+    """WHICH bundle the report admitted. Checked against the bundle actually in hand."""
+    bound = rep.get("bound_artifact") or {}
+
+    f.check("the_w10_report_admitted_THIS_condition",
+            str(bound.get("condition")) == str(condition), where,
+            f"the report admits condition {bound.get('condition')!r}; this endpoint is "
+            f"{condition!r}. An admission of another condition admits something else")
+    if rows_sha256:
+        f.check("the_w10_report_admitted_THESE_arm_rows",
+                bound.get("arm_rows_sha256") == str(rows_sha256), where,
+                f"the report admits rows {str(bound.get('arm_rows_sha256'))[:16]}…; the rows "
+                f"on disk hash to {str(rows_sha256)[:16]}…. An admission of other rows is an "
+                "admission of other numbers")
+    f.check("the_w10_report_admitted_a_bundle_solved_under_the_authoritative_lock",
+            bound.get("solver_lock_sha256") == AUTHORITATIVE_ENV_LOCK_SHA256, where,
+            f"the report admits a bundle solved under "
+            f"{str(bound.get('solver_lock_sha256'))[:16]}…, not the authoritative "
+            f"{AUTHORITATIVE_ENV_LOCK_SHA256[:16]}…")
+
+    # THE ARTIFACT MAP. Every file the report says it admitted must still hash to what it
+    # hashed to when the report was written — otherwise the admission is of bytes that are
+    # no longer there.
+    amap = bound.get("artifact_sha256") or {}
+    f.check("the_w10_artifact_map_names_the_files_it_admitted", bool(amap), where,
+            "the report binds no artifact map; an admission that does not say WHICH bytes it "
+            "admitted cannot be checked against them")
+    drift = []
+    for rel, sha in sorted(amap.items()):
+        fp = os.path.join(bundle_dir, os.path.basename(str(rel)))
+        if not os.path.exists(fp):
+            drift.append(f"{rel}:absent")
+        elif file_sha256(fp) != sha:
+            drift.append(f"{rel}:changed")
+    f.check("every_file_the_w10_report_admitted_still_hashes_to_what_it_admitted",
+            not drift, where,
+            f"{drift[:4]}. The admission is of bytes that are no longer on disk")
 
 
 def _dedupe(f, rows: list[dict[str, Any]], where: str) -> dict[str, dict[str, Any]]:

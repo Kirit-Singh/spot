@@ -54,6 +54,7 @@ def verify_release(*, release_root: str, bundle_root: str,
                    expect_scorer_view_prefix: Optional[str] = None,
                    expect_scorer_projection_prefix: Optional[str] = None,
                    sign: bool = False,
+                   admission_out: Optional[str] = None,
                    producer_checkout: Optional[str] = None,
                    require_clean_checkout: bool = True,
                    env_lock: Optional[str] = None,
@@ -127,7 +128,8 @@ def verify_release(*, release_root: str, bundle_root: str,
         report = dict(report)
         report["external_verification_envelope"] = admission.write_envelope(
             report=report, inventory=inventory, docs=docs, bundle_root=bundle_root,
-            verifier_id=VERIFIER_ID, rules_id=rules.RULES_ID, id_len=RUN_ID_LEN)
+            verifier_id=VERIFIER_ID, rules_id=rules.RULES_ID, id_len=RUN_ID_LEN,
+            admission_out=admission_out)
     return report
 
 

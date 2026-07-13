@@ -464,6 +464,67 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert envelope["binds"]["producer_release_id"]
         assert envelope["binds"]["env_lock_sha256"] == FX.env_lock_sha256()
 
+    def test_the_admission_can_be_FILED_AT_THE_AGGREGATE_ROOT_leaving_the_native_root_intact(
+            self, producer_checkout, tmp_path):
+        """THE AGGREGATE'S SHAPE: read OUT/temporal (the producer's native root), write the
+        receipt at OUT/. The verifier still reads the native inventory and still writes
+        NOTHING into the producer's root — the path is not the binding, and the admission
+        still names the exact release it admits."""
+        import hashlib
+
+        sys.path.insert(0, _HERE)
+
+        release_root, bundle_root, lock, direct, w10 = _stage(producer_checkout, tmp_path)
+
+        # the aggregate root is the PARENT of the producer's native temporal root
+        agg_root = os.path.dirname(os.path.abspath(bundle_root))
+        admission = os.path.join(agg_root, "temporal_arm_external_admission.json")
+
+        def snapshot():
+            out = {}
+            for dirpath, _, names in os.walk(bundle_root):
+                for n in sorted(names):
+                    fp = os.path.join(dirpath, n)
+                    with open(fp, "rb") as fh:
+                        out[os.path.relpath(fp, bundle_root)] = \
+                            hashlib.sha256(fh.read()).hexdigest()
+            return out
+
+        before = snapshot()
+        assert "temporal_arm_release.json" in before      # the native inventory is READ
+
+        env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+        argv = [sys.executable, "-m", "verify_temporal_arms.cli",
+                "--stage1-release-root", release_root,
+                "--bundle-root", bundle_root,                 # the NATIVE producer root
+                "--admission-out", admission,                 # ...the AGGREGATE's root
+                "--producer-checkout", producer_checkout,
+                "--env-lock", lock, "--sign"]
+        for cond, path in direct.items():
+            argv += ["--direct-bundle", f"{cond}:{path}"]
+        for cond, path in w10.items():
+            argv += ["--w10-report", f"{cond}:{path}"]
+
+        proc = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=_W11_REPO)
+        assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-500:]
+        assert json.loads(proc.stdout)["verdict"] == "ADMIT"
+
+        # the receipt is at the AGGREGATE root...
+        assert os.path.exists(admission)
+        # ...the producer's native root is BIT-IDENTICAL, and gained nothing
+        after = snapshot()
+        assert after == before, "the verifier touched the producer's native root"
+        assert "temporal_arm_external_admission.json" not in after
+
+        # ...and the receipt still names the exact release it admits, from over there
+        with open(admission) as fh:
+            envelope = json.load(fh)
+        with open(os.path.join(bundle_root, "temporal_arm_release.json"), "rb") as fh:
+            inv_raw = fh.read()
+        assert envelope["binds"]["producer_release_raw_sha256"] == \
+            hashlib.sha256(inv_raw).hexdigest()
+        assert envelope["binds"]["producer_release_id"] == json.loads(inv_raw)["release_id"]
+
     def test_a_REJECT_is_a_nonzero_exit_code_from_the_production_cli(
             self, producer_checkout, tmp_path):
         """A rejected release is an exit code, not a log line an aggregate has to read."""
@@ -509,6 +570,9 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert c["writes"]["external_admission_file"] == schema.ENVELOPE_FILENAME
         assert c["writes"]["external_admission_schema"] == schema.SCHEMA_ENVELOPE
         assert c["writes"]["producer_bytes_modified"] is False
+        assert c["writes"]["producer_root_written_into"] is False
+        assert c["writes"]["override_flag"] == "--admission-out FILE"
+        assert c["writes"]["path_is_not_the_binding"] is True
         # what --w10-report must SAY
         req = c["w10_admission_document"]["required_fields"]
         assert req["admitted"] is True and req["self_admitted"] is False

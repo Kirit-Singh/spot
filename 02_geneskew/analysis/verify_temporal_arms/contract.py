@@ -53,12 +53,24 @@ def integration_contract() -> dict[str, Any]:
 
         # WHAT THIS LANE WRITES. Exactly one file, beside the inventory it admits. Nothing
         # the producer wrote is modified.
+        # WHAT THIS LANE WRITES. Exactly one file. WHERE it lands is the caller's choice —
+        # WHAT IT SAYS is not. The verifier reads the producer's native root and writes
+        # NOTHING into it, wherever the receipt is filed.
         "writes": {
             "external_admission_file": schema.ENVELOPE_FILENAME,
             "external_admission_schema": schema.SCHEMA_ENVELOPE,
-            "written_at": "the same bundle_root, beside the producer inventory",
+            "default_location": "beside the producer inventory, under --bundle-root",
+            "override_flag": "--admission-out FILE",
+            "aggregate_usage": ("--bundle-root OUT/temporal  (the producer's NATIVE root, "
+                                "read-only) with --admission-out "
+                                "OUT/temporal_arm_external_admission.json"),
             "producer_bytes_modified": False,
+            "producer_root_written_into": False,
             "report_id_rule": "sha256(canonical JSON excluding report_id)",
+            # THE PATH IS NOT THE BINDING, and it never was. The admission binds the
+            # producer's release id and the exact inventory bytes, so a reader holding the
+            # receipt can get back to the release it admits from anywhere in the tree.
+            "path_is_not_the_binding": True,
         },
 
         # WHAT --w10-report MUST BE. Not the producer's in-bundle verification.json (that

@@ -195,8 +195,12 @@ def _endpoints(condition: str):
 # admission are exactly what the production chain hands the temporal producer.
 # --------------------------------------------------------------------------- #
 DIRECT_BUNDLE_SCHEMA = "spot.stage02_direct_arm_bundle.v1"
-W10_VERIFIER_ID = "spot.stage02_direct_arm.independent_verifier.v1"
-W10_REPORT_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
+# THE REAL W10 CONTRACT. Its native report — self-hashed, gate-listing, artifact-binding —
+# and it carries NO ``admitted`` boolean. Requiring one would be requiring a field that does
+# not exist, and would refuse a sound report.
+W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
+W10_REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
+VERIFICATION_SLOT_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
 
 
 def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
@@ -256,21 +260,76 @@ def stage_direct_bundles(root) -> tuple[dict[str, str], dict[str, str]]:
                 "gene_universe_sha256": "6" * 64,
                 "environment_lock": {"sha256": arm_env.AUTHORITATIVE_ENV_LOCK_SHA256},
                 "arm_rows_sha256": rows_sha}}, fh)
-        # the producer's PLACEHOLDER — never a verdict
+        # the producer's PLACEHOLDER SLOT — an empty slot, never a verdict
         with open(os.path.join(d, "verification.json"), "w") as fh:
-            json.dump({"schema_version": W10_REPORT_SCHEMA, "arm_bundle_run_id": run_id,
-                       "verifier_id": None, "verdict": "pending_independent_verification",
+            json.dump({"schema_version": VERIFICATION_SLOT_SCHEMA,
+                       "arm_bundle_run_id": run_id, "verifier_id": None,
+                       "verdict": "pending_independent_verification",
                        "admitted": False, "self_admitted": False}, fh)
         bundles[cond] = d
 
-        # the SEPARATE independent admission
+        # the SEPARATE independent admission, in W10's NATIVE shape
         w10 = os.path.join(root, f"w10_{cond}.json")
         with open(w10, "w") as fh:
-            json.dump({"schema_version": W10_REPORT_SCHEMA, "arm_bundle_run_id": run_id,
-                       "verifier_id": W10_VERIFIER_ID, "verdict": "admit",
-                       "admitted": True, "self_admitted": False}, fh)
+            fh.write(canonical.canonical_json(
+                w10_report(d, cond, run_id, rows_sha)))
         reports[cond] = w10
     return bundles, reports
+
+
+def w10_report(bundle_dir: str, condition: str, run_id: str, rows_sha: str,
+               *, mutate=None, legacy_booleans: bool = True) -> dict[str, Any]:
+    """W10's NATIVE report: self-hashed, gate-listing, artifact-binding, and carrying NO
+    ``admitted`` boolean — because it ships the evidence a boolean would have stood for."""
+    from direct.hashing import content_hash
+    from direct.temporal.arms import arm_env
+
+    artifact_sha256 = {}
+    for name in sorted(os.listdir(bundle_dir)):
+        fp = os.path.join(bundle_dir, name)
+        if os.path.isfile(fp):
+            with open(fp, "rb") as fh:
+                artifact_sha256[name] = canonical.sha256_hex(fh.read())
+
+    gates = ["the arm rows hash to what the bundle declares",
+             "the producer did not admit its own output",
+             "the target identity is independently derived"]
+    body = {
+        "schema_version": W10_REPORT_SCHEMA,
+        "verifier_id": W10_VERIFIER_ID,
+        "spec_sha256": "c4" * 32,
+        "verifier_code_sha256": "d4" * 32,
+        "independent_of_generator": True,
+        "generator_modules_not_imported": ["direct.arm_bundle"],
+        "gate_inventory": gates,
+        "gate_inventory_sha256": content_hash(gates),
+        "bound_artifact": {
+            "arm_bundle_run_id": run_id,
+            "condition": condition,
+            "solver_lock_sha256": arm_env.AUTHORITATIVE_ENV_LOCK_SHA256,
+            "arm_rows_sha256": rows_sha,
+            "artifact_sha256": artifact_sha256,
+        },
+        "gates": [{"gate": g, "passed": True, "detail": ""} for g in gates],
+        "n_gates": len(gates), "n_passed": len(gates), "n_failed": 0,
+        "failed_gates": [],
+        "verdict": "ADMIT",
+    }
+    if legacy_booleans:
+        # W5-SIDE COMPATIBILITY SHIM, and nothing more. W5's ``arm_direct_source`` still
+        # refuses a report carrying no ``admitted``/``self_admitted`` — fields W10's native
+        # report does not have and never had. That is the rc17 MISSING_W10 false refusal, and
+        # it is W5's to drop.
+        #
+        # THIS VERIFIER IGNORES THEM ENTIRELY. It validates the native report's own evidence:
+        # the self-hash, the gate list, and the artifact map. The shim exists only so the
+        # producer can still build a release for the suite to verify, and it must live INSIDE
+        # the signed body — a key bolted on afterwards is exactly what the self-hash exists to
+        # catch, and adding one would make an honest report look tampered.
+        body.update({"admitted": True, "self_admitted": False})
+    if mutate:
+        mutate(body)
+    return dict(body, report_sha256=content_hash(body))
 
 
 def stage_bundles(release_root: str, out_root, direct=None, w10=None,
