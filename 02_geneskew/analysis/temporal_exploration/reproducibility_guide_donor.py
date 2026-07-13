@@ -2,16 +2,21 @@
 Reuses the frozen compute_guide_support/compute_donor_support + disposition state fns.
 Reads main balanced_skew from the already-saved per-condition CSVs (avoids re-loading DE_stats)."""
 import sys, json, os, gc
-sys.path.insert(0,"/home/tcelab/spot_stage2/02_geneskew/analysis")
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ANALYSIS_ROOT = REPO_ROOT / "02_geneskew" / "analysis"
+sys.path.insert(0, str(ANALYSIS_ROOT))
 import numpy as np, pandas as pd
 from direct import config, io_data, disposition as D
 from direct import masks as M
 import direct.run_screen as RS
-DS="/home/tcelab/datasets/marson2025_gwcd4_perturbseq"
-BYGUIDE=f"{DS}/GWCD4i.DE_stats.by_guide.h5mu"; BYDONORS=f"{DS}/GWCD4i.DE_stats.by_donors.h5mu"
-SGRNA=f"{DS}/suppl_tables/sgrna_library_metadata.suppl_table.csv"
-REG="/home/tcelab/spot_stage2/reg/stage01_program_registry.json"
-OUT="/home/tcelab/spot_stage2/work/temporal"
+DS=Path(os.environ.get("SPOT_DATA_ROOT", REPO_ROOT / "data"))
+RUN_ROOT=Path(os.environ.get("SPOT_RUN_ROOT", REPO_ROOT / "outputs"))
+BYGUIDE=str(DS / "GWCD4i.DE_stats.by_guide.h5mu"); BYDONORS=str(DS / "GWCD4i.DE_stats.by_donors.h5mu")
+SGRNA=str(DS / "suppl_tables" / "sgrna_library_metadata.suppl_table.csv")
+REG=os.environ.get("SPOT_STAGE1_REGISTRY", str(REPO_ROOT / "01_programs" / "app" / "data" / "stage01_program_registry.json"))
+OUT=RUN_ROOT / "temporal"; OUT.mkdir(parents=True, exist_ok=True)
 programs,_,_=io_data.load_registry(REG)
 A,B=programs["th1_like"],programs["treg_like"]
 pa={"panel":A["panel_ensembl"],"control":A["control_ensembl"],"sign":+1}
@@ -27,7 +32,7 @@ def masks_for(targets):
         mk[t]=m
     return mk
 for cond in ["Stim8hr","Stim48hr"]:
-    main=pd.read_csv(f"{OUT}/th1_to_treg_{cond}.csv"); main["target"]=main["target"].astype(str)
+    main=pd.read_csv(OUT / f"th1_to_treg_{cond}.csv"); main["target"]=main["target"].astype(str)
     targets=main["target"].tolist(); mk=masks_for(targets)
     mainbal={r.target:r.balanced for r in main.itertuples()}
     print(f"[{cond}] targets={len(targets)} — loading guide support…", flush=True)
@@ -40,7 +45,7 @@ for cond in ["Stim8hr","Stim48hr"]:
         recs.append(dict(target=t,cond=cond,guide_agree=g["guide_sign_agreement"],n_guides_eval=g["n_guides_evaluated"],
             donor_agree=d["donor_pair_agreement"],n_donor_pairs=len([x for x in dper[t] if x is not None])))
     rep=pd.DataFrame(recs); out=main.merge(rep,on="target")
-    out.to_csv(f"{OUT}/reproducibility_{cond}.csv",index=False)
+    out.to_csv(OUT / f"reproducibility_{cond}.csv",index=False)
     elig=out[out.state.str.startswith("eligible")]
     print(f"  [{cond}] eligible n={len(elig)} | guide_agree={int((elig.guide_agree==True).sum())} ({100*(elig.guide_agree==True).mean():.1f}%) | donor_agree={int((elig.donor_agree==True).sum())} ({100*(elig.donor_agree==True).mean():.1f}%) | BOTH={int(((elig.guide_agree==True)&(elig.donor_agree==True)).sum())}")
     for g in ["TBX21","SOCS1","PPP1R14B","CMIP","GATB","SUCLA2","PDIA3","IL21R"]:

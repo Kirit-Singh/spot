@@ -1,12 +1,18 @@
 import sys, json, os
-sys.path.insert(0, "/home/tcelab/spot_stage2/02_geneskew/analysis")
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ANALYSIS_ROOT = REPO_ROOT / "02_geneskew" / "analysis"
+sys.path.insert(0, str(ANALYSIS_ROOT))
 import numpy as np, pandas as pd
 from direct import config, io_data, projection as proj, disposition as D
 from direct import masks as M
-REG="/home/tcelab/spot_stage2/reg/stage01_program_registry.json"
-DE="/home/tcelab/datasets/marson2025_gwcd4_perturbseq/GWCD4i.DE_stats.h5ad"
-SGRNA="/home/tcelab/datasets/marson2025_gwcd4_perturbseq/suppl_tables/sgrna_library_metadata.suppl_table.csv"
-OUT="/home/tcelab/spot_stage2/work/temporal"; os.makedirs(OUT, exist_ok=True)
+DATA_ROOT=Path(os.environ.get("SPOT_DATA_ROOT", REPO_ROOT / "data"))
+RUN_ROOT=Path(os.environ.get("SPOT_RUN_ROOT", REPO_ROOT / "outputs"))
+REG=os.environ.get("SPOT_STAGE1_REGISTRY", str(REPO_ROOT / "01_programs" / "app" / "data" / "stage01_program_registry.json"))
+DE=str(DATA_ROOT / "GWCD4i.DE_stats.h5ad")
+SGRNA=str(DATA_ROOT / "suppl_tables" / "sgrna_library_metadata.suppl_table.csv")
+OUT=RUN_ROOT / "temporal"; OUT.mkdir(parents=True, exist_ok=True)
 programs, registry_sha, reg = io_data.load_registry(REG)
 A, B = programs["th1_like"], programs["treg_like"]
 pa={"panel":A["panel_ensembl"],"control":A["control_ensembl"],"sign":+1}
@@ -33,12 +39,12 @@ def screen(cond):
             away_th1=ax["away_from_A"],toward_treg=ax["toward_b"],state=state,
             eligible=state.startswith("eligible"),ok=ok,ontarget_sig=bool(meta["ontarget_significant"][i]),
             n_cells=float(meta["n_cells_target"][i])))
-    df=pd.DataFrame(rows); df.to_csv(f"{OUT}/th1_to_treg_{cond}.csv",index=False)
+    df=pd.DataFrame(rows); df.to_csv(OUT / f"th1_to_treg_{cond}.csv",index=False)
     print(f"[{cond}] n={len(df)} eligible={int(df.eligible.sum())} ontarget_sig={int(df.ontarget_sig.sum())} states={df.state.value_counts().to_dict()}")
     return df
 d8,d48=screen("Stim8hr"),screen("Stim48hr")
 m=d8.merge(d48,on=["target","symbol"],suffixes=("_8","_48")); m["diff"]=m.balanced_48-m.balanced_8
-m.to_csv(f"{OUT}/merged.csv",index=False)
+m.to_csv(OUT / "merged.csv",index=False)
 elig=m[m.eligible_8&m.eligible_48].copy()
 def top(df,col,n=15,asc=False):
     return df.sort_values(col,ascending=asc)[["symbol","balanced_8","balanced_48","diff","n_cells_48"]].head(n).round(4).to_string(index=False)
@@ -50,5 +56,5 @@ print("\n--- effect GROWS toward Treg 8->48 ---\n",top(elig,"diff"))
 print("\n--- effect SHRINKS 8->48 ---\n",top(elig,"diff",asc=True))
 json.dump({"n_elig_both":int(len(elig)),"corr_8_48":round(corr,3),"registry_sha8":registry_sha[:8],
   "n8":int(len(d8)),"n48":int(len(d48)),"elig8":int(d8.eligible.sum()),"elig48":int(d48.eligible.sum())},
-  open(f"{OUT}/summary.json","w"),indent=2)
+  open(OUT / "summary.json","w"),indent=2)
 print("\nDONE")

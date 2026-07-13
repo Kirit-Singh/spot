@@ -5,7 +5,7 @@
 This is the *scoring-tier* reproduction entry point that closes external-review blocker
 S1-B1: the previously committed tooling either rebuilt the historical v2 40k table
 (``reproduce.sh``) or started *downstream* of scoring from an already-existing parquet
-(``reproduce_t8.sh`` / ``_t8_staging/dcompute_tcefold.py`` only *read + hash* the parquet).
+(``reproduce_t8.sh`` / the staged D-compute helper only *read + hash* the parquet).
 Nothing recomputed the v3 scores from ``.X``. This script does exactly that and proves it
 reproduces the frozen canonical hash byte-for-byte.
 
@@ -40,7 +40,7 @@ Recovered scoring method (frozen; see STAGE1_REMEDIATION_METHOD.md + registry v3
   ``sensitivity_lanes[0].activation_predictor``; the fit is ``np.polyfit(S_act, raw_ctl, 1)``
   over all 396k cells, frozen so the residual is deterministic).
 
-Canonicalization (reused EXACTLY from _t8_staging/dcompute_tcefold.py)
+Canonicalization (reused EXACTLY from the staged D-compute helper)
 ---------------------------------------------------------------------
 Stable argsort on barcode; per row ``barcode\tdonor\tcondition\t`` followed by each score
 field formatted ``f"{round(float(v),5):.5f}"``, tab-joined, trailing ``\n``; incremental sha256.
@@ -49,15 +49,15 @@ Score field order = the 11 primary ``{program_id}_score`` in registry order, the
 
 Run
 ---
-Locally requires the pinned h5ad (sha 2edc6d31...). On tcefold::
+Requires the pinned h5ad (sha 2edc6d31...) on a configured compute host::
 
     conda activate scvi_gpu
     python gen_stage1_scores_v3.py \
-        --h5ad /home/tcelab/cs_scratch/ntc_clustered.h5ad \
+        --h5ad "${SPOT_DATA_ROOT}/ntc_clustered.h5ad" \
         --registry 01_programs/app/data/stage01_program_registry_v3.json \
         --controls 01_programs/app/data/stage01_controls_v3.csv \
-        --out /tmp/stage01_scores_full.recomputed.parquet \
-        --reference-parquet /home/tcelab/cs_scratch/stage01_scores_full.parquet
+        --out "${SPOT_RUN_ROOT}/stage01_scores_full.recomputed.parquet" \
+        --reference-parquet "${SPOT_RUN_ROOT}/stage01_scores_full.parquet"
 
 Exit status 0 iff the canonical hash matches the frozen target.
 """
@@ -203,7 +203,7 @@ def score_field_order(primary: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Canonicalization (byte-identical to _t8_staging/dcompute_tcefold.py)
+# Canonicalization (byte-identical to the staged D-compute helper)
 # ---------------------------------------------------------------------------
 def canonical_scores_sha256(barcode, donor, condition, scores, fields) -> str:
     order = np.argsort(barcode, kind="stable")

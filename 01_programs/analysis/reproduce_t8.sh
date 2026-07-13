@@ -7,13 +7,13 @@
 #   3. pytest test_stage1_t8.py         -> mutation / forgery suite (naive + fully-resealed attacks)
 #   4. gen_full_release_verification.py -> outer full-release attestation binding code/env/inputs/outputs
 #
-# Heavy step (tcefold conda env 'scvi_gpu'; needs the pinned 396k parquet + frozen coordinates) —
+# Heavy step (configured compute host + solver-locked environment; needs the pinned 396k parquet + frozen coordinates) —
 # run once to (re)generate the recovered/built v3 artifacts + receipt into _t8_staging/:
-#   scp _t8_staging/dcompute_tcefold.py + registry_v3 + coords + controls/bins + summary_candidate  tcefold:~/spot_t8_dcompute/
-#   ssh tcefold '~/miniconda3/envs/scvi_gpu/bin/python ~/spot_t8_dcompute/dcompute_tcefold.py'
+#   scp _t8_staging/dcompute_tcefold.py + registry_v3 + coords + controls/bins + summary_candidate  "${SPOT_COMPUTE_HOST}:${SPOT_RUN_ROOT}/spot_t8_dcompute/"
+#   ssh "${SPOT_COMPUTE_HOST}" '"${SPOT_PYTHON}" "${SPOT_RUN_ROOT}/spot_t8_dcompute/dcompute_tcefold.py"'
 #   -> reproduces scores_canonical_content_sha256 43c4296d, builds the v3 overlay (proves overlay==full),
 #      regenerates the by_program_condition summary, verifies controls+coefficients; emit receipt.json.
-#   Then: capture the solver lock  ->  ssh tcefold 'conda list --explicit -n scvi_gpu' (+ in-env pip freeze).
+#   Then capture the solver lock from the configured environment (+ in-environment pip freeze).
 #
 # This never writes the v2 registry / v2 overlay and never deploys the v3 overlay (overlay_release_ok=false).
 set -euo pipefail

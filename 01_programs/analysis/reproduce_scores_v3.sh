@@ -8,7 +8,7 @@
 # Usage:
 #   ./reproduce_scores_v3.sh                 # --fetch the pinned h5ad from Hugging Face
 #   SPOT_H5AD=/path/ntc_clustered.h5ad ./reproduce_scores_v3.sh   # use a local h5ad
-# On tcefold:  conda activate scvi_gpu && ./reproduce_scores_v3.sh
+# On the configured compute host: activate the solver-locked environment, then run this script.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA="${HERE}/../app/data"

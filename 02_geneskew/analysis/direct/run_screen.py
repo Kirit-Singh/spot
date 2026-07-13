@@ -1,6 +1,6 @@
 """Stage-2 primary orchestrator: build the direct measured perturbation screen.
 
-Runs on tcedirector (reads the pinned DE_stats artifacts). Emits, under
+Runs on the configured analysis host (reads the pinned DE_stats artifacts). Emits, under
 ``<out_root>/<contrast_id>/``: axis.json, stage01_selection.json,
 input_manifest.json, masks.parquet, screen.parquet, guide_support.parquet,
 donor_support.parquet, cell_support.parquet (stub), provenance.json,

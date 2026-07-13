@@ -20,14 +20,13 @@ Five stage folders, each `inputs/ outputs/ analysis/ + README`:
 `CLAUDE.md LICENSE README.md` at root. `outputs/` is gitignored (generated artifacts).
 
 ## Compute
-- **Claude Science** runs on **tcedirector** (dev host) and is the per-stage analytical
-  engine. It **SSHes into `tcefold`** for heavy jobs — more cores/RAM + GPU/AVX2 — when a
-  stage outgrows tcedirector (e.g. loading cell-level h5ad past ~31 GB RAM, GPU UMAP).
-- The **NAS** (`/mnt/tcenas/datasets`, NFS, shared by both hosts) is slow (~35 MB/s,
-  seek-bound) — copy/subsample to local disk for iterative work; never depend on a live
-  NFS stream. Big processed files live local on tcedirector (`~/datasets/…`); raw
-  cell-level on the NAS.
-- The Mac is a thin SSH client.
+- **Claude Science** runs on the configured analysis host (`SPOT_CONTROLLER_HOST`) and
+  is the per-stage analytical engine. It can delegate heavy jobs to
+  `SPOT_COMPUTE_HOST` when a stage needs more memory, cores or accelerator support.
+- Public inputs are rooted at `SPOT_DATA_ROOT`; generated work belongs under
+  `SPOT_RUN_ROOT`. Copy or stream data according to the selected host's storage profile;
+  never encode a hostname, mount point or user directory in a scientific artifact.
+- The local workstation is an orchestration client, not part of scientific identity.
 
 ## Data rules
 - **Never invent a statistic** — every number comes from a real tool/DB (scanpy / DESeq2
@@ -43,7 +42,8 @@ Five stage folders, each `inputs/ outputs/ analysis/ + README`:
 
 ## Claude Science specialists
 Each stage = one CS project with tailored agent-context (domain + permitted databases /
-skills). CS calls DBs where possible; heavy compute → tcefold via SSH. The paper is the
+skills). CS calls databases where possible; heavy compute uses the configured compute
+host. The paper is the
 *reference*, CS *complements* it (tag genes 'paper' vs 'CS-complement'). Each specialist
 writes its locked artifact + provenance to the stage `outputs/`.
 

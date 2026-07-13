@@ -8,8 +8,9 @@ Stages 3 (drug link) and 4 (PK/PD) are **not yet built** — see "Not evaluated 
 ## Links
 - **Repo / PR:** github.com/Kirit-Singh/spot — branch `stage1-remediation`, **PR #16**
   (https://github.com/Kirit-Singh/spot/pull/16). Head commit `9e5ced2`.
-- **Live workbench:** http://100.117.50.59:8347/ (Stage-1 CD4 UMAP). Served by the
-  hardened `deploy/serve_static.py`; the previous unsafe `serve.py` is retired.
+- **Live workbench:** `http://<SPOT_HOST>:8347/` (Stage-1 CD4 UMAP; deployment-specific
+  host supplied by the operator). Served by the hardened `deploy/serve_static.py`; the
+  previous unsafe `serve.py` is retired.
 - **Assignment (verbatim):** `docs/spot_buildout_plan.md`. **Shared schemas:** `schemas/README.md`.
 
 ## What is done (by wave)

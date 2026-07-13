@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CP3a independent verifier (generator != verifier). Runs on tcefold against the pinned
+"""CP3a independent verifier (generator != verifier). Runs on the compute host against the pinned
 inputs. It does NOT import gen_gate_constituents; it reimplements the frozen statistics and:
 
   1. verifies the manifest content-hash, row_count, per-subcheck completeness grids, and

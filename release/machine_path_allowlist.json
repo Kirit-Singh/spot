@@ -1,0 +1,179 @@
+{
+  "schema": "spot.release.machine_path_allowlist.v1",
+  "entries": [
+    {
+      "path": "01_programs/analysis/REVIEW_MEMO.md",
+      "line_sha256": "afa56bf7a098b91f4ec9786ea5beada9a72b13d3b1303be6ea9298b8d51ed91c",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated adversarial memo records the exact stale deployment path that was reviewed."
+    },
+    {
+      "path": "01_programs/analysis/STAGE1_EXTERNAL_REVIEW_CS.md",
+      "line_sha256": "ef121a209237a32a0710da3ae2b13f595802370ce3247ffd3856d1d7fdb23911",
+      "classification": "immutable_historical_provenance",
+      "reason": "Historical external-review record identifies the host on which its checks ran."
+    },
+    {
+      "path": "01_programs/analysis/STAGE1_REMEDIATION_REVIEW_CS.md",
+      "line_sha256": "7fd151e4b049a2dc6fd2ddd73bf911db7f76f04fc6221598f80b3f0519d21d49",
+      "classification": "immutable_historical_provenance",
+      "reason": "Historical remediation review records the stale artifact location it found."
+    },
+    {
+      "path": "01_programs/analysis/STAGE1_REMEDIATION_REVIEW_CS.md",
+      "line_sha256": "08c95981738090ae1a17b2ede9c32a4fc94d265634be6eb7b7536ea2a977098e",
+      "classification": "immutable_historical_provenance",
+      "reason": "Historical remediation review records the stale workdir involved in its finding."
+    },
+    {
+      "path": "01_programs/analysis/gen_full_release_verification.py",
+      "line_sha256": "f1973e5bbe70a3a13d581958440e14aa8a8e42635ee028f4ae9e6ff281e699c0",
+      "classification": "frozen_release_attestation",
+      "reason": "Generator documentation names the D-compute provenance bound into the existing attestation."
+    },
+    {
+      "path": "01_programs/analysis/gen_full_release_verification.py",
+      "line_sha256": "536195b6f40f62806254c381fbf0a6d7e4ef61d9eb4ac5ef74943a0f872642dd",
+      "classification": "frozen_release_attestation",
+      "reason": "Generator reproduces the exact frozen compute-environment provenance string."
+    },
+    {
+      "path": "01_programs/analysis/gen_full_release_verification.py",
+      "line_sha256": "28697f5e6c3c269fe3508383d6850446c2519197ae15fd22d6ea64471485be36",
+      "classification": "frozen_release_attestation",
+      "reason": "Generator reproduces the exact frozen constituent-evidence provenance string."
+    },
+    {
+      "path": "01_programs/analysis/stage01_full_release_verification.json",
+      "line_sha256": "cd7dc417bd3c629a5823c95f945e6f87a7473bcf2a28bbd93803b93e4c26e23a",
+      "classification": "frozen_release_attestation",
+      "reason": "Hash-bound release attestation records where the scoring environment ran."
+    },
+    {
+      "path": "01_programs/analysis/stage01_full_release_verification.json",
+      "line_sha256": "c78c8c6c6cc57c40e97327931dc1f10ff66bccb33026f59611e155eb24f30786",
+      "classification": "frozen_release_attestation",
+      "reason": "Hash-bound release attestation records where constituent evidence was reconstructed."
+    },
+    {
+      "path": "01_programs/analysis/stage1_t8_derive.py",
+      "line_sha256": "e78b55b0d4ed244ee0e1820182364aac942a34ec420c74143438be990978bb6f",
+      "classification": "frozen_release_attestation",
+      "reason": "Hash-bound derivation source preserves the exact constituent-compute provenance."
+    },
+    {
+      "path": "01_programs/analysis/stage1_t8_derive.py",
+      "line_sha256": "ec205c1c85baccfa16ca4348eb7f259c0362fe694c251b2757136ed12811e5a8",
+      "classification": "frozen_release_attestation",
+      "reason": "Hash-bound derivation source preserves its original verification-host note."
+    },
+    {
+      "path": "01_programs/analysis/verify_stage1_t8.py",
+      "line_sha256": "841612f0f5dce67c1007bdba7635b5dd048a98b1f2574d78a090a9edcc9924d3",
+      "classification": "frozen_release_attestation",
+      "reason": "Hash-bound verifier source preserves its original constituent-compute provenance."
+    },
+    {
+      "path": "01_programs/analysis/stage01_solver_lock.txt",
+      "line_sha256": "829352f40e51ff97b041e0ff78f6a687299c0793e9d1ca515948d0811e84f2f3",
+      "classification": "solver_or_build_provenance",
+      "reason": "Frozen solver lock header identifies the environment from which the lock was captured."
+    },
+    {
+      "path": "01_programs/analysis/stage01_solver_lock.txt",
+      "line_sha256": "35340492b29158198eb3101aab8b06b9d4cad33f085dd729fa253cc8bde0c9f4",
+      "classification": "solver_or_build_provenance",
+      "reason": "Package manager emitted this immutable build-origin URL in the solver lock."
+    },
+    {
+      "path": "01_programs/analysis/requirements.txt",
+      "line_sha256": "8103fef5778a039823d324c5098c48eafb4a793e3a188eb7ce99167205a9dd72",
+      "classification": "solver_or_build_provenance",
+      "reason": "Protected requirements lock records the exact host environment that reproduced the scorer."
+    },
+    {
+      "path": "01_programs/analysis/test_effect_universe_portability.py",
+      "line_sha256": "0fa2b77b38dd993a1ace43e5bfeee30d808efb13d7d39a63be1fded557ebceee",
+      "classification": "verifier_guard_literal",
+      "reason": "Negative-test literals enumerate machine-specific fragments that the artifact must reject."
+    },
+    {
+      "path": "docs/HANDOVER_temporal_th1_treg.md",
+      "line_sha256": "ceb92f0308e4dcb2556c8af70a8a5d62ddb2c5c29cba5c3f96463e261a74ca97",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated temporal handover records the host on which the exploration ran."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "c6a803821d52954c6cdecf9d2b334cef89a1334959c45af1e450f6ab5566e05a",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records the compute host used for the original lock."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "ffde856f2afb8038b4f1b1b7d78da046431dd4e827e013ccee266ac5ef3dc014",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records where the equivalent-method amendment ran."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "ba6bc18adf554ae86562adf69716311255dd7b5b513a14486bbc18600c15fc97",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records the original chunked-compute design."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "9253335eae7a658dbfed52e0794fe6430d926ac04028662559ce7f0da65c670b",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records the original proceed-order."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "e2fb2c41cb18d4502b3ee908c79d9613dd9a1d58d6f763628c13bb3055f78b1e",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records its original audit environment."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "56b6c85ad72e12dc76594ff4deda02ba56f513916c247b17d9cbacd2dfa71b84",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records its original environment architecture."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "a2f765f618ea7c4f701f666e23d7ed50a49b79a506e10acc5e2d007b2228e636",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records the original compute task."
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-11-stage1-continuous-v3-lock.md",
+      "line_sha256": "5f22ccffd6e7baf4e3730b6607f3c3f8378467734a7bb3002214a92c6409e8d0",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated execution plan records the original lock sequence."
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md",
+      "line_sha256": "aa863f431042eb8b682e5f586690f4961304807a116b53df76e9b7895812f0f4",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated design snapshot records the original two-host architecture."
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md",
+      "line_sha256": "8fcf417fdf46e5946119aad9316aa83fb6924f93946d492feeb172f10a1ec8b6",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated design snapshot records the original host resource limit."
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md",
+      "line_sha256": "f45e260454d586e2d71fa80c9588a9fab3eace5c6af84a84304962666f3c3ed8",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated design snapshot records the original data mount and performance observation."
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md",
+      "line_sha256": "f59a71cc29b7e4eac0e74a4a6b426df4c3837abf39ac6347b745e089aee87ab8",
+      "classification": "immutable_historical_provenance",
+      "reason": "Dated design snapshot records the original compute-offload design."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 """CP3b — load the constituent evidence table and aggregate it to typed subchecks.
 
-Definedness is authoritative per-constituent (from the tcefold recompute), never inferred
+Definedness is authoritative per-constituent (from the frozen compute-host recompute), never inferred
 from a numeric zero or a metric name. A subcheck passes ONLY if every expected constituent
 stratum is present and defined and meets its comparator:
 

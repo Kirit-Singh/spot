@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CP3a — emit the per-constituent evidence table for the Stage-1 T7b MEASUREMENT gates.
 
-Runs on tcefold (scvi_gpu) against the pinned v3.0.1 inputs. It reuses the EXACT recovered
+Runs in the solver-locked compute environment against the pinned v3.0.1 inputs. It reuses the EXACT recovered
 T7b statistics (spearman: average ranks, finite-only, None if <2 finite or rank std 0;
 iqr: Q75-Q25 numpy-linear, None if empty) so every derived aggregate reproduces the frozen
 `stage01_validation.json` byte-for-byte — but instead of collapsing to a lossy extremum it

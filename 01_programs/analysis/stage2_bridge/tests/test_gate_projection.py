@@ -24,7 +24,7 @@ MIRROR = os.path.join(STAGING, "stage01_gate_constituents_v1.json.gz")
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(MIRROR),
-    reason="constituent evidence not staged (run gen_gate_constituents.py on tcefold + pull to _release_staging)")
+    reason="constituent evidence not staged (run gen_gate_constituents.py on the compute host + pull to _release_staging)")
 
 # our subcheck_id -> frozen (gate_id, metric)
 SUBCHECK_TO_FROZEN = {

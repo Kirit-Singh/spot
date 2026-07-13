@@ -11,8 +11,10 @@ unauthenticated POST /rerun mutation endpoint.
 """
 import os, re, sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
-DIST = os.environ.get("SPOT_DIST", "/home/tcelab/spot-dist")
+DEFAULT_DIST = Path(__file__).resolve().parents[1] / "01_programs" / "app"
+DIST = os.environ.get("SPOT_DIST", str(DEFAULT_DIST))
 PORT = int(os.environ.get("SPOT_PORT", "8347"))
 # Only these content extensions may be served; everything else 404s.
 ALLOW_EXT = {".html", ".css", ".js", ".json", ".svg", ".png", ".ico", ".woff2", ".webp", ".map", ".txt"}

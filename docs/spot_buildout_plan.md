@@ -196,7 +196,7 @@ Agents must communicate their artifact contracts before integration. Do not allo
 
 The current live host at:
 
-  http://100.117.50.59:8347/
+  `http://<SPOT_HOST>:8347/`
 
 has an unsafe serving boundary.
 

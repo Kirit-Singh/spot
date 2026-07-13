@@ -35,7 +35,8 @@ and reverse-engineer the transcriptional changes that influence those fates."
   Th2/Th17/Tfh/Th9-like, differentiation programs) via `score_genes` (panel mean − expression-bin-matched
   control mean, SEED=12345). **No categorical cell-type/fate calls, no p/q.** A frozen `program_registry`
   (`registry_sha256=1ac9f6b2…`) carries the exact panel + control genes. Th9 is `stage2_selectable=false`
-  (IL9/SPI1 absent from the effect universe). Live at http://100.117.50.59:8347/.
+  (IL9/SPI1 absent from the effect universe). Deployment URL:
+  `http://<SPOT_HOST>:8347/` (host supplied by the operator).
 - **Stage 2 (direct primary):** a **target-masked DE-space projection** of each measured CRISPRi
   knockdown onto the frozen Th1-like/Treg-like scorers → `away_from_A`, `toward_b`, `balanced_skew`;
   every target emitted with full disposition; **no p/q** (`inference_status=not_calibrated`); mask

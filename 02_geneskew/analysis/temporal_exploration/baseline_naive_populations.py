@@ -1,5 +1,12 @@
-import json, numpy as np, pandas as pd
-d=json.load(open("/home/tcelab/spot-dist/data/stage01_umap_seed.json"))
+import json, os
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+APP_ROOT = Path(os.environ.get("SPOT_APP_ROOT", REPO_ROOT / "01_programs" / "app"))
+d=json.load(open(APP_ROOT / "data" / "stage01_umap_seed.json"))
 df=pd.DataFrame(d["cells"])
 uni=d["meta"].get("scoring_universe_n") or 396000
 SCALE=uni/len(df)

@@ -1,4 +1,4 @@
-"""HDF5 loaders for the pinned DE_stats artifacts (runs on tcedirector).
+"""HDF5 loaders for the pinned DE_stats artifacts (runs on the configured analysis host).
 
 Only ``run_screen`` imports this module; the pure core never touches h5py. All
 joins between the main matrix and the guide/donor support matrices are by

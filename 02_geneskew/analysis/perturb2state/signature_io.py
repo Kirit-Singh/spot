@@ -1,6 +1,6 @@
 """IO-heavy broad target-signature construction from the 396k NTC cells.
 
-Runs on tcedirector. Reads the median-normalised log1p NTC expression matrix
+Runs on the configured analysis host. Reads the median-normalised log1p NTC expression matrix
 (var index = symbols), reproduces the frozen Stage-1 A/B/activation scores,
 standardises them within donor, builds donor-stratified pseudobulk quantile
 bins, and fits the per-gene donor-aware WLS to produce the away/toward/combined

@@ -1,4 +1,4 @@
-"""Perturb2State orchestrator (plan §6.2-§6.8). Runs on tcedirector.
+"""Perturb2State orchestrator (plan §6.2-§6.8). Runs on the configured analysis host.
 
 Emits under ``<out_root>/<contrast_id>/perturb2state/``:
   target_signatures.parquet, coefficients.parquet, reconstruction_metrics.parquet,

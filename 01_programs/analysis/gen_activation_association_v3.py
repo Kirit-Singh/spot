@@ -10,9 +10,11 @@ are reported PLUS the pooled CD4-CTL activation-adjusted residual (``cd4_ctl_lik
 activation axis ``diff_activated_score`` is included with its trivial self-association (≡1) for completeness.
 
 Emits ``stage01_activation_association_v1.json`` (schema spot.stage01_activation_association.v1).
-Run on tcefold (has the parquet + pyarrow):
-    python gen_activation_association_v3.py --parquet /home/tcelab/cs_scratch/stage01_scores_full.parquet \
-        --out stage01_activation_association_v1.json
+Run on a host with the staged parquet and pyarrow::
+
+    python gen_activation_association_v3.py \
+        --parquet "${SPOT_RUN_ROOT}/stage01_scores_full.parquet" \
+        --out "${SPOT_RUN_ROOT}/stage01_activation_association_v1.json"
 """
 from __future__ import annotations
 
