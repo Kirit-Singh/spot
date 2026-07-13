@@ -111,6 +111,12 @@ GENE_SETS_FILE = "gene_sets.source.json"
 ADMIT, REFUSE = "ADMIT", "REFUSE"                 # byte-exact tokens the aggregate maps
 PASS, FAIL = "pass", "fail"
 
+# The inferential firewall: a pathway arm is a rank position, never a test statistic. These
+# substrings (normalized) are forbidden at ANY depth of ANY shipped document — a resealed
+# forgery that self-consistently carries a q-value is still refused.
+FORBIDDEN_INFERENTIAL = ("p_value", "q_value", "empirical_q", "pvalue", "qvalue", "p_adj",
+                         "q_adj", "padj", "adjusted_p", "fdr", "false_discovery")
+
 # THE NAMED GATE INVENTORY — the exact list the envelope carries.
 G_RELEASE_ANCHOR = "the_condition_and_source_universe_comes_from_the_authoritative_stage1_release"
 G_TOPOLOGY = "the_bundles_are_exactly_the_authoritative_condition_x_source_grid_once_each"
@@ -119,11 +125,14 @@ G_ONE_RELEASE = "one_scorer_view_and_stage1_that_match_the_release_pins_and_the_
 G_DISTINCT = "every_cell_has_a_distinct_nonnull_run_id_and_distinct_nonnull_arm_record_bytes"
 G_SOURCE = "each_bundle_agrees_with_itself_about_which_condition_x_source_cell_it_is"
 G_GENE_SETS = "method_gene_sets_binds_two_pinned_sources_agrees_with_provenance_one_universe"
+G_UNIVERSE = "the_gene_set_universes_match_the_authoritative_native_run_binding_universe_fields"
+G_FIREWALL = "no_p_q_fdr_inferential_key_at_any_depth_of_any_shipped_document"
 G_BUNDLE_ADMITTED = "every_cell_has_one_independent_admitting_report_with_the_exact_gate_inventory"
 G_INVENTORY_PRESENT = "the_producer_inventory_is_present_pending_native_rederives_and_binds_this"
 G_INVENTORY_BYTES = "the_producer_inventory_binds_the_exact_bytes_that_landed_on_disk"
 GATE_INVENTORY = (G_RELEASE_ANCHOR, G_TOPOLOGY, G_REOPEN, G_ONE_RELEASE, G_DISTINCT, G_SOURCE,
-                  G_GENE_SETS, G_BUNDLE_ADMITTED, G_INVENTORY_PRESENT, G_INVENTORY_BYTES)
+                  G_GENE_SETS, G_UNIVERSE, G_FIREWALL, G_BUNDLE_ADMITTED, G_INVENTORY_PRESENT,
+                  G_INVENTORY_BYTES)
 
 
 def _check(name, ok, detail=""):
@@ -200,6 +209,8 @@ def verify(*, bundle_dirs: list[str], inventory_path: Optional[str],
     checks.append(_source(bundles, auth_src_set))
     gene_check, gene_artifacts = _gene_sets(bundles, auth_src_set, bundle_report_paths)
     checks.append(gene_check)
+    checks.append(_universe(bundles))
+    checks.append(_firewall(bundles, bundle_report_paths))
     checks.append(_verify_bundle_reports(bundle_report_paths, bundles))
     inv_present, inv_bytes, inv_release_id, inv_raw = _verify_inventory(
         inventory_path, bundles, auth_cond_set, pins)
@@ -274,6 +285,12 @@ def _reopen_bundles(bundle_dirs):
             "method_gene_sets": ((doc.get("method") or {}).get("gene_sets")),
             "prov_gene_sets": ((binding.get("method") or {}).get("gene_sets")),
             "top_level_gene_sets": "gene_sets" in doc,
+            # the AUTHORITATIVE universe identities the science computed against, bound into the
+            # run id at the top of run_binding — the gene-set block must match THESE.
+            "rb_effect_universe_sha256": binding.get("gene_universe_sha256"),
+            "rb_target_universe_sha256": binding.get("target_universe_sha256"),
+            "rb_n_effect_universe_genes": binding.get("n_effect_universe_genes"),
+            "rb_n_target_universe_genes": binding.get("n_target_universe_genes"),
             "arm_bundle_hashes": _hashes(bp), "provenance_hashes": _hashes(pp),
             "file_hashes": {name: _hashes(os.path.join(d, name)) for name in BOUND_BUNDLE_FILES
                             if os.path.exists(os.path.join(d, name))},
@@ -410,6 +427,78 @@ def _gene_sets(bundles, auth_src_set, report_paths):
     return _check(G_GENE_SETS, bool(bundles) and not bad, "; ".join(bad[:4])), artifacts
 
 
+def _universe(bundles):
+    """The gene-set block's universes MUST equal the authoritative native run_binding universe
+    fields — hash, count — for BOTH the effect (readout) and target (perturbation) universe, and
+    the roles/namespaces must be declared. A fake effect+target universe resealed self-consistently
+    into method.gene_sets across all six still disagrees with run_binding.{gene,target}_universe.
+    """
+    bad = []
+    eff_auth, tgt_auth = set(), set()
+    for b in bundles:
+        mgs = b["method_gene_sets"]
+        if not isinstance(mgs, dict):
+            bad.append(f"{b['dir']}: no method.gene_sets to bind universes from")
+            continue
+        pairs = (("effect_universe_sha256", "rb_effect_universe_sha256", "effect hash"),
+                 ("target_universe_sha256", "rb_target_universe_sha256", "target hash"),
+                 ("n_effect_universe_genes", "rb_n_effect_universe_genes", "effect count"),
+                 ("n_target_universe_genes", "rb_n_target_universe_genes", "target count"))
+        for mkey, bkey, label in pairs:
+            if b[bkey] is None:
+                bad.append(f"{b['dir']}: run_binding declares no authoritative {label}")
+            elif mgs.get(mkey) != b[bkey]:
+                bad.append(f"{b['dir']}: method.gene_sets {label} {mgs.get(mkey)!r} != the "
+                           f"authoritative run_binding {b[bkey]!r}")
+        for role in ("effect_universe_role", "target_universe_role", "gene_id_namespace_effect",
+                     "target_id_namespace"):
+            if not mgs.get(role):
+                bad.append(f"{b['dir']}: the gene-set binding declares no {role}")
+        eff_auth.add(b["rb_effect_universe_sha256"])
+        tgt_auth.add(b["rb_target_universe_sha256"])
+    if bundles and len(eff_auth) > 1:
+        bad.append("the release binds more than one authoritative effect universe")
+    if bundles and len(tgt_auth) > 1:
+        bad.append("the release binds more than one authoritative target universe")
+    return _check(G_UNIVERSE, bool(bundles) and not bad, "; ".join(bad[:4]))
+
+
+def _forbidden_hits(obj, path):
+    """Every key at any depth whose normalized name carries a p/q/FDR alias."""
+    hits = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            norm = str(k).lower().replace("-", "_").replace(" ", "_")
+            if any(tok in norm for tok in FORBIDDEN_INFERENTIAL):
+                hits.append(f"{path}.{k}")
+            hits += _forbidden_hits(v, f"{path}.{k}")
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            hits += _forbidden_hits(v, f"{path}[{i}]")
+    return hits
+
+
+def _firewall(bundles, report_paths):
+    """No inferential key at any depth of the shipped arm bundle, run binding / provenance, or
+    the independent reports — resealed or not. The pathway lane ships rank evidence, not tests."""
+    hits = []
+    for b in bundles:
+        for name in (BUNDLE_FILE, PROVENANCE_FILE):
+            p = os.path.join(b["dir"], name)
+            if os.path.exists(p):
+                try:
+                    hits += _forbidden_hits(_json(p), f"{os.path.basename(b['dir'])}/{name}")
+                except Exception:                       # noqa: BLE001, S112
+                    continue
+    for p in (report_paths or []):
+        if os.path.exists(p):
+            try:
+                hits += _forbidden_hits(_json(p), os.path.basename(p))
+            except Exception:                           # noqa: BLE001, S112
+                continue
+    return _check(G_FIREWALL, not hits, "; ".join(sorted(set(hits))[:5]))
+
+
 def _attested_gene_sets(report_paths):
     """run_id -> the gene_sets.source.json raw hash the per-bundle report says it read."""
     out = {}
@@ -494,6 +583,8 @@ def _one_report(p, want_ids, prov_by_id):
     att = (rep.get("bound_artifacts") or {}).get(rid) or {}
     if att.get(PROVENANCE_FILE) != prov_by_id.get(rid):
         return None, "attested provenance bytes are not the ones on disk"
+    if not att.get(GENE_SETS_FILE):
+        return None, "the report does not attest gene_sets.source.json (mandatory)"
     return rid, None
 
 

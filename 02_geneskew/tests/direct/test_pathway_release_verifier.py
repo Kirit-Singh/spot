@@ -77,8 +77,9 @@ def _binding_block(src, gs_raw, effect=EFFECT_U, target=TARGET_U):
 
 def _bundle(root, cond, src, *, scorer=SCORER_VIEW, code=None, release_scorer=SCORER_CANON,
             method=METHOD, env_lock=LOCK, records=None, doc_source=None, gene_tag=None,
-            effect=EFFECT_U, target=TARGET_U, mgs_override=None, bundle_mgs="_",
-            top_level_gene_sets=False, no_method=False):
+            effect=EFFECT_U, target=TARGET_U, rb_effect=None, rb_target=None,
+            rb_n_effect=100, rb_n_target=50, mgs_override=None, bundle_mgs="_",
+            top_level_gene_sets=False, no_method=False, arm_extra=None, binding_extra=None):
     tag = gene_tag or src
     gs_doc = _gene_doc(tag)
     gs_bytes = (json.dumps(gs_doc, indent=2, sort_keys=True) + "\n").encode()
@@ -94,17 +95,25 @@ def _bundle(root, cond, src, *, scorer=SCORER_VIEW, code=None, release_scorer=SC
         "environment_lock": {"sha256": env_lock, "status": "locked"},
         "records_sha256": records or hashlib.sha256(f"{cond}:{src}".encode()).hexdigest(),
         "method": {"gene_sets": mgs},                # the copy the run id is taken over
+        # the AUTHORITATIVE native universe identities (the science computed against these)
+        "gene_universe_sha256": rb_effect if rb_effect is not None else effect,
+        "target_universe_sha256": rb_target if rb_target is not None else target,
+        "n_effect_universe_genes": rb_n_effect, "n_target_universe_genes": rb_n_target,
     }
+    if binding_extra:
+        binding.update(binding_extra)
     full = R.content_sha256(binding)
     rid = full[:VR.RUN_ID_LEN]
     d = os.path.join(root, rid)
     _write(os.path.join(d, VR.PROVENANCE_FILE),
            {"pathway_run_id": rid, "pathway_run_sha256": full, "run_binding": binding})
     # the REAL native pathway arm_bundle shape (bundle_normalize contract) + method.gene_sets
+    arm = {"pathway_arm_key": f"PROG|increase|{cond}|{src}",
+           "records_sha256": binding["records_sha256"]}
+    if arm_extra:
+        arm.update(arm_extra)
     doc = {"schema_version": "spot.stage02_pathway_arm_bundle.v1", "pathway_run_id": rid,
-           "condition": cond, "source": doc_source or src,
-           "arms": [{"pathway_arm_key": f"PROG|increase|{cond}|{src}",
-                     "records_sha256": binding["records_sha256"]}]}
+           "condition": cond, "source": doc_source or src, "arms": [arm]}
     if not no_method:
         doc["method"] = {"gene_sets": (mgs if bundle_mgs == "_" else bundle_mgs)}
     if top_level_gene_sets:
@@ -130,16 +139,20 @@ def _release_file(path, conds=CONDITIONS, srcs=RELEASE_SOURCES, scorer=SCORER_CA
     return path
 
 
-def _report(path, d, *, verdict="admit", n_failed=0, gates=None, run_ids=None, tamper=False):
+def _report(path, d, *, verdict="admit", n_failed=0, gates=None, run_ids=None, tamper=False,
+            attest_gene=True, report_extra=None):
     rid = _run_id(d)
     gate_list = BUNDLE_GATES if gates is None else gates
-    att = {rid: {VR.PROVENANCE_FILE: _raw(os.path.join(d, VR.PROVENANCE_FILE)),
-                 VR.GENE_SETS_FILE: _raw(os.path.join(d, VR.GENE_SETS_FILE))}}
+    att = {rid: {VR.PROVENANCE_FILE: _raw(os.path.join(d, VR.PROVENANCE_FILE))}}
+    if attest_gene:
+        att[rid][VR.GENE_SETS_FILE] = _raw(os.path.join(d, VR.GENE_SETS_FILE))
     body = {"schema_version": VR.BUNDLE_REPORT_SCHEMA, "verifier_id": VR.BUNDLE_VERIFIER_ID,
             "generator_is_not_verifier": True, "fail_closed": True, "n_bundles": 1,
             "n_conditions": 1, "run_ids": [rid] if run_ids is None else run_ids,
             "bound_artifacts": att, "verdict": verdict, "n_failed": n_failed,
             "gates": [{"check": g, "status": "pass"} for g in gate_list]}
+    if report_extra:
+        body.update(report_extra)
     sha = hashlib.sha256(
         json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if tamper:
@@ -358,9 +371,49 @@ class TestTheGeneSetSources:
     def test_two_effect_universes_across_the_release_is_REFUSED(self, tmp_path):
         cells = [(c, s) for c in CONDITIONS for s in SOURCES]
         root = str(tmp_path / "pathway")
-        dirs = [_bundle(root, c, s, effect=("aa" * 32 if i == 0 else EFFECT_U))
+        dirs = [_bundle(root, c, s, effect=("aa" * 32 if i == 0 else EFFECT_U),
+                        rb_effect=("aa" * 32 if i == 0 else EFFECT_U))
                 for i, (c, s) in enumerate(cells)]
         assert VR.G_GENE_SETS in _failed(_verify(_rel(tmp_path, dirs)))
+
+
+class TestTheUniverseCrossBinding:
+    def test_a_RESEALED_fake_effect_and_target_universe_across_all_six_is_REFUSED(self, tmp_path):
+        # both method.gene_sets copies agree and are the SAME across all six, but they disagree
+        # with the authoritative run_binding.{gene,target}_universe_sha256 the run id is over.
+        rel = _build(tmp_path, effect="f1" * 32, target="f2" * 32,
+                     rb_effect=EFFECT_U, rb_target=TARGET_U)
+        assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+    def test_a_universe_GENE_COUNT_that_disagrees_with_run_binding_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, rb_n_effect=999)          # method says 100; run_binding says 999
+        assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+    def test_a_missing_universe_role_is_REFUSED(self, tmp_path):
+        block = _binding_block("reactome", "b" * 64)
+        del block["effect_universe_role"]
+        rel = _build(tmp_path, mgs_override=block)
+        assert VR.G_UNIVERSE in _failed(_verify(rel))
+
+
+class TestTheInferentialFirewall:
+    def test_a_RESEALED_q_value_in_the_run_binding_is_REFUSED(self, tmp_path):
+        # the run id re-derives over the binding that carries it — self-consistent, still refused
+        rel = _build(tmp_path, binding_extra={"empirical_q_value": 0.01})
+        res = _verify(rel)
+        assert res["verdict"] == VR.REFUSE and VR.G_FIREWALL in _failed(res)
+
+    def test_a_nested_p_value_in_the_arm_bundle_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, arm_extra={"stats": {"p_value": 0.5}})
+        assert VR.G_FIREWALL in _failed(_verify(rel))
+
+    def test_a_FDR_alias_in_an_independent_report_is_REFUSED(self, release):
+        # the report's self-hash still holds (the key is in the hashed body): only the firewall
+        _report(release["reports"][0], release["dirs"][0], report_extra={"fdr_threshold": 0.05})
+        assert VR.G_FIREWALL in _failed(_verify(release))
+
+    def test_the_honest_release_carries_no_inferential_key(self, release):
+        assert VR.G_FIREWALL not in _failed(_verify(release))
 
 
 # =========================================================================== #
@@ -378,6 +431,11 @@ class TestEveryCellIsIndependentlyAdmitted:
 
     def test_a_REJECTING_report_blocks_the_release(self, release):
         _report(release["reports"][0], release["dirs"][0], verdict="reject", n_failed=1)
+        assert VR.G_BUNDLE_ADMITTED in _failed(_verify(release))
+
+    def test_a_report_that_does_NOT_attest_gene_sets_source_is_REFUSED(self, release):
+        # a resealed deletion of the gene-set attestation: the report is otherwise valid
+        _report(release["reports"][0], release["dirs"][0], attest_gene=False)
         assert VR.G_BUNDLE_ADMITTED in _failed(_verify(release))
 
     def test_a_TRUNCATED_gate_inventory_is_REFUSED(self, release):
