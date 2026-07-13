@@ -118,14 +118,18 @@ def enrichment_arms(*, arm_rows: list[dict[str, Any]], bundle: dict[str, Any],
 def convergence_artifact(*, bundle: dict[str, Any],
                          signatures: dict[str, dict[str, float]],
                          condition: str, source: str,
-                         readout_universe_sha256: str) -> dict[str, Any]:
+                         readout_universe_sha256: str,
+                         pairwise_workers: int = convergence.DEFAULT_PAIRWISE_WORKERS,
+                         pair_chunk_size: int = convergence.DEFAULT_PAIR_CHUNK_SIZE,
+                         ) -> dict[str, Any]:
     """The ONE convergence claim for this (condition, source). Referenced, never copied.
 
     It carries no program and no desired_change, because it depends on neither: it is a
     statement about which perturbations move the transcriptome together, and that does not
     change with the direction somebody wishes a program would go.
     """
-    pairs = convergence.pairwise_within_sets(bundle, signatures)
+    pairs = convergence.pairwise_within_sets(
+        bundle, signatures, workers=pairwise_workers, chunk_size=pair_chunk_size)
     sets = convergence.converge_sets(bundle, signatures, pairs)
     doc = {
         "schema_version": CONVERGENCE_SCHEMA,

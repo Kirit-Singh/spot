@@ -33,6 +33,7 @@ from typing import Any
 from . import arm_bundle as ab
 from . import (
     config,
+    convergence,
     emit,
     envlock,
     gate,
@@ -119,7 +120,11 @@ def build_pathway_arms(args) -> dict[str, Any]:
     # THE ONE convergence claim for this (condition, source) — no program, no direction.
     conv = pathway_arms.convergence_artifact(
         bundle=bundle, signatures=signatures, condition=cond, source=source,
-        readout_universe_sha256=gene_universe["sha256"])
+        readout_universe_sha256=gene_universe["sha256"],
+        pairwise_workers=getattr(
+            args, "convergence_workers", convergence.DEFAULT_PAIRWISE_WORKERS),
+        pair_chunk_size=getattr(
+            args, "convergence_chunk_size", convergence.DEFAULT_PAIR_CHUNK_SIZE))
 
     doc = pathway_arms.build(condition=cond, source=source, view=view, bundle=bundle,
                              arm_rows=arm_rows, convergence_doc=conv)
@@ -295,6 +300,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--signature-matrix-root", required=True,
                     help="the SHARED per-condition signature artifacts (Step 0). This bundle "
                          "references them and ships no signature bytes of its own.")
+    ap.add_argument(
+        "--convergence-workers", type=int,
+        default=convergence.DEFAULT_PAIRWISE_WORKERS,
+        help="ordered fork workers for independent within-pathway signature pairs; "
+             "scientific bytes are invariant and the default remains serial")
+    ap.add_argument(
+        "--convergence-chunk-size", type=int,
+        default=convergence.DEFAULT_PAIR_CHUNK_SIZE,
+        help="contiguous sorted pair records per worker task; execution-only")
     ap.add_argument("--out-root", required=True)
     return ap
 

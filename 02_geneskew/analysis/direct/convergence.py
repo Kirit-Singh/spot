@@ -62,6 +62,7 @@ global component anywhere in this module for one to hide in.
 from __future__ import annotations
 
 import math
+import multiprocessing as mp
 from typing import Any, Optional
 
 # v2, not v1: convergence is now the induced intra-pathway component, not a global one.
@@ -94,6 +95,21 @@ SINGLE_TARGET_SUPPORT = "single_target_support"
 
 FLOAT_DECIMALS = 6
 ROUNDING_RULE = "half_even_6dp"
+
+# Execution only: changing these does not change the statistic, its order, or its bytes.
+# ``fork`` is required because the real signature dictionary is several GiB and pickling it
+# into workers would both duplicate the scientific input and erase the speedup.  Production
+# runs on Linux; callers elsewhere retain the serial default and fail closed if they request
+# multiprocessing on a platform without fork.
+DEFAULT_PAIRWISE_WORKERS = 1
+DEFAULT_PAIR_CHUNK_SIZE = 500
+PAIRWISE_EXECUTION_ID = "spot.stage02.convergence.ordered_fork_pair_chunks.v1"
+
+_PAIRWISE_SIGNATURES: Optional[dict[str, dict[str, float]]] = None
+
+
+class ConvergenceExecutionError(ValueError):
+    """The requested execution topology cannot preserve the frozen computation."""
 
 
 def cosine_on_shared(vec_a: dict[str, float],
@@ -138,8 +154,33 @@ def pairwise(signatures: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
     return out
 
 
+def _pair_record(pair: tuple[str, str],
+                 signatures: dict[str, dict[str, float]]) -> dict[str, Any]:
+    """One frozen pair record, shared by serial and process execution."""
+    a, b = pair
+    sim, n_shared = cosine_on_shared(signatures[a], signatures[b])
+    return {
+        "target_a": a, "target_b": b,
+        "similarity": sim,
+        "n_shared_unmasked_genes": n_shared,
+        "supportive": sim is not None and sim >= SIMILARITY_THRESHOLD,
+        "similarity_metric": SIMILARITY_METRIC,
+        "method_id": METHOD_ID,
+    }
+
+
+def _pair_chunk(pairs: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    """Fork worker. The signatures are inherited read-only; they are never pickled."""
+    if _PAIRWISE_SIGNATURES is None:
+        raise ConvergenceExecutionError(
+            "ordered pair worker has no inherited signature dictionary")
+    return [_pair_record(pair, _PAIRWISE_SIGNATURES) for pair in pairs]
+
+
 def pairwise_within_sets(bundle: dict[str, Any],
-                         signatures: dict[str, dict[str, float]]
+                         signatures: dict[str, dict[str, float]], *,
+                         workers: int = DEFAULT_PAIRWISE_WORKERS,
+                         chunk_size: int = DEFAULT_PAIR_CHUNK_SIZE,
                          ) -> list[dict[str, Any]]:
     """Only the pairs a gene set can actually stand on: BOTH endpoints in the same set.
 
@@ -158,18 +199,38 @@ def pairwise_within_sets(bundle: dict[str, Any],
             for b in measured[i + 1:]:
                 wanted.add((a, b))
 
-    out = []
-    for a, b in sorted(wanted):
-        sim, n_shared = cosine_on_shared(signatures[a], signatures[b])
-        out.append({
-            "target_a": a, "target_b": b,
-            "similarity": sim,
-            "n_shared_unmasked_genes": n_shared,
-            "supportive": sim is not None and sim >= SIMILARITY_THRESHOLD,
-            "similarity_metric": SIMILARITY_METRIC,
-            "method_id": METHOD_ID,
-        })
-    return out
+    if workers < 1:
+        raise ConvergenceExecutionError("pairwise workers must be >= 1")
+    if chunk_size < 1:
+        raise ConvergenceExecutionError("pair chunk size must be >= 1")
+
+    ordered = sorted(wanted)
+    if workers == 1 or len(ordered) <= 1:
+        return [_pair_record(pair, signatures) for pair in ordered]
+
+    if "fork" not in mp.get_all_start_methods():
+        raise ConvergenceExecutionError(
+            "parallel convergence requires multiprocessing start method 'fork'; "
+            "use workers=1 on this platform")
+
+    chunks = [ordered[i:i + chunk_size]
+              for i in range(0, len(ordered), chunk_size)]
+    n_processes = min(workers, len(chunks))
+    global _PAIRWISE_SIGNATURES
+    if _PAIRWISE_SIGNATURES is not None:
+        raise ConvergenceExecutionError(
+            "parallel convergence is already active in this process")
+    _PAIRWISE_SIGNATURES = signatures
+    try:
+        # map() returns in INPUT order. Each chunk is a contiguous slice of sorted pairs,
+        # and flattening therefore reproduces the serial record order byte-for-byte even
+        # when workers finish out of order.
+        ctx = mp.get_context("fork")
+        with ctx.Pool(processes=n_processes) as pool:
+            results = pool.map(_pair_chunk, chunks, chunksize=1)
+        return [record for chunk in results for record in chunk]
+    finally:
+        _PAIRWISE_SIGNATURES = None
 
 
 def induced_components(members: list[str],
