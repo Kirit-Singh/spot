@@ -195,6 +195,20 @@ def test_receipt_hardening(tmp_path, monkeypatch):
     with pytest.raises(S.SchedulerError):          # missing prerequisite is never silently omitted
         S._write_receipt(C, "U2", argv=["x"], inputs=[], outputs=[], prereqs=["NOPE"])
 
+    with pytest.raises(S.SchedulerError):          # missing declared INPUT -> refuse, not omit
+        S._write_receipt(C, "U3", argv=["x"], inputs=[str(tmp_path / "ghost_in")], outputs=[], prereqs=[])
+    with pytest.raises(S.SchedulerError):          # missing declared OUTPUT -> refuse, not omit
+        S._write_receipt(C, "U4", argv=["x"], inputs=[], outputs=[str(tmp_path / "ghost_out")], prereqs=[])
+
+    # three-condition shared-root evolution: bind an IMMUTABLE bundle dir; adding a SIBLING to the
+    # shared parent must NOT invalidate the receipt (this is the Direct per-condition fix)
+    root = tmp_path / "direct"; root.mkdir()
+    b_rest = root / "bundle_rest"; b_rest.mkdir(); (b_rest / "arms.parquet").write_text("rest")
+    S._write_receipt(C, "B.direct.Rest", argv=["python", "-m", "direct.run_arms", "--condition", "Rest"],
+                     inputs=[], outputs=[str(b_rest)], prereqs=[])
+    (root / "bundle_stim8").mkdir(); (root / "bundle_stim8" / "arms.parquet").write_text("stim8")
+    assert S.verify_receipt(C, "B.direct.Rest") is True     # Rest receipt stays valid after Stim8 added
+
 
 def test_preflight_refuses_over_a_tampered_stored_body(tmp_path):
     """Explicit re-preflight over a body-tampered stored manifest (declared scalar kept) must

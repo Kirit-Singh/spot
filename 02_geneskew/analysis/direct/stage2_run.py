@@ -281,13 +281,17 @@ def _write_receipt(cfg, name, *, argv, inputs, outputs, prereqs, extra=None):
     for q in prereqs:
         if not os.path.isfile(_receipt_path(cfg, q)):
             raise SchedulerError(f"receipt {name}: required prerequisite receipt {q!r} is missing")
+    for p in list(inputs) + list(outputs):
+        if not os.path.exists(p):
+            raise SchedulerError(f"receipt {name}: declared path {p!r} does not exist — cannot bind "
+                                 "(no silent omission)")
     rec = {
         "unit": name,
         "run_identity_sha256": json.load(open(identity_path(cfg)))["run_identity_sha256"],
         "argv": list(argv),                                  # the FULL executed argv, verbatim
         "argv_sha256": content_sha256(list(argv)),
-        "input_sha256": {p: _hash_path(p) for p in inputs if os.path.exists(p)},
-        "output_sha256": {p: _hash_path(p) for p in outputs if os.path.exists(p)},
+        "input_sha256": {p: _hash_path(p) for p in inputs},
+        "output_sha256": {p: _hash_path(p) for p in outputs},
         "prerequisite_receipt_sha256": {q: file_sha256(_receipt_path(cfg, q)) for q in prereqs},
     }
     if extra:
@@ -482,13 +486,15 @@ def bundle_args(cfg):
 def lane_direct(cfg):
     _phase("B direct")
     for cond in CONDITIONS:
-        run(f"direct:{cond}",
-            _py("run_arms", "--condition", cond, *bundle_args(cfg),
-                "--out-root", os.path.join(cfg.out, "direct")),
-            produces=[f"direct:{cond}"])
-        _write_receipt(cfg, f"B.direct.{cond}", argv=["run_arms", cond],
+        argv = _py("run_arms", "--condition", cond, *bundle_args(cfg),
+                   "--out-root", os.path.join(cfg.out, "direct"))
+        run(f"direct:{cond}", argv, produces=[f"direct:{cond}"])   # exact executed command
+        # bind the IMMUTABLE content-addressed bundle dir, NOT the shared mutable OUT/direct root
+        # (so the Rest receipt stays valid as Stim8hr/Stim48hr are added later)
+        bdir = direct_bundle_for(cfg, cond)
+        _write_receipt(cfg, f"B.direct.{cond}", argv=argv,
                        inputs=[cfg.de, cfg.sgrna, cfg.stage1_release],
-                       outputs=[os.path.join(cfg.out, "direct")], prereqs=["A.preflight"])
+                       outputs=[bdir], prereqs=["A.preflight"])
 
 
 def verify_direct_gate(cfg):
