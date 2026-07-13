@@ -187,9 +187,11 @@ def _selection_release(staged: dict) -> dict[str, Any]:
     """W5's NATIVE Stage-1 binding: the scorer view its arms actually stood on."""
     return {"registry_scorer_view_sha256":
                 staged["release"]["registry_scorer_view_canonical_sha256"],
-            # the PER-PROGRAM PROJECTION identity — null here would bind nothing
+            # (a) the SCALAR Stage-2-bound OVERALL projection identity (008c1da1)...
             "registry_scorer_projection_sha256":
                 staged["release"]["registry_scorer_projection_sha256"],
+            # ...and (b) the PER-PROGRAM map. Neither substitutes for the other.
+            "per_program_projection_sha256": dict(staged["projection"]),
             "programs_derived_from": "bound_stage1_v3_scorer_view",
             "effect_universe_sha256": _canon("FIXTURE-effect-universe")}
 

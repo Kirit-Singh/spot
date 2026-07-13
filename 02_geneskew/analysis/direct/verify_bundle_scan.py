@@ -145,7 +145,8 @@ def scan(*, bundles: list, bundles_root: str, programs: list, projection: dict,
                         f"{dict(list(recomputed_hits.items())[:3])}")
 
         # THE STAGE-1 IDENTITIES: present, non-null, and EXACTLY the release's own.
-        null_stage1 += W.stage1_bindings(prov, release, programs, bid)
+        null_stage1 += W.stage1_bindings(prov, release, programs, bid, projection)
+        null_stage1 += W.method_field(prov, lane, bid)
 
         binding = prov.get("run_binding") or {}
         codes.append((bid, R.content_sha256(B.code_binding(prov))))

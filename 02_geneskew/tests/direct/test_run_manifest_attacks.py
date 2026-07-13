@@ -1031,6 +1031,114 @@ class TestTheThreePostE122Blockers:
         assert doc["verdict"] == V.R.REJECT
         assert V.G_CODE in doc["failed_gates"]
 
+    def test_5_a_MISSING_per_program_projection_MAP_is_REFUSED(self, tmp_path):
+        """The scalar is one number over the whole view. It cannot see one program drift."""
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].pop(
+                   "per_program_projection_sha256"))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_5b_a_MISSING_SCALAR_projection_identity_is_REFUSED(self, tmp_path):
+        # ...and a correct map with no scalar is bound to a projection the release does
+        # not publish. Neither substitutes for the other.
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"registry_scorer_projection_sha256": None}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_5c_a_projection_map_with_the_WRONG_KEY_SET_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+
+        def drop_one(d):
+            m = d["run_binding"]["selection_release"]["per_program_projection_sha256"]
+            m.pop(sorted(m)[0])                      # 9 keys, not 10
+        _patch(run["temporal"][2], "temporal_provenance.json", drop_one)
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_5d_ONE_program_whose_projection_DRIFTED_is_REFUSED(self, tmp_path):
+        """The scalar still matches. Only the map can see this."""
+        run = F.complete_run(tmp_path)
+
+        def drift(d):
+            m = d["run_binding"]["selection_release"]["per_program_projection_sha256"]
+            m["treg_like"] = "e" * 64                # its panel/control/coefficients moved
+        _patch(run["temporal"][3], "temporal_provenance.json", drift)
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        # the SCALAR is untouched and still correct...
+        prov = json.load(open(os.path.join(run["temporal"][3],
+                                           "temporal_provenance.json")))
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        assert (prov["run_binding"]["selection_release"]
+                ["registry_scorer_projection_sha256"]
+                == rel["registry_scorer_projection_sha256"])
+        # ...and the run is still refused
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_6_stage2_inputs_is_EXACTLY_W5s_THREE_KEYS(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        prov = json.load(open(os.path.join(run["temporal"][0],
+                                           "temporal_provenance.json")))
+        inputs = prov["run_binding"]["stage2_inputs"]
+        assert set(inputs) == {"direct_method_version", "direct_config_sha256",
+                               "effect_source_sha256"}
+        # the two facts that must NOT be duplicated into it live in their own homes
+        assert prov["run_binding"]["temporal_method_sha256"]
+        assert prov["run_binding"]["selection_release"]["effect_universe_sha256"]
+
+    @pytest.mark.parametrize("smuggled", ["effect_universe_sha256",
+                                          "temporal_method_sha256"])
+    def test_6b_DUPLICATING_a_field_INTO_stage2_inputs_is_REFUSED(self, tmp_path,
+                                                                  smuggled):
+        # one fact, one home. A value duplicated into two places is a value that can
+        # disagree with itself, and then nothing says which one is the run.
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["stage2_inputs"].update({smuggled: "f" * 64}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_KEYED_PROVENANCE in doc["failed_gates"]
+
+    def test_6c_a_NULL_effect_universe_in_the_STAGE1_binding_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][1], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"].update(
+                   {"effect_universe_sha256": None}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_6d_a_NULL_temporal_method_in_its_OWN_field_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        _patch(run["temporal"][2], "temporal_provenance.json",
+               lambda d: d["run_binding"].update({"temporal_method_sha256": None}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
     def test_the_SELECTOR_CONDITION_ORDER_is_preserved_not_sorted(self, tmp_path):
         # Rest, Stim8hr, Stim48hr is TEMPORAL order. Sorting would give Rest, Stim48hr,
         # Stim8hr — which is a different sequence, and the release's order is the truth.

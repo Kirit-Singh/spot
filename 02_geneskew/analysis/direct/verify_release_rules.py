@@ -47,13 +47,57 @@ STAGE1_EXACT = {
     "registry_scorer_projection_sha256": "registry_scorer_projection_sha256",
 }
 
+# The effect universe lives in the STAGE-1 binding, not inside ``stage2_inputs`` — the
+# canonical inputs object is exactly three keys and nothing is duplicated into it.
+STAGE1_NONNULL = ("effect_universe_sha256",)
 
-def stage1_bindings(prov: Any, release: Any, admitted: list,
-                    bundle_id: str) -> list[str]:
-    """Every Stage-1 identity: PRESENT, NON-NULL, and EXACTLY the release's own."""
+# ...and the temporal method digest lives in its OWN explicit run_binding field, for the
+# same reason: one fact, one home. A value duplicated into two places is a value that can
+# disagree with itself.
+LANE_METHOD_FIELD = {"temporal": "temporal_method_sha256"}
+
+
+PROJECTION_MAP = "per_program_projection_sha256"
+
+
+def method_field(prov: Any, lane: str, bundle_id: str) -> list[str]:
+    """The lane's method digest, in its OWN explicit field. Never inside stage2_inputs."""
+    field = LANE_METHOD_FIELD.get(lane)
+    if not field:
+        return []
+    rb = (prov or {}).get("run_binding") or {}
+    if not rb.get(field):
+        return [f"{bundle_id}: run_binding.{field} is {rb.get(field)!r} — the method digest "
+                "is bound in its own explicit field, not duplicated into stage2_inputs"]
+    return []
+
+
+def stage1_bindings(prov: Any, release: Any, admitted: list, bundle_id: str,
+                    projection: Any = None) -> list[str]:
+    """Every Stage-1 identity: PRESENT, NON-NULL, and EXACTLY the release's own.
+
+    TWO PROJECTION BINDINGS, and NEITHER substitutes for the other:
+
+      * the SCALAR ``registry_scorer_projection_sha256`` — the Stage-2-bound OVERALL
+        projection identity the release publishes. It says WHICH projection was used;
+      * the ``per_program_projection_sha256`` MAP — one canonical hash per admitted program,
+        independently recomputed here from the staged scorer view's own records. It says
+        WHAT each program's projection actually IS.
+
+    A run can bind the right overall identity while a single program's panel, control or
+    coefficients have drifted, and the scalar would never notice — it is one number over the
+    whole view. Equally, a map with correct entries and the wrong scalar is bound to a
+    projection the release does not publish. So both are required, the map's KEY SET must be
+    exactly the admitted programs, and every value must match the recomputation.
+    """
     bad: list[str] = []
     rel = release or {}
     sel = ((prov or {}).get("run_binding") or {}).get("selection_release") or {}
+
+    for field in STAGE1_NONNULL:
+        if not sel.get(field):
+            bad.append(f"{bundle_id}: selection_release.{field} is {sel.get(field)!r} — "
+                       "the effect universe is bound HERE, not inside stage2_inputs")
 
     for field, rel_field in sorted(STAGE1_EXACT.items()):
         got, want = sel.get(field), rel.get(rel_field)
@@ -75,6 +119,27 @@ def stage1_bindings(prov: Any, release: Any, admitted: list,
                    f"admits {sorted(admitted)[:3]}…")
     if not adm.get("registry_scorer_view_sha256"):
         bad.append(f"{bundle_id}: program_admission.registry_scorer_view_sha256 is null")
+
+    # THE PER-PROGRAM PROJECTION MAP, re-derived. The scalar is one number over the whole
+    # view; it cannot see a single program's projection drift.
+    got_map = sel.get(PROJECTION_MAP)
+    if not isinstance(got_map, dict) or not got_map:
+        bad.append(f"{bundle_id}: selection_release.{PROJECTION_MAP} is {got_map!r} — the "
+                   "scalar projection identity cannot see a single program's projection "
+                   "drift, so the per-program map is required alongside it")
+    elif projection:
+        want_keys, got_keys = sorted(projection), sorted(str(k) for k in got_map)
+        if got_keys != want_keys:
+            bad.append(f"{bundle_id}: {PROJECTION_MAP} has {len(got_keys)} key(s); the "
+                       f"release admits {len(want_keys)} "
+                       f"(extra {sorted(set(got_keys) - set(want_keys))[:3]}, "
+                       f"missing {sorted(set(want_keys) - set(got_keys))[:3]})")
+        wrong = sorted(k for k in set(got_keys) & set(want_keys)
+                       if got_map[k] != projection[k])
+        if wrong:
+            bad.append(f"{bundle_id}: {PROJECTION_MAP} disagrees with the staged scorer "
+                       f"view for {wrong[:3]} — that program's projection is not the one "
+                       "the release publishes")
     return bad
 
 
