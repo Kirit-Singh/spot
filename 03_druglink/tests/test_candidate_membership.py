@@ -246,7 +246,10 @@ def test_MOVING_an_arm_from_observed_to_opposed_is_REFUSED(view):
     bad["tables"]["arm_summaries"][0]["arm_evidence_state"] = "opposed"
     with pytest.raises(cm.MembershipError) as exc:
         cm.check_view_membership(bad)
-    assert exc.value.gate == cm.GATE_TYPED_STATE_NOT_THE_EVIDENCE
+    # The STRICTER gate fires first, and should: exact-aggregate equality subsumes the old
+    # "is it one of the states" check. Both are refusals; the stronger one is the one that lands.
+    assert exc.value.gate in (cm.GATE_SUMMARY_STATE_NOT_THE_AGGREGATE,
+                              cm.GATE_TYPED_STATE_NOT_THE_EVIDENCE)
 
 
 @pytest.mark.parametrize("table", ["target_drug_edges", "arm_summaries"])
@@ -347,3 +350,85 @@ def test_TWO_summaries_for_one_candidate_and_arm_is_REFUSED(view):
     with pytest.raises(cm.MembershipError) as exc:
         cm.check_view_membership(bad)
     assert exc.value.gate == cm.GATE_DUPLICATE_SUMMARY
+
+
+# --------------------------------------------------------------------------- #
+# A SUMMARY STATE IS THE AGGREGATE — not merely one of the states its edges carry.
+# --------------------------------------------------------------------------- #
+def test_a_MIXED_STATE_forgery_is_REFUSED(view):
+    """The hole: `claimed_state in states` instead of `== wf.summary_state(states)`.
+
+    Duplicate an OPPOSED edge as OBSERVED, update the summary's edge_ids and n_edges so it
+    reconciles cleanly, and leave the claimed state `opposed`. The true aggregate is now
+    `conflicting` — THE SOURCES CONTRADICT EACH OTHER — but `opposed` is still a MEMBER of
+    {observed, opposed}, so it passed. A contradiction was displayed as a clean, one-sided finding.
+    """
+    bad = copy.deepcopy(view)
+    cid = _cands(bad)[0]["candidate_id"]
+    edges = bad["tables"]["target_drug_edges"]
+    src = next(e for e in edges
+               if e["candidate_id"] == cid and e["directional_evidence_status"] == "opposed")
+    twin = dict(src, edge_id=src["edge_id"][:-1] + "f",
+                directional_evidence_status="observed_perturbation")
+    edges.append(twin)
+    for s in bad["tables"]["arm_summaries"]:
+        if s["candidate_id"] == cid and s["arm_key"] == src["arm_key"]:
+            s["edge_ids"] = sorted(set(s["edge_ids"]) | {twin["edge_id"]})
+            s["n_edges"] = len(s["edge_ids"])          # reconciles; claimed state left as opposed
+
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_SUMMARY_STATE_NOT_THE_AGGREGATE
+
+
+def test_CONFLICTING_has_no_typed_column_and_is_never_silently_skipped(view):
+    """`if want is None: continue` is how `conflicting` walked through — the aggregate state has no
+    typed column, so the arm was checked against NOTHING. A contradiction between sources is a
+    finding in its own right; it must not be shown as a clean membership."""
+    import druglink.workflow as wf
+    assert wf.summary_state({"observed_perturbation", "opposed"}) == "conflicting"
+    assert "conflicting" not in cm.STATE_TO_FIELD, (
+        "if `conflicting` ever gains a typed column, this gate must be revisited deliberately — "
+        "not silently satisfied")
+
+    bad = copy.deepcopy(view)
+    cid = _cands(bad)[0]["candidate_id"]
+    edges = bad["tables"]["target_drug_edges"]
+    src = next(e for e in edges
+               if e["candidate_id"] == cid and e["directional_evidence_status"] == "opposed")
+    twin = dict(src, edge_id=src["edge_id"][:-1] + "f",
+                directional_evidence_status="observed_perturbation")
+    edges.append(twin)
+    for s in bad["tables"]["arm_summaries"]:
+        if s["candidate_id"] == cid and s["arm_key"] == src["arm_key"]:
+            s["edge_ids"] = sorted(set(s["edge_ids"]) | {twin["edge_id"]})
+            s["n_edges"] = len(s["edge_ids"])
+            s["arm_evidence_state"] = "conflicting"     # honest about the aggregate this time
+
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_CONFLICTING_HAS_NO_TYPED_COLUMN
+
+
+# --------------------------------------------------------------------------- #
+# EVERY FIELD A SUMMARY SERVES IS RE-DERIVED FROM ITS EDGES.
+# A field a consumer trusts and nobody re-derives is a field a forger owns.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("field,value", [
+    ("origin_type", "endpoint_pathway_context"),      # temporal -> pathway: was ADMITTED
+    ("n_observed_perturbation", 9),
+    ("n_opposed", 7),
+    ("observed_perturbation_support", False),
+])
+def test_a_summary_field_its_edges_do_not_produce_is_REFUSED(view, field, value):
+    """Downstream READS SUMMARIES. Reconciliation checked state, edge_ids/count and roles — so
+    `origin_type` could be flipped from `temporal_cross_time_measured` to
+    `endpoint_pathway_context` and it sailed through."""
+    bad = copy.deepcopy(view)
+    summary = bad["tables"]["arm_summaries"][0]
+    if field not in summary:
+        pytest.skip(f"the published summary does not serve {field!r}")
+    summary[field] = value
+    with pytest.raises(cm.MembershipError) as exc:
+        cm.check_view_membership(bad)
+    assert exc.value.gate == cm.GATE_SUMMARY_FIELD_NOT_THE_EDGES

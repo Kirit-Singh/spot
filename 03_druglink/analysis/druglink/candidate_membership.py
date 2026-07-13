@@ -41,6 +41,7 @@ here encodes an expectation of it.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Iterable, Mapping, Sequence
 
 from . import direction as dr
@@ -100,6 +101,12 @@ GATE_STALE_VOCABULARY = \
 GATE_TYPED_COLUMN_WRONG = \
     "an_active_arm_is_not_in_exactly_the_typed_column_its_edges_evidence_state_maps_to"
 GATE_DUPLICATE_SUMMARY = "two_arm_summaries_claim_one_candidate_and_arm"
+GATE_SUMMARY_STATE_NOT_THE_AGGREGATE = \
+    "an_arm_summarys_state_is_not_the_aggregate_of_the_states_its_edges_carry"
+GATE_CONFLICTING_HAS_NO_TYPED_COLUMN = \
+    "an_arms_edges_contradict_each_other_and_a_contradiction_has_no_typed_column"
+GATE_SUMMARY_FIELD_NOT_THE_EDGES = \
+    "an_arm_summary_serves_a_field_its_own_edges_do_not_produce"
 GATE_FOREIGN_PATHWAY_CONTEXT = \
     "a_shown_candidate_carries_pathway_context_the_selection_does_not_name"
 GATE_ROLE_NOT_THE_SELECTIONS = \
@@ -311,6 +318,21 @@ def check_view_membership(view: Mapping[str, Any]) -> None:
 # column is verified. `_check_typed_columns` now uses it.
 STATE_TO_FIELD: dict[str, str] = {state: field for field, state in MEMBERSHIP_FOR_STATE.items()}
 
+# Identity/context a summary SERVES and must therefore re-derive from its edges. A field a consumer
+# trusts and nobody re-derives is a field a forger owns.
+SUMMARY_FIELDS_FROM_EDGES: tuple[str, ...] = (
+    "origin_type", "origin_is_measured", "lane", "program_id", "desired_change",
+    "context", "from_condition", "to_condition", "condition",
+    "arm_context_sha256", "target_id", "target_id_namespace",
+)
+STATE_TO_COUNT: dict[str, str] = {
+    wf.OBSERVED_PERTURBATION: "n_observed_perturbation",
+    wf.INVERSE_DIRECTION_HYPOTHESIS: "n_inverse_direction_hypothesis",
+    wf.OPPOSED: "n_opposed",
+    wf.PATHWAY_HYPOTHESIS: "n_pathway_hypothesis",
+    wf.UNRESOLVED: "n_unresolved",
+}
+
 
 def _check_typed_columns(view: Mapping[str, Any], cand: Mapping[str, Any], cid: str) -> None:
     """Each active arm sits in EXACTLY the typed column its edges' evidence state maps to — and in
@@ -322,10 +344,19 @@ def _check_typed_columns(view: Mapping[str, Any], cand: Mapping[str, Any], cid: 
         by_arm.setdefault(str(e["arm_key"]), set()).add(str(e.get("directional_evidence_status")))
 
     for arm, states in sorted(by_arm.items()):
-        state = wf.summary_state(states) if hasattr(wf, "summary_state") else sorted(states)[0]
+        state = wf.summary_state(states)
         want = STATE_TO_FIELD.get(state)
         if want is None:
-            continue
+            # NEVER SILENTLY SKIP. `if want is None: continue` is how `conflicting` walked through:
+            # the aggregate state has no typed column, so the arm was checked against nothing at
+            # all. A contradiction is PRESERVED, not resolved (workflow.summary_state says so) —
+            # and it has no clean column to sit in, so it cannot be displayed as one. FAIL CLOSED.
+            _refuse(GATE_CONFLICTING_HAS_NO_TYPED_COLUMN,
+                    f"candidate {cid!r} arm {arm!r}: its edges carry {sorted(states)!r}, which "
+                    f"aggregate to {state!r} — a state with NO typed column. A contradiction "
+                    "between sources is a finding in its own right; it must not be shown as a "
+                    "clean membership, and it must not be silently skipped because the map has no "
+                    "entry for it.")
         for field in TYPED_MEMBERSHIP_FIELDS:
             present = arm in _keys(cand.get(field) or [])
             if field == want and not present:
@@ -403,12 +434,56 @@ def _reconcile(view: Mapping[str, Any], cid: str, selected_arms: Mapping[str, An
         # THE TYPED STATE IS THE EVIDENCE'S, not the summary's claim.
         states = {str(e.get("directional_evidence_status")) for e in group}
         claimed_state = str(summary.get("arm_evidence_state"))
-        if claimed_state not in states:
-            _refuse(GATE_TYPED_STATE_NOT_THE_EVIDENCE,
+        aggregate = wf.summary_state(states)
+
+        # EXACT EQUALITY WITH THE AGGREGATE — not membership of the state set.
+        #
+        # `claimed_state in states` was the hole. Duplicate an OPPOSED edge as OBSERVED, update the
+        # summary's edge_ids and n_edges so it reconciles, and leave the claimed state as
+        # `opposed`: the real aggregate is now `conflicting` (the sources CONTRADICT each other),
+        # but `opposed` is still A MEMBER of {observed, opposed}, so it passed. A contradiction was
+        # displayed as a clean, one-sided finding.
+        if claimed_state != aggregate:
+            _refuse(GATE_SUMMARY_STATE_NOT_THE_AGGREGATE,
                     f"candidate {cid!r} arm {arm!r}: the summary says {claimed_state!r}, but its "
-                    f"edges carry {sorted(states)!r}. Moving an arm from observed to opposed while "
-                    "the arm set and the hashes are resealed changes the SCIENCE and nothing else "
-                    "would have noticed.")
+                    f"edges carry {sorted(states)!r}, which aggregate to {aggregate!r}. A summary "
+                    "state that is merely ONE OF the states its edges carry lets a contradiction "
+                    "be shown as a clean finding.")
+
+        # EVERY FIELD THE SUMMARY SERVES IS RE-DERIVED FROM ITS EDGES.
+        #
+        # Reconciliation checked state, edge_ids/count and roles — so `origin_type` could be flipped
+        # from `temporal_cross_time_measured` to `endpoint_pathway_context` and it was ADMITTED.
+        # Downstream READS SUMMARIES. A field a consumer trusts and nobody re-derives is a field a
+        # forger owns. If a field cannot be re-derived from the edges, it does not belong on a
+        # served summary at all.
+        for field in SUMMARY_FIELDS_FROM_EDGES:
+            if field not in summary:
+                continue
+            values = {json.dumps(e.get(field), sort_keys=True) for e in group if field in e}
+            if len(values) == 1:
+                want = json.loads(next(iter(values)))
+                if summary.get(field) != want:
+                    _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
+                            f"candidate {cid!r} arm {arm!r}: the summary serves {field}="
+                            f"{summary.get(field)!r}, but its edges carry {want!r}.")
+
+        # The per-state COUNTS are the edges', not the summary's word for them.
+        for st, field in sorted(STATE_TO_COUNT.items()):
+            if field in summary:
+                want = sum(1 for e in group
+                           if str(e.get("directional_evidence_status")) == st)
+                if int(summary.get(field) or 0) != want:
+                    _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
+                            f"candidate {cid!r} arm {arm!r}: the summary says {field}="
+                            f"{summary.get(field)!r}; its edges give {want}.")
+        if "observed_perturbation_support" in summary:
+            want_support = wf.OBSERVED_PERTURBATION in states
+            if bool(summary.get("observed_perturbation_support")) is not want_support:
+                _refuse(GATE_SUMMARY_FIELD_NOT_THE_EDGES,
+                        f"candidate {cid!r} arm {arm!r}: the summary claims "
+                        f"observed_perturbation_support={summary.get('observed_perturbation_support')!r}, "
+                        f"but its edges carry {sorted(states)!r}.")
 
         edge_ids = {str(e.get("edge_id")) for e in group}
         claimed_ids = {str(x) for x in (summary.get("edge_ids") or [])}
