@@ -89,7 +89,8 @@ def _independent_eligibility_verdict(rec: dict[str, Any]) -> str:
 
 def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
            universe_targets: list[dict[str, str]],
-           eligibility_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+           eligibility_evidence: dict[str, Any] | None = None,
+           public_source_provenance: Any | None = None) -> dict[str, Any]:
     """Return {ok, violations}. ok is True only if no violation fires.
 
     If ``eligibility_evidence`` (the actual on-disk artifact) is supplied, its canonical
@@ -142,6 +143,12 @@ def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
             v.append("eligibility_counts_n_total_mismatch")
         if counts.get("n_eligible") != sum(1 for r in recs if r.get("eligible")):
             v.append("eligibility_counts_n_eligible_mismatch")
+
+    # 4c. the ACTUAL on-disk sanitized public source provenance vs its manifest pin
+    if public_source_provenance is not None:
+        if content_hash(public_source_provenance) != ext.get(
+                "public_source_provenance_sha256"):
+            v.append("public_source_provenance_hash_drift")
 
     # 5. coverage matches the typed universe rows; ENSG is never the total
     cov = manifest.get("coverage", {})
@@ -211,16 +218,31 @@ def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
             "verify_policy_version": VERIFY_POLICY_VERSION}
 
 
+DISK_ARTIFACTS = ("universe_store.rows.json", "target_eligibility_evidence.json",
+                  "source_provenance.public.json")
+
+
 def verify_from_disk(*, store_dir: str, manifest: dict[str, Any],
                      universe_targets: list[dict[str, str]]) -> dict[str, Any]:
-    """Disk-level admission: load and hash the ACTUAL store rows + eligibility artifact
-    from ``store_dir`` (not the in-memory objects), then verify. Catches an artifact
-    altered on disk after generation even when the manifest is untouched."""
+    """Disk-level admission: REQUIRE, load and hash the ACTUAL store rows, eligibility
+    artifact, AND public source provenance from ``store_dir`` (not in-memory objects),
+    then verify. A MISSING file is a named refusal (never an exception); an ALTERED file
+    fails at its hash gate even when the manifest is untouched."""
     import json
     import os
-    with open(os.path.join(store_dir, "universe_store.rows.json")) as fh:
-        rows = json.load(fh)
-    with open(os.path.join(store_dir, "target_eligibility_evidence.json")) as fh:
-        elig = json.load(fh)
-    return verify(store_rows=rows, manifest=manifest,
-                  universe_targets=universe_targets, eligibility_evidence=elig)
+    loaded: dict[str, Any] = {}
+    missing: list[str] = []
+    for name in DISK_ARTIFACTS:
+        path = os.path.join(store_dir, name)
+        if not os.path.exists(path):
+            missing.append(f"missing_artifact:{name}")
+            continue
+        with open(path) as fh:
+            loaded[name] = json.load(fh)
+    if missing:
+        return {"ok": False, "violations": sorted(missing),
+                "verify_policy_version": VERIFY_POLICY_VERSION}
+    return verify(store_rows=loaded["universe_store.rows.json"], manifest=manifest,
+                  universe_targets=universe_targets,
+                  eligibility_evidence=loaded["target_eligibility_evidence.json"],
+                  public_source_provenance=loaded["source_provenance.public.json"])

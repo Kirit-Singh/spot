@@ -31,10 +31,21 @@ CHEMBL_PUBLISHER_SHA256 = \
 UNIPROT_PUBLISHER_MD5 = "7ef6a677d4db949397c3b352c466e499"
 
 
+def _file_sha256(path):
+    return file_sha256(path) if os.path.exists(path) else None
+
+
 def _public_source_provenance(chembl_sha, chembl_size, uni_sha, uni_size,
-                              chembl_release, uniprot_release, accessed):
-    """Sanitized, content-bound public provenance (no machine path); release-specific
-    locators + publisher checksums. Bound into the manifest + store_id."""
+                              chembl_release, uniprot_release, accessed, raw_dir):
+    """Sanitized, content-bound public provenance (no machine path). The URL stays the
+    real (mutable) ``current_release`` locator — UniProt has not yet archived 2026_02 to
+    previous_releases — but the RELEASE.metalink + relnotes + checksum BYTES are hashed
+    and bound, so the release=2026_02 association and the publisher checksum are proven
+    without depending on the mutable path. Bound into the manifest + store_id."""
+    chembl_checksums_sha = _file_sha256(os.path.join(raw_dir, "chembl_37.checksums.txt"))
+    uni_metalink_sha = _file_sha256(
+        os.path.join(raw_dir, "uniprot_2026_02.by_organism.RELEASE.metalink"))
+    uni_relnotes_sha = _file_sha256(os.path.join(raw_dir, "uniprot_2026_02.relnotes.txt"))
     return [
         {"name": "chembl_sqlite", "basename": "chembl_37_sqlite.tar.gz",
          "url": ("https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/releases/"
@@ -42,6 +53,8 @@ def _public_source_provenance(chembl_sha, chembl_size, uni_sha, uni_size,
          "release": chembl_release, "doi": "10.6019/CHEMBL.database.37",
          "release_metadata_url": ("https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/"
                                   "releases/chembl_37/checksums.txt"),
+         "release_metadata_sha256": chembl_checksums_sha,
+         "release_metadata_packaged_as": "CHEMBL_checksums.txt",
          "size_bytes": chembl_size, "acquired_sha256": chembl_sha,
          "publisher_sha256": CHEMBL_PUBLISHER_SHA256,
          "last_modified": "Fri, 29 May 2026 06:35:28 GMT",
@@ -55,12 +68,19 @@ def _public_source_provenance(chembl_sha, chembl_size, uni_sha, uni_size,
          "release_metadata_url": ("https://ftp.uniprot.org/pub/databases/uniprot/"
                                   "current_release/knowledgebase/idmapping/by_organism/"
                                   "RELEASE.metalink"),
+         "release_metadata_sha256": uni_metalink_sha,
+         "release_metadata_packaged_as": "UNIPROT_2026_02.by_organism.RELEASE.metalink",
          "relnotes_url": ("https://ftp.uniprot.org/pub/databases/uniprot/current_release/"
                           "relnotes.txt"),
-         "current_release_is_mutable_note": (
-             "current_release path is mutable; bytes pinned by publisher MD5 + acquired "
-             "SHA-256; immutable archive previous_releases/release-2026_02/ becomes "
-             "available after the next UniProt release"),
+         "relnotes_sha256": uni_relnotes_sha,
+         "relnotes_packaged_as": "UNIPROT_2026_02.relnotes.txt",
+         "metalink_attested_md5": UNIPROT_PUBLISHER_MD5,
+         "locator_note": (
+             "current_release path is mutable and UniProt has NOT archived 2026_02 to "
+             "previous_releases yet (latest archived: 2026_01); the release=2026_02 "
+             "association is proven by the bound relnotes bytes and the RELEASE.metalink "
+             "which attests this file's MD5; bytes are pinned by publisher MD5 + acquired "
+             "SHA-256. Add previous_releases/release-2026_02/ once UniProt archives it."),
          "size_bytes": uni_size, "acquired_sha256": uni_sha,
          "publisher_md5": UNIPROT_PUBLISHER_MD5,
          "last_modified": "Wed, 10 Jun 2026 20:00:00 GMT",
@@ -142,9 +162,11 @@ def main(argv: list[str]) -> int:
     rows = result["rows"]
     store_rows_sha = content_hash(rows)
     accessed = "2026-07-13T06:29:16Z..2026-07-13T07:08:12Z"
+    raw_dir = os.path.dirname(os.path.abspath(a.sqlite_tar))
     public_prov = _public_source_provenance(
         chembl_sha, os.path.getsize(a.sqlite_tar), uni_sha,
-        os.path.getsize(a.idmapping), a.chembl_release, a.uniprot_release, accessed)
+        os.path.getsize(a.idmapping), a.chembl_release, a.uniprot_release, accessed,
+        raw_dir)
     public_prov_sha = content_hash(public_prov)
 
     manifest = build_universe_manifest(
@@ -157,7 +179,6 @@ def main(argv: list[str]) -> int:
         public_source_provenance_sha256=public_prov_sha)
 
     # 4. write outputs: data-cache (store rows + eligibility) + committable compact reports
-    raw_dir = os.path.dirname(os.path.abspath(a.sqlite_tar))
     with open(os.path.join(a.out_dir, "universe_store.rows.json"), "w") as fh:
         json.dump(rows, fh, sort_keys=True)
     with open(os.path.join(a.out_dir, "universe_manifest.json"), "w") as fh:
@@ -166,9 +187,15 @@ def main(argv: list[str]) -> int:
         json.dump(result["eligibility_evidence"], fh, sort_keys=True)
     with open(os.path.join(a.out_dir, "source_provenance.public.json"), "w") as fh:
         json.dump(public_prov, fh, indent=2, sort_keys=True)
-    # mixed-license release gate: package the ChEMBL notices alongside the data
-    for src, dst in [("chembl_37_LICENSE", "CHEMBL_LICENSE"),
-                     ("chembl_37.REQUIRED.ATTRIBUTION", "CHEMBL_REQUIRED_ATTRIBUTION")]:
+    # mixed-license release gate + release-metadata provenance: package the permitted
+    # notices and the release-metadata bytes (checksums, metalink, relnotes) alongside data
+    for src, dst in [
+            ("chembl_37_LICENSE", "CHEMBL_LICENSE"),
+            ("chembl_37.REQUIRED.ATTRIBUTION", "CHEMBL_REQUIRED_ATTRIBUTION"),
+            ("chembl_37.checksums.txt", "CHEMBL_checksums.txt"),
+            ("uniprot_2026_02.by_organism.RELEASE.metalink",
+             "UNIPROT_2026_02.by_organism.RELEASE.metalink"),
+            ("uniprot_2026_02.relnotes.txt", "UNIPROT_2026_02.relnotes.txt")]:
         if os.path.exists(os.path.join(raw_dir, src)):
             shutil.copyfile(os.path.join(raw_dir, src), os.path.join(a.out_dir, dst))
 

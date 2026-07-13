@@ -5,6 +5,7 @@ tamper mutations. The verifier reuses only the shared content-addressing leaf
 from __future__ import annotations
 
 import copy
+import json
 import os
 import sys
 
@@ -53,6 +54,61 @@ def test_altered_eligibility_evidence_is_refused():
     art["records"][0]["tax_id"] = 10090
     assert uv.verify(store_rows=store, manifest=manifest, universe_targets=universe,
                      eligibility_evidence=art)["ok"] is False
+
+
+def test_public_provenance_mutated_on_disk_is_refused_by_verify_from_disk(tmp_path):
+    # post-generation: alter source_provenance.public.json on disk while leaving the
+    # manifest/store untouched. verify_from_disk must reopen+hash it and fail closed.
+    store, _, universe = _valid()
+    prov = [{"name": "chembl_sqlite", "url": "https://x", "acquired_sha256": "a" * 64}]
+    art = te.eligibility_evidence_artifact([te.evidence_record(_elig_target())])
+    manifest = um.build_universe_manifest(
+        chembl_release="CHEMBL_37", chembl_source_sha256="a" * 64,
+        uniprot_release="2026_02", uniprot_source_sha256="b" * 64,
+        extraction_query_sha256="c" * 64, universe_targets=universe,
+        coverage=us.coverage_summary(store), store_rows_sha256=content_hash(store),
+        eligibility_evidence_sha256=content_hash(art),
+        public_source_provenance_sha256=content_hash(prov))
+    d = str(tmp_path)
+    for name, obj in [("universe_store.rows.json", store),
+                      ("target_eligibility_evidence.json", art),
+                      ("source_provenance.public.json", prov)]:
+        with open(os.path.join(d, name), "w") as fh:
+            json.dump(obj, fh)
+    assert uv.verify_from_disk(store_dir=d, manifest=manifest,
+                               universe_targets=universe)["ok"] is True
+    with open(os.path.join(d, "source_provenance.public.json"), "w") as fh:
+        json.dump([dict(prov[0], acquired_sha256="b" * 64)], fh)   # tamper on disk
+    r = uv.verify_from_disk(store_dir=d, manifest=manifest, universe_targets=universe)
+    assert r["ok"] is False
+    assert "public_source_provenance_hash_drift" in r["violations"]
+
+
+def test_provenance_deleted_on_disk_is_refused_by_verify_from_disk(tmp_path):
+    # deletion (not just mutation): a REQUIRED artifact removed on disk -> named refusal,
+    # never an exception. verify_from_disk is called directly on the real directory.
+    store, _, universe = _valid()
+    prov = [{"name": "chembl_sqlite", "url": "https://x", "acquired_sha256": "a" * 64}]
+    art = te.eligibility_evidence_artifact([te.evidence_record(_elig_target())])
+    manifest = um.build_universe_manifest(
+        chembl_release="CHEMBL_37", chembl_source_sha256="a" * 64,
+        uniprot_release="2026_02", uniprot_source_sha256="b" * 64,
+        extraction_query_sha256="c" * 64, universe_targets=universe,
+        coverage=us.coverage_summary(store), store_rows_sha256=content_hash(store),
+        eligibility_evidence_sha256=content_hash(art),
+        public_source_provenance_sha256=content_hash(prov))
+    d = str(tmp_path)
+    for name, obj in [("universe_store.rows.json", store),
+                      ("target_eligibility_evidence.json", art),
+                      ("source_provenance.public.json", prov)]:
+        with open(os.path.join(d, name), "w") as fh:
+            json.dump(obj, fh)
+    assert uv.verify_from_disk(store_dir=d, manifest=manifest,
+                               universe_targets=universe)["ok"] is True
+    os.remove(os.path.join(d, "source_provenance.public.json"))   # DELETE on disk
+    r = uv.verify_from_disk(store_dir=d, manifest=manifest, universe_targets=universe)
+    assert r["ok"] is False
+    assert "missing_artifact:source_provenance.public.json" in r["violations"]
 
 
 def test_ambiguous_assertion_missing_named_disposition_is_refused():
