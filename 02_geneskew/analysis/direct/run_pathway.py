@@ -179,7 +179,9 @@ def build_pathway(args) -> dict[str, Any]:
         # ...and WHAT the counts in those records were counted FROM. Bound by CONTENT here
         # (the raw byte hashes are added beside the files, which cannot exist until the run
         # id names the directory they go in).
-        "evidence_artifacts": pathway_evidence.binding_block(evidence_doc, sig_rows),
+        "evidence_artifacts": pathway_evidence.binding_block(
+            evidence_doc, sig_rows,
+            gene_sets=pathway_evidence.gene_set_source_block(args.gene_sets, bundle)),
     }
     full = sha256_hex(canonical_json(binding))
     pathway_run_id = full[:PATHWAY_RUN_ID_LEN]
@@ -201,7 +203,8 @@ def build_pathway(args) -> dict[str, Any]:
     # The evidence goes INTO the bundle, beside the records it accounts for. An independent
     # verifier recounts n_hits_in_ranking / n_genes_in_target_universe from these bytes
     # instead of re-deriving one declared number from another.
-    evidence_paths = pathway_evidence.write(evidence_doc, sig_rows, out_dir)
+    evidence_paths = pathway_evidence.write(evidence_doc, sig_rows, out_dir,
+                                           gene_sets_source=args.gene_sets)
 
     prov = {
         "schema_version": SCHEMA_PROVENANCE,

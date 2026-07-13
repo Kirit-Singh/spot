@@ -78,8 +78,9 @@ class TestItRunsEndToEndOnRealSignatures:
         # the bundle carries the EVIDENCE its counts were counted from, beside the records
         # that report them — so an independent verifier can recount rather than re-read
         assert sorted(os.listdir(res["out_dir"])) == [
-            "pathway.json", "pathway_evidence.json", "pathway_provenance.json",
-            "pathway_signatures.parquet", "pathway_verification.json"]
+            "gene_sets.source.json", "pathway.json", "pathway_evidence.json",
+            "pathway_provenance.json", "pathway_signatures.parquet",
+            "pathway_verification.json"]
 
     def test_it_refuses_to_run_without_a_pinned_gene_set_bundle(self, synthetic_run):
         from direct import gate

@@ -22,6 +22,13 @@ from direct.hashing import content_hash, file_sha256
 from fixtures_pathway import write_gene_sets
 from fixtures_spec import TARGET_GENES, UNIVERSE
 
+_SOURCE = {}
+
+
+@pytest.fixture
+def gene_sets_path(built):
+    return _SOURCE["path"]
+
 
 @pytest.fixture
 def built(synthetic_run):
@@ -36,6 +43,7 @@ def built(synthetic_run):
         ctx["gene_universe"]["sha256"], target_universe_sha256=tu["sha256"])
     res = run_pathway.build_pathway(args)
     out = res["out_dir"]
+    _SOURCE["path"] = args.gene_sets
     with open(os.path.join(out, "pathway_evidence.json")) as fh:
         evidence = json.load(fh)
     with open(os.path.join(out, "pathway_provenance.json")) as fh:
@@ -144,7 +152,56 @@ class TestTheCountsCanACTUALLYBeRecounted:
         assert forged != len(members & ranked)
 
 
-class TestTheEvidenceIsBoundIntoTheRunIDENTITY:
+class TestTheGeneSetSourceShipsINSIDETheBundle:
+    """A verifier must be able to work entirely from the shipped bytes.
+
+    The provenance named the gene-set release and its hashes, but the FILE lived wherever the
+    operator kept it. So a verifier could check the run's gene sets hashed to X — and had no
+    way to obtain X. It had to be handed the same file out of band, and an artifact whose
+    evidence exists only on the machine that made it is not independently checkable.
+    """
+
+    def test_the_exact_input_json_is_IN_the_bundle(self, built):
+        out, _, _, _ = built
+        assert os.path.exists(os.path.join(out, "gene_sets.source.json"))
+
+    def test_it_is_copied_BYTE_FOR_BYTE_not_re_serialised(self, built, gene_sets_path):
+        # a re-emitted JSON is a different FILE that happens to mean the same thing, and its
+        # raw hash would not be the hash the run bound
+        out, _, _, _ = built
+        with open(gene_sets_path, "rb") as fh:
+            source = fh.read()
+        with open(os.path.join(out, "gene_sets.source.json"), "rb") as fh:
+            shipped = fh.read()
+        assert shipped == source
+
+    def test_the_raw_hash_of_the_SHIPPED_copy_is_what_the_run_BOUND(self, built):
+        out, _, prov, _ = built
+        block = prov["run_binding"]["evidence_artifacts"]["gene_set_source"]
+        assert block["raw_sha256"] == file_sha256(
+            os.path.join(out, "gene_sets.source.json"))
+        assert prov["evidence_artifacts"]["gene_set_source"]["copy_verified"] is True
+
+    def test_it_binds_the_release_license_and_namespace(self, built):
+        _, _, prov, _ = built
+        block = prov["run_binding"]["evidence_artifacts"]["gene_set_source"]
+        assert block["gene_set_release"]
+        assert block["gene_set_license"]
+        assert block["gene_id_namespace"]
+        assert block["canonical_sha256"]
+
+    def test_the_path_is_BUNDLE_RELATIVE_never_an_absolute_machine_path(self, built):
+        _, _, prov, _ = built
+        block = prov["evidence_artifacts"]["gene_set_source"]
+        assert block["path_in_bundle"] == "gene_sets.source.json"
+        assert not os.path.isabs(block["path_in_bundle"])
+
+    def test_NO_absolute_machine_path_leaks_into_the_provenance(self, built):
+        _, _, prov, _ = built
+        # a published artifact that carries the producer's filesystem is unusable to anyone
+        # else, and tells them something they were not meant to be told
+        from direct import emit
+        assert emit.scan_for_local_paths(prov["evidence_artifacts"]) == []
     def test_the_run_binding_carries_the_CANONICAL_hash_of_the_evidence(self, built):
         out, evidence, prov, _ = built
         bound = prov["run_binding"]["evidence_artifacts"]["pathway_evidence"]

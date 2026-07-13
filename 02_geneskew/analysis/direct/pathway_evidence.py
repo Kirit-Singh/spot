@@ -33,7 +33,9 @@ also wrote the check that its counts were honest would be marking its own homewo
 """
 from __future__ import annotations
 
+import json
 import os
+import shutil
 from typing import Any, Optional
 
 from . import config, enrichment
@@ -42,8 +44,10 @@ from .hashing import canonical_num, content_hash, file_sha256
 SCHEMA_VERSION = "spot.stage02_pathway_evidence.v1"
 EVIDENCE_FILE = "pathway_evidence.json"
 SIGNATURES_FILE = "pathway_signatures.parquet"
+GENE_SETS_FILE = "gene_sets.source.json"
 EVIDENCE_KEY = "pathway_evidence"
 SIGNATURES_KEY = "masked_signatures"
+GENE_SETS_KEY = "gene_set_source"
 SIGNATURE_COLUMNS = ("target_id", "gene_id", "value")
 
 # WHAT each count is recounted against. Named, so the verifier and the producer are talking
@@ -143,19 +147,64 @@ def signature_rows(signatures: dict[str, dict[str, float]]) -> list[dict[str, An
             for g, v in sorted(vec.items())]
 
 
-def write(doc: dict[str, Any], sig_rows: list[dict[str, Any]],
-          out_dir: str) -> dict[str, str]:
-    """Write both evidence artifacts INTO the bundle. Returns their paths."""
+def gene_set_source_block(source_path: str,
+                          bundle: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """WHICH gene-set bundle this run stood on — by CONTENT, and by a BUNDLE-RELATIVE path.
+
+    The provenance named the gene-set release and its hashes, but the FILE lived wherever the
+    operator happened to keep it. A verifier could therefore check that the run's gene sets
+    hashed to X, but could not obtain X: it had to be handed the same file out of band, and
+    an artifact whose evidence only exists on the machine that made it is not independently
+    checkable.
+
+    So the exact input JSON is copied into the bundle, BYTE FOR BYTE, and named by a path
+    relative to the bundle — never an absolute machine path, which would be unusable to
+    anyone else and would leak the producer's filesystem into a published artifact.
+    """
+    with open(source_path) as fh:
+        doc = json.load(fh)
+    block = {
+        "logical_name": GENE_SETS_FILE,
+        "path_in_bundle": GENE_SETS_FILE,
+        "copied_byte_for_byte": True,
+        # the bytes as supplied, and the content independent of their formatting
+        "raw_sha256": file_sha256(source_path),
+        "canonical_sha256": content_hash(doc),
+        "schema_version": doc.get("schema_version"),
+        "n_sets_in_source": len(doc.get("sets") or []),
+    }
+    if bundle is not None:
+        block.update({
+            "gene_set_release": bundle["gene_set_release"],
+            "gene_set_license": bundle["gene_set_license"],
+            "gene_set_license_reference": bundle["gene_set_license_reference"],
+            "gene_id_namespace": bundle["gene_id_namespace"],
+        })
+    return block
+
+
+def write(doc: dict[str, Any], sig_rows: list[dict[str, Any]], out_dir: str, *,
+          gene_sets_source: Optional[str] = None) -> dict[str, str]:
+    """Write the evidence artifacts INTO the bundle. Returns their paths."""
     from . import emit
     evidence_path = os.path.join(out_dir, EVIDENCE_FILE)
     emit.write_json(evidence_path, doc)
     signatures_path = os.path.join(out_dir, SIGNATURES_FILE)
     emit.write_parquet(sig_rows, signatures_path, sort_by=["target_id", "gene_id"])
-    return {"evidence": evidence_path, "signatures": signatures_path}
+
+    paths = {"evidence": evidence_path, "signatures": signatures_path}
+    if gene_sets_source:
+        # BYTE FOR BYTE. Not re-serialised: a re-emitted JSON is a different file that
+        # happens to mean the same thing, and its raw hash would not be the hash the run
+        # bound. The verifier is entitled to the exact bytes the producer read.
+        gene_sets_path = os.path.join(out_dir, GENE_SETS_FILE)
+        shutil.copyfile(gene_sets_source, gene_sets_path)
+        paths["gene_sets"] = gene_sets_path
+    return paths
 
 
-def binding_block(doc: dict[str, Any],
-                  sig_rows: list[dict[str, Any]]) -> dict[str, Any]:
+def binding_block(doc: dict[str, Any], sig_rows: list[dict[str, Any]],
+                  gene_sets: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """WHAT evidence this run stands on — bound into the RUN IDENTITY, by CONTENT.
 
     Canonical hashes only, because this block is hashed INTO the run id and the run id names
@@ -182,6 +231,7 @@ def binding_block(doc: dict[str, Any],
             "n_sets": len(doc["membership"]),
             "n_ranked_by_arm": {arm: len(r) for arm, r in doc["arm_rankings"].items()},
         },
+        **({GENE_SETS_KEY: gene_sets} if gene_sets else {}),
         SIGNATURES_KEY: {
             "logical_name": SIGNATURES_FILE,
             "path_in_bundle": SIGNATURES_FILE,
@@ -201,7 +251,20 @@ def written_block(binding: dict[str, Any], paths: dict[str, str]) -> dict[str, A
     say it. A verifier wants both: one that checked only the canonical hash would not notice
     it had been handed different bytes than the ones that were hashed.
     """
-    out = {k: v for k, v in binding.items() if k not in (EVIDENCE_KEY, SIGNATURES_KEY)}
+    out = {k: v for k, v in binding.items()
+           if k not in (EVIDENCE_KEY, SIGNATURES_KEY, GENE_SETS_KEY)}
     for key, path_key in ((EVIDENCE_KEY, "evidence"), (SIGNATURES_KEY, "signatures")):
         out[key] = dict(binding[key], raw_sha256=file_sha256(paths[path_key]))
+
+    if GENE_SETS_KEY in binding:
+        block = dict(binding[GENE_SETS_KEY])
+        copied = file_sha256(paths["gene_sets"])
+        # The copy IS the source, or the artifact does not ship. A "byte-for-byte" copy
+        # nobody checked is a claim, and this one is cheap to make true.
+        if copied != block["raw_sha256"]:
+            raise ValueError(
+                f"the gene-set bundle copied into the artifact hashes to {copied!r}, but "
+                f"the source it was read from hashes to {block['raw_sha256']!r}; the copy "
+                "is not the file the run stood on")
+        out[GENE_SETS_KEY] = dict(block, copy_verified=True)
     return out
