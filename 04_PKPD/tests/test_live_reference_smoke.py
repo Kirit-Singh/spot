@@ -83,7 +83,11 @@ def test_the_four_public_sources_answer_and_identity_converges_for_the_reference
         claims_from(pubchem=pubchem, rxcui=rxcui, label=label, approval=approval),
         active_moiety_name=REFERENCE_MOIETY)
     assert identity.inchikey and identity.unii and identity.pubchem_cid
-    assert identity.fda_application_number      # the Drugs@FDA cross-check ran and agreed
+    # TEMODAR's label declares TWO applications (capsule + injection). BOTH are carried and
+    # BOTH were cross-checked against Drugs@FDA — none was chosen by position.
+    assert len(identity.fda_application_numbers) >= 1
+    assert set(identity.fda_application_numbers) == set(approval.application_numbers)
+    assert approval.marketing_statuses
     assert identity.conflicts == []
 
     # PubChem gave structure and the descriptors it has — and neither of the two it does not.

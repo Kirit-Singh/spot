@@ -292,8 +292,39 @@ its canonical query as a SHA-256; it is carried as a SHA-256, never reconstructe
 **Deterministic label selection.** Discovery → **exactly one product, or an explicit set-ID pin,
 or a refusal that names every candidate**. Live, `drug_name=temozolomide` returns 20 products, so
 "the first hit" would have read a repackager's label instead of TEMODAR. The served document must
-also *be* the version the listing offered (`dailymed_version_conflict`), and the label must tie to
-a Drugs@FDA application (`approval_conflict` → the safety lane stays `not_evaluated`).
+also *be* the version the listing offered (`dailymed_version_conflict`), the listing must be
+**complete** (a page-1 response that reports 40 total elements is not the candidate set —
+`dailymed_listing_incomplete`), and the label must tie to a Drugs@FDA application.
+
+**No first record, no first product** (`analysis/selection.py`). The independent cross-check
+flagged `results[0]`, `products[0]` and `limit=1` in `openfda_approval.py`, and the live data
+showed the flag was not theoretical: **TEMODAR's openFDA label declares two application numbers —
+NDA021029 (capsule) and NDA022277 (injection) — and its Drugs@FDA record carries six products.**
+The old code took the first of each, so the approval cross-check ran against an arbitrarily chosen
+*route*, and it reported a single marketing status; the two applications in fact differ
+(`Discontinued` and `Prescription`). Every selection is now one of exactly three things:
+
+| | Rule |
+|---|---|
+| `exactly_one` | matched on an identity **pin**; zero and many are both typed refusals, and duplicates are never silently de-duplicated into a choice |
+| `sorted_unique` | collect-all, canonical order. Every application number, every marketing status. Nothing dropped, nothing chosen |
+| `assert_result_set_complete` | the source's own `meta.results.total` must equal what arrived, or the result set is refused as truncated. `limit=1` could not detect a duplicate **even in principle** |
+
+Reordering a response cannot change an outcome, and every declared application is fetched and
+cross-checked in its own pinned query (`drugsfda_application_not_found` if Drugs@FDA does not know
+it → the safety lane stays `not_evaluated`).
+
+**`organ_system` (W9's optional v2 field) is source-backed or `unspecified`** — never inferred
+(`analysis/organ_system.py`). A value is admissible only when a public structured source actually
+carries the field, and is then copied **verbatim** with its exact locator and the raw record
+identity (set ID, label version, response SHA-256). It is never classified from a target, gene,
+mechanism, pharmacologic class or drug name — `refuse_inferred_organ_system` makes that path
+raise. **No source in the ledger carries such a field today** (SPL has LOINC-coded *sections*, not
+an organ-system attribute; recognising an adverse-reaction heading as a MedDRA System Organ Class
+would need the MedDRA vocabulary, whose licence is not established here; openFDA carries
+*pharmacologic class*, which is not an organ system), so `ORGAN_SYSTEM_SPECS` is empty and every
+extraction returns `unspecified` / `not_evaluated` — with the record it was looked for in attached,
+so "unspecified" can never be read as "never checked". No new external dataset was added.
 
 **Identity converges or the candidate is refused** (`identity_converged` → refuse_candidate).
 PubChem, RxNorm, DailyMed and Drugs@FDA claims are collected separately — no source's identifier

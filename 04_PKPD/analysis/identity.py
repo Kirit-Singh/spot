@@ -28,8 +28,14 @@ from .firewall import Rejection
 # The identifiers that must converge. `drugbank_id` is deliberately absent: no valid public
 # licence has been established for DrugBank, so it is never populated on this path.
 IDENTITY_FIELDS = (
-    "inchikey", "unii", "pubchem_cid", "rxcui", "dailymed_setid", "fda_application_number",
+    "inchikey", "unii", "pubchem_cid", "rxcui", "dailymed_setid",
 )
+
+# NOT single-valued, and not a conflict when there is more than one. TEMODAR's label declares
+# NDA021029 (capsule) AND NDA022277 (injection): one label, two approvals, two routes. Forcing
+# that into a scalar is what made the old code pick one by position. Every value is carried, in
+# canonical order, and `openfda_approval.cross_check_approval` checks the SETS agree.
+MULTI_VALUED_FIELDS = ("fda_application_number",)
 
 
 @dataclass(frozen=True)
@@ -49,7 +55,7 @@ class ResolvedIdentity:
     pubchem_cid: Optional[str] = None
     rxcui: Optional[str] = None
     dailymed_setid: Optional[str] = None
-    fda_application_number: Optional[str] = None
+    fda_application_numbers: tuple[str, ...] = ()
     active_moiety_name: Optional[str] = None
     administered_form: str = "active_moiety"
     maps_to_active_moiety_id: Optional[str] = None
@@ -90,15 +96,16 @@ def claims_from(*, pubchem: Any = None, rxcui: Optional[str] = None, label: Any 
             claims.append(IdentityClaim("unii", uniis[0], "dailymed", f"dailymed:{setid}"))
 
     if approval is not None:
-        ref = f"openfda:{approval.application_number}"
+        ref = f"openfda:setid:{approval.setid}"
         # Drugs@FDA and the openFDA label record each get their OWN claim. Preferring one over
         # the other would hide a disagreement about which molecule the label is even about.
         if approval.unii:
             claims.append(IdentityClaim("unii", approval.unii, "drugs_at_fda", ref))
         if approval.label_unii:
             claims.append(IdentityClaim("unii", approval.label_unii, "openfda_label", ref))
-        claims.append(IdentityClaim("fda_application_number", approval.application_number,
-                                    "openfda", ref))
+        for application_number in approval.application_numbers:   # ALL of them, in order
+            claims.append(IdentityClaim("fda_application_number", application_number,
+                                        "openfda", ref))
         claims.append(IdentityClaim("dailymed_setid", approval.setid, "openfda", ref))
     return claims
 
@@ -113,6 +120,8 @@ def resolve_identity(claims: list[IdentityClaim], *, administered_form: str = "a
         by_field.setdefault(claim.field, {}).setdefault(claim.value, []).append(claim)
 
     for name, values in sorted(by_field.items()):
+        if name in MULTI_VALUED_FIELDS:
+            continue          # more than one is a fact about the product, not a disagreement
         if len(values) > 1:
             raise Rejection("identity_conflict", _conflict_detail(name, values),
                             {"field": name, "values": sorted(values)})
@@ -130,8 +139,10 @@ def resolve_identity(claims: list[IdentityClaim], *, administered_form: str = "a
     resolved: dict[str, Any] = {
         name: next(iter(values)) for name, values in by_field.items() if name in IDENTITY_FIELDS
     }
+    applications = tuple(sorted(by_field.get("fda_application_number", {})))
     return ResolvedIdentity(
         **resolved,
+        fda_application_numbers=applications,
         active_moiety_name=active_moiety_name,
         administered_form=administered_form,
         maps_to_active_moiety_id=maps_to_active_moiety_id,

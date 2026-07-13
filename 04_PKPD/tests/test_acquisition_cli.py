@@ -116,7 +116,7 @@ def test_an_acquired_identity_that_is_not_a_candidate_is_a_reference_probe(tmp_p
     assert probe["role"] == "reference_probe"
     assert probe["candidate_id"] is None
     assert probe["identity"]["unii"] == "FIXTURE001"
-    assert probe["identity"]["fda_application_number"] == "NDA999901"
+    assert probe["identity"]["fda_application_numbers"] == ["NDA999901"]
     assert receipt["acquisition"]["candidates_acquired"] == 0
 
     fields = _keys(receipt)
@@ -172,6 +172,30 @@ def test_probing_a_reference_drug_does_not_fill_any_candidates_missing_identity_
     still_missing = {m["source_key"] for m in manifest["missing"]}
     assert {"pubchem", "rxnorm"} <= still_missing
     assert all(m["evidence_state"] == "not_evaluated" for m in manifest["missing"])
+
+
+def test_the_organ_system_field_is_handed_to_w9_as_unspecified_with_the_record_it_was_sought_in(
+        tmp_path):
+    """W9's optional v2 field. No public source carries it, so it is `unspecified` — but the raw
+    record it was looked for in travels with it, so `unspecified` cannot be read as `never
+    checked`, and the absence is stated in the manifest as well."""
+    root = str(tmp_path / "run")
+    run_acquire.main(
+        ["--stage3-bundle", PINNED_BUNDLE, "--run-root", root,
+         "--acquire-identity", "fixturomide", "--allow-network"],
+        client=_client())
+
+    organ = _read(os.path.join(root, "acquisition_receipt.json"))[
+        "acquisition"]["identities_acquired"][0]["identity"]["organ_system"]
+    assert organ["organ_system"] == "unspecified"
+    assert organ["evidence_state"] == "not_evaluated"
+    assert organ["setid"] and organ["raw_response_sha256"] and organ["label_version"]
+    assert organ["source_record_id"]        # binds to the exact acquisition record
+    assert organ["value_kind"] == "none"
+    assert "not inferred" in organ["reason"]
+
+    lanes = {m["lane"] for m in _read(os.path.join(root, "acquisition_manifest.json"))["missing"]}
+    assert "organ_system" in lanes
 
 
 def test_two_identical_runs_produce_the_same_manifest_content_hash(tmp_path):

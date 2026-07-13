@@ -33,6 +33,10 @@ from .label_adapters import LabelParseError, ParsedLabel, parse_dailymed_spl
 DAILYMED = "dailymed"
 RXNORM = "rxnorm"
 
+# DailyMed paginates. Ask for the whole candidate set in one page, and refuse to select from a
+# partial one (`assert_listing_complete`) rather than reading whichever products arrived.
+PAGE_SIZE = "100"
+
 
 @dataclass(frozen=True)
 class SplListing:
@@ -113,6 +117,24 @@ def parse_spl_listing(raw: bytes) -> list[SplListing]:
     return listings
 
 
+def assert_listing_complete(raw: bytes, listings: list[SplListing]) -> None:
+    """The listing we selected from must be the WHOLE listing.
+
+    DailyMed paginates. A page-1 response that reports 40 total elements while handing back one
+    product is not the candidate set, and selecting the "only" product on it is a first-hit with
+    extra steps — the same defect the openFDA `limit=1` had.
+    """
+    metadata = _json(raw, "spls.json").get("metadata") or {}
+    total = metadata.get("total_elements")
+    if isinstance(total, int) and total > len(listings):
+        raise Rejection(
+            "dailymed_listing_incomplete",
+            f"DailyMed reports {total} products for this query but this page carries "
+            f"{len(listings)}. Stage 4 will not select from a partial listing: uniqueness cannot "
+            "be established from a page. Pin the product with --dailymed-setid, or widen the "
+            "page size.")
+
+
 def select_spl(listings: list[SplListing], *, setid: Optional[str] = None) -> SplListing:
     """Deterministic selection. One product, or an explicit pin, or a refusal naming them all."""
     if not listings:
@@ -149,8 +171,10 @@ def select_spl(listings: list[SplListing], *, setid: Optional[str] = None) -> Sp
 def acquire_label(client: Client, run_root: RunRoot, name: str, *,
                   setid: Optional[str] = None) -> tuple[SelectedLabel, list[AcquisitionRecord]]:
     """Discover -> select deterministically -> fetch -> verify the version -> parse."""
-    listing_resp = client.get(DAILYMED, "spls.json", {"drug_name": name})
+    listing_resp = client.get(DAILYMED, "spls.json",
+                              {"drug_name": name, "pagesize": PAGE_SIZE})
     listings = parse_spl_listing(listing_resp.body)
+    assert_listing_complete(listing_resp.body, listings)
     chosen = select_spl(listings, setid=setid)
 
     spl_resp = client.get(DAILYMED, f"spls/{chosen.setid}.xml")
@@ -162,7 +186,22 @@ def acquire_label(client: Client, run_root: RunRoot, name: str, *,
             f"the SPL for set ID {chosen.setid!r} is not the document shape the parser accepts: "
             f"{exc}") from exc
 
-    if chosen.spl_version and label.label_version and label.label_version != chosen.spl_version:
+    # A label with no version has no identity. There is no `.vunversioned` label: an SPL that
+    # does not say which version it is cannot be re-fetched, re-checked, or distinguished from
+    # the next revision of itself, so it is UNAVAILABLE rather than usable-with-a-placeholder.
+    if not chosen.spl_version:
+        raise Rejection(
+            "dailymed_version_unavailable",
+            f"the DailyMed listing for set ID {chosen.setid!r} carries no spl_version. A label "
+            "version is part of the label's identity; Stage 4 does not substitute a placeholder "
+            "for one the source did not give.")
+    if not label.label_version:
+        raise Rejection(
+            "dailymed_version_unavailable",
+            f"the SPL served for set ID {chosen.setid!r} declares no versionNumber. An unversioned "
+            "document cannot be distinguished from the next revision of itself, and Stage 4 will "
+            "not invent a version to bind evidence to.")
+    if label.label_version != chosen.spl_version:
         raise Rejection(
             "dailymed_version_conflict",
             f"DailyMed listed set ID {chosen.setid!r} at version {chosen.spl_version}, but the "
@@ -171,7 +210,9 @@ def acquire_label(client: Client, run_root: RunRoot, name: str, *,
     if label.setid != chosen.setid:
         raise Rejection(
             "dailymed_setid_conflict",
-            f"the document served under set ID {chosen.setid!r} declares set ID {label.setid!r}")
+            f"the document served under set ID {chosen.setid!r} declares set ID {label.setid!r}. "
+            "The document is not the record that was requested, and Stage 4 does not read a label "
+            "it did not ask for.")
 
     records = [
         record_from_response(

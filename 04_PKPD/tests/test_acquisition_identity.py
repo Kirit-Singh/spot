@@ -74,11 +74,11 @@ def _routes(**over: str) -> dict[str, tuple[int, dict[str, str], bytes]]:
         f"InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON":
             (200, json_h, _bytes(files["properties"])),
         f"{RXNAV}/rxcui.json?name={NAME}&search=0": (200, json_h, _bytes(files["rxcui"])),
-        f"{DAILYMED}/spls.json?drug_name={NAME}": (200, json_h, _bytes(files["spls"])),
+        f"{DAILYMED}/spls.json?drug_name={NAME}&pagesize=100": (200, json_h, _bytes(files["spls"])),
         f"{DAILYMED}/spls/{SETID}.xml": (200, xml_h, _bytes("dailymed_spl.xml")),
-        f"{OPENFDA}/drug/label.json?limit=1&search=openfda.spl_set_id%3A%22{SETID}%22":
+        f"{OPENFDA}/drug/label.json?limit=25&search=openfda.spl_set_id%3A%22{SETID}%22":
             (200, json_h, _bytes(files["openfda_label"])),
-        f"{OPENFDA}/drug/drugsfda.json?limit=1&search=openfda.application_number%3A%22NDA999901%22":
+        f"{OPENFDA}/drug/drugsfda.json?limit=25&search=openfda.application_number%3A%22NDA999901%22":
             (200, json_h, _bytes(files["drugsfda"])),
     }
 
@@ -231,8 +231,8 @@ def test_a_label_whose_version_is_not_the_selected_version_is_refused(run_root, 
 def test_openfda_supplies_the_application_number_and_drugsfda_confirms_the_approval(run_root):
     approval, records = acquire_approval(_client(), run_root, SETID)
 
-    assert approval.application_number == "NDA999901"
-    assert approval.marketing_status == "Prescription"
+    assert approval.application_numbers == ("NDA999901",)
+    assert approval.marketing_statuses == ("Prescription",)
     assert approval.unii == "FIXTURE001"
     # openFDA's own last_updated is the release; it is not invented.
     assert all(r.release_or_last_updated == "2026-06-30" for r in records)
@@ -240,20 +240,23 @@ def test_openfda_supplies_the_application_number_and_drugsfda_confirms_the_appro
                for r in records)
 
 
-def test_a_drugsfda_application_that_is_not_the_labels_is_an_approval_conflict(run_root):
+def test_a_drugsfda_record_that_answers_with_another_application_is_refused(run_root):
     """FAIL-CLOSED (approval): `label_current_and_approval_crosschecked` -> safety_not_evaluated.
-    A label that cannot be tied to an approval is not cross-checked, and pretending otherwise
-    is exactly the overclaim the audit flagged."""
+
+    The query PINS the application number the label declared. A response carrying a different
+    application has not answered the question, so the label is not tied to an approval — and the
+    layer refuses rather than reading the record that happened to arrive.
+    """
     client = _client(drugsfda="drugsfda_conflicting.json")
     with pytest.raises(Rejection) as exc:
         acquire_approval(client, run_root, SETID)
-    assert exc.value.code == "approval_conflict"
+    assert exc.value.code == "drugsfda_application_not_found"
 
 
 def test_cross_check_refuses_a_label_application_number_that_drugsfda_does_not_know():
     with pytest.raises(Rejection) as exc:
-        cross_check_approval(label_application_number="NDA999901",
-                             drugsfda_application_number="NDA111111")
+        cross_check_approval(label_application_numbers=("NDA999901",),
+                             drugsfda_application_numbers=("NDA111111",))
     assert exc.value.code == "approval_conflict"
 
 
@@ -275,7 +278,7 @@ def test_identity_converges_across_four_public_sources(run_root):
     assert identity.pubchem_cid == "999999901"
     assert identity.rxcui == "9999901"
     assert identity.dailymed_setid == SETID
-    assert identity.fda_application_number == "NDA999901"
+    assert identity.fda_application_numbers == ("NDA999901",)
     assert identity.conflicts == []
     # DrugBank stays empty on a public-only path, whatever else is known.
     assert not hasattr(identity, "drugbank_id")

@@ -51,6 +51,7 @@ from .dailymed_select import acquire_label, acquire_rxcui
 from .firewall import Rejection
 from .identity import claims_from, resolve_identity
 from .openfda_approval import acquire_approval
+from .organ_system import LabelRef, extract_organ_system
 from .pubchem import acquire_pubchem_identity
 from .stage3_admission import admit
 from .stage3_reuse import reuse_stage3_sources, stage3_missing_lanes
@@ -97,21 +98,48 @@ def acquire_identity(client: Client, run_root: RunRoot, name: str, *,
         claims_from(pubchem=pubchem, rxcui=rxcui, label=label, approval=approval),
         active_moiety_name=name)
 
+    # W9's optional v2 organ_system. Source-backed or `unspecified` — never inferred from the
+    # target, the mechanism or the drug name. The raw record it was looked for in travels with
+    # it, so `unspecified` cannot be confused with `never checked`.
+    spl = next(r for r in label_records if (r.raw_media_type or "").endswith("xml"))
+    organ_system = extract_organ_system(
+        LabelRef(source_record_id=spl.acquisition_record_id, setid=label.listing.setid,
+                 label_version=label.label.label_version, raw_response_sha256=spl.raw_sha256),
+        source_key="dailymed")
+
     resolved = {
         "inchikey": identity.inchikey,
         "unii": identity.unii,
         "pubchem_cid": identity.pubchem_cid,
         "rxcui": identity.rxcui,
         "dailymed_setid": identity.dailymed_setid,
-        "fda_application_number": identity.fda_application_number,
+        # EVERY application the label declares (TEMODAR: capsule NDA + injection NDA), and every
+        # product's marketing status. Nothing here was chosen by position.
+        "fda_application_numbers": list(identity.fda_application_numbers),
         "administered_form": identity.administered_form,
         "descriptors_acquired": sorted(pubchem.descriptors),
         # Named, not implied: the two CNS-MPO inputs no public source in the ledger supplies.
         "descriptors_not_available": list(pubchem.not_available),
         "label_version": label.label.label_version,
         "label_effective_date": label.label.effective_date,
-        "marketing_status": approval.marketing_status,
+        "marketing_statuses": list(approval.marketing_statuses),
         "n_labeled_findings": len(label.label.findings),
+        # W9 v2 (optional). Field names are `evidence_records.Provenance`'s, not new ones.
+        "organ_system": {
+            "organ_system": organ_system.organ_system,
+            "value_kind": organ_system.value_kind,
+            "evidence_state": organ_system.evidence_state,
+            "source_key": organ_system.source_key,
+            "source_record_id": organ_system.source_record_id,
+            "setid": organ_system.setid,
+            "label_version": organ_system.label_version,
+            "raw_response_sha256": organ_system.raw_response_sha256,
+            "section_code": organ_system.section_code,
+            "subsection_code": organ_system.subsection_code,
+            "locator": organ_system.locator,
+            "extraction_transform": organ_system.extraction_transform,
+            "reason": organ_system.reason,
+        },
         "source_record_ids": [r.acquisition_record_id for r in records],
     }
     return resolved, records
@@ -136,6 +164,12 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
             resolved, acquired = acquire_identity(http, run_root, name, setid=setid)
             records += acquired
             candidate_id = queued_by_name.get(name.strip().upper())
+            if resolved["organ_system"]["evidence_state"] != "observed":
+                missing.append(MissingEvidence(
+                    lane="organ_system",
+                    evidence_state="not_evaluated",
+                    source_key="dailymed",
+                    reason=f"{name}: {resolved['organ_system']['reason']}"))
             identities.append({
                 "moiety_name": name,
                 # A probe is a probe. Nothing here promotes it to a candidate, and no candidate
@@ -246,8 +280,10 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
     print(f"reused (Stage 3) : {acq['reused_from_stage3']}  fetched: {acq['fetched_public']}")
     print(f"missing lanes    : {len(receipt['missing'])} stated absence(s)")
     for probe in acq["identities_acquired"]:
+        ident = probe["identity"]
         print(f"identity         : {probe['moiety_name']} [{probe['role']}] "
-              f"unii={probe['identity']['unii']} cid={probe['identity']['pubchem_cid']}")
+              f"unii={ident['unii']} cid={ident['pubchem_cid']} "
+              f"applications={','.join(ident['fda_application_numbers']) or 'none'}")
     print("\nThis layer ACQUIRES evidence. No drug is ranked, scored, selected or recommended, "
           "and nothing here asserts brain penetrance or safety.")
     return code
