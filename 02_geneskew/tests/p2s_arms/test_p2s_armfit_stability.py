@@ -160,9 +160,10 @@ def test_an_empty_l1_grid_is_refused():
 # PRIMARY comes from ONE fit; sensitivities are typed and never pooled; denominators ship.
 # --------------------------------------------------------------------------- #
 def _row(coef, layer, cfg, scope):
+    r = round(float(coef), 6)
     return {"arm_key": INC, "program_id": PROGRAM, "desired_change": "increase",
-            "condition": CONDITION, "target_id": "T00", "coefficient": coef,
-            "nonzero": coef != 0, "sign": int(np.sign(coef)),
+            "condition": CONDITION, "target_id": "T00", "coefficient": r,
+            "sign": 0 if r == 0.0 else int(np.sign(r)),
             "effect_layer": layer, "model_config": cfg, "donor_scope": scope}
 
 
@@ -178,11 +179,12 @@ def test_the_PRIMARY_is_the_single_seeded_svd_fit_and_sensitivities_never_pool_i
     assert got["primary_coefficient"] == 2.0
     assert got["primary_sign"] == config.SIGN_SUPPORTIVE
     assert got["opposed"] is False
-    # denominators ship: 3 sensitivity fits, 0 concordant (all disagree with the primary sign)
-    assert got["n_sensitivity_fits"] == 3
-    assert got["n_sensitivity_sign_concordant"] == 0
+    # each family ships its OWN denominator; NO pooled aggregate (that would weight LODO 4x)
     assert got["n_log_fc"] == 1 and got["n_pca_off"] == 1 and got["n_lodo"] == 1
+    assert got["sens_log_fc_sign_concordance"] == 0.0     # -9 disagrees with primary +2
     assert got["sens_pca_off_sign_concordance"] == 0.0
+    assert got["lodo_sign_concordance"] == 0.0
+    assert "n_sensitivity_fits" not in got                 # no pooled field
 
 
 def test_a_missing_primary_fit_is_marked_unavailable_never_pooled_from_sensitivities():

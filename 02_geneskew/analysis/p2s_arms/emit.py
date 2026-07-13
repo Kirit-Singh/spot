@@ -45,12 +45,11 @@ SUPPORT_COLUMNS = (
     "sens_log_fc_sign_concordance", "n_log_fc",
     "sens_pca_off_sign_concordance", "n_pca_off",
     "lodo_sign_concordance", "n_lodo",
-    "n_sensitivity_fits", "n_sensitivity_sign_concordant",
 )
 
 COEF_COLUMNS = (
     "arm_key", "program_id", "desired_change", "condition", "target_id",
-    "coefficient", config.COEF_SEM_COLUMN, "nonzero", "sign",
+    "coefficient", config.COEF_SEM_COLUMN, "sign",
     "effect_layer", "model_config", "donor_scope", "quantity",
 )
 
@@ -172,8 +171,9 @@ def canonical_support(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "primary_coefficient": _num(r["primary_coefficient"]),
             "primary_sign": str(r["primary_sign"]),
             "opposed": bool(r["opposed"]),
-            "n_sensitivity_fits": int(r["n_sensitivity_fits"]),
-            "n_sensitivity_sign_concordant": int(r["n_sensitivity_sign_concordant"]),
+            "sens_log_fc_sign_concordance": _num(r["sens_log_fc_sign_concordance"]),
+            "sens_pca_off_sign_concordance": _num(r["sens_pca_off_sign_concordance"]),
+            "lodo_sign_concordance": _num(r["lodo_sign_concordance"]),
         })
     out.sort(key=lambda r: (r["arm_key"], r["target_id"]))
     return out
@@ -190,7 +190,9 @@ def canonical_coefficients(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "model_config": str(r["model_config"]),
             "donor_scope": str(r["donor_scope"]),
             "coefficient": _num(r["coefficient"]),
-            "nonzero": bool(r["nonzero"]),
+            # coef_fit_variation is NOT derivable, so it goes in the hash: it must not be
+            # mutable without changing the run id.
+            "coef_fit_variation": _num(r[config.COEF_SEM_COLUMN]),
             "sign": int(r["sign"]),
         })
     out.sort(key=lambda r: (r["arm_key"], r["donor_scope"], r["effect_layer"],

@@ -64,17 +64,17 @@ def test_ONE_INVOCATION_runs_the_whole_grid_and_emits_BOTH_arms(tmp_path, prepar
     assert doc["both_sign_arms_emitted_per_invocation"] is True
 
     grid = doc["fit_grid"]
-    # 5 base signatures (one per donor scope); 8 model fits (all_donor x 2 layers x 2 configs
-    # = 4, plus 4 LODO). Both configs ship: seeded pca_on_60 primary + pca_off sensitivity.
+    # 5 base signatures; SEVEN model fits per the OFAT grid: 3 all_donor (primary +
+    # log_fc sensitivity + pca_off sensitivity) + 4 LODO. NO Cartesian log_fc+pca_off cell.
     assert grid["base_signatures_per_unit"] == 5
-    assert grid["fit_grid_members_per_unit"] == 8
+    assert grid["fit_grid_members_per_unit"] == 7
     assert grid["model_configs"] == ["pca_on_60", "pca_off"]
     assert grid["sign_arms_per_fit"] == 2
-    assert doc["n_fit_grid_members_total"] == 8 * doc["n_units"]
+    assert doc["n_fit_grid_members_total"] == 7 * doc["n_units"]
 
     for u in doc["units"]:
         assert u["invocations_per_unit"] == 1
-        assert u["fit_grid_members_per_unit"] == 8
+        assert u["fit_grid_members_per_unit"] == 7
         assert u["arms_emitted_per_unit"] == 2
         assert "n_fits" not in u                              # the misleading field is gone
         inc, dec = u["arm_keys"]

@@ -78,18 +78,18 @@ def fit_program(*, program_id: str, condition: str, base_signature: np.ndarray,
         # DERIVED for `decrease`; the identity transform for `increase`. Never a re-fit.
         values = negate(base, ref.desired_change)
         for target_id, value, s in zip(targets, values, sem):
-            nonzero = abs(value) > config.NONZERO_TOL
+            # THE ONE rule: round first, then sign from the rounded value. No raw threshold.
+            rounded = round(float(value), config.COEFFICIENT_DECIMALS)
             rows.append({
                 "arm_key": ref.arm_key,
                 "program_id": ref.program_id,
                 "desired_change": ref.desired_change,
                 "condition": ref.condition,
                 "target_id": target_id,
-                "coefficient": value,
+                "coefficient": rounded,
                 # fit variation across overlapping fits. NOT inference, and never a p-value.
                 config.COEF_SEM_COLUMN: s,
-                "nonzero": bool(nonzero),
-                "sign": int(np.sign(value)) if nonzero else 0,
+                "sign": 0 if rounded == 0.0 else int(np.sign(rounded)),
                 "effect_layer": layer,
                 "model_config": cfg.name,
                 "donor_scope": scope,
