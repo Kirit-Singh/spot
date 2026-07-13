@@ -11,7 +11,7 @@
     "gen_full_release_verification.py": "d59e0109798fd21bee2e3fb16e240ebc6a952465a70967da03ffec68f7c3c380",
     "gen_stage1_provenance.py": "3ab9d96b49028abaf3f363048e5bc4e7f4129ab5f6bfe766b9d46c3958cd7e4d",
     "verify_stage1_provenance.py": "20e6bf41b08f93d35bd859359e200b171fc3eb484031c529e60da7fa4656b716",
-    "test_stage1_provenance.py": "62fb4d1ed1a7248cbefa91ce705ae2ac4d530941d88c09eb2201b5beb9aaad0a",
+    "test_stage1_provenance.py": "47b8be513e36e975d1774504b0a218e6ecdfb4ecba1b812ebe324745b2a0b78e",
     "note": "Generator, independent verifier and mutation suite are distinct files (generator != verifier)."
   },
   "environment": {
@@ -39,7 +39,7 @@
     "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "validation_semantics_raw_sha256": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026",
     "current_raw_sha256": "f48313667699ada0f31ac0e15bef8b6f148ca34db57915eb963191979071afd8",
-    "release_manifest_raw_sha256": "2c94aa80ac84a93dbeaf6e6f12c887b0fd776ec694eca67ce3bad1f59a1860ce",
+    "release_manifest_raw_sha256": "67d04b7fdb847a961e22cc1ede930ddf4c8dd9e2ad57c5fc7dd791cf71b3efc6",
     "umap_coordinates_raw_sha256": "a7164168aaf61466ca699e1b00633c37ecef88705db443fb7fb0d00a86ccbbf6",
     "umap_overlay_v3_raw_sha256": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
     "summary_v3_raw_sha256": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
@@ -79,5 +79,5 @@
     "reproducibility": "Heavy artifacts (parquet, v3 overlay, coordinates, v3 registry, v3 summary) are gitignored release-staging outputs bound here by hash; the reproduce chain regenerates them from pinned inputs."
   },
   "recovery_receipt_all_pass": true,
-  "self_canonical_sha256": "e6cfcd952fc1ef7e2375e5b9ca8fc8184e98c08be6b8aca6e7077ae78cf4091e"
+  "self_canonical_sha256": "1bfabf35c8176e1366377ff8619be90600da34a1f7565fb3ee51810fb0e4336c"
 }
