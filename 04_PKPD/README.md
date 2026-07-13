@@ -109,6 +109,47 @@ python -m analysis.run_stage4      --stage3-annotation-bundle $S3 --evidence-bun
 python -m verifier.verify_stage4   --release outputs/<scorecard_set_id> --method method
 ```
 
+### The real-queue command (one template, gated)
+
+When the **table-sealed Stage-3 v2 bundle** arrives, this is the whole acquisition step. It
+acquires every candidate Stage 3 queued, concurrently, from the adapters and cache already in
+place — and it **refuses** to run until Stage-3's own verifier has actually passed.
+
+```bash
+# The Stage-3 build context gate 2 needs. Without these, the command below REFUSES.
+export SPOT_STAGE3_VERIFIER_ROOT=<dir holding Stage-3's verifier/ package>
+export SPOT_STAGE3_CACHE_ROOT=<Stage-3's pinned acquisition cache>
+export SPOT_STAGE3_DIRECT_RUN=<the verified Stage-2 Direct run>
+export SPOT_STAGE3_DIRECT_INPUTS_ROOT=<raw Direct inputs>
+
+S3=<the admitted, table-sealed Stage-3 v2 bundle dir>
+R=<run root, OUTSIDE the working tree>
+
+python -m analysis.run_acquire \
+    --stage3-annotation-bundle "$S3" \
+    --run-root "$R" \
+    --acquire-queue \              # every candidate Stage 3 queued — no hand-typed names
+    --require-external-verifier \  # gate 2 must PASS; `not_run` is a refusal
+    --allow-network \
+    --max-concurrency 4             # bounded; changes the wall clock, never a record
+```
+
+What it preserves on every acquired record, per source: **canonical URL + query**, **source
+release / `last_updated`**, **licence + terms URL**, **raw byte count + SHA-256**, **UTC access
+time** (a cache hit keeps the time of the fetch that *really* happened — it is never re-stamped),
+HTTP status, media type, adapter code hash and the exact extraction transform.
+
+What it will not do: rank, score or combine anything; invent a PK value; or fill a lane no adapter
+can reach (`potency_mec`, `systemic_exposure`, `brain_csf_exposure`, `transporters`,
+`primary_pk_literature` are written as `not_evaluated`, with reasons).
+
+Dry-run it first — `--plan` walks the queue offline and writes `acquisition_plan.json`
+(every URL, every identifier validated, nothing fetched):
+
+```bash
+python -m analysis.run_acquire --stage3-annotation-bundle "$S3" --run-root "$R" --plan
+```
+
 **A time nobody stated is not a time.** Stage 3's `source_records` carry no access timestamp — they
 pin bytes by `raw_sha256` + `source_release`. Stage 4 did not perform those fetches, so a reused
 record carries **no** `accessed_at_utc` and states why (`access_time_not_stated_reason`), and its

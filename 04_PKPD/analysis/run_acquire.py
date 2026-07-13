@@ -56,7 +56,7 @@ from .identity import claims_from, resolve_identity
 from .openfda_approval import acquire_approval
 from .organ_system import LabelRef, extract_organ_system
 from .pubchem import acquire_pubchem_identity
-from .stage3_admission import admit
+from .stage3_admission import PASSED, admit
 from .stage3_reuse import reuse_stage3_sources, stage3_missing_lanes
 
 RECEIPT_FILE = "acquisition_receipt.json"
@@ -91,6 +91,29 @@ def _candidate_names(tables: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
         for m in tables["active_moieties"]
         if m.get("active_moiety_id") in queued and m.get("preferred_name")
     }
+
+
+def queued_moiety_names(tables: dict[str, list[dict[str, Any]]]) -> list[str]:
+    """The moiety names Stage 3 QUEUED, in candidate order. A lookup, not a rank.
+
+    Nothing is typed by hand and nothing Stage 3 did not queue can enter the queue: the names come
+    out of the admitted bundle's own rows.
+    """
+    moieties = {m["active_moiety_id"]: m for m in tables["active_moieties"]}
+    names: list[str] = []
+    for candidate in sorted(tables["candidates"], key=lambda c: str(c["candidate_id"])):
+        if candidate.get("stage4_assessment_status") != "queued":
+            continue
+        moiety = moieties.get(candidate["active_moiety_id"]) or {}
+        name = str(moiety.get("preferred_name") or "").strip()
+        if not name:
+            raise Rejection(
+                "queued_candidate_has_no_name",
+                f"queued candidate {candidate['candidate_id']!r} has no preferred_name on its "
+                "active moiety, so no public source can be queried for it. Stage 4 does not guess "
+                "a drug name.")
+        names.append(name)
+    return names
 
 
 def acquire_identity(client: Client, run_root: RunRoot, name: str, *,
@@ -162,7 +185,8 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
         setid: Optional[str], require_external_verifier: bool,
         client: Optional[Client] = None, plan_only: bool = False,
         max_workers: int = DEFAULT_MAX_WORKERS,
-        reuse_cache: bool = True) -> tuple[int, dict[str, Any]]:
+        reuse_cache: bool = True,
+        acquire_queue: bool = False) -> tuple[int, dict[str, Any]]:
     # Admission is UNCHANGED and is not weakened by any flag below. A plan over an unadmitted
     # bundle would be a schedule built on bytes nobody verified.
     admission = admit(bundle_dir, require_external_verifier=require_external_verifier)
@@ -174,6 +198,20 @@ def run(bundle_dir: str, run_root_dir: str, *, names: list[str], allow_network: 
 
     queued_by_name = _candidate_names(admission.tables)
     identities: list[dict[str, Any]] = []
+
+    if acquire_queue:
+        # THE GATE on real-candidate acquisition. `not_run` is not a pass: acquiring the queue
+        # against a bundle Stage-3's own verifier never saw would bind real public evidence to
+        # unverified upstream bytes, and the receipt would look identical to one that was earned.
+        if admission.external_verifier != PASSED:
+            raise Rejection(
+                "queue_acquisition_requires_external_verifier",
+                "acquiring the real candidate queue requires Stage-3's own verifier "
+                f"(verifier.verify_stage3) to have PASSED; it is {admission.external_verifier!r}. "
+                "Pass --require-external-verifier with the Stage-3 build context configured "
+                "(SPOT_STAGE3_VERIFIER_ROOT / SPOT_STAGE3_CACHE_ROOT / SPOT_STAGE3_DIRECT_RUN / "
+                "SPOT_STAGE3_DIRECT_INPUTS_ROOT). Until then the queue is planned, never acquired.")
+        names = queued_moiety_names(admission.tables) + [n for n in names]
 
     # PLAN: what WOULD be acquired for the queued candidates, offline. Readiness, not a result.
     plan = plan_document(plan_queue(client or Client(), admission.tables))
@@ -362,6 +400,9 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
                     help="pin the DailyMed product when discovery returns more than one")
     ap.add_argument("--allow-network", action="store_true",
                     help="permit requests to the ledgered public hosts. Off by default.")
+    ap.add_argument("--acquire-queue", action="store_true",
+                    help="acquire EVERY candidate Stage 3 queued, concurrently. REFUSES unless "
+                         "Stage-3's own verifier has actually passed (gate 2).")
     ap.add_argument("--plan", action="store_true",
                     help="write acquisition_plan.json: what WOULD be acquired for the queued "
                          "candidates, offline. Acquires nothing.")
@@ -386,6 +427,7 @@ def main(argv: Optional[list[str]] = None, *, client: Optional[Client] = None) -
             plan_only=args.plan,
             max_workers=args.max_concurrency,
             reuse_cache=not args.no_cache,
+            acquire_queue=args.acquire_queue,
         )
     except Rejection as exc:
         print(f"REFUSED [{exc.code}] {exc.detail}", file=sys.stderr)
