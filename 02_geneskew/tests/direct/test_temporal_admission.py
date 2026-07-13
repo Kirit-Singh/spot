@@ -36,11 +36,22 @@ def artifact(temporal_run):
 
 
 def reverify(out_dir, prov, mutate_df=None, mutate_prov=None):
+    """Mutate the SHIPPED artifact on disk, then re-verify it.
+
+    ``mutate_prov`` writes the mutated provenance BACK TO DISK — because that is what a
+    real bad artifact looks like, and because the verifier now reads the shipped bytes
+    rather than whatever dict a caller hands it. The mutated dict is passed as the caller
+    copy too, so the honest-producer case (generator emits a bad artifact and hands over
+    its own view of it) is what gets exercised. See ``TestTheVerifierReadsTheShippedBytes``
+    for the adversarial case: poison the file, pass the CLEAN dict.
+    """
     if mutate_df is not None:
         path = os.path.join(out_dir, "temporal.parquet")
         mutate_df(pd.read_parquet(path)).to_parquet(path, index=False)
     if mutate_prov is not None:
         prov = mutate_prov(json.loads(json.dumps(prov)))
+        with open(os.path.join(out_dir, "temporal_provenance.json"), "w") as fh:
+            json.dump(prov, fh, indent=2)
     return verify_temporal.verify(out_dir=out_dir, provenance=prov)
 
 
@@ -164,6 +175,100 @@ class TestTheQShapedHoleTheReAuditWalkedThrough:
             assert spelling in doc
         for claimed in ("q_val_adjusted", "bh_significance"):
             assert admission.forbidden_keys({claimed: 1}) == [claimed]
+
+
+class TestTheVerifierReadsTheShippedBytes:
+    """B4 re-audit — the verifier used to firewall the CALLER'S DICT, not the artifact.
+
+    The demonstrated attack: poison the emitted ``temporal_provenance.json`` on disk, then
+    hand the verifier the pristine in-memory dict. It ADMITTED — and printed the sha256 of
+    the file it never opened. A verifier that trusts its caller's copy of the thing it is
+    verifying is not a verifier; it is a formality with a hash beside it.
+    """
+
+    def _poison_file_only(self, out_dir, key, value, at=None):
+        """Poison the SHIPPED file. Return the CLEAN dict, as the attacker would pass."""
+        path = os.path.join(out_dir, "temporal_provenance.json")
+        with open(path) as fh:
+            clean = json.load(fh)
+        poisoned = json.loads(json.dumps(clean))
+        target = poisoned if at is None else poisoned[at]
+        target[key] = value
+        with open(path, "w") as fh:
+            json.dump(poisoned, fh, indent=2)
+        return clean
+
+    @pytest.mark.parametrize("key", [
+        "empirical_q_value", "empirical_p_value", "nominal_p", "q_val", "qvalue",
+        "fdr", "combined_objective",
+    ])
+    def test_an_ON_DISK_poison_is_REJECTED_even_with_a_clean_caller_dict(
+            self, artifact, key):
+        out, _ = artifact
+        clean = self._poison_file_only(out, key, 0.01, at="estimator")
+        # the caller's copy really is clean: the poisoned KEY is not in it
+        assert key not in clean["estimator"]
+        assert admission.forbidden_keys(clean) == []
+
+        r = verify_temporal.verify(out_dir=out, provenance=clean)
+        assert r["verdict"] == verify_temporal.REJECT
+        assert "no_forbidden_key_at_any_depth" in failed(r)
+
+    def test_the_caller_dict_is_not_even_required(self, artifact):
+        # The shipped bytes are the subject. A verifier that needs to be TOLD what it is
+        # verifying can be told the wrong thing.
+        out, _ = artifact
+        assert verify_temporal.verify(out_dir=out)["verdict"] == verify_temporal.ADMIT
+
+        self._poison_file_only(out, "empirical_q_value", 0.01, at="estimator")
+        r = verify_temporal.verify(out_dir=out)      # no caller dict at all
+        assert r["verdict"] == verify_temporal.REJECT
+        assert "no_forbidden_key_at_any_depth" in failed(r)
+
+    def test_a_caller_dict_that_disagrees_with_the_shipped_file_is_REJECTED(self,
+                                                                            artifact):
+        out, _ = artifact
+        clean = self._poison_file_only(out, "empirical_q_value", 0.01, at="estimator")
+        r = verify_temporal.verify(out_dir=out, provenance=clean)
+        assert "caller_provenance_matches_the_shipped_file" in failed(r)
+
+    def test_it_proves_the_bytes_it_firewalled_are_the_bytes_it_hashed(self, artifact):
+        out, prov = artifact
+        r = verify_temporal.verify(out_dir=out, provenance=prov)
+        assert r["verdict"] == verify_temporal.ADMIT
+        # the check exists, it passed, and the report pins the canonical bytes it read
+        assert "the_provenance_we_verified_is_the_provenance_we_hashed" in {
+            c["check"] for c in r["checks"]}
+        assert len(r["artifact_identity"]["provenance_canonical_sha256"]) == 64
+
+    def test_an_unparseable_shipped_provenance_is_REJECTED(self, artifact):
+        out, prov = artifact
+        with open(os.path.join(out, "temporal_provenance.json"), "w") as fh:
+            fh.write("{ this is not json")
+        r = verify_temporal.verify(out_dir=out, provenance=prov)
+        assert r["verdict"] == verify_temporal.REJECT
+        assert "shipped_provenance_loads_from_disk" in failed(r)
+
+
+class TestTheNominalPHole:
+    """The THIRD audit's key: not a p-word, not a bare p. Both earlier passes missed it."""
+
+    def test_nominal_p_is_caught(self):
+        assert admission.forbidden_keys({"nominal_p": 0.01}) == ["nominal_p"]
+
+    @pytest.mark.parametrize("key", [
+        "nominal_p", "nominal_q", "raw_p", "raw_q", "p_adjusted", "q_adjusted",
+        "emp_p", "emp_q", "p_bh", "p", "q",
+    ])
+    def test_every_standalone_p_or_q_token_is_caught(self, key):
+        assert admission.forbidden_keys({key: 1}) == [key]
+
+    @pytest.mark.parametrize("key", [
+        "program_id", "pathway_run_id", "n_panel_surviving", "comparison_id",
+        "target_symbol", "peak_rank", "coverage", "policy_id", "sparse_panel_caution",
+    ])
+    def test_an_honest_key_containing_p_or_q_is_not_caught(self, key):
+        assert admission.forbidden_keys({key: 1}) == []
 
 
 class TestTheBareScalarKeys:

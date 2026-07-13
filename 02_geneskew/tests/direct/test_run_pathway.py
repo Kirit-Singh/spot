@@ -159,6 +159,65 @@ class TestItPassesItsOwnVerifier:
         assert v["verdict"] == verify_pathway.REJECT
 
 
+class TestTheVerifierReadsTheShippedBytes:
+    """B2 re-audit — the verifier hashed the provenance file and firewalled the CALLER'S
+    DICT. Poison the emitted ``pathway_provenance.json`` on disk, pass the pristine dict,
+    and it ADMITTED. It is now the shipped bytes or nothing."""
+
+    def _poison_file_only(self, out_dir, key, value):
+        path = os.path.join(out_dir, "pathway_provenance.json")
+        with open(path) as fh:
+            clean = json.load(fh)
+        poisoned = json.loads(json.dumps(clean))
+        poisoned["estimator_poison"] = {key: value}
+        with open(path, "w") as fh:
+            json.dump(poisoned, fh, indent=2)
+        return clean
+
+    @pytest.mark.parametrize("key", [
+        "empirical_p_value", "empirical_q_value", "nominal_p", "q_val", "qvalue", "fdr",
+    ])
+    def test_an_ON_DISK_poison_is_REJECTED_even_with_a_clean_caller_dict(
+            self, built, key):
+        from direct.temporal import admission
+        res, _, _ = built
+        clean = self._poison_file_only(res["out_dir"], key, 0.01)
+        assert admission.forbidden_keys(clean) == []     # the caller's copy IS clean
+
+        v = verify_pathway.verify(out_dir=res["out_dir"], provenance=clean)
+        assert v["verdict"] == verify_pathway.REJECT
+        assert "no_forbidden_key_at_any_depth" in {
+            c["check"] for c in v["checks"] if c["status"] == verify_pathway.FAIL}
+
+    def test_the_caller_dict_is_not_even_required(self, built):
+        res, _, _ = built
+        assert verify_pathway.verify(
+            out_dir=res["out_dir"])["verdict"] == verify_pathway.ADMIT
+        self._poison_file_only(res["out_dir"], "empirical_p_value", 0.01)
+        assert verify_pathway.verify(
+            out_dir=res["out_dir"])["verdict"] == verify_pathway.REJECT
+
+    def test_a_caller_dict_disagreeing_with_the_shipped_file_is_REJECTED(self, built):
+        res, _, _ = built
+        clean = self._poison_file_only(res["out_dir"], "empirical_p_value", 0.01)
+        v = verify_pathway.verify(out_dir=res["out_dir"], provenance=clean)
+        assert "caller_provenance_matches_the_shipped_file" in {
+            c["check"] for c in v["checks"] if c["status"] == verify_pathway.FAIL}
+
+    def test_it_pins_the_canonical_bytes_it_actually_read(self, built):
+        res, _, prov = built
+        v = verify_pathway.verify(out_dir=res["out_dir"], provenance=prov)
+        assert v["verdict"] == verify_pathway.ADMIT
+        assert len(v["artifact_identity"]["provenance_canonical_sha256"]) == 64
+
+    def test_an_unparseable_shipped_provenance_is_REJECTED(self, built):
+        res, _, prov = built
+        with open(os.path.join(res["out_dir"], "pathway_provenance.json"), "w") as fh:
+            fh.write("{ not json")
+        v = verify_pathway.verify(out_dir=res["out_dir"], provenance=prov)
+        assert v["verdict"] == verify_pathway.REJECT
+
+
 class TestNoPValueNoCombinedObjective:
     def test_the_clean_artifact_carries_no_p_or_q_anywhere(self, built):
         _, doc, prov = built

@@ -20,10 +20,9 @@ Fail-closed: any failed check REJECTS the artifact.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
-from typing import Any
+from typing import Any, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -55,8 +54,22 @@ def _fails(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [c for c in checks if c["status"] != PASS]
 
 
-def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
-    """Re-derive every pathway claim from the bytes that shipped."""
+PROVENANCE_FILE = "pathway_provenance.json"
+RECORDS_FILE = "pathway.json"
+
+
+def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
+           ) -> dict[str, Any]:
+    """Re-derive every pathway claim from THE BYTES THAT SHIPPED.
+
+    ``provenance`` is NOT the subject of verification — the shipped
+    ``pathway_provenance.json`` is LOADED here and everything below runs on THAT. The
+    caller's dict is admissible only as a cross-check.
+
+    (The previous version hashed the provenance file and then firewalled the caller's
+    dictionary. An independent audit poisoned the emitted provenance on disk with
+    ``empirical_p_value``, passed the pristine dict, and got ADMIT.)
+    """
     files = {n: (file_sha256(os.path.join(out_dir, n))
                  if os.path.exists(os.path.join(out_dir, n)) else None)
              for n in REQUIRED_FILES}
@@ -68,15 +81,38 @@ def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
     checks.append(_check("every_required_file_is_present", not absent,
                          f"absent: {absent}"))
     if absent:
-        return _report(provenance, identity, checks, n_records=0)
+        return _report(provenance or {}, identity, checks, n_records=0)
 
-    with open(os.path.join(out_dir, "pathway.json")) as fh:
-        doc = json.load(fh)
+    # ---- 0. LOAD BOTH SHIPPED DOCUMENTS. This is what gets verified. ----
+    try:
+        shipped_prov = admission.load_shipped(out_dir, PROVENANCE_FILE)
+        shipped_doc = admission.load_shipped(out_dir, RECORDS_FILE)
+    except admission.ShippedDocError as exc:
+        checks.append(_check("shipped_documents_load_from_disk", False, str(exc)))
+        return _report(provenance or {}, identity, checks, n_records=0)
+    checks.append(_check("shipped_documents_load_from_disk", True))
+
+    checks.append(_check(
+        "the_provenance_we_verified_is_the_provenance_we_hashed",
+        shipped_prov["sha256"] == files[PROVENANCE_FILE],
+        f"loaded {shipped_prov['sha256'][:16]} != pinned "
+        f"{str(files[PROVENANCE_FILE])[:16]}"))
+    checks.append(_check(
+        "caller_provenance_matches_the_shipped_file",
+        admission.caller_matches(shipped_prov["doc"], provenance),
+        "the caller's provenance dict differs from the shipped bytes; the shipped "
+        "bytes are what is verified"))
+
+    # FROM HERE ON these mean THE SHIPPED DOCUMENTS.
+    provenance = shipped_prov["doc"]
+    doc = shipped_doc["doc"]
+    identity["provenance_canonical_sha256"] = shipped_prov["canonical_sha256"]
     records = doc["records"]
 
     # ---- 1. NO p / q / FDR / combined objective, ANYWHERE, at ANY depth ----
-    # The same recursive firewall the temporal lane fails closed on. A pathway p-value
-    # would be the single most believable wrong number this whole layer could emit.
+    # The same recursive firewall the temporal lane fails closed on, over the SHIPPED
+    # bytes of both documents. A pathway p-value would be the single most believable
+    # wrong number this whole layer could emit.
     hits = admission.forbidden_keys(doc) + admission.forbidden_keys(provenance)
     checks.append(_check("no_forbidden_key_at_any_depth", not hits,
                          f"forbidden keys: {sorted(set(hits))[:8]}"))

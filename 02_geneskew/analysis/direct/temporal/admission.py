@@ -40,9 +40,20 @@ the code actually does, and ``test_temporal_admission`` asserts every line of it
     significance                           — including bh_significance
     combined  balanced  weighted  score    — the combined-objective family
 
-  CAUGHT (exact key, case-insensitive):
-    p  q                                   — a bare p or q. A substring rule for these
-                                             would fire on every key containing the letter.
+  CAUGHT (standalone p/q TOKEN in a snake_case key — ``(^|_)[pq](_|$)``):
+    p   q   nominal_p   raw_q   p_adjusted   emp_q   p_bh
+
+    ``nominal_p`` is the one a THIRD audit found: it is not spelled like any p-word on
+    the list above, and it is not a bare ``p`` either, so both earlier passes missed it.
+    A token rule catches the whole family. It is deliberately NOT a substring rule — "p"
+    as a substring would refuse every key containing the letter, and a firewall that
+    refuses everything is a firewall somebody turns off.
+
+VERIFY WHAT SHIPPED, NOT WHAT THE CALLER SAYS SHIPPED
+-----------------------------------------------------
+See ``load_shipped``. The verifiers used to firewall a dictionary handed to them by their
+caller while merely HASHING the file on disk — two different objects, never compared. The
+bytes are now read here and everything downstream runs on them.
 
 THE EXCEPTIONS ARE ENUMERATED, NOT IMPLIED
 ------------------------------------------
@@ -64,6 +75,9 @@ exemption is conditional on the declaration still being a prohibition.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import re
 from typing import Any
 
@@ -90,9 +104,15 @@ FORBIDDEN_KEY_PATTERN = (
     r"|combined|balanced|weighted|score")
 FORBIDDEN_KEY_RE = re.compile(FORBIDDEN_KEY_PATTERN, re.IGNORECASE)
 
-# A key that IS ``p`` or ``q``. Matched EXACTLY (case-insensitively), never as a
-# substring — ``p`` as a substring rule would refuse every key with a p in it.
-BARE_FORBIDDEN_KEYS = frozenset({"p", "q"})
+# ...and a STANDALONE p/q TOKEN anywhere in a snake_case key. This is what catches
+# ``nominal_p`` — which the first two passes both missed, because it is not spelled like
+# any p-word on the list and is not a bare ``p`` either. The token rule subsumes the bare
+# keys (``p``, ``q``) and generalises to ``raw_p``, ``p_adjusted``, ``emp_q``, ``p_bh``.
+#
+# It is a TOKEN rule, not a substring rule: a substring rule for "p" would refuse every
+# key containing the letter, and a firewall that refuses everything is a firewall somebody
+# turns off. Verified against all 453 keys the real artifacts emit — zero false positives.
+FORBIDDEN_TOKEN_RE = re.compile(r"(^|_)[pq](_|$)", re.IGNORECASE)
 
 # The ONLY names exempt from the firewall, by exact spelling. See the module docstring.
 KEY_FIREWALL_EXCEPTIONS = frozenset({"away_from_A_zscore", "toward_B_zscore"})
@@ -223,8 +243,8 @@ def forbidden_keys(obj: Any, path: str = "") -> list[str]:
 
 
 def _forbidden(key: str) -> bool:
-    """The pattern, plus the bare ``p``/``q`` keys a substring rule cannot express."""
-    return bool(FORBIDDEN_KEY_RE.search(key)) or key.lower() in BARE_FORBIDDEN_KEYS
+    """The word pattern, plus a standalone p/q token (``nominal_p``, ``raw_q``, ``p``)."""
+    return bool(FORBIDDEN_KEY_RE.search(key) or FORBIDDEN_TOKEN_RE.search(key))
 
 
 def _exempt(key: str, value: Any) -> bool:
@@ -236,6 +256,64 @@ def _exempt(key: str, value: Any) -> bool:
         # 1 or "false" cannot pose as the prohibition
         return value is NEGATIVE_DECLARATIONS[key]
     return False
+
+
+class ShippedDocError(ValueError):
+    """The shipped document is absent or unparseable. Refuse; never fall back."""
+
+
+def load_shipped(out_dir: str, filename: str) -> dict[str, Any]:
+    """Read the SHIPPED bytes off disk. The verifier's only source of truth.
+
+    THE HOLE THIS CLOSES. Both verifiers used to take the provenance as a CALLER
+    ARGUMENT: they hashed the file on disk, and then firewalled the dictionary the caller
+    handed them. Those are two different objects, and nothing compared them. An attacker
+    poisons the emitted ``*_provenance.json`` with ``empirical_q_value``, passes the
+    pristine in-memory dict to the verifier, and the verifier ADMITS — while its own
+    report prints the sha256 of the file it never looked inside.
+
+    A verifier that trusts its caller's copy of the thing it is verifying is not a
+    verifier. It is a formality with a hash beside it.
+
+    So: the bytes are read HERE, the object is parsed from THOSE bytes, and everything
+    downstream — the firewall, every re-derivation — runs on what was actually shipped.
+    The caller's dict is admissible only as a cross-check (``caller_matches``), never as
+    the subject.
+    """
+    path = os.path.join(out_dir, filename)
+    if not os.path.exists(path):
+        raise ShippedDocError(f"the shipped document {filename!r} is absent from "
+                              f"{out_dir!r}; an absent artifact confirms nothing")
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    try:
+        doc = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ShippedDocError(
+            f"the shipped document {filename!r} is not parseable JSON: {exc}") from exc
+    return {
+        "doc": doc,
+        "raw": raw,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "canonical_sha256": hashlib.sha256(_canonical(doc).encode()).hexdigest(),
+    }
+
+
+def caller_matches(shipped_doc: Any, caller_doc: Any) -> bool:
+    """Is the caller's dictionary the SAME OBJECT the artifact shipped?
+
+    Compared on canonical content, not on identity or key order: a re-serialised dict is
+    the same document. A caller whose copy DIFFERS from the shipped bytes is either stale
+    or lying, and either way the shipped bytes are what get verified.
+    """
+    if caller_doc is None:
+        return True
+    return _canonical(shipped_doc) == _canonical(caller_doc)
+
+
+def _canonical(obj: Any) -> str:
+    """Canonical bytes: sorted keys, no whitespace. Key order is not content."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def column_violations(columns: list[str], filename: str) -> dict[str, list[str]]:

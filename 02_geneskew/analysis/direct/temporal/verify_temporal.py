@@ -18,7 +18,7 @@ from in-memory rows, and this rebuilds the claims from the bytes that shipped.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -64,13 +64,28 @@ def _artifact_identity(out_dir: str) -> dict[str, Any]:
             "required_files": list(admission.REQUIRED_FILES)}
 
 
-def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
-    """Re-derive every claim in ``temporal.parquet`` from the bytes that shipped.
+PROVENANCE_FILE = "temporal_provenance.json"
 
-    FAIL-CLOSED. If a required file is absent, if a column is not on its file's exact
-    allowlist, or if any key ANYWHERE in the artifact matches the forbidden pattern, the
-    artifact is REJECTED — before a single scientific claim is re-derived. There is no
-    branch here that admits something it does not recognise.
+
+def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None
+           ) -> dict[str, Any]:
+    """Re-derive every claim in the artifact from THE BYTES THAT SHIPPED.
+
+    ``provenance`` is NOT the subject of verification. The shipped
+    ``temporal_provenance.json`` is LOADED from disk here, and everything below — the
+    firewall, the reliability re-derivation, the identity binding — runs on THAT. A
+    caller-supplied dict is accepted only as a cross-check: if it differs from the
+    shipped bytes, the artifact is REJECTED, because one of the two is a lie and the
+    verifier does not get to pick the flattering one.
+
+    (The previous version firewalled the caller's dict while merely HASHING the file.
+    An independent audit poisoned the emitted provenance on disk with
+    ``empirical_q_value``, handed the verifier the pristine in-memory dict, and got
+    ADMIT — with the sha256 of the file it never opened printed in its own report.)
+
+    FAIL-CLOSED. Absent file, unparseable file, caller mismatch, unknown column, or a
+    forbidden key ANYWHERE at any depth → REJECT, before a single scientific claim is
+    re-derived.
     """
     identity = _artifact_identity(out_dir)
     checks: list[dict[str, Any]] = []
@@ -80,8 +95,36 @@ def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
     checks.append(_check("every_required_file_is_present", not absent,
                          f"absent: {absent}"))
     if absent:
-        return _report(provenance, identity, checks, n_records=0, n_endpoint_rows=0,
-                       n_comparisons=0)
+        return _report(provenance or {}, identity, checks, n_records=0,
+                       n_endpoint_rows=0, n_comparisons=0)
+
+    # ---- 0a. LOAD THE SHIPPED PROVENANCE. This, and not the caller's copy, is the
+    # thing that gets verified. ----
+    try:
+        shipped = admission.load_shipped(out_dir, PROVENANCE_FILE)
+    except admission.ShippedDocError as exc:
+        checks.append(_check("shipped_provenance_loads_from_disk", False, str(exc)))
+        return _report(provenance or {}, identity, checks, n_records=0,
+                       n_endpoint_rows=0, n_comparisons=0)
+    checks.append(_check("shipped_provenance_loads_from_disk", True))
+
+    # the bytes we firewall ARE the bytes the report pins
+    checks.append(_check(
+        "the_provenance_we_verified_is_the_provenance_we_hashed",
+        shipped["sha256"] == identity["files"][PROVENANCE_FILE],
+        f"loaded {shipped['sha256'][:16]} != pinned "
+        f"{str(identity['files'][PROVENANCE_FILE])[:16]}"))
+
+    # a caller who hands us a DIFFERENT document than the one on disk is stale or lying
+    checks.append(_check(
+        "caller_provenance_matches_the_shipped_file",
+        admission.caller_matches(shipped["doc"], provenance),
+        "the caller's provenance dict differs from the shipped bytes; the shipped "
+        "bytes are what is verified"))
+
+    # FROM HERE ON, `provenance` means THE SHIPPED DOCUMENT.
+    provenance = shipped["doc"]
+    identity["provenance_canonical_sha256"] = shipped["canonical_sha256"]
 
     df = pd.read_parquet(os.path.join(out_dir, "temporal.parquet"))
     ends = pd.read_parquet(os.path.join(out_dir, "endpoints.parquet"))
@@ -99,9 +142,10 @@ def verify(*, out_dir: str, provenance: dict[str, Any]) -> dict[str, Any]:
             not v["unknown"] and not v["missing"],
             f"{name}: unknown={v['unknown']} missing={v['missing']}"))
 
-    # ---- 0b. THE RECURSIVE KEY FIREWALL, over EVERY emitted object (B4). ----
-    # Column names AND the whole provenance document, at any nesting depth. A p-value
-    # buried three levels down in a diagnostics list is the shape a disguised one takes.
+    # ---- 0b. THE RECURSIVE KEY FIREWALL, over EVERY SHIPPED object (B4). ----
+    # Column names AND the LOADED provenance document, at any nesting depth. A p-value
+    # buried three levels down in a diagnostics list is the shape a disguised one takes —
+    # and it is now scanned in the bytes that actually shipped, not in the caller's copy.
     hits = (admission.forbidden_keys({c: None for c in df.columns})
             + admission.forbidden_keys({c: None for c in ends.columns})
             + admission.forbidden_keys(provenance))
