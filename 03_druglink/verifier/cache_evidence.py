@@ -213,3 +213,79 @@ def check_one_mec_id_is_not_spread_across_genes(
         "no single ChEMBL mec_id is admitted as drug evidence for MORE THAN ONE gene",
         not spread,
         "; ".join(f"mec {m} -> {g}" for m, g in list(spread.items())[:3]))
+
+
+# --------------------------------------------------------------------------- #
+# THE GAP MY OWN AUDIT MISSED — containment is not row-deep, it is ASSERTION-deep.
+#
+# The regenerated store gets the ROW right: an ambiguous_identity target carries
+# `drugs: []`. I checked exactly that, and reported green.
+#
+# But the copied source assertions are preserved one level down, under
+# `ambiguous_source_assertions[]`, and SIX of them still carry
+# `general_gene_rankable: true` — mec_ids 6210 and 6862, on CALM1/CALM2/CALM3, the three
+# genes that encode an identical calmodulin protein and therefore share every accession.
+# The exact rows from the original attack.
+#
+# A consumer that flattens assertions — and flattening is the obvious thing to do — reads
+# `general_gene_rankable: true` and ranks them. The row said no; the assertion says yes;
+# the assertion is what gets read.
+#
+# So the rule is not "an ambiguous row has no drugs". It is: NO ASSERTION ANYWHERE INSIDE
+# an ambiguous row may claim to be generally rankable, at any nesting depth, in any
+# container, however honestly that container is named. A gate that holds only at the depth
+# you happened to look at is not a gate.
+# --------------------------------------------------------------------------- #
+DISP_AMBIGUOUS_SOURCE_ASSERTION = "ambiguous_identity_source_assertion"
+
+# The real occurrences, pinned so they cannot silently return.
+CALMODULIN_GENES = ("ENSG00000143933", "ENSG00000160014", "ENSG00000198668")
+AMBIGUOUS_ASSERTION_MEC_IDS = (6210, 6862)
+
+
+def _assertion_nodes(obj: Any, path: str = "$"):
+    """Every dict at ANY depth that makes a rankability claim. Container-agnostic."""
+    if isinstance(obj, dict):
+        if "general_gene_rankable" in obj:
+            yield path, obj
+        for key, value in obj.items():
+            yield from _assertion_nodes(value, f"{path}.{key}")
+    elif isinstance(obj, (list, tuple)):
+        for i, item in enumerate(obj):
+            yield from _assertion_nodes(item, f"{path}[{i}]")
+
+
+def check_no_rankable_assertion_inside_an_ambiguous_row(
+        rep: Report, rows: list[dict[str, Any]]) -> None:
+    """RECURSIVE. Every copied/nested assertion under an ambiguous identity is non-rankable."""
+    leaks = []
+    for row in rows:
+        if row.get("disposition") != DISP_AMBIGUOUS_IDENTITY:
+            continue
+        for path, node in _assertion_nodes(row):
+            if node.get("general_gene_rankable") is not False:
+                leaks.append(
+                    f"{row.get('target_id')}{path[1:]} "
+                    f"(mec {node.get('source_row_id')}): "
+                    f"general_gene_rankable={node.get('general_gene_rankable')!r}")
+
+    rep.check(
+        "NO assertion at ANY nesting depth inside an ambiguous_identity row claims to be "
+        "generally rankable (the row carrying drugs=[] is not enough — a consumer that "
+        "flattens assertions reads the assertion, not the row, and flattening is the "
+        "obvious thing to do)",
+        not leaks, "; ".join(leaks[:4]))
+
+    unnamed = []
+    for row in rows:
+        if row.get("disposition") != DISP_AMBIGUOUS_IDENTITY:
+            continue
+        for path, node in _assertion_nodes(row):
+            if node.get("disposition") not in (DISP_AMBIGUOUS_SOURCE_ASSERTION,
+                                               DISP_AMBIGUOUS_IDENTITY):
+                unnamed.append(f"{row.get('target_id')}{path[1:]}")
+    rep.check(
+        f"every preserved ambiguous assertion carries the named "
+        f"{DISP_AMBIGUOUS_SOURCE_ASSERTION!r} disposition (preserved-but-unlabelled is how "
+        "it gets read as ordinary evidence)",
+        not unnamed, f"{len(unnamed)} unnamed: {unnamed[:3]}")
