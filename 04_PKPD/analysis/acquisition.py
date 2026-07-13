@@ -28,7 +28,7 @@ import json
 import os
 import re
 from functools import lru_cache
-from typing import Any, Literal, Optional
+from typing import Any, Final, Literal, Optional, cast
 
 from pydantic import Field, model_validator
 
@@ -37,7 +37,7 @@ from .contracts import ID_PATTERN, SHA256_PATTERN, AcquisitionStatus, SourceReco
 from .firewall import Rejection
 from .method_config import STAGE4_DIR
 
-ACQUISITION_SCHEMA_ID = "spot.stage04_acquisition_manifest.v1"
+ACQUISITION_SCHEMA_ID: Final = "spot.stage04_acquisition_manifest.v1"
 MANIFEST_FILE = "acquisition_manifest.json"
 RAW_DIR = "raw"
 
@@ -46,6 +46,11 @@ UTC_PATTERN = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
 DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 
 Origin = Literal["fetched_public", "reused_from_stage3", "synthetic_fixture"]
+SourceType = Literal[
+    "primary_literature", "regulatory_label", "public_database", "public_api",
+    "structure_probe", "fixture",
+]
+ReviewStatus = Literal["unreviewed", "machine_verified", "human_reviewed", "not_applicable"]
 EvidenceState = Literal[
     "observed",
     "not_evaluated",
@@ -53,6 +58,24 @@ EvidenceState = Literal[
     "conflicting",
     "not_applicable",
 ]
+
+SOURCE_TYPES: tuple[str, ...] = (
+    "primary_literature", "regulatory_label", "public_database", "public_api",
+    "structure_probe", "fixture",
+)
+
+
+def as_source_type(value: str) -> SourceType:
+    """A source type Stage 4 does not know is a refusal, not a cast.
+
+    The ledger is data, and data can be edited. A typo there must not quietly widen the set of
+    provenance classes the engine believes in.
+    """
+    if value not in SOURCE_TYPES:
+        raise Rejection(
+            "unknown_source_type",
+            f"{value!r} is not a Stage-4 source type (known: {list(SOURCE_TYPES)}).")
+    return cast(SourceType, value)
 
 # What a fetched record must show before it is allowed to be evidence about anything.
 PUBLIC_REQUIRED = (
@@ -79,10 +102,7 @@ class AcquisitionRecord(Strict):
     acquisition_record_id: str = Field(pattern=ID_PATTERN)
     source_key: str
     source_name: str
-    source_type: Literal[
-        "primary_literature", "regulatory_label", "public_database", "public_api",
-        "structure_probe", "fixture",
-    ]
+    source_type: SourceType
     origin: Origin
 
     # --- the locator ---------------------------------------------------------------
@@ -122,7 +142,7 @@ class AcquisitionRecord(Strict):
     # --- what was done with it ------------------------------------------------------
     extraction_transform: str
     adapter_code_sha256: str = Field(pattern=SHA256_PATTERN)
-    review_status: Literal["unreviewed", "machine_verified", "human_reviewed", "not_applicable"]
+    review_status: ReviewStatus
     evidence_state: EvidenceState = "observed"
 
     stage3_source_record_id: Optional[str] = None
@@ -355,7 +375,7 @@ def fixture_record(*, acquisition_record_id: str, source_key: str, raw: bytes,
 def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: str,
                          extraction_transform: str, adapter_file: str,
                          release: str, suffix: str = "",
-                         review_status: str = "unreviewed",
+                         review_status: ReviewStatus = "unreviewed",
                          content_sha256: Optional[str] = None,
                          content_hash_rule: Optional[str] = None,
                          note: Optional[str] = None) -> AcquisitionRecord:
@@ -374,7 +394,7 @@ def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: 
         acquisition_record_id=new_record_id("acq", response.source_key, response.canonical_query),
         source_key=response.source_key,
         source_name=str(entry["source_name"]),
-        source_type=str(entry["source_type"]),  # type: ignore[arg-type]
+        source_type=as_source_type(str(entry["source_type"])),
         origin="fetched_public",
         stable_record_id=stable_record_id,
         url=response.url,
@@ -396,7 +416,7 @@ def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: 
         cache_relpath=relpath,
         extraction_transform=extraction_transform,
         adapter_code_sha256=code_sha256(adapter_file),
-        review_status=review_status,  # type: ignore[arg-type]
+        review_status=review_status,
         evidence_state="observed",
         note=note,
     )

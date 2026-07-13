@@ -27,7 +27,14 @@ from __future__ import annotations
 import math
 from typing import Any, Optional
 
-from .acquisition import AcquisitionRecord, MissingEvidence, code_sha256, new_record_id
+from .acquisition import (
+    AcquisitionRecord,
+    MissingEvidence,
+    SourceType,
+    as_source_type,
+    code_sha256,
+    new_record_id,
+)
 from .firewall import Rejection
 from .public_sources import ledger
 from .stage3_contract_v2 import ACQUISITION_STATUSES
@@ -71,9 +78,9 @@ def _str(value: Any) -> Optional[str]:
     return s or None
 
 
-def _source_type(source_key: str) -> str:
+def _source_type(source_key: str) -> SourceType:
     entry = ledger()["sources"].get(source_key)
-    return str(entry["source_type"]) if entry else "public_database"
+    return as_source_type(str(entry["source_type"])) if entry else "public_database"
 
 
 def _terms(source_key: str, stage3_license: Optional[str]) -> tuple[Optional[str], Optional[str], str]:
