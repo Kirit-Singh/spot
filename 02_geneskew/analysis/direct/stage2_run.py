@@ -161,9 +161,10 @@ def build_run_identity(cfg: Cfg) -> dict:
             "pathway_verifier": "53ac540",
         },
         "p2s": {
-            "scores_full": h(cfg.p2s_scores),
+            "scores_full": cfg.p2s_scores,          # W15 preparer input (NOT a --cells NPZ)
             "scores_raw_sha256": P2S_SCORES_RAW_SHA256,
             "scores_canonical_sha256": P2S_SCORES_CANONICAL_SHA256,
+            "status": "typed_pending_w15_preparer",
             "forbid_40k_overlay": True,
         },
     }
@@ -193,12 +194,6 @@ def phaseA_preflight(cfg: Cfg):
         raise SchedulerError(f"preflight: staged release root missing: {cfg.stage1_release_root}")
     if os.path.exists(cfg.out) and not os.path.isdir(cfg.state_dir) and os.listdir(cfg.out):
         raise SchedulerError(f"preflight: OUT {cfg.out} non-empty and not a resumable run root")
-    if os.path.isfile(cfg.p2s_scores):
-        raw = file_sha256(cfg.p2s_scores)
-        if raw != P2S_SCORES_RAW_SHA256:
-            raise SchedulerError(
-                f"preflight: P2S scores raw sha {raw[:16]} != pinned {P2S_SCORES_RAW_SHA256[:16]} "
-                "(bind the staged 396k-row stage01_scores_full.parquet; NEVER the 40k overlay)")
     os.makedirs(cfg.state_dir, exist_ok=True)
     with open(identity_path(cfg), "w") as fh:
         json.dump(manifest, fh, sort_keys=True, indent=2)
@@ -420,19 +415,24 @@ def lane_pathway(cfg):
 
 
 def lane_p2s(cfg):
-    _phase("D p2s (optional secondary)")
+    """P2S optional secondary lane — TYPED PENDING, not runnable, until W15 publishes its
+    production preparation CLI. `run_p2s_arms --cells` requires a PREPARED per-condition NPZ
+    (barcodes/donors/gene_ids/expr/score__<program_id>) that W15's preparer builds by barcode-
+    joining the staged 396k-row `stage01_scores_full.parquet` (pinned in the run identity) to the
+    condition-specific NTC expression matrix — NEVER the 40k overlay. The eventual run also needs
+    the real per-condition effects.parquet, admitted masks.parquet, and eligible.parquet. The raw
+    parquet is NOT a valid --cells input, so this lane emits a typed-pending state and does not run."""
+    _phase("D p2s (optional secondary — TYPED PENDING: W15 preparer CLI not yet published)")
     require_admitted_direct(cfg)
+    if DRY:
+        print("=== P2S TYPED-PENDING: run_p2s_arms needs W15's prepared per-condition NPZ "
+              "(barcode-joined 396k scores x NTC matrix) + effects/masks/eligible; not runnable")
+        return
     for cond in CONDITIONS:
-        run(f"p2s:{cond}",
-            _py("p2s_arms.run_p2s_arms", "--direct-bundle", direct_bundle_for(cfg, cond),
-                "--w10-report", w10_binding_path(cfg, cond), "--env-lock", cfg.env_lock,
-                "--stage1-release", cfg.stage1_release, "--arm-key", f"p2s.{cond}",
-                "--cells", cfg.p2s_scores,   # staged 396k-row Stage-1 scores; never the 40k overlay
-                "--effects", os.path.join(cfg.sel_dir, f"effects_{cond}.parquet"),
-                "--out-root", os.path.join(cfg.out, "p2s")),
-            consumes=[f"w10_admission:{cond}"], produces=[f"p2s:{cond}"])
-    _write_receipt(cfg, "D.p2s", argv=["run_p2s_arms"], inputs=[],
-                   outputs=[os.path.join(cfg.out, "p2s")], prereqs=["C.direct_admitted"])
+        _write_receipt(cfg, f"D.p2s.{cond}", argv=["p2s-pending"], inputs=[], outputs=[],
+                       prereqs=["C.direct_admitted"],
+                       extra={"status": "typed_pending_w15_preparer",
+                              "forbid_40k_overlay": True})
 
 
 def lane_aggregate(cfg):
