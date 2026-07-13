@@ -208,7 +208,7 @@ SCORE_DOMAINS = {k: _domain(allcols[k]) for k in sorted(allcols)}
 # No argmax across fields anywhere; scores are compared only within a field.
 DISPLAY_LABEL = {
     "diff_naive_score": "Naïve-like", "diff_activated_score": "Activated",
-    "diff_memory_score": "Memory / adhesion-like", "diff_checkpoint_score": "Checkpoint-high",
+    "diff_memory_score": "Memory / adhesion-like", "diff_checkpoint_score": "Checkpoint",
     "treg_like_score": "Treg-like", "cd4_ctl_like_score": "CD4 CTL-like",
     "th1_like_score": "Th1-like", "th2_like_score": "Th2-like", "th17_like_score": "Th17-like",
     "tfh_like_score": "Tfh-like", "th9_like_score": "Th9-like",
@@ -223,7 +223,7 @@ PROGRAM_ORDER = ["diff_naive_score", "diff_activated_score", "diff_memory_score"
                  "th17_like_score", "tfh_like_score", "th9_like_score", "cd4_ctl_like_score_actadj"]
 _METHOD = ("score_genes: panel mean minus expression-bin-matched control mean "
            "(25 bins, ctrl_size 50), SEED=12345")
-_SRC = "Masopust et al., Guidelines for T cell nomenclature, Nat Rev Immunol 2026;26:298-313"
+_SRC = "Naming per Masopust et al. 2026 (framework only); panel markers are separately curated + cited (see registry marker_provenance)"
 programs = [{
     "score_field": k,
     "display_label": DISPLAY_LABEL[k],

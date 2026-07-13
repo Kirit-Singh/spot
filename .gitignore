@@ -32,3 +32,6 @@ pipeline/datasets/
 
 # e2e run outputs
 pipeline/tests/e2e/work/
+01_programs/analysis/_t8_staging/
+# Stage-1 -> Stage-2 bridge: generated/large release bundle (projections + hardlinked parquet)
+01_programs/analysis/stage2_bridge/_release_staging/
