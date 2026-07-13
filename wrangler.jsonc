@@ -8,7 +8,7 @@
   "env": {
     "production": {
       "vars": {
-        "SITE_MODE": "production"
+        "SITE_MODE": "placeholder"
       }
     },
     "preview": {
