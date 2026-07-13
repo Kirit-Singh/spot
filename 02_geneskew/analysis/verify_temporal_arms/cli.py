@@ -33,10 +33,10 @@ def main(argv=None) -> int:
         description="Independent verifier for the Stage-2 reusable temporal ARM release "
                     "(population-level difference-in-differences on program projections; "
                     "NOT per-cell fate, NOT lineage tracing)")
-    ap.add_argument("--stage1-release-root", required=True,
+    ap.add_argument("--stage1-release-root", default=None,
                     help="the EXPLICITLY STAGED Stage-1 v3 release root. Component paths "
                          "resolve against it; there is no machine default.")
-    ap.add_argument("--bundle-root", required=True,
+    ap.add_argument("--bundle-root", default=None,
                     help="the root the six ordered-pair temporal arm bundles were emitted "
                          "under")
     ap.add_argument("--expect-conditions", nargs="*", default=None,
@@ -81,9 +81,27 @@ def main(argv=None) -> int:
                     help="RECORD, rather than refuse, a dirty producer checkout. A digest "
                          "over uncommitted bytes does not identify the commit printed "
                          "beside it, so this is never the default.")
+    ap.add_argument("--print-contract", action="store_true",
+                    help="print the INTEGRATION CONTRACT as JSON and exit: the native files "
+                         "this lane reads and writes, the admission document it requires "
+                         "for --w10-report, and the typed pointer an aggregate binds it by. "
+                         "Emitted as BYTES so a caller binds it rather than transcribing "
+                         "it — a contract copied by hand is a contract that drifts.")
     ap.add_argument("--print-frozen-pins", action="store_true",
                     help="print the frozen Stage-1 v3 release's scorer pins and exit")
     args = ap.parse_args(argv)
+
+    # The two print flags answer questions ABOUT the contract, not about a release, so they
+    # do not need one. Everything else does, and a missing root is an error, not a default.
+    if not (args.print_contract or args.print_frozen_pins):
+        missing = [f for f, v in (("--stage1-release-root", args.stage1_release_root),
+                                  ("--bundle-root", args.bundle_root)) if not v]
+        if missing:
+            ap.error(f"the following arguments are required: {', '.join(missing)}")
+
+    if args.print_contract:
+        print(canonical_json(verify.integration_contract()))
+        return 0
 
     if args.print_frozen_pins:
         print(canonical_json({

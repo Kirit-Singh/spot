@@ -34,7 +34,7 @@ import json
 import os
 from typing import Any, Optional
 
-from . import admission, code_identity, direct_source, rules, schema
+from . import admission, code_identity, contract, direct_source, rules, schema
 from . import bundle as bundle_check
 from . import release as release_mod
 from .canonical import content_hash, file_sha256, sha256_hex
@@ -44,6 +44,7 @@ ADMIT = "ADMIT"
 REJECT = "REJECT"
 
 VERIFIER_ID = "spot.stage02.temporal.arm.independent_verifier.v1"
+integration_contract = contract.integration_contract   # re-export: one import site for a caller
 RUN_ID_RULE_ID = "spot.stage02.temporal.arm.run_id.v1"
 RUN_ID_LEN = 16
 

@@ -485,6 +485,48 @@ class TestTheProducerAndTheVerifierRunFromDifferentCheckouts:
         assert "release_conditions_match_the_pinned_universe" in \
             {x["gate"] for x in report["failures"]}
 
+    def test_the_integration_CONTRACT_is_emitted_as_bytes_and_cannot_drift(self):
+        """An aggregate BINDS this instead of transcribing it. A contract copied by hand is
+        a contract that drifts, and the drift is invisible until a release is admitted
+        against the wrong thing — so every field here is asserted against the constants the
+        verifier actually runs on, not against a copy of them."""
+        from verify_temporal_arms import direct_source, schema, verify
+
+        env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+        proc = subprocess.run(
+            [sys.executable, "-m", "verify_temporal_arms.cli", "--print-contract"],
+            capture_output=True, text=True, env=env, cwd=_W11_REPO)
+        assert proc.returncode == 0, proc.stderr[-500:]
+        c = json.loads(proc.stdout)
+
+        assert c["verifier_id"] == verify.VERIFIER_ID
+        # what it READS: the producer-native inventory, and nothing generic
+        assert c["reads"]["producer_inventory_file"] == schema.INVENTORY_FILENAME
+        assert c["reads"]["producer_inventory_schema"] == schema.SCHEMA_INVENTORY
+        assert c["reads"]["producer_inventory_is_mandatory"] is True
+        assert c["reads"]["generic_or_copied_inventory_accepted"] is False
+        # what it WRITES: one file, beside it, and nothing of the producer's
+        assert c["writes"]["external_admission_file"] == schema.ENVELOPE_FILENAME
+        assert c["writes"]["external_admission_schema"] == schema.SCHEMA_ENVELOPE
+        assert c["writes"]["producer_bytes_modified"] is False
+        # what --w10-report must SAY
+        req = c["w10_admission_document"]["required_fields"]
+        assert req["admitted"] is True and req["self_admitted"] is False
+        assert direct_source.PENDING_VERDICT in req["verdict"]
+        assert c["w10_admission_document"]["must_not_be"]["path"].endswith(
+            direct_source.VERIFICATION_FILE)
+        assert c["exit_codes"] == {"0": "ADMIT", "1": "REJECT"}
+
+    def test_the_print_flags_need_no_release_but_everything_else_does(self):
+        """A missing root is an ERROR, not a default: a verifier that guessed one would bind
+        to whatever release happened to be on the machine that ran it."""
+        env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
+        bad = subprocess.run(
+            [sys.executable, "-m", "verify_temporal_arms.cli", "--sign"],
+            capture_output=True, text=True, env=env, cwd=_W11_REPO)
+        assert bad.returncode != 0
+        assert "--stage1-release-root" in bad.stderr and "--bundle-root" in bad.stderr
+
     def test_neither_process_imports_the_others_rules(self):
         """Asserted in the process that actually ran, not by reading the source."""
         env = dict(os.environ, PYTHONPATH=_W11_ANALYSIS)
