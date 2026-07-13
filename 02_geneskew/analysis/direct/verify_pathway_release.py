@@ -118,7 +118,7 @@ G_REOPEN = "every_bundle_reopens_and_its_nonnull_run_id_rederives_from_its_own_b
 G_ONE_RELEASE = "one_scorer_view_and_stage1_that_match_the_release_pins_and_the_pinned_solver_lock"
 G_DISTINCT = "every_cell_has_a_distinct_nonnull_run_id_and_distinct_nonnull_arm_record_bytes"
 G_SOURCE = "each_bundle_agrees_with_itself_about_which_condition_x_source_cell_it_is"
-G_GENE_SETS = "exactly_two_pinned_gene_set_source_artifacts_one_per_source_each_attested"
+G_GENE_SETS = "method_gene_sets_binds_two_pinned_sources_agrees_with_provenance_one_universe"
 G_BUNDLE_ADMITTED = "every_cell_has_one_independent_admitting_report_with_the_exact_gate_inventory"
 G_INVENTORY_PRESENT = "the_producer_inventory_is_present_pending_native_rederives_and_binds_this"
 G_INVENTORY_BYTES = "the_producer_inventory_binds_the_exact_bytes_that_landed_on_disk"
@@ -269,6 +269,11 @@ def _reopen_bundles(bundle_dirs):
             "env_lock_sha256": (binding.get("environment_lock") or {}).get("sha256"),
             "records_sha256": binding.get("records_sha256"),
             "gene_sets_raw_sha256": _raw(gs) if os.path.exists(gs) else None,
+            # the NATIVE gene-set binding is at arm_bundle.method.gene_sets, with the copy the
+            # run id is taken over at run_binding.method.gene_sets — NEVER a top-level gene_sets.
+            "method_gene_sets": ((doc.get("method") or {}).get("gene_sets")),
+            "prov_gene_sets": ((binding.get("method") or {}).get("gene_sets")),
+            "top_level_gene_sets": "gene_sets" in doc,
             "arm_bundle_hashes": _hashes(bp), "provenance_hashes": _hashes(pp),
             "file_hashes": {name: _hashes(os.path.join(d, name)) for name in BOUND_BUNDLE_FILES
                             if os.path.exists(os.path.join(d, name))},
@@ -342,38 +347,67 @@ def _source(bundles, auth_src_set):
 
 
 def _gene_sets(bundles, auth_src_set, report_paths):
-    """Exactly two pinned gene-set source artifacts, one per source, each attested by its report.
+    """The NATIVE gene-set binding, at arm_bundle.method.gene_sets — identity, provenance
+    agreement, pinned bytes, universes — and exactly two artifacts, one per source.
 
-    The only per-source content hash exists PER BUNDLE (``gene_sets.source.json``): there is no
-    upstream pin. So the release binds the two distinct artifacts itself — one shared across each
-    source's bundles — and requires the independent per-bundle report to have ATTESTED the same
-    bytes (so a swapped gene-set file that never went through the per-bundle verifier is caught).
+    ``run_pathway_arms`` writes the binding under ``arm_bundle.method.gene_sets`` and takes the
+    pathway run id over a copy at ``run_binding.method.gene_sets``. This reads ONLY that native
+    location (a top-level ``gene_sets`` is a non-native crutch and is refused), requires the two
+    copies to AGREE exactly, checks the gene-set identity field by field, binds the pinned
+    ``gene_set_release.sha256`` to the gene_sets.source.json bytes on disk (and to the per-bundle
+    report's attestation), and holds the release to ONE effect + ONE target universe.
     """
     bad = []
     by_source: dict[Any, set] = {}
+    effect_universes, target_universes = set(), set()
+    attested = _attested_gene_sets(report_paths)
     for b in bundles:
-        if b["gene_sets_raw_sha256"] is None:
-            bad.append(f"{b['dir']}: no {GENE_SETS_FILE}")
+        mgs, prov_mgs = b["method_gene_sets"], b["prov_gene_sets"]
+        if b["top_level_gene_sets"] and not isinstance(mgs, dict):
+            bad.append(f"{b['dir']}: a top-level gene_sets is not the native binding "
+                       "(it lives at method.gene_sets)")
+        if not isinstance(mgs, dict):
+            bad.append(f"{b['dir']}: arm_bundle carries no method.gene_sets")
             continue
-        by_source.setdefault(b["source"], set()).add(b["gene_sets_raw_sha256"])
+        if not isinstance(prov_mgs, dict) or mgs != prov_mgs:
+            bad.append(f"{b['dir']}: method.gene_sets disagrees with the provenance copy "
+                       "(run_binding.method.gene_sets)")
+        rel = mgs.get("gene_set_release") or {}
+        if _norm_source(rel.get("source")) != b["source"]:
+            bad.append(f"{b['dir']}: gene_set_release.source {rel.get('source')!r} is not the "
+                       f"cell's source {b['source']!r}")
+        if mgs.get("status") != "bound":
+            bad.append(f"{b['dir']}: gene-set binding status is {mgs.get('status')!r}, not bound")
+        # the pinned bytes: gene_set_release.sha256 IS the gene_sets.source.json on disk.
+        pinned_sha = rel.get("sha256")
+        if pinned_sha != b["gene_sets_raw_sha256"]:
+            bad.append(f"{b['dir']}: gene_set_release.sha256 is not the gene_sets.source.json "
+                       "bytes on disk")
+        got = attested.get(b["run_id"])
+        if got is not None and pinned_sha is not None and got != pinned_sha:
+            bad.append(f"{b['dir']}: the independent report attested a different gene-set file")
+        # crosswalk + BOTH universes must be present and identical across the release.
+        if not mgs.get("gene_id_namespace"):
+            bad.append(f"{b['dir']}: the gene-set binding declares no gene_id_namespace crosswalk")
+        for u in ("effect_universe_sha256", "target_universe_sha256"):
+            if not mgs.get(u):
+                bad.append(f"{b['dir']}: the gene-set binding declares no {u}")
+        effect_universes.add(mgs.get("effect_universe_sha256"))
+        target_universes.add(mgs.get("target_universe_sha256"))
+        by_source.setdefault(b["source"], set()).add(pinned_sha)
     for src, hashes in by_source.items():
         if len(hashes) > 1:
             bad.append(f"source {src!r} bundles do not share ONE gene-set artifact")
-    artifacts = {str(src): sorted(h)[0] for src, h in by_source.items() if h}
-    distinct = {h for hs in by_source.values() for h in hs}
+    artifacts = {str(src): sorted(h)[0] for src, h in by_source.items() if h and None not in h}
     if auth_src_set and len(artifacts) != len(auth_src_set):
         bad.append(f"expected {len(auth_src_set)} gene-set sources, found {len(artifacts)}")
-    if len(distinct) != len(artifacts):
+    if len({h for hs in by_source.values() for h in hs}) != len(by_source):
         bad.append("two different sources share the same gene-set artifact")
-    # cross-check attestation: the per-bundle report must have READ these exact gene-set bytes.
-    attested = _attested_gene_sets(report_paths)
-    for b in bundles:
-        want = b["gene_sets_raw_sha256"]
-        got = attested.get(b["run_id"])
-        if want is not None and got is not None and got != want:
-            bad.append(f"{b['dir']}: the independent report attested a different gene-set file")
-    ok = bool(bundles) and not bad
-    return _check(G_GENE_SETS, ok, "; ".join(bad[:3])), artifacts
+    if bundles and len(effect_universes) > 1:
+        bad.append("the release is not built against ONE effect (readout) universe")
+    if bundles and len(target_universes) > 1:
+        bad.append("the release is not built against ONE target (perturbation) universe")
+    return _check(G_GENE_SETS, bool(bundles) and not bad, "; ".join(bad[:4])), artifacts
 
 
 def _attested_gene_sets(report_paths):

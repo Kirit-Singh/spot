@@ -27,6 +27,8 @@ SCORER_CANON = "v" * 64
 METHOD = "stage1-continuous-v3.0.1"
 SCORER_VIEW = "5" * 64
 CODE_IDENTITY = {"lane": "production", "code_tree_sha256": "c" * 64}
+EFFECT_U = "e0" * 32                                 # the ONE readout universe, shared
+TARGET_U = "70" * 32                                 # the ONE perturbation universe, shared
 W3C = "/home/tcelab/worktrees/spot-stage2-w3c/02_geneskew"
 
 BUNDLE_GATES = [SM.V1, SM.V1_REFMAN, SM.V2_VALUES, SM.V2_BITS, SM.V2_CANON, SM.V2_ANCHOR,
@@ -56,8 +58,32 @@ def _gene_doc(tag):
             "gene_set_release": {"source": tag, "release_id": f"{tag}-2024", "sha256": "g" * 64}}
 
 
+def _binding_block(src, gs_raw, effect=EFFECT_U, target=TARGET_U):
+    """The native gene-set binding (genesets.binding_block shape). gene_set_release.sha256 IS
+    the gene_sets.source.json bytes on disk."""
+    return {"status": "bound", "schema_version": "spot.stage02_gene_sets.v1",
+            "gene_set_release": {"source": src, "release_id": f"{src}-2024", "sha256": gs_raw,
+                                 "n_sets": 10},
+            "gene_set_license": "CC-BY", "gene_set_license_reference": "ref://license",
+            "gene_id_namespace": "ensembl", "gene_id_namespace_effect": "ensembl",
+            "effect_universe_sha256": effect, "n_effect_universe_genes": 100,
+            "effect_universe_role": "readout",
+            "target_universe_sha256": target, "n_target_universe_genes": 50,
+            "target_universe_role": "perturbation", "target_id_namespace": "ensembl",
+            "symbol_targets_preserved": False, "single_universe_binding": False,
+            "canonical_sha256": hashlib.sha256(f"canon:{src}".encode()).hexdigest(),
+            "min_set_size": 5, "max_set_size": 500, "pathway_layer_available": True}
+
+
 def _bundle(root, cond, src, *, scorer=SCORER_VIEW, code=None, release_scorer=SCORER_CANON,
-            method=METHOD, env_lock=LOCK, records=None, doc_source=None, gene_tag=None):
+            method=METHOD, env_lock=LOCK, records=None, doc_source=None, gene_tag=None,
+            effect=EFFECT_U, target=TARGET_U, mgs_override=None, bundle_mgs="_",
+            top_level_gene_sets=False, no_method=False):
+    tag = gene_tag or src
+    gs_doc = _gene_doc(tag)
+    gs_bytes = (json.dumps(gs_doc, indent=2, sort_keys=True) + "\n").encode()
+    gs_raw = hashlib.sha256(gs_bytes).hexdigest()
+    mgs = mgs_override or _binding_block(tag, gs_raw, effect, target)
     binding = {
         "condition": cond, "source": src,
         "scorer_view_sha256": scorer,
@@ -67,19 +93,24 @@ def _bundle(root, cond, src, *, scorer=SCORER_VIEW, code=None, release_scorer=SC
         "stage1_release_kind": "fixture",
         "environment_lock": {"sha256": env_lock, "status": "locked"},
         "records_sha256": records or hashlib.sha256(f"{cond}:{src}".encode()).hexdigest(),
+        "method": {"gene_sets": mgs},                # the copy the run id is taken over
     }
     full = R.content_sha256(binding)
     rid = full[:VR.RUN_ID_LEN]
     d = os.path.join(root, rid)
     _write(os.path.join(d, VR.PROVENANCE_FILE),
            {"pathway_run_id": rid, "pathway_run_sha256": full, "run_binding": binding})
-    # the REAL native pathway arm_bundle shape (bundle_normalize contract)
-    _write(os.path.join(d, VR.BUNDLE_FILE),
-           {"schema_version": "spot.stage02_pathway_arm_bundle.v1", "pathway_run_id": rid,
-            "condition": cond, "source": doc_source or src,
-            "arms": [{"pathway_arm_key": f"PROG|increase|{cond}|{src}",
-                      "records_sha256": binding["records_sha256"]}]})
-    _write(os.path.join(d, VR.GENE_SETS_FILE), _gene_doc(gene_tag or src))
+    # the REAL native pathway arm_bundle shape (bundle_normalize contract) + method.gene_sets
+    doc = {"schema_version": "spot.stage02_pathway_arm_bundle.v1", "pathway_run_id": rid,
+           "condition": cond, "source": doc_source or src,
+           "arms": [{"pathway_arm_key": f"PROG|increase|{cond}|{src}",
+                     "records_sha256": binding["records_sha256"]}]}
+    if not no_method:
+        doc["method"] = {"gene_sets": (mgs if bundle_mgs == "_" else bundle_mgs)}
+    if top_level_gene_sets:
+        doc["gene_sets"] = mgs                        # the non-native crutch
+    _write(os.path.join(d, VR.BUNDLE_FILE), doc)
+    _write(os.path.join(d, VR.GENE_SETS_FILE), gs_doc)
     _write(os.path.join(d, "signature_ref.json"), {"condition": cond, "source": src, "ref": rid})
     _write(os.path.join(d, "convergence.json"), {"condition": cond, "source": src, "conv": rid})
     return d
@@ -186,6 +217,15 @@ def _build(tmp, **bundle_kw):
     }
 
 
+def _rel(tmp, dirs):
+    """A full release (inventory + reports + Stage-1 release) over pre-built bundle dirs."""
+    root = os.path.dirname(dirs[0])
+    return {"root": root, "dirs": dirs, "tmp": tmp,
+            "release": _release_file(str(tmp / "stage01_v3_release.json")),
+            "inventory": _native_inventory(str(tmp / VR.RELEASE_FILE), dirs, root),
+            "reports": _reports(str(tmp / "verification"), dirs)}
+
+
 @pytest.fixture
 def release(tmp_path):
     return _build(tmp_path)
@@ -269,24 +309,58 @@ class TestTheAuthoritativeUniverseAndPins:
 # the two gene-set source artifacts
 # =========================================================================== #
 class TestTheGeneSetSources:
-    def test_two_sources_sharing_one_artifact_is_REFUSED(self, tmp_path):
-        rel = _build(tmp_path, gene_tag="shared")
+    def test_the_binding_is_read_from_method_gene_sets_not_top_level(self, release):
+        # the honest bundle carries the binding at arm_bundle.method.gene_sets and NO top-level
+        doc = json.load(open(os.path.join(release["dirs"][0], VR.BUNDLE_FILE)))
+        assert "gene_sets" not in doc and "gene_sets" in doc["method"]
+        assert _verify(release)["verdict"] == VR.ADMIT
+
+    def test_a_MISSING_method_gene_sets_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, no_method=True)
         assert VR.G_GENE_SETS in _failed(_verify(rel))
 
-    def test_a_source_whose_bundles_disagree_on_the_artifact_is_REFUSED(self, release):
-        _write(os.path.join(release["dirs"][0], VR.GENE_SETS_FILE), _gene_doc("reactome-TAMPER"))
+    def test_a_bundle_with_ONLY_a_top_level_gene_sets_is_REFUSED(self, tmp_path):
+        # the exact masked bug: the non-native top-level location is present, method.gene_sets is
+        # not — a verifier that read the top level would admit this; this one refuses.
+        rel = _build(tmp_path, no_method=True, top_level_gene_sets=True)
+        assert VR.G_GENE_SETS in _failed(_verify(rel))
+
+    def test_method_gene_sets_disagreeing_with_the_provenance_copy_is_REFUSED(self, tmp_path):
+        # the arm_bundle's binding is forged to differ from run_binding.method.gene_sets
+        forged = _binding_block("reactome", "b" * 64)
+        rel = _build(tmp_path, bundle_mgs=forged)
+        assert VR.G_GENE_SETS in _failed(_verify(rel))
+
+    def test_a_pinned_sha_that_is_not_the_gene_set_bytes_on_disk_is_REFUSED(self, release):
+        gs = os.path.join(release["dirs"][0], VR.GENE_SETS_FILE)
+        doc = json.load(open(gs))
+        doc["n_sets"] = 999                              # disk changes; method's pin does not
+        _write(gs, doc)
         assert VR.G_GENE_SETS in _failed(_verify(release))
 
     def test_a_MISSING_gene_set_file_is_REFUSED(self, release):
         os.remove(os.path.join(release["dirs"][0], VR.GENE_SETS_FILE))
         assert VR.G_GENE_SETS in _failed(_verify(release))
 
-    def test_a_gene_set_the_report_never_attested_is_REFUSED(self, release):
-        gs = os.path.join(release["dirs"][0], VR.GENE_SETS_FILE)
-        doc = json.load(open(gs))
-        doc["n_sets"] = 999
-        _write(gs, doc)
-        assert VR.G_GENE_SETS in _failed(_verify(release))
+    def test_two_sources_sharing_one_artifact_is_REFUSED(self, tmp_path):
+        rel = _build(tmp_path, gene_tag="shared")
+        assert VR.G_GENE_SETS in _failed(_verify(rel))
+
+    def test_a_binding_naming_the_wrong_source_is_REFUSED(self, tmp_path):
+        cells = [(c, s) for c in CONDITIONS for s in SOURCES]
+        root = str(tmp_path / "pathway")
+        dirs = [_bundle(root, c, s,
+                        mgs_override=_binding_block("go_bp" if (c, s) == ("Rest", "reactome")
+                                                    else s, "z" * 64))
+                for c, s in cells]
+        assert VR.G_GENE_SETS in _failed(_verify(_rel(tmp_path, dirs)))
+
+    def test_two_effect_universes_across_the_release_is_REFUSED(self, tmp_path):
+        cells = [(c, s) for c in CONDITIONS for s in SOURCES]
+        root = str(tmp_path / "pathway")
+        dirs = [_bundle(root, c, s, effect=("aa" * 32 if i == 0 else EFFECT_U))
+                for i, (c, s) in enumerate(cells)]
+        assert VR.G_GENE_SETS in _failed(_verify(_rel(tmp_path, dirs)))
 
 
 # =========================================================================== #
