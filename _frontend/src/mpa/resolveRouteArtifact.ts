@@ -162,6 +162,12 @@ export async function loadProductionProjection(
   const entry = current.routes[routeKey];
   if (!entry || !entry.projection_path || !entry.projection_content_hash) return null; // no projection → unbound
 
+  // #1 STALE CROSS-RELEASE REFUSAL — the results MUST descend from the ACTIVE selection's Stage-1 scorer
+  // binding. Every route (not just Stage-2) requires a verified selection and an exact registry-scorer-view
+  // match; a result package from a different Stage-1 release/scorer is refused, never rendered.
+  if (!selection) return null;
+  if (current.stage1_binding.registry_scorer_view_sha256 !== selection.registry_scorer_view_sha256) return null;
+
   let raw: unknown;
   try {
     raw = JSON.parse(await fetchText(underResults(entry.projection_path)));
@@ -175,12 +181,27 @@ export async function loadProductionProjection(
     return null;
   }
 
+  // #6 CROSS-ROUTE CHAIN — each route's projection must descend from the admitted chain
+  // (Stage-2 run → Stage-3 bundle → Stage-4 scorecard set) by EXACT id; an admitted receipt over
+  // data from a different run/bundle is refused (the chain ids come from results/current.json).
+  const chain = current.chain;
   try {
-    if (routeKey === 'drugs') return { kind: 'stage3', artifact: parseDrugsProjection(raw) };
-    if (routeKey === 'pksafety') return { kind: 'stage4', artifact: parsePkSafetyProjection(raw) };
-    // Stage-2 (targets | pathways): resolve the view from the admitted bundles + the stored selection.
+    if (routeKey === 'drugs') {
+      const artifact = parseDrugsProjection(raw);
+      if (artifact.upstream_stage2_run !== chain.stage2_run_id) return null;
+      if (artifact.bundle_id !== chain.stage3_bundle_id) return null;
+      return { kind: 'stage3', artifact };
+    }
+    if (routeKey === 'pksafety') {
+      const artifact = parsePkSafetyProjection(raw);
+      if (artifact.upstream_stage3_bundle !== chain.stage3_bundle_id) return null;
+      if (artifact.scorecard_set_id !== chain.stage4_scorecard_set_id) return null;
+      return { kind: 'stage4', artifact };
+    }
+    // Stage-2 (targets | pathways): resolve the view from the admitted bundles + the stored selection
+    // (selection + release binding already verified above).
     const proj = parseStage2Projection(raw);
-    if (!selection) return null; // Stage-2 needs the independently-verified v3 selection to resolve
+    if (proj.run_id !== chain.stage2_run_id) return null; // chain: this projection is not the admitted run
     if (proj.analysis_mode !== selection.analysis_mode) return null; // fail closed on mode mismatch
     const view = resolveJoinedView(selection, proj.bundles, proj.pathway_source, proj.release_conditions);
     return { kind: 'stage2', view, bundles: proj.bundles };

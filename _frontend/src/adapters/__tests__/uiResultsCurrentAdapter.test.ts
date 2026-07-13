@@ -8,11 +8,12 @@ import { AdapterError } from '../errors';
 
 const H = 'a'.repeat(64);
 const BINDING = { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: H };
+const CHAIN = { stage2_run_id: 'run_1', stage3_bundle_id: null, stage4_scorecard_set_id: null };
 const ENTRY = { manifest_path: 'results/manifests/targets.ui_release.json', content_hash: H, projection_path: null, projection_content_hash: null };
 
 describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   it('accepts a valid pointer and preserves route entries', () => {
-    const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: { targets: ENTRY } });
+    const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: ENTRY } });
     expect(c.schema).toBe('spot.ui_results_current.v1');
     expect(c.stage1_binding.registry_scorer_view_sha256).toBe(H);
     expect(c.routes.targets?.content_hash).toBe(H);
@@ -20,13 +21,13 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   });
 
   it('an empty routes object is valid (all routes unbound — the pre-run state)', () => {
-    const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: {} });
+    const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: {} });
     expect(c.routes).toEqual({});
   });
 
   it('accepts a fully-bound projection (path + hash together)', () => {
     const entry = { ...ENTRY, projection_path: 'results/stage02/release.json', projection_content_hash: H };
-    const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: { targets: entry } });
+    const c = parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: entry } });
     expect(c.routes.targets?.projection_path).toBe('results/stage02/release.json');
   });
 
@@ -36,7 +37,7 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
   });
 
   it('rejects an unknown schema', () => {
-    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v2', stage1_binding: BINDING, routes: {} })).toThrow(/unknown_schema_version|expected/);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v2', stage1_binding: BINDING, chain: CHAIN, routes: {} })).toThrow(/unknown_schema_version|expected/);
   });
 
   it('rejects a missing / malformed stage1_binding', () => {
@@ -44,19 +45,24 @@ describe('parseUiResultsCurrent — fail-closed downstream pointer', () => {
     expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: { release_method_version: 'v', registry_scorer_view_sha256: 'short' }, routes: {} })).toThrow(AdapterError);
   });
 
+  it('rejects a missing / malformed chain (stage2_run_id required)', () => {
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: {} })).toThrow(AdapterError);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: { stage3_bundle_id: null, stage4_scorecard_set_id: null }, routes: {} })).toThrow(AdapterError);
+  });
+
   it('rejects an unknown route key', () => {
-    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: { bogus: ENTRY } })).toThrow(AdapterError);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { bogus: ENTRY } })).toThrow(AdapterError);
   });
 
   it('rejects a route content_hash that is not 64-hex', () => {
     const entry = { ...ENTRY, content_hash: 'not-a-hash' };
-    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: { drugs: entry } })).toThrow(AdapterError);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { drugs: entry } })).toThrow(AdapterError);
   });
 
   it('rejects a HALF-bound projection (path without hash, or hash without path)', () => {
     const halfA = { ...ENTRY, projection_path: 'results/stage02/x.json', projection_content_hash: null };
     const halfB = { ...ENTRY, projection_path: null, projection_content_hash: H };
-    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: { targets: halfA } })).toThrow(AdapterError);
-    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, routes: { targets: halfB } })).toThrow(AdapterError);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: halfA } })).toThrow(AdapterError);
+    expect(() => parseUiResultsCurrent({ schema: 'spot.ui_results_current.v1', stage1_binding: BINDING, chain: CHAIN, routes: { targets: halfB } })).toThrow(AdapterError);
   });
 });

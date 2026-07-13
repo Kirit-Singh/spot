@@ -47,7 +47,7 @@ const pksafetyNative = {
   candidates: [{ candidate_id: 'cand-1', active_moiety: 'Examplib', target: 'T1', mechanism: 'inhibitor', production_eligible: null, lanes: { delivery: 'oral', safety: null } }],
 };
 const stage2Native = {
-  analysis_mode: 'within_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'],
+  run_id: 'run_1', analysis_mode: 'within_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'],
   direct: null, temporal: null, pathwayByContext: null,
 };
 
@@ -64,8 +64,8 @@ const withinSelection: SelectionV3 = {
   selection_id: 'a'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
   estimator_id: 'within_condition_v1', estimator_status: 'available',
   A: { program_id: 'p1', direction: 'high' }, B: { program_id: 'p2', direction: 'high' }, conditions: ['Rest'],
-  registry_scorer_view_sha256: 'b'.repeat(64), source_h5ad_sha256: 'c'.repeat(64),
-  selection_full_sha256: 'd'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
+  registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64), // matches spec.stage1_binding
+  selection_full_sha256: 'f'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
 };
 
 const deps = (sel: SelectionV3 | null, tree: Record<string, string>): RouteLoaderDeps => ({
@@ -77,7 +77,7 @@ describe('packager → browser loader round-trip (native fixtures)', () => {
   it('Drugs: derived + content-addressed → loader binds artifact + admitted run', async () => {
     const { pack } = await importPack();
     const { tree } = pack(spec);
-    const res = await resolveRouteArtifact('drugs', deps(null, tree));
+    const res = await resolveRouteArtifact('drugs', deps(withinSelection, tree));
     expect(res?.route).toBe('drugs');
     expect(res && res.route === 'drugs' ? res.artifact.bundle_id : null).toBe('s3_b1');
     expect(res && res.route === 'drugs' ? res.artifact.candidates[0].development_state_aggregate : null).toBe('approved');
@@ -89,7 +89,7 @@ describe('packager → browser loader round-trip (native fixtures)', () => {
   it('PK & Safety: derived lanes preserved; not-evaluated stays null', async () => {
     const { pack } = await importPack();
     const { tree } = pack(spec);
-    const res = await resolveRouteArtifact('pksafety', deps(null, tree));
+    const res = await resolveRouteArtifact('pksafety', deps(withinSelection, tree));
     expect(res?.route).toBe('pksafety');
     const art = res && res.route === 'pksafety' ? res.artifact : null;
     expect(art?.scorecard_set_id).toBe('s4_1');
@@ -112,7 +112,7 @@ describe('packager → browser loader round-trip (native fixtures)', () => {
     const { pack } = await importPack();
     const { tree } = pack(spec);
     const tampered = { ...tree, 'stage03/drugs.ui.json': tree['stage03/drugs.ui.json'].replace('Examplib', 'Tampered') };
-    const res = await resolveRouteArtifact('drugs', deps(null, tampered));
+    const res = await resolveRouteArtifact('drugs', deps(withinSelection, tampered));
     expect(res).toBeNull();
   });
 
@@ -121,6 +121,17 @@ describe('packager → browser loader round-trip (native fixtures)', () => {
     const { tree } = pack(spec); // pksafety present, but request an unlisted route binding
     const res = await resolveRouteArtifact('pathways', deps(withinSelection, tree)); // pathways not in spec
     expect(res).toBeNull();
+  });
+
+  it('#1 stale cross-release: a selection whose Stage-1 scorer binding differs is refused on EVERY route', async () => {
+    const { pack } = await importPack();
+    const { tree } = pack(spec);
+    const stale: SelectionV3 = { ...withinSelection, registry_scorer_view_sha256: '9'.repeat(64) }; // a different Stage-1 release
+    for (const route of ['drugs', 'pksafety', 'targets'] as const) {
+      expect(await resolveRouteArtifact(route, deps(stale, tree))).toBeNull();
+    }
+    // no selection at all also refuses (cannot validate the release binding)
+    expect(await resolveRouteArtifact('drugs', deps(null, tree))).toBeNull();
   });
 });
 
@@ -143,11 +154,28 @@ describe('packager: derives from native, never invents run metadata', () => {
   it('derives Stage-2 objects from native base_records[]/arms[] arrays (values unchanged)', async () => {
     const { deriveCompactProjection } = await importPack();
     const compact = deriveCompactProjection('targets', {
-      analysis_mode: 'temporal_cross_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim48hr'],
+      run_id: 'run_1', analysis_mode: 'temporal_cross_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim48hr'],
       temporal: { bundle_id: 'b1', base_records: [{ base_key: 'k1', target_symbol: 'GENE1' }], arms: [{ arm_key: 'a1', records: [{ base_key: 'k1', arm_value: -0.1 }] }] },
     });
     expect(compact.temporal.base_records.k1).toEqual({ base_key: 'k1', target_symbol: 'GENE1' }); // array → object keyed by base_key
     expect(compact.temporal.arms.a1.arm_key).toBe('a1');
     expect(Array.isArray(compact.temporal.arms.a1.records)).toBe(true); // arm.records stays a native array
+  });
+
+  it('#6 chain: refuses drugs upstream_stage2_run != stage-2 run_id at pack time (receipt A + data B)', async () => {
+    const { pack } = await importPack();
+    const badDrugs = { ...drugsNative, upstream_stage2_run: 'run_WRONG' };
+    const bad = { ...spec, routes: { ...spec.routes, drugs: { native: badDrugs, receipt: receipt('drugs') } } };
+    expect(() => pack(bad)).toThrow(/chain.*upstream_stage2_run|upstream_stage2_run.*run_id/);
+  });
+
+  it('#6 chain: loader refuses a projection whose upstream id != the current.json chain', async () => {
+    const { pack } = await importPack();
+    const { tree } = pack(spec);
+    // tamper the pointer's chain so the drugs projection.upstream_stage2_run no longer matches
+    const cur = JSON.parse(tree['current.json']);
+    cur.chain.stage2_run_id = 'run_TAMPERED';
+    const tampered = { ...tree, 'current.json': JSON.stringify(cur) };
+    expect(await resolveRouteArtifact('drugs', deps(withinSelection, tampered))).toBeNull();
   });
 });

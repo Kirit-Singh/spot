@@ -6,7 +6,7 @@
 // ui_release manifest and native projection are each independently content-verified downstream
 // (parseUiReleaseManifest / the projection loader) against the hashes this pointer pins.
 
-import type { RouteReleaseEntry, Stage1Binding, UiResultsCurrent, ResultRouteKey } from '../domain/uiResultsCurrent';
+import type { ResultChain, RouteReleaseEntry, Stage1Binding, UiResultsCurrent, ResultRouteKey } from '../domain/uiResultsCurrent';
 import { RESULT_ROUTE_KEYS, UI_RESULTS_CURRENT_SCHEMA } from '../domain/uiResultsCurrent';
 import { fail } from './errors';
 import { isObject, optStr, str } from './guards';
@@ -52,6 +52,15 @@ function stage1Binding(v: unknown, path: string): Stage1Binding {
   };
 }
 
+function resultChain(v: unknown, path: string): ResultChain {
+  if (!isObject(v)) fail('malformed', `${path} must be an object`);
+  return {
+    stage2_run_id: reqStr(v.stage2_run_id, `${path}.stage2_run_id`),
+    stage3_bundle_id: optStr(v.stage3_bundle_id, `${path}.stage3_bundle_id`),
+    stage4_scorecard_set_id: optStr(v.stage4_scorecard_set_id, `${path}.stage4_scorecard_set_id`),
+  };
+}
+
 /** Parse + fully validate results/current.json, FAIL-CLOSED. Throws AdapterError on any violation. */
 export function parseUiResultsCurrent(raw: unknown): UiResultsCurrent {
   if (!isObject(raw)) fail('malformed', 'results/current.json must be an object');
@@ -61,6 +70,7 @@ export function parseUiResultsCurrent(raw: unknown): UiResultsCurrent {
   }
 
   const stage1_binding = stage1Binding(raw.stage1_binding, 'stage1_binding');
+  const chain = resultChain(raw.chain, 'chain');
 
   if (!isObject(raw.routes)) fail('malformed', 'routes must be an object');
   const routesRaw = raw.routes;
@@ -72,5 +82,5 @@ export function parseUiResultsCurrent(raw: unknown): UiResultsCurrent {
     routes[key as ResultRouteKey] = routeEntry(routesRaw[key], `routes.${key}`);
   }
 
-  return { schema: UI_RESULTS_CURRENT_SCHEMA, stage1_binding, routes };
+  return { schema: UI_RESULTS_CURRENT_SCHEMA, stage1_binding, chain, routes };
 }

@@ -255,6 +255,7 @@ function nativeToStage2Projection(nat, route) {
   }
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route,
+    run_id: nStr(nat.run_id, 'stage2 native.run_id'),
     analysis_mode: nStr(nat.analysis_mode, 'stage2 native.analysis_mode'),
     pathway_source: nStr(nat.pathway_source, 'stage2 native.pathway_source'),
     release_conditions: nStrList(nat.release_conditions, 'stage2 native.release_conditions'),
@@ -262,6 +263,36 @@ function nativeToStage2Projection(nat, route) {
     temporal: nativeToStage2Bundle(nat.temporal, 'stage2 native.temporal'),
     pathwayByContext,
   };
+}
+
+/** Accumulate the admitted cross-stage chain ids from each route's derived projection. */
+function collectChain(route, projection, ids) {
+  if (route === 'targets' || route === 'pathways') {
+    if (ids.stage2_run_id !== null && ids.stage2_run_id !== projection.run_id) {
+      fail(`chain: stage-2 run_id differs across routes ("${ids.stage2_run_id}" vs "${projection.run_id}")`);
+    }
+    ids.stage2_run_id = projection.run_id;
+  } else if (route === 'drugs') {
+    ids.stage3_bundle_id = projection.artifact.bundle_id;
+    ids._drugsUpstream = projection.artifact.upstream_stage2_run;
+  } else if (route === 'pksafety') {
+    ids.stage4_scorecard_set_id = projection.artifact.scorecard_set_id;
+    ids._pksafetyUpstream = projection.artifact.upstream_stage3_bundle;
+  }
+}
+
+/** Enforce cross-stage consistency (admitted receipt over data from another run/bundle → refuse). */
+function finalizeChain(ids, nRoutes) {
+  if (ids._drugsUpstream !== null && ids._drugsUpstream !== ids.stage2_run_id) {
+    fail(`chain: drugs upstream_stage2_run "${ids._drugsUpstream}" != stage-2 run_id "${ids.stage2_run_id}"`);
+  }
+  if (ids._pksafetyUpstream !== null && ids._pksafetyUpstream !== ids.stage3_bundle_id) {
+    fail(`chain: pksafety upstream_stage3_bundle "${ids._pksafetyUpstream}" != stage-3 bundle_id "${ids.stage3_bundle_id}"`);
+  }
+  if (nRoutes > 0 && ids.stage2_run_id === null) {
+    fail('chain: a bound release requires a Stage-2 route (targets/pathways) to anchor stage2_run_id');
+  }
+  return { stage2_run_id: ids.stage2_run_id, stage3_bundle_id: ids.stage3_bundle_id, stage4_scorecard_set_id: ids.stage4_scorecard_set_id };
 }
 
 /** Derive the compact route projection from that route's admitted NATIVE bundle(s). */
@@ -288,12 +319,14 @@ export function pack(spec) {
 
   const tree = {}; // results-relative path → text (pretty JSON; hashes are over the canonical form / raw bytes)
   const routes = {};
+  const chainIds = { stage2_run_id: null, stage3_bundle_id: null, stage4_scorecard_set_id: null, _drugsUpstream: null, _pksafetyUpstream: null };
   for (const route of Object.keys(routesIn)) {
     const def = ROUTES[route];
     if (!def) fail(`unknown route "${route}"`);
     const { native, receipt } = routesIn[route] || {};
     const projection = deriveCompactProjection(route, native); // derived from native — never hand-authored
     validateProjectionEnvelope(route, def, projection);
+    collectChain(route, projection, chainIds);
 
     tree[def.projection_path] = JSON.stringify(projection, null, 2);
     const projection_content_hash = canonicalHash(projection);
@@ -308,7 +341,8 @@ export function pack(spec) {
 
   // inventory: EVERY emitted file (results-relative), raw-file-bytes sha256, sorted — excludes current.json.
   const inventory = Object.keys(tree).sort().map((path) => ({ path, sha256: sha256Hex(tree[path]) }));
-  const current = { schema: 'spot.ui_results_current.v1', stage1_binding, routes, inventory };
+  const chain = finalizeChain(chainIds, Object.keys(routes).length);
+  const current = { schema: 'spot.ui_results_current.v1', stage1_binding, chain, routes, inventory };
   tree['current.json'] = JSON.stringify(current, null, 2);
   return { tree, current };
 }

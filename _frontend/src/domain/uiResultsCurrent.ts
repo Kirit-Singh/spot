@@ -31,9 +31,21 @@ export interface Stage1Binding {
   registry_scorer_view_sha256: string; // ties to the v3 selection's registry_scorer_view_sha256
 }
 
+/**
+ * The admitted cross-stage chain the results descend from: Stage-1 selection → Stage-2 run → Stage-3
+ * bundle → Stage-4 scorecard set. Each route binds only if its projection's upstream ids match this
+ * chain EXACTLY — an admitted receipt for run A packaged over data from run B is refused.
+ */
+export interface ResultChain {
+  stage2_run_id: string; // the admitted Stage-2 run id every downstream result descends from
+  stage3_bundle_id: string | null; // the admitted Stage-3 bundle id (Drugs), or null until bound
+  stage4_scorecard_set_id: string | null; // the admitted Stage-4 scorecard-set id (PK & Safety), or null
+}
+
 export interface UiResultsCurrent {
   schema: typeof UI_RESULTS_CURRENT_SCHEMA;
   stage1_binding: Stage1Binding;
+  chain: ResultChain;
   /** A route absent here is UNBOUND (allowed); a present route must carry a complete entry. */
   routes: Partial<Record<ResultRouteKey, RouteReleaseEntry>>;
 }

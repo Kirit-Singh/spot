@@ -51,7 +51,7 @@ function pksafetyRaw() {
 function stage2Raw() {
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route: 'targets',
-    analysis_mode: 'within_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'],
+    run_id: 'run_1', analysis_mode: 'within_condition', pathway_source: 'reactome', release_conditions: ['Rest', 'Stim8hr', 'Stim48hr'],
     direct: null, temporal: null, pathwayByContext: null,
   };
 }

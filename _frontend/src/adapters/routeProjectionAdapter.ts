@@ -45,6 +45,7 @@ function assertProductionEnvelope(raw: Record<string, unknown>): void {
 
 // ── Stage-2 (Targets / Pathways) ──────────────────────────────────────────────
 export interface Stage2Projection {
+  run_id: string; // the admitted Stage-2 run id (must match results/current.json chain.stage2_run_id)
   analysis_mode: 'within_condition' | 'temporal_cross_condition';
   pathway_source: string;
   release_conditions: string[];
@@ -64,6 +65,7 @@ export function parseStage2Projection(raw: unknown): Stage2Projection {
   const route = str(raw.route, 'route');
   if (route !== 'targets' && route !== 'pathways') fail('malformed', `stage-2 projection route "${route}" must be targets|pathways`);
 
+  const run_id = prodId(raw.run_id, 'run_id');
   const analysis_mode = str(raw.analysis_mode, 'analysis_mode');
   if (analysis_mode !== 'within_condition' && analysis_mode !== 'temporal_cross_condition') {
     fail('malformed', `analysis_mode "${analysis_mode}" invalid`);
@@ -81,7 +83,7 @@ export function parseStage2Projection(raw: unknown): Stage2Projection {
       pathwayByContext[key] = b == null ? null : parsePathwayArmBundle(b, PROD);
     }
   }
-  return { analysis_mode, pathway_source, release_conditions, bundles: { direct, temporal, pathwayByContext } };
+  return { run_id, analysis_mode, pathway_source, release_conditions, bundles: { direct, temporal, pathwayByContext } };
 }
 
 // ── Stage-3 (Drugs) ───────────────────────────────────────────────────────────
