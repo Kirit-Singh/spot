@@ -306,3 +306,36 @@ def test_no_served_artifact_bakes_in_a_drifting_test_count():
     assert not offenders, (
         f"a served artifact hard-codes a test count: {offenders}. Counts drift; state the "
         "verifier command and its expected exit status instead.")
+
+
+# ------------------------------------- ACS-copyrighted source material may not be reproduced
+
+# Wager 2010 is ACS-copyrighted and NOT in the PMC open-access subset. The M2 repair reduced the
+# encoded goldens to ONE arithmetic vector (alprazolam) in `method/cns_mpo_wager2010_v1.json` and
+# in `tests/test_cnsmpo.py` — but MISSED `METHODS.md`, which went on reproducing all five published
+# Table-2 totals in prose. The same licensing defect, one file over, in the doc a reader actually
+# reads. So the boundary is enforced over the served bytes, not just asserted in the JSON.
+#
+# The four non-golden drugs from Table 2. Reproducing their published totals IS reproducing the
+# table, whatever the file extension.
+WAGER_TABLE2_NOT_LICENSED = ("zolpidem", "paroxetine", "risperidone", "methylphenidate")
+
+# The one vector the method and the tests actually need: a fractional T0 (interpolation ran), the
+# equal-weight sum over six inputs (5.75), and rounding at a .x5 boundary (-> 5.8).
+WAGER_PERMITTED_GOLDEN = "alprazolam"
+
+
+def test_no_served_file_reproduces_the_published_wager_table():
+    """Keeping the minimum independently necessary arithmetic vector is permitted. Reprinting the
+    authors' table is not, and a Markdown file is as served as a JSON one."""
+    offenders = {}
+    for rel in _served_files():
+        body = _read(rel).lower()
+        hits = sorted(d for d in WAGER_TABLE2_NOT_LICENSED if d in body)
+        if hits:
+            offenders[rel] = hits
+
+    assert not offenders, (
+        f"a served file reproduces Wager 2010's Table 2: {offenders}. The paper is ACS-copyrighted "
+        f"and not in the PMC open-access subset. Keep the {WAGER_PERMITTED_GOLDEN!r} vector and "
+        "cite the table; do not reprint it.")

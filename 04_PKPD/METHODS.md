@@ -71,10 +71,20 @@ pKa."* So:
 `status = incomplete`, `total = null`, `missing_inputs` explicit. Five of six is not a
 score; it is a lower score.
 
-**Published golden checks** (Table 2, "CNS MPO Scores and Individual Transformed Scores
-(T0) for Selected Drugs"): alprazolam 5.8, zolpidem 5.4, paroxetine 4.2, risperidone 5.5,
-methylphenidate 4.8 — the six published components sum to the published total in every case.
-These are *the authors'* values for those drugs; **Spot makes no claim about them.**
+**The published golden check.** Wager 2010, **Table 2** ("CNS MPO Scores and Individual
+Transformed Scores (T0) for Selected Drugs") is the arithmetic reference. **The table is not
+reproduced here** — the paper is **ACS-copyrighted and not in the PMC open-access subset**, so
+spot cites it and encodes only the *minimum independently necessary* vector.
+
+That vector is **alprazolam**, and one row is enough: it carries a fractional T0 (`0.75`, so the
+linear interpolation demonstrably ran), the equal-weight sum over all six inputs (`5.75`), and
+publication rounding at a `.x5` boundary (`5.75 → 5.8`). The other published rows re-exercise the
+same three facts and add no independent check — none of them distinguishes ROUND_HALF_UP from
+half-to-even, which is pinned directly in `tests/test_cnsmpo.py` instead.
+
+It lives in `method/cns_mpo_wager2010_v1.json` (`golden_examples`) with its locator and scope.
+It is *the authors'* value for that drug; **spot makes no claim about it**, and it is used only to
+check spot's own arithmetic.
 
 **There is no end-to-end golden.** The 2010 Table 2 publishes the six *transformed*
 components but **not** the raw property values behind them, and the Supporting Information
