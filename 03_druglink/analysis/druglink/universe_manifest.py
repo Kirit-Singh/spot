@@ -69,6 +69,7 @@ def build_universe_manifest(
     coverage: dict[str, Any],
     store_rows_sha256: str,
     eligibility_evidence_sha256: str | None = None,
+    public_source_provenance_sha256: str | None = None,
 ) -> dict[str, Any]:
     n_ensg = sum(1 for t in universe_targets
                  if t["target_id_namespace"] == "ensembl_gene")
@@ -109,9 +110,10 @@ def build_universe_manifest(
         "coverage": coverage,
         "extraction": {"extraction_query_sha256": extraction_query_sha256,
                        "store_rows_sha256": store_rows_sha256,
-                       "eligibility_evidence_sha256": eligibility_evidence_sha256},
-        # BLOCKER 3: store_id binds the TYPED universe + both source releases + method +
-        # the eligibility evidence, never merely a bare ENSG set.
+                       "eligibility_evidence_sha256": eligibility_evidence_sha256,
+                       "public_source_provenance_sha256": public_source_provenance_sha256},
+        # store_id binds the TYPED universe + both source releases + method + the
+        # eligibility evidence + the sanitized public source provenance.
         "store_id": content_hash({
             "extraction_query_sha256": extraction_query_sha256,
             "chembl_source_sha256": chembl_source_sha256,
@@ -119,6 +121,7 @@ def build_universe_manifest(
             "universe_targets_sha256": uni_sha,
             "store_rows_sha256": store_rows_sha256,
             "eligibility_evidence_sha256": eligibility_evidence_sha256,
+            "public_source_provenance_sha256": public_source_provenance_sha256,
         }),
     }
     manifest["content_sha256"] = content_sha256(manifest)

@@ -97,12 +97,17 @@ def build_store_rows(
              for ev in evidence_by_target.get(t, [])), key=_sort)
 
         # (1) Ambiguous identity: a UniProt accession shared by >1 gene cannot attribute a
-        # gene-drug edge to any one gene. Fail closed — preserve, never rank.
+        # gene-drug edge to any one gene. Fail closed — preserve, never rank. EVERY nested
+        # copied assertion is stamped non-rankable so a flattened consumer can never treat
+        # it as general gene evidence.
         if res["identity_status"] == "shared_accession":
+            amb = [dict(a, general_gene_rankable=False,
+                        ambiguity_disposition="ambiguous_identity_nonrankable")
+                   for a in assertions]
             rows.append({
                 "target_id": tid, "target_id_namespace": ns,
                 "disposition": DISP_AMBIGUOUS_IDENTITY, "identity": res, "drugs": [],
-                "ambiguous_source_assertions": assertions,
+                "ambiguous_source_assertions": amb,
                 "no_evidence_reason": "shared_uniprot_accession_maps_to_multiple_genes",
             })
             continue

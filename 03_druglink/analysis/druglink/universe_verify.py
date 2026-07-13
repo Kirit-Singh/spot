@@ -64,9 +64,39 @@ def _recompute_coverage(store_rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _independent_eligibility_verdict(rec: dict[str, Any]) -> str:
+    """Re-derive the eligibility disposition from a record's predicate fields, WITHOUT
+    importing the generator. Used to replay the frozen gate during admission."""
+    if rec.get("target_type") != "SINGLE PROTEIN":
+        return "reject_wrong_target_type"
+    if rec.get("tax_id") != 9606:
+        return "reject_nonhuman_target_taxon"
+    if rec.get("species_group_flag") != 0:
+        return "reject_species_group"
+    if rec.get("n_components") != 1:
+        return "reject_component_cardinality"
+    c = (rec.get("components") or [{}])[0]
+    if c.get("component_type") != "PROTEIN":
+        return "reject_nonprotein_component"
+    if c.get("tax_id") != 9606:
+        return "reject_nonhuman_component_taxon"
+    if c.get("homologue") != 0:
+        return "reject_homologue"
+    if not c.get("accession"):
+        return "reject_missing_accession"
+    return "eligible_human_single_protein"
+
+
 def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
-           universe_targets: list[dict[str, str]]) -> dict[str, Any]:
-    """Return {ok, violations}. ok is True only if no violation fires."""
+           universe_targets: list[dict[str, str]],
+           eligibility_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return {ok, violations}. ok is True only if no violation fires.
+
+    If ``eligibility_evidence`` (the actual on-disk artifact) is supplied, its canonical
+    hash is checked against the manifest pin AND every record's verdict is replayed from
+    its predicate fields — so a mutated eligibility file fails closed even though the
+    manifest and store are untouched.
+    """
     v: list[str] = []
 
     # 1. manifest proves its own identity
@@ -94,9 +124,24 @@ def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
         "universe_targets_sha256": ub.get("universe_targets_sha256"),
         "store_rows_sha256": ext.get("store_rows_sha256"),
         "eligibility_evidence_sha256": ext.get("eligibility_evidence_sha256"),
+        "public_source_provenance_sha256": ext.get("public_source_provenance_sha256"),
     })
     if recomputed_store_id != manifest.get("store_id"):
         v.append("store_id_tamper")
+
+    # 4b. the ACTUAL on-disk eligibility artifact (hash + verdict replay + counts)
+    if eligibility_evidence is not None:
+        if content_hash(eligibility_evidence) != ext.get("eligibility_evidence_sha256"):
+            v.append("eligibility_evidence_hash_drift")
+        recs = eligibility_evidence.get("records", [])
+        for rec in recs:
+            if _independent_eligibility_verdict(rec) != rec.get("disposition"):
+                v.append(f"eligibility_verdict_replay_mismatch:{rec.get('target_chembl_id')}")
+        counts = eligibility_evidence.get("counts", {})
+        if counts.get("n_total") != len(recs):
+            v.append("eligibility_counts_n_total_mismatch")
+        if counts.get("n_eligible") != sum(1 for r in recs if r.get("eligible")):
+            v.append("eligibility_counts_n_eligible_mismatch")
 
     # 5. coverage matches the typed universe rows; ENSG is never the total
     cov = manifest.get("coverage", {})
@@ -154,6 +199,28 @@ def verify(*, store_rows: list[dict[str, Any]], manifest: dict[str, Any],
         for a in (r.get("ambiguous_source_assertions") or []):
             if FORBIDDEN_DRUG_KEYS & set(a.keys()):
                 v.append(f"forbidden_key_in_ambiguous_assertion:{r['target_id']}")
+            # every nested/copied ambiguous assertion must be non-rankable AND carry the
+            # named disposition, so a flattened consumer cannot treat it as general
+            # evidence by following either field alone
+            if a.get("general_gene_rankable") is not False:
+                v.append(f"ambiguous_assertion_marked_rankable:{r['target_id']}")
+            if a.get("ambiguity_disposition") != "ambiguous_identity_nonrankable":
+                v.append(f"ambiguous_assertion_missing_disposition:{r['target_id']}")
 
     return {"ok": not v, "violations": sorted(set(v)),
             "verify_policy_version": VERIFY_POLICY_VERSION}
+
+
+def verify_from_disk(*, store_dir: str, manifest: dict[str, Any],
+                     universe_targets: list[dict[str, str]]) -> dict[str, Any]:
+    """Disk-level admission: load and hash the ACTUAL store rows + eligibility artifact
+    from ``store_dir`` (not the in-memory objects), then verify. Catches an artifact
+    altered on disk after generation even when the manifest is untouched."""
+    import json
+    import os
+    with open(os.path.join(store_dir, "universe_store.rows.json")) as fh:
+        rows = json.load(fh)
+    with open(os.path.join(store_dir, "target_eligibility_evidence.json")) as fh:
+        elig = json.load(fh)
+    return verify(store_rows=rows, manifest=manifest,
+                  universe_targets=universe_targets, eligibility_evidence=elig)

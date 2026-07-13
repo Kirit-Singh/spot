@@ -16,17 +16,56 @@ import json
 import os
 import resource
 import sqlite3
+import shutil
 import sys
 import tarfile
 import time
 
-from .hashing import content_hash, file_sha256
+from .hashing import contains_local_path, content_hash, file_sha256
 from .universe_extract import build_from_sqlite, extraction_query_sha256
 from .universe_manifest import build_universe_manifest
-from .universe_verify import verify
+from .universe_verify import verify_from_disk
 
 CHEMBL_PUBLISHER_SHA256 = \
     "33c203740555f96067710cdfc1c3c55d890660e5908ec5cbf5817492c290d281"
+UNIPROT_PUBLISHER_MD5 = "7ef6a677d4db949397c3b352c466e499"
+
+
+def _public_source_provenance(chembl_sha, chembl_size, uni_sha, uni_size,
+                              chembl_release, uniprot_release, accessed):
+    """Sanitized, content-bound public provenance (no machine path); release-specific
+    locators + publisher checksums. Bound into the manifest + store_id."""
+    return [
+        {"name": "chembl_sqlite", "basename": "chembl_37_sqlite.tar.gz",
+         "url": ("https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/releases/"
+                 "chembl_37/chembl_37_sqlite.tar.gz"),
+         "release": chembl_release, "doi": "10.6019/CHEMBL.database.37",
+         "release_metadata_url": ("https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/"
+                                  "releases/chembl_37/checksums.txt"),
+         "size_bytes": chembl_size, "acquired_sha256": chembl_sha,
+         "publisher_sha256": CHEMBL_PUBLISHER_SHA256,
+         "last_modified": "Fri, 29 May 2026 06:35:28 GMT",
+         "accessed_at_utc": accessed, "license": "CC BY-SA 3.0",
+         "required_attribution": ("preserve ChEMBL IDs; display release; cite Mendez 2019 "
+                                  "DOI 10.1093/nar/gky1075")},
+        {"name": "uniprot_idmapping", "basename": "HUMAN_9606_idmapping.dat.gz",
+         "url": ("https://ftp.uniprot.org/pub/databases/uniprot/current_release/"
+                 "knowledgebase/idmapping/by_organism/HUMAN_9606_idmapping.dat.gz"),
+         "release": uniprot_release, "release_date": "10-Jun-2026",
+         "release_metadata_url": ("https://ftp.uniprot.org/pub/databases/uniprot/"
+                                  "current_release/knowledgebase/idmapping/by_organism/"
+                                  "RELEASE.metalink"),
+         "relnotes_url": ("https://ftp.uniprot.org/pub/databases/uniprot/current_release/"
+                          "relnotes.txt"),
+         "current_release_is_mutable_note": (
+             "current_release path is mutable; bytes pinned by publisher MD5 + acquired "
+             "SHA-256; immutable archive previous_releases/release-2026_02/ becomes "
+             "available after the next UniProt release"),
+         "size_bytes": uni_size, "acquired_sha256": uni_sha,
+         "publisher_md5": UNIPROT_PUBLISHER_MD5,
+         "last_modified": "Wed, 10 Jun 2026 20:00:00 GMT",
+         "accessed_at_utc": accessed, "license": "CC BY 4.0"},
+    ]
 
 
 def _utc(ts: float) -> str:
@@ -102,35 +141,64 @@ def main(argv: list[str]) -> int:
 
     rows = result["rows"]
     store_rows_sha = content_hash(rows)
+    accessed = "2026-07-13T06:29:16Z..2026-07-13T07:08:12Z"
+    public_prov = _public_source_provenance(
+        chembl_sha, os.path.getsize(a.sqlite_tar), uni_sha,
+        os.path.getsize(a.idmapping), a.chembl_release, a.uniprot_release, accessed)
+    public_prov_sha = content_hash(public_prov)
+
     manifest = build_universe_manifest(
         chembl_release=a.chembl_release, chembl_source_sha256=chembl_sha,
         uniprot_release=a.uniprot_release, uniprot_source_sha256=uni_sha,
         extraction_query_sha256=extraction_query_sha256(),
         universe_targets=universe, coverage=result["coverage"],
         store_rows_sha256=store_rows_sha,
-        eligibility_evidence_sha256=result["eligibility_evidence_sha256"])
+        eligibility_evidence_sha256=result["eligibility_evidence_sha256"],
+        public_source_provenance_sha256=public_prov_sha)
 
-    vr = verify(store_rows=rows, manifest=manifest, universe_targets=universe)
-
-    # 4. write outputs: full store + eligibility evidence (data-cache), compact
-    # manifest+reports (committable). Every file is parse-validated below.
+    # 4. write outputs: data-cache (store rows + eligibility) + committable compact reports
+    raw_dir = os.path.dirname(os.path.abspath(a.sqlite_tar))
     with open(os.path.join(a.out_dir, "universe_store.rows.json"), "w") as fh:
         json.dump(rows, fh, sort_keys=True)
     with open(os.path.join(a.out_dir, "universe_manifest.json"), "w") as fh:
         json.dump(manifest, fh, indent=2, sort_keys=True)
     with open(os.path.join(a.out_dir, "target_eligibility_evidence.json"), "w") as fh:
         json.dump(result["eligibility_evidence"], fh, sort_keys=True)
+    with open(os.path.join(a.out_dir, "source_provenance.public.json"), "w") as fh:
+        json.dump(public_prov, fh, indent=2, sort_keys=True)
+    # mixed-license release gate: package the ChEMBL notices alongside the data
+    for src, dst in [("chembl_37_LICENSE", "CHEMBL_LICENSE"),
+                     ("chembl_37.REQUIRED.ATTRIBUTION", "CHEMBL_REQUIRED_ATTRIBUTION")]:
+        if os.path.exists(os.path.join(raw_dir, src)):
+            shutil.copyfile(os.path.join(raw_dir, src), os.path.join(a.out_dir, dst))
+
+    # DISK-level admission: verify against the ACTUAL written store rows + eligibility
+    vr = verify_from_disk(store_dir=a.out_dir, manifest=manifest,
+                          universe_targets=universe)
     with open(os.path.join(a.out_dir, "verify_report.json"), "w") as fh:
         json.dump(vr, fh, indent=2, sort_keys=True)
 
-    # parse-validate every emitted JSON (never ship a malformed artifact)
+    # parse-validate every publishable JSON + assert no machine path leaks
     for name in ("universe_store.rows.json", "universe_manifest.json",
-                 "target_eligibility_evidence.json", "verify_report.json"):
+                 "target_eligibility_evidence.json", "source_provenance.public.json",
+                 "verify_report.json"):
         with open(os.path.join(a.out_dir, name)) as fh:
-            json.load(fh)
+            obj = json.load(fh)
+        leak = contains_local_path(obj)
+        if leak:
+            print(f"FAIL: machine path in {name}: {leak[:2]}", file=sys.stderr)
+            return 4
 
-    n_drug = result["coverage"]["n_drug_evidence"]
-    n_assertions = sum(len(r["drugs"]) for r in rows)
+    # exact assertion denominators (n_general is the rankable set, NOT a total)
+    def _all(r):
+        return ((r.get("drugs") or []) + (r.get("variant_specific_assertions") or [])
+                + (r.get("ambiguous_source_assertions") or []))
+    n_general = sum(len(r.get("drugs") or []) for r in rows)
+    n_variant = sum(len(r.get("variant_specific_assertions") or []) for r in rows)
+    n_amb = sum(len(r.get("ambiguous_source_assertions") or []) for r in rows)
+    uniq_mec = {x.get("source_row_id") for r in rows for x in _all(r)}
+    amb_uniq = {x.get("source_row_id") for r in rows
+                for x in (r.get("ambiguous_source_assertions") or [])}
     metrics.update({
         "finished_utc": _utc(time.time()),
         "wall_clock_s": round(time.time() - t0, 1),
@@ -139,18 +207,25 @@ def main(argv: list[str]) -> int:
         "manifest_content_sha256": manifest["content_sha256"],
         "store_rows_sha256": store_rows_sha,
         "eligibility_evidence_sha256": result["eligibility_evidence_sha256"],
+        "public_source_provenance_sha256": public_prov_sha,
         "coverage": result["coverage"],
         "eligibility_counts": result["eligibility_evidence"]["counts"],
-        "n_drug_evidence_targets": n_drug,
-        "n_total_drug_assertions": n_assertions,
+        "n_drug_evidence_targets": result["coverage"]["n_drug_evidence"],
+        "assertion_counts": {
+            "n_general_drug_assertions": n_general,
+            "n_variant_specific_assertions": n_variant,
+            "n_ambiguous_assertion_occurrences": n_amb,
+            "n_ambiguous_unique_source_rows": len(amb_uniq),
+            "n_unique_source_mechanism_rows": len(uniq_mec),
+            "n_total_stored_occurrences": n_general + n_variant + n_amb,
+        },
         "verify_ok": vr["ok"], "verify_violations": vr["violations"],
     })
     with open(os.path.join(a.out_dir, "extraction_metrics.json"), "w") as fh:
         json.dump(metrics, fh, indent=2, sort_keys=True)
     print(json.dumps({k: metrics[k] for k in (
-        "wall_clock_s", "peak_rss_mb", "sqlite_bytes", "store_id",
-        "n_drug_evidence_targets", "n_total_drug_assertions", "verify_ok",
-        "coverage")}, indent=2))
+        "wall_clock_s", "store_id", "n_drug_evidence_targets", "assertion_counts",
+        "verify_ok", "coverage")}, indent=2))
     return 0 if vr["ok"] else 3
 
 

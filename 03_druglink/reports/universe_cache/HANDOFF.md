@@ -1,13 +1,18 @@
 # Stage-3 universe drug-evidence cache — handoff to W16 & W1
 
 **Branch:** `agent/stage3-universe-cache` (base `a7cd03d`; W16's `agent/stage3-druglink` untouched).
-**Status:** built + real-extracted + generator-independently verified; **HELD for independent admission
-audit before publish** (per instruction: do not publish until post-extraction audit passes).
+**Status:** built + real-extracted + generator-independently verified (disk-level admission); **HELD for
+independent admission audit before publish**. Post-extraction audit `fa64054e` + re-audit `1f6008c2`
+(verdict REPAIR) worklists fully applied test-first and regenerated (details at end).
 
 ## Store identity
-- **store_id:** `446c3b78937593e89d13afe941eb3a6dbe6d37e3beac17f7edd5dd0abdde914d`
-- store_rows_sha256 `6c88b53a…`; eligibility_evidence_sha256 `cf5d7088…`; both bound into `store_id`.
-- **verify_ok: true** (generator-independent `universe_verify`, imports only the `hashing` leaf).
+- **store_id:** `b20ec29bf3d829a23b1c13cd60cd37779fb78c69328d2531b376d0d4bf2f886e`
+- Bound into `store_id`: store_rows_sha256, eligibility_evidence_sha256, public_source_provenance_sha256,
+  typed_universe_sha256, extraction_query_sha256, both source shas.
+- **verify_ok: true** via `universe_verify.verify_from_disk` (loads + hashes + predicate-**replays** the
+  actual on-disk store rows and 3.5 MB eligibility artifact; generator-independent, imports only `hashing`).
+- Assertion denominators (exact): **2,227 general (rankable)** · 29 variant-specific · 6 ambiguous
+  occurrences (2 unique mec_ids) · **2,258 unique source mec_ids** · **2,262 total stored occurrences**.
 
 ## Pinned public sources (independently verified)
 - ChEMBL 37 `chembl_37_sqlite.tar.gz`: 5,764,252,857 bytes; sha256 `33c2037…d281` — **== publisher checksum**.
@@ -24,7 +29,7 @@ audit before publish** (per instruction: do not publish until post-extraction au
 - Eligibility evidence: 11,055 SINGLE PROTEIN candidates → 5,869 eligible human single-protein,
   5,186 rejected (`reject_nonhuman_target_taxon`). Accepted AND rejected records shipped (revalidatable).
 
-## Data artifacts (out-of-Git; tcefold data cache `/home/tcelab/.cache/spot-stage3-universe/`)
+## Data artifacts (out-of-Git; host-local cache `$SPOT_STAGE3_CACHE/` — real path only in the non-publishable operational log)
 - `store/universe_store.rows.json` (6.6 MB), `store/target_eligibility_evidence.json` (3.5 MB) — ChEMBL-derived (CC BY-SA 3.0).
 - `store/universe_manifest.json`, `verify_report.json`, `extraction_metrics.json`, `source_provenance.public.json` (sanitized, no machine path).
 - `raw/` — pinned bulk archives + `source_provenance.operational.json` (**contains local paths; non-publishable, never committed**).
@@ -51,5 +56,22 @@ audit before publish** (per instruction: do not publish until post-extraction au
 3. Variant assertions in the general lane → `variant_specific_nonrankable` (`test_universe_variant_nonrankable`, real V617F/V600E/-1).
 4. Eligibility source fields discarded → content-addressed evidence artifact bound to manifest/store_id (`test_universe_eligibility_evidence`).
 
-**Ask of W16/W1:** independent admission audit of the store (re-run `universe_verify`, re-hash sources vs
-publisher, re-parse all JSON, confirm dispositions/counts, review the two schemas). Publish only on pass.
+## Re-audit `1f6008c2` (REPAIR) — applied test-first, regenerated once
+1. Ambiguous nested `ambiguous_source_assertions` now `general_gene_rankable=false` + named
+   `ambiguity_disposition="ambiguous_identity_nonrankable"`; verifier requires **both** (mutation refused).
+2. On-disk eligibility artifact is loaded, canonically hashed, and every verdict predicate-**replayed**
+   during admission (`verify_from_disk`); a one-record mutation fails at `eligibility_evidence_hash_drift` /
+   `eligibility_verdict_replay_mismatch`.
+3. Sanitized public provenance content-bound into manifest + `store_id`; release-specific locators (ChEMBL
+   `checksums.txt`, UniProt `RELEASE.metalink`/`relnotes`); mutable `current_release` caveated, bytes pinned
+   by hash; immutable `previous_releases/release-2026_02/` to be added once UniProt archives 2026_02.
+4. `n_total_drug_assertions` renamed → `n_general_drug_assertions`; added `n_unique_source_mechanism_rows`,
+   `n_variant_specific_assertions`, `n_ambiguous_assertion_occurrences` (+ unique) in metrics.
+5. Committed HANDOFF machine path removed → `$SPOT_STAGE3_CACHE/` (real path only in the non-publishable
+   operational log).
+6. Mixed-license release gate: `CHEMBL_LICENSE` + `CHEMBL_REQUIRED_ATTRIBUTION` packaged in the store dir;
+   ChEMBL-derived layer CC BY-SA 3.0, UniProt-derived identity CC BY 4.0 — cache data is NOT the code's MIT.
+
+**Ask of W16/W1:** independent admission audit of `store_id b20ec29b…` — re-run `universe_verify.verify_from_disk`,
+re-hash both sources vs publisher, re-parse all JSON (zero path leaks), replay eligibility predicates, confirm
+dispositions/counts, review the two schemas, and reconcile with W16's `03_druglink/verifier/`. Publish only on pass.

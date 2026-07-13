@@ -54,6 +54,18 @@ def test_ambiguous_source_assertions_are_preserved_separately():
     assert ids == {6210, 6862}                       # source kept, just not rankable
 
 
+def test_every_nested_ambiguous_assertion_is_marked_nonrankable():
+    # the flattening hazard: a copied assertion must NOT carry general_gene_rankable=True.
+    rows = _rows(_resolution())
+    seen = 0
+    for g in GENES:
+        for a in rows[g]["ambiguous_source_assertions"]:
+            assert a["general_gene_rankable"] is False
+            assert a["ambiguity_disposition"] == "ambiguous_identity_nonrankable"
+            seen += 1
+    assert seen == 6            # 2 mec_ids x 3 CALM genes, all stamped non-rankable
+
+
 def test_ambiguous_rows_excluded_from_drug_evidence_count():
     summ = us.coverage_summary(_rows(_resolution()).values())
     assert summ["n_drug_evidence"] == 0
