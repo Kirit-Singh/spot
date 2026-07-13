@@ -60,7 +60,10 @@ class CacheSweepError(ValueError):
     """The cache cannot be admitted."""
 
 
-def _walk(root: str, suffixes: tuple[str, ...] = (".json",)) -> list[str]:
+PUBLIC_SUFFIXES = (".json", ".md", ".txt", ".yaml", ".yml", ".csv")
+
+
+def _walk(root: str, suffixes: tuple[str, ...] = PUBLIC_SUFFIXES) -> list[str]:
     out = []
     for dirpath, _, files in os.walk(root):
         for name in sorted(files):
@@ -76,7 +79,7 @@ def parse_all_json(root: str) -> tuple[dict[str, Any], list[str]]:
     """
     parsed: dict[str, Any] = {}
     failures: list[str] = []
-    for path in _walk(root):
+    for path in _walk(root, (".json",)):
         rel = os.path.relpath(path, root)
         try:
             with open(path, "r", encoding="utf-8") as fh:
@@ -204,3 +207,27 @@ def sweep(rep: Report, root: str) -> Optional[dict[str, Any]]:
     check_no_tokens(rep, parsed)
     check_etags_are_stored_safely(rep, parsed)
     return parsed
+
+
+def check_no_machine_paths_in_ANY_public_text(rep: Report, root: str) -> None:
+    """Not just JSON. A committed HANDOFF.md leaked `/home/tcelab/.cache/...` and my
+    JSON-only sweep sailed straight past it.
+
+    The leak does not care what extension it is written under, so neither does the scan.
+    """
+    leaks = []
+    for path in _walk(root):
+        rel = os.path.relpath(path, root)
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                for i, line in enumerate(fh, 1):
+                    if LOCAL_PATH_RE.search(line):
+                        leaks.append(f"{rel}:{i}")
+                        break
+        except OSError:
+            continue
+    rep.check(
+        "no PUBLIC text artifact of any type (.json/.md/.txt/...) leaks a machine-local "
+        "path — a JSON-only scan misses a committed HANDOFF.md, and the leak does not care "
+        "what extension it was written under",
+        not leaks, "; ".join(leaks[:4]))

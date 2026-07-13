@@ -40,8 +40,14 @@ PRODUCTION_POINTER_KEYS = ("production_pointer", "production_pointer_path",
                            "promoted_to_production", "current_pointer")
 PRODUCTION_POINTER_FILES = ("production_pointer.json", "current.json")
 
+# A machine-local path, wherever it is written. The old form allowlisted the characters
+# that could PRECEDE the path (whitespace, quote, `=`, `(`) — so a markdown code span,
+# `/home/tcelab/...`, sailed straight through, and a committed HANDOFF.md leaked a path my
+# own sweep reported clean. An allowlist of delimiters is a guess about how someone will
+# write it. The lookbehind instead says what a path may NOT follow, which is the thing we
+# actually know: a path component.
 LOCAL_PATH_RE = re.compile(
-    r"(^|[\s\"'=(])(/home/|/Users/|/mnt/|/media/|/root/|/tmp/|/var/folders/"
+    r"(?<![A-Za-z0-9_.\-/])(/home/|/Users/|/mnt/|/media/|/root/|/tmp/|/var/folders/"
     r"|/private/var/|[A-Za-z]:\\)")
 
 # --------------------------------------------------------------------------- #

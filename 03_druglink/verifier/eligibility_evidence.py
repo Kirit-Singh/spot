@@ -262,3 +262,54 @@ def verify(rep: Report, *, evidence: Optional[dict[str, Any]],
     check_content_hash(rep, evidence)
     check_store_binding(rep, evidence=evidence, manifest=manifest)
     check_predicate_replay(rep, evidence)
+
+
+# --------------------------------------------------------------------------- #
+# ADMISSION MUST HASH THE BYTES ON DISK.
+#
+# A manifest pin proves nothing about a file nobody opened. The producer's verifier can
+# hold a correct hash in the manifest while the 3.5 MB evidence file on disk has been
+# altered — the pin and the file are only connected if someone actually reads the file and
+# recomputes it. Passing an already-parsed dict into the checker does not do that: it
+# verifies whatever was handed over, which may not be what is on disk.
+#
+# So production admission LOADS the file itself and hashes what it read.
+# --------------------------------------------------------------------------- #
+def load_and_hash(path: str) -> tuple[dict[str, Any], str]:
+    """Read the evidence file FROM DISK and canonically hash what was actually read."""
+    with open(path, "r", encoding="utf-8") as fh:
+        doc = json.load(fh)
+    return doc, canonical_content_sha256(doc.get("records") or [])
+
+
+def check_on_disk_evidence_matches_the_pin(rep: Report, *, evidence_path: str,
+                                           manifest: dict[str, Any],
+                                           content_hash_fn: Any) -> Optional[dict[str, Any]]:
+    """Open the real file, hash it, and compare to the manifest's pin.
+
+    ``content_hash_fn`` is the producer's canonical hash rule (its own ``content_hash``),
+    so the comparison is against the rule the pin was computed under — not a rule Stage 3
+    invented, which would fail for the wrong reason.
+    """
+    import os
+    if not os.path.isfile(evidence_path):
+        rep.check(
+            "the eligibility evidence file exists ON DISK and is loaded for admission (a "
+            "manifest pin proves nothing about a file nobody opened)",
+            False, f"not found: {evidence_path}")
+        return None
+
+    with open(evidence_path, "r", encoding="utf-8") as fh:
+        doc = json.load(fh)
+
+    recomputed = content_hash_fn(doc)
+    pinned = (manifest.get("extraction") or {}).get("eligibility_evidence_sha256") \
+        or manifest.get("eligibility_evidence_sha256")
+
+    rep.check(
+        "the eligibility evidence ON DISK re-hashes to the manifest's pin (the producer's "
+        "verifier can hold a correct pin while the file beside it has been altered — the "
+        "pin and the file are only connected if someone opens the file and recomputes it)",
+        recomputed == pinned,
+        f"on-disk {str(recomputed)[:16]}… vs pinned {str(pinned)[:16]}…")
+    return doc

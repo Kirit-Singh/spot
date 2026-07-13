@@ -289,3 +289,59 @@ def check_no_rankable_assertion_inside_an_ambiguous_row(
         f"{DISP_AMBIGUOUS_SOURCE_ASSERTION!r} disposition (preserved-but-unlabelled is how "
         "it gets read as ordinary evidence)",
         not unnamed, f"{len(unnamed)} unnamed: {unnamed[:3]}")
+
+
+# --------------------------------------------------------------------------- #
+# DENOMINATORS. `n_total_drug_assertions` is not a total.
+#
+# The store reports n_total_drug_assertions = 2,227. That number is the count of GENERAL,
+# rankable assertions. The cache actually holds:
+#
+#     2,262  occurrences  (every copy, at every depth)
+#     2,258  unique source mec_ids
+#     2,227  general / rankable
+#        29  variant-specific
+#         6  ambiguous copies  (2 unique mec_ids x 3 calmodulin genes)
+#
+# and 2,227 + 29 + 6 = 2,262. A field called "total" that silently excludes the variant and
+# ambiguous assertions makes the excluded evidence invisible in exactly the accounting a
+# reader would use to notice it was excluded. The denominators must be named for what they
+# COUNT, not for what the producer happened to want in the numerator.
+# --------------------------------------------------------------------------- #
+REQUIRED_DENOMINATORS = (
+    "n_assertion_occurrences",      # every copy, every depth
+    "n_unique_source_mec_ids",
+    "n_general_rankable_assertions",
+    "n_variant_specific_assertions",
+    "n_ambiguous_copy_assertions",
+)
+
+
+def check_denominators_are_exact(rep: Report, metrics: dict[str, Any]) -> None:
+    """A 'total' that is really a subtotal hides the thing it excluded."""
+    missing = [d for d in REQUIRED_DENOMINATORS if d not in metrics]
+    rep.check(
+        "the cache reports EXACT denominators (occurrences, unique mec_ids, general, "
+        "variant, ambiguous) — a field named `n_total_*` that actually counts only the "
+        "rankable subset makes the excluded evidence invisible in the very accounting a "
+        "reader would use to notice it was excluded",
+        not missing, f"missing: {missing}")
+
+    if missing:
+        return
+
+    occ = metrics["n_assertion_occurrences"]
+    parts = (metrics["n_general_rankable_assertions"]
+             + metrics["n_variant_specific_assertions"]
+             + metrics["n_ambiguous_copy_assertions"])
+    rep.check(
+        "the denominators RECONCILE: general + variant + ambiguous == occurrences",
+        occ == parts, f"{parts} != {occ}")
+
+    rep.check(
+        "no metric is named `n_total_drug_assertions` while counting only the rankable "
+        "subset",
+        "n_total_drug_assertions" not in metrics
+        or metrics.get("n_total_drug_assertions") == occ,
+        f"n_total_drug_assertions={metrics.get('n_total_drug_assertions')!r} but there are "
+        f"{occ} occurrences")
