@@ -1,5 +1,5 @@
 // Canonical reusable-arm identity — frozen topology (ROUND4_ADDENDUM.md, Rule 2,
-// sha256 fd59ecb6cc099009965fd552bedb0378cfddbf337a7afabde10f7419cfc96c0e).
+// sha256 c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f).
 //
 // A program's perturbation effect is computed ONCE per context; the two logical arms
 // (`increase` / `decrease`) are exact sign transforms of that one base effect, not two
@@ -11,6 +11,13 @@
 // program A + toward_b of program B — with NO combined / balanced / weighted score. The
 // release holds 300 logical arm slots (60 direct + 120 temporal + 120 pathway) over 10
 // base-portable programs, materialized by 15 content-addressed all-arm bundles.
+//
+// Pair-derived views (Pareto tiers, concordance labels, any two-arm ordering) are JOIN-TIME
+// DISPLAY ONLY: derived on demand from the two immutable arm ranks, OFF BY DEFAULT, carrying
+// NO new score, unable to change either arm or rescue an ineligible target. They are NOT
+// stored in the reusable bundles (there is deliberately no pair key here), NOT part of
+// release completeness, and NOT part of Stage-3 admission. Any legacy pair-shaped fields are
+// compatibility-only and are excluded from the production all-arm manifest.
 
 import type { DirectObjective } from '../domain/stage2RealRun';
 

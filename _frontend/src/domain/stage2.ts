@@ -1,5 +1,11 @@
 // Stage-2 — targets (UI shape of spot.stage02_gene_lever_set.v1).
 //
+// COMPATIBILITY-ONLY (ROUND4_ADDENDUM.md, sha c4773562): this is the legacy pair-bound
+// lever set. The forward release is per-program reusable arms (see repository/armKey.ts +
+// domain/stage2RealRun.ts) joined on demand into a pair. Its pair-shaped fields (joint_status,
+// pareto_tier) are pair-derived, join-time display concepts here — they are excluded from the
+// production all-arm manifest and are never stored in a reusable arm bundle.
+//
 // Two INDEPENDENT, authoritative objectives — never averaged into one score:
 //   away_from_A  — reduction of the A program
 //   toward_B     — increase of the B program
