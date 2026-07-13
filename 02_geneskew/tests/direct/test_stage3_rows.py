@@ -248,9 +248,21 @@ class TestPathwayIsNOTATargetEvidenceLane:
 
 
 class TestIdentityIsJOINEDNeverSniffed:
-    def test_the_join_key_is_the_lanes_own(self):
-        assert S.IDENTITY_JOIN["temporal"]["join_on"] == "base_key"
-        assert S.IDENTITY_JOIN["temporal"]["record"] == "base_records"
+    def test_TEMPORAL_identity_is_the_CANONICAL_JOIN_of_BOTH_direct_endpoints(self):
+        """base_records are NOT an identity source. The native temporal producer (276a9ad)
+        leaves target_symbol, target_ensembl and target_id_namespace at their dataclass
+        defaults — NULL — and base_records mirror those nulls faithfully. They are an empty
+        box with the right label on it.
+
+        A temporal arm is a DIFFERENCE BETWEEN TWO DIRECT ENDPOINTS, so its targets are
+        exactly as identified as those two endpoints AGREE they are.
+        """
+        j = S.IDENTITY_JOIN["temporal"]
+        assert j["record"] == S.TARGET_IDENTITY_FILE == "target_identity.json"
+        assert j["join_on"] == "target_id"
+        assert j["record_scope"] == "BOTH admitted Direct endpoint conditions"
+        assert j["endpoints_must_agree_exactly"] is True
+        assert j["trusts_the_temporal_identity_mirrors"] is False
 
     def test_a_row_with_NO_joined_identity_is_REFUSED_not_dropped(self):
         with pytest.raises(S.RowContractError, match="unresolved_target_identity"):
@@ -266,7 +278,7 @@ class TestIdentityIsJOINEDNeverSniffed:
 
     def test_the_MODALITY_is_read_off_the_joined_record_not_asserted(self):
         bad = _identity()
-        bad["perturbation_modality"] = "CRISPRa_activation"
+        bad["observed_perturbation_modality"] = "CRISPRa_activation"
         with pytest.raises(S.RowContractError, match="one assay"):
             _row(identity=bad)
 
@@ -275,13 +287,9 @@ class TestIdentityIsJOINEDNeverSniffed:
         DELETED sailed through and was classed `inhibition_observed_compatible`. The row
         exists to stop a drug direction being assumed — and it was assuming the ASSAY."""
         blank = _identity()
-        del blank["perturbation_modality"]
+        del blank["observed_perturbation_modality"]
         with pytest.raises(S.RowContractError, match=S.G_MODALITY_ABSENT):
             _row(identity=blank)
-
-    def test_TEMPORAL_declares_the_assay_on_the_record_it_joins_to(self):
-        assert S.IDENTITY_JOIN["temporal"]["modality_field"] == "perturbation_modality"
-        assert S.IDENTITY_JOIN["temporal"]["record"] == "base_records"
 
     def test_DIRECT_now_binds_the_SHARED_identity_artifact(self):
         """LANDED at 9bd5895. Direct emits `target_identity.json`, it is in VERIFIED_PATHS and

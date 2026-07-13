@@ -71,8 +71,10 @@ NATIVE_ROWS = {
                "join_on": "target_id"},
     # temporal DOES ship rankings/, with `arm_value`, and its identity lives on base_records
     # keyed by base_key — "never on the arm records that join to it", in its own words.
+    # temporal's rows join identity on target_id — NOT base_key. base_records were never an
+    # identity source: 276a9ad leaves their identity fields NULL.
     "temporal": {"kind": "rankings_dir", "dir": "rankings", "value_field": "arm_value",
-                 "join_on": "base_key"},
+                 "join_on": "target_id"},
     # pathway ships NO target rows at all: its records are (arm x GENE SET).
     "pathway": None,
 }
@@ -139,6 +141,12 @@ def _canon(obj: Any) -> str:
 
 
 G_NON_FINITE = "a_value_that_is_not_a_finite_number_and_not_null"
+G_TEMPORAL_IDENTITY = "temporal_identity_is_the_canonical_join_of_BOTH_direct_endpoints"
+
+
+def _note(failures: Any, message: str) -> None:
+    if failures is not None:
+        failures.append(message)
 
 
 def _jsonable(value: Any) -> Any:
@@ -230,7 +238,8 @@ def verify(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
     # value in the native ranking record, so the rebuilt row disagrees with the shipped one.
     rebuilt: dict[tuple, dict] = {}
     for rel, bound in sources.items():
-        rebuilt.update(_rebuild_rows(os.path.join(bundles_root, rel), bound))
+        rebuilt.update(_rebuild_rows(os.path.join(bundles_root, rel), bound,
+                                     bundles_root=bundles_root, failures=failures))
 
     shipped = {_row_key(r): r for r in (doc.get("target_rows") or [])}
     for key, row in shipped.items():
@@ -406,25 +415,26 @@ def _verify_completeness(doc: dict, sources: dict, rebuilt: dict, contexts: list
     return bad
 
 
-def _rebuild_rows(bundle_dir: str, bound: dict) -> dict[tuple, dict]:
+def _rebuild_rows(bundle_dir: str, bound: dict, *, bundles_root: str = "",
+                  failures: Any = None) -> dict[tuple, dict]:
     """Rebuild a bundle's typed rows FROM ITS OWN NATIVE BYTES. The producer's word is not used.
 
     Identity + assay come from the lane's bound identity source. A lane that binds none
     produces NO rows — and so a bridge that ships rows for it has rows from nowhere.
     """
     lane = str(bound.get("lane"))
-    identity = _identity_index(bundle_dir, bound)
+    identity = _identity_index(bundle_dir, bound, bundles_root=bundles_root,
+                               failures=failures)
     if identity is None:
         return {}                       # no bound identity source -> this lane rebuilds nothing
-    # temporal joins on base_key; a lane with an identity artifact joins on target_id
-    join_on = "base_key" if (bound.get("identity_source") or {}).get(
-        "kind") == "base_records" else "target_id"
+    # EVERY lane now joins identity on target_id: Direct through its own target_identity.json,
+    # temporal through the canonical join across BOTH of its Direct endpoints.
+    join_on = "target_id"
 
     spec = NATIVE_ROWS.get(lane)
     if spec is None:
         return {}                       # pathway: no target rows exist to rebuild
     records = _native_records(bundle_dir, spec)
-    join_on = spec["join_on"]
     value_field = spec["value_field"]
 
     out: dict[tuple, dict] = {}
@@ -457,8 +467,11 @@ ROW_SCHEMA = "spot.stage02_stage3_row.v1"
 ROW_RULE_ID = "spot.stage02.stage3_row.direction_and_namespace.v1"
 PERTURBATION_TARGET_EFFECT = "target_transcript_reduced"
 PHENOCOPY_CLAIM = "putative_crispri_phenocopy"
-JOIN_ON = {"direct": "target_id", "temporal": "base_key"}
-IDENTITY_SOURCE_OF = {"direct": IDENTITY_FILE, "temporal": "base_records"}
+# EVERY lane joins identity on target_id now: Direct through its own target_identity.json,
+# temporal through the canonical join across BOTH of its Direct endpoints. base_records were
+# never an identity source — 276a9ad leaves their identity fields NULL.
+JOIN_ON = {"direct": "target_id", "temporal": "target_id"}
+IDENTITY_SOURCE_OF = {"direct": IDENTITY_FILE, "temporal": IDENTITY_FILE}
 
 
 def _typed_row(*, lane, arm_key, change, rec, ident, value, evaluable, modulation, context):
@@ -536,7 +549,8 @@ def _native_records(bundle_dir: str, spec: dict) -> list:
     return out
 
 
-def _identity_index(bundle_dir: str, bound: dict) -> Any:
+def _identity_index(bundle_dir: str, bound: dict, *, bundles_root: str = "",
+                    failures: Any = None) -> Any:
     """target_id -> {namespace, modality}, from the lane's BOUND identity source.
 
     Direct binds NO such artifact today (`arm_artifacts.VERIFIED_PATHS` has no identity table,
@@ -544,6 +558,54 @@ def _identity_index(bundle_dir: str, bound: dict) -> Any:
     """
     src = bound.get("identity_source") or {}
     kind = src.get("kind")
+
+    # TEMPORAL: the canonical join across BOTH admitted Direct endpoints.
+    #
+    # The temporal producer (276a9ad) leaves target_symbol, target_ensembl and
+    # target_id_namespace at their dataclass defaults — NULL — and base_records mirror those
+    # nulls faithfully. They are not an identity source; they are an empty box with the right
+    # label on it, and a verifier that read them would rebuild every row with a null identity
+    # and then agree with a bridge that did the same.
+    #
+    # A temporal arm is a DIFFERENCE BETWEEN TWO DIRECT ENDPOINTS. Its targets are exactly as
+    # identified as those two endpoints AGREE they are — and a disagreement is refused, because
+    # a target the endpoints identify differently is not one target.
+    if kind == "direct_endpoints":
+        ends, canonical = src.get("endpoints") or {}, None
+        for cond, ep in sorted(ends.items()):
+            path = os.path.join(bundles_root, ep.get("relative_dir", ""), IDENTITY_FILE)
+            if not os.path.exists(path):
+                _note(failures, f"{G_TEMPORAL_IDENTITY}: the {cond!r} Direct endpoint has no "
+                                f"{IDENTITY_FILE}")
+                return None
+            if ep.get("raw_sha256") and _sha256(path) != ep["raw_sha256"]:
+                _note(failures, f"{G_TEMPORAL_IDENTITY}: the {cond!r} endpoint's identity "
+                                "artifact is not the bytes that were bound")
+                return None
+            with open(path) as fh:
+                rows = json.load(fh).get(IDENTITY_RECORDS_KEY) or []
+            here = {str(r["target_id"]): {
+                "target_id": r.get("target_id"),
+                "target_id_namespace": r.get("target_id_namespace"),
+                "target_symbol": r.get("target_symbol"),
+                "target_ensembl": r.get("target_ensembl"),
+                "modality": r.get(IDENTITY_MODALITY_FIELD),
+            } for r in rows}
+            if canonical is None:
+                canonical = here
+                continue
+            merged = {}
+            for tid in sorted(set(canonical) & set(here)):
+                if canonical[tid] != here[tid]:
+                    _note(failures,
+                          f"{G_TEMPORAL_IDENTITY}: target {tid!r}: the endpoints DISAGREE "
+                          f"about its identity ({canonical[tid]} vs {here[tid]}). A target the "
+                          "two endpoints identify differently is not one target")
+                    return None
+                merged[tid] = canonical[tid]
+            canonical = merged
+        return canonical
+
     if kind == "base_records":
         with open(os.path.join(bundle_dir, "arm_bundle.json")) as fh:
             doc = json.load(fh)

@@ -41,54 +41,73 @@ def _sha(path):
 
 
 def _native_temporal(root, value=0.5):
-    """A native temporal bundle: a bound ranking + the base_records it joins to."""
+    """A native temporal bundle — plus the two Direct endpoints its identity comes from.
+
+    The temporal producer's own identity mirrors are NULL (276a9ad), so a temporal bundle
+    ALONE cannot say who any of its targets are. Its endpoints can.
+    """
+    _direct_at(root, "Rest")
+    _direct_at(root, "Stim48hr")
+
     d = os.path.join(root, "temporal", "Rest__Stim48hr")
     os.makedirs(os.path.join(d, "rankings"), exist_ok=True)
     with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
         json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
                    "bundle_id": "T-1", "lane": "temporal", "context": CTX,
+                   # the NULL mirrors, exactly as the producer writes them
                    "base_records": [{"base_key": "PRG-1|ENSG00000111111",
                                      "target_id": "ENSG00000111111",
-                                     "target_id_namespace": "ensembl_gene_id",
-                                     "target_symbol": "SYM",
-                                     "target_ensembl": "ENSG00000111111",
+                                     "target_id_namespace": None, "target_symbol": None,
+                                     "target_ensembl": None,
                                      "perturbation_modality": "CRISPRi_knockdown"}]}, fh)
     with open(os.path.join(d, "rankings", "PRG-1__increase.json"), "w") as fh:
-        # THE NATIVE TEMPORAL SHAPE: arm_key ONCE, at the top of the document. The ranked
-        # records do NOT repeat it.
+        # arm_key ONCE, at the top of the document; the records do not repeat it
         json.dump({"arm_key": ARM,
                    "records": [{"target_id": "ENSG00000111111",
                                 "base_key": "PRG-1|ENSG00000111111",
-                                "arm_value": value,
-                                "evaluable": True, "rank": 1}]}, fh)
+                                "arm_value": value, "evaluable": True, "rank": 1}]}, fh)
     return d
 
 
 def _bindings(root, d):
     rel = os.path.relpath(d, root).replace(os.sep, "/")
+    from direct import target_identity as TI
+    endpoints = {}
+    for cond in ("Rest", "Stim48hr"):
+        dd = os.path.join(root, "direct", cond)
+        endpoints[cond] = {
+            "relative_dir": os.path.relpath(dd, root).replace(os.sep, "/"),
+            "raw_sha256": _sha(os.path.join(dd, TI.TARGET_IDENTITY_FILE)),
+        }
     return {
         "native_bundles": {rel: {
             "lane": "temporal", "bundle_id": "T-1", "context": CTX,
-            "identity_source": {"kind": "base_records", "file": "arm_bundle.json"},
+            # identity is the CANONICAL JOIN across BOTH admitted Direct endpoints
+            "identity_source": {"kind": "direct_endpoints",
+                                "file": TI.TARGET_IDENTITY_FILE,
+                                "endpoints": endpoints,
+                                "trusts_the_temporal_identity_mirrors": False},
             "files": {"arm_bundle.json": _sha(os.path.join(d, "arm_bundle.json")),
                       "rankings/PRG-1__increase.json":
                           _sha(os.path.join(d, "rankings", "PRG-1__increase.json"))},
         }},
         "lane_admissions": {"temporal": {"native_verdict": "ADMIT", "report_id": "r-1"}},
         "stage1": {"release_canonical_sha256": "s" * 64},
-        "identity_source": {"temporal": "base_records"},
+        "identity_source": {"temporal": TI.TARGET_IDENTITY_FILE},
         "aggregate": _aggregate(root),
     }
 
 
 def _rows(value=0.5):
+    from direct import target_identity as TI
     return [S.build_row(
         lane="temporal",
         record={"target_id": "ENSG00000111111", "arm_value": value, "evaluable": True,
                 "rank": 1},
+        # the CANONICAL identity, from the endpoints — never the temporal null mirror
         identity={"target_id": "ENSG00000111111", "target_id_namespace": "ensembl_gene_id",
                   "target_symbol": "SYM", "target_ensembl": "ENSG00000111111",
-                  "perturbation_modality": "CRISPRi_knockdown"},
+                  "observed_perturbation_modality": TI.OBSERVED_PERTURBATION_MODALITY},
         arm_key=ARM, program_id="PRG-1", program_effect_direction="increase", context=CTX)]
 
 
@@ -1106,3 +1125,163 @@ class TestTheSTALEREPORTAttack:
         out = V.verify_receipt(bridge, bundles_root=root)
         assert out["verdict"] == "reject"
         assert any("can be moved onto any" in f for f in out["failures"])
+
+
+# --------------------------------------------------------------------------- #
+# TEMPORAL: identity is the CANONICAL JOIN across BOTH admitted Direct endpoints.
+# --------------------------------------------------------------------------- #
+TARM = "temporal|PRG-1|increase|from_condition=Rest|to_condition=Stim48hr"
+
+
+def _direct_at(root, condition, value=0.5, namespace="ensembl_gene_id", symbol="SYM",
+               ensembl="ENSG00000111111"):
+    """A Direct endpoint bundle for ONE condition, carrying its target_identity.json."""
+    import pandas as pd
+    from direct import target_identity as TI
+
+    d = os.path.join(root, "direct", condition)
+    os.makedirs(d, exist_ok=True)
+    arm = f"direct|PRG-1|increase|condition={condition}"
+    with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+        json.dump({"schema_version": "spot.stage02_direct_arm_bundle.v1",
+                   "arm_bundle_run_id": f"D-{condition}", "condition": condition}, fh)
+    pd.DataFrame([{"arm_key": arm, "program_id": "PRG-1", "desired_change": "increase",
+                   "condition": condition, "target_id": "ENSG00000111111",
+                   "value": value, "rank": 1, "evaluable": True}]
+                 ).to_parquet(os.path.join(d, "arms.parquet"))
+    with open(os.path.join(d, TI.TARGET_IDENTITY_FILE), "w") as fh:
+        json.dump({"schema_version": TI.SCHEMA_VERSION, "condition": condition,
+                   "columns": list(TI.COLUMNS),
+                   "observed_perturbation_modality": TI.OBSERVED_PERTURBATION_MODALITY,
+                   "modality_rule_id": TI.MODALITY_RULE_ID, "n_targets": 1,
+                   "n_ensembl_gene_id": 1, "n_gene_symbol": 0,
+                   "records": [{"target_id": "ENSG00000111111",
+                                "target_id_namespace": namespace, "target_symbol": symbol,
+                                "target_ensembl": ensembl,
+                                "observed_perturbation_modality":
+                                    TI.OBSERVED_PERTURBATION_MODALITY}]}, fh)
+    return d
+
+
+def _temporal_release(tmp_path, **endpoint_kw):
+    """Two admitted Direct endpoints + the temporal bundle that differences them."""
+    root = str(tmp_path)
+    _direct_at(root, "Rest")
+    _direct_at(root, "Stim48hr", **endpoint_kw)
+
+    t = os.path.join(root, "temporal", "Rest__Stim48hr")
+    os.makedirs(os.path.join(t, "rankings"), exist_ok=True)
+    with open(os.path.join(t, "arm_bundle.json"), "w") as fh:
+        json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
+                   "bundle_id": "T-1", "lane": "temporal",
+                   "context": {"from_condition": "Rest", "to_condition": "Stim48hr"},
+                   # 276a9ad: the identity mirrors are NULL. The bridge never reads them.
+                   "base_records": [{"base_key": "PRG-1|ENSG00000111111",
+                                     "target_id": "ENSG00000111111",
+                                     "target_id_namespace": None, "target_symbol": None,
+                                     "target_ensembl": None,
+                                     "perturbation_modality": "CRISPRi_knockdown"}]}, fh)
+    with open(os.path.join(t, "rankings", "PRG-1__increase.json"), "w") as fh:
+        json.dump({"arm_key": TARM,
+                   "records": [{"target_id": "ENSG00000111111",
+                                "base_key": "PRG-1|ENSG00000111111",
+                                "arm_value": 0.5, "evaluable": True, "rank": 1}]}, fh)
+
+    lanes = {la: {"aggregate_disposition": "admitted", "native_verdict": "ADMIT",
+                  "native_self_hash": la[0] * 64} for la in ("direct", "temporal")}
+    with open(os.path.join(root, "stage2_run_manifest.json"), "w") as fh:
+        json.dump({"lane_admissions": lanes,
+                   "stage1_v3_release": {"release_canonical_sha256": "s" * 64}}, fh,
+                  indent=2, sort_keys=True)
+    with open(os.path.join(root, "stage2_aggregate_verification.json"), "w") as fh:
+        json.dump({"verdict": "admit", "n_failed": 0}, fh, indent=2, sort_keys=True)
+    return root, t
+
+
+class TestTemporalIdentityIsTheCANONICALEndpointJoin:
+    """The native temporal producer (276a9ad) leaves target_symbol, target_ensembl and
+    target_id_namespace NULL, and base_records mirror those nulls faithfully. They are not an
+    identity source — they are an empty box with the right label on it.
+
+    A temporal arm is a DIFFERENCE BETWEEN TWO DIRECT ENDPOINTS, so its targets are exactly as
+    identified as those two endpoints AGREE they are.
+    """
+
+    def test_the_NATIVE_276a9ad_bundle_replays_and_gets_a_REAL_identity(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, t = _temporal_release(tmp_path)
+
+        # the producer's own mirrors really are null — this is the shape we refuse to trust
+        bases = json.load(open(os.path.join(t, "arm_bundle.json")))["base_records"]
+        assert bases[0]["target_id_namespace"] is None
+        assert bases[0]["target_symbol"] is None
+
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        rows = json.load(open(os.path.join(bridge, BB.BRIDGE_FILE)))["target_rows"]
+        temporal = [r for r in rows if r["lane"] == "temporal"]
+        assert len(temporal) == 1
+        r = temporal[0]
+        # ...and the identity is REAL, from the endpoints — not the null mirror
+        assert r["target_id_namespace"] == "ensembl_gene_id"
+        assert r["target_symbol"] == "SYM"
+        assert r["target_ensembl"] == "ENSG00000111111"
+        assert r["observed_perturbation_modality"] == "CRISPRi_knockdown"
+        assert r["identity_source"] == "target_identity.json"
+
+    def test_it_BINDS_BOTH_endpoint_identity_artifacts_by_hash(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _t = _temporal_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        doc = json.load(open(os.path.join(bridge, BB.BRIDGE_FILE)))
+        tb = [b for b in doc["bindings"]["native_bundles"].values()
+              if b["lane"] == "temporal"][0]
+        src = tb["identity_source"]
+        assert src["kind"] == "direct_endpoints"
+        assert src["trusts_the_temporal_identity_mirrors"] is False
+        assert set(src["endpoints"]) == {"Rest", "Stim48hr"}
+        for cond in ("Rest", "Stim48hr"):
+            want = _sha(os.path.join(root, "direct", cond, "target_identity.json"))
+            assert src["endpoints"][cond]["raw_sha256"] == want
+
+    def test_MISMATCHED_endpoint_identity_REFUSES_to_build(self, tmp_path):
+        """The two endpoints disagree about who this target is. It is not one target, and a
+        difference computed across them is a difference between two different genes."""
+        from direct import stage3_bridge as BB
+        root, _t = _temporal_release(tmp_path, symbol="A_DIFFERENT_GENE")
+
+        with pytest.raises(BB.BridgeError, match="DISAGREE about its identity"):
+            BB.assemble(root, os.path.join(root, "bridge"))
+
+    def test_a_MISMATCH_introduced_AFTER_the_build_is_REFUSED_by_the_verifier(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _t = _temporal_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        # somebody edits ONE endpoint's identity afterwards
+        ip = os.path.join(root, "direct", "Stim48hr", "target_identity.json")
+        doc = json.load(open(ip))
+        doc["records"][0]["target_symbol"] = "A_DIFFERENT_GENE"
+        with open(ip, "w") as fh:
+            json.dump(doc, fh)
+
+        report = V.verify(bridge, bundles_root=root)
+        assert report["verdict"] == "reject"
+        assert any(V.G_TEMPORAL_IDENTITY in f or V.G_SOURCE_BYTES in f
+                   for f in report["failures"])
+
+    def test_a_temporal_target_NEITHER_endpoint_identifies_is_REFUSED(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, t = _temporal_release(tmp_path)
+        rp = os.path.join(t, "rankings", "PRG-1__increase.json")
+        doc = json.load(open(rp))
+        doc["records"][0]["target_id"] = "ENSG00000999999"      # in no endpoint's identity
+        with open(rp, "w") as fh:
+            json.dump(doc, fh)
+
+        with pytest.raises(BB.BridgeError, match="disappear without a trace"):
+            BB.assemble(root, os.path.join(root, "bridge"))

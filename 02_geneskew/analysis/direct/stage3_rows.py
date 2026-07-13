@@ -200,13 +200,23 @@ IDENTITY_JOIN = {
         "bound_as": f"bindings.{TARGET_IDENTITY_FILE}",
     },
     LANE_TEMPORAL: {
-        # temporal says this in its own bytes: identity is carried on base_records, "never on
-        # the arm records that join to it", and Stage 3 reads it from the record it joins to
-        "record": "base_records",
-        "join_on": "base_key",
-        "unique_by": ("base_key",),
-        "modality_field": "perturbation_modality",
-        "bound_as": "arm_bundle.json:base_records",
+        # NOT base_records. The native temporal producer (276a9ad) leaves target_symbol,
+        # target_ensembl and target_id_namespace at their dataclass defaults — NULL — and
+        # base_records faithfully mirror those nulls. They are not an identity source; they
+        # are an empty box with the right label on it.
+        #
+        # A temporal arm is a DIFFERENCE BETWEEN TWO DIRECT ENDPOINTS, so its targets' identity
+        # is whatever BOTH endpoints say it is. We join target_identity.json from EACH admitted
+        # endpoint condition and require the two to agree EXACTLY. If they disagree, the target
+        # is not one target — and no amount of picking a side makes it one.
+        "record": TARGET_IDENTITY_FILE,
+        "record_scope": "BOTH admitted Direct endpoint conditions",
+        "join_on": "target_id",
+        "unique_by": ("target_id",),
+        "modality_field": "observed_perturbation_modality",
+        "bound_as": "bindings.direct_endpoints[from_condition|to_condition]",
+        "endpoints_must_agree_exactly": True,
+        "trusts_the_temporal_identity_mirrors": False,
     },
 }
 

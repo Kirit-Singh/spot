@@ -253,14 +253,53 @@ def _direct_rows(bundle_dir: str, context: dict) -> list:
     return out
 
 
-def _temporal_rows(bundle_dir: str, context: dict) -> list:
-    """Temporal ships rankings/ with `arm_value`; identity is on base_records, via base_key."""
+def endpoint_identity(direct_dirs: dict, context: dict) -> dict:
+    """The CANONICAL identity of a temporal arm's targets: BOTH Direct endpoints, in agreement.
+
+    The temporal producer's own identity mirrors are NULL (276a9ad leaves target_symbol,
+    target_ensembl and target_id_namespace at their dataclass defaults), so they are not read
+    at all. A temporal arm is a DIFFERENCE BETWEEN TWO DIRECT ENDPOINTS, so its targets are
+    exactly as identified as those two endpoints agree they are.
+
+    If the endpoints disagree about who a target is, the target is NOT ONE TARGET — and
+    picking a side would silently attach one endpoint's gene to a difference computed across
+    two. So a disagreement REFUSES.
+    """
+    frm, to = context.get("from_condition"), context.get("to_condition")
+    ends = {}
+    for cond in (frm, to):
+        d = direct_dirs.get(cond)
+        if d is None:
+            raise BridgeError(
+                f"the temporal bundle {frm}->{to} has no admitted Direct endpoint for "
+                f"{cond!r}. Its identity comes from BOTH endpoints' {TARGET_IDENTITY_FILE}; "
+                "the temporal lane's own identity fields are null and are never trusted")
+        ends[cond] = _identity_of(d)
+
+    a, b = ends[frm], ends[to]
+    canonical = {}
+    for target_id in sorted(set(a) & set(b)):
+        ra, rb = a[target_id], b[target_id]
+        tuple_a = tuple(ra.get(k) for k in TARGET_IDENTITY_TUPLE)
+        tuple_b = tuple(rb.get(k) for k in TARGET_IDENTITY_TUPLE)
+        if tuple_a != tuple_b:
+            raise BridgeError(
+                f"target {target_id!r}: the {frm!r} and {to!r} endpoints DISAGREE about its "
+                f"identity ({tuple_a} vs {tuple_b}). A target the two endpoints identify "
+                "differently is not one target, and a difference computed across them is a "
+                "difference between two different genes")
+        canonical[target_id] = ra
+    return canonical
+
+
+TARGET_IDENTITY_TUPLE = ("target_id_namespace", "target_symbol", "target_ensembl",
+                         "observed_perturbation_modality")
+
+
+def _temporal_rows(bundle_dir: str, context: dict, identity: dict) -> list:
+    """Temporal ships rankings/ with `arm_value`; identity is the CANONICAL endpoint join."""
     import json
     import os
-
-    with open(os.path.join(bundle_dir, "arm_bundle.json")) as fh:
-        bundle = json.load(fh)
-    bases = {str(b["base_key"]): b for b in (bundle.get("base_records") or [])}
 
     out, rdir = [], os.path.join(bundle_dir, "rankings")
     for fname in sorted(os.listdir(rdir)) if os.path.isdir(rdir) else []:
@@ -276,13 +315,14 @@ def _temporal_rows(bundle_dir: str, context: dict) -> list:
                 f"{bundle_dir}/{fname}: the ranking document carries no arm_key. Temporal "
                 "stores it ONCE at the top level; its records do not repeat it")
         for rec in (doc.get("records") or doc.get("ranked") or []):
-            base = bases.get(str(rec.get("base_key")))
-            if base is None:
+            ident = identity.get(str(rec.get("target_id")))
+            if ident is None:
                 raise BridgeError(
-                    f"{bundle_dir}: arm record for {rec.get('target_id')!r} joins base_key "
-                    f"{rec.get('base_key')!r}, which no base_record carries")
+                    f"{bundle_dir}: target {rec.get('target_id')!r} is ranked but neither "
+                    "admitted Direct endpoint identifies it. It would drop out of the Stage-3 "
+                    "join and disappear without a trace")
             out.append(R.build_row(
-                lane="temporal", record=rec, identity=base, arm_key=arm_key,
+                lane="temporal", record=rec, identity=ident, arm_key=arm_key,
                 program_id=arm_key.split("|")[1],
                 program_effect_direction=arm_key.split("|")[2], context=context))
     return out
@@ -313,6 +353,11 @@ def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
 
     aggregate, manifest, _report = preconditions(bundles_root)
 
+    # THE DIRECT ENDPOINTS FIRST. Temporal's identity is the canonical join across BOTH of
+    # them, and pathway's leading edge resolves against the same declared identity — so the
+    # Direct bundles must be located before either lane can be built.
+    direct_dirs = _direct_bundles_by_condition(bundles_root)
+
     rows, contexts, native = [], [], {}
     for base, dirs, files in os.walk(bundles_root):
         dirs[:] = [d for d in dirs if not d.startswith(".")]
@@ -330,10 +375,21 @@ def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
             names += ["arms.parquet", TARGET_IDENTITY_FILE]
             source = {"kind": "identity_artifact", "file": TARGET_IDENTITY_FILE}
         elif lane == "temporal":
-            rows += _temporal_rows(base, ctx)
+            rows += _temporal_rows(base, ctx, endpoint_identity(direct_dirs, ctx))
             names += [f"rankings/{f}" for f in sorted(os.listdir(os.path.join(base,
                       "rankings")))] if os.path.isdir(os.path.join(base, "rankings")) else []
-            source = {"kind": "base_records", "file": BS.BUNDLE_FILE}
+            # BIND BOTH Direct identity artifacts, by hash. The temporal lane's own identity
+            # fields are NULL (276a9ad) and are never read; these two are the source.
+            endpoints = {}
+            for cond in (ctx.get("from_condition"), ctx.get("to_condition")):
+                dd = direct_dirs[cond]
+                endpoints[cond] = {
+                    "relative_dir": os.path.relpath(dd, bundles_root).replace(os.sep, "/"),
+                    "raw_sha256": _raw(os.path.join(dd, TARGET_IDENTITY_FILE)),
+                }
+            source = {"kind": "direct_endpoints", "file": TARGET_IDENTITY_FILE,
+                      "endpoints": endpoints, "endpoints_must_agree_exactly": True,
+                      "trusts_the_temporal_identity_mirrors": False}
         else:
             # THE NAMESPACE OF EVERY LEADING-EDGE TARGET — from the same declared identity the
             # typed target evidence uses. Never sniffed from the shape of the id.
@@ -361,6 +417,28 @@ def assemble(bundles_root: str, bridge_root: str) -> dict[str, Any]:
     os.makedirs(bridge_root, exist_ok=True)
     _dump(doc, os.path.join(bridge_root, BRIDGE_FILE))     # allow_nan=False: no NaN bytes
     return doc
+
+
+def _direct_bundles_by_condition(bundles_root: str) -> dict:
+    """condition -> the Direct bundle directory. The identity source for every other lane."""
+    import json
+    import os
+
+    from . import bundle_shapes as BS
+
+    out: dict = {}
+    for base, dirs, files in os.walk(bundles_root):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        if BS.BUNDLE_FILE not in files:
+            continue
+        try:
+            with open(os.path.join(base, BS.BUNDLE_FILE)) as fh:
+                doc = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if BS.lane_of(doc) == "direct":
+            out[str(doc.get("condition"))] = base
+    return out
 
 
 def _release_namespaces(bundles_root: str) -> dict:
