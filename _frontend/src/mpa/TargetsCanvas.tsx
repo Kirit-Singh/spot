@@ -306,18 +306,39 @@ function bothArmTargets(view: CompactStage2SelectionView): ReadonlySet<string> {
  *  chrome; the run of them reads as a direction of travel rather than a single badge. */
 const ARROW_RUN = 7;
 
+/** A short, heavy-stroked arrow — drawn rather than typeset, so its width and weight are independent
+ *  (a glyph can only get wider as it gets bolder). */
+function Arrow({ down }: { down: boolean }) {
+  return (
+    <svg
+      width="15"
+      height="11"
+      viewBox="0 0 15 11"
+      aria-hidden="true"
+      className={down ? 'rotate-90' : undefined}
+    >
+      <path
+        d="M1.5 5.5 H10.5 M8 2.5 L11.5 5.5 L8 8.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function TransitionArrows({ from, to, down = false }: { from: string; to: string; down?: boolean }) {
   return (
     <span
       aria-label={`from ${from} to ${to}`}
-      className={`pointer-events-none flex select-none text-[20px] leading-none text-muted ${
-        down ? 'flex-row justify-center gap-6' : 'h-full flex-col items-center justify-between'
+      className={`pointer-events-none flex select-none text-ink-2 ${
+        down ? 'flex-row justify-center' : 'h-full flex-col items-center justify-between'
       }`}
     >
       {Array.from({ length: down ? 1 : ARROW_RUN }, (_, i) => (
-        <span key={i} aria-hidden="true">
-          {down ? '↓' : '→'}
-        </span>
+        <Arrow key={i} down={down} />
       ))}
     </span>
   );
