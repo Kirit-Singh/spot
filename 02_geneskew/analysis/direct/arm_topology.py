@@ -109,11 +109,37 @@ PAIR_DERIVED_VIEW_POLICY = {
     "legacy_pair_fields": "compatibility_only_excluded_from_this_manifest",
 }
 
-# The scorer view's own field names. The program set is RE-DERIVED from the portability
-# field it names; the list it declares is CHECKED against that, never copied.
-SCORER_PROGRAMS = "base_portable_programs"
-SCORER_N = "n_base_portable"
-SCORER_FIELD = "base_portability_source_field"
+# --------------------------------------------------------------------------- #
+# THE AUTHORITATIVE STAGE-1 v3 RELEASE. Its real schema, not one we wished for.
+#
+# An earlier version of this module read `base_portable_programs`,
+# `base_portability_source_field` and a per-program `method_hash`. NONE OF THEM EXIST. The
+# scorer view (`spot.stage01_stage2_registry_view.v1`) carries `base_portable` PER PROGRAM
+# and nothing else, and the release (`spot.stage01_v3_release.v1`) carries `selector` +
+# `components`, not `artifacts`. Tests written against invented fields agree with the
+# invention, not with the release — so the fields are read from the release's own bytes
+# here, and the fixtures stage the REAL release.
+#
+# The admitted set is DERIVED from `program.base_portable` and then COMPARED to
+# `release.selector.admitted_programs`: two independent statements of the same fact, which
+# is the only way a disagreement between them can ever surface. Reading the selector alone
+# would trust it; deriving alone would never notice it had drifted.
+# (Reference: W18's `scorer_view.admitted_programs()` + `cross_check_selector()`.)
+# --------------------------------------------------------------------------- #
+RELEASE_SCHEMA = "spot.stage01_v3_release.v1"
+VIEW_SCHEMA = "spot.stage01_stage2_registry_view.v1"
+VIEW_COMPONENT = "stage2_registry_view"
+PORTABLE_KEY = "base_portable"
+
+# There is NO per-program hash in the view. If an arm needs a per-program projection id, it
+# is SPECIFIED here and derived by hashing the program's canonical record — never read from
+# a field that does not exist.
+PROJECTION_ID_RULE = "spot.stage02.arm.program_projection_id.canonical_view_record.v1"
+
+# Batch commentary stays OUT of the reusable temporal chain (owner rule). The DiD estimand
+# is population-level and the arm key already carries the ordered pair; a batch field in a
+# reusable bundle would be commentary travelling into every join that reuses the arm.
+BATCH_KEYS = ("batch", "confound")
 
 
 class RunManifestError(ValueError):
@@ -144,75 +170,168 @@ def role_pole_map() -> dict[str, str]:
             for role in config.ARMS for pole in sorted(config.POLE_SIGN)}
 
 
-def pair_derived_hits(obj: Any, path: str = "") -> list[str]:
-    """Every key in an arm inventory that stores a pair-derived ordering. Recursive."""
+def key_hits(obj: Any, keys: tuple, path: str = "") -> list[str]:
+    """Every key anywhere in a document whose name contains one of ``keys``. Recursive."""
     hits: list[str] = []
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if any(bad in str(k).lower() for bad in PAIR_DERIVED_KEYS):
+            if any(bad in str(k).lower() for bad in keys):
                 hits.append(f"{path}.{k}")
-            hits += pair_derived_hits(v, f"{path}.{k}")
+            hits += key_hits(v, keys, f"{path}.{k}")
     elif isinstance(obj, (list, tuple)):
         for i, v in enumerate(obj):
-            hits += pair_derived_hits(v, f"{path}[{i}]")
+            hits += key_hits(v, keys, f"{path}[{i}]")
     return hits
 
 
-# --------------------------------------------------------------------------- #
-# THE SCORER VIEW: the ONE source of the admitted program set.
-# --------------------------------------------------------------------------- #
-def load_scorer_view(path: Optional[str]) -> dict[str, Any]:
-    """Bind the v3 generic release / scorer view and RE-DERIVE its program set.
+def pair_derived_hits(obj: Any, path: str = "") -> list[str]:
+    """Every key in an arm inventory that stores a pair-derived ordering."""
+    return key_hits(obj, PAIR_DERIVED_KEYS, path)
 
-    The declared ``base_portable_programs`` list is never believed. The view names the
-    field that decides portability; the program set is recomputed from that field over the
-    view's own program records, and the declared list and count must agree with the
-    recomputation or the view is refused.
 
-    There is no default and no fallback: a run whose admitted program set came from an
-    unnamed source cannot be reproduced or contested.
+# --------------------------------------------------------------------------- #
+# THE AUTHORITATIVE RELEASE: the ONE source of the programs, the conditions and the
+# gene-set sources.
+# --------------------------------------------------------------------------- #
+def program_projection_sha256(record: dict[str, Any]) -> str:
+    """The per-program projection id, SPECIFIED because the view does not carry one.
+
+    Two releases that admit the same program ids but disagree about that program's panel,
+    control or coefficients are NOT the same scorer projection, and an arm keyed only on
+    the id could be silently re-attributed from one to the other. So the id is the
+    canonical hash of the program's whole record in the view.
     """
-    if not path:
+    return content_hash(record)
+
+
+def _component(release: dict[str, Any], name: str, release_root: str) -> dict[str, Any]:
+    """Resolve ONE release component against an EXPLICITLY STAGED release root.
+
+    Never a machine default: a component resolved from wherever the process happens to be
+    running is a component nobody can point at afterwards.
+    """
+    comp = (release.get("components") or {}).get(name)
+    if not isinstance(comp, dict) or not comp.get("path"):
         raise RunManifestError(
-            "the aggregate manifest requires --scorer-view: the v3 generic release / "
-            "scorer view that names the admitted programs. The legacy "
-            "stage01_program_registry.json is NOT this artifact and may not stand in for "
-            "it, even while the two happen to agree")
+            f"the release declares no {name!r} component; it cannot be resolved")
+    rel = str(comp["path"])
+    if os.path.isabs(rel) or ".." in rel.split("/"):
+        raise RunManifestError(
+            f"release component {name!r} path {rel!r} must be release-root-relative")
+    path = os.path.join(release_root, rel)
     if not os.path.exists(path):
-        raise RunManifestError(f"scorer view not found: {os.path.basename(path)}")
+        raise RunManifestError(
+            f"release component {name!r} is not staged at {rel!r} under the release root; "
+            "stage the release explicitly rather than resolving it from a machine default")
+
+    raw = file_sha256(path)
+    if comp.get("raw_sha256") and raw != comp["raw_sha256"]:
+        raise RunManifestError(
+            f"release component {name!r}: the staged bytes hash to {raw[:16]}, but the "
+            f"release pins {str(comp['raw_sha256'])[:16]}")
     with open(path) as fh:
         doc = json.load(fh)
+    canon = content_hash(doc)
+    if comp.get("canonical_content_sha256") and canon != comp["canonical_content_sha256"]:
+        raise RunManifestError(
+            f"release component {name!r}: canonical content hashes to {canon[:16]}, but "
+            f"the release pins {str(comp['canonical_content_sha256'])[:16]}")
+    return {"doc": doc, "path": rel, "raw_sha256": raw, "canonical_sha256": canon}
 
-    field = doc.get(SCORER_FIELD)
-    programs = doc.get("programs")
-    if not field or not isinstance(programs, list) or not programs:
-        raise RunManifestError(
-            f"scorer view must declare {SCORER_FIELD!r} and a non-empty 'programs' list; "
-            "a program set that cannot be re-derived cannot be trusted")
 
-    derived = sorted(str(p["program_id"]) for p in programs if p.get(field))
-    declared = sorted(str(p) for p in (doc.get(SCORER_PROGRAMS) or []))
-    if derived != declared:
+def load_release(release_path: Optional[str],
+                 release_root: Optional[str]) -> dict[str, Any]:
+    """Bind the authoritative Stage-1 v3 release and DERIVE the whole topology from it.
+
+    The admitted program set is derived from ``program.base_portable`` in the scorer view
+    and then CHECKED against ``release.selector.admitted_programs``. The conditions and the
+    pathway sources come from the selector. Nothing is taken from a legacy registry, and no
+    count is copied.
+    """
+    if not release_path or not release_root:
         raise RunManifestError(
-            f"scorer view: {SCORER_PROGRAMS} declares {declared} but re-deriving from "
-            f"{field!r} gives {derived}; the declared list is not believed")
-    n_declared = doc.get(SCORER_N)
-    if n_declared is not None and int(n_declared) != len(derived):
+            "the aggregate manifest requires --release AND --release-root: the "
+            "authoritative Stage-1 v3 release, and the directory it is STAGED in. The "
+            "legacy stage01_program_registry.json is not this artifact and may not stand "
+            "in for it")
+    if not os.path.exists(release_path):
+        raise RunManifestError(f"release not found: {os.path.basename(release_path)}")
+    with open(release_path) as fh:
+        release = json.load(fh)
+    if release.get("schema") != RELEASE_SCHEMA:
         raise RunManifestError(
-            f"scorer view: {SCORER_N}={n_declared} disagrees with the {len(derived)} "
-            "programs re-derived from the portability field")
+            f"release schema is {release.get('schema')!r}; expected {RELEASE_SCHEMA!r}")
+
+    view_comp = _component(release, VIEW_COMPONENT, release_root)
+    view = view_comp["doc"]
+    if view.get("schema_version") != VIEW_SCHEMA:
+        raise RunManifestError(
+            f"scorer view schema is {view.get('schema_version')!r}; expected "
+            f"{VIEW_SCHEMA!r}")
+    # The release publishes the view's canonical hash; the staged bytes must BE that view.
+    pinned_view = release.get("registry_scorer_view_canonical_sha256")
+    if pinned_view and view_comp["canonical_sha256"] != pinned_view:
+        raise RunManifestError(
+            f"the staged scorer view canonically hashes to "
+            f"{view_comp['canonical_sha256'][:16]}, but the release binds "
+            f"{str(pinned_view)[:16]}")
+
+    records = view.get("programs")
+    if not isinstance(records, list) or not records:
+        raise RunManifestError("the scorer view carries no programs")
+    undeclared = [str(p.get("program_id")) for p in records if PORTABLE_KEY not in p]
+    if undeclared:
+        raise RunManifestError(
+            f"the scorer view does not declare {PORTABLE_KEY!r} for {sorted(undeclared)}; "
+            "a program whose portability is unstated is not silently treated as portable")
+
+    derived = sorted(str(p["program_id"]) for p in records if bool(p[PORTABLE_KEY]))
+    if not derived:
+        raise RunManifestError(
+            "the release marks no program base_portable, so there is no arm to compute")
+
+    selector = release.get("selector") or {}
+    declared = sorted(str(p) for p in (selector.get("admitted_programs") or []))
+    if declared and declared != derived:
+        raise RunManifestError(
+            f"base_portable derives {derived}, but the release selector declares "
+            f"{declared}. One of them is wrong about what this release admits, and a run "
+            "that picked either without checking would not know which")
+
+    conditions = [str(c) for c in (selector.get("conditions") or [])]
+    sources = [str(s) for s in (selector.get("pathway_sources") or [])]
+    if not conditions or not sources:
+        raise RunManifestError(
+            "the release selector must name its conditions and its pathway sources; the "
+            "condition universe is NOT taken from a batch policy and NOT from the manifest")
 
     return {
-        "schema_version": doc.get("schema_version"),
-        "method_version": doc.get("method_version"),
-        "raw_sha256": file_sha256(path),
-        "canonical_sha256": content_hash(doc),
-        "base_portability_source_field": str(field),
+        "release_schema": release.get("schema"),
+        "release_canonical_sha256": content_hash(release),
+        "release_raw_sha256": file_sha256(release_path),
+        "method_version": release.get("method_version"),
+        # bound WHOLE, as the release publishes them — never a per-program field that does
+        # not exist
+        "registry_scorer_view_canonical_sha256": view_comp["canonical_sha256"],
+        "registry_scorer_projection_sha256": release.get(
+            "registry_scorer_projection_sha256"),
+        "scorer_view_raw_sha256": view_comp["raw_sha256"],
+        "scorer_view_path": view_comp["path"],
         "programs": derived,
         "n_programs": len(derived),
-        "scorer_projection_sha256": {
-            str(p["program_id"]): p.get("method_hash") for p in programs},
-        "program_set_rederived_from_the_view": True,
+        "admitted_set_rederived_from_base_portable": True,
+        "derived_agrees_with_selector": bool(declared),
+        # the per-program id is SPECIFIED and computed, not read
+        "program_projection_id_rule": PROJECTION_ID_RULE,
+        "program_projection_sha256": {
+            str(p["program_id"]): program_projection_sha256(p)
+            for p in records if bool(p[PORTABLE_KEY])},
+        # ORDER PRESERVED: the release states its conditions in temporal order, and a
+        # reordered list is a different release
+        "conditions": conditions,
+        "gene_set_sources": sources,
+        "condition_universe_source": "release.selector.conditions",
+        "batch_policy_is_not_an_authority_here": True,
         "legacy_registry_used": False,
     }
 
@@ -317,7 +436,9 @@ CLI_CONTRACTS = {
             "one screen row per released pooled-main estimate at the bundle's condition — "
             "verification.json.source_target_count, re-derived by verify_run from the DE "
             "release obs (culture_condition == the bundle's condition)",
-        "expected_arm_count_source": "2 x the scorer view's n_base_portable",
+        "expected_arm_count_source":
+            "2 x the admitted set derived from program.base_portable in the release's "
+            "scorer view (cross-checked against release.selector.admitted_programs)",
         "expected_exit_code": 0,
     },
     LANE_TEMPORAL: {
@@ -332,7 +453,9 @@ CLI_CONTRACTS = {
         "expected_row_count_source":
             "one temporal record per target in the UNION of the two endpoints' released "
             "pooled-main targets — temporal_provenance.json.n_records",
-        "expected_arm_count_source": "2 x the scorer view's n_base_portable",
+        "expected_arm_count_source":
+            "2 x the admitted set derived from program.base_portable in the release's "
+            "scorer view (cross-checked against release.selector.admitted_programs)",
         "expected_exit_code": 0,
     },
     LANE_PATHWAY: {
@@ -348,8 +471,8 @@ CLI_CONTRACTS = {
             "one pathway record per gene set in the PINNED bundle — "
             "pathway_provenance.json.run_binding.gene_sets.gene_set_release.n_sets",
         "expected_arm_count_source":
-            "2 x the scorer view's n_base_portable, every arm referencing the ONE shared "
-            "convergence artifact of this (condition, source)",
+            "2 x the admitted set derived from program.base_portable, every arm "
+            "referencing the ONE shared convergence artifact of this (condition, source)",
         "expected_hit_count_source":
             "RECONSTRUCTED, never declared: n_hits_in_ranking = |gene-set members (target "
             "namespace) INTERSECT the ranked target ids of that arm's bound ranking|, both "

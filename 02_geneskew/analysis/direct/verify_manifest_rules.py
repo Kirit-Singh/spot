@@ -188,6 +188,17 @@ PAIR_DERIVED_KEYS = ("pareto", "concordance", "joint_order", "joint_ordering",
                      "combined_score", "balanced_skew", "weighted_score",
                      "composite_score", "headline_rank")
 
+# Batch commentary stays OUT of the reusable temporal chain (owner rule). The DiD estimand
+# is population-level, the arm key already carries the ordered pair, and a batch field
+# baked into a reusable arm is commentary travelling into every join that reuses it.
+BATCH_KEYS = ("batch", "confound")
+
+# The real schemas. Read from the release's own bytes; never assumed.
+RELEASE_SCHEMA = "spot.stage01_v3_release.v1"
+VIEW_SCHEMA = "spot.stage01_stage2_registry_view.v1"
+VIEW_COMPONENT = "stage2_registry_view"
+PORTABLE_KEY = "base_portable"
+
 
 # --------------------------------------------------------------------------- #
 # The verifier's own hashing and readers.
@@ -236,23 +247,88 @@ def pair_derived_keys(obj: Any) -> list[str]:
     return _scan(obj, lambda k: any(bad in k.lower() for bad in PAIR_DERIVED_KEYS))
 
 
+def batch_keys(obj: Any) -> list[str]:
+    return _scan(obj, lambda k: any(bad in k.lower() for bad in BATCH_KEYS))
+
+
 # --------------------------------------------------------------------------- #
 # The independent expectation.
 # --------------------------------------------------------------------------- #
-def scorer_programs(doc: Optional[dict]) -> tuple[list[str], dict[str, Any]]:
-    """RE-DERIVE the admitted program set from the view's OWN portability field.
+def scorer_programs(view: Optional[dict]) -> tuple[list[str], dict[str, Any]]:
+    """RE-DERIVE the admitted program set from ``program.base_portable`` in the view.
 
-    The view's declared ``base_portable_programs`` list is never read here — the caller
-    compares it against this derivation, and a disagreement refuses the view.
+    The scorer view (``spot.stage01_stage2_registry_view.v1``) carries ``base_portable``
+    per program AND NOTHING ELSE — there is no ``base_portable_programs`` list, no
+    ``base_portability_source_field``, no ``view_id`` and no per-program ``method_hash``.
+    (An earlier version of this verifier read all four. They do not exist, so it derived an
+    empty program set and REJECTED every real release — fail-closed, but blind.)
+
+    The per-program projection id is therefore SPECIFIED, not read: it is the canonical
+    hash of the program's whole record. Two releases that admit the same ids but disagree
+    about a program's panel, control or coefficients are not the same scorer projection,
+    and an arm keyed only on the id could be silently re-attributed between them.
     """
-    if not isinstance(doc, dict):
+    if not isinstance(view, dict):
         return [], {}
-    field = doc.get("base_portability_source_field")
-    programs = doc.get("programs") or []
-    derived = sorted(str(p["program_id"]) for p in programs
-                     if field and p.get(field))
-    scorer = {str(p["program_id"]): p.get("method_hash") for p in programs}
-    return derived, scorer
+    records = view.get("programs") or []
+    # A program whose portability is UNSTATED is not silently treated as portable.
+    if any(PORTABLE_KEY not in p for p in records):
+        return [], {}
+    derived = sorted(str(p["program_id"]) for p in records if bool(p[PORTABLE_KEY]))
+    projection = {str(p["program_id"]): content_sha256(p)
+                  for p in records if bool(p[PORTABLE_KEY])}
+    return derived, projection
+
+
+def resolve_component(release: Optional[dict], name: str,
+                      release_root: str) -> Optional[dict]:
+    """Load ONE release component from an EXPLICITLY STAGED release root.
+
+    Never a machine default: a component resolved from wherever the process happens to be
+    running is a component nobody can point at afterwards. The staged bytes must match the
+    raw AND canonical hashes the release pins, or the component is not the one it names.
+    """
+    comp = ((release or {}).get("components") or {}).get(name)
+    if not isinstance(comp, dict) or not comp.get("path") or not release_root:
+        return None
+    rel = str(comp["path"])
+    if os.path.isabs(rel) or ".." in rel.split("/"):
+        return None
+    path = os.path.join(release_root, rel)
+    if not os.path.exists(path):
+        return None
+    if comp.get("raw_sha256") and file_sha256(path) != comp["raw_sha256"]:
+        return None
+    doc = load_json(path)
+    if doc is None:
+        return None
+    if comp.get("canonical_content_sha256") and \
+            content_sha256(doc) != comp["canonical_content_sha256"]:
+        return None
+    return doc
+
+
+def selector_of(release: Optional[dict]) -> dict:
+    return (release or {}).get("selector") or {}
+
+
+def release_conditions(release: Optional[dict]) -> list[str]:
+    """The condition universe — from ``release.selector.conditions``, IN ITS ORDER.
+
+    NOT from a batch policy: batch is out of the reusable temporal chain entirely, and a
+    confound diagnostic was never the right place to learn which conditions exist. The
+    order is the release's (Rest, Stim8hr, Stim48hr — temporal, not alphabetical), and a
+    reordered list is a DIFFERENT release: the pinned release hash is what says so.
+    """
+    return [str(c) for c in (selector_of(release).get("conditions") or [])]
+
+
+def release_sources(release: Optional[dict]) -> list[str]:
+    return [str(s) for s in (selector_of(release).get("pathway_sources") or [])]
+
+
+def release_admitted(release: Optional[dict]) -> list[str]:
+    return sorted(str(p) for p in (selector_of(release).get("admitted_programs") or []))
 
 
 def ordered_pairs(conds: list[str]) -> list[tuple[str, str]]:

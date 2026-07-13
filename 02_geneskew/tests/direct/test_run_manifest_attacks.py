@@ -21,13 +21,12 @@ from direct.hashing import content_hash
 
 
 def _manifest(tmp_path, run, name="manifest.json", allow_partial=False):
-    scorer = run_manifest.load_scorer_view(run["scorer_view"])
+    release = run_manifest.load_release(run["release_path"], run["release_root"])
     bundles = [run_manifest.bind_bundle(d)
                for d in run["direct"] + run["temporal"] + run["pathway"]]
     return run_manifest.build(
         bundles=bundles, out_path=os.path.join(str(tmp_path), name),
-        scorer_view=scorer, conditions=run["conditions"], sources=run["sources"],
-        allow_partial=allow_partial,
+        release=release, allow_partial=allow_partial,
         code_identity={"commit": "f" * 40, "clean_tree": True,
                        "manifest_sha256": "0" * 64, "canonical_digest": "0" * 16})
 
@@ -44,10 +43,12 @@ def _forge_complete(path):
     return path
 
 
-def _verify(run, manifest_path):
+def _verify(run, manifest_path, expect_release_sha256=None):
     return V.verify(manifest_path=manifest_path, bundles_root=run["root"],
-                    scorer_view_path=run["scorer_view"],
-                    batch_policy_path=run["batch_policy"],
+                    release_path=run["release_path"],
+                    release_root=run["release_root"],
+                    expect_release_sha256=(expect_release_sha256
+                                           or run["expect_release_sha256"]),
                     expect_gene_sets_path=run["pinned_gene_sets"],
                     expect_verifiers_path=run["pinned_verifiers"],
                     expected_code_identity_path=run["expected_code_identity"])
@@ -253,7 +254,7 @@ def test_a_PAIR_SPECIFIC_bundle_cannot_satisfy_completeness(tmp_path):
     run = F.complete_run(tmp_path)
     shutil.rmtree(run["direct"][0])
     run["direct"][0] = F.build_bundle(
-        run["root"], "direct", {"condition": run["conditions"][0]}, run["scorer_view"],
+        run["root"], "direct", {"condition": run["conditions"][0]}, run["staged"],
         arms_for=[("treg_like", "decrease"), ("th1_like", "increase")])
     doc = _verify(run, _forge_complete(
         _manifest(tmp_path, run, allow_partial=True)["path"]))
@@ -319,8 +320,8 @@ class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
         run = F.complete_run(tmp_path)
         # every bundle of this source gets the SAME forged identity, so it is
         # self-consistent and still differs from the other source — the old check passed
-        self._forge(run, "reactome",
-                    release_id="FIXTURE-reactome-release-v99-NOT-THE-PINNED-ONE",
+        self._forge(run, "Reactome",
+                    release_id="FIXTURE-Reactome-release-v99-NOT-THE-PINNED-ONE",
                     raw_sha256="c" * 64, canonical_sha256="d" * 64)
         doc = _verify(run, _forge_complete(
             _manifest(tmp_path, run, allow_partial=True)["path"]))
@@ -338,7 +339,7 @@ class TestAGeneSetSourceNameIsNotAGeneSetIdentity:
         # nothing, and "no enrichment" is the answer you get. That is a failed join
         # wearing a null result, and the namespace is part of the identity for that reason.
         run = F.complete_run(tmp_path)
-        self._forge(run, "go_bp", **{field: value})
+        self._forge(run, "GO-BP", **{field: value})
         doc = _verify(run, _forge_complete(
             _manifest(tmp_path, run, allow_partial=True)["path"]))
 
@@ -426,6 +427,89 @@ class TestCleanTreeIsNotSomethingTheRunGetsToAssert:
         assert V.G_CLEAN in doc["failed_gates"]
 
 
+class TestTheConditionUniverseComesFromTheRelease:
+    """The batch policy is no longer an authority. The release is — and it is PINNED.
+
+    A confound diagnostic was never the right place to learn which conditions exist, and
+    batch is now out of the reusable temporal chain entirely. So the conditions come from
+    ``release.selector.conditions``, and the release is content-addressed against a pin
+    held OUTSIDE the run: forging, dropping or REORDERING that list changes the hash.
+    """
+
+    @staticmethod
+    def _mutate_conditions(run, conditions):
+        doc = json.load(open(run["release_path"]))
+        doc["selector"]["conditions"] = conditions
+        with open(run["release_path"], "w") as fh:
+            json.dump(doc, fh, indent=2, sort_keys=True)
+
+    def test_a_FORGED_condition_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = _manifest(tmp_path, run)["path"]
+        self._mutate_conditions(run, ["Rest", "Stim8hr", "FORGED_CONDITION"])
+        doc = _verify(run, path)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_RELEASE_PIN in doc["failed_gates"]
+
+    def test_a_MISSING_condition_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = _manifest(tmp_path, run)["path"]
+        self._mutate_conditions(run, ["Rest", "Stim8hr"])
+        doc = _verify(run, path)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_RELEASE_PIN in doc["failed_gates"]
+
+    def test_a_REORDERED_condition_list_is_REJECTED(self, tmp_path):
+        # the sneaky one: the SET is identical, so every slot still fills and the topology
+        # looks perfect. Only the content address of the release notices.
+        run = F.complete_run(tmp_path)
+        path = _manifest(tmp_path, run)["path"]
+        self._mutate_conditions(run, ["Stim48hr", "Stim8hr", "Rest"])
+        doc = _verify(run, path)
+
+        assert doc["n_arm_slots"] == 300          # every slot still filled...
+        assert doc["verdict"] == V.R.REJECT       # ...and still refused
+        assert V.G_RELEASE_PIN in doc["failed_gates"]
+
+    def test_the_conditions_are_the_RELEASES_in_its_own_order(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+        assert doc["conditions"] == ["Rest", "Stim8hr", "Stim48hr"]
+        assert doc["verdict"] == V.R.ADMIT, doc["failed_gates"]
+
+    def test_a_FORGED_base_portable_flag_is_caught_by_the_selector_crosscheck(
+            self, tmp_path):
+        run = F.complete_run(tmp_path)
+        path = _manifest(tmp_path, run)["path"]
+        view_path = os.path.join(run["release_root"], F.VIEW_PATH)
+        view = json.load(open(view_path))
+        for p in view["programs"]:
+            if p["program_id"] == "th9_like":
+                p["base_portable"] = True         # promote the non-portable program
+        with open(view_path, "w") as fh:
+            json.dump(view, fh, indent=2, sort_keys=True)
+        doc = _verify(run, path)
+
+        assert doc["verdict"] == V.R.REJECT
+        # the staged view no longer hashes to what the release binds
+        assert V.G_VIEW_PIN in doc["failed_gates"]
+
+
+class TestBatchCommentaryIsRefusedByTheVerifierToo:
+    def test_batch_commentary_in_a_temporal_bundle_is_REJECTED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        # the producer refuses it, so a forger must write it in AFTER the manifest is built
+        path = _manifest(tmp_path, run)["path"]
+        _patch(run["temporal"][0], "arm_bundle.json",
+               lambda d: d.update({"batch_status": "partially_confounded"}))
+        doc = _verify(run, path)
+
+        assert doc["verdict"] == V.R.REJECT
+        assert V.G_NO_BATCH in doc["failed_gates"]
+
+
 class TestTheVerifierIsIndependentOfTheProducer:
     """generator != verifier. Enforced, not intended."""
 
@@ -475,7 +559,7 @@ def test_the_verifier_does_not_take_the_TOPOLOGY_from_the_manifest_it_audits(tmp
     path = _manifest(tmp_path, run, allow_partial=True)["path"]
     doc = json.load(open(path))
     doc["conditions"] = run["conditions"][:1]        # "the run was only ever one condition"
-    doc["gene_set_sources"] = ["reactome"]
+    doc["gene_set_sources"] = ["Reactome"]
     doc["complete"] = True
     doc["release_admissible"] = True
     doc["manifest_sha256"] = content_hash(

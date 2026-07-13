@@ -19,12 +19,12 @@ from direct import config, run_manifest
 
 
 def _build(tmp_path, run, **kw):
-    scorer = run_manifest.load_scorer_view(run["scorer_view"])
+    release = run_manifest.load_release(run["release_path"], run["release_root"])
     bundles = [run_manifest.bind_bundle(d)
                for d in run["direct"] + run["temporal"] + run["pathway"]]
     return run_manifest.build(
         bundles=bundles, out_path=os.path.join(str(tmp_path), "manifest.json"),
-        scorer_view=scorer, conditions=run["conditions"], sources=run["sources"],
+        release=release,
         code_identity={"commit": "f" * 40, "clean_tree": True,
                        "manifest_sha256": "0" * 64, "canonical_digest": "0" * 16},
         **kw)
@@ -100,9 +100,9 @@ class TestTheTopology:
         run = F.complete_run(tmp_path)
         doc = _build(tmp_path, run)
         for b in doc["bundles"]:
-            assert b["n_arms"] == 2 * len(F.FIXTURE_PROGRAMS) == 20
+            assert b["n_arms"] == 2 * len(run["programs"]) == 20
 
-    def test_the_slot_algebra_is_derived_from_the_scorer_view(self):
+    def test_the_slot_algebra_is_derived_from_the_release(self):
         # 4 programs, 2 conditions -> 4*2*2 direct, 4*2*2 temporal (2 ordered pairs),
         # 4*2*2*2 pathway. Nothing is hard-coded.
         slots = T.expected_slots(["a", "b", "c", "d"], ["C1", "C2"], ["s1", "s2"])
@@ -127,33 +127,105 @@ class TestTheTopology:
         assert doc["pair_derived_views"]["part_of_release_completeness"] is False
 
 
-class TestTheScorerViewIsTheSourceOfTruth:
-    def test_the_program_set_is_REDERIVED_not_read(self, tmp_path):
-        path = F.scorer_view(tmp_path)
-        doc = json.load(open(path))
-        doc["base_portable_programs"] = doc["base_portable_programs"] + ["th9_like"]
-        with open(path, "w") as fh:
-            json.dump(doc, fh)
-        with pytest.raises(T.RunManifestError, match="declared list is not believed"):
-            run_manifest.load_scorer_view(path)
+class TestTheAuthoritativeReleaseIsTheSourceOfTruth:
+    """The REAL release (55899ac), not a scorer view we wished for.
 
-    def test_the_non_portable_programs_are_excluded(self, tmp_path):
-        scorer = run_manifest.load_scorer_view(F.scorer_view(tmp_path))
-        assert scorer["n_programs"] == 10
-        for excluded in F.FIXTURE_NON_PORTABLE:
-            assert excluded not in scorer["programs"]
+    The previous version of these tests built a view carrying
+    ``base_portable_programs`` / ``base_portability_source_field`` / per-program
+    ``method_hash``. None of those fields exists, so the suite was green against a fiction.
+    """
+
+    def test_the_admitted_set_is_DERIVED_from_program_base_portable(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        view = run["staged"]["view"]
+        assert rel["programs"] == sorted(
+            p["program_id"] for p in view["programs"] if p["base_portable"])
+        assert rel["n_programs"] == 10
+        assert rel["admitted_set_rederived_from_base_portable"] is True
+
+    def test_the_derivation_is_CHECKED_against_the_releases_own_selector(self, tmp_path):
+        # two independent statements of the same fact; a disagreement refuses the release
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        assert rel["programs"] == sorted(
+            run["staged"]["release"]["selector"]["admitted_programs"])
+        assert rel["derived_agrees_with_selector"] is True
+
+    def test_a_selector_that_DISAGREES_with_base_portable_is_refused(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        doc = json.load(open(run["release_path"]))
+        doc["selector"]["admitted_programs"].append("th9_like")   # not base_portable
+        with open(run["release_path"], "w") as fh:
+            json.dump(doc, fh)
+        with pytest.raises(T.RunManifestError, match="selector declares"):
+            run_manifest.load_release(run["release_path"], run["release_root"])
+
+    def test_the_non_portable_program_is_excluded(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        assert "th9_like" not in rel["programs"]
+
+    def test_the_conditions_come_from_the_release_selector_NOT_a_batch_policy(
+            self, tmp_path):
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        # ORDER PRESERVED: temporal, not alphabetical (which would be Rest, Stim48hr, ...)
+        assert rel["conditions"] == ["Rest", "Stim8hr", "Stim48hr"]
+        assert rel["condition_universe_source"] == "release.selector.conditions"
+        assert rel["batch_policy_is_not_an_authority_here"] is True
+
+    def test_the_pathway_sources_come_from_the_release(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        assert rel["gene_set_sources"] == ["GO-BP", "Reactome"]
 
     def test_there_is_no_default_and_no_legacy_registry_fallback(self):
         with pytest.raises(T.RunManifestError, match="legacy"):
-            run_manifest.load_scorer_view(None)
+            run_manifest.load_release(None, None)
 
-    def test_every_arm_binds_its_programs_scorer_projection(self, tmp_path):
+    def test_a_component_must_be_STAGED_not_resolved_from_a_machine_default(
+            self, tmp_path):
         run = F.complete_run(tmp_path)
-        scorer = run_manifest.load_scorer_view(run["scorer_view"])
+        os.remove(os.path.join(run["release_root"], F.VIEW_PATH))
+        with pytest.raises(T.RunManifestError, match="not staged"):
+            run_manifest.load_release(run["release_path"], run["release_root"])
+
+    def test_every_arm_binds_its_programs_SPECIFIED_projection_id(self, tmp_path):
+        # the view carries NO per-program hash, so the id is the canonical hash of that
+        # program's whole record — specified, computed, never read from a missing field
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
         inv = json.load(open(os.path.join(run["direct"][0], "arm_bundle.json")))
         for arm in inv["arms"]:
-            assert (arm["program_method_hash"]
-                    == scorer["scorer_projection_sha256"][arm["program_id"]])
+            assert (arm["program_projection_sha256"]
+                    == rel["program_projection_sha256"][arm["program_id"]])
+
+    def test_the_release_binds_the_scorer_view_and_projection_it_publishes(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+        assert rel["registry_scorer_view_canonical_sha256"].startswith("5d1d8c36")
+        assert rel["registry_scorer_projection_sha256"].startswith("008c1da1")
+
+
+class TestBatchStaysOutOfTheReusableChain:
+    def test_the_manifest_declares_the_population_level_DiD_estimand(self, tmp_path):
+        doc = _build(tmp_path, F.complete_run(tmp_path))
+        est = doc["temporal_estimand"]
+        assert est["estimand_level"] == "population"
+        assert est["is_per_cell_fate"] is False
+        assert est["is_lineage_traced"] is False
+        assert est["batch_commentary_in_reusable_bundles"] is False
+
+    def test_a_bundle_carrying_BATCH_COMMENTARY_is_refused(self, tmp_path):
+        run = F.complete_run(tmp_path)
+        d = run["temporal"][0]
+        inv = json.load(open(os.path.join(d, "arm_bundle.json")))
+        inv["batch_status"] = "partially_confounded"
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump(inv, fh)
+        with pytest.raises(T.RunManifestError, match="batch commentary"):
+            run_manifest.bind_bundle(d)
 
 
 class TestPathwayBindsTheBytesItsCountsCameFrom:
@@ -206,7 +278,7 @@ class TestAPartialRunIsVisiblyPartial:
         # only sufficient IF each one carries every program arm
         run = F.complete_run(tmp_path)
         F.build_bundle(run["root"], "direct", {"condition": run["conditions"][0]},
-                       run["scorer_view"],
+                       run["staged"],
                        arms_for=[("treg_like", T.DECREASE), ("th1_like", T.INCREASE)])
         doc = _build(tmp_path, run, allow_partial=True)
         assert doc["complete"] is False

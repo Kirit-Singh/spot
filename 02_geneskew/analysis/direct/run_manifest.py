@@ -32,6 +32,7 @@ from typing import Any, Optional
 from . import code_digest, config
 from .arm_topology import (
     ARM_BINDING,
+    BATCH_KEYS,
     BINDING_FIELDS,
     BUNDLE_BINDINGS,
     BUNDLE_FILES,
@@ -42,7 +43,8 @@ from .arm_topology import (
     RunManifestError,
     expected_bundles,
     expected_slots,
-    load_scorer_view,
+    key_hits,
+    load_release,
     pair_derived_hits,
     role_pole_map,
     selection_capacity,
@@ -54,7 +56,7 @@ MANIFEST_ID = "spot.stage02.run_manifest.v2"
 FROZEN_ADDENDUM_SHA256 = (
     "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f")
 
-__all__ = ["build", "bind_bundle", "load_scorer_view", "RunManifestError", "main"]
+__all__ = ["build", "bind_bundle", "load_release", "RunManifestError", "main"]
 
 
 def _load(path: str, what: str) -> dict[str, Any]:
@@ -126,6 +128,16 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
             "an arm is pair-agnostic, and a tier baked into it would travel into every "
             "future join that reuses the arm")
 
+    # Nor may it carry BATCH COMMENTARY. The reusable temporal chain omits it by owner
+    # rule: the DiD estimand is population-level, the arm key already carries the ordered
+    # pair, and a batch field baked into an arm is commentary travelling into every join
+    # that reuses it.
+    batch = key_hits(bundle, BATCH_KEYS)
+    if batch:
+        raise RunManifestError(
+            f"{lane} bundle carries batch commentary {batch[:5]} in its arm inventory; "
+            "batch stays out of the reusable temporal chain")
+
     prov = _load(os.path.join(out_dir, names["provenance"]), "provenance")
     report = _load(os.path.join(out_dir, names["verification"]),
                    "independent verification report")
@@ -159,7 +171,7 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
         "context": bundle.get("context") or {},
         "arm_keys": sorted(str(a.get("arm_key")) for a in arms),
         "n_arms": len(arms),
-        "scorer_view": bundle.get("scorer_view") or {},
+        "stage1_v3_release": bundle.get("stage1_v3_release") or {},
         "gene_sets": bundle.get("gene_sets"),
         "convergence": bundle.get("convergence"),
         "bound_artifacts": bindings,
@@ -175,11 +187,18 @@ def bind_bundle(out_dir: str) -> dict[str, Any]:
     }
 
 
-def build(*, bundles: list[dict[str, Any]], out_path: str, scorer_view: dict[str, Any],
-          conditions: list[str], sources: list[str], allow_partial: bool = False,
+def build(*, bundles: list[dict[str, Any]], out_path: str, release: dict[str, Any],
+          allow_partial: bool = False,
           code_identity: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    """The aggregate manifest over every ARM of one Stage-2 run."""
-    slots = expected_slots(scorer_view["programs"], conditions, sources)
+    """The aggregate manifest over every ARM of one Stage-2 run.
+
+    The programs, the conditions and the gene-set sources ALL come from the bound
+    authoritative Stage-1 v3 release. There is no separate --conditions, and the temporal
+    batch policy is not an authority here: the condition universe is
+    ``release.selector.conditions``.
+    """
+    conditions, sources = release["conditions"], release["gene_set_sources"]
+    slots = expected_slots(release["programs"], conditions, sources)
     want_bundles = expected_bundles(conditions, sources)
 
     filled: dict[str, list[str]] = {lane: [] for lane in LANES}
@@ -227,9 +246,18 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, scorer_view: dict[str
         "binds_arm_outputs": True,
         "frozen_topology_addendum_sha256": FROZEN_ADDENDUM_SHA256,
         "code_identity": code_identity or code_digest.run_binding(),
-        "scorer_view": scorer_view,
-        "conditions": sorted(conditions),
-        "gene_set_sources": sorted(sources),
+        "stage1_v3_release": release,
+        # ORDER PRESERVED, as the release states it: a reordered condition list is a
+        # different release, and the pinned release hash is what says so.
+        "conditions": list(conditions),
+        "gene_set_sources": list(sources),
+        "condition_universe_source": release["condition_universe_source"],
+        "temporal_estimand": {
+            "estimand_level": "population",
+            "is_per_cell_fate": False,
+            "is_lineage_traced": False,
+            "batch_commentary_in_reusable_bundles": False,
+        },
         "desired_change_vocabulary": list(DESIRED_CHANGES),
         "desired_change_by_role_and_pole": role_pole_map(),
         "arm_key_rule": (
@@ -243,7 +271,7 @@ def build(*, bundles: list[dict[str, Any]], out_path: str, scorer_view: dict[str
         "per_lane": per_lane,
         "duplicate_bundle_ids": dupe_ids,
         "selection_capacity": selection_capacity(
-            scorer_view["n_programs"], len(conditions)),
+            release["n_programs"], len(conditions)),
         "cli_invocation_contracts": CLI_CONTRACTS,
         "combined_objective": None,
         "combined_objective_permitted": config.COMBINED_OBJECTIVE_PERMITTED,
@@ -277,21 +305,22 @@ def main(argv=None) -> int:
                     help="temporal all-arm bundles (one per ordered condition pair)")
     ap.add_argument("--pathway", nargs="*", default=[],
                     help="pathway all-arm bundles (condition x gene-set source)")
-    ap.add_argument("--scorer-view", required=True,
-                    help="the v3 generic release / scorer view: the ONLY source of the "
-                         "admitted program set. NOT the legacy program registry.")
-    ap.add_argument("--conditions", nargs="+", required=True)
-    ap.add_argument("--gene-set-sources", nargs="+", required=True)
+    ap.add_argument("--release", required=True,
+                    help="the authoritative Stage-1 v3 release: the ONLY source of the "
+                         "admitted programs, the conditions and the pathway sources. NOT "
+                         "the legacy program registry, and NOT a batch policy.")
+    ap.add_argument("--release-root", required=True,
+                    help="the directory the release is STAGED in; component paths resolve "
+                         "against it, never against a machine default")
     ap.add_argument("--allow-partial", action="store_true",
                     help="manifest a partial run: it is flagged complete=false and is "
                          "never release-admissible")
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
 
-    scorer = load_scorer_view(args.scorer_view)
+    release = load_release(args.release, args.release_root)
     bundles = [bind_bundle(d) for d in (args.direct + args.temporal + args.pathway)]
-    doc = build(bundles=bundles, out_path=args.out, scorer_view=scorer,
-                conditions=args.conditions, sources=args.gene_set_sources,
+    doc = build(bundles=bundles, out_path=args.out, release=release,
                 allow_partial=args.allow_partial)
     print(json.dumps({k: v for k, v in doc.items() if k != "bundles"},
                      indent=2, sort_keys=True, default=str))

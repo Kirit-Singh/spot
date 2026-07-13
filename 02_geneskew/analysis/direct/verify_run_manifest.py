@@ -13,11 +13,17 @@ Everything that decides what COMPLETE means, WHO may admit an arm, and WHAT the 
 built from. If any of that came from the document being audited, a forger would simply
 declare it and pass. So each is loaded from a SEPARATE pinned artifact:
 
-    admitted programs   <- the v3 generic release / scorer view  (--scorer-view)
-    condition universe  <- the frozen temporal batch policy       (--batch-policy)
-    gene-set identities <- the pinned source identities           (--expect-gene-sets)
-    lane verifiers      <- the pinned verifier + gate inventory   (--expect-verifiers)
-    code identity       <- the pinned checkout                    (--expected-code-identity)
+    admitted programs   <- release.selector + program.base_portable   (--release)
+    condition universe  <- release.selector.conditions               (--release)
+    gene-set sources    <- release.selector.pathway_sources          (--release)
+    the release itself  <- an independently pinned canonical hash    (--expect-release-sha256)
+    gene-set identities <- the pinned source identities              (--expect-gene-sets)
+    lane verifiers      <- the pinned verifier + gate inventory      (--expect-verifiers)
+    code identity       <- the pinned checkout                       (--expected-code-identity)
+
+The temporal BATCH POLICY is NOT an authority here and is no longer read: batch is out of
+the reusable temporal chain, and a confound diagnostic was never the right place to learn
+which conditions exist. The DiD estimand stays population-level.
 
 The manifest's own ``conditions``, ``gene_set_sources``, ``scorer_view``, counts,
 ``complete`` flag and ``manifest_sha256`` are CHECKED against those. None is believed.
@@ -41,7 +47,8 @@ the bundle bound (its gene-set membership INTERSECT its arm's ranked target ids)
 
 Usage:
     python -m direct.verify_run_manifest --manifest M --bundles-root R \\
-        --scorer-view V --batch-policy P --expect-gene-sets G
+        --release REL --release-root ROOT --expect-release-sha256 SHA \\
+        --expect-gene-sets G --expect-verifiers V --expected-code-identity C
 Exit 0 = ADMIT; 1 = REJECT.
 """
 from __future__ import annotations
@@ -60,10 +67,13 @@ VERIFIER_ID = "spot.stage02.run_manifest.verifier.v1"
 SCHEMA_VERSION = "spot.stage02_run_manifest_verification.v1"
 
 # ---- THE NAMED GATES. Each mutation dies at the one that names its violation. ---- #
-G_SCORER = "scorer_view_program_set_rederives_from_its_own_portability_field"
-G_MANIFEST_SCORER = "the_manifest_binds_the_scorer_view_it_was_verified_against"
-G_CONDITIONS = "the_condition_universe_comes_from_the_frozen_batch_policy"
-G_SOURCES = "the_gene_set_sources_are_the_pinned_ones"
+G_SCORER = "the_admitted_set_rederives_from_base_portable_AND_agrees_with_the_selector"
+G_RELEASE_PIN = "the_release_canonically_hashes_to_the_INDEPENDENTLY_pinned_release"
+G_VIEW_PIN = "the_release_binds_the_scorer_view_and_projection_hashes_it_publishes"
+G_MANIFEST_SCORER = "the_manifest_binds_the_release_it_was_verified_against"
+G_CONDITIONS = "the_condition_universe_comes_from_release_selector_conditions"
+G_SOURCES = "the_gene_set_sources_are_the_releases_pathway_sources"
+G_NO_BATCH = "no_batch_commentary_in_a_reusable_bundle_or_the_aggregate_manifest"
 G_FILES = "every_bundle_ships_its_required_files_and_they_load"
 G_BYTES = "every_artifact_byte_matches_the_hash_its_bundle_bound"
 G_ALL_ARM = "every_bundle_is_an_ALL_ARM_bundle_for_its_context"
@@ -98,8 +108,8 @@ def _one(rep, pairs, gate, what):
              "these outputs are not the same run")
 
 
-def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
-           batch_policy_path: str, expect_gene_sets_path: str,
+def verify(*, manifest_path: str, bundles_root: str, release_path: str,
+           release_root: str, expect_release_sha256: str, expect_gene_sets_path: str,
            expect_verifiers_path: str, expected_code_identity_path: str
            ) -> dict[str, Any]:
     rep = R.Report()
@@ -110,36 +120,60 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
         rep.gate(G_SELF_HASH, False, "the manifest is not a readable JSON document")
         return rep.doc(VERIFIER_ID, SCHEMA_VERSION, n_bundles=0, n_arm_slots=0)
 
-    # ---- 0. THE INDEPENDENT EXPECTATION, from three separately pinned artifacts ---- #
-    scorer = R.load_json(scorer_view_path)
-    programs, projection = R.scorer_programs(scorer)
-    declared = sorted(str(p) for p in
-                      ((scorer or {}).get("base_portable_programs") or []))
-    rep.gate(G_SCORER, bool(programs) and programs == declared,
-             f"re-derived {programs} from the view's portability field; the view declares "
-             f"{declared}. The declared list is never believed")
+    # ---- 0. THE INDEPENDENT EXPECTATION, from the AUTHORITATIVE Stage-1 v3 release ---- #
+    # The programs, the conditions and the pathway sources ALL come from the release. The
+    # batch policy is NOT an authority here: batch is out of the reusable temporal chain,
+    # and a confound diagnostic was never the right place to learn which conditions exist.
+    release = R.load_json(release_path)
+    release_canon = R.content_sha256(release) if release is not None else None
 
-    policy = R.load_json(batch_policy_path) or {}
-    conditions = sorted((policy.get("condition_composition") or {}).keys())
+    # THE PIN. A forged, truncated or REORDERED selector.conditions changes this hash —
+    # which is the whole reason the release is content-addressed and pinned outside the run.
+    rep.gate(G_RELEASE_PIN,
+             bool(expect_release_sha256) and release_canon == expect_release_sha256,
+             f"the staged release canonically hashes to {str(release_canon)[:16]}; the "
+             f"pinned release is {str(expect_release_sha256)[:16]}. A forged, missing or "
+             "reordered condition list is a different release")
+
+    view = R.resolve_component(release, R.VIEW_COMPONENT, release_root)
+    programs, projection = R.scorer_programs(view)
+    declared = R.release_admitted(release)
+    rep.gate(G_SCORER,
+             bool(programs) and bool(declared) and programs == declared,
+             f"base_portable derives {programs}; the release selector declares {declared}. "
+             "Two independent statements of the same fact — a disagreement means one of "
+             "them is wrong about what this release admits")
+
+    rep.gate(G_VIEW_PIN,
+             view is not None
+             and R.content_sha256(view) == (release or {}).get(
+                 "registry_scorer_view_canonical_sha256")
+             and bool((release or {}).get("registry_scorer_projection_sha256")),
+             "the staged scorer view is not the one the release binds, or the release "
+             "publishes no scorer-projection hash")
+
+    conditions = R.release_conditions(release)
     rep.gate(G_CONDITIONS, bool(conditions),
-             "the frozen batch policy names no conditions; the condition universe may "
-             "not be taken from the manifest under test")
+             "release.selector.conditions names no conditions; the condition universe may "
+             "not be taken from the manifest under test, and not from a batch policy")
 
+    sources = R.release_sources(release)
     pinned = R.load_json(expect_gene_sets_path) or {}
-    sources = sorted(pinned.keys())
-    rep.gate(G_SOURCES, bool(sources),
-             "no pinned gene-set source identities supplied; the source universe may not "
-             "be taken from the manifest under test")
+    rep.gate(G_SOURCES,
+             bool(sources) and sorted(sources) == sorted(pinned.keys()),
+             f"the release names sources {sources}; the pinned gene-set identities cover "
+             f"{sorted(pinned.keys())}")
     if not programs or not conditions or not sources:
         return rep.doc(VERIFIER_ID, SCHEMA_VERSION, n_bundles=0, n_arm_slots=0)
 
-    bound = manifest.get("scorer_view") or {}
+    bound = manifest.get("stage1_v3_release") or {}
     rep.gate(G_MANIFEST_SCORER,
-             bound.get("raw_sha256") == R.file_sha256(scorer_view_path)
-             and bound.get("canonical_sha256") == R.content_sha256(scorer)
-             and sorted(bound.get("programs") or []) == programs,
-             f"the manifest binds scorer view {str(bound.get('raw_sha256'))[:16]}; the "
-             f"one verified here is {R.file_sha256(scorer_view_path)[:16]}")
+             bound.get("release_canonical_sha256") == release_canon
+             and sorted(bound.get("programs") or []) == programs
+             and list(bound.get("conditions") or []) == conditions,
+             f"the manifest binds release {str(bound.get('release_canonical_sha256'))[:16]}"
+             f" / conditions {bound.get('conditions')}; the release verified here is "
+             f"{str(release_canon)[:16]} / {conditions}")
 
     want = R.expected_slots(programs, conditions, sources)
 
@@ -159,7 +193,7 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
     convergences: list[tuple] = []
     missing, bad_bytes, not_all_arm, bad_map = [], [], [], []
     bad_projection, pair_stored, forbidden, unloadable, bad_hits = [], [], [], [], []
-    bad_reports, bad_code, bad_gene_sets = [], [], []
+    bad_reports, bad_code, bad_gene_sets, batch_stored = [], [], [], []
 
     for b in bundles:
         lane, bid = b.get("lane"), str(b.get("bundle_id"))
@@ -198,6 +232,7 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
 
         forbidden += R.forbidden_keys(inv) + R.forbidden_keys(prov)
         pair_stored += R.pair_derived_keys(inv)
+        batch_stored += R.batch_keys(inv)
 
         # (c) the bundle is an ALL-ARM bundle for its context
         ctx = inv.get("context") or {}
@@ -228,11 +263,13 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
                         f"a {spec}, but the arm declares {a.get('desired_change')}")
             # (e) the arm binds its program's Stage-1 scorer projection
             pid = str(a.get("program_id"))
-            if projection.get(pid) and a.get("program_method_hash") != projection[pid]:
+            # The view carries NO per-program hash, so the id is the canonical hash of that
+            # program's record, recomputed here from the staged view's own bytes.
+            if projection.get(pid) and a.get("program_projection_sha256") != projection[pid]:
                 bad_projection.append(
                     f"{key}: binds scorer projection "
-                    f"{str(a.get('program_method_hash'))[:16]}; the scorer view says "
-                    f"{str(projection[pid])[:16]}")
+                    f"{str(a.get('program_projection_sha256'))[:16]}; the canonical record "
+                    f"of {pid} in the staged view hashes to {str(projection[pid])[:16]}")
             # (f) RECONSTRUCT the hit counts from the bound bytes. Never read them.
             if lane == R.LANE_PATHWAY:
                 ranking = R.load_json(os.path.join(
@@ -287,6 +324,11 @@ def verify(*, manifest_path: str, bundles_root: str, scorer_view_path: str,
              f"a reusable arm bundle stores pair-derived ordering(s) {pair_stored[:5]}; "
              "Pareto tiers and concordance labels are join-time display only")
     rep.gate(G_NO_PQ, not forbidden, f"forbidden keys: {sorted(set(forbidden))[:6]}")
+    rep.gate(G_NO_BATCH,
+             not batch_stored and not R.batch_keys(manifest.get("bundles") or []),
+             f"batch commentary {sorted(set(batch_stored))[:5]} is stored in a reusable "
+             "bundle; the DiD estimand is population-level and batch stays out of the "
+             "reusable temporal chain")
 
     # ---- 3. THE TOPOLOGY: the slots, per lane ---- #
     gate_of = {R.LANE_DIRECT: G_DIRECT_SLOTS, R.LANE_TEMPORAL: G_TEMPORAL_SLOTS,
@@ -394,10 +436,15 @@ def main(argv=None) -> int:
         description="Independent verifier for the Stage-2 aggregate run manifest")
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--bundles-root", required=True)
-    ap.add_argument("--scorer-view", required=True,
-                    help="the v3 generic release / scorer view: the admitted programs")
-    ap.add_argument("--batch-policy", required=True,
-                    help="the frozen batch policy: the condition universe")
+    ap.add_argument("--release", required=True,
+                    help="the authoritative Stage-1 v3 release: the admitted programs, the "
+                         "conditions and the pathway sources")
+    ap.add_argument("--release-root", required=True,
+                    help="the directory the release is STAGED in; components resolve "
+                         "against it, never against a machine default")
+    ap.add_argument("--expect-release-sha256", required=True,
+                    help="the INDEPENDENTLY pinned canonical hash of that release; a "
+                         "forged, missing or reordered condition list changes it")
     ap.add_argument("--expect-gene-sets", required=True,
                     help="the pinned gene-set source identities: the source universe, and "
                          "the exact release/hash/namespace/licence/universe bindings every "
@@ -414,8 +461,8 @@ def main(argv=None) -> int:
 
     try:
         doc = verify(manifest_path=args.manifest, bundles_root=args.bundles_root,
-                     scorer_view_path=args.scorer_view,
-                     batch_policy_path=args.batch_policy,
+                     release_path=args.release, release_root=args.release_root,
+                     expect_release_sha256=args.expect_release_sha256,
                      expect_gene_sets_path=args.expect_gene_sets,
                      expect_verifiers_path=args.expect_verifiers,
                      expected_code_identity_path=args.expected_code_identity)

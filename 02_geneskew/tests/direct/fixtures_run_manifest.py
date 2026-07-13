@@ -1,39 +1,36 @@
-"""FIXTURES for the aggregate run manifest. SYNTHETIC — not a run, not data, not science.
+"""FIXTURES for the aggregate run manifest. The BUNDLES are synthetic; the RELEASE is REAL.
 
-Every document these builders write is a FIXTURE and says so in its own bytes
-(``"fixture": true``, ids prefixed ``FIXTURE-``). Nothing here is a measurement: the
-scores, hashes and rankings are invented so the TOPOLOGY can be exercised. What IS real is
-the CARDINALITY — 10 base-portable programs, 3 conditions, 2 gene-set sources — so the
-300-slot / 15-bundle algebra is the algebra the real run will be held to.
+Every bundle these builders write is a FIXTURE and says so in its own bytes
+(``"fixture": true``, ids prefixed ``FIXTURE-``). Nothing in a bundle is a measurement:
+the scores, hashes and rankings are invented so the TOPOLOGY can be exercised.
 
-The condition universe is NOT faked: it is read from the frozen batch policy that ships in
-the tree, which is the same artifact the verifier binds.
+The RELEASE is not invented. An earlier version of this file manufactured a scorer view
+with ``base_portability_source_field``, ``base_portable_programs`` and a per-program
+``method_hash`` — NONE OF WHICH EXIST — so the suite was green against fields the real
+release does not have, and proved only that the code agreed with the fiction. The
+authoritative Stage-1 v3 release is now STAGED FROM GIT (``55899ac``) and bound as-is, so
+the admitted programs (10, from ``program.base_portable``), the conditions
+(``Rest, Stim8hr, Stim48hr``) and the pathway sources (``GO-BP, Reactome``) are the
+release's, not ours.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import subprocess
 from typing import Any
 
-# The real, frozen batch policy: the condition universe comes from it, here as in
-# production. A fixture that invented its own conditions would exercise a topology the run
-# does not have.
-POLICY_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "analysis", "direct", "temporal", "batch_policy.v1.json")
+import pytest
 
-# The ten base-portable programs of the frozen release. Real ids, so the fixture has the
-# real cardinality; every VALUE attached to them below is synthetic.
-FIXTURE_PROGRAMS = [
-    "cd4_ctl_like", "diff_activated", "diff_checkpoint", "diff_memory", "diff_naive",
-    "tfh_like", "th17_like", "th1_like", "th2_like", "treg_like",
-]
-# Excluded by the scorer view, exactly as the release excludes them.
-FIXTURE_NON_PORTABLE = ["th9_like", "cd4_ctl_like_actadj"]
+# The authoritative Stage-1 v3 release. Staged, never fabricated.
+RELEASE_COMMIT = "55899ac"
+RELEASE_PATH = "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json"
+VIEW_PATH = "01_programs/app/data/stage01_stage2_registry_view.json"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
 
-FIXTURE_SOURCES = ["go_bp", "reactome"]
-PORTABILITY_FIELD = "base_portable"
+PORTABLE_KEY = "base_portable"
 
 INCREASE, DECREASE = "increase", "decrease"
 DESIRED_CHANGES = (INCREASE, DECREASE)
@@ -48,6 +45,46 @@ ORIGINS = {
 
 FIXTURE_SETS = {"FIXTURE-SET-1": ["treg_like", "th1_like", "tfh_like"],
                 "FIXTURE-SET-2": ["diff_naive", "diff_memory"]}
+
+
+def _git_show(ref: str) -> bytes:
+    out = subprocess.run(["git", "-C", REPO, "show", ref],
+                         capture_output=True)
+    if out.returncode != 0:
+        pytest.skip(f"the authoritative release {ref} is not in this object store")
+    return out.stdout
+
+
+def stage_release(tmp_path) -> dict[str, Any]:
+    """Materialise the REAL release + scorer view into an explicitly staged root."""
+    root = os.path.join(str(tmp_path), "release_root")
+    view_path = os.path.join(root, VIEW_PATH)
+    os.makedirs(os.path.dirname(view_path), exist_ok=True)
+    with open(view_path, "wb") as fh:
+        fh.write(_git_show(f"{RELEASE_COMMIT}:{VIEW_PATH}"))
+
+    release_path = os.path.join(root, "stage01_v3_release.json")
+    raw = _git_show(f"{RELEASE_COMMIT}:{RELEASE_PATH}")
+    with open(release_path, "wb") as fh:
+        fh.write(raw)
+
+    release = json.loads(raw)
+    view = json.loads(open(view_path).read())
+    admitted = sorted(p["program_id"] for p in view["programs"] if p[PORTABLE_KEY])
+    return {
+        "release_path": release_path,
+        "release_root": root,
+        "release": release,
+        "view": view,
+        "release_canonical_sha256": _canon(release),
+        "programs": admitted,
+        "conditions": list(release["selector"]["conditions"]),
+        "sources": list(release["selector"]["pathway_sources"]),
+        # the per-program projection id is SPECIFIED (the view carries none): the canonical
+        # hash of that program's whole record
+        "projection": {p["program_id"]: _canon(p)
+                       for p in view["programs"] if p[PORTABLE_KEY]},
+    }
 
 
 def _canon(obj: Any) -> str:
@@ -74,33 +111,6 @@ def _binding(out_dir: str, rel: str, doc: Any) -> dict[str, str]:
     return {"path": rel, "raw_sha256": raw, "canonical_sha256": canon}
 
 
-def conditions() -> list[str]:
-    with open(POLICY_PATH) as fh:
-        return sorted(json.load(fh)["condition_composition"].keys())
-
-
-def scorer_view(tmp_path, programs=None) -> str:
-    """A FIXTURE v3 generic release / scorer view. The program set is re-derivable."""
-    progs = list(FIXTURE_PROGRAMS if programs is None else programs)
-    doc = {
-        "fixture": True,
-        "schema_version": "FIXTURE.spot.stage01_stage2_registry_view.v1",
-        "method_version": "FIXTURE-stage1-continuous-v3.0.1",
-        "base_portability_source_field": PORTABILITY_FIELD,
-        "base_portable_programs": sorted(progs),
-        "n_base_portable": len(progs),
-        "programs": (
-            [{"program_id": p, PORTABILITY_FIELD: True,
-              "method_hash": _canon(f"FIXTURE-scorer-{p}")} for p in progs]
-            + [{"program_id": p, PORTABILITY_FIELD: False,
-                "method_hash": _canon(f"FIXTURE-scorer-{p}")}
-               for p in FIXTURE_NON_PORTABLE]),
-    }
-    path = os.path.join(str(tmp_path), "FIXTURE_scorer_view.json")
-    _write(path, doc)
-    return path
-
-
 def gene_set_identity(source: str) -> dict[str, Any]:
     """The FULL identity of one gene-set source. The pin and the bundle share this."""
     return {
@@ -115,7 +125,7 @@ def gene_set_identity(source: str) -> dict[str, Any]:
     }
 
 
-def pinned_gene_sets(tmp_path) -> str:
+def pinned_gene_sets(tmp_path, sources) -> str:
     """The FIXTURE pinned source identities: release, hashes, namespaces, licence and
     universe bindings — the whole identity, from OUTSIDE the run.
 
@@ -123,7 +133,7 @@ def pinned_gene_sets(tmp_path) -> str:
     forged 'reactome' pass, because nothing ever compared it to the Reactome that was
     actually pinned.
     """
-    doc = {src: dict(gene_set_identity(src), fixture=True) for src in FIXTURE_SOURCES}
+    doc = {src: dict(gene_set_identity(src), fixture=True) for src in sources}
     path = os.path.join(str(tmp_path), "FIXTURE_pinned_gene_sets.json")
     _write(path, doc)
     return path
@@ -167,10 +177,14 @@ def _code_identity() -> dict[str, Any]:
             "n_files": 1, "clean_checkout_required": True}
 
 
-def _selection_release(scorer_path: str) -> dict[str, Any]:
-    return {"fixture": True, "release_id": "FIXTURE-stage1-v3-generic-release",
-            "scorer_view_raw_sha256": _raw(scorer_path),
-            "selection_schema_sha256": _canon("FIXTURE-v3-schema")}
+def _selection_release(staged: dict) -> dict[str, Any]:
+    """What the bundle bound: the AUTHORITATIVE release, by its canonical hash."""
+    return {"release_canonical_sha256": staged["release_canonical_sha256"],
+            "registry_scorer_view_canonical_sha256":
+                staged["release"]["registry_scorer_view_canonical_sha256"],
+            "registry_scorer_projection_sha256":
+                staged["release"]["registry_scorer_projection_sha256"],
+            "selection_schema": staged["release"]["selector"]["selection_schema"]}
 
 
 def _inputs() -> list[dict[str, Any]]:
@@ -213,12 +227,11 @@ def _pathway_bindings(out_dir: str) -> dict[str, dict]:
     }
 
 
-def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
+def build_bundle(root: str, lane: str, ctx: dict, staged: dict,
                  programs=None, arms_for=None) -> str:
     """Write ONE FIXTURE all-arm bundle and return its directory."""
-    progs = list(FIXTURE_PROGRAMS if programs is None else programs)
-    scorer = json.load(open(scorer_path))
-    method = {p["program_id"]: p["method_hash"] for p in scorer["programs"]}
+    progs = list(staged["programs"] if programs is None else programs)
+    projection = staged["projection"]
 
     if lane == "direct":
         slug, prov_name, ver_name = (
@@ -260,7 +273,9 @@ def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
                    else [ctx["condition"], ctx["gene_set_source"]])),
             "program_id": program,
             "desired_change": dc,
-            "program_method_hash": method[program],
+            # the view carries NO per-program hash: this is the canonical hash of that
+            # program's record, which is what the verifier recomputes
+            "program_projection_sha256": projection[program],
             # ONE base effect per program/context; the two desired changes are exact sign
             # transforms of it — two logical arms, not two experimental estimates.
             "base_effect_sha256": _canon(f"FIXTURE-base-{program}-{slug}"),
@@ -283,9 +298,10 @@ def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
         "schema_version": "spot.stage02_arm_bundle.v1",
         "lane": lane,
         "context": ctx,
-        "scorer_view": {"raw_sha256": _raw(scorer_path),
-                        "canonical_sha256": _canon(scorer),
-                        "programs": sorted(progs)},
+        "stage1_v3_release": {
+            "release_canonical_sha256": staged["release_canonical_sha256"],
+            "programs": sorted(progs),
+            "conditions": list(staged["conditions"])},
         "arms": arms,
         "n_arms": len(arms),
         "arms_are_independent": True,
@@ -305,7 +321,7 @@ def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
         "schema_version": f"FIXTURE.spot.stage02_{lane}_provenance.v1",
         "run_binding": {
             "code_identity": _code_identity(),
-            "selection_release": _selection_release(scorer_path),
+            "selection_release": _selection_release(staged),
             "stage2_inputs": _inputs(),
         },
     })
@@ -326,24 +342,26 @@ def build_bundle(root: str, lane: str, ctx: dict, scorer_path: str,
     return out_dir
 
 
-def complete_run(tmp_path, scorer_path=None) -> dict[str, Any]:
-    """A COMPLETE FIXTURE run: every context, every program arm. 15 bundles, 300 slots."""
+def complete_run(tmp_path, staged=None) -> dict[str, Any]:
+    """A COMPLETE FIXTURE run against the REAL release: 15 bundles, 300 logical arms."""
+    staged = staged or stage_release(tmp_path)
     root = os.path.join(str(tmp_path), "bundles")
-    scorer_path = scorer_path or scorer_view(tmp_path)
-    conds = conditions()
+    conds, sources = staged["conditions"], staged["sources"]
 
-    direct = [build_bundle(root, "direct", {"condition": c}, scorer_path)
-              for c in conds]
+    direct = [build_bundle(root, "direct", {"condition": c}, staged) for c in conds]
     temporal = [build_bundle(root, "temporal",
-                             {"from_condition": a, "to_condition": b}, scorer_path)
+                             {"from_condition": a, "to_condition": b}, staged)
                 for a in conds for b in conds if a != b]
     pathway = [build_bundle(root, "pathway",
-                            {"condition": c, "gene_set_source": s}, scorer_path)
-               for c in conds for s in FIXTURE_SOURCES]
-    return {"root": root, "scorer_view": scorer_path,
-            "pinned_gene_sets": pinned_gene_sets(tmp_path),
+                            {"condition": c, "gene_set_source": s}, staged)
+               for c in conds for s in sources]
+    return {"root": root, "staged": staged,
+            "release_path": staged["release_path"],
+            "release_root": staged["release_root"],
+            "expect_release_sha256": staged["release_canonical_sha256"],
+            "pinned_gene_sets": pinned_gene_sets(tmp_path, sources),
             "pinned_verifiers": pinned_verifiers(tmp_path),
             "expected_code_identity": expected_code_identity(tmp_path),
-            "batch_policy": POLICY_PATH,
             "direct": direct, "temporal": temporal, "pathway": pathway,
-            "conditions": conds, "sources": list(FIXTURE_SOURCES)}
+            "conditions": list(conds), "sources": list(sources),
+            "programs": list(staged["programs"])}
