@@ -74,6 +74,7 @@ def _bindings(root, d):
         "lane_admissions": {"temporal": {"native_verdict": "ADMIT", "report_id": "r-1"}},
         "stage1": {"release_canonical_sha256": "s" * 64},
         "identity_source": {"temporal": "base_records"},
+        "aggregate": _aggregate(root),
     }
 
 
@@ -86,6 +87,24 @@ def _rows(value=0.5):
                   "target_symbol": "SYM", "target_ensembl": "ENSG00000111111",
                   "perturbation_modality": "CRISPRi_knockdown"},
         arm_key=ARM, program_id="PRG-1", program_effect_direction="increase", context=CTX)]
+
+
+def _aggregate(root):
+    """The ADMITTED aggregate the bridge is downstream of. Bound, never rewritten."""
+    m = os.path.join(root, "stage2_run_manifest.json")
+    r = os.path.join(root, "stage2_aggregate_verification.json")
+    if not os.path.exists(m):
+        with open(m, "w") as fh:
+            json.dump({"lane_admissions": {}}, fh, indent=2, sort_keys=True)
+        with open(r, "w") as fh:
+            json.dump({"verdict": "admit", "n_failed": 0}, fh, indent=2, sort_keys=True)
+    out = {}
+    for role, p_ in (("manifest", m), ("report", r)):
+        out[role] = {"path": p_, "raw_sha256": _sha(p_),
+                     "canonical_sha256": hashlib.sha256(json.dumps(
+                         json.load(open(p_)), sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=True).encode()).hexdigest()}
+    return out
 
 
 def _write_bridge(root, doc):
@@ -226,7 +245,8 @@ class TestTheFORGEDPATHWAYCONTEXTAttack:
              "lane_admissions": {"pathway": {"native_verdict": "ADMIT",
                                             "native_self_hash": "p" * 64}},
              "stage1": {"release_canonical_sha256": "s" * 64},
-             "identity_source": {"pathway": "none_target_evidence"}}
+             "identity_source": {"pathway": "none_target_evidence"},
+             "aggregate": _aggregate(root)}
         return b
 
     def _ctx(self, d):
@@ -345,16 +365,20 @@ DARM = "direct|PRG-1|increase|condition=Stim48hr"
 
 def _native_direct(root, value=0.5, identity_rows=None):
     """A native Direct bundle: a bound ranking + the PRODUCER'S `target_identity.json`."""
+    import pandas as pd
     from direct import target_identity as TI
 
     d = os.path.join(root, "direct", "Stim48hr")
-    os.makedirs(os.path.join(d, "rankings"), exist_ok=True)
+    os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
         json.dump({"schema_version": "spot.stage02_direct_arm_bundle.v1",
                    "arm_bundle_run_id": "D-1", "condition": "Stim48hr"}, fh)
-    with open(os.path.join(d, "rankings", "PRG-1__increase.json"), "w") as fh:
-        json.dump({"records": [{"target_id": "ENSG00000111111", "arm_key": DARM,
-                                "arm_value": value, "evaluable": True, "rank": 1}]}, fh)
+    # DIRECT HAS NO rankings/ DIRECTORY. Its rows are arms.parquet (arm_artifacts.ROWS_FILE),
+    # with the value in a column called `value`.
+    pd.DataFrame([{"arm_key": DARM, "program_id": "PRG-1", "desired_change": "increase",
+                   "condition": "Stim48hr", "target_id": "ENSG00000111111",
+                   "value": value, "rank": 1, "evaluable": True}]
+                 ).to_parquet(os.path.join(d, "arms.parquet"))
     # the artifact, in the producer's OWN shape: `records`, and the pinned modality
     rows_ = identity_rows if identity_rows is not None else [{
         "target_id": "ENSG00000111111", "target_id_namespace": "ensembl_gene_id",
@@ -372,7 +396,7 @@ def _native_direct(root, value=0.5, identity_rows=None):
 def _direct_bindings(root, d):
     from direct import target_identity as TI
     rel = os.path.relpath(d, root).replace(os.sep, "/")
-    names = ["arm_bundle.json", "rankings/PRG-1__increase.json", TI.TARGET_IDENTITY_FILE]
+    names = ["arm_bundle.json", "arms.parquet", TI.TARGET_IDENTITY_FILE]
     return {
         "native_bundles": {rel: {
             "lane": "direct", "bundle_id": "D-1", "context": {"condition": "Stim48hr"},
@@ -385,6 +409,7 @@ def _direct_bindings(root, d):
                                        "native_self_hash": "d" * 64}},
         "stage1": {"release_canonical_sha256": "s" * 64},
         "identity_source": {"direct": TI.TARGET_IDENTITY_FILE},
+        "aggregate": _aggregate(root),
     }
 
 
@@ -489,3 +514,186 @@ class TestDIRECTThroughTheSHAREDIdentityArtifact:
         report = V.verify(os.path.join(root, "bridge"), bundles_root=root)
         assert report["verdict"] == "reject"
         assert any(V.G_ORPHAN_ROW in f or V.G_COMPLETENESS in f for f in report["failures"])
+
+
+# --------------------------------------------------------------------------- #
+# THE PRODUCTION CONTRACT: the bridge runs ONLY over an ADMITTED release.
+# --------------------------------------------------------------------------- #
+def _admitted_release(tmp_path, direct_value=0.5):
+    """A release that has already passed lane + aggregate admission."""
+    root = str(tmp_path)
+    d = _native_direct(root, value=direct_value)
+    p = os.path.join(root, "pathway", "Stim48hr__GO-BP")
+    os.makedirs(p, exist_ok=True)
+    with open(os.path.join(p, "arm_bundle.json"), "w") as fh:
+        json.dump({"schema_version": "spot.stage02_pathway_arm_bundle.v1",
+                   "pathway_run_id": "P-1", "condition": "Stim48hr", "source": "GO-BP",
+                   "records": [{"pathway_arm_key": "pathway|PRG-1|increase|condition=Stim48hr",
+                                "set_id": "GO:0006955", "enrichment_value": 2.4,
+                                "leading_edge": ["ENSG00000111111"]}]}, fh)
+
+    # Direct's rows live in arms.parquet — there is no rankings/ dir on this lane
+    import pandas as pd
+    pd.DataFrame([{"arm_key": DARM, "program_id": "PRG-1", "desired_change": "increase",
+                   "condition": "Stim48hr", "target_id": "ENSG00000111111",
+                   "value": direct_value, "rank": 1, "evaluable": True}]
+                 ).to_parquet(os.path.join(d, "arms.parquet"))
+
+    manifest = {"schema_version": "spot.stage02_run_manifest.v1",
+                "lane_admissions": {
+                    "direct": {"aggregate_disposition": "admitted", "native_verdict": "ADMIT",
+                               "native_self_hash": "d" * 64},
+                    "pathway": {"aggregate_disposition": "admitted", "native_verdict": "ADMIT",
+                                "native_self_hash": "p" * 64}},
+                "stage1_v3_release": {"release_canonical_sha256": "s" * 64}}
+    with open(os.path.join(root, "stage2_run_manifest.json"), "w") as fh:
+        json.dump(manifest, fh, indent=2, sort_keys=True)
+    with open(os.path.join(root, "stage2_aggregate_verification.json"), "w") as fh:
+        json.dump({"verifier_id": "spot.stage02.run_manifest.verifier.v1",
+                   "verdict": "admit", "n_failed": 0, "failed_gates": []}, fh,
+                  indent=2, sort_keys=True)
+    return root, d, p
+
+
+class TestTheBridgeRunsONLYOverAnADMITTEDRelease:
+    def test_e2e_the_CLI_builds_and_the_SEPARATE_verifier_admits(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        rc = BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"])
+        assert rc == 0
+
+        doc = json.load(open(os.path.join(bridge, BB.BRIDGE_FILE)))
+        assert doc["n_target_rows"] == 1 and doc["n_pathway_contexts"] == 1
+        report = json.load(open(os.path.join(bridge, BB.BRIDGE_REPORT_FILE)))
+        assert report["verdict"] == "admit", report["failures"]
+
+    def test_the_RECEIPT_binds_the_aggregate_WITHOUT_RESEALING_it(self, tmp_path):
+        """The aggregate was hashed when it was admitted. It is never rewritten."""
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        agg = os.path.join(root, "stage2_run_manifest.json")
+        before = _sha(agg)
+
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+
+        assert _sha(agg) == before                       # NOT mutated, NOT resealed
+        rec = json.load(open(os.path.join(bridge, BB.RECEIPT_FILE)))
+        assert rec["aggregate_is_immutable"] is True
+        assert rec["aggregate_was_resealed"] is False
+        # both hashes of both artifacts, so a reader can walk admitted release -> handoff
+        for side in ("aggregate", "bridge", "bridge_report"):
+            assert rec[side]
+        assert rec["aggregate"]["manifest"]["raw_sha256"] == before
+        assert rec["bridge"]["raw_sha256"] and rec["bridge"]["canonical_sha256"]
+
+    def test_it_writes_NOTHING_into_any_bundle_directory(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, d, p = _admitted_release(tmp_path)
+        before = {b: sorted(os.listdir(b)) for b in (d, p)}
+        BB.main(["--bundles-root", root, "--bridge-root", os.path.join(root, "bridge"),
+                 "--verify"])
+        assert {b: sorted(os.listdir(b)) for b in (d, p)} == before
+
+    def test_a_REJECTED_aggregate_REFUSES_to_build(self, tmp_path):
+        """A Stage-3 handoff for a release nobody cleared looks exactly like one that was."""
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        path = os.path.join(root, "stage2_aggregate_verification.json")
+        with open(path, "w") as fh:
+            json.dump({"verdict": "reject", "n_failed": 3, "failed_gates": ["x"]}, fh)
+
+        with pytest.raises(BB.BridgeError, match="not 'admit'"):
+            BB.assemble(root, os.path.join(root, "bridge"))
+
+    def test_an_UNADMITTED_LANE_REFUSES_to_build(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        path = os.path.join(root, "stage2_run_manifest.json")
+        doc = json.load(open(path))
+        doc["lane_admissions"]["pathway"]["aggregate_disposition"] = "refused"
+        with open(path, "w") as fh:
+            json.dump(doc, fh)
+
+        with pytest.raises(BB.BridgeError, match="not independently admitted"):
+            BB.assemble(root, os.path.join(root, "bridge"))
+
+    def test_NO_aggregate_at_all_REFUSES_to_build(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, _p = _admitted_release(tmp_path)
+        os.remove(os.path.join(root, "stage2_aggregate_verification.json"))
+        with pytest.raises(BB.BridgeError, match="DOWNSTREAM of aggregate admission"):
+            BB.assemble(root, os.path.join(root, "bridge"))
+
+
+class TestTheFiveSWAPS:
+    """Swap any referent the bridge was built over. Each must refuse."""
+
+    def _built(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, d, p = _admitted_release(tmp_path)
+        bridge = os.path.join(root, "bridge")
+        assert BB.main(["--bundles-root", root, "--bridge-root", bridge, "--verify"]) == 0
+        return root, d, p, bridge
+
+    def _reverify(self, bridge, root):
+        return V.verify(bridge, bundles_root=root)
+
+    def test_SWAP_the_aggregate_REPORT(self, tmp_path):
+        root, _d, _p, bridge = self._built(tmp_path)
+        with open(os.path.join(root, "stage2_aggregate_verification.json"), "w") as fh:
+            json.dump({"verdict": "admit", "n_failed": 0, "swapped": True}, fh)
+        r = self._reverify(bridge, root)
+        assert r["verdict"] == "reject"
+        assert any(V.G_AGGREGATE in f for f in r["failures"])
+
+    def test_SWAP_the_W10_IDENTITY_artifact(self, tmp_path):
+        from direct import target_identity as TI
+        root, d, _p, bridge = self._built(tmp_path)
+        path = os.path.join(d, TI.TARGET_IDENTITY_FILE)
+        doc = json.load(open(path))
+        doc["records"][0]["target_id_namespace"] = "gene_symbol"   # the wrong gene
+        with open(path, "w") as fh:
+            json.dump(doc, fh)
+        r = self._reverify(bridge, root)
+        assert r["verdict"] == "reject"
+        assert any(V.G_SOURCE_BYTES in f for f in r["failures"])
+
+    def test_SWAP_the_DIRECT_bundle_rows(self, tmp_path):
+        import pandas as pd
+        root, d, _p, bridge = self._built(tmp_path)
+        pd.DataFrame([{"arm_key": DARM, "program_id": "PRG-1", "desired_change": "increase",
+                       "condition": "Stim48hr", "target_id": "ENSG00000111111",
+                       "value": -0.5, "rank": 1, "evaluable": True}]   # sign flipped
+                     ).to_parquet(os.path.join(d, "arms.parquet"))
+        r = self._reverify(bridge, root)
+        assert r["verdict"] == "reject"
+        assert any(V.G_SOURCE_BYTES in f for f in r["failures"])
+
+    def test_SWAP_the_AGGREGATE_MANIFEST(self, tmp_path):
+        root, _d, _p, bridge = self._built(tmp_path)
+        path = os.path.join(root, "stage2_run_manifest.json")
+        doc = json.load(open(path))
+        doc["lane_admissions"]["direct"]["native_self_hash"] = "0" * 64
+        with open(path, "w") as fh:
+            json.dump(doc, fh)
+        r = self._reverify(bridge, root)
+        assert r["verdict"] == "reject"
+        assert any(V.G_AGGREGATE in f for f in r["failures"])
+
+    def test_SWAP_a_PATHWAY_CONTEXT_into_target_evidence(self, tmp_path):
+        from direct import stage3_bridge as BB
+        root, _d, _p, bridge = self._built(tmp_path)
+        path = os.path.join(bridge, BB.BRIDGE_FILE)
+        doc = json.load(open(path))
+        ctx = doc["pathway_contexts"][0]
+        ctx["is_a_crispri_target_row"] = True
+        ctx["may_be_matched_to_a_drug_as_a_target"] = True
+        ctx["arm_value"] = 99
+        with open(path, "w") as fh:
+            json.dump(_reseal(doc), fh)
+        r = self._reverify(bridge, root)
+        assert r["verdict"] == "reject"
+        assert any(V.G_CTX_FLAGS in f for f in r["failures"])
+        assert any(V.G_CTX_ALLOWLIST in f for f in r["failures"])

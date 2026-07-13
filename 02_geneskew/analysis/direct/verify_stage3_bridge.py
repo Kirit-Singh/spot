@@ -32,9 +32,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from typing import Any
 
-import verify_stage3_rows as VR  # noqa: I001  (flat, as the verifier loads its modules)
+# The verifier's modules load FLAT — never through the producer's package. Same bootstrap the
+# other verifiers use, so this runs identically as a module and as a subprocess.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import verify_stage3_rows as VR  # noqa: E402, I001
 
 BRIDGE_FILE = "stage3_bridge.json"
 
@@ -52,6 +57,29 @@ IDENTITY_FILE = "target_identity.json"
 IDENTITY_SCHEMA = "spot.stage02_target_identity.v1"
 IDENTITY_RECORDS_KEY = "records"          # NOT "targets" — that was my guess, and it was wrong
 IDENTITY_MODALITY_FIELD = "observed_perturbation_modality"
+
+# --------------------------------------------------------------------------- #
+# WHERE EACH LANE'S ROWS ACTUALLY LIVE. Read off the producers, not imagined.
+#
+# I had every lane rebuilding from `rankings/<program>__<change>.json`. DIRECT HAS NO SUCH
+# DIRECTORY. Its rows are `arms.parquet` (arm_artifacts.ROWS_FILE), bound by the bundle's
+# `arm_rows_sha256`, with the value in a column called `value`. Rebuilding Direct from a
+# rankings dir would have found nothing and failed every Direct row as an orphan.
+# --------------------------------------------------------------------------- #
+NATIVE_ROWS = {
+    "direct": {"kind": "parquet", "file": "arms.parquet", "value_field": "value",
+               "join_on": "target_id"},
+    # temporal DOES ship rankings/, with `arm_value`, and its identity lives on base_records
+    # keyed by base_key — "never on the arm records that join to it", in its own words.
+    "temporal": {"kind": "rankings_dir", "dir": "rankings", "value_field": "arm_value",
+                 "join_on": "base_key"},
+    # pathway ships NO target rows at all: its records are (arm x GENE SET).
+    "pathway": None,
+}
+AGGREGATE_MANIFEST = "stage2_run_manifest.json"
+AGGREGATE_REPORT = "stage2_aggregate_verification.json"
+
+G_AGGREGATE = "the_bridge_binds_an_ADMITTED_aggregate_and_the_bytes_still_match"
 
 G_SELF_HASH = "the_bridge_hashes_to_what_it_says_it_does"
 G_BINDINGS = "the_bridge_binds_the_admitted_native_bytes_it_was_built_from"
@@ -80,7 +108,8 @@ CTX_FORBIDDEN = frozenset({
     "supported", "phenocopy_claim",
 })
 
-REQUIRED_BINDINGS = ("native_bundles", "lane_admissions", "stage1", "identity_source")
+REQUIRED_BINDINGS = ("native_bundles", "lane_admissions", "stage1", "identity_source",
+                     "aggregate")
 
 
 def _sha256(path: str) -> str:
@@ -173,6 +202,11 @@ def verify(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
                             "the bridge dropped it — a dropped row and a row that never "
                             "existed look identical")
 
+    # (4b) THE AGGREGATE MUST HAVE ADMITTED, AND ITS BYTES MUST STILL BE THOSE BYTES.
+    # The bridge is DOWNSTREAM of aggregate admission. A bridge built over a rejected — or a
+    # since-edited — aggregate is a Stage-3 handoff for a release that was never cleared.
+    failures += _verify_aggregate(bindings.get("aggregate") or {}, bundles_root)
+
     # (5) THE PATHWAY CONTEXTS — which the previous verifier did not read AT ALL.
     contexts = doc.get("pathway_contexts") or []
     failures += _verify_contexts(contexts, sources, bundles_root)
@@ -222,6 +256,40 @@ def verify(bridge_root: str, *, bundles_root: str) -> dict[str, Any]:
         "failures": failures[:50],
         "verdict": "admit" if not failures else "reject",
     }
+
+
+def _verify_aggregate(agg: dict, bundles_root: str) -> list[str]:
+    """The aggregate manifest AND its INDEPENDENT report — both bound, both still on disk."""
+    bad: list[str] = []
+    if not agg:
+        return [f"{G_AGGREGATE}: the bridge binds no aggregate. It runs AFTER the aggregate is "
+                "admitted; one that names no aggregate could have been built before it, or "
+                "instead of it"]
+
+    for role, fname in (("manifest", AGGREGATE_MANIFEST), ("report", AGGREGATE_REPORT)):
+        bound = agg.get(role) or {}
+        path = bound.get("path") or os.path.join(bundles_root, fname)
+        if not os.path.exists(path):
+            bad.append(f"{G_AGGREGATE}: the aggregate {role} is bound but is not on disk")
+            continue
+        if bound.get("raw_sha256") and _sha256(path) != bound["raw_sha256"]:
+            bad.append(
+                f"{G_AGGREGATE}: the aggregate {role} bound "
+                f"{str(bound['raw_sha256'])[:16]}, on disk {_sha256(path)[:16]} — the bridge "
+                "was built over a different aggregate than the one that was admitted")
+            continue
+        with open(path) as fh:
+            doc = json.load(fh)
+        if bound.get("canonical_sha256") and _canon(doc) != bound["canonical_sha256"]:
+            bad.append(f"{G_AGGREGATE}: the aggregate {role}'s canonical hash does not match")
+        # THE ADMISSION ITSELF. `admit` comes from the SEPARATE aggregate verifier's report —
+        # never from the manifest, which never admits itself.
+        if role == "report" and doc.get("verdict") != "admit":
+            bad.append(
+                f"{G_AGGREGATE}: the aggregate verifier's verdict is {doc.get('verdict')!r}, "
+                "not 'admit'. The bridge runs only over an ADMITTED release — a Stage-3 "
+                "handoff for a release nobody cleared is worse than no handoff")
+    return bad
 
 
 def _verify_admissions(admissions: dict) -> list[str]:
@@ -282,31 +350,27 @@ def _rebuild_rows(bundle_dir: str, bound: dict) -> dict[tuple, dict]:
     join_on = "base_key" if (bound.get("identity_source") or {}).get(
         "kind") == "base_records" else "target_id"
 
+    spec = NATIVE_ROWS.get(lane)
+    if spec is None:
+        return {}                       # pathway: no target rows exist to rebuild
+    records = _native_records(bundle_dir, spec)
+    join_on = spec["join_on"]
+    value_field = spec["value_field"]
+
     out: dict[tuple, dict] = {}
-    rdir = os.path.join(bundle_dir, "rankings")
-    if not os.path.isdir(rdir):
-        return out
-    for fname in sorted(os.listdir(rdir)):
-        if not fname.endswith(".json"):
-            continue
-        with open(os.path.join(rdir, fname)) as fh:
-            doc = json.load(fh)
-        # `records` with `ranked` as the native alias (arm_topology.ARM_RANKING_ROWS)
-        records = doc.get("records")
-        if records is None:
-            records = doc.get("ranked") or []
+    if True:
         for rec in records:
             # THE ARM KEY IS READ VERBATIM. An arm key rebuilt from a filename and a sorted
             # context is a key I invented — it would differ from the producer's on any lane
             # whose context order or separator I guessed wrong, and then EVERY row would look
             # like an orphan (or, worse, match the wrong arm).
-            arm_key = str(rec.get("arm_key") or doc.get("arm_key") or "")
+            arm_key = str(rec.get("arm_key") or "")
             change = arm_key.split("|")[2] if arm_key.count("|") >= 2 else None
             # ...and identity is joined on the LANE'S OWN key, verbatim.
             join_value = str(rec.get(join_on) if rec.get(join_on) is not None
                              else rec.get("target_id"))
             ident = identity.get(join_value) or {}
-            value, evaluable = rec.get("arm_value"), bool(rec.get("evaluable"))
+            value, evaluable = rec.get(value_field), bool(rec.get("evaluable"))
             modulation = VR._rederive(value, evaluable)
             out[(lane, arm_key, str(rec.get("target_id")))] = {
                 "arm_value": value,
@@ -318,6 +382,29 @@ def _rebuild_rows(bundle_dir: str, bound: dict) -> dict[tuple, dict]:
                 "phenocopy_class": VR.CLASS_OF.get(modulation),
                 "program_effect_direction": change,
             }
+    return out
+
+
+def _native_records(bundle_dir: str, spec: dict) -> list:
+    """The lane's OWN row bytes. Direct: arms.parquet. Temporal: rankings/*.json."""
+    if spec["kind"] == "parquet":
+        path = os.path.join(bundle_dir, spec["file"])
+        if not os.path.exists(path):
+            return []
+        import pandas as pd
+        return pd.read_parquet(path).to_dict("records")
+
+    rdir = os.path.join(bundle_dir, spec["dir"])
+    if not os.path.isdir(rdir):
+        return []
+    out: list = []
+    for fname in sorted(os.listdir(rdir)):
+        if not fname.endswith(".json"):
+            continue
+        with open(os.path.join(rdir, fname)) as fh:
+            doc = json.load(fh)
+        # `records`, with `ranked` as the native alias (arm_topology.ARM_RANKING_ROWS)
+        out += doc.get("records") if doc.get("records") is not None else (doc.get("ranked") or [])
     return out
 
 
@@ -437,3 +524,28 @@ def _native_pathway_records(bundle_dir: str, bound: dict) -> dict[tuple, dict]:
             "leading_edge": rec.get("leading_edge") or [],
         }
     return out
+
+
+def main(argv=None) -> int:
+    """The SEPARATE process. It writes its own report; its exit code is the verdict."""
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description="Reopen the admitted native bytes and REBUILD the Stage-3 bridge. "
+                    "Trusts nothing the bridge says about itself.")
+    ap.add_argument("--bridge-root", required=True)
+    ap.add_argument("--bundles-root", required=True)
+    ap.add_argument("--report", required=True, help="a FILE, not a directory")
+    args = ap.parse_args(argv)
+
+    report = verify(args.bridge_root, bundles_root=args.bundles_root)
+    with open(args.report, "w") as fh:
+        json.dump(report, fh, indent=2, sort_keys=True)
+    print(json.dumps({k: v for k, v in report.items() if k != "failures"}, indent=2))
+    for f in report["failures"][:10]:
+        print(f"  - {f}")
+    return 0 if report["verdict"] == "admit" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
