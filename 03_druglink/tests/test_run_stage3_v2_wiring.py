@@ -36,7 +36,7 @@ from druglink import v2_input_loader as v2      # noqa: E402
 
 # the SAME fixtures the admitted loader's own tests use — a second, subtly different bundle
 # shape here would be testing my invention rather than the shipped contract
-from test_v2_input_loader import _adm, _direct_bundle    # noqa: E402,F401
+from test_v2_input_loader import _D, _adm, _direct_bundle  # noqa: E402,F401
 
 
 class TestTheProducerKnowsTheThreeTypedOrigins:
@@ -65,13 +65,13 @@ class TestProductionIsGatedAndNothingIsFabricated:
     def test_a_production_consumption_REFUSES_while_the_matrix_is_red(self):
         assert aq.DETACHED_CLONE_MATRIX_GREEN is False
         with pytest.raises(v2.ProductionConsumptionGated):
-            v2.load_admitted_stage2_inputs(direct_arm_bundle=_direct_bundle(),
-                                           direct_admission=_adm(),
+            v2.load_admitted_stage2_inputs(direct_arm_bundle=_D,
+                                           direct_admission=_adm(_D),
                                            require_production=True)
 
     def test_the_v2_loader_reports_that_it_is_gated(self):
-        out = v2.load_admitted_stage2_inputs(direct_arm_bundle=_direct_bundle(),
-                                             direct_admission=_adm())
+        out = v2.load_admitted_stage2_inputs(direct_arm_bundle=_D,
+                                             direct_admission=_adm(_D))
         assert out["production_consumption_gated"] is True
         assert out["combined_objective_permitted"] is False
 
@@ -108,8 +108,8 @@ class TestTheAdmittedUniverseStoreIsBoundNotAdmitted:
 
 class TestMeasuredAndInferredNeverMerge:
     def test_the_three_origins_land_in_separate_collections(self):
-        out = v2.load_admitted_stage2_inputs(direct_arm_bundle=_direct_bundle(),
-                                             direct_admission=_adm())
+        out = v2.load_admitted_stage2_inputs(direct_arm_bundle=_D,
+                                             direct_admission=_adm(_D))
         measured = {lev["origin_type"] for lev in out["measured_levers"]}
         inferred = {n["origin_type"] for n in out["pathway_nodes"]}
         assert not (measured & inferred)

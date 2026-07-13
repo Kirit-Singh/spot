@@ -15,10 +15,23 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..", "analysis")))
 
 from druglink import v2_input_loader as v2         # noqa: E402
-from druglink.arm_query import ExternalAdmission    # noqa: E402
+from druglink.arm_query import ExternalAdmission, bundle_digest   # noqa: E402
 
 
-def _adm(sha="d" * 64):
+_D = None      # set after the builders are defined
+_T = None
+
+
+def _adm(bundle=None, sha=None):
+    """An admission must be ABOUT the bundle it admits (audit 0ec6ec99, B3).
+
+    The old helper took an ARBITRARY digest, and the gate accepted it — an admission that
+    names a digest it never checked is a certificate stapled to the wrong artifact. The
+    gate now recomputes the bundle's canonical digest and requires them to agree, so the
+    helper must be handed the bundle it is admitting.
+    """
+    if sha is None:
+        sha = bundle_digest(bundle) if bundle is not None else "d" * 64
     return ExternalAdmission(verifier_id="stage2_independent_verifier.v1",
                              producer_commit="abc123", bundle_sha256=sha, verdict="admit")
 
@@ -56,9 +69,19 @@ def _temporal_bundle():
                                    "temporal_status": "evaluable"}]}]}
 
 
+_D = _direct_bundle()
+_T = _temporal_bundle()
+
+
 def _pathway_bundle():
-    return {"schema_version": "spot.stage02_pathway_arm_bundle.v1",
-            "verification_ref": {"verifier_id": "stage2_pathway_independent_verifier.v1"}}
+    """Fully BOUND (audit 0ec6ec99, B4): a verifier NAME binds no report, verdict, digest
+    or producer. Anyone can type "independent" into a string field."""
+    b = {"schema_version": "spot.stage02_pathway_arm_bundle.v1"}
+    b["verification_ref"] = {
+        "verifier_id": "stage2_pathway_independent_verifier.v1",
+        "verdict": "admit", "bundle_sha256": bundle_digest(b),
+        "producer_commit": "abc1234", "report_sha256": "d" * 64}
+    return b
 
 
 def _pathway_node(target="ENSG3", hyp=True, own_dir=False):
@@ -74,8 +97,8 @@ def _pathway_node(target="ENSG3", hyp=True, own_dir=False):
 
 def _full():
     return v2.load_admitted_stage2_inputs(
-        direct_arm_bundle=_direct_bundle(), direct_admission=_adm("a" * 64),
-        temporal_arm_bundles=[(_temporal_bundle(), _adm("b" * 64))],
+        direct_arm_bundle=_D, direct_admission=_adm(_D),
+        temporal_arm_bundles=[(_T, _adm(_T))],
         pathway_arm_bundle=_pathway_bundle(), pathway_nodes=[_pathway_node()],
         measured_target_ids={"ENSG1", "ENSG2"})
 
@@ -101,7 +124,7 @@ def test_three_typed_origins_direct_temporal_pathway_never_fused():
 def test_temporal_rows_are_nonempty_and_never_stamped_direct():
     # NON-VACUOUS: assert there IS a cross-time row, then assert its origin is temporal.
     r = v2.load_admitted_stage2_inputs(
-        temporal_arm_bundles=[(_temporal_bundle(), _adm("b" * 64))])
+        temporal_arm_bundles=[(_T, _adm(_T))])
     temporal_rows = [lev for lev in r["measured_levers"]
                      if lev.get("time_scope") == "cross_time"]
     assert len(temporal_rows) >= 1                               # not vacuously true
@@ -146,14 +169,23 @@ def test_self_admission_is_refused():
 
 def test_missing_admission_is_refused_no_default():
     with pytest.raises(Exception):
-        v2.load_admitted_stage2_inputs(direct_arm_bundle=_direct_bundle(),
+        v2.load_admitted_stage2_inputs(direct_arm_bundle=_D,
                                        direct_admission=None)
 
 
 def test_admission_hashes_bound_per_lane():
+    """The binding must be the digest OF THE BUNDLE, not whatever the caller passed.
+
+    This test used to assert `== "a" * 64` — i.e. it asserted that Stage 3 faithfully
+    republishes an ARBITRARY digest supplied alongside an unrelated bundle. That was the
+    defect (audit 0ec6ec99, B3), written down as an expectation. The gate now recomputes
+    the bundle's canonical digest and refuses an admission that is about other bytes, so
+    the binding is necessarily the real one.
+    """
     r = _full()
-    assert r["admission_binding"]["direct"]["external_bundle_sha256"] == "a" * 64
-    assert r["admission_binding"]["temporal"][0]["external_bundle_sha256"] == "b" * 64
+    assert r["admission_binding"]["direct"]["external_bundle_sha256"] == bundle_digest(_D)
+    assert (r["admission_binding"]["temporal"][0]["external_bundle_sha256"]
+            == bundle_digest(_T))
     assert "independent" in r["admission_binding"]["pathway"]["verifier_id"]
 
 
@@ -187,8 +219,8 @@ def test_pathway_membership_never_promotes_to_measured():
 
 def test_production_consumption_is_gated_until_matrix_green():
     with pytest.raises(Exception):
-        v2.load_admitted_stage2_inputs(direct_arm_bundle=_direct_bundle(),
-                                       direct_admission=_adm(), require_production=True)
+        v2.load_admitted_stage2_inputs(direct_arm_bundle=_D,
+                                       direct_admission=_adm(_D), require_production=True)
     assert _full()["production_consumption_gated"] is True
 
 

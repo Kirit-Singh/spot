@@ -151,10 +151,22 @@ def test_a_pathway_record_missing_any_binding_is_refused():
 # Admission: independent verifier, and no cross-time pathway statistic.
 # --------------------------------------------------------------------------- #
 def _bundle(**over):
-    b = {"schema_version": pb.PATHWAY_ARM_BUNDLE_SCHEMA,
-         "verification_ref": {
-             "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1"}}
+    """A pathway bundle whose admission actually BINDS it (audit 0ec6ec99, B4).
+
+    A verifier NAME is not an admission: the gate now requires a verdict, the bundle's own
+    digest, the producer commit and an addressable report. Anyone can type the word
+    "independent" into a string field.
+    """
+    from druglink.arm_query import bundle_digest
+    b = {"schema_version": pb.PATHWAY_ARM_BUNDLE_SCHEMA}
     b.update(over)
+    ref = b.get("verification_ref")
+    if ref is None:
+        payload = {k: v for k, v in b.items() if k != "verification_ref"}
+        b["verification_ref"] = {
+            "verifier_id": "spot.stage02.pathway.arm.independent_verifier.v1",
+            "verdict": "admit", "bundle_sha256": bundle_digest(payload),
+            "producer_commit": "abc1234", "report_sha256": "d" * 64}
     return b
 
 
@@ -163,15 +175,32 @@ def test_an_admitted_bundle_passes():
 
 
 def test_a_self_verified_bundle_is_refused():
-    """B6 / M4b / the temporal lane, a third time: self-verification proves nothing."""
-    bad = _bundle(verification_ref={"verifier_id": "spot.stage02.pathway.verifier.v1"})
+    """B6 / M4b / the temporal lane, a third time: self-verification proves nothing.
+
+    Fully bound, so the ONLY thing wrong is the verifier's identity — otherwise this would
+    pass at the unbound-name gate and prove nothing about self-verification.
+    """
+    from druglink.arm_query import bundle_digest
+    payload = {"schema_version": pb.PATHWAY_ARM_BUNDLE_SCHEMA}
+    bad = dict(payload)
+    bad["verification_ref"] = {
+        "verifier_id": "spot.stage02.pathway.verifier.v1",       # NOT independent
+        "verdict": "admit", "bundle_sha256": bundle_digest(payload),
+        "producer_commit": "abc1234", "report_sha256": "d" * 64}
     with pytest.raises(pb.PathwayBridgeError, match="not an INDEPENDENT verifier"):
         pb.require_admitted_bundle(bad)
 
 
 def test_an_unverified_bundle_is_refused():
-    with pytest.raises(pb.PathwayBridgeError, match="no verification_ref"):
+    with pytest.raises(pb.PathwayBridgeError, match="unbound_name"):
         pb.require_admitted_bundle(_bundle(verification_ref={}))
+
+
+def test_a_verifier_NAME_alone_is_not_an_admission():
+    """The audit's exact probe (0ec6ec99, B4): a friendly word in a string field."""
+    bad = _bundle(verification_ref={"verifier_id": "totally_independent_but_unbound"})
+    with pytest.raises(pb.PathwayBridgeError, match="unbound_name"):
+        pb.require_admitted_bundle(bad)
 
 
 def test_a_bundle_carrying_a_cross_time_pathway_statistic_is_refused_at_any_depth():

@@ -29,12 +29,17 @@ def bundle():
 
 
 @pytest.fixture(scope="module")
-def admission():
-    """A PROVISIONAL admission standing in for W11's. Replaced by the real one on landing."""
+def admission(bundle):
+    """An admission BOUND to the bundle it admits (audit 0ec6ec99, B3).
+
+    It used to carry a hard-coded digest unrelated to these bytes, and the gate accepted it.
+    An admission that names a digest it never checked is a certificate stapled to the wrong
+    artifact.
+    """
     return aq.ExternalAdmission(
         verifier_id="spot.stage02.temporal.arm.independent_verifier.v1",
         producer_commit="cc82599",
-        bundle_sha256="d2d7aaaf68cdbf9143b453e568b157a2ccc80ea1d5804876f75cf9383d351ed2",
+        bundle_sha256=aq.bundle_digest(bundle),
         verdict="admit")
 
 
@@ -57,7 +62,7 @@ def test_a_provisional_bundle_cannot_be_used_without_an_external_admission(bundl
 def test_a_self_verified_admission_is_refused():
     with pytest.raises(aq.ExternalAdmissionRequired, match="INDEPENDENT"):
         aq.ExternalAdmission(verifier_id="spot.stage02.temporal_arm.verifier.v1",
-                             producer_commit="cc82599", bundle_sha256="a" * 64,
+                             producer_commit="cc82599", bundle_sha256=aq.bundle_digest({"schema_version": aq.TEMPORAL_ARM_BUNDLE}),
                              verdict="admit")
 
 
@@ -65,7 +70,7 @@ def test_a_non_admit_verdict_is_refused():
     with pytest.raises(aq.ExternalAdmissionRequired, match="did not admit"):
         aq.ExternalAdmission(
             verifier_id="spot.stage02.temporal.arm.independent_verifier.v1",
-            producer_commit="cc82599", bundle_sha256="a" * 64, verdict="reject")
+            producer_commit="cc82599", bundle_sha256=aq.bundle_digest({"schema_version": aq.TEMPORAL_ARM_BUNDLE}), verdict="reject")
 
 
 def test_an_admission_must_name_the_commit_AND_the_bytes():
@@ -122,11 +127,16 @@ def test_a_cross_time_lever_binds_BOTH_endpoint_estimates(rows):
     assert r["released_estimate_id"]["from"] and r["released_estimate_id"]["to"]
 
 
-def test_a_bundle_carrying_a_cross_time_pathway_statistic_is_refused(bundle, admission):
+def test_a_bundle_carrying_a_cross_time_pathway_statistic_is_refused(bundle):
+    """Re-admit the MUTATED bytes, so the byte-binding is satisfied and the temporal-claim
+    check is what actually refuses. Otherwise this would pass for the wrong reason."""
     bad = dict(bundle)
     bad["sets"] = [{"temporal_enrichment": 3.3}]
+    honest = aq.ExternalAdmission(
+        verifier_id="spot.stage02.temporal.arm.independent_verifier.v1",
+        producer_commit="cc82599", bundle_sha256=aq.bundle_digest(bad), verdict="admit")
     with pytest.raises(js.JoinSemanticsError, match="ACROSS TIME"):
-        aq.require_external_admission(bad, admission)
+        aq.require_external_admission(bad, honest)
 
 
 # --------------------------------------------------------------------------- #

@@ -99,6 +99,31 @@ DRUG_ORDERING_ELIGIBLE = frozenset({SUPPORTS_INHIBITION})
 PERTURBATION_MODALITY = "CRISPRi_knockdown"
 
 
+GATE_ADMISSION_NOT_ABOUT_THESE_BYTES = "external_admission_is_not_about_these_bytes"
+
+
+def bundle_digest(bundle: dict[str, Any]) -> str:
+    """The digest of an arm bundle's BYTES, excluding any admission block stapled on.
+
+    Deliberately a plain sha256 over canonical JSON, NOT ``hashing.content_hash``. The
+    latter enforces Stage-3's canonical-number rule (exact decimal strings, never floats)
+    because it addresses SCIENTIFIC CONTENT. Here we are binding an admission to the bytes
+    an upstream producer actually shipped — those bytes are theirs, floats and all, and
+    running them through Stage-3's numeric contract would refuse a bundle for a rule that
+    governs Stage-3's output rather than Stage-2's input.
+
+    Recomputed from the bundle every time; never read out of it.
+    """
+    import hashlib
+    import json
+
+    payload = {k: v for k, v in bundle.items()
+               if k not in ("external_admission", "admission", "verification_ref")}
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                     ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
 class ArmQueryError(ValueError):
     """The arm bundle and Stage-3's v2 query contract do not agree."""
 
@@ -146,6 +171,26 @@ class ExternalAdmission:
 
 def require_external_admission(bundle: dict[str, Any],
                                admission: Optional[ExternalAdmission]) -> ExternalAdmission:
+    """The admission must be about THE BYTES IN HAND. (Audit 0ec6ec99, B3.)
+
+    This used to check that the strings were present and that the verifier's name contained
+    "independent" — and then hand the admission straight back **without ever hashing the
+    bundle**. The audit's probe is one line and it lands:
+
+        b = {"schema_version": "spot.stage02_direct_arm_bundle.v1"}
+        a = ExternalAdmission(..., bundle_sha256="0"*64, verdict="admit")
+        require_external_admission(b, a)   ->  ACCEPTED_UNRELATED_HASH 000000…
+
+    An honest caller supplies a real bundle and an admission for *some other bytes*, and
+    Stage 3 republishes that unrelated digest as though it had admitted the thing in front
+    of it. The class docstring boasts that "a record cannot be produced without naming who
+    admitted what" — and it was true, and it was useless, because nothing checked that the
+    record was ABOUT this bundle.
+
+    That is the same defect this lane has spent the whole review catching in other people:
+    a check that NAMES a binding without ENFORCING it. B6, M4b, the temporal
+    `verification_ref`, W2's `shared_accession` flag that gated nothing. Mine now too.
+    """
     schema = bundle.get("schema_version")
     if schema not in ARM_BUNDLE_SCHEMAS:
         raise ArmQueryError(
@@ -156,6 +201,17 @@ def require_external_admission(bundle: dict[str, Any],
             "Stage 3 requires an explicit ExternalAdmission naming the independent "
             "verifier, the producer commit and the bytes. There is no default and no "
             "trust-me path.")
+
+    # THE BINDING. Recompute the bundle's canonical digest and require the admission to be
+    # about exactly these bytes.
+    actual = bundle_digest(bundle)
+    if admission.bundle_sha256 != actual:
+        raise ExternalAdmissionRequired(
+            f"[{GATE_ADMISSION_NOT_ABOUT_THESE_BYTES}] the admission is for OTHER BYTES: it "
+            f"binds {admission.bundle_sha256[:16]}…, but the bundle in hand canonically "
+            f"hashes to {actual[:16]}…. An admission that names a digest it never checked "
+            "is a certificate stapled to the wrong artifact.")
+
     js.refuse_temporal_pathway_claim(bundle, what="arm bundle")
     return admission
 

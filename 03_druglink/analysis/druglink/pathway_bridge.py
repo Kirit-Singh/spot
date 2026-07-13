@@ -127,20 +127,53 @@ class PathwayBridgeError(ValueError):
 # --------------------------------------------------------------------------- #
 # Admission.
 # --------------------------------------------------------------------------- #
-def require_admitted_bundle(bundle: dict[str, Any]) -> None:
-    """Stage 3 reads no byte of a bundle its own independent verifier has not admitted."""
+GATE_PATHWAY_ADMISSION_UNBOUND = "pathway_admission_is_an_unbound_name"
+
+# What a pathway admission must BIND. A name is not a binding.
+REQUIRED_VERIFICATION_REF = (
+    "verifier_id",          # an INDEPENDENT verifier
+    "verdict",              # and it must say admit
+    "bundle_sha256",        # ...about THESE bytes
+    "producer_commit",      # ...produced by THIS commit
+    "report_sha256",        # ...and the report itself is addressable
+)
+
+
+def require_admitted_bundle(bundle: dict[str, Any],
+                            admission: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """The pathway admission must BIND the bytes. (Audit 0ec6ec99, B4.)
+
+    This used to accept any `verification_ref.verifier_id` whose string happened to contain
+    the substring "independent". The audit's probe lands precisely because it is trivial:
+
+        {"verification_ref": {"verifier_id": "totally_independent_but_unbound"}}
+        ->  ACCEPTED_UNBOUND_PATHWAY_VERIFIER_ID
+
+    A bundle nobody verified carries a friendly word in a string field, and Stage 3 records
+    it as admitted. There was no report, no verdict, no digest, no commit — nothing behind
+    the name. The provenance chain is broken at the point it claims to be strongest.
+
+    **A name is not a binding.** That sentence is the whole of what this lane has been
+    telling other people all round, and my own gate did not obey it.
+    """
+    from .arm_query import bundle_digest
+
     if bundle.get("schema_version") != PATHWAY_ARM_BUNDLE_SCHEMA:
         raise PathwayBridgeError(
             f"expected {PATHWAY_ARM_BUNDLE_SCHEMA}, got "
             f"{bundle.get('schema_version')!r}")
 
-    ref = bundle.get("verification_ref") or {}
-    verifier = ref.get("verifier_id")
-    if not verifier:
+    ref = dict(admission or bundle.get("verification_ref") or {})
+
+    missing = [f for f in REQUIRED_VERIFICATION_REF if not ref.get(f)]
+    if missing:
         raise PathwayBridgeError(
-            "the pathway arm bundle carries no verification_ref: Stage 3's admission "
-            "contract is that the producer's own INDEPENDENT verifier reconstructed this "
-            "bundle, and an unverified bundle is refused, not assumed")
+            f"[{GATE_PATHWAY_ADMISSION_UNBOUND}] the pathway admission is missing "
+            f"{missing}. A verifier NAME is not an admission: it binds no report, no "
+            "verdict, no digest and no producer. Anyone can type the word 'independent' "
+            "into a string field.")
+
+    verifier = str(ref["verifier_id"])
     if "independent" not in verifier:
         raise PathwayBridgeError(
             f"verification_ref names {verifier!r}, which is not an INDEPENDENT verifier. "
@@ -148,8 +181,22 @@ def require_admitted_bundle(bundle: dict[str, Any]) -> None:
             "itself — that is the self-consistency an independent verifier exists to "
             "refuse.")
 
+    if ref["verdict"] != "admit":
+        raise PathwayBridgeError(
+            f"[{GATE_PATHWAY_ADMISSION_UNBOUND}] the independent verifier's verdict is "
+            f"{ref['verdict']!r}, not 'admit'")
+
+    # THE BINDING: the admission must be about the bytes in hand.
+    actual = bundle_digest(bundle)
+    if ref["bundle_sha256"] != actual:
+        raise PathwayBridgeError(
+            f"[{GATE_PATHWAY_ADMISSION_UNBOUND}] the pathway admission is for OTHER BYTES: "
+            f"it binds {str(ref['bundle_sha256'])[:16]}…, but this bundle canonically "
+            f"hashes to {actual[:16]}…")
+
     # No pathway artifact may carry a statistic computed ACROSS time, at any depth.
     js.refuse_temporal_pathway_claim(bundle, what="pathway arm bundle")
+    return ref
 
 
 def require_bindings(record: dict[str, Any]) -> None:
