@@ -1092,6 +1092,69 @@ class TestTheThreePostE122Blockers:
         assert doc["verdict"] == V.R.REJECT
         assert V.G_STAGE1_NONNULL in doc["failed_gates"]
 
+    def test_5e_the_map_is_the_10_BASE_PORTABLE_programs_NOT_the_11_raw_entries(
+            self, tmp_path):
+        """The raw scorer view carries 11 program records. The release admits 10.
+
+        A map derived over the raw entries would carry th9_like — a program no arm can ever
+        stand on — and would then disagree with W5 and W11 by exactly one key. Derived from
+        `base_portable`, never from a hardcoded name list.
+        """
+        run = F.complete_run(tmp_path)
+        view = run["staged"]["view"]
+        rel = run_manifest.load_release(run["release_path"], run["release_root"])
+
+        assert len(view["programs"]) == 11                    # raw registry entries
+        portable = {p["program_id"] for p in view["programs"] if p["base_portable"]}
+        assert len(portable) == 10
+        assert "th9_like" in {p["program_id"] for p in view["programs"]}
+        assert "th9_like" not in portable
+
+        # the map W3 derives, and the one the bundle binds, are BOTH exactly those 10
+        assert set(rel["program_projection_sha256"]) == portable
+        prov = json.load(open(os.path.join(run["temporal"][0],
+                                           "temporal_provenance.json")))
+        bound = prov["run_binding"]["selection_release"]["per_program_projection_sha256"]
+        assert set(bound) == portable == set(rel["programs"])
+
+        # ...and the SCALAR is a separate binding over the full frozen view
+        assert (prov["run_binding"]["selection_release"]
+                ["registry_scorer_projection_sha256"]
+                == rel["registry_scorer_projection_sha256"])
+        assert (rel["registry_scorer_projection_sha256"]
+                not in bound.values())                        # not one of the per-program
+
+    def test_5f_an_EXTRA_NONPORTABLE_program_in_the_map_is_REFUSED(self, tmp_path):
+        """11 keys against 10 admitted: th9_like is in the view, and admits no arm."""
+        run = F.complete_run(tmp_path)
+        th9 = next(p for p in run["staged"]["view"]["programs"]
+                   if p["program_id"] == "th9_like")
+        assert th9["base_portable"] is False
+
+        _patch(run["temporal"][0], "temporal_provenance.json",
+               lambda d: d["run_binding"]["selection_release"]
+               ["per_program_projection_sha256"].update({"th9_like": F._canon(th9)}))
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
+    def test_5g_a_MISSING_PORTABLE_program_in_the_map_is_REFUSED(self, tmp_path):
+        run = F.complete_run(tmp_path)
+
+        def drop_portable(d):
+            m = d["run_binding"]["selection_release"]["per_program_projection_sha256"]
+            m.pop("treg_like")                      # an admitted program, unbound
+        _patch(run["temporal"][1], "temporal_provenance.json", drop_portable)
+        F.seal_release(run)
+        doc = _verify(run, _manifest(tmp_path, run)["path"])
+
+        assert doc["verdict"] == V.R.REJECT
+        assert doc["n_failed"] > 0
+        assert V.G_STAGE1_NONNULL in doc["failed_gates"]
+
     def test_6_stage2_inputs_is_EXACTLY_W5s_THREE_KEYS(self, tmp_path):
         run = F.complete_run(tmp_path)
         prov = json.load(open(os.path.join(run["temporal"][0],

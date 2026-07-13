@@ -158,6 +158,10 @@ def scorer_programs(view: Optional[dict]) -> tuple[list[str], dict[str, Any]]:
     # A program whose portability is UNSTATED is not silently treated as portable.
     if any(PORTABLE_KEY not in p for p in records):
         return [], {}
+    # THE STAGE-2-PORTABLE SET, and only it. The raw scorer view carries MORE program
+    # records than the release admits (th9_like is in the view and is NOT base-portable), so
+    # a map derived over the raw entries would carry a program no arm can ever stand on, and
+    # would then disagree with W5 and W11 by exactly one key.
     derived = sorted(str(p["program_id"]) for p in records if bool(p[PORTABLE_KEY]))
     projection = {str(p["program_id"]): content_sha256(p)
                   for p in records if bool(p[PORTABLE_KEY])}

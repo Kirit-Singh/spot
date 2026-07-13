@@ -129,11 +129,19 @@ def stage1_bindings(prov: Any, release: Any, admitted: list, bundle_id: str,
                    "drift, so the per-program map is required alongside it")
     elif projection:
         want_keys, got_keys = sorted(projection), sorted(str(k) for k in got_map)
-        if got_keys != want_keys:
+        extra = sorted(set(got_keys) - set(want_keys))
+        absent = sorted(set(want_keys) - set(got_keys))
+        if extra:
+            bad.append(f"{bundle_id}: {PROJECTION_MAP} carries {extra[:3]}, which the "
+                       "release does NOT admit as base-portable. A projection for a program "
+                       "no arm can stand on is a key that agrees with nothing")
+        if absent:
+            bad.append(f"{bundle_id}: {PROJECTION_MAP} is MISSING {absent[:3]} — every "
+                       "admitted program's projection must be bound, or an arm stands on a "
+                       "projection nobody pinned")
+        if not extra and not absent and len(got_keys) != len(want_keys):
             bad.append(f"{bundle_id}: {PROJECTION_MAP} has {len(got_keys)} key(s); the "
-                       f"release admits {len(want_keys)} "
-                       f"(extra {sorted(set(got_keys) - set(want_keys))[:3]}, "
-                       f"missing {sorted(set(want_keys) - set(got_keys))[:3]})")
+                       f"release admits {len(want_keys)}")
         wrong = sorted(k for k in set(got_keys) & set(want_keys)
                        if got_map[k] != projection[k])
         if wrong:
