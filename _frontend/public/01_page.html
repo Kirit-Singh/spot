@@ -1,0 +1,1238 @@
+<!doctype html>
+<!-- @dsCard group="Screens" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spot · stage 01 — CD4 transcriptional programs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23FAF9F7'/%3E%3Ccircle cx='8' cy='8' r='4.6' fill='%233E7D8C'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#FAF9F7;--surface:#FFFFFF;--sunken:#F4F2EE;--line:#E7E3DC;--ink:#1E1B16;--ink2:#5C564C;--muted:#8A8172;--accent:#3E7D8C;--treg:#9A3E9C;--serif:'Newsreader',serif;--mono:'IBM Plex Mono',monospace}
+  *{box-sizing:border-box}
+  /* visible keyboard focus on every interactive control (mouse clicks stay ring-free) */
+  a:focus-visible,button:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  /* top brand + source links */
+  .top{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+  /* brand + title share ONE baseline so 'spot' (20px) and the title (16px) sit on the same line, not center-aligned boxes */
+  .hleft{display:flex;align-items:baseline;gap:12px;min-width:0}
+  .brand{font-family:var(--serif);font-size:20px;font-weight:500}.brand b{color:var(--accent)}
+  .subhead{display:flex;align-items:baseline;gap:8px;padding-left:12px;margin-left:2px;border-left:1px solid var(--line)}
+  .subhead .t{font-family:var(--serif);font-size:16px;font-weight:500;color:var(--ink)}
+  .subhead .cite{font-family:var(--mono);font-size:11px;color:var(--muted);text-decoration:none;margin-left:1px}
+  .subhead .cite:hover{color:var(--accent);text-decoration:underline}
+  .dstools{margin-left:auto;display:flex;align-items:center;gap:11px}
+  .srclink{font-family:var(--mono);font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap}
+  .srclink:hover{text-decoration:underline}
+  .dstools .dssep{color:#D9D3C8;font-size:11px}
+  .hflink{font-family:var(--mono);font-size:11px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .hflink:hover{text-decoration:underline}
+  /* pipeline nav — stage 01 active; later stages are not yet built (visibly disabled) */
+  .nav{flex:0 0 auto;display:flex;align-items:center;gap:3px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);font-size:clamp(10.5px,1.2vw,13px)}
+  .nav .nstep{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:9px;color:var(--muted);font-weight:500;white-space:nowrap}
+  .nav .nstep .n{font-family:var(--mono);font-size:10.5px;opacity:.55}
+  .nav .nstep.on{color:var(--ink);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .nav .nstep.on .n{opacity:1;color:var(--accent)}
+  .nav .nstep.off{opacity:.5;cursor:not-allowed}
+  .nav a.nstep.step{text-decoration:none;cursor:pointer;transition:color .12s}
+  .nav a.nstep.step:hover{color:var(--ink)}
+  .nav a.nstep.step:hover .n{opacity:.85}
+  .nav .nsep{color:#D9D3C8;padding:0 1px}
+  /* body */
+  .body{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:minmax(0,1fr);min-height:0;overflow:hidden}
+  .plot{position:relative;border-right:1px solid var(--line);min-height:0;overflow:hidden}
+  /* grey loading state over the map while the 40k-cell shell parses/joins/draws (~250ms); the header + nav
+     stay interactive during the async fetch. Shown by default in HTML, hidden after the first resize()/draw. */
+  #maploading{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;gap:9px;background:var(--sunken);color:var(--muted);font-family:var(--mono);font-size:12px;letter-spacing:.02em}
+  #maploading .mlspin{width:13px;height:13px;border-radius:50%;border:2px solid rgba(0,0,0,.10);border-top-color:var(--accent);animation:mlspin .7s linear infinite}
+  @keyframes mlspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){#maploading .mlspin{animation:none}}
+  canvas{width:100%;height:100%;display:block;cursor:grab}
+  canvas.grabbing{cursor:grabbing}
+  /* plot title now lives inline in the top-of-plot contrast toolbar (.ctbar) */
+  /* on-plot continuous colour key */
+  .cbar{margin-top:13px;height:29px}
+  .cbar .cbt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
+  .cbar .cbg{position:relative;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.08)}
+  .cbar .clip{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted);line-height:1}
+  .cbar .clip.lo{left:-9px}.cbar .clip.hi{right:-9px}
+  .cbar .cbtk{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2);margin-top:4px}
+  .cbar .cbn{font-size:9.5px;color:var(--muted);margin-top:5px;line-height:1.4}
+  /* popover */
+  #pop{position:absolute;display:none;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:0 8px 28px rgba(30,27,22,.16);padding:12px 14px;width:246px;font-size:12px;z-index:9}
+  #pop .bc{font-family:var(--mono);font-size:10.5px;color:var(--accent);word-break:break-all;margin-bottom:4px}
+  #pop .pmeta{font-size:11.5px;color:var(--ink2);margin-bottom:8px}
+  #pop .psel{display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--sunken);border-radius:8px;margin-bottom:9px}
+  #pop .psel .dot{width:11px;height:11px;border-radius:50%;flex:0 0 11px;border:1px solid rgba(0,0,0,.12)}
+  #pop .psel .pl{font-weight:600;font-size:12.5px}
+  #pop .psel .pv{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  #pop .pscope{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin:-6px 0 8px 3px}
+  #pop .grp{margin-top:7px}
+  #pop .grph{font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;border-top:1px solid var(--sunken);padding-top:6px;margin-bottom:2px}
+  #pop .srow{display:flex;justify-content:space-between;padding:2px 0;color:var(--ink2)}
+  #pop .srow.em{color:var(--ink);font-weight:600}
+  #pop .srow .sv{font-family:var(--mono)}
+  /* rail */
+  .rail{background:var(--surface);padding:11px 16px 10px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+  /* rail children keep their natural height and the rail scrolls — never let the segmented controls squish to a line */
+  .rail>*{flex-shrink:0}
+  /* all sidebar section titles share ONE style — the MARKER GENES look (.pcard .pn) */
+  .lab{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin:0 0 5px}
+  /* section labels sit under a single hairline that separates rail sections — no boxes */
+  .lab.mt{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+  /* the separator goes on the CONTAINER (both singleProg and contrastPanel) so a first-child
+     margin can't escape upward and cut through the donor tabs; reset the inner Color-by label's own line */
+  #singleProg,#contrastPanel{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+  #singleProg>.lab.mt{margin-top:0;padding-top:0;border-top:0;display:block;margin-bottom:9px}
+  .colorsel{width:100%;font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:9px 30px 9px 11px;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 5.5L9 0z' fill='%233E7D8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+  .colorsel:hover{border-color:var(--accent)}
+  /* selected-program metadata card */
+  .pcard{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+  .pcard .pn{font-family:'Inter Tight';font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--ink2);line-height:1.2}
+  .pcard .pf{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+  .pcard .psrc{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--accent);text-decoration:none;margin-top:9px}
+  .pcard .psrc:hover{text-decoration:underline}
+  .pcard .pg{white-space:nowrap;overflow:hidden;font-family:var(--mono);font-size:11px;color:var(--ink2);height:18px;line-height:18px;margin-top:8px}
+  .pcard .pm{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:7px}
+  /* segmented filters */
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{flex:1;font:inherit;font-size:12.5px;font-weight:500;padding:7px 8px;background:none;border:0;border-left:1px solid var(--line);color:var(--ink2);cursor:pointer}
+  .seg button:first-child{border-left:0}
+  .seg button.on{background:var(--accent);color:#fff}
+  /* top-of-plot program-axis contrast panel — vertical stack: A row / B row / actions */
+  /* contrast panel: no card chrome — controls sit plainly on the UMAP (--chipw sets the From/To pill width + the actions-row indent) */
+  .ctbar{position:absolute;top:12px;left:14px;z-index:6;--chipw:42px;--dirw:56px;--progw:124px;--condw:82px}
+  .ctinner{display:flex;flex-direction:column;align-items:stretch;gap:7px}
+  /* narrow: the From/To bar collapses into this button (shown via media query) */
+  .skewbtn{display:none;align-items:center;gap:5px;font:inherit;font-size:12px;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:7px 13px;cursor:pointer;box-shadow:0 2px 9px rgba(30,27,22,.12)}
+  .skewbtn:hover{filter:brightness(1.06)}
+  /* actions row: Identify button spans program+direction; Clear sits under the condition dropdown (same width), on the same row */
+  .ctactions{display:flex;flex-direction:row;align-items:center;gap:6px;margin-top:2px;padding-left:calc(var(--chipw) + 6px)}
+  .ctbar .ctsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+  .ctgrp{display:flex;align-items:center;gap:6px;min-width:0}
+  .ctchip{font-family:var(--mono);font-size:9.5px;font-weight:700;color:#fff;height:20px;min-width:var(--chipw);padding:0 6px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;text-transform:uppercase;letter-spacing:.03em}
+  .ctchip.a{background:rgb(45,124,142)}.ctchip.b{background:rgb(214,152,52)}
+  .ctvs{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600;padding:0 1px}
+  .axsel{flex:0 1 auto;min-width:0;font:inherit;font-size:11.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 18px 4px 7px;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23a89f8f'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
+  .axsel.prog{flex:0 0 auto;width:var(--progw);max-width:var(--progw)}.axsel.cond{flex:0 0 auto;width:var(--condw)}.axsel.obj{max-width:120px}
+  .axsel:hover{border-color:var(--accent)}
+  .ctlbl{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:0 1px;white-space:nowrap}
+  .axdir{flex:0 0 auto;width:var(--dirw);text-align:center;font:inherit;font-size:11px;font-weight:600;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:4px 0;cursor:pointer;white-space:nowrap;text-transform:capitalize}
+  .axdir:hover{border-color:var(--accent)}
+  .axdir.hi{color:#C0392B}.axdir.lo{color:#2E74B5}
+  /* matched button pair — Clear (active) + Identify genes (disabled/muted) share shape/radius/padding/font/height; differ only by state */
+  /* Identify (program+direction width) + Clear (condition width) on one row — share height/radius/border/font, differ by width + state */
+  .ctclear,.idbtn{font:inherit;font-size:11px;font-weight:600;height:27px;border-radius:7px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+  .ctclear{width:var(--condw);padding:0;color:#C0392B;background:rgba(192,57,43,.06);border-color:rgba(192,57,43,.32);cursor:pointer}
+  .ctclear:hover{background:rgba(192,57,43,.13);border-color:#C0392B;color:#C0392B}
+  .idbtn{width:calc(var(--progw) + 6px + var(--dirw));padding:0 9px;color:var(--muted);background:var(--sunken);cursor:not-allowed}
+  .idbtn .pend{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;background:rgba(0,0,0,.05);border-radius:20px;padding:2px 7px}
+  /* Identify-genes enabled only when preflight passes: accent-filled + a live short-contrast_id pill */
+  .idbtn.ready{color:#fff;background:var(--accent);border-color:var(--accent);cursor:pointer}
+  .idbtn.ready:hover{filter:brightness(1.06)}
+  .idbtn.ready .pend{background:rgba(255,255,255,.22);color:#fff}
+  /* ONE fixed status box under #lastrun ("Map generated"): every contrast-bar state renders here, one font,
+     coloured text + a leading severity icon — ✓ ready (accent) · ⊘ unable (amber) · ! error (red). It spans
+     the button pair (idbtn.left → clear.right), centred beneath "Map generated". white-space:pre-line lets a
+     forced \n put a second line under the first. */
+  .ctstate{font-size:10px;line-height:1.4;margin-top:1px;margin-left:calc(var(--chipw) + 6px);width:calc(var(--progw) + 12px + var(--dirw) + var(--condw));text-align:center;white-space:pre-line}
+  .ctstate:empty{display:none}
+  .ctstate.warn{color:#B9770E;font-weight:600}
+  .ctstate.err{color:#C0392B;font-weight:600}
+  .ctstate.ok{color:var(--accent);font-weight:600}
+  .ctstate.ok::before{content:"✓ "}
+  .ctstate.warn::before{content:"⊘ "}
+  .ctstate.err::before{content:"! "}
+  /* legacy #ctErr slot retained in the DOM but unused — all states now render in the single #ctstate box */
+  .cterr{font-size:10.5px;color:#C0392B;text-align:center;font-weight:500;line-height:1.35;margin-top:5px}
+  .cterr:empty{display:none}
+  /* A→B conveyor belt on the plot (display-only; anchors are score-weighted centroids, no membership) */
+  #skewline{position:absolute;inset:0;z-index:3;pointer-events:none;display:none;overflow:visible}
+  #skewline .skl{fill:none;stroke:rgba(30,27,22,.12);stroke-width:8;stroke-linecap:round}
+  #skewline .belt{animation:beltflow .9s linear infinite}
+  #skewline .belt polyline{fill:none;stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;opacity:.62}
+  @keyframes beltflow{from{transform:translate(0,0)}to{transform:translate(var(--mx,0),var(--my,0))}}
+  /* on-plot A/B population labels (sit at each pole's score-weighted centroid; belt runs between them) */
+  .anchlbl{position:absolute;z-index:5;display:none;transform:translate(-50%,-50%);background:rgba(255,255,255,.92);border:1.5px solid var(--line);border-radius:8px;padding:3px 9px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 9px rgba(30,27,22,.12)}
+  /* belt stays ink-black (the app body has no dark theme, so no dark override) */
+  /* on-plot viewer controls (zoom in / reset / zoom out) — top-right, clear of the contrast bar (top-left) and rail; reuses the app's surface/line/ink2/accent tokens + radius/shadow conventions */
+  .viewctl{position:absolute;right:14px;top:14px;z-index:6;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 2px 9px rgba(30,27,22,.10);overflow:hidden}
+  .viewctl button{width:32px;height:30px;display:flex;align-items:center;justify-content:center;padding:0;font:inherit;font-size:16px;font-weight:600;line-height:1;color:var(--ink2);background:var(--surface);border:0;border-top:1px solid var(--line);cursor:pointer}
+  .viewctl button:first-child{border-top:0}
+  .viewctl button:hover{color:var(--accent);background:var(--sunken)}
+  .viewctl button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .viewctl .vreset{font-size:13px}
+  /* methods & scope */
+  .scope{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;line-height:1.55;color:var(--ink2)}
+  /* flows below the contrast controls; JS shrinks the font so the single line never exceeds the control width */
+  #lastrun{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-align:center;margin-top:-4px;margin-left:calc(var(--chipw) + 6px)}
+  #lastrun b{color:var(--ink2);font-weight:500}
+  /* methods & provenance tab (top-right), opens the right slide-over */
+  .methodstab{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink2);font-family:'Inter Tight';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .lkwrap{position:relative;display:inline-flex}
+  .lkic{font-size:12px;line-height:1}
+  .lkmenu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(30,27,22,.16);padding:6px;display:none;flex-direction:column;gap:2px;z-index:20;min-width:210px}
+  .lkwrap.open .lkmenu{display:flex}
+  .lkmenu a{font-family:var(--mono);font-size:11px;color:var(--accent);text-decoration:none;padding:7px 10px;border-radius:6px;white-space:nowrap}
+  .lkmenu a:hover{background:var(--sunken)}
+  .methodstab:hover{border-color:var(--accent);color:var(--accent)}
+  .methodstab .ic{width:15px;height:15px;border-radius:50%;border:1.4px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-style:italic;font-weight:700;flex:0 0 15px}
+  /* ── cell-detail modal card ── */
+  #scrim{position:fixed;inset:0;background:rgba(30,27,22,.34);display:none;z-index:40}
+  #modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;max-height:88vh;background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(30,27,22,.32);display:none;z-index:41;overflow:hidden;flex-direction:column}
+  #modal .hd{padding:16px 18px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  #modal .hdtop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  #modal .chip{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600}
+  #modal .chip i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+  #modal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
+  #modal .bc{font-family:var(--mono);font-size:12px;color:var(--accent);margin:10px 0 3px;white-space:nowrap;overflow:hidden}
+  #modal .mmeta{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  #modal .rec{padding:14px 18px 16px;overflow-y:auto}
+  #modal .rec .t{font-family:'Inter Tight';font-size:14px;font-weight:600;margin-bottom:11px}
+  #modal .mgrp{margin-bottom:11px}
+  #modal .mgrph{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:5px}
+  #modal .mrow{display:grid;grid-template-columns:132px 1fr 54px;align-items:center;gap:9px;font-size:11.5px;margin:4px 0}
+  #modal .mrow .mg{font-weight:500;color:var(--ink2)}
+  #modal .mrow.em .mg{font-weight:700;color:var(--ink)}
+  #modal .mrow.em{background:var(--sunken);border-radius:6px;padding:2px 6px;margin-left:-6px;margin-right:-6px}
+  #modal .mrow .mb{position:relative;height:6px;background:var(--sunken);border-radius:3px;overflow:hidden}
+  #modal .mrow.em .mb{background:#E7E1DA}
+  #modal .mrow .mb i{position:absolute;display:block;height:100%;background:var(--accent);opacity:.85;border-radius:3px}
+  #modal .mrow.em .mb i{background:var(--treg)}
+  #modal .mrow .ml{text-align:right;font-family:var(--mono);font-size:11px;color:var(--ink)}
+  #modal .src{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--sunken);padding-top:9px;line-height:1.6;word-break:break-word}
+  #modal .src .srcnr{margin-top:4px}
+  #modal .src a{color:var(--accent);text-decoration:none}#modal .src a:hover{text-decoration:underline}
+  #modal .src code{font-size:9.5px;color:var(--ink2)}
+  #modal .abrow{display:grid;grid-template-columns:15px 1fr auto 46px;align-items:center;gap:8px;font-size:11.5px;margin:5px 0}
+  #modal .abrow .crsw{width:13px;height:13px}
+  #modal .abn{font-weight:600;color:var(--ink)}
+  #modal .abs{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right}
+  #modal .abv{font-family:var(--mono);text-align:right;color:var(--ink)}
+  #modal .abchip{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;border:1px solid rgba(0,0,0,.15)}
+  /* ── provenance / method popup ── */
+  #provmodal{position:fixed;top:0;right:0;height:100vh;width:600px;max-width:94vw;background:var(--surface);border-radius:16px 0 0 16px;box-shadow:-24px 0 64px rgba(30,27,22,.28);display:flex;z-index:42;flex-direction:column;overflow:hidden;transform:translateX(102%);transition:transform .34s cubic-bezier(.4,0,.2,1);will-change:transform}
+  #provmodal.open{transform:translateX(0)}
+  #provmodal .phd{padding:11px 20px 9px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex:0 0 auto}
+  #provmodal .ptitle{font-family:'Inter Tight';font-size:16px;font-weight:600;line-height:1.2}
+  #provmodal .x{width:26px;height:26px;border:0;background:var(--sunken);border-radius:8px;color:var(--ink2);font-size:14px;cursor:pointer;flex:0 0 26px}
+  #provmodal .pbody{padding:2px 20px 12px;overflow-y:auto}
+  #provmodal .pstep{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--sunken)}
+  #provmodal .pn{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
+  #provmodal .pc h4{font-size:13px;font-weight:600;margin:1px 0 3px}
+  #provmodal .pc p{font-size:12px;line-height:1.42;color:var(--ink2);margin:0}
+  #provmodal .pc p b{color:var(--ink);font-weight:600}
+  #provmodal code{font-family:var(--mono);font-size:11px;background:var(--sunken);border-radius:4px;padding:1px 5px}
+  #provmodal .ppapers{padding-top:9px}
+  #provmodal .pph2{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+  #provmodal .ppaper{margin-bottom:6px}
+  #provmodal .ppaper a{font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}
+  #provmodal .ppaper a:hover{text-decoration:underline}
+  #provmodal .ppaper span{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+  #provmodal .regenrow{margin-top:10px}
+  #provmodal .regenline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #provmodal .regenlast{color:var(--muted);font-size:11px}
+  #provmodal .regenbtn{font:inherit;font-size:12px;font-weight:600;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  #provmodal .regenbtn:hover{border-color:var(--accent);color:var(--accent)}
+  #provmodal .regenhint{margin-top:9px}
+  #provmodal .regenhint p{color:var(--muted);font-size:11px;line-height:1.45;margin:0 0 7px}
+  #provmodal .regencmd{display:flex;align-items:center;gap:8px;background:var(--sunken);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+  #provmodal .regencmd code{font-family:var(--mono);font-size:11px;color:var(--ink2);flex:1;overflow-x:auto;white-space:nowrap}
+  #provmodal .regencopy{font:inherit;font-size:10px;font-weight:600;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+  #provmodal .regencopy:hover{color:var(--accent);border-color:var(--accent)}
+  #provmodal a{color:var(--accent)}
+  /* as the window narrows: drop the citation + source links; header/nav fonts already scale via clamp() */
+  @media (max-width:1080px){
+    .subhead .cite{display:none}
+    .nav{padding:9px 16px}
+  }
+  /* collapse the From/To bar into a single 'Skew' button (click to expand into a card) */
+  @media (max-width:1000px){
+    .skewbtn{display:inline-flex}
+    .ctbar .ctinner{display:none}
+    .ctbar.open .ctinner{display:flex;margin-top:7px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px;box-shadow:0 8px 28px rgba(30,27,22,.16)}
+  }
+  /* narrower still: header buttons drop to icons only */
+  @media (max-width:880px){
+    .nav .nstep{padding:5px 9px;gap:5px}
+    .dstools .tlbl{display:none}
+  }
+  @media (max-width:720px){
+    .body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(240px,1fr) auto}
+    .plot{border-right:0;border-bottom:1px solid var(--line)}
+    .rail{max-height:48vh}
+    /* reclaim top-bar space: keep brand + Methods tab; source links live on in the provenance panel */
+    .dstools .srclink,.dstools .hflink,.dstools .dssep{display:none}
+  }
+  /* usable at 390 CSS px: shrink the on-plot bar + rail so nothing overflows the body (body itself never scrolls) */
+  @media (max-width:430px){
+    .top{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}
+    .nav{overflow-x:auto;white-space:nowrap;padding:8px 12px}
+    .ctbar{left:8px;top:8px;--chipw:36px;--dirw:48px;--progw:98px;--condw:70px}
+    .axsel.obj{max-width:88px}
+    .ctstate{max-width:none}
+    .rail{padding:12px 14px}
+  }
+  /* contrast rail: active A and B fields, their swatches/scopes, and the encoding legend */
+  .crail .lab{margin-top:0}
+  .crrow{display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid var(--sunken)}
+  .crrow:first-of-type{border-top:0}
+  .crsw{width:14px;height:14px;border-radius:4px;flex:0 0 14px;border:1px solid rgba(0,0,0,.14)}
+  .crmeta{min-width:0}
+  .crtag{font-family:var(--mono);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#fff;border-radius:4px;padding:2px 6px;min-width:34px;text-align:center;flex:0 0 auto}
+  .crlab{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
+  .crsub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:7px;letter-spacing:.02em;white-space:nowrap}
+  .crleg{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+  .crleg .crgrad{height:10px;border-radius:3px;margin:6px 0 4px;border:1px solid rgba(0,0,0,.08)}
+  .crleg .crends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ink2)}
+  /* programs over time — programs × Rest/8h/48h, cell = median program score (shaded within each row) */
+  /* a right spacer column mirrors the label column (--labw) so the Rest/8h/48h columns sit dead-centre */
+  #timeGridSection{margin-top:11px;padding-top:11px;border-top:1px solid var(--line);text-align:center;--labw:96px}
+  #timeGridSection .prevcap{font-size:8.5px;color:var(--muted);letter-spacing:.02em;margin-top:2px}
+  .prevbody{width:max-content;max-width:100%;margin:0 auto}
+  .prevgrid{display:grid;grid-template-columns:var(--labw) repeat(3,32px) auto;gap:3px;align-items:center;margin-top:8px}
+  .prevgrid .ph{font-size:8px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);text-align:center;font-weight:700}
+  /* population labels are equal-width clickable chips — faint outline, accent on hover */
+  .prevgrid .plbl{height:19px;line-height:17px;padding:0 5px;text-align:right;border:1px solid rgba(0,0,0,.06);border-radius:4px;font-size:8.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .prevgrid .plbl:hover{border-color:var(--accent);color:var(--accent)}
+  .prevgrid .pc{height:19px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px}
+  .prevgrid .pc.nd{background:var(--sunken);color:var(--muted);font-size:7.5px;letter-spacing:.02em}
+  .prevgrid .ndkey{grid-column:2/5;justify-self:center;font-size:8.5px;color:var(--muted);white-space:nowrap;margin-top:6px;line-height:1.4}
+  /* modular-definition column (Masopust descriptor); header is the single Masopust hyperlink */
+  .prevgrid .prmod{font-size:8px;color:var(--ink2);white-space:nowrap;text-align:left;padding-left:5px}
+  .prevgrid .prmodh{text-align:left;color:var(--accent);text-decoration:none;white-space:nowrap;padding-left:5px}
+  .prevgrid .prmodh:hover{text-decoration:underline}
+  /* degenerate single-program key: a flat swatch instead of the gradient (field too sparse to shade) */
+  /* too-sparse (Th9): hide the gradient/ticks, show a centred 'Too sparse to shade' at the same height */
+  .cbar.degen{display:flex;align-items:center;justify-content:center}
+  .cbar.degen .cbg,.cbar.degen .cbtk{display:none}
+  .cbar.degen .cbn{margin:0}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="hleft"><span class="brand">spot<b>·</b></span><span class="subhead"><span class="t" id="dsTitle">CD4 transcriptional programs</span><a class="cite" href="https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1" target="_blank" rel="noopener">(Zhu et al. 2025)</a></span></div><span class="dstools"><div class="lkwrap"><button id="linksBtn" class="methodstab" aria-expanded="false" aria-label="Data links"><span class="lkic">🔗</span><span class="tlbl">Links</span></button><div id="linksMenu" class="lkmenu"><a id="dsSrc" target="_blank" rel="noopener"></a><a id="dsHf" target="_blank" rel="noopener">🤗 Hugging Face ↗</a></div></div><button id="provbtn" class="methodstab"><span class="ic">i</span><span class="tlbl">Methods &amp; provenance</span></button></span></div>
+<div class="nav">
+  <a class="nstep on" href="01_page.html" aria-current="page" style="text-decoration:none"><span class="n">01</span>Programs</a><span class="nsep">›</span>
+  <a class="nstep step" href="targets.html"><span class="n">02</span>Targets</a><span class="nsep">·</span>
+  <a class="nstep step" href="pathways.html"><span class="n">02</span>Pathways</a><span class="nsep">›</span>
+  <a class="nstep step" href="drugs.html"><span class="n">03</span>Drugs</a><span class="nsep">›</span>
+  <a class="nstep step" href="pksafety.html"><span class="n">04</span>PK &amp; Safety</a>
+</div>
+
+<div class="body">
+  <div class="plot">
+    <div class="ctbar" role="group" aria-label="Contrast two programs on the map">
+      <button class="skewbtn" id="skewToggle" aria-expanded="false" aria-label="Show contrast controls">Skew ▾</button>
+      <div class="ctinner">
+      <div class="ctgrp"><span class="ctchip a">From</span><select class="axsel prog" data-ax="A" data-k="field" aria-label="From program"></select><button class="axdir" data-ax="A" aria-label="From direction (high or low)">high</button><select class="axsel cond" data-ax="A" aria-label="From condition"></select></div>
+      <div class="ctgrp"><span class="ctchip b">To</span><select class="axsel prog" data-ax="B" data-k="field" aria-label="To program"></select><button class="axdir" data-ax="B" aria-label="To direction (high or low)">high</button><select class="axsel cond" data-ax="B" aria-label="To condition"></select></div>
+      <div class="ctactions"><button class="idbtn" id="idgenes" disabled><span class="idlbl">ID program skew genes →</span><span class="pend" id="idpend"></span></button><button class="ctclear" id="ctclear">✕ Clear</button></div>
+      <div id="lastrun"></div>
+      <div id="ctstate" class="ctstate" role="status" aria-live="polite"></div>
+      <div id="ctErr" class="cterr" role="alert"></div>
+      </div>
+    </div>
+    <canvas id="c"></canvas>
+    <div id="maploading" role="status" aria-live="polite"><span class="mlspin" aria-hidden="true"></span>Loading map…</div>
+    <svg id="skewline" width="100%" height="100%" aria-hidden="true"><defs><linearGradient id="beltGrad" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.18" stop-color="#fff" stop-opacity="1"/><stop offset="0.82" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><mask id="beltMask" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="9000" height="9000"><rect x="-3000" y="-3000" width="9000" height="9000" fill="url(#beltGrad)"/></mask></defs><line class="skl"/><g class="beltmask" mask="url(#beltMask)"><g class="belt"></g></g></svg>
+    <div id="lblA" class="anchlbl"></div><div id="lblB" class="anchlbl"></div>
+    <div class="viewctl" role="group" aria-label="Zoom and pan the map">
+      <button id="vzin" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+      <button id="vreset" class="vreset" type="button" aria-label="Reset view" title="Reset view">⤢</button>
+      <button id="vzout" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+    </div>
+    <div id="pop"></div>
+  </div>
+  <div class="rail">
+    <div class="lab" id="condLab">Show cells · condition</div>
+    <div class="seg" id="cond" role="group" aria-labelledby="condLab"></div>
+    <div class="lab mt" id="donorLab">Donor</div>
+    <div class="seg" id="donorSel" role="group" aria-labelledby="donorLab"></div>
+
+    <div id="singleProg">
+      <label class="lab mt" for="colorby">Color by program score</label>
+      <select id="colorby" class="colorsel" aria-label="Color the map by program score"></select>
+      <div class="cbar">
+        <div class="cbg" id="cbGrad"></div>
+        <div class="cbtk"><span>Low</span><span>Mid</span><span>High</span></div>
+        <div class="cbn" id="cbNote">grey = no data</div>
+      </div>
+      <div class="pcard">
+        <div class="pn" id="pcName">Marker genes</div>
+        <div class="pg" id="pcGenes"></div>
+      </div>
+    </div>
+
+    <div id="contrastPanel" class="crail" style="display:none">
+      <div class="lab">Contrast</div>
+      <div class="crrow" id="crA"></div>
+      <div class="crrow" id="crB"></div>
+      <div class="crleg">
+        <div class="crgrad" id="crGrad"></div>
+        <div class="crends"><span id="crEndA">From</span><span>Mixed</span><span id="crEndB">To</span></div>
+      </div>
+    </div>
+    <div id="timeGridSection">
+      <div class="lab">Programs over time</div>
+      <div class="prevcap">median program score per timepoint · shaded on a shared scale</div>
+      <div class="prevbody">
+        <div class="prevgrid" id="timeGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="scrim"></div>
+<div id="modal">
+  <div class="hd">
+    <div class="hdtop"><span class="chip" id="mchip"><i></i><b></b></span><button class="x" id="mx">✕</button></div>
+    <div class="bc" id="mbc"></div>
+    <div class="mmeta" id="mmeta"></div>
+  </div>
+  <div class="rec">
+    <div class="t">RNA-program scores</div>
+    <div id="mgenes"></div>
+    <div class="src" id="msrc"></div>
+  </div>
+</div>
+
+<div id="provmodal">
+  <div class="phd">
+    <div><div class="ptitle">Methods &amp; provenance</div></div>
+    <button class="x" id="provx">✕</button>
+  </div>
+  <div class="pbody">
+    <div class="pstep"><div class="pn">1</div><div class="pc">
+      <h4>Data source</h4>
+      <p>≈396,000 non-targeting-control CD4 T cells from the <b>Marson</b> genome-scale CRISPRi perturb-seq (primary human CD4); 4 donors × Rest / Stim&nbsp;8&nbsp;hr / Stim&nbsp;48&nbsp;hr. Public on the <b>CZI Virtual Cells Platform</b> and mirrored to <b>Hugging Face</b> at a pinned revision (SHA-256 verified). A 40,000-cell subsample of the embedding is shown here.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">2</div><div class="pc">
+      <h4>Embedding &amp; clustering</h4>
+      <p id="pEmbed"></p>
+    </div></div>
+    <div class="pstep"><div class="pn">3</div><div class="pc">
+      <h4>Program scores</h4>
+      <p>Every cell carries continuous <b>RNA panel-minus-control scores</b> — <code>score_genes</code> panel mean minus an expression-bin-matched control mean (25 bins, ctrl_size 50, fixed seed). 11 programs span two families (differentiation, functional); a 12th activation-adjusted CD4 CTL-like sensitivity lane is selectable in the color-by menu (see step 4). Program names follow the Masopust et al. nomenclature. These are continuous scores, not cell-type calls.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">4</div><div class="pc">
+      <h4>Activation sensitivity lane</h4>
+      <p>Activation associates with <b>most programs, not only Treg-like / CD4 CTL-like</b>. Pooled Spearman |ρ| against the activation score is strongest for naïve / memory / checkpoint (~0.50–0.57), then CD4 CTL-like (0.45), Treg-like (0.44), Th1-like (0.38); it stays nontrivial <b>within donor×timepoint strata</b> (max |donor ρ| ~0.26–0.36) and is substantially timepoint-driven. Full program×condition/donor table: <code>stage01_activation_association_v1.json</code> (descriptive; no p/q/FDR). An activation-adjusted CD4 CTL-like score (<code>cd4_ctl_like_score_actadj</code>) is a descriptive sensitivity <b>residual, not a deconfounding</b> (near-zero pooled overlap but retained condition/donor structure) and stays non-selectable; the raw score axes remain primary.</p>
+    </div></div>
+    <div class="pstep"><div class="pn">5</div><div class="pc">
+      <h4>Scope &amp; reproduction</h4>
+      <p id="pScope"></p>
+      <p style="margin-top:9px"><b>Reproduce:</b> <code>reproduce.sh</code> <span style="color:var(--muted);font-size:11px">fetches the pinned Hugging Face h5ad and verifies its SHA-256, then re-runs the fixed-seed scoring and emits the overlay. <a id="reproLink" href="https://github.com/Kirit-Singh/spot/blob/stage1-remediation/01_programs/analysis/reproduce.sh" target="_blank" rel="noopener" style="text-decoration:none">script ↗</a></span></p>
+      <div class="regenrow">
+        <div class="regenline">
+          <button id="regenBtn" type="button" class="regenbtn">⟳ Regenerate overlay</button>
+          <span class="regenlast">Map generated <b id="emittedAt" style="color:var(--ink2)">—</b>.</span>
+        </div>
+        <div id="regenHint" class="regenhint" hidden>
+          <p>The workbench serves <b>static, content-addressed artifacts</b> — regeneration runs offline against the pinned Hugging Face revision, then <code>verify_reproduce.py</code> gates the SHA-256 (must reproduce <code>6e1665d1…</code>) before redeploy. Run:</p>
+          <div class="regencmd"><code id="regenCmd">cd 01_programs/analysis && ./reproduce.sh</code><button id="regenCopy" type="button" class="regencopy">Copy</button></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="pstep"><div class="pn">6</div><div class="pc">
+      <h4>Provenance &amp; status</h4>
+      <p id="pProdStatus" style="font-family:var(--mono);font-size:11px;line-height:1.75;color:var(--ink2)"></p>
+    </div></div>
+    <div class="ppapers">
+      <div class="pph2">References</div>
+      <div class="ppaper"><a id="paperMarson" target="_blank" rel="noopener">Marson genome-scale CRISPRi perturb-seq · bioRxiv ↗</a><span>Source of the cells and experimental design — a genome-scale CRISPRi screen in primary human CD4.</span></div>
+      <div class="ppaper"><a id="paperMasopust" target="_blank" rel="noopener">Masopust et al. · Guidelines for T cell nomenclature · Nat Rev Immunol 2026 ↗</a><span>Naming framework only — the program names follow this consensus; the program panels are separately curated and cited (see each program's marker provenance), not sourced from these definitions.</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── reference links (nomenclature + data source only; no cell-type calls made here) ──
+const PAPERS={
+  marson:{url:'https://www.biorxiv.org/content/10.64898/2025.12.23.696273v1'},
+  masopust:{url:'https://www.nature.com/articles/s41577-025-01238-2'}
+};
+// 'sensitivity' (cd4_ctl_like_score_actadj) removed from the UI by human decision (2026-07);
+// the score is retained in the data/records for provenance but is not a display/contrast option.
+const FAM_ORDER=['differentiation','functional'];
+const FAM_LABEL={differentiation:'Differentiation programs',functional:'Functional programs',sensitivity:'Sensitivity'};
+const CONDLAB={All:'All',Rest:'Rest',Stim8hr:'8 hr',Stim48hr:'48 hr'};
+const COND_ORDER={Rest:0,Stim8hr:1,Stim48hr:2};
+// viridis-like sequential ramp (perceptually ordered; low → high)
+const VIR=[[68,1,84],[71,44,122],[59,81,139],[44,113,142],[33,144,141],[39,173,129],[92,200,99],[170,220,50],[253,231,37]];
+function ramp(t){t=Math.max(0,Math.min(1,t));const f=t*(VIR.length-1),i=Math.min(VIR.length-2,Math.floor(f)),g=f-i,a=VIR[i],b=VIR[i+1];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*g)},${Math.round(a[1]+(b[1]-a[1])*g)},${Math.round(a[2]+(b[2]-a[2])*g)})`;}
+const VIR_CSS='linear-gradient(90deg,'+VIR.map((s,i)=>`rgb(${s}) ${(i/(VIR.length-1)*100).toFixed(1)}%`).join(',')+')';
+
+const c=document.getElementById('c'),x=c.getContext('2d'),pop=document.getElementById('pop');
+let DATA=null,cells=[],meta=null,programs=[],progByField={};
+let field='diff_naive_score',cond='All',donorSel='All',hover=-1;
+let axisA={field:null,condition:'All',direction:'high',donor:'All'},
+    axisB={field:null,condition:'All',direction:'high',donor:'All'};
+let sx,sy,ox,oy;
+// ── Stage-1 selection contract (spot.stage01_selection.v3) state + constants ──
+// program_id + method provenance come from the v3.0.1 registry; base portability comes from the frozen validation
+let regByField={},REGISTRY_OK=false,REGISTRY_SHA='',H5AD_SHA='',HF_REV='',HF_REPO='',METHOD_VERSION='';
+// v3 truthful current pointer (schema spot.stage01_current.v3): carries selection_routing +
+// measurement_display_release. No production/research split; the historical selectability gate is not active here.
+let CURRENT=null,MARKER_DIAG=null,BUNDLE=null;   // BUNDLE = served spot.stage01_selection_bundle.v1 (v3-contract constants)
+// each axis carries its own condition (enables cross-subset display comparisons); when both share one
+// REAL condition that value is the executable analysis_condition. Different timepoints render as a
+// display-only view (no screen — a screen needs one timepoint). donor scope is fixed to all.
+let curContrastId=null,pfSeq=0;
+const DATASET_ID='marson2025_gwcd4_perturbseq';
+const EFFECT_UNIVERSE_ID='marson2025_gwcd4_perturbseq : GWCD4i.DE_stats.h5ad';
+const DONOR_SCOPE='all';
+// ── v3.0.1 measurement-display bindings, cross-bound through stage01_current.json (no hard-coded v2 hashes) ──
+// V3 = the measurement_display_release block; BASE_PORTABLE = set of base-portable program_ids from the frozen
+// validation; V3_SUMMARY = the 396k full-universe summary that drives the Programs-over-time grid.
+let V3=null,V3_OK=false,BASE_PORTABLE={},V3_SUMMARY=null;
+// pan/zoom view transform, layered on top of the fit transform (default = fit view)
+let vk=1,vtx=0,vty=0;const VK_MIN=0.5,VK_MAX=12;
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+const sv=v=>(v==null||isNaN(v))?'—':(v>=0?'+':'')+v.toFixed(2);
+// render a "YYYY-MM-DD HH:MM UTC" string in the viewer's LOCAL timezone (with tz abbrev if available)
+function fmtLocal(s){
+  if(!s)return '';
+  let dt=new Date(String(s).replace(' UTC',' GMT'));
+  if(isNaN(dt))dt=new Date(s);
+  if(isNaN(dt))return s;
+  let out=dt.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  try{const parts=new Intl.DateTimeFormat(undefined,{timeZoneName:'short'}).formatToParts(dt),
+        tz=parts.find(p=>p.type==='timeZoneName');
+      if(tz&&/[A-Za-z]/.test(tz.value))out+=' '+tz.value;}catch(e){}
+  return out;
+}
+function domainFor(f){return (meta.score_display_domains&&meta.score_display_domains[f])||progByField[f].display_domain;}
+// flat neutral fill for a degenerate (too-sparse-to-shade) field's PRESENT cells — distinct from
+// the paler "no data" grey; grey stays reserved for missing values only.
+const DEGEN_CSS='rgb(176,172,164)';
+// ── sparse-aware display transform (built once per field from the FROZEN quantiles) ──
+// p50 → 0.5 always; monotonic. Upper anchor = first stored quantile STRICTLY > p50 (scan
+// p75,p90,p95,p98,p99) → 1.0; lower anchor = first quantile STRICTLY < p50 (scan p25,p10,p02) → 0.0.
+// If nothing exceeds p50 the field is degenerate: it carries no shadeable signal and renders flat.
+const _tf={};
+function transformFor(f){
+  if(_tf[f])return _tf[f];
+  const d=domainFor(f),p50=d.p50;
+  const hi=[d.p75,d.p90,d.p95,d.p98,d.p99].find(q=>q!=null&&q>p50);
+  const lo=[d.p25,d.p10,d.p02].find(q=>q!=null&&q<p50);
+  const t=(hi==null)?{status:'degenerate',p50:p50,anchors:{lo:lo??null,hi:null}}
+                    :{status:'ok',p50:p50,lo:(lo==null?p50:lo),hi:hi,anchors:{lo:lo??p50,hi:hi}};
+  return _tf[f]=t;
+}
+// raw score → [0,1] through the sparse-aware transform. null = missing OR degenerate (no signal).
+// Callers distinguish the two via transformFor(f).status before choosing a fill.
+function normScore(v,tf){
+  if(v==null||isNaN(v))return null;
+  if(tf.status==='degenerate')return null;
+  const lo=tf.lo,p50=tf.p50,hi=tf.hi;let t;
+  t=v<=p50?(lo===p50?0.5:0.5*(v-lo)/(p50-lo)):0.5+0.5*(v-p50)/(hi-p50);
+  return Math.max(0,Math.min(1,t));
+}
+// fill for a cell's value under field f: missing → grey; degenerate field → flat neutral; else viridis.
+function swatchFor(f,v){
+  if(v==null||isNaN(v))return 'rgb(200,197,190)';
+  const tf=transformFor(f);
+  if(tf.status==='degenerate')return DEGEN_CSS;
+  return ramp(normScore(v,tf));
+}
+
+const V3_METHOD_ID='stage1-continuous-v3.0.1';
+// Deterministic display-only quantile domains recomputed from the JOINED 40k v3 score fields (NOT v2).
+// Per field: collect finite values, sort ascending, then percentile by linear interpolation on the rank
+// r=(p/100)*(n-1) — numpy 'linear' — with lo=floor(r), hi=ceil(r), value=v[lo]*(1-w)+v[hi]*w, w=r-lo.
+// Ties keep natural sorted order (a stable numeric sort). Changes color mapping only; no score is altered.
+function computeV3Domains(cellArr,fields){
+  const QS=[['p02',2],['p10',10],['p25',25],['p50',50],['p75',75],['p90',90],['p95',95],['p98',98],['p99',99]];
+  const pct=(s,p)=>{const n=s.length;if(!n)return null;const r=(p/100)*(n-1),lo=Math.floor(r),hi=Math.ceil(r);return lo===hi?s[lo]:s[lo]*(1-(r-lo))+s[hi]*(r-lo);};
+  const dom={};
+  fields.forEach(f=>{const vals=[];for(let i=0;i<cellArr.length;i++){const v=cellArr[i][f];if(v!=null&&!isNaN(v))vals.push(v);}
+    vals.sort((a,b)=>a-b);const d={};QS.forEach(([k,p])=>{d[k]=pct(vals,p);});dom[f]=d;});
+  return dom;
+}
+// STRICT loader — every v3 dependency is REQUIRED. Missing / wrong-schema / wrong-method / wrong-count /
+// hash-mismatch / cross-binding mismatch stops initialization; there is NO fallback to v2 scores/registry/40k.
+async function strictLoadV3(){
+  const T=async(u)=>{const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status+' '+u);return await r.text();};
+  const sha=sha256hex;   // crypto.subtle in secure contexts; pure-JS fallback for non-secure (Tailscale HTTP) origins
+  const d=JSON.parse(await T('./data/stage01_umap_seed.json'));                                 // frozen coordinate/design shell (required)
+  const cur=JSON.parse(await T('./data/stage01_current.json'));                                 // v3 binding hub (required)
+  if(cur.schema!=='spot.stage01_current.v3')throw new Error('current schema != spot.stage01_current.v3');
+  if(cur.method_version!==V3_METHOD_ID)throw new Error('current method != '+V3_METHOD_ID);
+  const v3=cur.measurement_display_release;
+  if(!v3||!v3.registry||!v3.overlay||!v3.summary||!v3.validation_raw_sha256||!Array.isArray(v3.base_portable_programs))throw new Error('measurement_display_release binding incomplete');
+  if(v3.method_version!==V3_METHOD_ID)throw new Error('measurement_display_release method != '+V3_METHOD_ID);
+  const regT=await T('./data/stage01_program_registry_v3.json'),regv3=JSON.parse(regT);         // v3 registry (required, verified)
+  if(regv3.schema_version!=='spot.stage01_program_registry.v3')throw new Error('registry schema_version != spot.stage01_program_registry.v3');
+  if(await sha(regT)!==v3.registry.raw_sha256)throw new Error('v3 registry raw-sha mismatch');
+  if(regv3.method_version!==V3_METHOD_ID||regv3.registry_sha256!==v3.registry.registry_sha256)throw new Error('v3 registry method/canonical mismatch');
+  if(!Array.isArray(regv3.programs)||regv3.programs.filter(p=>p.role!=='sensitivity').length<11)throw new Error('v3 registry program count');
+  const ovlT=await T('./data/stage01_umap_overlay_v3.json'),ovl3=JSON.parse(ovlT);              // v3 overlay (required, verified)
+  if(ovl3.schema!=='spot.stage01_umap_overlay.v3')throw new Error('overlay schema != spot.stage01_umap_overlay.v3');
+  if(await sha(ovlT)!==v3.overlay.raw_sha256)throw new Error('v3 overlay raw-sha mismatch');
+  if(ovl3.method_version!==V3_METHOD_ID||ovl3.n_cells!==40000||!Array.isArray(ovl3.cells)||ovl3.cells.length!==40000)throw new Error('v3 overlay method/count');
+  const sumT=await T('./data/stage01_summary_v3.json'),sum3=JSON.parse(sumT);                   // v3 summary (required, verified)
+  if(sum3.schema!=='spot.stage01_summary.v3')throw new Error('summary schema != spot.stage01_summary.v3');
+  if(await sha(sumT)!==v3.summary.raw_sha256)throw new Error('v3 summary raw-sha mismatch');
+  if(sum3.scoring_universe_n!==396000||!sum3.by_program_condition)throw new Error('v3 summary universe/shape');
+  if(sum3.method_version!==V3_METHOD_ID)throw new Error('v3 summary method != '+V3_METHOD_ID);
+  const valT=await T('./data/stage01_validation.json'),val=JSON.parse(valT);                    // frozen validation (required, verified)
+  if(val.schema!=='spot.stage01_validation.v1')throw new Error('validation schema != spot.stage01_validation.v1');
+  if(await sha(valT)!==v3.validation_raw_sha256)throw new Error('validation raw-sha mismatch');
+  if(!val.stage2_base_portability)throw new Error('validation stage2_base_portability missing');
+  if(val.method_version!==V3_METHOD_ID)throw new Error('validation method != '+V3_METHOD_ID);
+  return {d,cur,v3,regv3,ovl3,sum3,val};
+}
+// Join v3 scores onto the frozen coordinate shell by EXACT barcode. Requires: no duplicate barcodes in
+// either side, identical barcode sets, and EXACT x/y equality per barcode. Copies ONLY score fields;
+// seed x/y/donor/condition are preserved. Throws (fail-closed) on any violation. Returns the score fields.
+function joinV3Scores(cells,ovl3,regv3){
+  const sf=ovl3.score_fields||[],v3map={};ovl3.cells.forEach(c=>{v3map[c.barcode]=c;});
+  // fail-closed field-set gate (BEFORE any copy): never copy over a reserved seed/identity field, and require the
+  // overlay score fields to EXACTLY equal the primary+sensitivity score fields declared by the bound v3 registry.
+  const reserved=new Set(['barcode','x','y','donor','condition','cluster']);
+  sf.forEach(f=>{if(reserved.has(f))throw new Error('v3 overlay score field overlaps reserved seed field: '+f);});
+  if(new Set(sf).size!==sf.length)throw new Error('v3 overlay duplicate score fields');
+  const expected=new Set();
+  (regv3.programs||[]).forEach(p=>{if(p.score_field)expected.add(p.score_field);});
+  (regv3.sensitivity_lanes||[]).forEach(p=>{if(p.score_field)expected.add(p.score_field);});
+  if(sf.length!==expected.size||!sf.every(f=>expected.has(f)))throw new Error('v3 overlay score-field set != registry primary+sensitivity fields');
+  const seedUniq=new Set();cells.forEach(c=>seedUniq.add(c.barcode));
+  if(seedUniq.size!==cells.length)throw new Error('duplicate barcodes in coordinate shell');
+  if(Object.keys(v3map).length!==ovl3.cells.length)throw new Error('duplicate barcodes in v3 overlay');
+  if(cells.length!==ovl3.cells.length||!cells.every(c=>v3map[c.barcode]))throw new Error('v3 overlay barcode-set mismatch — refusing to join');
+  for(let i=0;i<cells.length;i++){const c=cells[i],s=v3map[c.barcode];if(s.x!==c.x||s.y!==c.y)throw new Error('v3 overlay coordinate mismatch at '+c.barcode);}
+  cells.forEach(c=>{const s=v3map[c.barcode];sf.forEach(f=>{c[f]=s[f];});});   // scores only; seed coordinates preserved
+  return sf;
+}
+strictLoadV3().then(({d,cur,v3,regv3,ovl3,sum3,val})=>{
+  DATA=d;cells=d.cells;meta=d.meta;programs=meta.programs;
+  CURRENT=cur;V3=v3;
+  // bind marker diagnostics v2 (neutral, selected-condition + donor stratified; NOT an eligibility gate)
+  fetch('./data/stage01_marker_diagnostics_v2.json').then(r=>r.ok?r.json():null).then(md=>{
+    if(md&&md.use_for_eligibility===false){MARKER_DIAG=md;buildMethods();}
+  }).catch(()=>{});
+  // bind the v3 selection-contract bundle (scorer-VIEW binding + per-program poles + estimator registry +
+  // trust bindings) so "Identify genes" emits the exact spot.stage01_selection.v3 contract (S1-B2)
+  fetch('./data/stage01_selection_bundle.json').then(r=>r.ok?r.json():null).then(b=>{
+    if(b&&b.schema==='spot.stage01_selection_bundle.v1'){BUNDLE=b;runPreflightUI();}
+  }).catch(()=>{});
+  // ── join verified v3.0.1 scores onto the frozen coordinate shell by EXACT barcode ──
+  const sf=joinV3Scores(cells,ovl3,regv3);
+  V3_OK=true;meta.method_version=ovl3.method_version;V3_SUMMARY=sum3;
+  meta.score_display_domains=computeV3Domains(cells,sf);                       // display domains from the joined v3 scores (NOT v2)
+  // base portability from the FROZEN validation (stage2_base_portable), NOT the registry boolean
+  Object.keys(val.stage2_base_portability).forEach(pid=>{BASE_PORTABLE[pid]=(val.stage2_base_portability[pid]||{}).stage2_base_portable===true;});
+  programs.forEach(p=>progByField[p.score_field]=p);
+  programs.forEach(p=>transformFor(p.score_field));   // display transform over the recomputed v3 domains
+  // program IDs + method provenance come from the v3.0.1 registry (keyed by score_field)
+  regv3.programs.forEach(p=>regByField[p.score_field]=p);
+  REGISTRY_SHA=regv3.registry_sha256||'';
+  REGISTRY_OK=!!(REGISTRY_SHA&&programs.filter(p=>p.role!=='sensitivity').every(p=>regByField[p.score_field]&&regByField[p.score_field].program_id));
+  METHOD_VERSION=V3.method_version;H5AD_SHA=V3.source_h5ad_raw_sha256;HF_REV=(meta.source||{}).hf_revision||'';HF_REPO=(meta.source||{}).hf_repo||'';
+  // START EMPTY: no default contrast; the map shows the single-program gradient (default = Naïve-like).
+  buildHeader();buildSelector();buildFilters();buildAxis();buildMethods();buildProgramTimeGrid();
+  applyProgram();
+  resize();
+  var ml=document.getElementById('maploading');if(ml)ml.style.display='none';   // map drawn — drop the grey loading state
+}).catch(e=>{console.error('v3 load failed',e);var ml=document.getElementById('maploading');if(ml)ml.innerHTML='Map unavailable';var s=document.getElementById('lastrun');if(s)s.innerHTML='<b style="color:#C0392B">⚠ v3 load failed — analysis unavailable</b>';var b=document.getElementById('idgenes');if(b)b.disabled=true;});
+
+function buildHeader(){
+  const s=meta.source;
+  const a=document.getElementById('dsSrc');a.textContent='CZI Virtual Cells Platform ↗';a.href='https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq';a.title=s.dataset;
+  document.getElementById('dsHf').href=`https://huggingface.co/datasets/${s.hf_repo}/tree/${s.hf_revision}`;
+}
+function buildSelector(){
+  const sel=document.getElementById('colorby');
+  sel.innerHTML=FAM_ORDER.map(fam=>{
+    const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
+    return `<optgroup label="${FAM_LABEL[fam]}">`+ps.map(p=>`<option value="${p.score_field}"${p.score_field===field?' selected':''}>${p.display_label}</option>`).join('')+`</optgroup>`;
+  }).join('')
+  // activation-adjusted sensitivity lane — surfaced here so the confound is visible where it bites (see Methods)
+  +(()=>{const sp=programs.filter(p=>p.role==='sensitivity');return sp.length?`<optgroup label="${FAM_LABEL.sensitivity} — see Methods">`+sp.map(p=>`<option value="${p.score_field}"${p.score_field===field?' selected':''}>${p.display_label}</option>`).join('')+`</optgroup>`:'';})();
+  sel.onchange=e=>{field=e.target.value;applyProgram();};
+}
+function buildFilters(){
+  const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
+  const ce=document.getElementById('cond');
+  ce.innerHTML=conds.map(k=>`<button data-c="${k}"${k===cond?' class="on"':''}>${CONDLAB[k]||k}</button>`).join('');
+  ce.onclick=e=>{if(!e.target.dataset.c)return;cond=e.target.dataset.c;[...ce.children].forEach(b=>b.classList.toggle('on',b.dataset.c===cond));draw();runPreflightUI();};
+  const donors=['All',...meta.design.donors.slice().sort()];
+  const de=document.getElementById('donorSel');
+  de.innerHTML=donors.map(k=>`<button data-d="${k}"${k===donorSel?' class="on"':''}>${k}</button>`).join('');
+  de.onclick=e=>{if(!e.target.dataset.d)return;donorSel=e.target.dataset.d;[...de.children].forEach(b=>b.classList.toggle('on',b.dataset.d===donorSel));draw();runPreflightUI();};
+}
+// median program score across the timecourse: for each program, the MEDIAN continuous score
+// (panel-minus-control) among cells at Rest / 8h / 48h. Continuous — no threshold, no categorical
+// call, no prevalence. Cell shade tracks the median on a SHARED absolute scale across all programs,
+// so a near-flat program renders flat and the extent of each swing is comparable across rows (1:1,
+// not per-row renormalised). Click a program to colour the map.
+function buildProgramTimeGrid(){
+  const grid=document.getElementById('timeGrid'); if(!grid||!cells.length)return;
+  const conds=[['Rest','Rest'],['Stim8hr','8 h'],['Stim48hr','48 h']];
+  // short labels for this compact grid only (full '-like' names stay in the tooltip + everywhere else)
+  const SHORT={diff_naive_score:'Naive',diff_activated_score:'Activated',diff_memory_score:'Memory/Adhesion',diff_checkpoint_score:'Checkpoint',treg_like_score:'Treg-like',cd4_ctl_like_score:'CD4 CTL-like',th1_like_score:'Th1',th2_like_score:'Th2',th17_like_score:'Th17',tfh_like_score:'Tfh',th9_like_score:'Th9'};
+  // modular nomenclature descriptors — NAMING only, not functional-state calls. RNA compatibility does
+  // not demonstrate exhaustion or cytotoxicity, so those read 'checkpoint-associated' / 'cytotoxic-like'.
+  const MOD={diff_naive_score:'naïve',diff_activated_score:'activated',diff_memory_score:'memory',diff_checkpoint_score:'checkpoint-associated',treg_like_score:'regulatory',cd4_ctl_like_score:'cytotoxic-like',th1_like_score:'type-1 helper',th2_like_score:'type-2 helper',th17_like_score:'type-17 helper',tfh_like_score:'follicular helper',th9_like_score:'type-9 helper'};
+  const progs=programs.filter(p=>p.role!=='sensitivity');
+  // medians come ONLY from the verified v3.0.1 396k full-universe summary (by_program_condition).
+  // There is NO 40k-overlay fallback: if the summary is unavailable the grid is unavailable — it must
+  // never silently change its scientific universe.
+  const bpc=(V3_SUMMARY&&V3_SUMMARY.by_program_condition)||null;
+  if(!bpc){grid.innerHTML='';return;}
+  const med={},degen={};
+  progs.forEach(p=>{degen[p.score_field]=transformFor(p.score_field).status==='degenerate';
+    med[p.score_field]={};conds.forEach(([k])=>{const e=(bpc[p.score_field]||{})[k];med[p.score_field][k]=(e&&typeof e.median==='number')?e.median:null;});});
+  // shared absolute scale across all non-degenerate medians → magnitude comparable across rows
+  let gLo=Infinity,gHi=-Infinity;
+  progs.forEach(p=>{if(degen[p.score_field])return;conds.forEach(([k])=>{const v=med[p.score_field][k];if(v<gLo)gLo=v;if(v>gHi)gHi=v;});});
+  const gSpan=gHi>gLo?gHi-gLo:1;
+  let html='<div></div>'+conds.map(([,l])=>`<div class="ph">${l}</div>`).join('')+`<a class="ph prmodh" href="${PAPERS.masopust.url}" target="_blank" rel="noopener" title="Masopust et al. · Guidelines for T cell nomenclature">Modular definition ↗</a>`,anyND=false;
+  progs.forEach(p=>{
+    const nd=degen[p.score_field]; if(nd)anyND=true;
+    html+=`<div class="plbl" data-f="${p.score_field}" title="${p.display_label}">${SHORT[p.score_field]||p.display_label}</div>`;
+    conds.forEach(([k])=>{
+      if(nd){html+='<div class="pc nd">ND</div>';return;}
+      const v=med[p.score_field][k],i=(v-gLo)/gSpan;
+      html+=`<div class="pc" style="background:${ramp(i)};color:${i>0.55?'#1E1B16':'#fff'}" title="median ${v.toFixed(3)}">${v.toFixed(2)}</div>`;});
+    html+=`<div class="prmod">${MOD[p.score_field]||'—'}</div>`;
+  });
+  if(anyND)html+='<div class="ndkey">ND — not detected in this dataset</div>';
+  grid.innerHTML=html;
+  grid.querySelectorAll('.plbl').forEach(el=>el.onclick=()=>{field=el.dataset.f;const cs=document.getElementById('colorby');if(cs)cs.value=field;clearContrast();applyProgram();draw();});
+}
+function buildAxis(){
+  // Analysis donor scope is fixed to all four donors (donor_scope="all"); each axis carries its own condition.
+  // From/To program options lead with an empty placeholder — the contrast is inactive until BOTH are chosen.
+  const progOpts='<option value="">— program —</option>'+programs.filter(p=>p.role!=='sensitivity').map(p=>`<option value="${p.score_field}">${p.display_label}</option>`).join('');
+  // per-axis condition: "All" (pooled across the timecourse) + real timepoints. Both poles "All" runs one
+  // pooled screen; a real timepoint runs that timepoint; differing timepoints = display-only.
+  const conds=['All',...meta.design.conditions.slice().sort((a,b)=>(COND_ORDER[a]??9)-(COND_ORDER[b]??9))];
+  const condOpts=conds.map(k=>`<option value="${k}">${CONDLAB[k]||k}</option>`).join('');
+  document.querySelectorAll('.axsel.prog').forEach(s=>s.innerHTML=progOpts);
+  document.querySelectorAll('.axsel.cond').forEach(s=>s.innerHTML=condOpts);
+  // Stage 1 emits the two ordered arms (A, B) only — no combined objective is chosen or serialized here.
+  // Any away-from-A decomposition / Perturb2State support belongs to Stage 2, not this selection.
+  document.querySelectorAll('.axsel.prog').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.field=e.target.value;updateAxisMeta();});
+  document.querySelectorAll('.axsel.cond').forEach(s=>s.onchange=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.condition=e.target.value;updateAxisMeta();});
+  document.querySelectorAll('.axdir').forEach(b=>b.onclick=e=>{const ax=e.target.dataset.ax==='A'?axisA:axisB;ax.direction=ax.direction==='high'?'low':'high';setAxdir(e.target,ax.direction);updateAxisMeta();});
+  document.getElementById('ctclear').onclick=clearContrast;
+  document.getElementById('idgenes').onclick=onIdentifyGenes;
+  const sk=document.getElementById('skewToggle');
+  if(sk)sk.onclick=()=>{const o=document.querySelector('.ctbar').classList.toggle('open');sk.setAttribute('aria-expanded',o);sk.textContent='Skew '+(o?'▴':'▾');};
+  syncAxisUI();syncObjTitle();
+  updateAxisMeta();
+}
+// keep the objective control's own tooltip in sync with the selected option
+function syncObjTitle(){const ob=document.getElementById('objectiveSel');if(!ob)return;const o=ob.options[ob.selectedIndex];ob.title=o?o.title:'';}
+// direction toggle text + colour (high = red, low = blue)
+function setAxdir(b,dir){b.textContent=dir;b.classList.toggle('hi',dir==='high');b.classList.toggle('lo',dir==='low');}
+// reflect the axisA/axisB state back into the bar's selects (empty field → placeholder) + toggles + conditions
+function syncAxisUI(){
+  document.querySelectorAll('.axsel.prog').forEach(s=>s.value=(s.dataset.ax==='A'?axisA.field:axisB.field)||'');
+  document.querySelectorAll('.axsel.cond').forEach(s=>s.value=s.dataset.ax==='A'?axisA.condition:axisB.condition);
+  document.querySelectorAll('.axdir').forEach(b=>setAxdir(b,b.dataset.ax==='A'?axisA.direction:axisB.direction));
+}
+// Clear → reset A and B to the empty placeholder state → contrastActive() false → single-program gradient
+function clearContrast(){
+  axisA={field:null,condition:'All',direction:'high',donor:'All'};
+  axisB={field:null,condition:'All',direction:'high',donor:'All'};
+  syncAxisUI();updateAxisMeta();
+}
+// friendly condition (Rest / 8 hr / 48 hr / All times) + donor only if not "All"
+function scopeLabel(ax){
+  const cl2=ax.condition==='All'?'All times':(CONDLAB[ax.condition]||ax.condition);
+  return (ax.donor&&ax.donor!=='All')?cl2+' · '+ax.donor:cl2;
+}
+function selectionObj(){
+  const one=ax=>({score_field:ax.field,condition:ax.condition,direction:ax.direction,donor:ax.donor,method_version:meta.method_version});
+  return {A:one(axisA),B:one(axisB)};
+}
+function updateAxisMeta(){
+  window.__stage01Selection=selectionObj();
+  draw();
+  runPreflightUI();
+}
+// ── Stage-1 selection contract (spot.stage01_selection.v3) ─────────────────────
+// canonical JSON: recursively SORTED keys + compact (",",":") separators — byte-identical to
+// python json.dumps(obj,sort_keys=True,separators=(",",":")) for this ASCII content.
+function canonicalJSON(v){
+  if(v===null||typeof v!=='object')return JSON.stringify(v);
+  if(Array.isArray(v))return '['+v.map(canonicalJSON).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonicalJSON(v[k])).join(',')+'}';
+}
+// Pure-JS SHA-256 fallback. crypto.subtle exists only in secure contexts (HTTPS or localhost); served over
+// plain HTTP on a Tailscale IP it is undefined, so we hash the same UTF-8 bytes in-page. Validated
+// byte-identical to crypto.subtle (known vectors + the served v3 artifacts). Preserves the verified-load
+// guarantee off-localhost.
+function _sha256utf8(s){return unescape(encodeURIComponent(s));}
+function _sha256js(ascii){
+  function R(v,a){return (v>>>a)|(v<<(32-a));}
+  const mp=Math.pow,mw=mp(2,32);let i,j,result='',words=[];
+  const bitLen=ascii.length*8;let hash=[],k=[];const isC={};
+  for(let c=2,pc=0;pc<64;c++){if(!isC[c]){for(i=0;i<313;i+=c)isC[i]=c;hash[pc]=(mp(c,.5)*mw)|0;k[pc++]=(mp(c,1/3)*mw)|0;}}
+  ascii+='\x80';while(ascii.length%64-56)ascii+='\x00';
+  for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return null;words[i>>2]|=j<<((3-i)%4)*8;}
+  words[words.length]=((bitLen/mw)|0);words[words.length]=(bitLen);
+  for(j=0;j<words.length;){let w=words.slice(j,j+=16),oldHash=hash;hash=hash.slice(0,8);
+    for(i=0;i<64;i++){const w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4];
+      const t1=hash[7]+(R(e,6)^R(e,11)^R(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(R(w15,7)^R(w15,18)^(w15>>>3))+w[i-7]+(R(w2,17)^R(w2,19)^(w2>>>10)))|0);
+      const t2=(R(a,2)^R(a,13)^R(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(t1+t2)|0].concat(hash);hash[4]=(hash[4]+t1)|0;}
+    for(i=0;i<8;i++)hash[i]=(hash[i]+oldHash[i])|0;}
+  for(i=0;i<8;i++)for(j=3;j+1;j--){const b=(hash[i]>>(j*8))&255;result+=((b<16)?0:'')+b.toString(16);}
+  return result;
+}
+async function sha256hex(str){
+  if(typeof crypto!=='undefined'&&crypto.subtle){
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  return _sha256js(_sha256utf8(str));
+}
+// ── spot.stage01_selection.v3 emission (mirrors stage2_bridge/emit_selection_contract.build_contract) ──
+// The browser emits the SAME v3 contract Stage-2 verifies (external review S1-B2): canonical_content binds
+// the scorer VIEW hash (registry_scorer_view_sha256 = what selection_id binds), NOT the primary-registry
+// hashes. All selection-invariant constants — the view binding, per-program pole projection, estimator
+// registry, and the trust/provenance/historical bindings — come from the served bundle
+// stage01_selection_bundle.json (generated by the Python emitter); the browser fills A/B/conditions and
+// recomputes selection_id + the full-contract hash. canonical_content carries no floats, so the two agree
+// byte-for-byte.
+function _normConds(cs){const seen={},o=[];cs.forEach(c=>{if(!seen[c]){seen[c]=1;o.push(c);}});return {ordered:o,mode:o.length===1?'within_condition':'temporal_cross_condition'};}
+function _poleV3(pid,direction){const p=(BUNDLE.poles||{})[pid]||{};return {program_id:pid,direction:direction,effect_projection_status:p.effect_projection_status,n_measured:p.n_measured,n_panel_in_effect_universe:p.n_panel_in_effect_universe,n_control_in_effect_universe:p.n_control_in_effect_universe,reason_codes:(p.reason_codes||[]).slice()};}
+function _estBinding(mode,nConds){const id=BUNDLE.estimator_for_mode[mode];const present=(BUNDLE.implemented_estimators||[]).indexOf(id)>=0;const status=present?'available':'not_implemented';let b;if(present&&BUNDLE.estimator_registry&&BUNDLE.estimator_registry[id]){b=Object.assign({},BUNDLE.estimator_registry[id]);b.status=status;b.n_conditions=nConds;}else{b={estimator_id:id,analysis_mode:mode,n_conditions:nConds,status:status};}return {id:id,status:status,binding:b};}
+// frozen (role, pole) -> desired_change (ROUND4_ADDENDUM c4773562; mirrors arm_keys.desired_change). Reusable
+// arms key on desired_change, NEVER pole high|low: away_from_A(high)=decrease, away_from_A(low)=increase,
+// toward_B(high)=increase, toward_B(low)=decrease.
+function _desiredChange(role,direction){return role==='toward_B'?(direction==='high'?'increase':'decrease'):(direction==='high'?'decrease':'increase');}
+// one INDEPENDENT reusable per-program arm reference (mirrors emit_selection_contract._arm_ref). Keyed by
+// DESIRED CHANGE; pole_direction kept as selection metadata only. away_from_A@conditions[0], toward_B@[-1];
+// a temporal selection also carries the (from,to) key. UI joins the two arms with NO combined score.
+function _armRef(role,pid,direction,condition,mode,ordered){const dc=_desiredChange(role,direction);const r={role:role,program_id:pid,pole_direction:direction,desired_change:dc,condition:condition,direct_arm_key:'direct|'+pid+'|'+dc+'|'+condition,pathway_arm_key_base:'pathway|'+pid+'|'+dc+'|'+condition};if(mode==='temporal_cross_condition')r.temporal_arm_key='temporal|'+pid+'|'+dc+'|'+ordered[0]+'|'+ordered[ordered.length-1];return r;}
+// the biological body selection_id hashes — A/B poles + mode + conditions + the scorer-VIEW binding
+function canonicalContent(){
+  const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{},nc=_normConds([axisA.condition,axisB.condition]);
+  return {A:{program_id:A.program_id,score_field:axisA.field,direction:axisA.direction},
+          B:{program_id:B.program_id,score_field:axisB.field,direction:axisB.direction},
+          analysis_mode:nc.mode,combined_objective:null,conditions:nc.ordered,
+          dataset_id:BUNDLE.dataset_id,donor_scope:BUNDLE.donor_scope,effect_universe_id:BUNDLE.effect_universe_id,
+          poles_separate:true,registry_scorer_view_sha256:BUNDLE.registry_scorer_view_sha256,
+          source_h5ad_sha256:BUNDLE.source_h5ad_sha256,source_hf_revision:BUNDLE.source_hf_revision,
+          stage1_method_version:BUNDLE.stage1_method_version};
+}
+// build the full v3 contract + both hashes (selection_id over canonical_content; full over the whole body)
+async function computeContrast(){
+  const A=regByField[axisA.field]||{},B=regByField[axisB.field]||{},nc=_normConds([axisA.condition,axisB.condition]);
+  const est=_estBinding(nc.mode,nc.ordered.length);
+  const pA=_poleV3(A.program_id,axisA.direction),pB=_poleV3(B.program_id,axisB.direction);
+  const aAv=pA.effect_projection_status==='available',bAv=pB.effect_projection_status==='available';
+  let exec; if(nc.mode==='temporal_cross_condition'&&est.status!=='available')exec='awaiting_estimator';
+  else if(aAv&&bAv)exec='ready'; else exec='refused';
+  const cc=canonicalContent(),selFull=await sha256hex(canonicalJSON(cc));
+  // question_id: BIOLOGY-ONLY ordered-question identity (poles' program/direction/condition + analysis_mode;
+  // NO method/input binding), stable across method/registry/source revisions. Mirrors emit_selection_contract.
+  const qc={A:{program_id:A.program_id,direction:axisA.direction,condition:nc.ordered[0]},B:{program_id:B.program_id,direction:axisB.direction,condition:nc.ordered[nc.ordered.length-1]},analysis_mode:nc.mode};
+  const qid=(await sha256hex(canonicalJSON(qc))).slice(0,16);
+  const contract={schema_version:'spot.stage01_selection.v3',selection_origin:'user_selected',
+    execution_status:exec,analysis_mode:nc.mode,estimator_id:est.id,estimator_status:est.status,estimator:est.binding,
+    selection_id:selFull.slice(0,16),selection_full_sha256:selFull,question_id:qid,canonical_content:cc,
+    poles:{A:pA,B:pB},
+    arms:{away_from_A:_armRef('away_from_A',A.program_id,axisA.direction,nc.ordered[0],nc.mode,nc.ordered),toward_B:_armRef('toward_B',B.program_id,axisB.direction,nc.ordered[nc.ordered.length-1],nc.mode,nc.ordered)},
+    trust_bindings:BUNDLE.trust_bindings,provenance_bindings:BUNDLE.provenance_bindings,
+    historical_validation_provenance:BUNDLE.historical_validation_provenance};
+  const body=Object.assign({},contract);delete body.full_contract_content_sha256;
+  contract.full_contract_content_sha256=await sha256hex(canonicalJSON(body));
+  return {contract:contract,canonical_content:cc,contract_id:contract.selection_id,selection_id:contract.selection_id,canonical_contrast_sha256:selFull};
+}
+// verify the v3.0.1 bindings are present + internally consistent (cross-bound through stage01_current.json)
+function hashesOk(){return !!(V3_OK&&V3&&BUNDLE&&METHOD_VERSION===V3.method_version&&REGISTRY_SHA===(V3.registry||{}).registry_sha256&&H5AD_SHA===V3.source_h5ad_raw_sha256);}
+// RESEARCH-only readiness gate — Identify-genes is enabled ONLY when this returns ok:true.
+// It decides research readiness from base portability + a concrete shared timepoint. It does NOT
+// consult the frozen PRODUCTION-selectability flag (that governs production promotion only).
+// the temporal estimator is executable only when it is implemented + bound in the served bundle;
+// otherwise a cross-condition selection is awaiting_estimator (button disabled). Mirrors emit_selection_contract.
+function temporalEstimatorAvailable(){
+  if(!BUNDLE)return false;
+  const id=(BUNDLE.estimator_for_mode||{}).temporal_cross_condition||'temporal_cross_condition_v1';
+  return (BUNDLE.implemented_estimators||[]).indexOf(id)>=0;
+}
+// preflight → {ok, sev, reason}. GENERIC selector: any two primary programs, independent directions, and
+// the SAME timepoint (within_condition) OR DIFFERENT timepoints (temporal_cross_condition). sev drives the
+// single #ctstate box: 'err' (hard fault) · 'warn' (correctable/advisory) · 'ok' (ready) · '' (hidden).
+function preflight(){
+  if(!REGISTRY_OK)return{ok:false,sev:'warn',reason:'Program registry unavailable — cannot resolve program IDs'};
+  if(!axisA.field||!axisB.field)return{ok:false,sev:'',reason:''};                 // partial selection: no advisory line yet
+  const A=regByField[axisA.field],B=regByField[axisB.field];
+  if(!A||!B)return{ok:false,sev:'warn',reason:'Program registry incomplete for a selected axis'};
+  if(A.role==='sensitivity'||B.role==='sensitivity')return{ok:false,sev:'warn',reason:'A sensitivity field cannot be a contrast axis'};
+  // POLE IDENTITY = (program, direction, condition). Refuse ONLY when all three are identical — same
+  // program+direction at the SAME timepoint (a true self-comparison). Same program+direction at DIFFERENT
+  // timepoints is a VALID temporal comparison (condition disambiguates the poles) and falls through to the
+  // cross-condition route below. Mirrors the emitter (objective_incompatible_same_pole fires only within-condition).
+  if(A.program_id===B.program_id&&axisA.direction===axisB.direction&&axisA.condition===axisB.condition)
+    return{ok:false,sev:'err',reason:'From and To are identical\nPick distinct programs, opposite directions, or different timepoints'};
+  if(axisA.condition==='All'||axisB.condition==='All')return{ok:false,sev:'warn',reason:'Pick an analysis timepoint (Rest / Stim8hr / Stim48hr)\nPooled “All” is display only'};   // needs a concrete timepoint per axis
+  if(!BASE_PORTABLE[A.program_id])return{ok:false,sev:'warn',reason:stage2Reason(A)};          // Stage-2 base portability (A) from frozen validation: excludes Th9 / nonportable
+  if(!BASE_PORTABLE[B.program_id])return{ok:false,sev:'warn',reason:stage2Reason(B)};          // Stage-2 base portability (B) from frozen validation
+  if(!hashesOk())return{ok:false,sev:'warn',reason:'Unknown dataset or method hash — cannot build a verifiable contrast'};
+  // DIFFERENT timepoints = temporal cross-condition: READY when the temporal estimator is available (a v3
+  // temporal_cross_condition contract materializes), else awaiting_estimator.
+  if(axisA.condition!==axisB.condition){
+    if(!temporalEstimatorAvailable())return{ok:false,sev:'warn',reason:'Cross-condition analysis awaits the temporal estimator'};
+    return{ok:true,sev:'ok',reason:''};
+  }
+  return{ok:true,sev:'ok',reason:''};   // within-condition ready
+}
+// base-portability reason (from frozen validation): sensitivity lanes are display-only; a nonportable
+// primary (Th9) has no panel genes in the effect universe.
+function stage2Reason(p){
+  const lbl=(progByField[p.score_field]||{}).display_label||p.program_id||p.score_field;   // Tier-2 display label lives in the seed, not the registry
+  if(p.role==='sensitivity')return `${lbl} is display-only`;
+  return `${lbl} has no panel genes in the effect universe`;
+}
+function condShort(k){return k==='All'?'All times':(CONDLAB[k]||k);}
+// reflect preflight into the button + inline functional state (no banner); kick async contrast_id compute
+function runPreflightUI(){
+  const btn=document.getElementById('idgenes');if(!btn)return;
+  const pf=preflight(),pend=document.getElementById('idpend'),st=document.getElementById('ctstate'),err=document.getElementById('ctErr'),seq=++pfSeq;
+  // §4.3 display-vs-analysis: the rail display filter excludes the (shared, single) contrast condition
+  const dispMismatch=contrastActive()&&axisA.condition!=='All'&&axisA.condition===axisB.condition&&cond!=='All'&&cond!==axisA.condition;
+  if(!pf.ok){
+    curContrastId=null;btn.disabled=true;btn.classList.remove('ready');btn.title=pf.reason;
+    pend.style.display='none';pend.textContent='';
+    err.textContent='';   // legacy #ctErr retired — every non-ready state renders in the single #ctstate box
+    // one fixed status box: severity from preflight drives colour + leading icon (! err / ⊘ warn); '' = hidden
+    st.className='ctstate'+(pf.sev?' '+pf.sev:'');st.textContent=pf.reason||'';
+    return;
+  }
+  err.textContent='';
+  btn.disabled=false;btn.classList.add('ready');btn.title='ID program skew genes for this contrast';
+  computeContrast().then(r=>{if(seq!==pfSeq)return;curContrastId=r.selection_id;pend.style.display='';pend.textContent=r.selection_id.slice(0,8);
+    if(dispMismatch){st.className='ctstate warn';st.textContent='Display filter excludes the contrast condition (analysis uses '+condShort(axisA.condition)+')';}
+    else{st.className='ctstate ok';st.textContent='Contrast ready · '+r.selection_id;}
+  });
+}
+// The emitted artifact IS the full spot.stage01_selection.v3 contract from computeContrast() (external
+// review S1-B2). The legacy spot.stage01_selection.v1 builder is retired — Stage-2 now receives the reviewed
+// v3 contract with the scorer-VIEW-bound selection_id, typed execution/estimator routing, and poles.
+const SELECTION_LS_KEY='spot.stage01_selection.v3';   // one versioned localStorage key
+// Identify-genes → build + store the v3 selection contract, expose it, and hand off to Stage 2.
+async function onIdentifyGenes(){
+  const btn=document.getElementById('idgenes');if(btn.disabled||!preflight().ok||!BUNDLE)return;   // readiness + bundle required
+  const art=(await computeContrast()).contract;                                           // spot.stage01_selection.v3
+  window.__stage01SelectionArtifact=art;                                                  // browser-verifiable
+  try{localStorage.setItem(SELECTION_LS_KEY,JSON.stringify(art));}catch(e){}
+  try{sessionStorage.setItem(SELECTION_LS_KEY,JSON.stringify(art));}catch(e){}
+  const st=document.getElementById('ctstate');st.className='ctstate ok';
+  st.textContent='Selection ready · '+art.selection_id+' → Stage 2';
+  // hand off to the Stage-2/3/4 shell (separate app); the shell reads the versioned selection key
+  window.location.assign('targets.html');
+}
+// shrink #lastrun's font (10px → 7px floor) until its single line fits under the action buttons
+// (spans the Identify-button's left edge to the Clear-button's right edge)
+function fitLastRun(){
+  const el=document.getElementById('lastrun');if(!el||!el.textContent)return;
+  const idb=document.getElementById('idgenes'),clr=document.getElementById('ctclear');if(!idb||!clr)return;
+  el.style.width='0px';                 // don't let #lastrun drive the panel width while we measure it
+  const avail=Math.round(clr.getBoundingClientRect().right-idb.getBoundingClientRect().left); // Identify-left → Clear-right
+  el.style.fontSize='10px';el.style.width=avail+'px';
+  let fs=10;
+  while(el.scrollWidth>avail&&fs>7){fs-=0.5;el.style.fontSize=fs+'px';}
+}
+function buildMethods(){
+  document.getElementById('lastrun').innerHTML=meta.emitted_at?('Map generated · <b>'+fmtLocal(meta.emitted_at)+'</b>'):'';
+  requestAnimationFrame(fitLastRun);
+  document.getElementById('emittedAt').textContent=fmtLocal(meta.emitted_at)||'—';
+  const emb=meta.embedding||{};
+  document.getElementById('pEmbed').innerHTML=`${emb.method||'scVI embedding then UMAP'}. Clustering: ${emb.clustering||'Leiden'}. ${emb.cluster_ids||'Numeric cluster ids are retained as technical provenance only — not named biological states.'}`;
+  document.getElementById('pScope').textContent=meta.methods_and_scope;
+  const ps=document.getElementById('pProdStatus');
+  if(ps){
+    const sr=(CURRENT&&CURRENT.selection_routing)||{},mdr=(CURRENT&&CURRENT.measurement_display_release)||{};
+    const facts=[['Method',METHOD_VERSION||'—'],
+                 ['Selection schema',sr.schema||'—'],
+                 ['Within-condition estimator',sr.within_condition_estimator_status||'—'],
+                 ['Temporal estimator',sr.temporal_cross_condition_estimator_status||'—'],
+                 ['Base-portable programs',(mdr.n_base_portable!=null?mdr.n_base_portable:'—')],
+                 ['Marker diagnostics',MARKER_DIAG?'v2 · not an eligibility gate':'—']];
+    ps.innerHTML=facts.map(([k,v])=>`${k}: <b style="color:var(--ink)">${v}</b>`).join('<br>');
+  }
+  document.getElementById('paperMarson').href=PAPERS.marson.url;
+  document.getElementById('paperMasopust').href=PAPERS.masopust.url;
+}
+
+// selected-program → legend, colour key, rail card, title
+function applyProgram(){
+  const p=progByField[field];
+  // colour key: a viridis gradient normally; a flat neutral + note when the field is too sparse to shade
+  const degen=transformFor(field).status==='degenerate';
+  const cbar=document.querySelector('.cbar'),grad=document.getElementById('cbGrad');
+  cbar.classList.toggle('degen',degen);
+  grad.style.background=degen?DEGEN_CSS:VIR_CSS;
+  // "grey = no data" only when the field actually has no shadeable data (degenerate, e.g. Th9);
+  // for normal fully-scored programs there is no grey, so the note is hidden.
+  const cbNote=document.getElementById('cbNote'),isSens=p.role==='sensitivity';
+  cbNote.textContent=degen?'Too sparse to shade':(isSens?'Activation-adjusted sensitivity lane — see Methods':'');
+  cbNote.style.display=(degen||isSens)?'':'none';
+  const pg=document.getElementById('pcGenes');pg.textContent=p.panel_genes.join('  ·  ');requestAnimationFrame(fitMarkers);
+  draw();
+}
+// scale the marker-gene line down (11px → 6px floor) until it fits on one line within the rail width
+function fitMarkers(){
+  const el=document.getElementById('pcGenes');if(!el||!el.textContent)return;
+  el.style.fontSize='11px';let fs=11;
+  while(el.scrollWidth>el.clientWidth&&fs>6){fs-=0.5;el.style.fontSize=fs+'px';}
+}
+
+function pct(arr,p){const a=arr.slice().sort((x,y)=>x-y);return a[cl(Math.floor(a.length*p),0,a.length-1)];}
+function resize(){const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;x.setTransform(2,0,0,2,0,0);
+  const W=r.width,H=r.height,pad=54,top=58,bot=72;
+  const xs=cells.map(c=>c.x),ys=cells.map(c=>c.y);
+  const xmn=pct(xs,.015),xmx=pct(xs,.985),ymn=pct(ys,.015),ymx=pct(ys,.985);
+  const s=Math.min((W-2*pad)/(xmx-xmn),(H-top-bot)/(ymx-ymn))*0.83;  // slightly zoomed-out fit (~10% looser than 0.92) so the cloud isn't tight on load
+  // TOP-ANCHORED: cloud top sits at y=top (small margin); any vertical slack falls below it
+  sx=s;sy=s;ox=(W-(xmx-xmn)*s)/2-xmn*s;oy=top-ymn*s;
+  resetView();}                    // resize recomputes the fit AND returns to the top-anchored fit view
+window.addEventListener('resize',resize);
+window.addEventListener('resize',fitLastRun);
+// data → screen (CSS px): fit transform, then the pan/zoom view transform on top
+function px(c){return[(c.x*sx+ox)*vk+vtx,(c.y*sy+oy)*vk+vty];}
+// ── pan/zoom view transform ──
+function resetView(){vk=1;vtx=0;vty=0;draw();}   // back to the default top-anchored fit
+// zoom by `factor` about screen point (mx,my) so the data under the cursor stays put
+function zoomAt(factor,mx,my){const nk=cl(vk*factor,VK_MIN,VK_MAX);if(nk===vk)return;
+  vtx=mx-(mx-vtx)*(nk/vk);vty=my-(my-vty)*(nk/vk);vk=nk;draw();}
+function zoomCenter(factor){const r=c.getBoundingClientRect();zoomAt(factor,r.width/2,r.height/2);}
+function vis(c){return (cond==='All'||c.condition===cond)&&(donorSel==='All'||c.donor===donorSel);}
+
+// A/B contrast: active once the two axes differ in ANY dimension — program field, condition,
+// direction, or donor. Identical in all four → single-program gradient.
+const ABHUE_A=[45,124,142], ABHUE_B=[214,152,52];   // A pole (teal #2D7C8E), B pole (amber #D69834)
+function contrastActive(){
+  if(!axisA.field||!axisB.field)return false;
+  return axisA.field!==axisB.field||axisA.condition!==axisB.condition||
+         axisA.direction!==axisB.direction||axisA.donor!==axisB.donor;
+}
+// a cell's continuous strength on an axis pole (0..1): its frozen-domain score, flipped for
+// 'low', zeroed if it falls outside the axis's own condition/donor scope. No threshold, no argmax.
+function pole(c0,ax){
+  if(ax.condition!=='All'&&c0.condition!==ax.condition)return 0;
+  if(ax.donor!=='All'&&c0.donor!==ax.donor)return 0;
+  const tf=transformFor(ax.field);
+  if(tf.status==='degenerate')return 0;        // a too-sparse axis carries no signal → contributes nothing
+  const t=normScore(c0[ax.field],tf);
+  if(t==null)return 0;
+  return ax.direction==='low'?1-t:t;
+}
+// continuous bivariate blend: hue mixes A↔B by relative score (co-high → visibly mixed), opacity ∝ max score
+function blendAB(pa,pb){
+  const pm=Math.max(pa,pb);
+  if(pm<0.15)return {css:'rgb(196,192,184)',al:.06};              // low on both → neutral fade
+  const tot=(pa+pb)||1,wa=pa/tot,wb=pb/tot;
+  const r=Math.round(ABHUE_A[0]*wa+ABHUE_B[0]*wb),
+        g=Math.round(ABHUE_A[1]*wa+ABHUE_B[1]*wb),
+        b=Math.round(ABHUE_A[2]*wa+ABHUE_B[2]*wb);
+  return {css:`rgb(${r},${g},${b})`,al:.14+.72*pm};
+}
+function draw(){if(sx==null)return;const W=c.width/2,H=c.height/2;x.clearRect(0,0,W,H);
+  const contrast=contrastActive();
+  // rail swaps between the single-program key and the A/B contrast panel (Color-by hidden in contrast)
+  document.getElementById('singleProg').style.display=contrast?'none':'block';
+  document.getElementById('contrastPanel').style.display=contrast?'block':'none';
+  if(contrast){updateContrastRail();drawContrast();return;}
+  hideSkewLine();hideAnchorLabels();
+  const tf=transformFor(field),degen=tf.status==='degenerate';
+  for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);
+    const v=c0[field],missing=v==null||isNaN(v);
+    if(missing){x.fillStyle='rgb(200,197,190)';x.globalAlpha=.35;}
+    else if(degen){x.fillStyle=DEGEN_CSS;x.globalAlpha=.5;}   // too sparse to shade → flat neutral, never max-intensity
+    else{x.fillStyle=ramp(normScore(v,tf));x.globalAlpha=.82;}
+    const rad=i===hover?4.4:2.5;
+    x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
+    if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
+  }
+  x.globalAlpha=1;
+}
+// contrast render: every cell's hue is a continuous A↔B blend weighted by its two scores
+// (co-high cells mix both colours); opacity ∝ max score; low-on-both faded. No A-or-B pick.
+function drawContrast(){
+  let axmx=0,axmy=0,awa=0,bxmx=0,bxmy=0,bwa=0;
+  for(let pass=0;pass<2;pass++){                              // faded first, prominent on top
+    for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;
+      const pa=pole(c0,axisA),pb=pole(c0,axisB),pm=Math.max(pa,pb),prominent=pm>=0.5;
+      if((pass===0)===prominent)continue;
+      const[X,Y]=px(c0);const mix=blendAB(pa,pb);
+      x.fillStyle=mix.css;x.globalAlpha=mix.al;
+      const rad=i===hover?4.6:(prominent?2.9:2.3);
+      x.beginPath();x.arc(X,Y,rad,0,6.283);x.fill();
+      if(i===hover){x.globalAlpha=1;x.lineWidth=1.4;x.strokeStyle='#1E1B16';x.stroke();}
+      // anchor weight = pole^3 so each end pulls toward its program's PEAK (co-located
+      // programs still separate enough to show a belt); opacity above stays linear in score.
+      if(pa>0){const w=pa*pa*pa;axmx+=X*w;axmy+=Y*w;awa+=w;}
+      if(pb>0){const w=pb*pb*pb;bxmx+=X*w;bxmy+=Y*w;bwa+=w;}
+    }
+  }
+  x.globalAlpha=1;
+  const lblText=ax=>`${progByField[ax.field].display_label} ${ax.direction} · ${scopeLabel(ax)}`;
+  if(awa>0&&bwa>0){const A={X:axmx/awa,Y:axmy/awa},B={X:bxmx/bwa,Y:bxmy/bwa};
+    if(Math.hypot(B.X-A.X,B.Y-A.Y)>22)updateSkewLine(A,B);else hideSkewLine();
+    placeAnchorLabel('lblA',A,ABHUE_A,lblText(axisA));
+    placeAnchorLabel('lblB',B,ABHUE_B,lblText(axisB));
+    deCollideLabels('lblA','lblB');
+  } else {hideSkewLine();hideAnchorLabels();}
+}
+// right-rail contrast panel: the active A and B fields with swatch, direction and scope, plus the blend key
+function updateContrastRail(){
+  const rowHTML=(ax,hue,tag)=>{
+    const p=progByField[ax.field],degen=transformFor(ax.field).status==='degenerate';
+    return `<span class="crtag" style="background:rgb(${hue})">${tag}</span>
+      <div class="crmeta"><span class="crlab">${p.display_label}</span><span class="crsub">${ax.direction} · ${scopeLabel(ax)}${degen?' · too sparse':''}</span></div>`;
+  };
+  document.getElementById('crA').innerHTML=rowHTML(axisA,ABHUE_A,'From');
+  document.getElementById('crB').innerHTML=rowHTML(axisB,ABHUE_B,'To');
+  document.getElementById('crGrad').style.background=`linear-gradient(90deg,rgb(${ABHUE_A}),${blendAB(1,1).css},rgb(${ABHUE_B}))`;
+}
+// hover/cell-detail selection block: one row per program in contrast (both A and B + blended swatch), else the single field
+function abBlendSwatch(c0){return blendAB(pole(c0,axisA),pole(c0,axisB)).css;}
+function axValRow(c0,ax,tag){
+  const p=progByField[ax.field];
+  return `<div class="psel" title="${ax.field} · ${ax.direction}"><span class="dot" style="background:${swatchFor(ax.field,c0[ax.field])}"></span><span class="pl">${tag} · ${p.display_label}</span><b class="pv">${sv(c0[ax.field])}</b></div>
+    <div class="pscope">${ax.direction} · ${scopeLabel(ax)}</div>`;
+}
+function selBlockHTML(c0){
+  if(contrastActive())
+    return `<div class="psel"><span class="dot" style="background:${abBlendSwatch(c0)}"></span><span class="pl">From ↔ To blend</span></div>`
+      +axValRow(c0,axisA,'From')+axValRow(c0,axisB,'To');
+  const p=progByField[field];
+  return `<div class="psel" title="${p.score_field} · ${p.scoring_method}"><span class="dot" style="background:${swatchFor(field,c0[field])}"></span><span class="pl">${p.display_label}</span><b class="pv">${sv(c0[field])}</b></div>`;
+}
+function placeAnchorLabel(id,P,hue,text){const el=document.getElementById(id);el.textContent=text;el.style.color=`rgb(${hue})`;el.style.borderColor=`rgb(${hue})`;el.style.left=P.X+'px';el.style.top=P.Y+'px';el.style.display='block';}
+// when the two program peaks are close, their on-plot labels overlap — push them apart vertically to clear
+function deCollideLabels(idA,idB){
+  const a=document.getElementById(idA),b=document.getElementById(idB);
+  if(a.style.display==='none'||b.style.display==='none')return;
+  const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+  const ox=Math.min(ra.right,rb.right)-Math.max(ra.left,rb.left);
+  const oy=Math.min(ra.bottom,rb.bottom)-Math.max(ra.top,rb.top);
+  if(ox>0&&oy>0){                              // boxes overlap → separate vertically with a small gap
+    const shift=oy/2+5, aTop=parseFloat(a.style.top), bTop=parseFloat(b.style.top);
+    if(aTop<=bTop){a.style.top=(aTop-shift)+'px';b.style.top=(bTop+shift)+'px';}
+    else{a.style.top=(aTop+shift)+'px';b.style.top=(bTop-shift)+'px';}
+  }
+}
+function hideAnchorLabels(){document.getElementById('lblA').style.display='none';document.getElementById('lblB').style.display='none';}
+// animated conveyor belt of chevrons from anchor a to anchor b (screen px), flowing a→b
+function updateSkewLine(a,b){const svg=document.getElementById('skewline');
+  const ang=Math.atan2(b.Y-a.Y,b.X-a.X),ux=Math.cos(ang),uy=Math.sin(ang);
+  const ax=a.X+ux*20,ay=a.Y+uy*20,bx=b.X-ux*20,by=b.Y-uy*20,L=Math.hypot(bx-ax,by-ay);
+  const ln=svg.querySelector('.skl');ln.setAttribute('x1',ax);ln.setAttribute('y1',ay);ln.setAttribute('x2',bx);ln.setAttribute('y2',by);
+  // fade-mask endpoints along the belt so chevrons fade IN at the start and OUT at the end
+  const g=svg.querySelector('#beltGrad');g.setAttribute('x1',ax);g.setAttribute('y1',ay);g.setAttribute('x2',bx);g.setAttribute('y2',by);
+  const s=8,gap=21,cx=Math.cos(ang),cy=Math.sin(ang);let chev='';
+  for(let dd=0;dd<=L+gap;dd+=gap){const p0x=ax+ux*dd,p0y=ay+uy*dd;
+    const tx=p0x+cx*s,ty=p0y+cy*s,w1x=p0x+Math.cos(ang+2.4)*s,w1y=p0y+Math.sin(ang+2.4)*s,w2x=p0x+Math.cos(ang-2.4)*s,w2y=p0y+Math.sin(ang-2.4)*s;
+    chev+=`<polyline points="${w1x.toFixed(1)},${w1y.toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)} ${w2x.toFixed(1)},${w2y.toFixed(1)}"/>`;}
+  const belt=svg.querySelector('.belt');belt.innerHTML=chev;
+  belt.style.setProperty('--mx',(ux*gap).toFixed(2)+'px');belt.style.setProperty('--my',(uy*gap).toFixed(2)+'px');
+  svg.style.display='block';}
+function hideSkewLine(){document.getElementById('skewline').style.display='none';}
+
+// grouped score rows (hover popover)
+function scoreGroupsHTML(c0){
+  return FAM_ORDER.map(fam=>{
+    const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
+    return `<div class="grp"><div class="grph">${FAM_LABEL[fam]}</div>`+
+      ps.map(p=>`<div class="srow${p.score_field===field?' em':''}" title="${p.score_field} · ${p.scoring_method}"><span class="sl">${p.display_label}</span><span class="sv">${sv(c0[p.score_field])}</span></div>`).join('')+
+    `</div>`;
+  }).join('');
+}
+function shortBc(bc){return (bc.split('_').find(t=>/^[ACGT]{8,}/.test(t))||bc).slice(0,26);}
+
+// ── viewer controls: wheel zooms about the cursor; drag pans; +/−/reset buttons ──
+document.getElementById('vzin').onclick=()=>zoomCenter(1.4);
+document.getElementById('vzout').onclick=()=>zoomCenter(1/1.4);
+document.getElementById('vreset').onclick=resetView;
+c.addEventListener('wheel',e=>{e.preventDefault();const r=c.getBoundingClientRect();
+  zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+// click-vs-drag: only treat pointer motion as a pan past a ~4px threshold; a plain click still selects a cell
+let panning=false,panMoved=false,pStartX=0,pStartY=0,pOX=0,pOY=0,suppressClick=false;
+c.addEventListener('mousedown',e=>{if(e.button!==0)return;panning=true;panMoved=false;
+  pStartX=e.clientX;pStartY=e.clientY;pOX=vtx;pOY=vty;});
+window.addEventListener('mousemove',e=>{if(!panning)return;const dx=e.clientX-pStartX,dy=e.clientY-pStartY;
+  if(!panMoved&&Math.hypot(dx,dy)>4){panMoved=true;c.classList.add('grabbing');pop.style.display='none';}
+  if(panMoved){vtx=pOX+dx;vty=pOY+dy;draw();}});
+window.addEventListener('mouseup',()=>{if(!panning)return;panning=false;c.classList.remove('grabbing');
+  if(panMoved)suppressClick=true;});   // swallow the click that ends a drag so it doesn't open a card
+c.addEventListener('mousemove',e=>{if(panning)return;const r=c.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  let best=-1,bd=64;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}
+  if(best!==hover){hover=best;draw();}
+  if(best>=0){const c0=cells[best];const[X,Y]=px(c0);
+    pop.innerHTML=`<div class="bc">${shortBc(c0.barcode)}</div>
+      <div class="pmeta">donor ${c0.donor} · ${c0.condition}</div>
+      ${selBlockHTML(c0)}
+      ${scoreGroupsHTML(c0)}`;
+    pop.style.display='block';let lx=X+14,ly=Y+10;if(lx>r.width-260)lx=X-260;lx=Math.max(6,Math.min(lx,r.width-254));ly=Math.max(6,Math.min(ly,r.height-300));
+    pop.style.left=lx+'px';pop.style.top=ly+'px';
+  } else pop.style.display='none';
+});
+c.addEventListener('mouseleave',()=>{hover=-1;pop.style.display='none';draw();});
+
+// ── click a dot → open the cell-detail card ──
+function nearestCell(mx,my){let best=-1,bd=400;for(let i=0;i<cells.length;i++){const c0=cells[i];if(!vis(c0))continue;const[X,Y]=px(c0);const dd=(X-mx)**2+(Y-my)**2;if(dd<bd){bd=dd;best=i;}}return best;}
+c.addEventListener('click',e=>{if(suppressClick){suppressClick=false;return;}const r=c.getBoundingClientRect();const i=nearestCell(e.clientX-r.left,e.clientY-r.top);if(i>=0)openCard(i);});
+
+function cardScoresHTML(c0){
+  const bar=v=>{const t=Math.max(-1.5,Math.min(1.5,v||0)),w=Math.abs(t)/1.5*50;return{w:w.toFixed(0),left:(t<0?50-w:50).toFixed(0)};};
+  return FAM_ORDER.map(fam=>{
+    const ps=programs.filter(p=>p.family===fam);if(!ps.length)return'';
+    return `<div class="mgrp"><div class="mgrph">${FAM_LABEL[fam]}</div>`+
+      ps.map(p=>{const v=c0[p.score_field],b=bar(v);return `<div class="mrow${p.score_field===field?' em':''}" title="${p.score_field} · ${p.scoring_method}"><span class="mg">${p.display_label}</span><span class="mb"><i style="left:${b.left}%;width:${b.w}%"></i></span><span class="ml">${sv(v)}</span></div>`;}).join('')+
+    `</div>`;
+  }).join('');
+}
+// in contrast mode the card leads with the From/To pair (both values, directions, scopes, blended swatch)
+function abCardHTML(c0){
+  const line=(ax,tag,hue)=>{const p=progByField[ax.field],degen=transformFor(ax.field).status==='degenerate';
+    return `<div class="abrow"><span class="crsw" style="background:rgb(${hue})"></span><span class="abn">${tag} · ${p.display_label}</span><span class="abs">${ax.direction} · ${scopeLabel(ax)}${degen?' · sparse':''}</span><span class="abv">${sv(c0[ax.field])}</span></div>`;};
+  return `<div class="mgrp"><div class="mgrph">Contrast · <span class="abchip" style="background:${abBlendSwatch(c0)}"></span> blended colour on the map</div>${line(axisA,'From',ABHUE_A)}${line(axisB,'To',ABHUE_B)}</div>`;
+}
+function openCard(i){const c0=cells[i];const contrast=contrastActive();
+  const chip=document.getElementById('mchip');
+  if(contrast){chip.querySelector('i').style.background=abBlendSwatch(c0);chip.querySelector('b').textContent='From ↔ To contrast';}
+  else{const p=progByField[field];chip.querySelector('i').style.background=swatchFor(field,c0[field]);chip.querySelector('b').textContent=`${p.display_label} · ${sv(c0[field])}`;}
+  document.getElementById('mbc').textContent=c0.barcode;
+  document.getElementById('mmeta').textContent=`donor ${c0.donor} · ${c0.condition} · cluster ${c0.cluster}`;
+  document.getElementById('mgenes').innerHTML=(contrast?abCardHTML(c0):'')+cardScoresHTML(c0);
+  document.getElementById('msrc').innerHTML=`<div>Scores: <code>score_genes</code> panel-minus-expression-bin-matched-control values.</div><div class="srcnr">Naming reference: <a href="${PAPERS.masopust.url}" target="_blank" rel="noopener">Masopust et al. ↗</a> · data: <a href="${PAPERS.marson.url}" target="_blank" rel="noopener">Marson ↗</a></div>`;
+  document.getElementById('scrim').style.display='block';document.getElementById('modal').style.display='flex';requestAnimationFrame(fitBarcode);}
+// scale the barcode / unique-ID line (12px → 7px floor) until it fits on one line inside the card
+function fitBarcode(){
+  const el=document.getElementById('mbc'); if(!el||!el.textContent)return;
+  el.style.fontSize='12px'; let fs=12;
+  while(el.scrollWidth>el.clientWidth&&fs>7){fs-=0.5;el.style.fontSize=fs+'px';}
+}
+// scrim is shared by the cell-detail modal and the methods slide-over; keep it up while either is open
+function syncScrim(){const on=document.getElementById('modal').style.display==='flex'||document.getElementById('provmodal').classList.contains('open');document.getElementById('scrim').style.display=on?'block':'none';}
+function closeCard(){document.getElementById('modal').style.display='none';syncScrim();}
+function closeProv(){document.getElementById('provmodal').classList.remove('open');syncScrim();}
+function openProv(){document.getElementById('provmodal').classList.add('open');document.getElementById('scrim').style.display='block';}
+document.getElementById('mx').onclick=closeCard;
+document.getElementById('scrim').onclick=function(){closeCard();closeProv();};
+document.getElementById('provx').onclick=closeProv;document.getElementById('provbtn').onclick=openProv;
+document.getElementById('regenBtn').onclick=function(){const h=document.getElementById('regenHint');h.hidden=!h.hidden;this.textContent=h.hidden?'⟳ Regenerate overlay':'⟳ Regenerate overlay ▾';};
+document.getElementById('regenCopy').onclick=async function(){try{await navigator.clipboard.writeText(document.getElementById('regenCmd').textContent);this.textContent='Copied';}catch(e){this.textContent='⌘C to copy';}setTimeout(()=>{this.textContent='Copy';},1500);};
+{const lb=document.getElementById('linksBtn');if(lb){lb.onclick=e=>{e.stopPropagation();const w=lb.closest('.lkwrap');const o=w.classList.toggle('open');lb.setAttribute('aria-expanded',o);};document.addEventListener('click',()=>{const w=document.querySelector('.lkwrap.open');if(w)w.classList.remove('open');});}}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCard();closeProv();}});
+
+window.__t={open:openCard,cells:()=>cells,px:i=>px(cells[i]),field:()=>field,setField:f=>{field=f;document.getElementById('colorby').value=f;applyProgram();},selection:()=>selectionObj(),
+  computeContrast,preflight,canonicalContent,canonicalJSON,
+  contrastId:async()=>(await computeContrast()).contrast_id,
+  artifact:async()=>(await computeContrast()).contract,
+  setContrast:(af,ad,bf,bd,c)=>{const cc=c||'All';axisA={field:af,condition:cc,direction:ad||'high',donor:'All'};axisB={field:bf,condition:cc,direction:bd||'high',donor:'All'};syncAxisUI();syncObjTitle();updateAxisMeta();}};
+</script>
+</body>
+</html>
