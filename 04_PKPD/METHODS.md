@@ -263,6 +263,88 @@ source response hash and the deterministic transform that produced it.
 
 ---
 
+## 7b. Public acquisition — `spot.stage04_acquisition_manifest.v1`
+
+The source audit's §4.7 finding was that a Stage-4 source record carried an access *date* and
+nothing else a reviewer could reconstruct the request from. The acquisition manifest is the
+repair: per response — canonical URL + query, `accessed_at_utc`, HTTP status, media type, an
+**allowlisted** subset of response headers (per-request noise would make the same document hash
+differently), source release/`last_updated`, licence **and terms URL**, raw byte count +
+SHA-256, a stable `content_sha256` + declared rule where the transport envelope is volatile, the
+**adapter code hash**, the exact extraction transform, and a review status.
+
+**Three origins, no path between them.** `fetched_public` must show its locator, its terms and
+its bytes (HTTP 200, cached under the run root) or it is refused. `reused_from_stage3` is carried
+verbatim. `synthetic_fixture` is hashed and can never become public.
+
+**Bytes live outside Git.** `RunRoot` refuses a cache inside the working tree: a live label
+committed by accident is a licensing problem that no later `git rm` undoes. DailyMed in
+particular has **no verified blanket licence** — `method/sources.json` previously called it
+"Public domain (NLM DailyMed)", which was an overclaim and is corrected. openFDA is generally
+CC0 **with marked source exceptions**. ClinicalTrials.gov is **not** relabelled public domain and
+has no adapter. DrugBank is forbidden and `drugbank_id` is never populated on this path.
+
+**ChEMBL/UniProt are reuse-only.** Stage 3 acquired, hashed and released those responses, and
+Stage-4 gate 1 re-derives their table hash at admission. Re-querying them would mint a second,
+unreconciled provenance for the same number, so `assert_fetch_permitted` raises. Stage 3 stores
+its canonical query as a SHA-256; it is carried as a SHA-256, never reconstructed as text.
+
+**Deterministic label selection.** Discovery → **exactly one product, or an explicit set-ID pin,
+or a refusal that names every candidate**. Live, `drug_name=temozolomide` returns 20 products, so
+"the first hit" would have read a repackager's label instead of TEMODAR. The served document must
+also *be* the version the listing offered (`dailymed_version_conflict`), the listing must be
+**complete** (a page-1 response that reports 40 total elements is not the candidate set —
+`dailymed_listing_incomplete`), and the label must tie to a Drugs@FDA application.
+
+**No first record, no first product** (`analysis/selection.py`). The independent cross-check
+flagged `results[0]`, `products[0]` and `limit=1` in `openfda_approval.py`, and the live data
+showed the flag was not theoretical: **TEMODAR's openFDA label declares two application numbers —
+NDA021029 (capsule) and NDA022277 (injection) — and its Drugs@FDA record carries six products.**
+The old code took the first of each, so the approval cross-check ran against an arbitrarily chosen
+*route*, and it reported a single marketing status; the two applications in fact differ
+(`Discontinued` and `Prescription`). Every selection is now one of exactly three things:
+
+| | Rule |
+|---|---|
+| `exactly_one` | matched on an identity **pin**; zero and many are both typed refusals, and duplicates are never silently de-duplicated into a choice |
+| `sorted_unique` | collect-all, canonical order. Every application number, every marketing status. Nothing dropped, nothing chosen |
+| `assert_result_set_complete` | the source's own `meta.results.total` must equal what arrived, or the result set is refused as truncated. `limit=1` could not detect a duplicate **even in principle** |
+
+Reordering a response cannot change an outcome, and every declared application is fetched and
+cross-checked in its own pinned query (`drugsfda_application_not_found` if Drugs@FDA does not know
+it → the safety lane stays `not_evaluated`).
+
+**`organ_system` (W9's optional v2 field) is source-backed or `unspecified`** — never inferred
+(`analysis/organ_system.py`). A value is admissible only when a public structured source actually
+carries the field, and is then copied **verbatim** with its exact locator and the raw record
+identity (set ID, label version, response SHA-256). It is never classified from a target, gene,
+mechanism, pharmacologic class or drug name — `refuse_inferred_organ_system` makes that path
+raise. **No source in the ledger carries such a field today** (SPL has LOINC-coded *sections*, not
+an organ-system attribute; recognising an adverse-reaction heading as a MedDRA System Organ Class
+would need the MedDRA vocabulary, whose licence is not established here; openFDA carries
+*pharmacologic class*, which is not an organ system), so `ORGAN_SYSTEM_SPECS` is empty and every
+extraction returns `unspecified` / `not_evaluated` — with the record it was looked for in attached,
+so "unspecified" can never be read as "never checked". No new external dataset was added.
+
+**Identity converges or the candidate is refused** (`identity_converged` → refuse_candidate).
+PubChem, RxNorm, DailyMed and Drugs@FDA claims are collected separately — no source's identifier
+is silently preferred over another's — and any disagreement refuses. An administered form that is
+not the active moiety needs an explicit, **sourced** mapping; a shared InChIKey first block is a
+salt/free-base relationship, not a match.
+
+**CNS-MPO stays incomplete under a public-only rule.** PubChem supplies neither logD7.4 nor a
+most-basic pKa (XLogP3 is a logP at no stated pH), and `assert_descriptor_is_public` refuses to
+let either be substituted. Per the audit, that incompleteness must **not** block the measured
+exposure, transporter, label-safety or NEBPI lanes.
+
+**One live probe.** `tests/test_live_reference_smoke.py` (opt-in, `SPOT_STAGE4_LIVE=1`) acquires
+TEMODAR/temozolomide — the GBM standard of care, and emphatically **not** a Stage-3 candidate, so
+it can never be mistaken for one. It re-proves the e410d72 nested-warning repair against the real
+innovator SPL, whose bytes hash to `9437c054…f652a29ce7` (275 112 bytes, v40) — the same digest
+the independent source audit recorded.
+
+---
+
 ## 8. Limitations, and what is *not* done
 
 1. **Fixture-only. No real result.** Every candidate is a labelled `FIXTURE-*`; every
@@ -298,6 +380,16 @@ source response hash and the deterministic transform that produced it.
    `pip-compile --generate-hashes` is a **maintainer follow-up**.
 9. **Not reviewed by a clinician or pharmacologist.** The NEBPI transcription and the two
    interpretation calls flagged in §3 need domain review before any real use.
+10. **Acquisition covers IDENTITY only.** §7b acquires identity, label selection and the approval
+    cross-check. It does **not** acquire potency, exposure, transporter or primary-literature
+    evidence — those lanes remain `not_evaluated`, in writing, and their schemas need the
+    structured fields the audit lists (§4.2, §4.4) before an adapter is written for them. No
+    candidate has been acquired: identity acquisition is per-moiety and explicit, and the only
+    moiety run live is a reference probe.
+11. **Root `DATA_LICENSES.md` still collapses openFDA/FAERS and calls ClinicalTrials.gov public
+    domain** (source audit §4.6). Stage 4's own ledger (`method/acquisition_sources_v1.json`) is
+    correct on both points; fixing the shared root file is a **maintainer follow-up** outside
+    this lane.
 
 ---
 

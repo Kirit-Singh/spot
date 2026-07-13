@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE. Synthetic HL7 v3 SPL. THE DRUG AND ALL CONTENT ARE INVENTED and describe no real
+  product; only the STRUCTURE is real.
+
+  Two things the acquisition layer needs from a label, in one document:
+
+    * IDENTITY — an <activeMoiety> coded with a UNII (codeSystem 2.16.840.1.113883.4.9), so a
+      label can contribute an identity claim that must agree with PubChem/openFDA or the
+      candidate is refused.
+    * NESTED WARNINGS — WARNINGS AND PRECAUTIONS (43685-7) carries NO direct <text>; both
+      warnings live in <component><section> subsections coded 42229-5. This is the shape that
+      defeated the pre-e410d72 parser, and the acquisition path must still see them.
+-->
+<document xmlns="urn:hl7-org:v3">
+  <id root="ffffffff-0000-4000-8000-fixtureacq99"/>
+  <title>FIXTUROMIDE CAPSULE [SPOT FIXTURE LABORATORIES] — FIXTURE, NOT A REAL PRODUCT</title>
+  <effectiveTime value="20260220"/>
+  <setId root="ffffffff-0000-4000-8000-fixtureacq01"/>
+  <versionNumber value="40"/>
+  <component>
+    <structuredBody>
+      <component>
+        <section>
+          <code code="34070-3" codeSystem="2.16.840.1.113883.6.1" displayName="CONTRAINDICATIONS SECTION"/>
+          <title>4 CONTRAINDICATIONS</title>
+          <text>
+            <paragraph>FIXTURE: contraindicated in patients with invented hypersensitivity to fixturomide.</paragraph>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="43685-7" codeSystem="2.16.840.1.113883.6.1" displayName="WARNINGS AND PRECAUTIONS SECTION"/>
+          <title>5 WARNINGS AND PRECAUTIONS</title>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.1 Fixture Myelosuppression</title>
+              <text>
+                <paragraph>FIXTURE: invented myelosuppression warning nested one level below the coded section.</paragraph>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.2 Fixture Hepatotoxicity</title>
+              <text>
+                <paragraph>FIXTURE: invented hepatotoxicity warning, also nested.</paragraph>
+              </text>
+            </section>
+          </component>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="34073-7" codeSystem="2.16.840.1.113883.6.1" displayName="DRUG INTERACTIONS SECTION"/>
+          <title>7 DRUG INTERACTIONS</title>
+          <text>
+            <paragraph>FIXTURE: invented interaction with an invented corticosteroid.</paragraph>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <subject>
+            <manufacturedProduct>
+              <manufacturedProduct>
+                <name>FIXTUROMIDE</name>
+                <asEntityWithGeneric>
+                  <genericMedicine>
+                    <name>fixturomide</name>
+                  </genericMedicine>
+                </asEntityWithGeneric>
+                <ingredient classCode="ACTIB">
+                  <ingredientSubstance>
+                    <code code="FIXTURE002" codeSystem="2.16.840.1.113883.4.9"/>
+                    <name>FIXTUROMIDE HYDROCHLORIDE</name>
+                    <activeMoiety>
+                      <activeMoiety>
+                        <code code="FIXTURE001" codeSystem="2.16.840.1.113883.4.9"/>
+                        <name>FIXTUROMIDE</name>
+                      </activeMoiety>
+                    </activeMoiety>
+                  </ingredientSubstance>
+                </ingredient>
+              </manufacturedProduct>
+            </manufacturedProduct>
+          </subject>
+        </section>
+      </component>
+    </structuredBody>
+  </component>
+</document>

@@ -66,7 +66,10 @@
       "source_type": "structure_probe",
       "title": "DailyMed SPL v2 REST responses used ONLY to verify document structure and LOINC section codes",
       "url": "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/{setid}.xml",
-      "license": "Public domain (NLM DailyMed)",
+      "license": "NO BLANKET LICENCE VERIFIED. DailyMed publishes no blanket licence statement on its web-services page, and some SPL content visibly carries third-party copyright. This entry previously read 'Public domain (NLM DailyMed)', which was an overclaim (source audit §4.6). Nothing in Stage 4 redistributes SPL text: these probes established the PARSER CONTRACT only, and live label bytes are cached outside Git under a run root.",
+      "license_or_terms_url": "https://dailymed.nlm.nih.gov/dailymed/app-support-web-services.cfm",
+      "license_status": "no_blanket_license_verified",
+      "in_use_vs_approved_caveat": "DailyMed warns that in-use labelling may differ from current FDA-approved labelling and is not reviewed by NLM. Cross-check Drugs@FDA (analysis/openfda_approval.py) before treating a label as current.",
       "retrieved_representation": "HL7 v3 SPL XML",
       "probes": [
         {

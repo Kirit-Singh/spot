@@ -1,0 +1,135 @@
+{
+  "schema_id": "spot.stage04_acquisition_source_ledger.v1",
+  "description": "Terms, licence status and endpoint identity for every source the Stage-4 acquisition layer is permitted to touch. This ledger is NOT a scoring parameter and is deliberately not part of the method bundle hash (method_config.METHOD_FILES); its own file hash travels in every acquisition manifest instead (`source_ledger_sha256`), so a change to a source's terms moves the manifest, not the science. A source that is not listed here cannot be fetched.",
+  "rules": [
+    "A source may not declare itself free. Every acquired record carries the terms URL recorded here.",
+    "reuse_only sources are NEVER fetched by Stage 4. Their records come from the admitted Stage-3 bundle, verbatim, or they do not exist.",
+    "Raw bytes are cached OUTSIDE Git under a caller-supplied run root. Git holds synthetic fixtures only.",
+    "No source in this ledger supplies logD7.4 or most-basic pKa. CNS-MPO stays incomplete rather than fabricated."
+  ],
+  "sources": {
+    "pubchem": {
+      "source_name": "PubChem PUG REST",
+      "source_type": "public_api",
+      "host": "pubchem.ncbi.nlm.nih.gov",
+      "base_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug",
+      "docs_url": "https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest",
+      "license": "NCBI usage policy: no NCBI restriction is placed on molecular data; third-party rights may exist in individual records.",
+      "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+      "license_status": "no_ncbi_restriction_third_party_rights_may_exist",
+      "release_in_response": false,
+      "release_note": "PUG REST carries no global database release. Identity is bound by CID + accessed_at_utc + raw_sha256, never by a release string this source does not emit.",
+      "permitted_use": [
+        "active-moiety CID, InChIKey, InChI, canonical structure",
+        "PubChem-computed descriptors that PubChem actually reports"
+      ],
+      "forbidden_use": [
+        "logD7.4 — PubChem does not compute it; XLogP3 is a logP, not a logD, and is never substituted for one",
+        "most-basic pKa — PubChem PUG REST does not supply it",
+        "PUG-View annotation text as evidence (it inherits source-specific third-party terms)"
+      ],
+      "fetch": "permitted"
+    },
+    "rxnorm": {
+      "source_name": "RxNorm (RxNav REST)",
+      "source_type": "public_api",
+      "host": "rxnav.nlm.nih.gov",
+      "base_url": "https://rxnav.nlm.nih.gov/REST",
+      "docs_url": "https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html",
+      "license": "NLM RxNorm terms of service (attribution; RxNorm carries source-vocabulary restrictions for some content).",
+      "license_or_terms_url": "https://www.nlm.nih.gov/research/umls/rxnorm/docs/termsofservice.html",
+      "license_status": "nlm_terms_with_source_vocabulary_restrictions",
+      "release_in_response": true,
+      "release_note": "RxNav reports its RxNorm version; it is recorded verbatim when the endpoint returns one.",
+      "permitted_use": ["RxCUI identity crosswalk (name <-> RxCUI <-> ingredient/precise-ingredient)"],
+      "forbidden_use": ["any potency, exposure, safety or approval claim"],
+      "fetch": "permitted"
+    },
+    "dailymed": {
+      "source_name": "DailyMed SPL v2 REST",
+      "source_type": "regulatory_label",
+      "host": "dailymed.nlm.nih.gov",
+      "base_url": "https://dailymed.nlm.nih.gov/dailymed/services/v2",
+      "docs_url": "https://dailymed.nlm.nih.gov/dailymed/app-support-web-services.cfm",
+      "license": "NO BLANKET LICENCE VERIFIED. DailyMed publishes no blanket licence statement on its web-services page, and some SPL content visibly carries third-party copyright. DailyMed also warns that in-use labelling may differ from current FDA-approved labelling and is not reviewed by NLM.",
+      "license_or_terms_url": "https://dailymed.nlm.nih.gov/dailymed/app-support-web-services.cfm",
+      "additional_terms_url": "https://www.nlm.nih.gov/web_policies.html",
+      "license_status": "no_blanket_license_verified",
+      "release_in_response": true,
+      "release_note": "Per-SPL: setid + spl_version + effective_time. There is no global release.",
+      "redistribution": "do_not_store_full_labels_in_git",
+      "redistribution_note": "Live label bytes are cached under the run root and hashed. They are never committed: Git holds synthetic, labelled SPL fixtures only.",
+      "permitted_use": [
+        "current in-use label identity (setid, spl_version, effective_time, active-moiety UNII)",
+        "labelled safety sections, parsed by analysis/label_adapters.py, bound to the exact response hash"
+      ],
+      "forbidden_use": [
+        "calling an SPL public domain",
+        "treating an in-use label as the current FDA-approved label without a Drugs@FDA cross-check",
+        "selecting an arbitrary first hit among products or versions"
+      ],
+      "fetch": "permitted"
+    },
+    "openfda": {
+      "source_name": "openFDA (drug/label, drug/drugsfda)",
+      "source_type": "public_api",
+      "host": "api.fda.gov",
+      "base_url": "https://api.fda.gov",
+      "docs_url": "https://open.fda.gov/apis/drug/label/",
+      "license": "openFDA is generally CC0, WITH marked exceptions where third-party rights are asserted. Data are unvalidated; the original response and its disclaimer are retained.",
+      "license_or_terms_url": "https://open.fda.gov/terms/",
+      "license_status": "generally_cc0_with_marked_source_exceptions",
+      "release_in_response": true,
+      "release_note": "The response meta block carries `last_updated`; it is recorded verbatim as the source release.",
+      "permitted_use": [
+        "approval status / application number cross-check (Drugs@FDA)",
+        "machine-readable label fields and their application identifiers"
+      ],
+      "forbidden_use": [
+        "treating an openFDA field as validated by FDA",
+        "dropping a per-record third-party-rights exception when one is marked"
+      ],
+      "fetch": "permitted"
+    },
+    "chembl": {
+      "source_name": "ChEMBL",
+      "source_type": "public_database",
+      "host": "www.ebi.ac.uk",
+      "license": "CC BY-SA 3.0 (share-alike applies to redistributed derivatives).",
+      "license_or_terms_url": "https://chembl.gitbook.io/chembl-interface-documentation/about",
+      "license_status": "cc_by_sa_3_0",
+      "release_in_response": true,
+      "fetch": "reuse_only",
+      "fetch_note": "Stage 3 already acquired, hashed and released its ChEMBL records. Stage 4 reuses those exact records and hashes from the admitted Stage-3 bundle. Re-querying would produce a second, unreconciled copy of the same evidence under a different release — so it is refused, not merely discouraged."
+    },
+    "uniprot": {
+      "source_name": "UniProt",
+      "source_type": "public_database",
+      "host": "rest.uniprot.org",
+      "license": "CC BY 4.0",
+      "license_or_terms_url": "https://www.uniprot.org/help/license",
+      "license_status": "cc_by_4_0",
+      "release_in_response": true,
+      "fetch": "reuse_only",
+      "fetch_note": "Same rule as ChEMBL. UniProt establishes target identity only — never drug direction, potency, safety or disease benefit.",
+      "forbidden_use": ["drug action direction", "potency", "safety", "disease benefit"]
+    }
+  },
+  "not_used": {
+    "clinicaltrials_gov": {
+      "status": "no_adapter",
+      "reason": "Not called public domain here. ClinicalTrials.gov's own terms assert third-party rights and international copyright caveats, so it may not be relabelled US public domain. No Stage-4 adapter exists.",
+      "terms_url": "https://clinicaltrials.gov/about-site/terms-conditions"
+    },
+    "faers": {
+      "status": "no_adapter",
+      "reason": "If ever added, FAERS is SIGNAL evidence only: it cannot establish incidence, causality or safety."
+    }
+  },
+  "forbidden": {
+    "drugbank": {
+      "reason": "No valid public licence has been established for this project. DrugBank is not queried, not parsed, and no drugbank_id is populated on any public-only production path.",
+      "enforced_by": "analysis/public_sources.py :: assert_fetch_permitted"
+    }
+  }
+}
