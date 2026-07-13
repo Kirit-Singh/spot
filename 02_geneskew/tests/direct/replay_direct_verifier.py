@@ -39,6 +39,14 @@ from verify_arm_report import verifier_code_sha256  # noqa: E402
 
 CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
 
+# THE PINNED STAGE-2 SOLVER LOCK. Every run binds it; the verifier re-hashes it and hard-pins
+# it, so the harness must supply the real one — a fixture that skipped it would be testing a
+# configuration the lane refuses.
+LOCK = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "analysis", "stage02_solver_lock.txt")
+
+
 
 def _key(row):
     return tuple("" if row.get(k) is None else str(row.get(k)) for k in S.MASK_ROW_SORT)
@@ -64,6 +72,7 @@ def mask_counterexample(tmp) -> dict:
     """
     args = conftest.synthetic_run.__wrapped__(tmp)()
     args.condition, args.out_root = F.CONDITION, os.path.join(tmp, "ce")
+    args.env_lock = LOCK
     res = run_arms.build_bundle(args)
 
     bound = res["provenance"]["run_binding"]["mask_sha256"]
@@ -91,11 +100,12 @@ def mask_counterexample(tmp) -> dict:
 def bundle_gate(tmp) -> dict:
     args = conftest.synthetic_run.__wrapped__(tmp)()
     args.condition, args.out_root = F.CONDITION, os.path.join(tmp, "bundle")
+    args.env_lock = LOCK
     res = run_arms.build_bundle(args)
     argv = ["--bundle", res["out_dir"], "--de-main", args.de_main, "--sgrna", args.sgrna,
             "--by-guide", args.by_guide, "--by-donors", args.by_donors,
             "--guide-manifest", args.guide_manifest, "--registry", args.registry,
-            "--condition", args.condition, "--recompute", "all"]
+            "--condition", args.condition, "--recompute", "all", "--env-lock", LOCK]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):
         value = getattr(args, attr, None)
@@ -109,13 +119,15 @@ def release_gate(tmp) -> dict:
     root = os.path.join(tmp, "s1root")
     stage1 = V3.stage_release(root, conditions=CONDITIONS)
     prod.stage1_release, prod.stage1_release_root = stage1, root
+    prod.env_lock = LOCK
     prod.out_root = os.path.join(tmp, "release")
     res = arm_release.build_release(prod)
 
     argv = ["--release", res["out_dir"], "--de-main", prod.de_main, "--sgrna", prod.sgrna,
             "--by-guide", prod.by_guide, "--by-donors", prod.by_donors,
             "--guide-manifest", prod.guide_manifest, "--registry", prod.registry,
-            "--stage1-v3-release", stage1, "--release-root", root, "--recompute", "all"]
+            "--stage1-v3-release", stage1, "--release-root", root, "--recompute", "all",
+            "--env-lock", LOCK]
     for flag, attr in (("--source-registry", "source_registry"),
                        ("--pseudobulk", "pseudobulk")):
         value = getattr(prod, attr, None)

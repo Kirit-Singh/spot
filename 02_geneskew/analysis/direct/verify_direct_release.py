@@ -176,6 +176,7 @@ def verify(args) -> Report:
     # not say any of them is true.
     per_bundle: list[dict] = []
     code_ids: set = set()
+    lock_shas: set = set()
     for entry in bundles:
         cond = str(entry.get("condition"))
         bundle_dir = os.path.join(args.release, str(entry.get("path") or ""))
@@ -202,12 +203,24 @@ def verify(args) -> Report:
                  f"cited={entry.get('arm_bundle_run_id')!r}")
 
         prov = _load_json(os.path.join(bundle_dir, "provenance.json"))
-        code = (prov.get("run_binding") or {}).get("code_identity") or {}
-        code_ids.add(code.get("canonical_digest"))
+        run_binding = prov.get("run_binding") or {}
+        code_ids.add((run_binding.get("code_identity") or {}).get("canonical_digest"))
+        lock_shas.add((run_binding.get("environment_lock") or {}).get("sha256"))
 
     rep.gate("every bundle in the release was built by the SAME code — a release whose "
              "conditions came from different code is not one release",
              len(code_ids) <= 1, f"code digests: {sorted(str(c) for c in code_ids)}")
+
+    # CROSS-BUNDLE LOCK AGREEMENT. Each bundle's lock is hard-pinned individually; this is the
+    # separate claim that they are the same lock. Two conditions computed under two
+    # environments are not one release, and a downstream lane differencing them would be
+    # differencing the solvers as much as the biology.
+    rep.gate("every bundle in the release binds the SAME solver lock, and it is the hard "
+             "pin — two conditions computed under two environments are not one release",
+             len(lock_shas) == 1
+             and next(iter(lock_shas)) == VB.G.PINNED_SOLVER_LOCK_SHA256,
+             f"locks across bundles: {sorted(str(s) for s in lock_shas)}; pinned="
+             f"{VB.G.PINNED_SOLVER_LOCK_SHA256}")
 
     n_logical = sum(int(b.get("n_expected_arm_slots") or 0) for b in bundles)
     rep.gate("the release's logical arm count is the sum of its bundles' derived slots",
@@ -225,6 +238,8 @@ def verify(args) -> Report:
         "registry_scorer_projection_sha256":
             stage1["registry_scorer_projection_sha256"],
         "scorer_view_sha256": stage1["stage2_arm_view"]["scorer_view_sha256"],
+        "solver_lock_sha256": (next(iter(lock_shas)) if len(lock_shas) == 1 else None),
+        "solver_lock_pinned_sha256": VB.G.PINNED_SOLVER_LOCK_SHA256,
         "bundles": per_bundle,
     }
     return rep
