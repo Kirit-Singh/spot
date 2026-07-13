@@ -127,5 +127,35 @@ Stage-4 `spot.stage04_scorecard_set.v1` nested `active_moiety`, `production_elig
 and upstream binding. The strict adapters + fixtures are in place to pin against — no compact rows are
 hand-authored.
 
+## ARCHITECTURE — selection-INDEPENDENT release, runtime selection binding (W3/W6/W16/W13)
+
+Per the end-to-end binding audit, **one admitted release must resolve arbitrary within/temporal dropdown
+choices without regeneration** — so:
+
+- **results/current.json is SELECTION-INDEPENDENT** — native release ids/hashes only (`stage1_binding`,
+  `chain`, `routes`, `inventory`). It carries **NO top-level selection or analysis_mode** (that would
+  recreate the single-view blocker). It must NOT carry a `selection_binding`.
+- **The Stage-2 projection is the UNIFIED all-arm release** — every Direct condition bundle + every ordered
+  temporal pair + every (condition, source) pathway bundle, with **NO top-level analysis_mode**. The active
+  selection decides within vs temporal at join time.
+- **At runtime** the browser INDEPENDENTLY re-derives the active v3 selection's identity
+  (`src/mpa/selectionIdentity.ts` → `{ selection_id, analysis_mode, two exact gene arm keys }`), then
+  selects those slots from the global release (`resolveStage2Bundles`). A different A/B/time yields a
+  different identity → different slots (never reuses a previous selection's result).
+- **Any optional cached selected view MUST be keyed by `selection_id` in a map, never a singleton.**
+
+### Still to build against PUBLISHED contracts (do not guess)
+- **Stage-3 (W6) selection-bound subset** — filter the global Stage-3 candidates by ARM MEMBERSHIP (the
+  selection's two arm keys); update to `spot.stage03_drug_annotation.v2` per-origin/arm-key + reject v1.
+- **Stage-4 (W1/W3) selection-bound subset** — filter scorecards by the SELECTED Stage-3 candidate
+  membership; **strict NESTED adapter** for `spot.stage04_scorecard_set.v1` (`active_moiety`, `compound_ids`,
+  lanes are OBJECT/ARRAY-valued — the current packer would stringify + throw on real bytes).
+- **Temporal title** — render `A @ from → B @ to` (not both conditions collapsed to `conditions[0]`).
+- **Pathway source** — compact Reactome ⇄ GO-BP switch (currently one source is pinned for the active view).
+- Enforce the selection binding INSIDE the Stage-3/4 selected content, not only via the outer release.
+- **question_id (W13)** — a REQUIRED biology-only `question_id` with an exact canonical recipe is inbound.
+  Do NOT ship an optional/nullable `question_id` seam. When W13 lands, INDEPENDENTLY re-derive it and require
+  it alongside `selection_id` / `analysis_mode` / arm keys.
+
 _Deployment stays HELD until real admitted native artifacts + receipts exist. The packager writes nothing
 unless invoked with a real spec; production results are never committed._

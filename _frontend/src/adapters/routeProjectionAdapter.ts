@@ -52,7 +52,8 @@ function assertProductionEnvelope(raw: Record<string, unknown>): void {
 // — so a missing slot FAILS completeness here and never silently renders empty.
 export interface Stage2Projection {
   run_id: string; // the admitted Stage-2 run id (must match results/current.json chain.stage2_run_id)
-  analysis_mode: 'within_condition' | 'temporal_cross_condition';
+  // NO top-level analysis_mode: the all-arm release serves BOTH within_condition and temporal selections;
+  // the active v3 selection decides the mode at join time (resolveStage2Bundles).
   release_conditions: string[]; // the release's condition axis (e.g. Rest / Stim8hr / Stim48hr)
   pathway_sources: string[]; // the release's pathway sources (e.g. reactome / go_bp)
   pathway_source: string; // the active source for the view (∈ pathway_sources)
@@ -95,10 +96,6 @@ export function parseStage2Projection(raw: unknown): Stage2Projection {
   if (route !== 'targets' && route !== 'pathways') fail('malformed', `stage-2 projection route "${route}" must be targets|pathways`);
 
   const run_id = prodId(raw.run_id, 'run_id');
-  const analysis_mode = str(raw.analysis_mode, 'analysis_mode');
-  if (analysis_mode !== 'within_condition' && analysis_mode !== 'temporal_cross_condition') {
-    fail('malformed', `analysis_mode "${analysis_mode}" invalid`);
-  }
   const release_conditions = strList(raw.release_conditions, 'release_conditions');
   const pathway_sources = strList(raw.pathway_sources, 'pathway_sources');
   if (release_conditions.length === 0 || pathway_sources.length === 0) fail('malformed', 'release_conditions + pathway_sources required');
@@ -114,7 +111,7 @@ export function parseStage2Projection(raw: unknown): Stage2Projection {
   requireSlots(temporalByPair, slots.temporal, 'temporalByPair');
   requireSlots(pathwayByContext, slots.pathway, 'pathwayByContext');
 
-  return { run_id, analysis_mode, release_conditions, pathway_sources, pathway_source, directByCondition, temporalByPair, pathwayByContext };
+  return { run_id, release_conditions, pathway_sources, pathway_source, directByCondition, temporalByPair, pathwayByContext };
 }
 
 /**

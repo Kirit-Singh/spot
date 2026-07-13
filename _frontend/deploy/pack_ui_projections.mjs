@@ -138,6 +138,7 @@ function requireBinding(b) {
   return { release_method_version: b.release_method_version, registry_scorer_view_sha256: b.registry_scorer_view_sha256 };
 }
 
+
 // ── NATIVE → COMPACT projection derivation ──────────────────────────────────────────────────────
 // The packager DERIVES the four compact route projections from the admitted native bundles; compact
 // rows are never hand-authored. These adapters are STRICT on required ids + types and LENIENT on
@@ -273,7 +274,8 @@ function nativeToStage2Projection(nat, route) {
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route,
     run_id: nStr(nat.run_id, 'stage2 native.run_id'),
-    analysis_mode: nStr(nat.analysis_mode, 'stage2 native.analysis_mode'),
+    // no top-level analysis_mode — the all-arm release serves both within + temporal; the active
+    // selection decides at join time.
     release_conditions, pathway_sources, pathway_source,
     directByCondition, temporalByPair, pathwayByContext,
   };

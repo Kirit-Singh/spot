@@ -64,7 +64,7 @@ function stage2Raw() {
   const m = completeMaps();
   return {
     schema_version: 'spot.ui_projection.stage2.v1', route: 'targets',
-    run_id: 'run_1', analysis_mode: 'within_condition',
+    run_id: 'run_1',
     release_conditions: CONDS, pathway_sources: SOURCES, pathway_source: 'reactome',
     directByCondition: m.direct, temporalByPair: m.temporal, pathwayByContext: m.pathway,
   };
@@ -118,8 +118,7 @@ describe('parsePkSafetyProjection — strict', () => {
 describe('parseStage2Projection — complete generic release', () => {
   it('accepts a complete release (3 Direct + 6 ordered temporal + 6 pathway slots)', () => {
     const p = parseStage2Projection(stage2Raw());
-    expect(p.analysis_mode).toBe('within_condition');
-    expect(p.pathway_source).toBe('reactome');
+    expect(p.pathway_source).toBe('reactome'); // active source; the release itself is mode-agnostic
     expect(Object.keys(p.directByCondition).sort()).toEqual(['Rest', 'Stim48hr', 'Stim8hr']);
     expect(Object.keys(p.temporalByPair).length).toBe(6);
     expect(Object.keys(p.pathwayByContext).length).toBe(6);
@@ -135,9 +134,11 @@ describe('parseStage2Projection — complete generic release', () => {
     delete m3.pathway['Rest|go_bp']; // missing a (condition, source) pathway bundle
     expect(() => parseStage2Projection({ ...stage2Raw(), pathwayByContext: m3.pathway })).toThrow(/incomplete_release|missing/);
   });
-  it('rejects unknown schema / wrong route / invalid mode', () => {
+  it('rejects unknown schema / wrong route / missing run_id; carries NO top-level analysis_mode', () => {
     expect(() => parseStage2Projection({ ...stage2Raw(), schema_version: 'x' })).toThrow(AdapterError);
     expect(() => parseStage2Projection({ ...stage2Raw(), route: 'drugs' })).toThrow(AdapterError);
-    expect(() => parseStage2Projection({ ...stage2Raw(), analysis_mode: 'pooled' })).toThrow(AdapterError);
+    expect(() => parseStage2Projection({ ...stage2Raw(), run_id: undefined })).toThrow(AdapterError);
+    // the unified all-arm release is mode-agnostic — no analysis_mode is parsed (the selection decides).
+    expect(parseStage2Projection(stage2Raw())).not.toHaveProperty('analysis_mode');
   });
 });

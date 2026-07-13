@@ -66,6 +66,14 @@ const stage2Native = {
   ...completeStage2Maps(),
 };
 
+const withinSelection: SelectionV3 = {
+  selection_id: 'a'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
+  estimator_id: 'within_condition_v1', estimator_status: 'available',
+  A: { program_id: 'p1', direction: 'high' }, B: { program_id: 'p2', direction: 'high' }, conditions: ['Rest'],
+  registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64), // matches spec.stage1_binding
+  selection_full_sha256: 'f'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
+};
+// results/current.json is SELECTION-INDEPENDENT — one release resolves any within/temporal selection.
 const spec = {
   stage1_binding: { release_method_version: 'stage1-continuous-v3.0.1', registry_scorer_view_sha256: 'd'.repeat(64) },
   routes: {
@@ -73,14 +81,6 @@ const spec = {
     drugs: { native: drugsNative, receipt: receipt('drugs') },
     pksafety: { native: pksafetyNative, receipt: receipt('pksafety') },
   },
-};
-
-const withinSelection: SelectionV3 = {
-  selection_id: 'a'.repeat(16), analysis_mode: 'within_condition', execution_status: 'ready',
-  estimator_id: 'within_condition_v1', estimator_status: 'available',
-  A: { program_id: 'p1', direction: 'high' }, B: { program_id: 'p2', direction: 'high' }, conditions: ['Rest'],
-  registry_scorer_view_sha256: 'd'.repeat(64), source_h5ad_sha256: 'c'.repeat(64), // matches spec.stage1_binding
-  selection_full_sha256: 'f'.repeat(64), full_contract_content_sha256: 'e'.repeat(64), raw: {},
 };
 
 const deps = (sel: SelectionV3 | null, tree: Record<string, string>): RouteLoaderDeps => ({

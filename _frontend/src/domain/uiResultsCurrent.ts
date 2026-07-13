@@ -42,6 +42,10 @@ export interface ResultChain {
   stage4_scorecard_set_id: string | null; // the admitted Stage-4 scorecard-set id (PK & Safety), or null
 }
 
+// results/current.json is SELECTION-INDEPENDENT — it carries only native release ids/hashes so ONE
+// admitted release resolves ARBITRARY within/temporal dropdown choices without regeneration. It has NO
+// top-level selection or analysis_mode. The active v3 selection is re-derived at runtime
+// (selectionIdentity) and used to select release slots + (per W6/W3 contracts) filter Stage-3/4.
 export interface UiResultsCurrent {
   schema: typeof UI_RESULTS_CURRENT_SCHEMA;
   stage1_binding: Stage1Binding;
