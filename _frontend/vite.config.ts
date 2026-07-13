@@ -19,6 +19,9 @@ export default defineConfig({
         pathways: entry('pathways'),
         drugs: entry('drugs'),
         pksafety: entry('pksafety'),
+        // Per-stage Methods (notebook) + Provenance (trace) routed views.
+        '01_notebook': entry('01_notebook'),
+        '01_trace': entry('01_trace'),
       },
     },
   },
