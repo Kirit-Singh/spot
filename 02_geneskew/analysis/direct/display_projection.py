@@ -54,7 +54,9 @@ from typing import Any
 # --------------------------------------------------------------------------- #
 # THE FROZEN CAP POLICY. Method-versioned. Never settable from a UI.
 # --------------------------------------------------------------------------- #
-METHOD_VERSION = "spot.stage02.display_projection.v1"
+# v2: target_symbol added to every target row (DISPLAY METADATA). No value, rank,
+# cap or population changed — the science in v1 and v2 is byte-identical.
+METHOD_VERSION = "spot.stage02.display_projection.v2"
 CAP_POLICY_ID = "spot.stage02.display_projection.first_n_native_order.v1"
 
 CAP_OF = {"direct": 100, "temporal": 100, "pathway": 50}
@@ -77,11 +79,11 @@ CAP_POLICY = {
     "combined_or_pair_ranking_emitted": False,
 }
 
-SCHEMA = "spot.stage02_display_projection.v1"
+SCHEMA = "spot.stage02_display_projection.v2"
 PROJECTION_FILE = "stage2_display_projection.json"
 
 # The fields carried VERBATIM from the native row. Nothing is recomputed, rescaled or renamed.
-TARGET_ROW_FIELDS = ("target_id", "rank", "arm_value")
+TARGET_ROW_FIELDS = ("target_id", "target_symbol", "rank", "arm_value")
 PATHWAY_ROW_FIELDS = ("set_id", "enrichment_value", "target_source_coverage",
                       "global_coverage_disposition", "n_leading_edge", "peak_rank")
 
@@ -117,7 +119,7 @@ def _jsonable(value: Any) -> Any:
 # --------------------------------------------------------------------------- #
 # THE PREFIX. One arm at a time; never across arms.
 # --------------------------------------------------------------------------- #
-def target_arm_view(rows: list, *, lane: str) -> dict[str, Any]:
+def target_arm_view(rows: list, *, lane: str, crosswalk: dict | None = None) -> dict[str, Any]:
     """ONE Direct/temporal arm: its counts, and its first N NATIVE-RANKED evaluable rows.
 
     The counts are over the WHOLE arm. The rows are a prefix. A reader must be able to see
@@ -136,7 +138,14 @@ def target_arm_view(rows: list, *, lane: str) -> dict[str, Any]:
             "this arm's native ranking contains a duplicated rank; two rows cannot both be "
             "the same place in one order")
 
+    from . import symbol_crosswalk as CW
+
     emitted = [{"target_id": str(r["target_id"]),
+                # DISPLAY METADATA. Looked up in the frozen, bound crosswalk — never guessed,
+                # never a live lookup, and NEVER the target_id relabelled as a symbol. An
+                # unmapped target is an EXPLICIT null.
+                "target_symbol": (CW.symbol_for(crosswalk, r["target_id"])
+                                  if crosswalk else None),
                 "rank": int(r["rank"]),
                 "arm_value": _jsonable(r.get("arm_value", r.get("value")))}
                for r in ranked[:cap]]
@@ -229,9 +238,12 @@ def _pathway_records_by_arm(bundle_dir: str) -> dict[str, list]:
     return out
 
 
-def project(bundles_root: str) -> dict[str, Any]:
+def project(bundles_root: str, *, crosswalk_path: str = "") -> dict[str, Any]:
     """The whole release, as a compact view. It reads only ADMITTED native bytes."""
     from . import bundle_normalize as BN
+    from . import symbol_crosswalk as CW
+
+    crosswalk = CW.load(crosswalk_path) if crosswalk_path else None
 
     arms: dict[str, Any] = {}
     sources: dict[str, Any] = {}
@@ -268,7 +280,7 @@ def project(bundles_root: str) -> dict[str, Any]:
                     f"arm {arm_key!r} appears in more than one bundle; an arm is projected "
                     "once, from the bundle that computed it")
             view = (pathway_arm_view(rows) if lane == "pathway"
-                    else target_arm_view(rows, lane=lane))
+                    else target_arm_view(rows, lane=lane, crosswalk=crosswalk))
             view.update({"lane": lane, "arm_key": arm_key,
                          "context": dict(norm["context"]),
                          "source_bundle": rel})
@@ -299,7 +311,12 @@ def project(bundles_root: str) -> dict[str, Any]:
         "combined_objective": None,
         "cross_arm_score_or_order": None,
         "authoritative_artifacts_are_the_native_ones": True,
-        "bindings": {"native_bundles": sources},
+        "bindings": {
+            "native_bundles": sources,
+            # THE FROZEN CROSSWALK, bound by raw AND canonical hash, so a verifier can reopen
+            # it and prove every symbol on every row.
+            "symbol_crosswalk": (CW.binding(crosswalk) if crosswalk else None),
+        },
         "n_arms": len(arms),
         "arms": dict(sorted(arms.items())),
     }
@@ -307,8 +324,8 @@ def project(bundles_root: str) -> dict[str, Any]:
     return doc
 
 
-def write(bundles_root: str, out_path: str) -> dict[str, Any]:
-    doc = project(bundles_root)
+def write(bundles_root: str, out_path: str, *, crosswalk_path: str = "") -> dict[str, Any]:
+    doc = project(bundles_root, crosswalk_path=crosswalk_path)
     with open(out_path, "w") as fh:
         json.dump(doc, fh, indent=2, sort_keys=True, allow_nan=False)
     return doc
@@ -323,14 +340,21 @@ def main(argv=None) -> int:
                     "frozen in method-versioned config — never a UI parameter.")
     ap.add_argument("--bundles-root", required=True)
     ap.add_argument("--out", required=True, help="a FILE, not a directory")
+    ap.add_argument("--symbol-crosswalk", default="",
+                    help="the FROZEN Stage-1 effect_universe_gwcd4i.json. Its symbol_to_ensembl "
+                         "map is inverted (one-to-one only) to label rows. DISPLAY METADATA: it "
+                         "changes no value, no rank and no population.")
     args = ap.parse_args(argv)
 
     try:
-        doc = write(args.bundles_root, args.out)
+        doc = write(args.bundles_root, args.out, crosswalk_path=args.symbol_crosswalk)
     except ProjectionError as exc:
         print(json.dumps({"projected": False, "error": str(exc)}, indent=2))
         return 1
+    cw = (doc.get("bindings") or {}).get("symbol_crosswalk") or {}
     print(json.dumps({"projected": True, "n_arms": doc["n_arms"],
+                      "symbol_crosswalk_raw_sha256": cw.get("raw_sha256"),
+                      "n_one_to_one_symbols": cw.get("n_one_to_one"),
                       "cap_policy_id": CAP_POLICY_ID,
                       "method_version": METHOD_VERSION,
                       "projection_sha256": doc["projection_sha256"]}, indent=2))

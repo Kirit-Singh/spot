@@ -35,8 +35,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # RE-STATED, NOT IMPORTED. A drift between these and the producer's is the finding.
 CAP_OF = {"direct": 100, "temporal": 100, "pathway": 50}
 CAP_POLICY_ID = "spot.stage02.display_projection.first_n_native_order.v1"
-METHOD_VERSION = "spot.stage02.display_projection.v1"
-SCHEMA = "spot.stage02_display_projection.v1"
+METHOD_VERSION = "spot.stage02.display_projection.v2"
+SCHEMA = "spot.stage02_display_projection.v2"
+
+# The frozen crosswalk's identity, RESTATED — not imported from the producer.
+CROSSWALK_ID = "spot.stage01.effect_universe_gwcd4i.symbol_to_ensembl.v1"
+CROSSWALK_SOURCE_FIELD = "symbol_to_ensembl"
+SYMBOL_NAMESPACE = "hgnc_symbol"
 
 G_SELF_HASH = "the_projection_hashes_to_what_it_says_it_does"
 G_CAP = "the_cap_is_the_frozen_method_versioned_one"
@@ -49,7 +54,16 @@ G_CROSS_ARM = "no_combined_pair_or_cross_arm_ordering_is_emitted"
 G_SELECTION = "the_projection_is_selection_independent"
 
 FORBIDDEN_ANYWHERE = ("combined_score", "balanced_score", "pair_rank", "headline_rank",
-                      "overall_rank", "p_value", "q_value", "fdr", "analysis_mode_result")
+                      "overall_rank", "p_value", "q_value", "pval", "qval", "padj", "fdr",
+                      "significance", "std_error", "stderr", "se", "ci_low", "ci_high",
+                      "analysis_mode_result")
+
+# EXACTLY what a served target row may carry. A symbol is DISPLAY METADATA; a standard error
+# would be a new statistic, and a plot that showed one would be asserting a precision nobody
+# computed.
+TARGET_ROW_ALLOWED = frozenset({"target_id", "target_symbol", "rank", "value", "arm_value",
+                                "pareto_tier", "joint_status", "joint_ordering_method_id"})
+G_UNKNOWN_ROW_FIELD = "a_served_row_carries_a_field_the_display_contract_does_not_have"
 
 
 def _raw(path: str) -> str:
@@ -172,6 +186,10 @@ def verify(projection_path: str, *, bundles_root: str) -> dict[str, Any]:
                 failures.append(f"{G_SOURCE_BYTES}: {rel}/{name} changed after the view was "
                                 "built")
 
+    # (4b) THE SYMBOLS. Reopen the BOUND crosswalk and prove every one of them.
+    inverse, cw_failures = _crosswalk(doc, bundles_root)
+    failures += cw_failures
+
     # (5) THE RECONSTRUCTION — the whole point.
     native_targets: dict[str, list] = {}
     native_pathway: dict[str, list] = {}
@@ -188,6 +206,7 @@ def verify(projection_path: str, *, bundles_root: str) -> dict[str, Any]:
             failures += _check_pathway(arm_key, view, native_pathway.get(arm_key))
         else:
             failures += _check_target(arm_key, view, native_targets.get(arm_key), lane)
+            failures += _check_symbols(arm_key, view, inverse)
 
     # ---- THE SUBJECT. A receipt that does not name WHICH projection it judged is a receipt
     # for any projection with the same shape.
@@ -231,6 +250,9 @@ def verify(projection_path: str, *, bundles_root: str) -> dict[str, Any]:
 
 
 G_SUBJECT = "the_receipt_does_not_name_the_exact_projection_it_judged"
+G_CROSSWALK = "the_symbol_crosswalk_is_not_bound_or_is_not_the_bytes_it_says_it_is"
+G_SYMBOL = "an_emitted_target_symbol_is_not_the_one_the_frozen_crosswalk_gives_that_target"
+G_AMBIGUOUS = "a_symbol_was_emitted_for_a_target_whose_inversion_is_ambiguous"
 G_ADMITTED_INPUTS = "the_lane_admissions_behind_this_view_were_not_loaded_and_validated"
 
 
@@ -297,6 +319,100 @@ def _admitted_inputs(doc: dict, bundles_root: str) -> tuple:
     return out, bad
 
 
+def _crosswalk(doc: dict, bundles_root: str) -> tuple:
+    """Reopen the BOUND crosswalk and rebuild the one-to-one inverse INDEPENDENTLY.
+
+    The producer's inverse is not read: a verifier that trusted the producer's map would prove
+    only that the producer agrees with itself. The forward map is reopened from the bound bytes
+    and inverted here, and an AMBIGUOUS id is dropped here too — so a label the producer minted
+    from a collision has nothing to match against.
+    """
+    b = (doc.get("bindings") or {}).get("symbol_crosswalk")
+    if not b:
+        # No crosswalk bound: then NO row may carry a symbol. Silence is not permission.
+        bad = []
+        for arm_key, view in (doc.get("arms") or {}).items():
+            for r in (view.get("rows") or []):
+                if r.get("target_symbol") is not None:
+                    bad.append(f"{G_CROSSWALK}: {arm_key}: a symbol was emitted with NO "
+                               "crosswalk bound. A label with no source is a label nobody "
+                               "can check")
+                    break
+        return {}, bad
+
+    bad = []
+    if b.get("crosswalk_id") != CROSSWALK_ID:
+        bad.append(f"{G_CROSSWALK}: crosswalk_id {b.get('crosswalk_id')!r}")
+    if b.get("symbol_namespace") != SYMBOL_NAMESPACE:
+        bad.append(f"{G_CROSSWALK}: symbol_namespace {b.get('symbol_namespace')!r}")
+
+    path = _find_crosswalk(bundles_root, str(b.get("path")))
+    if path is None:
+        return {}, bad + [f"{G_CROSSWALK}: the bound crosswalk {b.get('path')!r} is not on "
+                          "disk; its symbols cannot be proved"]
+    if _raw(path) != b.get("raw_sha256"):
+        return {}, bad + [
+            f"{G_CROSSWALK}: the crosswalk on disk hashes to {_raw(path)[:16]}; the projection "
+            f"bound {str(b.get('raw_sha256'))[:16]}. It was labelled from different bytes"]
+    with open(path) as fh:
+        body = json.load(fh)
+    if _canon(body) != b.get("canonical_sha256"):
+        bad.append(f"{G_CROSSWALK}: the crosswalk's canonical hash does not match")
+
+    forward = body.get(CROSSWALK_SOURCE_FIELD) or {}
+    seen: dict = {}
+    for symbol, ensembl in forward.items():
+        seen.setdefault(str(ensembl), []).append(str(symbol))
+    inverse = {e: s[0] for e, s in seen.items() if len(s) == 1}
+    n_ambig = sum(1 for s in seen.values() if len(s) > 1)
+
+    if b.get("n_one_to_one") != len(inverse):
+        bad.append(f"{G_CROSSWALK}: the projection claims {b.get('n_one_to_one')} one-to-one "
+                   f"entries; the bound bytes give {len(inverse)}")
+    if b.get("n_ambiguous_dropped") != n_ambig:
+        bad.append(f"{G_AMBIGUOUS}: the projection claims {b.get('n_ambiguous_dropped')} "
+                   f"ambiguous ids; the bound bytes have {n_ambig}")
+    return inverse, bad
+
+
+def _find_crosswalk(bundles_root: str, name: str) -> Any:
+    """The bound crosswalk, by NAME — beside the release, or under it. Never an absolute path
+    baked into the artifact: a binding that carried this host's layout would bind a machine."""
+    for cand in (os.path.join(bundles_root, name),
+                 os.path.join(bundles_root, "inputs", name)):
+        if os.path.exists(cand):
+            return cand
+    for base, _dirs, files in os.walk(bundles_root):
+        if name in files:
+            return os.path.join(base, name)
+    return None
+
+
+def _check_symbols(arm_key: str, view: dict, inverse: dict) -> list:
+    """EVERY emitted symbol IS the one the frozen crosswalk gives that target_id."""
+    bad = []
+    shown = 0
+    for i, r in enumerate(view.get("rows") or []):
+        tid = str(r.get("target_id"))
+        got = r.get("target_symbol")
+        want = inverse.get(tid)              # None when unmapped — an EXPLICIT null
+        if got == want:
+            continue
+        if shown >= 3:
+            bad.append(f"{G_SYMBOL}: {arm_key}: ...and further symbols differ (truncated)")
+            break
+        if got is not None and want is None:
+            bad.append(
+                f"{G_SYMBOL}: {arm_key}[{i}]: {tid} is not in the frozen crosswalk, yet it was "
+                f"labelled {got!r}. An unmapped target is an EXPLICIT null — never a guess, and "
+                "never its own id wearing a symbol's field")
+        else:
+            bad.append(f"{G_SYMBOL}: {arm_key}[{i}]: {tid} is labelled {got!r}; the frozen "
+                       f"crosswalk gives {want!r}")
+        shown += 1
+    return bad
+
+
 def _check_target(arm_key: str, view: dict, native: Any, lane: str) -> list:
     bad: list[str] = []
     if native is None:
@@ -349,6 +465,13 @@ def _check_target(arm_key: str, view: dict, native: Any, lane: str) -> list:
             bad.append(f"{G_ROW_IS_NATIVE}: {arm_key}[{i}]: {exp['target_id']} served with "
                        f"value {got.get('arm_value')!r}; natively it is {exp['arm_value']!r}")
             n_row_failures += 1
+
+    # NOTHING ON THE ROW THE CONTRACT DOES NOT HAVE.
+    for i, r in enumerate(rows):
+        extra = sorted(set(r) - TARGET_ROW_ALLOWED)
+        if extra:
+            bad.append(f"{G_UNKNOWN_ROW_FIELD}: {arm_key}[{i}]: carries {extra}")
+            break
 
     # AN UNRANKED TARGET WAS NEVER SERVED AS EVIDENCE.
     by_id = {r["target_id"]: r for r in native}

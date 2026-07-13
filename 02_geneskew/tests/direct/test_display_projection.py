@@ -11,7 +11,9 @@ import json
 import os
 import sys
 
+import pytest
 from direct import display_projection as P
+from direct.hashing import file_sha256
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "analysis", "direct"))
@@ -402,7 +404,9 @@ class TestTheRECEIPTBindsTheEXACTProjection:
         assert "arm_value" in row and "value" not in row
         before = row["arm_value"]
         row["arm_value"] = 125.1318342617                        # SAME SHAPE, new number
-        assert set(row) == {"target_id", "rank", "arm_value"}    # no field added or removed
+        # v2 rows also carry target_symbol (display metadata). The mutation adds and removes
+        # nothing — it is the same shape, one different number.
+        assert set(row) == {"target_id", "target_symbol", "rank", "arm_value"}
         with open(out, "w") as fh:                               # declared hash left ALONE
             json.dump(doc, fh, indent=2, sort_keys=True)
         assert doc["arms"][DARM]["rows"][0]["arm_value"] != before
@@ -543,3 +547,196 @@ class TestEVERYSourceLaneMustBeAdmitted:
         keys = set(rec["admitted_inputs"])
         assert "pathway" in keys
         assert any(k.startswith("direct:") for k in keys)
+
+
+# --------------------------------------------------------------------------- #
+# THE SYMBOL IS DISPLAY METADATA — looked up in a frozen, bound artifact, never guessed.
+# --------------------------------------------------------------------------- #
+CROSSWALK = "effect_universe_gwcd4i.json"
+
+
+def _crosswalk(root, forward=None):
+    """The frozen Stage-1 artifact: symbol -> ensembl."""
+    doc = {"symbol_to_ensembl": forward if forward is not None else {
+               "POGLUT3": "ENSG00000000000", "SEC61B": "ENSG00000000001",
+               "MED12": "ENSG00000000002"},
+           "provenance": {"dataset": "GWCD4i", "role": "effect_universe",
+                          "host_path": "/should/never/be/serialized"}}
+    p = os.path.join(root, CROSSWALK)
+    with open(p, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+    return p
+
+
+_NO_CW = object()
+
+
+def _project_cw(root, cw=_NO_CW):
+    """cw=None means NO crosswalk at all (the unlabelled control)."""
+    out = os.path.join(root, P.PROJECTION_FILE)
+    path = os.path.join(root, CROSSWALK) if cw is _NO_CW else (cw or "")
+    doc = P.write(root, out, crosswalk_path=path)
+    return doc, out
+
+
+class TestTheSymbolIsLookedUpNeverGuessed:
+    def test_every_mapped_row_carries_the_EXACT_symbol(self, tmp_path):
+        root = _release(tmp_path)
+        _crosswalk(root)
+        doc, _ = _project_cw(root)
+        rows = {r["target_id"]: r["target_symbol"] for r in doc["arms"][DARM]["rows"]}
+        assert rows["ENSG00000000000"] == "POGLUT3"
+        assert rows["ENSG00000000002"] == "MED12"
+
+    def test_an_UNMAPPED_target_is_an_EXPLICIT_NULL_not_its_own_id(self, tmp_path):
+        """An ENSG printed where a reader expects a gene name is a lie a plot tells quietly."""
+        root = _release(tmp_path)
+        _crosswalk(root)
+        doc, _ = _project_cw(root)
+        unmapped = [r for r in doc["arms"][DARM]["rows"]
+                    if r["target_id"] not in ("ENSG00000000000", "ENSG00000000001",
+                                              "ENSG00000000002")]
+        assert unmapped, "the fixture must contain targets the crosswalk does not cover"
+        for r in unmapped:
+            assert r["target_symbol"] is None
+            assert r["target_symbol"] != r["target_id"]
+
+    def test_an_AMBIGUOUS_inversion_is_DROPPED_not_picked(self, tmp_path):
+        """Two symbols naming one id: that id has no single public label."""
+        root = _release(tmp_path)
+        _crosswalk(root, forward={"AAA": "ENSG00000000000", "BBB": "ENSG00000000000",
+                                  "SEC61B": "ENSG00000000001"})
+        doc, _ = _project_cw(root)
+        rows = {r["target_id"]: r["target_symbol"] for r in doc["arms"][DARM]["rows"]}
+        assert rows["ENSG00000000000"] is None          # the collision is UNLABELLED
+        assert rows["ENSG00000000001"] == "SEC61B"
+        b = doc["bindings"]["symbol_crosswalk"]
+        assert b["n_ambiguous_dropped"] == 1
+        assert b["n_one_to_one"] == 1
+
+    def test_the_crosswalk_is_BOUND_by_raw_AND_canonical_hash(self, tmp_path):
+        root = _release(tmp_path)
+        p = _crosswalk(root)
+        doc, _ = _project_cw(root)
+        b = doc["bindings"]["symbol_crosswalk"]
+        assert b["raw_sha256"] == file_sha256(p)
+        assert b["canonical_sha256"]
+        assert b["crosswalk_id"] == "spot.stage01.effect_universe_gwcd4i.symbol_to_ensembl.v1"
+        assert b["symbol_namespace"] == "hgnc_symbol"
+        assert b["coverage_universe"] == "de_readout"
+        # NO HOST PATH is serialized — a binding that carried it would bind a machine
+        assert "host_path" not in json.dumps(b)
+        assert b["path"] == CROSSWALK                    # a NAME, not a path
+
+    def test_the_VALUES_RANKS_and_PREFIX_are_UNCHANGED_by_labelling(self, tmp_path):
+        """A label is not a result. v1 and v2 must be byte-identical in the science."""
+        root = _release(tmp_path)
+        plain, _ = _project_cw(root, cw=None)             # NO crosswalk at all
+        _crosswalk(root)
+        labelled, _ = _project_cw(root)
+
+        a, b = plain["arms"][DARM], labelled["arms"][DARM]
+        assert a["n_emitted"] == b["n_emitted"] == 100
+        assert a["n_ranked"] == b["n_ranked"]
+        assert a["cap"] == b["cap"]
+        for ra, rb in zip(a["rows"], b["rows"]):
+            assert ra["target_id"] == rb["target_id"]
+            assert ra["rank"] == rb["rank"]
+            assert ra["arm_value"] == rb["arm_value"]    # the SCIENCE is untouched
+
+    def test_TEMPORAL_rows_get_symbols_too(self, tmp_path):
+        root = str(tmp_path)
+        os.makedirs(root, exist_ok=True)
+        _crosswalk(root)
+        # a temporal bundle whose targets are in the crosswalk
+        d = os.path.join(root, "temporal", "Rest__to__Stim48hr")
+        os.makedirs(os.path.join(d, "rankings"), exist_ok=True)
+        key = "temporal|p|increase|Rest|Stim48hr"
+        with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+            json.dump({"schema_version": "spot.stage02_temporal_arm_bundle.v1",
+                       "bundle_id": "T-1", "lane": "temporal",
+                       "context": {"from_condition": "Rest", "to_condition": "Stim48hr"}}, fh)
+        with open(os.path.join(d, "rankings", "a.json"), "w") as fh:
+            json.dump({"arm_key": key, "records": [
+                {"target_id": "ENSG00000000000", "arm_value": 1.0, "rank": 1,
+                 "evaluable": True}]}, fh)
+        doc = P.project(root, crosswalk_path=os.path.join(root, CROSSWALK))
+        assert doc["arms"][key]["rows"][0]["target_symbol"] == "POGLUT3"
+
+
+class TestTheVerifierPROVESEverySymbol:
+    def _forge(self, tmp_path, mutate):
+        root = _release(tmp_path)
+        _crosswalk(root)
+        doc, out = _project_cw(root)
+        mutate(doc, root)
+        doc.pop("projection_sha256")
+        doc["projection_sha256"] = P._canon(doc)
+        with open(out, "w") as fh:
+            json.dump(doc, fh, indent=2, sort_keys=True)
+        return V.verify(out, bundles_root=root)
+
+    def test_an_HONEST_labelled_projection_is_ADMITTED(self, tmp_path):
+        root = _release(tmp_path)
+        _crosswalk(root)
+        _, out = _project_cw(root)
+        rep = V.verify(out, bundles_root=root)
+        assert rep["verdict"] == "admit", rep["failures"]
+
+    def test_a_SWAPPED_symbol_is_REFUSED(self, tmp_path):
+        rep = self._forge(
+            tmp_path,
+            lambda d, r: d["arms"][DARM]["rows"][0].update({"target_symbol": "MED12"}))
+        assert rep["verdict"] == "reject"
+        assert any(V.G_SYMBOL in f for f in rep["failures"])
+
+    def test_LABELLING_an_UNMAPPED_target_is_REFUSED(self, tmp_path):
+        def mutate(d, r):
+            row = next(x for x in d["arms"][DARM]["rows"] if x["target_symbol"] is None)
+            row["target_symbol"] = "PLAUSIBLE1"
+        rep = self._forge(tmp_path, mutate)
+        assert rep["verdict"] == "reject"
+        assert any("EXPLICIT null" in f for f in rep["failures"])
+
+    def test_a_STALE_CROSSWALK_on_disk_is_REFUSED(self, tmp_path):
+        """The projection was labelled from different bytes than the ones now bound."""
+        def mutate(d, r):
+            _crosswalk(r, forward={"WRONG": "ENSG00000000000"})   # the file changes
+        rep = self._forge(tmp_path, mutate)
+        assert rep["verdict"] == "reject"
+        assert any(V.G_CROSSWALK in f for f in rep["failures"])
+
+    def test_a_MUTATED_crosswalk_HASH_is_REFUSED(self, tmp_path):
+        rep = self._forge(
+            tmp_path,
+            lambda d, r: d["bindings"]["symbol_crosswalk"].update(
+                {"raw_sha256": "dead" + "0" * 60}))
+        assert rep["verdict"] == "reject"
+        assert any(V.G_CROSSWALK in f for f in rep["failures"])
+
+    def test_a_symbol_with_NO_CROSSWALK_BOUND_is_REFUSED(self, tmp_path):
+        """Silence is not permission."""
+        rep = self._forge(
+            tmp_path,
+            lambda d, r: d["bindings"].update({"symbol_crosswalk": None}))
+        assert rep["verdict"] == "reject"
+        assert any(V.G_CROSSWALK in f for f in rep["failures"])
+
+    def test_a_FORGED_ambiguity_count_is_REFUSED(self, tmp_path):
+        rep = self._forge(
+            tmp_path,
+            lambda d, r: d["bindings"]["symbol_crosswalk"].update(
+                {"n_ambiguous_dropped": 99}))
+        assert rep["verdict"] == "reject"
+        assert any(V.G_AMBIGUOUS in f for f in rep["failures"])
+
+    @pytest.mark.parametrize("field", ["p_value", "q_value", "fdr", "se", "std_error",
+                                       "significance"])
+    def test_NO_inferential_or_precision_field_may_reach_a_ROW(self, tmp_path, field):
+        """A standard error would be a new statistic, and a plot showing one would assert a
+        precision nobody computed."""
+        rep = self._forge(
+            tmp_path,
+            lambda d, r, f=field: d["arms"][DARM]["rows"][0].update({f: 0.01}))
+        assert rep["verdict"] == "reject"
+        assert any(V.G_UNKNOWN_ROW_FIELD in f or V.G_CROSS_ARM in f for f in rep["failures"])
