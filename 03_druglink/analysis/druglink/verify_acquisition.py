@@ -252,7 +252,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         rep = verify(args.cache_root, run_dir=args.direct_run,
                      inputs_root=args.direct_inputs_root,
                      direct_analysis=args.direct_analysis, artifact_class=args.artifact_class)
-    except (direct_run.DirectRunError, armlever.ArmLeverError, ac.NamespaceError,
+    except (direct_run.DirectRunError, armlever.ArmLeverError, ac.ArtifactClassError,
             KeyError, ValueError) as exc:
         print(f"[FAIL] acquisition_verification_aborted -- {exc}")
         return 1

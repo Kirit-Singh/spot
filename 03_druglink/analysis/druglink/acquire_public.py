@@ -453,7 +453,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                       chembl_release=args.chembl_release,
                       transport=hp.default_transport())
     except (direct_run.DirectRunError, armlever.ArmLeverError, AcquireError,
-            hp.HttpError, ac.NamespaceError) as exc:
+            hp.HttpError, ac.ArtifactClassError) as exc:
         print(f"REFUSED [{args.artifact_class}]: {exc}")
         return 2
 
