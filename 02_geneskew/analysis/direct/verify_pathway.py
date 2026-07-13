@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from typing import Any, Optional
 
@@ -452,6 +453,53 @@ def _set_view(records: list[dict[str, Any]], conv_doc: dict[str, Any],
     return view
 
 
+# The ONE honest key in the shipped bundle that matches the firewall: the RANKED SCORE of a
+# target inside an arm's ranking. It is the Direct arm's own effect statistic — the input the
+# enrichment walks — and the verifier RE-DERIVES the enrichment from these very numbers, so it
+# is checked as science rather than waved through as a name.
+#
+# The exemption is PATH-SCOPED, not name-scoped. `score` is permitted at exactly
+# `arm_rankings.<arm_key>[i].score` inside pathway_evidence.json and NOWHERE else: a fused
+# "pathway score" at the top of that document, or a `score` in the convergence artifact, or a
+# `p_value` anywhere inside a ranking, all still fire. Exempting the NAME would have opened
+# the hole the firewall exists to close.
+RANKING_SCORE_PATH = re.compile(r"^arm_rankings\.[^\[]+\[\d+\]\.score$")
+
+GATE_FIREWALL_READS_EVERY_DOC = "the_key_firewall_scanned_every_shipped_document"
+
+
+def _firewall_scan(out_dir: str, required, checks: list[dict[str, Any]]) -> None:
+    """NO p / q / FDR / combined objective, at ANY depth, in ANY document the bundle ships.
+
+    It used to scan two: the records and the provenance. The bundle ships SIX, and the four it
+    never opened — the convergence artifact, the evidence, the gene-set copy, the signature
+    reference — are exactly where a p-value would be quietest: nested, bound by hash, cited by
+    the run id, and read by nobody. A firewall that covers part of an artifact tells you only
+    about the part it covered.
+
+    The BYTES are re-read from disk here, not the parsed objects the rest of the verifier is
+    holding: the scan must see what shipped.
+    """
+    hits: list[str] = []
+    for name in required:
+        path = os.path.join(out_dir, name)
+        try:
+            with open(path) as fh:
+                obj = json.load(fh)
+        except (ValueError, OSError) as exc:
+            checks.append(_check(GATE_FIREWALL_READS_EVERY_DOC, False,
+                                 f"{name} does not load, so it cannot be scanned: {exc}"))
+            return
+        for hit in admission.forbidden_keys(obj):
+            if name == EVIDENCE_FILE and RANKING_SCORE_PATH.match(hit):
+                continue                      # the ranked statistic, at its one allowed path
+            hits.append(f"{name}:{hit}")
+    checks.append(_check(GATE_FIREWALL_READS_EVERY_DOC, True,
+                         f"scanned {len(required)} documents"))
+    checks.append(_check("no_forbidden_key_at_any_depth", not hits,
+                         f"forbidden keys: {sorted(set(hits))[:8]}"))
+
+
 def _all_arm_view(out_dir, doc, provenance, raw_records, identity, checks):
     """The ALL-ARM extras: bind the separate convergence artifact, then regroup to the
     per-set view every gate below already knows how to check.
@@ -584,9 +632,7 @@ def verify(*, out_dir: str, provenance: Optional[dict[str, Any]] = None,
     # The same recursive firewall the temporal lane fails closed on, over the SHIPPED
     # bytes of both documents. A pathway p-value would be the single most believable
     # wrong number this whole layer could emit.
-    hits = admission.forbidden_keys(doc) + admission.forbidden_keys(provenance)
-    checks.append(_check("no_forbidden_key_at_any_depth", not hits,
-                         f"forbidden keys: {sorted(set(hits))[:8]}"))
+    _firewall_scan(out_dir, required, checks)
     checks.append(_check(
         "inference_status_is_not_calibrated",
         provenance.get("inference_status") == "not_calibrated",

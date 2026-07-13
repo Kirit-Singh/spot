@@ -337,6 +337,156 @@ class TestDeletingTheDenominatorDoesNotDisableTheGate:
             sorted(_failed(report))
 
 
+# --------------------------------------------------------------------------- #
+# THE FIREWALL READS EVERY SHIPPED DOCUMENT.
+#
+# It scanned two of six. The four it never opened — the convergence artifact, the evidence,
+# the gene-set copy, the signature reference — are exactly where a p-value would be quietest:
+# nested, bound by hash, cited by the run id, and read by nobody.
+#
+# Each injector below poisons ONE document at the point the PRODUCER builds it, so every hash,
+# content address and the run id are recomputed honestly around the poison. The artifact is
+# internally perfect. Only a firewall that opens the file can see it.
+# --------------------------------------------------------------------------- #
+POISON = {"empirical_q_value": 0.03, "combined_score": 0.91}
+
+
+def _nested(payload):
+    """Three levels down, through a list: the shape a disguised statistic actually takes."""
+    return {"diagnostics": {"per_set": [dict({"set_id": "FX:CONVERGENT"}, **payload)]}}
+
+
+def _build_with_poison(args, out_root, target, payload):
+    """Rebuild the bundle with `payload` nested inside `target`, RESEALED by the producer."""
+    from direct import pathway_arms, pathway_evidence, signature_matrix
+    from direct import run_pathway_arms as rpa
+    from direct import emit
+    from direct.hashing import content_hash
+
+    saved = {}
+
+    def patch(mod, name, fn):
+        saved[(mod, name)] = getattr(mod, name)
+        setattr(mod, name, fn)
+
+    if target == "convergence.json":
+        real = pathway_arms.convergence_artifact
+
+        def forged(**kw):
+            doc = copy.deepcopy(real(**kw))
+            doc.update(_nested(payload))
+            doc["convergence_sha256"] = content_hash(
+                {k: v for k, v in doc.items() if k != "convergence_sha256"})
+            return doc
+        patch(pathway_arms, "convergence_artifact", forged)
+
+    elif target == "pathway_evidence.json":
+        real = pathway_evidence.build
+        patch(pathway_evidence, "build",
+              lambda *a, **k: dict(copy.deepcopy(real(*a, **k)), **_nested(payload)))
+
+    elif target == "signature_ref.json":
+        real = signature_matrix.signature_ref
+        patch(signature_matrix, "signature_ref",
+              lambda *a, **k: dict(copy.deepcopy(real(*a, **k)), **_nested(payload)))
+
+    elif target == "arm_bundle.json":
+        real = pathway_arms.build
+        patch(pathway_arms, "build",
+              lambda **k: dict(copy.deepcopy(real(**k)), **_nested(payload)))
+
+    elif target == "pathway_provenance.json":
+        real = emit.write_json
+
+        def forged_write(path, doc, *a, **k):
+            if os.path.basename(path) == "pathway_provenance.json":
+                doc = dict(copy.deepcopy(doc), **_nested(payload))
+            return real(path, doc, *a, **k)
+        patch(emit, "write_json", forged_write)
+
+    elif target == "gene_sets.source.json":
+        # bound by RAW hash, so the poison goes into the SOURCE the run is pinned to: then the
+        # copy, the pin and the release identity all agree and only the firewall can see it
+        with open(args.gene_sets) as fh:
+            doc = json.load(fh)
+        doc.update(_nested(payload))
+        with open(args.gene_sets, "w") as fh:
+            json.dump(doc, fh, indent=2, sort_keys=True)
+    else:
+        raise AssertionError(target)
+
+    try:
+        a = copy.deepcopy(args)
+        a.out_root = out_root
+        return rpa.build_pathway_arms(a)["out_dir"]
+    finally:
+        for (mod, name), fn in saved.items():
+            setattr(mod, name, fn)
+
+
+class TestTheKeyFirewallReadsEVERYShippedDocument:
+
+    FORBIDDEN = "no_forbidden_key_at_any_depth"
+    DOCS = ("arm_bundle.json", "pathway_provenance.json", "convergence.json",
+            "pathway_evidence.json", "gene_sets.source.json", "signature_ref.json")
+
+    def test_the_honest_bundle_still_passes_the_WIDER_firewall(self, honest):
+        """The evidence legitimately carries a `score` per ranked target. A firewall that
+        refused the truth would be turned off within the week."""
+        args, out_dir = honest
+        report = _verify(args, out_dir)
+        assert report["verdict"] == VP.ADMIT, sorted(_failed(report))
+        assert VP.GATE_FIREWALL_READS_EVERY_DOC in {c["check"] for c in report["checks"]}
+
+    @pytest.mark.parametrize("target", DOCS)
+    @pytest.mark.parametrize("key", sorted(POISON))
+    def test_a_nested_forbidden_key_in_EVERY_shipped_doc_is_refused(
+            self, prepared, tmp_path, target, key):
+        out = _build_with_poison(prepared, str(tmp_path / f"{target}.{key}"),
+                                 target, {key: POISON[key]})
+        report = _verify(prepared, out)
+        failed = _failed(report)
+        assert report["verdict"] == VP.REJECT, f"{key} in {target} ADMITTED"
+        # THE FIREWALL, AND NOTHING ELSE. If a hash or a schema gate also fired, the poison
+        # was not coherently resealed and the attack proves nothing about the firewall.
+        assert failed == {self.FORBIDDEN}, (target, key, sorted(failed))
+
+    def test_a_CLEAN_caller_provenance_cannot_launder_a_poisoned_file(self, prepared,
+                                                                     tmp_path):
+        """The audit that poisoned the SHIPPED provenance, passed a pristine dict as caller
+        metadata, and got ADMIT. The firewall reads the BYTES ON DISK; the caller's dict is
+        admissible only as a cross-check, never as the thing verified."""
+        from direct import run_pathway_arms as rpa
+
+        clean = rpa.build_pathway_arms(copy.deepcopy(prepared))["provenance"]
+        out = _build_with_poison(prepared, str(tmp_path / "laundered"),
+                                 "pathway_provenance.json", {"empirical_q_value": 0.03})
+        report = VP.verify(out_dir=out, provenance=copy.deepcopy(clean),
+                           gene_sets_path=prepared.gene_sets,
+                           signature_matrix_root=prepared.signature_matrix_root)
+        assert report["verdict"] == VP.REJECT
+        assert self.FORBIDDEN in _failed(report), sorted(_failed(report))
+
+    def test_a_FUSED_pathway_score_cannot_hide_at_the_ranking_score_path(self, prepared,
+                                                                         tmp_path):
+        """The `score` exemption is PATH-scoped: permitted only at
+        `arm_rankings.<arm>[i].score`. A fused score anywhere else still fires."""
+        from direct import pathway_evidence
+        real = pathway_evidence.build
+        pathway_evidence.build = (
+            lambda *a, **k: dict(copy.deepcopy(real(*a, **k)), score=0.77))
+        try:
+            from direct import run_pathway_arms as rpa
+            a = copy.deepcopy(prepared)
+            a.out_root = str(tmp_path / "fused")
+            out = rpa.build_pathway_arms(a)["out_dir"]
+        finally:
+            pathway_evidence.build = real
+        report = _verify(prepared, out)
+        assert report["verdict"] == VP.REJECT
+        assert self.FORBIDDEN in _failed(report), sorted(_failed(report))
+
+
 class TestTheRefusalsAreSCIENTIFIC_notIncidental:
     """A forgery that dies on a missing file, a schema slip or a hash mismatch tells us
     nothing about whether the SCIENCE was recomputed. So for each attack, the structural
