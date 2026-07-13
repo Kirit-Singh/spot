@@ -113,6 +113,8 @@ def _env_for(r):
         "SGRNA": str(r / "sgrna"), "MANIFEST": str(r / "manifest"), "SRCREG": str(r / "srcreg"),
         "PB": str(r / "pb"), "ENV_LOCK": str(r / "el"), "OUT": str(r / "out"),
         "W10_REPORT_DIR": str(r / "w"),
+        # decouple identity tests from the (concurrently-edited) real verifier worktree
+        "DIRECT_VERIFIER_DIR": str(r / "no_verifier"),
     }
 
 
@@ -139,3 +141,63 @@ def test_identity_resume_passes_when_unchanged(tmp_path):
     res = _run(["temporal"], env)   # unchanged -> identity passes -> refuses on admission only
     assert res.returncode == 3
     assert "RESUME REFUSED" not in res.stderr
+
+
+def test_identity_resume_refuses_a_tampered_stored_manifest(tmp_path):
+    import json
+    r = _real_run_dir(tmp_path); env = _env_for(r)
+    assert _run(["preflight"], env).returncode == 0
+    mp = r / "out" / ".state" / "run_identity.json"
+    m = json.loads(mp.read_text())
+    m["lane"] = "tampered"               # edit the body WITHOUT recomputing the self-hash
+    mp.write_text(json.dumps(m))
+    res = _run(["temporal"], env)
+    assert res.returncode == 3
+    assert "RESUME REFUSED" in res.stderr and "tampered" in res.stderr
+
+
+def test_preflight_refuses_rebaseline_in_same_run_root(tmp_path):
+    r = _real_run_dir(tmp_path); env = _env_for(r)
+    assert _run(["preflight"], env).returncode == 0
+    (r / "de").write_text("orig-de\nMUTATED")   # a different identity in the SAME OUT
+    res = _run(["preflight"], env)
+    assert res.returncode == 3
+    assert "no rebaseline" in res.stderr.lower() or "different run identity" in res.stderr.lower()
+
+
+def test_w10_admitted_rejects_forged_bindings(tmp_path):
+    """Exact owner forgery: a full-body-self-hashed binding with correct binding_schema but
+    native_verdict=REFUSE + disposition=admitted, omitting contract fields, must be REFUSED. Also
+    a complete-fields-but-REFUSE binding must be refused (verdict/disposition consistency)."""
+    import sys as _sys
+    _sys.path.insert(0, ANALYSIS)
+    from direct import stage2_run as S
+    d = tmp_path / "w"; d.mkdir()
+
+    class C:
+        w10_report_dir = str(d)
+        direct_verifier = str(tmp_path / "no_verifier")   # offline -> fallback path
+
+    def _sealed(b):
+        import json as _j
+        b["binding_sha256"] = S.content_sha256({k: v for k, v in b.items() if k != "binding_sha256"})
+        return b
+
+    # (a) the owner's exact forgery: REFUSE+admitted, omits source_report*/spec/lane/solver_lock/...
+    forged = _sealed({
+        "binding_schema": S.BINDING_SCHEMA, "subject_kind": "release",
+        "native_verdict": "REFUSE", "disposition": "admitted",
+        "verifier_id": S.W10_BUNDLE_VERIFIER_ID, "verifier_code_sha256": S.W10_VERIFIER_CODE,
+        "condition": "Rest", "bundle_id": "abc123", "binding_sha256": "x"})
+    (d / "direct_admission_Rest.json").write_text(__import__("json").dumps(forged))
+    assert S.w10_admitted(C, "Rest") is False
+
+    # (b) complete required fields but native_verdict=REFUSE (must fail the semantic consistency)
+    full = {k: "v" for k in S._BINDING_REQUIRED}
+    full.update({"binding_schema": S.BINDING_SCHEMA, "subject_kind": "bundle",
+                 "native_verdict": "REFUSE", "disposition": "admitted", "n_failed": 0,
+                 "bundle_verified_on_disk": True, "verifier_id": S.W10_BUNDLE_VERIFIER_ID,
+                 "verifier_code_sha256": S.W10_VERIFIER_CODE, "condition": "Stim8hr"})
+    _sealed(full)
+    (d / "direct_admission_Stim8hr.json").write_text(__import__("json").dumps(full))
+    assert S.w10_admitted(C, "Stim8hr") is False

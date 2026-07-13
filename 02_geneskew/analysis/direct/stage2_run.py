@@ -34,6 +34,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 
 # --- module-root anchoring (works from any cwd) -----------------------------------------
 SELF = os.path.dirname(os.path.abspath(__file__))          # .../02_geneskew/analysis/direct
@@ -157,7 +158,10 @@ def build_run_identity(cfg: Cfg) -> dict:
             "direct_w10_verifier_id": "spot.stage02.direct.arm_bundle.verifier.v1",
             "direct_w10_verifier_code_sha256":
                 "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",
-            "direct_verifier_head": "9965d64",   # W10 FINAL adapter head (56/56; production gate profiles)
+            "direct_verifier_head": "9965d64e50cd4a38fb6067a35c00bd7a5a7babef",  # W10 FINAL adapter (FULL commit)
+            "direct_verifier_tree_sha256": (("tree:" + tree_sha256(cfg.direct_verifier))
+                                            if (not DRY and os.path.isdir(cfg.direct_verifier))
+                                            else "<unbound>"),
             "temporal_verifier": "07a064c1b8c4f5a1c1693c306fd264c4ada6f49d",
             "pathway_verifier": "53ac540",
         },
@@ -197,27 +201,56 @@ def phaseA_preflight(cfg: Cfg):
     if os.path.exists(cfg.out) and not os.path.isdir(cfg.state_dir) and os.listdir(cfg.out):
         raise SchedulerError(f"preflight: OUT {cfg.out} non-empty and not a resumable run root")
     os.makedirs(cfg.state_dir, exist_ok=True)
+    if os.path.isfile(identity_path(cfg)):
+        existing = json.load(open(identity_path(cfg)))
+        if existing.get("run_identity_sha256") != manifest["run_identity_sha256"]:
+            raise SchedulerError(
+                f"preflight REFUSED: a DIFFERENT run identity already exists in this OUT ({cfg.out}) "
+                "— no rebaseline/overwrite in the same run root; use a fresh OUT")
+        return   # identical re-preflight is a no-op; the stored identity is write-once
     with open(identity_path(cfg), "w") as fh:
         json.dump(manifest, fh, sort_keys=True, indent=2)
     _write_receipt(cfg, "A.preflight", argv=["preflight"], inputs=[], outputs=[identity_path(cfg)],
                    prereqs=[], extra={"run_identity_sha256": manifest["run_identity_sha256"]})
 
 
+def _verify_external_verifier_tree(cfg, stored_body):
+    """Bind the external Direct verifier checkout to its exact tree hash — a verifier-dir swap or
+    a dirty verifier tree is refused."""
+    want = stored_body.get("verifier_pins", {}).get("direct_verifier_tree_sha256")
+    if want and want != "<unbound>" and os.path.isdir(cfg.direct_verifier):
+        got = "tree:" + tree_sha256(cfg.direct_verifier)
+        if got != want:
+            raise SchedulerError("RESUME REFUSED: the external Direct verifier checkout tree "
+                                 f"changed (swap/dirty) — got {got[:22]} != bound {str(want)[:22]}")
+
+
 def verify_run_identity(cfg: Cfg):
-    """Every resume rehashes the identity and compares to the stored manifest BEFORE any receipt."""
+    """Every resume, BEFORE any receipt is read: (1) recompute the STORED manifest's self-hash
+    and require it equals its own recorded sha (a naive edit is caught); (2) rebuild the identity
+    from the ACTUAL inputs and require the FULL body equals the stored body field-by-field (any
+    input/tree/code/pin change is caught, not just a sha comparison); (3) confirm the external
+    verifier checkout is at its exact bound tree."""
     if DRY:
-        print("=== RESUME-GATE rehash run identity; REFUSE on any input/tree/code/pin change")
+        print("=== RESUME-GATE recompute stored self-hash + compare FULL stored body + bind "
+              "external verifier tree; REFUSE on any change")
         return
     p = identity_path(cfg)
     if not os.path.isfile(p):
         raise SchedulerError("resume: no run-identity manifest; run phase A first")
     stored = json.load(open(p))
-    fresh = build_run_identity(cfg)
-    if fresh["run_identity_sha256"] != stored.get("run_identity_sha256"):
-        raise SchedulerError(
-            "RESUME REFUSED: the run identity changed since preflight — a scientific input, "
-            "the Stage-1 release/view, a gene set, the code identity, or a verifier pin differs. "
-            f"fresh={fresh['run_identity_sha256'][:16]} stored={str(stored.get('run_identity_sha256'))[:16]}")
+    stored_sha = stored.get("run_identity_sha256")
+    stored_body = {k: v for k, v in stored.items() if k != "run_identity_sha256"}
+    if content_sha256(stored_body) != stored_sha:
+        raise SchedulerError("RESUME REFUSED: the stored run-identity manifest is internally "
+                             "inconsistent (body edited without a matching self-hash) — tampered")
+    fresh_body = {k: v for k, v in build_run_identity(cfg).items() if k != "run_identity_sha256"}
+    if fresh_body != stored_body:
+        diff = sorted(k for k in set(fresh_body) | set(stored_body)
+                      if fresh_body.get(k) != stored_body.get(k))
+        raise SchedulerError(f"RESUME REFUSED: the run identity changed since preflight — "
+                             f"differing keys: {diff}")
+    _verify_external_verifier_tree(cfg, stored_body)
 
 
 # ---- hash-bound receipts ----------------------------------------------------------------
@@ -295,44 +328,93 @@ def native_report_path(cfg, cond):
 BINDING_SCHEMA = "spot.stage02.direct_admission_binding.v1"
 W10_VERIFIER_CODE = "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
 W10_BUNDLE_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
-# every field the adapter's binding must carry, non-null, for a per-bundle admission
-_BINDING_REQUIRED = ("binding_schema", "subject_kind", "native_verdict", "disposition",
-                     "verifier_id", "verifier_code_sha256", "bundle_id", "condition",
-                     "arm_rows_sha256", "mask_sha256", "binding_sha256")
+# W10's PUBLISHED per-bundle contract (its authoritative field list) — NOT a hand-picked subset.
+# Every one is required non-null on a bundle admission; the schema file (when present) is the
+# authoritative validator and this replicates it for offline/test use.
+_BINDING_REQUIRED = (
+    "binding_schema", "source_report_sha256", "source_report_schema", "subject_kind",
+    "native_verdict", "disposition", "verifier_id", "verifier_code_sha256", "spec_sha256",
+    "solver_lock_sha256", "scorer_view_sha256", "n_failed", "direct_bundle_sha256",
+    "bundle_verified_on_disk", "binding_sha256", "bundle_id", "condition", "lane",
+    "arm_rows_sha256", "mask_sha256", "stage1_scorer_view_canonical_sha256")
 
 
-def w10_admitted(cfg, cond):
-    """Fail-closed. The adapter's normalized `binding_schema` binding must: carry the EXACT schema
-    id, re-derive its own `binding_sha256` over the FULL body, present every required field
-    non-null, be independently ADMITTED, carry the pinned W10 verifier id + code sha, and BIND
-    this condition + the DISCOVERED bundle's `arm_bundle_run_id` on disk. A forged partial binding
-    (e.g. the 4-field {schema,disposition,verifier_code_sha256,binding_sha256}) is refused because
-    the full required set + the condition/bundle bind must hold. Field is `binding_schema` (the
-    adapter's name), never `schema`."""
-    p = w10_binding_path(cfg, cond)
-    if not os.path.isfile(p):
+def _rerun_adapter(cfg, cond):
+    """Re-run the PINNED adapter on the native report + discovered bundle → its FRESH normalized
+    binding (the authoritative re-derivation), or None if the adapter/native report is absent or
+    the adapter REFUSES (a forged native report cannot produce a binding)."""
+    adapter = os.path.join(cfg.direct_verifier, "verify_arm_contract.py")
+    native_p = native_report_path(cfg, cond)
+    if not (os.path.isfile(adapter) and os.path.isfile(native_p)):
+        return None
+    try:
+        bundle_dir = direct_bundle_for(cfg, cond)
+    except Exception:
+        return None
+    fd, outp = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    try:
+        r = subprocess.run([sys.executable, adapter, "--report", native_p, "--bundle", bundle_dir,
+                            "--out", outp], capture_output=True, cwd=cfg.direct_verifier)
+        return json.load(open(outp)) if r.returncode == 0 else None
+    except Exception:
+        return None
+    finally:
+        try:
+            os.unlink(outp)
+        except OSError:
+            pass
+
+
+def _binding_semantics_ok(cfg, cond, b):
+    """Admission semantics on an authoritative binding: full-body self-hash, bundle subject,
+    native ADMIT consistent with disposition=admitted, n_failed==0, verified-on-disk, pinned W10
+    id+code, and bind THIS condition + the discovered bundle's arm_bundle_run_id."""
+    if not isinstance(b, dict):
+        return False
+    if content_sha256({k: v for k, v in b.items() if k != "binding_sha256"}) != b.get("binding_sha256"):
+        return False
+    if b.get("binding_schema") != BINDING_SCHEMA or b.get("subject_kind") != "bundle":
+        return False
+    if b.get("native_verdict") != "ADMIT" or b.get("disposition") != "admitted":
+        return False
+    if b.get("n_failed") != 0 or b.get("bundle_verified_on_disk") is not True:
+        return False
+    if b.get("verifier_code_sha256") != W10_VERIFIER_CODE or b.get("verifier_id") != W10_BUNDLE_VERIFIER_ID:
+        return False
+    if b.get("condition") != cond:
         return False
     try:
-        b = json.load(open(p))
-    except Exception:
-        return False
-    if any(b.get(k) in (None, "") for k in _BINDING_REQUIRED):
-        return False
-    if b["binding_schema"] != BINDING_SCHEMA:
-        return False
-    if content_sha256({k: v for k, v in b.items() if k != "binding_sha256"}) != b["binding_sha256"]:
-        return False
-    if b["disposition"] != "admitted":
-        return False
-    if b["verifier_code_sha256"] != W10_VERIFIER_CODE or b["verifier_id"] != W10_BUNDLE_VERIFIER_ID:
-        return False
-    if b["condition"] != cond:
-        return False
-    try:                                              # bind the ACTUAL discovered bundle
         doc = json.load(open(os.path.join(direct_bundle_for(cfg, cond), "arm_bundle.json")))
     except Exception:
         return False
-    return b["bundle_id"] == doc.get("arm_bundle_run_id")
+    return b.get("bundle_id") == doc.get("arm_bundle_run_id")
+
+
+def w10_admitted(cfg, cond):
+    """STRONGEST fail-closed rule: RE-RUN the pinned adapter against the native report + discovered
+    bundle, load its FRESH normalized output, and require CANONICAL EQUALITY to the stored binding
+    before testing the admission semantics. A resealed/forged stored binding (e.g. native_verdict
+    REFUSE + disposition admitted, or omitted contract fields) cannot equal a fresh re-derivation;
+    a forged native report makes the adapter refuse (no fresh binding). When the adapter is
+    unavailable offline, fall back to the FULL published-contract field set + the same semantics —
+    never a hand-picked subset."""
+    stored_p = w10_binding_path(cfg, cond)
+    if not os.path.isfile(stored_p):
+        return False
+    try:
+        stored = json.load(open(stored_p))
+    except Exception:
+        return False
+    fresh = _rerun_adapter(cfg, cond)
+    if fresh is not None:                                # authoritative re-derivation available
+        if content_sha256(fresh) != content_sha256(stored):
+            return False                                # stored binding != fresh adapter output
+        return _binding_semantics_ok(cfg, cond, fresh)
+    # offline fallback: the full published required-field contract + the same semantics
+    if not isinstance(stored, dict) or any(stored.get(k) in (None, "") for k in _BINDING_REQUIRED):
+        return False
+    return _binding_semantics_ok(cfg, cond, stored)
 
 
 def require_admitted_direct(cfg):
@@ -381,7 +463,9 @@ def verify_direct_gate(cfg):
              "--by-donors", cfg.donor, "--guide-manifest", cfg.manifest,
              "--source-registry", cfg.srcreg, "--pseudobulk", cfg.pb,
              "--stage1-v3-release", cfg.stage1_release, "--release-root", cfg.stage1_release_root,
-             "--env-lock", cfg.env_lock, "--recompute", "all", "--report", nrep],
+             "--env-lock", cfg.env_lock,
+             "--expect-h5ad-sha256", ("<sha256:DE.h5ad>" if DRY else file_sha256(cfg.de)),
+             "--recompute", "all", "--report", nrep],
             consumes=[f"direct:{cond}"], produces=[f"w10_report:{cond}"], cwd=dv)
         # 2) the neutral adapter normalizes native report -> self-hashed binding
         run(f"w10-adapter:{cond}",
