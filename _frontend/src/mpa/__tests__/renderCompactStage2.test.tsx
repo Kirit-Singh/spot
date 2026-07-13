@@ -35,8 +35,11 @@ describe('compact Stage-2 route rendering', () => {
     expect(within(canvas).getAllByText('rank')).toHaveLength(2);
     expect(within(canvas).getAllByText('symbol')).toHaveLength(2);
     expect(within(canvas).getAllByText('ensembl')).toHaveLength(2);
-    // the arm's context carries the size of the ranking its rows are drawn from
-    expect(within(canvas).getAllByText('Stim48hr (2 ranked)')).toHaveLength(2);
+    // each arm states the size of the ranking its rows are drawn from; the pole bracket beside it
+    // already carries the condition, so the full context stays available without repeating it inline
+    expect(canvas.textContent).toContain('2 ranked');
+    expect([...canvas.querySelectorAll('[title]')].map((n) => n.getAttribute('title')))
+      .toContain('Stim48hr (2 ranked)');
     expect(canvas.querySelectorAll('section[aria-label$="effect-rank facet"]')).toHaveLength(2);
     expect(within(canvas).getAllByText('Signed program shift')).toHaveLength(2);
     expect(within(canvas).getAllByText('Rank evidence −log10(rank/N)')).toHaveLength(2);

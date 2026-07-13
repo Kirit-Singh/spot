@@ -179,25 +179,26 @@ function GeneArmTable({
 
   return (
     <section aria-label="Gene arm" className="min-w-0 rounded-lg border border-line bg-surface">
-      {/* The pole is stated exactly as its facet states it; the arm context sits on its own centred
-          line so both tables keep the same header height and stay aligned side by side. */}
-      <header className="border-b border-line px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <PoleChip role={pole.role} />
-          <PoleTitle label={pole.label} direction={pole.direction} condition={pole.condition} />
-          <span className="ml-auto">
-            <RowModeControl mode={mode} bothCount={bothArmIds.size} cap={arm.n_emitted} onMode={onMode} />
-          </span>
-        </div>
-        {/* secondary context — drops out once the card is too narrow to carry it without crowding */}
-        <div className="mt-1 hidden text-center font-mono text-[10px] text-muted md:block">
+      {/* One row: the pole exactly as its facet states it, the arm context centred between, the row
+          control right. The context NEVER wraps (it would push one table's rows below the other's),
+          and it drops out entirely once the card is too narrow to seat it. */}
+      <header className="flex items-center gap-x-2 border-b border-line px-3 py-2">
+        <PoleChip role={pole.role} />
+        <PoleTitle label={pole.label} direction={pole.direction} condition={pole.condition} />
+        <span
+          title={armContext(arm)}
+          className="hidden min-w-0 flex-1 truncate whitespace-nowrap text-center font-mono text-[10px] text-muted md:block"
+        >
           {dir && (
             <span className="text-ink-2">
               {ARROW[dir]} {MOTION[dir]}
             </span>
           )}{' '}
-          {armContext(arm)}
-        </div>
+          · {shown(arm.n_ranked)} ranked
+        </span>
+        <span className="ml-auto flex-none">
+          <RowModeControl mode={mode} bothCount={bothArmIds.size} cap={arm.n_emitted} onMode={onMode} />
+        </span>
       </header>
       {/* Stable columns: a fixed layout (not content-sized) plus a reserved scrollbar gutter, so
           switching row modes — 10 rows to 100, scrollbar or none — never reflows the columns. */}
