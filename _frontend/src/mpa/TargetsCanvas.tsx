@@ -13,7 +13,7 @@ import type {
   CompactTargetRow,
 } from '../domain/compactStage2Projection';
 import { conditionLabel } from './contrastTitle';
-import { EffectRankPlot } from './EffectRankPlot';
+import { EffectRankPlot, PoleChip, PoleTitle } from './EffectRankPlot';
 
 const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
 const TD = 'px-2 py-1 font-mono text-[10.5px] text-ink-2';
@@ -39,16 +39,6 @@ function armDirection(view: CompactStage2SelectionView, arm: CompactTargetArm): 
   for (const facet of view.effectRankFacets) {
     if (facet.increase.arm_key === arm.arm_key) return 'increase';
     if (facet.decrease.arm_key === arm.arm_key) return 'decrease';
-  }
-  return null;
-}
-
-/** The program this arm belongs to, again by exact arm_key identity. */
-function armProgramId(view: CompactStage2SelectionView, arm: CompactTargetArm): string | null {
-  for (const facet of view.effectRankFacets) {
-    if (facet.increase.arm_key === arm.arm_key || facet.decrease.arm_key === arm.arm_key) {
-      return facet.program_id;
-    }
   }
   return null;
 }
@@ -154,7 +144,8 @@ function armContext(arm: CompactTargetArm): string {
 interface ArmTableProps {
   view: CompactStage2SelectionView;
   arm: CompactTargetArm;
-  labels: Map<string, string>;
+  /** The pole this arm serves, stated exactly as its facet states it. */
+  pole: { role: 'A' | 'B'; label: string; direction?: string; condition?: string };
   activeId: string | null;
   pinnedId: string | null;
   bothArmIds: ReadonlySet<string>;
@@ -167,7 +158,7 @@ interface ArmTableProps {
 function GeneArmTable({
   view,
   arm,
-  labels,
+  pole,
   activeId,
   pinnedId,
   bothArmIds,
@@ -179,8 +170,6 @@ function GeneArmTable({
   const rows = rowsFor(arm, mode, bothArmIds, pinnedId);
   const showValue = rows.some((row) => row.arm_value !== null);
   const dir = armDirection(view, arm);
-  const programId = armProgramId(view, arm);
-  const program = programId ? (labels.get(programId) ?? programId) : null;
   const pinnedRow = useRef<HTMLTableRowElement | null>(null);
 
   // Follow a gene pinned from the plot into view; 'nearest' keeps the page from jumping.
@@ -190,17 +179,25 @@ function GeneArmTable({
 
   return (
     <section aria-label="Gene arm" className="min-w-0 rounded-lg border border-line bg-surface">
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
-        {program && <span className="text-[13.5px] font-semibold text-ink">{program}</span>}
-        {dir && (
-          <span className="font-mono text-[11px] text-ink-2">
-            {ARROW[dir]} {MOTION[dir]}
+      {/* The pole is stated exactly as its facet states it; the arm context sits on its own centred
+          line so both tables keep the same header height and stay aligned side by side. */}
+      <header className="border-b border-line px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <PoleChip role={pole.role} />
+          <PoleTitle label={pole.label} direction={pole.direction} condition={pole.condition} />
+          <span className="ml-auto">
+            <RowModeControl mode={mode} bothCount={bothArmIds.size} cap={arm.n_emitted} onMode={onMode} />
           </span>
-        )}
-        <span className="font-mono text-[11px] text-muted">{armContext(arm)}</span>
-        <span className="ml-auto">
-          <RowModeControl mode={mode} bothCount={bothArmIds.size} cap={arm.n_emitted} onMode={onMode} />
-        </span>
+        </div>
+        {/* secondary context — drops out once the card is too narrow to carry it without crowding */}
+        <div className="mt-1 hidden text-center font-mono text-[10px] text-muted md:block">
+          {dir && (
+            <span className="text-ink-2">
+              {ARROW[dir]} {MOTION[dir]}
+            </span>
+          )}{' '}
+          {armContext(arm)}
+        </div>
       </header>
       {/* Stable columns: a fixed layout (not content-sized) plus a reserved scrollbar gutter, so
           switching row modes — 10 rows to 100, scrollbar or none — never reflows the columns. */}
@@ -378,7 +375,12 @@ export function TargetsCanvas({
             <GeneArmTable
               view={view}
               arm={selectedArmFor(view, facet)}
-              labels={labels}
+              pole={{
+                role: facet.role,
+                label: name(facet.program_id),
+                direction: poleDirections?.[facet.role],
+                condition: facetCondition(facet),
+              }}
               activeId={activeId}
               pinnedId={pinned}
               bothArmIds={bothArmIds}

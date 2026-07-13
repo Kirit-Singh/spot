@@ -63,8 +63,9 @@ function hpaUrl(id: string): string | null {
 /** Emphasis is bound to top-five rank, independent of whether a display label was drawn. */
 const isTopFive = (p: PlotPoint): boolean => p.rank <= 5;
 
-/** Stage-1's `.ctchip` grammar: the From / To poles keep the identity they were selected with. */
-function PoleChip({ role }: { role: 'A' | 'B' }) {
+/** Stage-1's `.ctchip` grammar: the From / To poles keep the identity they were selected with.
+ *  Shared with the arm tables so a pole is stated identically wherever it appears. */
+export function PoleChip({ role }: { role: 'A' | 'B' }) {
   const from = role === 'A';
   return (
     <span
@@ -72,6 +73,26 @@ function PoleChip({ role }: { role: 'A' | 'B' }) {
       style={{ background: from ? 'rgb(45,124,142)' : 'rgb(214,152,52)' }}
     >
       {from ? 'From' : 'To'}
+    </span>
+  );
+}
+
+/** A pole as the page header states it: label, selected direction, its own condition. Shared by the
+ *  facet and its arm table so the same pole never reads two different ways. */
+export function PoleTitle({
+  label,
+  direction,
+  condition,
+}: {
+  label: string;
+  direction?: string;
+  condition?: string;
+}) {
+  return (
+    <span className="text-[13.5px] font-semibold text-ink">
+      {label}
+      {direction && <span className="text-ink-2"> {direction}</span>}
+      {condition && <span className="font-normal text-ink-2"> ({condition})</span>}
     </span>
   );
 }
@@ -223,13 +244,7 @@ export function EffectRankPlot({
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
         <PoleChip role={facet.role} />
-        {/* the pole as the page header states it — label + its own condition; the raw program_id
-            stays in the accessible name, not on the card */}
-        <span className="text-[13.5px] font-semibold text-ink">
-          {programLabel ?? facet.program_id}
-          {poleDirection && <span className="text-ink-2"> {poleDirection}</span>}
-          {condition && <span className="font-normal text-ink-2"> ({condition})</span>}
-        </span>
+        <PoleTitle label={programLabel ?? facet.program_id} direction={poleDirection} condition={condition} />
         <span className="ml-auto">
           <Legend bothCount={bothArmIds.size} />
         </span>
