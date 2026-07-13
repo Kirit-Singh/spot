@@ -1034,7 +1034,94 @@ class TestTheREALW11Bytes:
         with pytest.raises(LA.AdmissionError) as exc:
             LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
         assert exc.value.gate == LA.G_BOUND_BYTES
-        assert rel in str(exc.value)
+        # The RANKINGS DIGEST catches it release-wide, BEFORE the per-file check — a stronger
+        # refusal: one edited byte in one ranking moves a digest taken over all 120 of them.
+        assert "rankings_digest" in str(exc.value) or rel in str(exc.value)
+
+    def test_the_REAL_envelope_ASSERTS_independence_AND_fail_closed(self):
+        """It DOES carry both. An empty assert set under-checked exactly the two claims a
+        forged envelope would omit."""
+        _inv, adm = self._real()
+        assert adm["generator_is_not_verifier"] is True
+        assert adm["fail_closed"] is True
+        assert LA.EXTERNAL["temporal"]["asserts"] == (
+            "generator_is_not_verifier", "fail_closed")
+
+    @pytest.mark.parametrize("field", ["generator_is_not_verifier", "fail_closed"])
+    def test_DROPPING_an_assert_from_the_REAL_envelope_is_REFUSED(self, tmp_path, field):
+        root, inv, adm, s1 = self._real_root(tmp_path)
+        forged = dict(adm)
+        forged[field] = False
+        forged.pop("report_id")
+        forged["report_id"] = content_hash(forged)              # resealed
+        with open(os.path.join(root, "temporal_arm_external_admission.json"), "w") as fh:
+            json.dump(forged, fh)
+        bd = os.path.join(root, "temporal", inv["bundles"][0]["relative_dir"])
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert exc.value.gate == LA.G_VERIFIER
+        assert field in str(exc.value)
+
+    def test_the_CANONICAL_binding_is_RE_DERIVED_from_the_real_inventory(self, tmp_path):
+        """producer_release_canonical_sha256 = content_hash(json.loads(raw bytes)). It was
+        accepted on PRESENCE — a check that compares nothing."""
+        _inv, adm = self._real()
+        with open(W11_INVENTORY, "rb") as fh:
+            iraw = fh.read()
+        assert adm["binds"]["producer_release_canonical_sha256"] == content_hash(
+            json.loads(iraw))
+
+    def test_a_FORGED_CANONICAL_binding_is_REFUSED(self, tmp_path):
+        root, inv, adm, s1 = self._real_root(tmp_path)
+        forged = dict(adm)
+        forged["binds"] = dict(adm["binds"],
+                               producer_release_canonical_sha256="dead" + "0" * 60)
+        forged.pop("report_id")
+        forged["report_id"] = content_hash(forged)
+        with open(os.path.join(root, "temporal_arm_external_admission.json"), "w") as fh:
+            json.dump(forged, fh)
+        bd = os.path.join(root, "temporal", inv["bundles"][0]["relative_dir"])
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert exc.value.gate == LA.G_BOUND_BYTES
+        assert "producer_release_canonical_sha256" in str(exc.value)
+
+    def test_the_RANKINGS_DIGEST_is_RE_DERIVED_over_all_120_rankings(self, tmp_path):
+        """One row per ARM RANKING across every bundle — {bundle_key, arm_key, path,
+        raw_sha256, canonical_sha256} — sorted, with raw/canonical RECOMPUTED FROM DISK."""
+        root, inv, adm, _s1 = self._real_root(tmp_path)
+        native = os.path.join(root, "temporal")
+        got = LA._rankings_digest(native, inv, content_hash, file_sha256)
+        assert got == adm["binds"]["rankings_digest"]
+        # 6 bundles x 20 arms
+        rows = sum(len(json.load(open(os.path.join(native, b["relative_dir"],
+                                                   "arm_bundle.json")))["arms"])
+                   for b in inv["bundles"])
+        assert rows == 120
+
+    def test_a_FORGED_RANKINGS_DIGEST_is_REFUSED(self, tmp_path):
+        root, inv, adm, s1 = self._real_root(tmp_path)
+        forged = dict(adm)
+        forged["binds"] = dict(adm["binds"], rankings_digest="beef" + "0" * 60)
+        forged.pop("report_id")
+        forged["report_id"] = content_hash(forged)
+        with open(os.path.join(root, "temporal_arm_external_admission.json"), "w") as fh:
+            json.dump(forged, fh)
+        bd = os.path.join(root, "temporal", inv["bundles"][0]["relative_dir"])
+        with pytest.raises(LA.AdmissionError) as exc:
+            LA.bind_external(root, "temporal", bundle_dir=bd, stage1=s1)
+        assert exc.value.gate == LA.G_BOUND_BYTES
+        assert "rankings_digest" in str(exc.value)
+
+    def test_the_VERIFIER_re_derives_BOTH_digests_INDEPENDENTLY(self, tmp_path):
+        import verify_admission_rules as VR
+        root, inv, adm, _s1 = self._real_root(tmp_path)
+        native = os.path.join(root, "temporal")
+        assert VR._rankings_digest(native, inv, VR.canon, VR.raw) == \
+            adm["binds"]["rankings_digest"]
+        with open(W11_INVENTORY, "rb") as fh:
+            assert VR.canon(json.loads(fh.read())) == \
+                adm["binds"]["producer_release_canonical_sha256"]
 
     def test_a_PRODUCER_VERIFIER_DRIFT_is_CAUGHT_on_the_REAL_bytes(self, tmp_path,
                                                                    monkeypatch):

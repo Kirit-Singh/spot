@@ -26,7 +26,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from typing import Any
+
+# the verifier's own modules load FLAT — never through the producer's package
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # RE-STATED, NOT IMPORTED. A drift between these and the producer's is the finding.
 CAP_OF = {"direct": 100, "temporal": 100, "pathway": 50}
@@ -185,15 +189,112 @@ def verify(projection_path: str, *, bundles_root: str) -> dict[str, Any]:
         else:
             failures += _check_target(arm_key, view, native_targets.get(arm_key), lane)
 
+    # ---- THE SUBJECT. A receipt that does not name WHICH projection it judged is a receipt
+    # for any projection with the same shape.
+    #
+    # THE DEFECT: this receipt carried a verifier id, some booleans, n_arms, failures and a
+    # verdict — and NOTHING that identified the bytes. So a UI could take an ALTERED projection
+    # (one arm_value 1.6758342617 -> 125.1318342617, declared projection_sha256 left alone) and
+    # pair it with the ORIGINAL receipt, and both parsed: the only thing tying them together was
+    # n_arms, which the mutation does not change. A verdict about bytes nobody named is not a
+    # verdict about these bytes.
+    with open(projection_path, "rb") as fh:
+        raw_bytes = fh.read()
+    subject = {
+        "projection_file": os.path.basename(projection_path),
+        # RECOMPUTED from the file on disk — not copied from the document's own claim
+        "projection_raw_sha256": hashlib.sha256(raw_bytes).hexdigest(),
+        "projection_canonical_sha256": _canon(doc),
+        "projection_self_sha256_declared": doc.get("projection_sha256"),
+        "projection_self_sha256_recomputed": derived,
+        "self_hash_agrees": claimed == derived,
+    }
+
+    # ---- THE ADMITTED INPUTS. `rebuilt_from_admitted_native_bytes` was a hard-coded TRUE:
+    # it meant "a directory was found", not "an admission was validated". It is now the RESULT
+    # of loading each lane's external admission and its bound inventory.
+    admitted_inputs, admission_failures = _admitted_inputs(doc, bundles_root)
+    failures += admission_failures
+
     return {
         "verifier_id": "spot.stage02.display_projection.independent_verifier.v1",
         "generator_is_not_verifier": True,
-        "rebuilt_from_admitted_native_bytes": True,
+        # ONLY after the lane admissions were loaded AND validated.
+        "rebuilt_from_admitted_native_bytes": bool(admitted_inputs) and not admission_failures,
+        "subject": subject,
+        "admitted_inputs": admitted_inputs,
         "n_arms": len(doc.get("arms") or {}),
         "n_failed": len(failures),
         "failures": failures[:50],
         "verdict": "admit" if not failures else "reject",
     }
+
+
+G_SUBJECT = "the_receipt_does_not_name_the_exact_projection_it_judged"
+G_ADMITTED_INPUTS = "the_lane_admissions_behind_this_view_were_not_loaded_and_validated"
+
+
+def _admitted_inputs(doc: dict, bundles_root: str) -> tuple:
+    """Load and VALIDATE each lane's external admission. Finding a directory is not admission.
+
+    `rebuilt_from_admitted_native_bytes` used to be a literal `True`. It said a root existed.
+    It is now the result of actually opening each lane's admission and its bound inventory,
+    through the verifier's OWN restatement of the contract.
+    """
+    import verify_admission_rules as AR
+
+    sources = (doc.get("bindings") or {}).get("native_bundles") or {}
+    out: dict[str, Any] = {}
+    bad: list[str] = []
+
+    # ---- DIRECT: W10 admits ONE BUNDLE AT A TIME, so EVERY Direct bundle this view read must
+    # carry its own admission. Skipping past Direct — as this did — meant a MIXED Direct +
+    # temporal projection could claim `rebuilt_from_admitted_native_bytes` on the strength of
+    # the TEMPORAL admission alone, while its Direct rows rested on nothing.
+    for rel, b in sorted(sources.items()):
+        if str(b.get("lane")) != "direct":
+            continue
+        bd = os.path.join(bundles_root, rel)
+        try:
+            with open(os.path.join(bd, "arm_bundle.json")) as fh:
+                bundle = json.load(fh)
+            condition = str(bundle.get("condition"))
+            arm_key = next((k for k, a in (doc.get("arms") or {}).items()
+                            if a.get("source_bundle") == rel), None)
+            if arm_key is None:
+                raise AR.AdmissionError(
+                    AR.G_ARM_NOT_VERIFIED,
+                    f"[direct] {rel}: this view names no arm from that bundle")
+            res = AR.check_direct(bundles_root, condition=condition, bundle_dir=bd,
+                                  arm_key=arm_key, stage1={})
+            out[f"direct:{condition}"] = {
+                "admission_file": AR.W10_REPORT_FILE.format(condition=condition),
+                "report_sha256": res["report_sha256"], "n_gates": res["n_gates"],
+                "n_arms_verified": res["n_arms_verified"],
+                "recompute_mode": res["recompute_mode"],
+            }
+        except (AR.AdmissionError, OSError, ValueError, KeyError) as exc:
+            bad.append(f"{G_ADMITTED_INPUTS}: [direct] {rel}: {exc}")
+
+    # ---- TEMPORAL / PATHWAY: the FULL external check, never a shallow one.
+    lanes = {str(b.get("lane")) for b in sources.values()} & set(AR.EXTERNAL)
+    for lane in sorted(lanes):
+        rel = next(r for r, b in sorted(sources.items()) if str(b.get("lane")) == lane)
+        try:
+            res = AR.check_external(bundles_root, lane,
+                                    bundle_dir=os.path.join(bundles_root, rel), stage1={})
+            out[lane] = {"admission_file": AR.EXTERNAL[lane]["file"],
+                         "report_id": res["report_id"], "n_gates": res["n_gates"],
+                         "n_bundles": res["n_bundles"],
+                         "bound_inventory": res["bound_inventory"],
+                         "bound_inventory_sha256": res["bound_inventory_sha256"]}
+        except (AR.AdmissionError, OSError, ValueError, KeyError) as exc:
+            bad.append(f"{G_ADMITTED_INPUTS}: [{lane}] {exc}")
+
+    if not out and not bad:
+        bad.append(f"{G_ADMITTED_INPUTS}: this view names no admitted lane input at all. "
+                   "Finding a directory is not an admission")
+    return out, bad
 
 
 def _check_target(arm_key: str, view: dict, native: Any, lane: str) -> list:

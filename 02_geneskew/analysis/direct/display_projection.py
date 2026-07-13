@@ -286,7 +286,11 @@ def project(bundles_root: str) -> dict[str, Any]:
     doc = {
         "schema_version": SCHEMA,
         "method_version": METHOD_VERSION,
-        "cap_policy": CAP_POLICY,
+        # A COPY. The module-level policy was embedded BY REFERENCE, so a caller mutating the
+        # returned document mutated the frozen cap policy for the whole process — and the next
+        # projection was built under a cap somebody else had changed. A frozen policy a caller
+        # can move is not frozen.
+        "cap_policy": dict(CAP_POLICY, caps=dict(CAP_OF)),
         # SELECTION-INDEPENDENT: no selection, no analysis_mode, no A/B pair. This view is the
         # same view whatever question is later asked of the release.
         "selection_independent": True,

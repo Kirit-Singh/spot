@@ -149,9 +149,10 @@ EXTERNAL = {
         "gate_inventory_sha256": W11_GATE_INVENTORY_SHA256,
         "gates": (),                       # pinned by HASH, not by a copied list
         "binds_keys": W11_BINDS_KEYS,
-        # W11's envelope is not known to carry these top-level assertions; W4's does. Requiring
-        # them of W11 would REFUSE the real release, and a fail-closed bug is still a bug.
-        "asserts": (),
+        # THE REAL ENVELOPE CARRIES BOTH (jq on admission.json confirms it). An empty assert
+        # set UNDER-CHECKED it: the two claims that say the verifier was independent and
+        # refused by default are exactly the two a forged envelope would omit.
+        "asserts": ("generator_is_not_verifier", "fail_closed"),
         "owner": "W11",
     },
     "pathway": {
@@ -347,6 +348,56 @@ def bind_direct(bundles_root: str, *, condition: str, bundle_dir: str, arm_key: 
 # TEMPORAL (W11) / PATHWAY (W4) — the external admission, BOUND to the release it cleared.
 # --------------------------------------------------------------------------- #
 
+
+# --------------------------------------------------------------------------- #
+# W11'S TWO DERIVED BINDINGS. Independently re-derived — never presence-checked.
+#
+# They were accepted on presence alone, which is a check that compares nothing. Both recipes
+# are the authoritative verifier's (verify_temporal_arms/admission.py) and both are REPRODUCED
+# here from the release's own bytes:
+#
+#   producer_release_canonical_sha256 = content_hash(json.loads(<raw inventory bytes>))
+#   rankings_digest = content_hash of one row per ARM RANKING across EVERY bundle —
+#       {bundle_key, arm_key, path, raw_sha256, canonical_sha256} — sorted by
+#       (bundle_key, arm_key), with raw/canonical RECOMPUTED FROM THE BYTES ON DISK.
+#
+# Recomputing from disk is what makes the digest a byte-binding rather than a re-hash of the
+# producer's own claims: an edited ranking moves the digest even if every declared hash in the
+# bundle still agrees with itself.
+# --------------------------------------------------------------------------- #
+def _native_root(bundle_dir, relative_dir):
+    """The directory the bundle dirs sit in — derived from the path we were given, never from
+    a `native_release_root` string in the report (a binding to a machine is not a binding)."""
+    up = len([p for p in str(relative_dir).split("/") if p])
+    return os.path.normpath(os.path.join(bundle_dir, *([".."] * up)))
+
+
+def _rankings_digest(native_root, inv, canon_fn, raw_fn):
+    rows = []
+    for b in inv.get("bundles") or []:
+        d = os.path.join(native_root, str(b.get("relative_dir")))
+        bp = os.path.join(d, "arm_bundle.json")
+        if not os.path.exists(bp):
+            return None                      # a bundle we cannot open cannot be digested
+        with open(bp) as fh:
+            doc = json.load(fh)
+        for arm in doc.get("arms") or []:
+            rb = arm.get("ranking") or {}
+            fp = os.path.join(d, str(rb.get("path")))
+            if not os.path.exists(fp):
+                return None
+            with open(fp) as fh:
+                body = json.load(fh)
+            rows.append({"bundle_key": doc.get("bundle_key"), "arm_key": arm.get("arm_key"),
+                         "path": rb.get("path"),
+                         "raw_sha256": raw_fn(fp),
+                         "canonical_sha256": canon_fn(body)})
+    if not rows:
+        return None
+    rows.sort(key=lambda r: (str(r["bundle_key"]), str(r["arm_key"])))
+    return canon_fn(rows)
+
+
 def _check_external(bundles_root, lane, *, bundle_dir, stage1, EXTERNAL, canon_fn, raw_fn,
                     load_fn, self_hash_fn, refuse):
     """W11 / W4, against their REAL bytes. Shared shape; each side calls it with its own hashes."""
@@ -424,6 +475,17 @@ def _check_external(bundles_root, lane, *, bundle_dir, stage1, EXTERNAL, canon_f
     if lane == "pathway" and str(binds.get("inventory_raw_sha256")) != inv_raw:
         refuse(G_BOUND_BYTES, f"[{lane}] inventory_raw_sha256 is not the inventory on disk")
 
+    # ---- W11'S TWO DERIVED BINDINGS, RE-DERIVED. Presence was never a check. ----
+    if lane == "temporal":
+        with open(inv_path, "rb") as fh:
+            iraw = fh.read()
+        want_canon = canon_fn(json.loads(iraw))
+        if str(binds.get("producer_release_canonical_sha256")) != want_canon:
+            refuse(G_BOUND_BYTES,
+                   f"[{lane}] producer_release_canonical_sha256 is "
+                   f"{str(binds.get('producer_release_canonical_sha256'))[:16]}; the inventory "
+                   f"on disk canonically hashes to {want_canon[:16]}")
+
     # ---- STAGE-1. NESTED for W11 (binds.stage1_release.stage1_release_raw_sha256); flat for W4.
     want_s1 = stage1.get("stage1_release_raw_sha256")
     if want_s1:
@@ -450,6 +512,23 @@ def _check_external(bundles_root, lane, *, bundle_dir, stage1, EXTERNAL, canon_f
     if entry is None:
         refuse(G_BOUND_SUBJECT,
                f"[{lane}] the bundle being read ({mine[:16]}) is not in the cleared inventory")
+
+    # ---- THE RANKINGS DIGEST, RE-DERIVED across EVERY bundle in the release ----
+    #
+    # Recomputed from the BYTES ON DISK, not from the hashes the bundles declare: an edited
+    # ranking moves this digest even if every declared hash still agrees with itself.
+    if lane == "temporal":
+        native_root = _native_root(bundle_dir, entry.get("relative_dir", ""))
+        got = _rankings_digest(native_root, inv, canon_fn, raw_fn)
+        if got is None:
+            refuse(G_BOUND_BYTES,
+                   f"[{lane}] the rankings digest cannot be re-derived: a bundle or a ranking "
+                   "this release names is not on disk. A digest nobody can recompute is a "
+                   "number, not a binding")
+        if str(binds.get("rankings_digest")) != got:
+            refuse(G_BOUND_BYTES,
+                   f"[{lane}] rankings_digest is {str(binds.get('rankings_digest'))[:16]}; the "
+                   f"{inv.get('n_bundles')} bundles' rankings ON DISK digest to {got[:16]}")
 
     # ---- EVERY BOUND FILE AND RANKING HASH, against the bytes on disk ----
     for group in ("files", "rankings"):

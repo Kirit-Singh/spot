@@ -28,9 +28,6 @@ def _release(tmp_path, n_targets=250, n_unrankable=7, n_sets=120):
     root = str(tmp_path)
     d = os.path.join(root, "direct", "Stim48hr")
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
-        json.dump({"schema_version": "spot.stage02_direct_arm_bundle.v1",
-                   "arm_bundle_run_id": "D-1", "condition": "Stim48hr"}, fh)
 
     rows = []
     for i in range(n_targets):
@@ -44,6 +41,13 @@ def _release(tmp_path, n_targets=250, n_unrankable=7, n_sets=120):
                      "condition": "Stim48hr", "target_id": f"UNRANKABLE{j}",
                      "value": None, "rank": None, "evaluable": False})
     pd.DataFrame(rows).to_parquet(os.path.join(d, "arms.parquet"))
+    from direct.hashing import content_hash as _ch
+    with open(os.path.join(d, "arm_bundle.json"), "w") as fh:
+        json.dump({"schema_version": "spot.stage02_direct_arm_bundle.v1",
+                   "arm_bundle_run_id": "D-1", "condition": "Stim48hr",
+                   "arm_rows_sha256": _ch(rows),
+                   "arms": [{"arm_key": DARM}]}, fh, indent=2, sort_keys=True)
+    _w10_report(root, "Stim48hr", d, [DARM])
 
     p = os.path.join(root, "pathway", "Stim48hr__GO-BP")
     os.makedirs(p, exist_ok=True)
@@ -57,7 +61,69 @@ def _release(tmp_path, n_targets=250, n_unrankable=7, n_sets=120):
                                     "covered" if i % 3 else "under_covered"),
                                 "n_leading_edge": 3, "peak_rank": i + 1}
                                for i in range(n_sets)]}, fh)
+    _pathway_admission(root)
     return root
+
+
+def _w10_report(root, condition, bundle_dir, arms):
+    """W10's FULL report for a Direct bundle — the display view now REQUIRES it."""
+    import sys as _s
+    _s.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "..", "..", "analysis", "direct"))
+    import verify_admission_rules as AR
+    from direct.hashing import content_hash, file_sha256
+
+    gates = ([f"gate {i}: an independently re-derived invariant" for i in range(104)] +
+             ["every artifact's shipped hash matches the BYTES ON DISK — no file moved",
+              "every arm's own bytes and counts RE-DERIVE from the shipped parquet rows",
+              "every arm key re-derives from (program, desired_change, condition)"])
+    with open(os.path.join(bundle_dir, "arm_bundle.json")) as fh:
+        doc = json.load(fh)
+    files = {n: file_sha256(os.path.join(bundle_dir, n))
+             for n in sorted(os.listdir(bundle_dir))
+             if os.path.isfile(os.path.join(bundle_dir, n))}
+    body = {"schema_version": AR.W10_REPORT_SCHEMA, "verifier_id": AR.W10_VERIFIER_ID,
+            "verifier_code_sha256": AR.W10_VERIFIER_CODE, "independent_of_generator": True,
+            "gate_inventory": gates, "gate_inventory_sha256": content_hash(gates),
+            "n_gates": len(gates), "n_passed": len(gates), "n_failed": 0,
+            "failed_gates": [], "verdict": "ADMIT",
+            "bound_artifact": {
+                "arm_bundle_run_id": doc["arm_bundle_run_id"],
+                "arm_rows_sha256": doc["arm_rows_sha256"],
+                "condition": condition, "solver_lock_sha256": AR.SOLVER_LOCK_SHA256,
+                "artifact_sha256": files, "recompute_mode": "all",
+                "arm_inventory": [{"arm_key": k} for k in sorted(arms)]}}
+    with open(os.path.join(root, AR.W10_REPORT_FILE.format(condition=condition)), "w") as fh:
+        json.dump(dict(body, report_sha256=content_hash(body)), fh, indent=2, sort_keys=True)
+
+
+def _pathway_admission(root):
+    """W4's envelope + its PENDING inventory. The view is only 'rebuilt from admitted native
+    bytes' once these are LOADED AND VALIDATED — finding a directory is not an admission."""
+    import sys as _s
+    _s.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "..", "..", "analysis", "direct"))
+    import verify_admission_rules as AR
+    from direct.hashing import content_hash, file_sha256
+
+    spec = AR.EXTERNAL["pathway"]
+    body = {"schema_version": spec["inventory_schema"], "lane": "pathway",
+            "n_bundles": 1, "bundles": [{"bundle_id": "P-1"}],
+            "external_admission": {"status": "pending"}}
+    inv = dict(body, release_id=content_hash(body))
+    ip = os.path.join(root, spec["inventory"])
+    with open(ip, "w") as fh:
+        json.dump(inv, fh, indent=2, sort_keys=True)
+    raw = file_sha256(ip)
+
+    env = {"schema_version": spec["schema"], "verifier_id": spec["verifier_id"],
+           "lane": "pathway", "generator_is_not_verifier": True, "fail_closed": True,
+           "gate_inventory": list(spec["gates"]), "n_failed": 0, "verdict": "ADMIT",
+           "binds": {"producer_release_id": inv["release_id"],
+                     "producer_release_raw_sha256": raw, "inventory_raw_sha256": raw,
+                     "stage1_release_raw_sha256": "0c336546" + "0" * 56}}
+    with open(os.path.join(root, spec["file"]), "w") as fh:
+        json.dump(dict(env, report_id=content_hash(env)), fh, indent=2, sort_keys=True)
 
 
 def _project(root):
@@ -289,3 +355,191 @@ class TestTheCapsAgreeAcrossTheSeam:
         assert V.CAP_OF == P.CAP_OF
         assert V.CAP_POLICY_ID == P.CAP_POLICY_ID
         assert V.METHOD_VERSION == P.METHOD_VERSION
+
+
+# --------------------------------------------------------------------------- #
+# THE RECEIPT MUST NAME THE PROJECTION IT JUDGED.
+#
+# It carried a verifier id, booleans, n_arms, failures and a verdict — and NOTHING that
+# identified the bytes. So a UI could take an ALTERED projection (one arm_value
+# 1.6758342617 -> 125.1318342617, declared projection_sha256 left alone) and pair it with the
+# ORIGINAL receipt, and both parsed: the only thing tying them together was n_arms, which the
+# mutation does not change. A verdict about bytes nobody named is not a verdict about these
+# bytes.
+# --------------------------------------------------------------------------- #
+class TestTheRECEIPTBindsTheEXACTProjection:
+    def _receipt(self, root, out):
+        return V.verify(out, bundles_root=root)
+
+    def test_the_receipt_BINDS_raw_canonical_and_self_hashes(self, tmp_path):
+        root = _release(tmp_path)
+        _, out = _project(root)
+        rec = self._receipt(root, out)
+        subj = rec["subject"]
+
+        import hashlib
+        assert subj["projection_raw_sha256"] == hashlib.sha256(
+            open(out, "rb").read()).hexdigest()
+        assert subj["projection_canonical_sha256"]
+        assert subj["projection_self_sha256_declared"] == \
+            subj["projection_self_sha256_recomputed"]
+        assert subj["self_hash_agrees"] is True
+        assert subj["projection_file"] == P.PROJECTION_FILE      # a NAME, not a path
+
+    def test_THE_UI_MUTATION_an_altered_arm_value_with_the_ORIGINAL_receipt_is_CAUGHT(
+            self, tmp_path):
+        """THE REPRODUCED DEFECT. Alter one arm_value, keep the declared projection_sha256,
+        keep the original receipt. n_arms is unchanged — and that was the only binding."""
+        root = _release(tmp_path)
+        doc, out = _project(root)
+        original = self._receipt(root, out)
+        assert original["verdict"] == "admit"
+
+        # THE EXACT CHANGE: edit the arm_value THAT EXISTS. (An earlier version of this test
+        # set `["value"]`, which ADDS a field the row does not have — that is a different
+        # mutation, caught by a different gate, and it did not reproduce the defect at all.)
+        row = doc["arms"][DARM]["rows"][0]
+        assert "arm_value" in row and "value" not in row
+        before = row["arm_value"]
+        row["arm_value"] = 125.1318342617                        # SAME SHAPE, new number
+        assert set(row) == {"target_id", "rank", "arm_value"}    # no field added or removed
+        with open(out, "w") as fh:                               # declared hash left ALONE
+            json.dump(doc, fh, indent=2, sort_keys=True)
+        assert doc["arms"][DARM]["rows"][0]["arm_value"] != before
+
+        # THE UI'S CHECK: the original receipt's SUBJECT HASH no longer names these bytes.
+        import hashlib
+        now = hashlib.sha256(open(out, "rb").read()).hexdigest()
+        assert original["subject"]["projection_raw_sha256"] != now
+        assert original["n_arms"] == len(doc["arms"])            # n_arms is UNCHANGED —
+        #                                                          it was the ONLY binding
+
+        # ...and re-verifying the altered file refuses outright
+        rep = self._receipt(root, out)
+        assert rep["verdict"] == "reject"
+        assert any(V.G_SELF_HASH in f or V.G_ROW_IS_NATIVE in f for f in rep["failures"])
+        # the FRESH receipt names the NEW bytes, so a UI can always tell the two apart
+        assert rep["subject"]["projection_raw_sha256"] == now
+
+    def test_a_SWAPPED_receipt_from_another_projection_does_not_name_these_bytes(self,
+                                                                                 tmp_path):
+        root_a = _release(tmp_path / "a")
+        _, out_a = _project(root_a)
+        rec_a = self._receipt(root_a, out_a)
+
+        root_b = _release(tmp_path / "b", n_targets=200)          # a DIFFERENT release
+        _, out_b = _project(root_b)
+        rec_b = self._receipt(root_b, out_b)
+
+        assert rec_a["subject"]["projection_raw_sha256"] != \
+            rec_b["subject"]["projection_raw_sha256"]
+        # a UI holding receipt A and projection B can SEE they do not match
+        import hashlib
+        assert rec_a["subject"]["projection_raw_sha256"] != hashlib.sha256(
+            open(out_b, "rb").read()).hexdigest()
+
+    def test_a_STALE_receipt_over_re_projected_bytes_does_not_match(self, tmp_path):
+        import pandas as pd
+        root = _release(tmp_path)
+        _, out = _project(root)
+        stale = self._receipt(root, out)
+
+        d = os.path.join(root, "direct", "Stim48hr")
+        df = pd.read_parquet(os.path.join(d, "arms.parquet"))
+        df.loc[0, "value"] = 0.999
+        df.to_parquet(os.path.join(d, "arms.parquet"))
+        _, out2 = _project(root)                                  # re-projected
+
+        fresh = self._receipt(root, out2)
+        assert stale["subject"]["projection_raw_sha256"] != \
+            fresh["subject"]["projection_raw_sha256"]
+
+
+class TestREBUILTFromAdmittedIsEARNEDNotDeclared:
+    def test_it_binds_the_ADMITTED_LANE_INPUTS(self, tmp_path):
+        root = _release(tmp_path)
+        _, out = _project(root)
+        rec = V.verify(out, bundles_root=root)
+
+        assert rec["rebuilt_from_admitted_native_bytes"] is True
+        # EVERY source lane, not just one: Direct's W10 report AND pathway's W4 envelope.
+        pw = rec["admitted_inputs"]["pathway"]
+        assert pw["report_id"] and pw["bound_inventory_sha256"]
+        assert pw["n_gates"] == 12                               # W4's exact inventory
+
+        dr = rec["admitted_inputs"]["direct:Stim48hr"]
+        assert dr["recompute_mode"] == "all"
+        assert dr["n_gates"] >= 50 and dr["n_arms_verified"] == 1
+
+    def test_a_MISSING_lane_admission_makes_it_FALSE_and_REFUSES(self, tmp_path):
+        """It used to be a hard-coded True: it meant 'a directory was found'."""
+        root = _release(tmp_path)
+        _, out = _project(root)
+        os.remove(os.path.join(root, "pathway_arm_external_admission.json"))
+
+        rec = V.verify(out, bundles_root=root)
+        assert rec["rebuilt_from_admitted_native_bytes"] is False
+        assert rec["verdict"] == "reject"
+        assert any(V.G_ADMITTED_INPUTS in f for f in rec["failures"])
+
+    def test_an_admission_binding_ANOTHER_inventory_is_REFUSED(self, tmp_path):
+        from direct.hashing import content_hash
+        root = _release(tmp_path)
+        _, out = _project(root)
+        p = os.path.join(root, "pathway_arm_external_admission.json")
+        rep = json.load(open(p))
+        rep["binds"]["producer_release_raw_sha256"] = "dead" + "0" * 60
+        rep["report_id"] = content_hash({k: v for k, v in rep.items() if k != "report_id"})
+        with open(p, "w") as fh:
+            json.dump(rep, fh)
+
+        rec = V.verify(out, bundles_root=root)
+        assert rec["rebuilt_from_admitted_native_bytes"] is False
+        assert rec["verdict"] == "reject"
+        assert any(V.G_ADMITTED_INPUTS in f for f in rec["failures"])
+
+
+class TestEVERYSourceLaneMustBeAdmitted:
+    """A MIXED projection may not lean on one lane's admission for another lane's rows."""
+
+    def test_a_MISSING_DIRECT_admission_REFUSES_even_though_pathway_is_admitted(self,
+                                                                                tmp_path):
+        """Skipping past Direct meant a mixed view could claim
+        `rebuilt_from_admitted_native_bytes` on the TEMPORAL/PATHWAY admission alone, while its
+        Direct rows rested on nothing."""
+        import verify_admission_rules as AR
+        root = _release(tmp_path)
+        _, out = _project(root)
+        assert V.verify(out, bundles_root=root)["verdict"] == "admit"
+
+        os.remove(os.path.join(root, AR.W10_REPORT_FILE.format(condition="Stim48hr")))
+        rec = V.verify(out, bundles_root=root)
+
+        assert rec["rebuilt_from_admitted_native_bytes"] is False
+        assert rec["verdict"] == "reject"
+        assert any(V.G_ADMITTED_INPUTS in f and "direct" in f for f in rec["failures"])
+        # ...and the PATHWAY admission is still fine — it just cannot cover Direct
+        assert "pathway" in rec["admitted_inputs"]
+
+    def test_a_FORGED_DIRECT_report_REFUSES(self, tmp_path):
+        import verify_admission_rules as AR
+        root = _release(tmp_path)
+        _, out = _project(root)
+        p = os.path.join(root, AR.W10_REPORT_FILE.format(condition="Stim48hr"))
+        with open(p, "w") as fh:
+            fh.write('{"verdict":"ADMIT"}')
+
+        rec = V.verify(out, bundles_root=root)
+        assert rec["rebuilt_from_admitted_native_bytes"] is False
+        assert rec["verdict"] == "reject"
+
+    def test_EVERY_source_lane_appears_in_admitted_inputs(self, tmp_path):
+        root = _release(tmp_path)
+        doc, out = _project(root)
+        rec = V.verify(out, bundles_root=root)
+
+        lanes = {b["lane"] for b in doc["bindings"]["native_bundles"].values()}
+        assert lanes == {"direct", "pathway"}
+        keys = set(rec["admitted_inputs"])
+        assert "pathway" in keys
+        assert any(k.startswith("direct:") for k in keys)
