@@ -366,8 +366,10 @@ def test_MUTATION_a_report_that_names_NO_code_is_refused(tmp_path, bundle_dir, v
 @pytest.mark.parametrize("code", [
     "0" * 64,                                    # blanked
     "f" * 64,                                    # invented
-    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a833",   # off by one char
-    "3bc55ba5",                                  # truncated to the display prefix
+    "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc175",   # off by one char
+    "943d32bd5317bbc8",                          # truncated to the display prefix
+    "8290802638898db622a8baf19f233b54b5f6f1c8434f192730aa28f829f8715f",   # the superseded 2c3031e pin
+    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834",   # the OLD pre-identity pin
 ])
 def test_MUTATION_a_WRONG_verifier_code_sha_is_refused(code, tmp_path, bundle_dir, view):
     """Including the display prefix: a truncated pin is not the pin."""
@@ -381,16 +383,19 @@ def test_MUTATION_a_WRONG_verifier_code_sha_is_refused(code, tmp_path, bundle_di
 def test_the_W10_code_pin_is_RE_DERIVABLE_from_W10s_own_recipe():
     """Re-derive it here, from the blobs at W10's commit — not copied from a report.
 
-    W10's recipe: {module: sha256(file)} over its eight verifier modules -> canonical json ->
+    W10's recipe: {module: sha256(file)} over its NINE verifier modules -> canonical json ->
     sha256. Reimplemented, never imported: a pin the checker borrowed from the thing it checks
-    is a pin nobody checked.
+    is a pin nobody checked. The head is the PRODUCER-CODE-ROOT verifier at f6da804 — the module
+    set is unchanged (still nine) but three modules' bytes moved with the fix, so the code hash
+    moved. It re-derives from the blobs at W10_VERIFIER_COMMIT_HINT and must equal the pin.
     """
     import hashlib
     import subprocess
 
     modules = ("verify_arm_bundle.py", "verify_arm_gates.py", "verify_arm_report.py",
                "verify_arm_rules.py", "verify_arm_science.py", "verify_arm_view.py",
-               "verify_arm_recompute.py", "verify_direct_release.py")
+               "verify_arm_recompute.py", "verify_direct_release.py",
+               "verify_target_identity.py")
     assert len(modules) == config.W10_VERIFIER_N_MODULES
 
     try:

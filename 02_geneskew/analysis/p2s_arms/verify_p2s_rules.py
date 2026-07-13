@@ -29,11 +29,13 @@ W10_VERIFIER_ID = "spot.stage02.direct.arm_bundle.verifier.v1"
 W10_SPEC_SHA256 = "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f"
 
 # WHICH CHECKER RAN. Restated here as this verifier's OWN literal, independently re-derived
-# from W10's eight modules at commit 3119900. Without it, an honestly RESEALED report — one
-# whose verifier_code_sha256 was blanked and whose body was then re-hashed so it agrees with
-# itself — satisfies every other gate while naming no code at all.
+# from W10's NINE modules at head f6da804 (the PRODUCER-CODE-ROOT verifier, where
+# gate_code_identity re-derives the code manifest from the producer's supplied checkout).
+# Without it, an honestly RESEALED report — one whose verifier_code_sha256 was blanked and
+# whose body was then re-hashed so it agrees with itself — satisfies every other gate while
+# naming no code at all.
 W10_VERIFIER_CODE_SHA256 = \
-    "3bc55ba51f6a8a619e9a8f47e4fd8d6318811c92048948159e8d03a93210a834"
+    "943d32bd5317bbc84d2705a39f98de024f10548d1995cd6bc42ed56fb9efc174"
 
 # The Stage-2 solver lock, restated HERE as this verifier's own literal. A pin the checker
 # borrowed from the thing it checks is a pin nobody checked.
