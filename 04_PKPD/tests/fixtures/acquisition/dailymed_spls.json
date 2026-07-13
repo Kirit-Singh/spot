@@ -1,0 +1,12 @@
+{
+  "_fixture_notice": "FIXTURE. Synthetic DailyMed v2 spls.json listing. One product.",
+  "metadata": {"total_elements": 1, "current_page": 1, "total_pages": 1},
+  "data": [
+    {
+      "spl_version": 40,
+      "published_date": "Feb 20, 2026",
+      "title": "FIXTUROMIDE CAPSULE [SPOT FIXTURE LABORATORIES] - FIXTURE, NOT A REAL PRODUCT",
+      "setid": "ffffffff-0000-4000-8000-fixtureacq01"
+    }
+  ]
+}

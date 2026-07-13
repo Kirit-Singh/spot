@@ -352,6 +352,56 @@ def fixture_record(*, acquisition_record_id: str, source_key: str, raw: bytes,
     )
 
 
+def record_from_response(response: Any, *, run_root: RunRoot, stable_record_id: str,
+                         extraction_transform: str, adapter_file: str,
+                         release: str, suffix: str = "",
+                         review_status: str = "unreviewed",
+                         content_sha256: Optional[str] = None,
+                         content_hash_rule: Optional[str] = None,
+                         note: Optional[str] = None) -> AcquisitionRecord:
+    """A fetched response -> a cached, hashed, terms-bound acquisition record.
+
+    `release` is passed in by the adapter because only the adapter knows where its source puts
+    one: openFDA has `meta.last_updated`, DailyMed has a per-SPL version, and PubChem PUG REST
+    has none at all — which is recorded as `not_reported_by_source`, not left blank and not
+    filled with a plausible-looking date.
+    """
+    from .public_sources import source as ledger_source
+
+    entry = ledger_source(response.source_key)
+    relpath, sha = run_root.store(response.body, source_key=response.source_key, suffix=suffix)
+    return AcquisitionRecord(
+        acquisition_record_id=new_record_id("acq", response.source_key, response.canonical_query),
+        source_key=response.source_key,
+        source_name=str(entry["source_name"]),
+        source_type=str(entry["source_type"]),  # type: ignore[arg-type]
+        origin="fetched_public",
+        stable_record_id=stable_record_id,
+        url=response.url,
+        canonical_query=response.canonical_query,
+        accessed_at_utc=response.accessed_at_utc,
+        access_date=response.accessed_at_utc[:10],
+        http_status=response.status,
+        raw_media_type=response.media_type,
+        response_headers=dict(response.headers),
+        release_or_last_updated=release,
+        license=str(entry["license"]),
+        license_or_terms_url=str(entry["license_or_terms_url"]),
+        license_status=str(entry["license_status"]),
+        redistribution=str(entry.get("redistribution") or "bytes_cached_outside_git"),
+        raw_bytes=len(response.body),
+        raw_sha256=sha,
+        content_sha256=content_sha256,
+        content_hash_rule=content_hash_rule,
+        cache_relpath=relpath,
+        extraction_transform=extraction_transform,
+        adapter_code_sha256=code_sha256(adapter_file),
+        review_status=review_status,  # type: ignore[arg-type]
+        evidence_state="observed",
+        note=note,
+    )
+
+
 def to_source_record(record: AcquisitionRecord) -> SourceRecord:
     """The bridge into the Stage-4 evidence contract (W9's `SourceRecord`).
 

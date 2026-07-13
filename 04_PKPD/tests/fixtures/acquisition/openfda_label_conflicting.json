@@ -1,0 +1,19 @@
+{
+  "_fixture_notice": "FIXTURE. Same set ID, a DIFFERENT active-moiety UNII. Stage 4 refuses the candidate.",
+  "meta": {"disclaimer": "FIXTURE - not an openFDA response.", "last_updated": "2026-06-30"},
+  "results": [
+    {
+      "id": "fixture-acq-0000-0000-000000000009",
+      "set_id": "ffffffff-0000-4000-8000-fixtureacq01",
+      "version": "40",
+      "effective_time": "20260220",
+      "openfda": {
+        "brand_name": ["FIXTUROMIDE"],
+        "generic_name": ["FIXTUROMIDE"],
+        "application_number": ["NDA999901"],
+        "unii": ["FIXTURE999"],
+        "spl_set_id": ["ffffffff-0000-4000-8000-fixtureacq01"]
+      }
+    }
+  ]
+}

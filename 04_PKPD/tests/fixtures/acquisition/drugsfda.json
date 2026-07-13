@@ -1,0 +1,22 @@
+{
+  "_fixture_notice": "FIXTURE. Synthetic openFDA /drug/drugsfda.json response. Invented application.",
+  "meta": {"disclaimer": "FIXTURE - not an openFDA response.", "last_updated": "2026-06-30"},
+  "results": [
+    {
+      "application_number": "NDA999901",
+      "sponsor_name": "SPOT FIXTURE LABORATORIES",
+      "openfda": {"unii": ["FIXTURE001"], "generic_name": ["FIXTUROMIDE"]},
+      "products": [
+        {
+          "product_number": "001",
+          "marketing_status": "Prescription",
+          "dosage_form": "CAPSULE",
+          "active_ingredients": [{"name": "FIXTUROMIDE", "strength": "100MG"}]
+        }
+      ],
+      "submissions": [
+        {"submission_type": "ORIG", "submission_number": "1", "submission_status": "AP", "submission_status_date": "20200115"}
+      ]
+    }
+  ]
+}
