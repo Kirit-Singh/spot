@@ -1,0 +1,229 @@
+{
+  "schema": "spot.stage01_v3_release_index.v1",
+  "biological_question": {
+    "A_away_from": {
+      "program_id": "treg_like",
+      "direction": "high"
+    },
+    "B_toward": {
+      "program_id": "th1_like",
+      "direction": "high"
+    },
+    "arms": [
+      "away_from_A",
+      "toward_B"
+    ],
+    "rationale": "canonical Stage-1 question: away from the immunosuppressive Treg-like program, toward the Th1-like anti-tumor effector. Both are base-portable primary programs.",
+    "owner_decision": "OWNER-CONFIRMABLE: the A/B pair + directions determine the biological hypothesis; confirm or override before authorizing the real run (alternatives: B=cd4_ctl_like; direction variants)."
+  },
+  "release_bundle": "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json",
+  "release_self_release_sha256": "47931ffa61c280f8dab72313cbe02ef0a19ec341ced59dd1fbe9ce02e33c731a",
+  "selection_schema": "01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json",
+  "registry": "01_programs/app/data/stage01_program_registry_v3.json",
+  "selections": [
+    {
+      "matrix_var": "SEL_WITHIN_Rest",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_within_Rest.v3.json",
+      "analysis_mode": "within_condition",
+      "conditions": [
+        "Rest"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "3b91b68db608787c",
+      "full_contract_content_sha256": "c24b894db5b4580225000960c76e8d5e7e135bd85fcdfdd463d8f7a8094a3509"
+    },
+    {
+      "matrix_var": "SEL_WITHIN_Stim8hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_within_Stim8hr.v3.json",
+      "analysis_mode": "within_condition",
+      "conditions": [
+        "Stim8hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "bebd3016a77f7ab7",
+      "full_contract_content_sha256": "f3d5dbf7fca956da3aaeb959d66c0eea13175089c538f52cc6b98f48c8095e20"
+    },
+    {
+      "matrix_var": "SEL_WITHIN_Stim48hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_within_Stim48hr.v3.json",
+      "analysis_mode": "within_condition",
+      "conditions": [
+        "Stim48hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "4af0fbbbd3f7dd04",
+      "full_contract_content_sha256": "9e65a494fedb9275ab59025218c2577fe2e0d5676d7636bd0903c4887643e940"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Rest_Stim8hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Rest_Stim8hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Rest",
+        "Stim8hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "2ae96d15809efdd0",
+      "full_contract_content_sha256": "adb2219285107a9ac0b5fccb851f9f6fc077fa48e3e0c551371547f24ce80ec2"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim8hr_Rest",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim8hr_Rest.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim8hr",
+        "Rest"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "2115b577e03b8a02",
+      "full_contract_content_sha256": "7d9bf4a791d742b0ac5ce17dbfbfe31abc438a9b4f26fc8ce96b8545673c086c"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Rest_Stim48hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Rest_Stim48hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Rest",
+        "Stim48hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "4c219f69ff07eb73",
+      "full_contract_content_sha256": "f0cc21c5a906d31cd268f75b8cac62e9565c1999d006bcfa9df0592c4ec56e80"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim48hr_Rest",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim48hr_Rest.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim48hr",
+        "Rest"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "014a48a627b328c8",
+      "full_contract_content_sha256": "ab7985eef39a5a82205eb165ab4df9bf6b44870b346e1667f3b7a95a5c2aa44b"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim8hr_Stim48hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim8hr_Stim48hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim8hr",
+        "Stim48hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "7a77f6b314b9c0f3",
+      "full_contract_content_sha256": "1684d57beccae7f436c121163492dbd2130929e3b43a949d8d60b43cf5855225"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim48hr_Stim8hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim48hr_Stim8hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim48hr",
+        "Stim8hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "ccf390b76f2f0d27",
+      "full_contract_content_sha256": "3fc91f5ab0d5749a7fcd103d7492c36bb5858a10f75b3548182727c6d558c37c"
+    }
+  ]
+}
