@@ -75,7 +75,8 @@ export function PageShell({
           onClearSelection={onClearSelection}
           onOpenMethods={(section) =>
             opener.open(
-              `${subtitle} — methods & provenance`,
+              // drawer title derives from the ACTIVE PAGE (manifest stage label), not the contrast
+              `${methodsManifest?.stage_label ?? subtitle} — methods & provenance`,
               methodsProvenance,
               methodsNotes,
               methodsManifest,
