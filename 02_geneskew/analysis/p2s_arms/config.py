@@ -54,6 +54,12 @@ UPSTREAM_REPOSITORY = "emdann/pert2state_model"
 UPSTREAM_COMMIT = "2c2e30959ffafadecc6af5d4d7b5bde868ab5313"
 UPSTREAM_LICENSE = "MIT"
 UPSTREAM_VERSION = "0.0.1"
+
+# THE SOURCE-TREE CONTENT HASH — MANDATORY, not optional. Re-derived independently from the
+# installed package directory. A commit id cannot detect a file EDITED under a pinned commit;
+# the bytes can.
+UPSTREAM_TREE_SHA256 = \
+    "623b24ffae078d4eff7ad3484df0366ce59b884ac2b692746539ebd7fc8e5a28"
 UPSTREAM_PROVENANCE = (
     "Perturb2StateModel is pre-existing upstream MIT software by the dataset authors. "
     "spot contributes the per-program signature construction, masking, stability design, "
@@ -150,8 +156,30 @@ class ModelConfig:
     n_pcs: int
 
 
-CONFIGS = (ModelConfig("pca_off", False, 0),
-           ModelConfig("pca_on_50", True, 50))
+# FROZEN TO pca_off FOR THIS PRODUCTION RELEASE.
+#
+# `pca_on_50` is NOT DETERMINISTIC and must not be shipped as if it were. Upstream builds the
+# projection as
+#
+#     Perturb2StateModel.py:108   pca = TruncatedSVD(n_components=self.n_pcs)
+#
+# with NO `random_state`. sklearn's TruncatedSVD defaults to `algorithm="randomized"`, which
+# then draws from a fresh global RNG on every call — so `random_state=42` on the wrapper does
+# nothing for it. An independent replay measured a repeat max-coefficient delta of ~0.004236.
+#
+# Our own determinism test did not catch this, and the reason is worth writing down: it drove
+# the INJECTED stand-in fitter, which is deterministic by construction. A stand-in hides
+# exactly the defect it stands in for.
+CONFIGS = (ModelConfig("pca_off", False, 0),)
+
+# Retained, NOT run. Restoring it requires patching upstream to seed TruncatedSVD and PROVING
+# byte-stability across repeats — not merely asserting it.
+DEFERRED_CONFIGS = (ModelConfig("pca_on_50", True, 50),)
+PCA_ON_50_DEFERRED_REASON = (
+    "upstream TruncatedSVD is constructed without random_state (Perturb2StateModel.py:108), "
+    "so the projection is not reproducible under a fixed wrapper seed; measured repeat max "
+    "coefficient delta ~0.004236")
+DETERMINISM_SCOPE = "pca_off only; pca_on_50 is deferred and is NOT claimed deterministic"
 
 # --------------------------------------------------------------------------- #
 # Support. Judged PER ARM — there is no other kind of support here.
@@ -248,3 +276,115 @@ DIRECT_BUNDLE_FILES = (
 RELEASE_LANES = ("production", "research_only")
 LANE_SYNTHETIC = "synthetic"
 LANES = RELEASE_LANES + (LANE_SYNTHETIC,)
+
+
+# --------------------------------------------------------------------------- #
+# THE PINNED PUBLIC INPUTS. Marson GWCD4i only; nothing else is an experimental source.
+#
+# Hashed at RUNTIME from the bytes handed in, and refused on any mismatch. A path is not an
+# input: two files can sit at the same path on two hosts and be different science.
+# --------------------------------------------------------------------------- #
+# The Stage-1 cell matrix. Public: HF KiritSingh/spot-CD4-Marson @ e5fcf98b.
+# 396,000 cells x 18,130 genes; var/_index is SYMBOLS (see the namespace rule below).
+NTC_H5AD_SHA256 = \
+    "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43"
+NTC_HF_SOURCE = "KiritSingh/spot-CD4-Marson"
+NTC_HF_REVISION = "e5fcf98b56a9302921d402e97fc5a190bd88f9a6"
+NTC_N_CELLS = 396000
+
+# The pooled DE readout. var/gene_ids is ENSEMBL; var/gene_name is the SYMBOL.
+#
+# TCEFOLD ONLY. tcedirector reads this file NON-DETERMINISTICALLY -- stable mtime and size,
+# a DIFFERENT sha256 on re-read (c355f535 -> dc503816). A run whose input hashes differently
+# on two reads cannot be content-addressed at all, so preparation REFUSES on any host where
+# the bytes do not hash to the pin. That refusal is the gate working.
+DE_MAIN_SHA256 = \
+    "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62"
+
+CONDITIONS = ("Rest", "Stim8hr", "Stim48hr")
+
+# THE SCORE FIELD RULE. Stage-1 names a program's score column `<program_id>_score`, and the
+# scores are READ BY BARCODE from the authoritative full table -- never recomputed here. A
+# recomputed score is a different score wearing the released one's name, and it would agree
+# with the released one closely enough that nobody would check.
+SCORE_FIELD_SUFFIX = "_score"
+STAGE1_SCORES_N_ROWS = 396000
+
+# THE NAMESPACE RULE. The cell matrix is keyed on SYMBOLS; the readout universe is ENSEMBL.
+# The crosswalk is the DE readout's own (gene_name -> gene_ids), and an AMBIGUOUS symbol --
+# one naming more than one Ensembl id -- is DROPPED with a named reason, never guessed.
+GENE_NAMESPACE_CELLS = "symbol"
+GENE_NAMESPACE_READOUT = "ensembl"
+NAMESPACE_RULE_ID = "spot.stage02.p2s.namespace.symbol_to_ensembl_via_de_readout.v1"
+
+# Preparation output identity.
+SCHEMA_INPUTS = "spot.stage02_p2s_prepared_inputs.v1"
+PREPARE_ID = "spot.stage02.p2s_arms.prepare_inputs.v1"
+
+
+# --------------------------------------------------------------------------- #
+# TWO ENVIRONMENTS, TWO LOCKS. They are not interchangeable and neither stands in for the
+# other.
+#
+#   * the DIRECT solver lock (2983d140) pins the environment the ADMITTED DIRECT ARMS were
+#     computed in. It does NOT contain sklearn and it does NOT contain pert2state_model, so
+#     it cannot execute this lane and it is a lie to imply that it does;
+#   * the P2S RUNTIME lock pins the environment THIS lane executes in — sklearn, and the
+#     pinned pert2state_model tree.
+#
+# Both are bound. A run that recorded only the Direct lock would be claiming its numbers came
+# out of an environment that cannot produce them.
+# --------------------------------------------------------------------------- #
+P2S_RUNTIME_LOCK_SHA256 = \
+    "93823984bda6053c19bf758c38abd91644e50a761d62679449a48cf5312a5c42"
+P2S_RUNTIME_LOCK_FILENAME = "stage02_p2s_runtime_lock.txt"
+LOCK_ROLES = {
+    "direct_solver_lock": "the environment the ADMITTED DIRECT ARMS were computed in",
+    "p2s_runtime_lock": "the environment THIS lane executes in (sklearn + pert2state_model)",
+}
+DIRECT_LOCK_EXECUTES_P2S = False
+
+# --------------------------------------------------------------------------- #
+# STAGE-1 SCORES. The raw hash is AUTHORITATIVE and gated.
+#
+# The canonical (sorted-barcode / 5-decimal) hash was SUPPLIED but could NOT be independently
+# reproduced here: 25 formulations of the published recipe were tried against the parquet and
+# none yielded it. It is therefore RECORDED as declared, and NOT gated on.
+#
+# This is the repo's own standing rule, from stage01_input_manifest.json: "...NOT a current
+# verified hash. Its canonicalization algorithm is not fully specified and was not
+# independently reproduced this session; do not present it as verified merely because Phase-1
+# emitted it. The raw_file_sha256 is authoritative."
+# --------------------------------------------------------------------------- #
+STAGE1_SCORES_RAW_SHA256 = \
+    "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f"
+STAGE1_SCORES_CANONICAL_SHA256_DECLARED = \
+    "43c4296d5166740c334441a69df23bb440a073382bbe79628a3bb89e43d51316"
+STAGE1_SCORES_CANONICAL_INDEPENDENTLY_REPRODUCED = False
+STAGE1_SCORES_CANONICAL_STATUS = (
+    "DECLARED by Stage-1 and recorded; NOT independently reproduced here (25 formulations of "
+    "the published sorted-barcode/5-decimal recipe tried). The raw sha256 is authoritative "
+    "and is what this lane gates on")
+STAGE1_SCORES_N_ROWS_PER_CONDITION = 132000
+
+# --------------------------------------------------------------------------- #
+# THE ACTIVATION COVARIATE IS NOT A PROGRAM ARM.
+#
+# `diff_activated` IS the activation covariate. Fitting an arm for it would put the same
+# quantity on both sides of the design — `mean_expr ~ 1 + z_diff_activated + activation +
+# donor` with z == activation — a perfectly collinear design whose beta is not identified.
+# The lane emits a TYPED UNAVAILABLE disposition for it rather than a number, and it is NOT
+# counted as a successful program-condition unit.
+# --------------------------------------------------------------------------- #
+ACTIVATION_IS_NOT_AN_ARM = True
+ACTIVATION_ARM_UNAVAILABLE_REASON = "program_is_the_activation_covariate_of_its_own_design"
+
+# The DIRECT screen's REAL eligibility states (the admitted bundle's own vocabulary).
+QC_PASS_STATES = ("qc_pass_single_guide", "qc_pass_two_guide", "qc_pass_multi_guide")
+
+# The DIRECT mask contract: masks are selected by the FULL estimate identity, never unioned
+# across scopes. A guide-scope or donor-scope mask row is a mask for a DIFFERENT estimate.
+MASK_GENE_COLUMN = "masked_gene_ensembl"
+MASK_MAIN_ESTIMATE_TYPE = "main"
+MASK_MAIN_ESTIMATE_ID = "main"
+MASK_SCOPES_MAY_BE_UNIONED = False

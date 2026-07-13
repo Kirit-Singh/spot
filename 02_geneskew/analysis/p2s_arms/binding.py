@@ -107,9 +107,61 @@ def verify_solver_lock(path: Optional[str]) -> dict[str, Any]:
     }
 
 
+def verify_p2s_runtime_lock(path: Optional[str]) -> dict[str, Any]:
+    """The P2S RUNTIME lock — a SECOND, separate environment. Not the Direct lock.
+
+    The Direct solver lock pins the environment the ADMITTED DIRECT ARMS were computed in. It
+    contains neither sklearn nor pert2state_model, so it CANNOT execute this lane, and a run
+    that bound only it would be claiming its numbers came out of an environment that cannot
+    produce them.
+    """
+    if not path:
+        raise D.RefusalError(
+            D.REFUSE_P2S_LOCK_ABSENT,
+            "no --p2s-env-lock was supplied. Two environments, two locks: the Direct solver "
+            "lock pins the environment the ARMS were computed in and contains no sklearn and "
+            "no pert2state_model — it cannot execute this lane. The P2S runtime lock is "
+            f"{config.P2S_RUNTIME_LOCK_FILENAME} "
+            f"({config.P2S_RUNTIME_LOCK_SHA256[:16]}...)")
+    if not os.path.exists(path):
+        raise D.RefusalError(
+            D.REFUSE_P2S_LOCK_ABSENT,
+            f"the --p2s-env-lock at {os.path.basename(path)!r} does not exist")
+
+    actual = w10.file_sha256(path)
+    if actual != config.P2S_RUNTIME_LOCK_SHA256:
+        direct = actual == config.PINNED_SOLVER_LOCK_SHA256
+        hint = (" — that is the DIRECT solver lock. It pins the environment the arms were "
+                "computed in; it does not contain sklearn or pert2state_model and cannot "
+                "execute this lane" if direct else "")
+        raise D.RefusalError(
+            D.REFUSE_P2S_LOCK_MISMATCH,
+            f"the supplied --p2s-env-lock hashes to {actual[:16]}..., not the pinned P2S "
+            f"runtime lock {config.P2S_RUNTIME_LOCK_SHA256[:16]}...{hint}")
+
+    return {"lock_id": "spot.stage02.p2s_runtime_lock.v1",
+            "name": os.path.basename(path), "sha256": actual,
+            "expected_sha256": config.P2S_RUNTIME_LOCK_SHA256,
+            "role": config.LOCK_ROLES["p2s_runtime_lock"],
+            "verified": True, "status": "locked"}
+
+
 def refuse_program(program_id: str, view: dict[str, Any]) -> None:
-    """Th9, the sensitivity/actadj lanes and research namespaces. Named, not silent."""
+    """Th9, the activation covariate, the sensitivity lanes and research namespaces."""
     pid = str(program_id)
+
+    # THE ACTIVATION COVARIATE IS NOT AN ARM. Fitting one would put the same quantity on both
+    # sides of the design (`~ 1 + z_diff_activated + activation + ...` with z == activation) —
+    # a perfectly collinear design whose beta is not identified. A number returned there would
+    # be an arbitrary point on a ridge of equally good fits.
+    if config.ACTIVATION_IS_NOT_AN_ARM and pid == config.ACTIVATION_PROGRAM_ID:
+        raise D.RefusalError(
+            D.REFUSE_ACTIVATION_ARM,
+            f"{pid!r} IS the activation covariate of this lane's design. An arm for it would "
+            "regress the program on itself — perfectly collinear, and the coefficient is not "
+            "identified. It gets a TYPED UNAVAILABLE disposition, never a number, and it is "
+            "not counted as a successful program-condition unit")
+
     if any(pid.endswith(s) for s in SENSITIVITY_SUFFIXES) or \
             any(t in pid for t in SENSITIVITY_TOKENS):
         raise D.RefusalError(

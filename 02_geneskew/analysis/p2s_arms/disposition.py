@@ -106,3 +106,40 @@ def record(state: str, *, reason: Optional[str] = None, detail: str = "",
         "bound": bound or {},
         "support_emitted": state == PROCEEDED,
     }
+
+
+# -- input preparation --------------------------------------------------------- #
+REFUSE_INPUT_NOT_PINNED = "an_input_does_not_hash_to_its_pin"
+REFUSE_DUPLICATE_BARCODE = "the_score_table_carries_a_duplicate_barcode"
+REFUSE_MISSING_BARCODE = "a_cell_has_no_stage1_score_row"
+REFUSE_NAMESPACE_DRIFT = "gene_namespace_drift_between_the_cells_and_the_readout"
+REFUSE_FIXTURE_PATH = "a_fixture_or_synthetic_path_may_not_feed_a_production_run"
+REFUSE_CONDITION_MISMATCH = "the_condition_is_not_the_admitted_bundles_condition"
+REFUSE_PROGRAM_SET_MISMATCH = "the_score_table_does_not_cover_the_admitted_program_set"
+REFUSE_SUBSAMPLE_IN_PRODUCTION = "a_subsampled_cell_matrix_may_not_feed_a_production_run"
+
+REFUSAL_REASONS = REFUSAL_REASONS + (
+    REFUSE_INPUT_NOT_PINNED, REFUSE_DUPLICATE_BARCODE, REFUSE_MISSING_BARCODE,
+    REFUSE_NAMESPACE_DRIFT, REFUSE_FIXTURE_PATH, REFUSE_CONDITION_MISMATCH,
+    REFUSE_PROGRAM_SET_MISMATCH, REFUSE_SUBSAMPLE_IN_PRODUCTION,
+)
+
+
+# -- the real Direct inventory / environment ----------------------------------- #
+REFUSE_MASK_MISSING_FOR_ELIGIBLE = "an_eligible_target_has_no_mask_in_the_admitted_bundle"
+REFUSE_MASK_SCOPE_UNION = "mask_rows_were_selected_across_estimate_scopes"
+REFUSE_MASK_EMPTY = "the_admitted_bundle_ships_no_main_estimate_mask"
+REFUSE_ELIGIBLE_EMPTY = "the_admitted_bundle_ships_no_evaluable_target_for_this_arm"
+REFUSE_ARM_INVENTORY_ASYMMETRY = "the_two_sign_arms_do_not_share_one_target_inventory"
+REFUSE_P2S_LOCK_ABSENT = "p2s_runtime_lock_not_supplied"
+REFUSE_P2S_LOCK_MISMATCH = "p2s_runtime_lock_is_not_the_pinned_p2s_lock"
+REFUSE_UPSTREAM_TREE_UNPINNED = "the_upstream_model_tree_hash_is_not_the_pinned_one"
+REFUSE_ACTIVATION_ARM = "program_is_the_activation_covariate_of_its_own_design"
+REFUSE_BARCODE_INVENTORY = "the_cell_and_score_barcode_inventories_are_not_identical"
+
+REFUSAL_REASONS = REFUSAL_REASONS + (
+    REFUSE_MASK_MISSING_FOR_ELIGIBLE, REFUSE_MASK_SCOPE_UNION, REFUSE_MASK_EMPTY,
+    REFUSE_ELIGIBLE_EMPTY, REFUSE_ARM_INVENTORY_ASYMMETRY,
+    REFUSE_P2S_LOCK_ABSENT, REFUSE_P2S_LOCK_MISMATCH, REFUSE_UPSTREAM_TREE_UNPINNED,
+    REFUSE_ACTIVATION_ARM, REFUSE_BARCODE_INVENTORY,
+)

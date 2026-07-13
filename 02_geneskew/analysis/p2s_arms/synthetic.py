@@ -186,25 +186,31 @@ def make_cells(path: str, *, n_cells: int = 800, seed: int = 3) -> str:
 
 
 def make_effects(path: str, *, seed: int = 11) -> str:
-    """Effect vectors in which T00 reconstructs the program and T01 OPPOSES it."""
+    """The effect MATRIX (targets x genes): T00 reconstructs the program, T01 OPPOSES it.
+
+    A matrix, not 116M long rows — see ``io_data.load_effects``.
+    """
+    if not path.endswith(".npz"):
+        path = path.rsplit(".", 1)[0] + ".npz"
     rng = np.random.default_rng(seed)
     genes = gene_ids()
     targets = target_ids()
 
-    program_direction = np.zeros(len(genes))
-    program_direction[:40] = 1.5
+    direction = np.zeros(len(genes))
+    direction[:40] = 1.5
 
-    rows = []
-    for t in targets:
+    z = np.zeros((len(targets), len(genes)), dtype=np.float32)
+    for i, t in enumerate(targets):
         v = rng.normal(0, 0.5, size=len(genes))
         if t == CONTRIBUTOR:
-            v = v + CONTRIBUTOR_WEIGHT * program_direction
+            v = v + CONTRIBUTOR_WEIGHT * direction
         elif t == OPPONENT:
-            v = v + OPPONENT_WEIGHT * program_direction
-        for g, val in zip(genes, v):
-            rows.append({"target_id": t, "gene_id": g,
-                         "zscore": float(val), "log_fc": float(val * 0.8)})
-    pd.DataFrame(rows).to_parquet(path, index=False)
+            v = v + OPPONENT_WEIGHT * direction
+        z[i] = v
+    np.savez(path,
+             target_ids=np.asarray(targets, dtype=object).astype("U"),
+             gene_ids=np.asarray(genes, dtype=object).astype("U"),
+             zscore=z, log_fc=(z * 0.8).astype(np.float32))
     return path
 
 
@@ -280,7 +286,7 @@ UPSTREAM_OBSERVED = {
     "commit": None,          # filled from config at call time
     "dirty": False,
     "version": None,
-    "tree_sha256": "f" * 64,
+    "tree_sha256": None,   # filled from the pin at call time
 }
 
 
@@ -294,7 +300,8 @@ def run_producer(tmp_path, *, view, bundle_dir, w10_report, inputs,
 
     observed = dict(UPSTREAM_OBSERVED,
                     commit=p2s_config.UPSTREAM_COMMIT,
-                    version=p2s_config.UPSTREAM_VERSION)
+                    version=p2s_config.UPSTREAM_VERSION,
+                    tree_sha256=p2s_config.UPSTREAM_TREE_SHA256)
     up = upstream.identity(observed)
 
     rel = release if release is not None else make_release()
@@ -441,3 +448,13 @@ def write_w10_report(path: str, bundle_dir: str, view, *, condition: str = CONDI
     with open(path, "w") as fh:
         json.dump(report, fh, indent=2, sort_keys=True)
     return path
+
+
+# The Marson-SHAPED input builders live in `synthetic_inputs` — same fixtures, one module per
+# purpose. Re-exported so callers keep a single import point.
+from .synthetic_inputs import (  # noqa: E402,F401
+    CELL_SYMBOLS,
+    write_de_readout,
+    write_ntc_h5ad,
+    write_stage1_scores,
+)
