@@ -17,6 +17,7 @@ release gate is false; the pointer stays `candidate`, never `current`/`locked`.
 """
 import json, hashlib, os, sys
 import stage1_t8_derive as D8
+import stage1_deployment_readiness as DR
 
 D = os.path.join(os.path.dirname(__file__), "..", "app", "data")
 STAGING = os.path.join(os.path.dirname(__file__), "_t8_staging")   # non-served recovered/built v3 artifacts
@@ -54,9 +55,21 @@ def write_canon(name, obj):
     return obj["self_canonical_sha256"], raw_sha256(P(name))
 
 
-def staged(name):
-    """Raw sha + present flag for a recovered/built v3 artifact in the non-served (gitignored) staging dir."""
+def staged(name, committed=None):
+    """Raw sha + present flag for a recovered/built v3 artifact in the non-served (gitignored) staging dir.
+
+    A local staging file, when present, always wins (fresh recompute). On a served checkout (staging
+    absent) we PRESERVE the host-recorded provenance entry from the committed manifest — these are
+    `release_staging_not_served` provenance records of host artifacts, never served bytes, so recomputing
+    them as 'missing' locally would corrupt the released manifest."""
     p = os.path.join(STAGING, name)
+    if os.path.exists(p):
+        return {"file": name, "location": "release_staging_not_served", "raw_sha256": raw_sha256(p), "present": True}
+    if committed:
+        for e in (committed.get("artifacts") or {}).values():
+            if isinstance(e, dict) and e.get("file") == name:
+                return {"file": name, "location": e.get("location", "release_staging_not_served"),
+                        "raw_sha256": e.get("raw_sha256"), "present": bool(e.get("present"))}
     return {"file": name, "location": "release_staging_not_served", "raw_sha256": raw_sha256(p), "present": os.path.exists(p)}
 
 
@@ -75,9 +88,22 @@ def main():
     method_version = v.get("method_version")
     gate_spec_sha = v["hash_bundle"]["gate_spec_sha256"]
 
-    # per-metric definedness from the hash-bound constituent evidence (CP3c amendment: the deleted
-    # zero-value/name heuristic is replaced by authoritative per-constituent definedness).
-    defmap, constituent_evidence = D8.build_definedness_index()
+    # The (gitignored) hash-bound constituent tables live in the release-staging dir. When PRESENT we
+    # recompute selectability/semantics from them (CP3c per-constituent definedness); when ABSENT (a served
+    # checkout) we REUSE the already-committed, hash-verified, immutable-validation-derived artifacts and
+    # regenerate only the readiness pointer + manifest below. The immutable validation is never modified.
+    _staging_gz = os.path.join(os.path.dirname(__file__), "stage2_bridge", "_release_staging",
+                               "stage01_gate_constituents_v1.json.gz")
+    staging_present = os.path.exists(_staging_gz)
+    # On a served checkout the committed manifest carries the host-recorded provenance for the
+    # release-staging (never-served) artifacts; preserve it so a readiness reseal never drops host
+    # provenance it cannot recompute locally.
+    _committed_manifest = None
+    if not staging_present:
+        try:
+            _committed_manifest = json.load(open(P("stage01_release_manifest.json")))
+        except Exception:
+            _committed_manifest = None
 
     def binding(name): return {"file": name, "raw_sha256": raw_sha256(P(name)), "present": os.path.exists(P(name))}
     bind = {n: binding(n) for n in [
@@ -85,75 +111,131 @@ def main():
         "stage01_controls_v3.csv", "stage01_bins_v3.csv", "stage01_control_eligible_pool.json",
         "stage01_program_registry.json"]}
 
-    # ---- 1) selectability_v3: 33 records with exact per-stratum failure detail (multiset preserved) ----
-    records = D8.derive_selectability_records(v, defmap)
-    assert len(records) == 33, f"expected 33 records, got {len(records)}"
-    n_true = sum(1 for r in records if r["production_selectable"] is True)
-    selectability = {
-        "schema": "spot.stage01_selectability_v3.v2",
-        "method_version": method_version,
-        "derivation": "Deterministically derived from the immutable T7b validation (bound by raw sha below) via stage1_t8_derive. No retuning; a false hard-gate is never reinterpreted as advisory. failed_or_undefined_hard_gates is a MULTISET (a gate failing in two strata appears twice).",
-        "production_selectable_default": False,
-        "n_records": len(records),
-        "n_production_selectable_true": n_true,
-        "n_selectable_program_conditions": n_true,
-        "portability_disclaimer": "stage2_base_portability is a SEPARATE necessary condition and DOES NOT confer stage-1 production selectability. No current program-condition pair cleared the frozen production gate.",
-        "not_a_biological_invalidity_claim": "This records only that no current program-condition pair cleared the frozen production gate; it does not assert any program is biologically invalid.",
-        "bound_hashes": {"validation_raw_sha256": bind[VALIDATION]["raw_sha256"],
-                         "gate_spec_sha256": gate_spec_sha,
-                         "input_manifest_raw_sha256": bind["stage01_input_manifest.json"]["raw_sha256"],
-                         "control_method_raw_sha256": bind["stage01_control_method.json"]["raw_sha256"],
-                         "v2_registry_raw_sha256": bind["stage01_program_registry.json"]["raw_sha256"]},
-        "no_p_q_fdr": True, "no_categorical_cell_labels": True,
-        "records": records,
-    }
-    sel_canon, sel_raw = write_canon("stage01_selectability_v3.json", selectability)
+    # ---- 1)+3) selectability_v3 + validation-semantics: recompute from the staging tables when present,
+    #      else REUSE the committed hash-bound upstream (guarded) — served-checkout readiness reseal. ----
+    if staging_present:
+        defmap, constituent_evidence = D8.build_definedness_index()
+        # ---- 1) selectability_v3: 33 records with exact per-stratum failure detail (multiset preserved) ----
+        records = D8.derive_selectability_records(v, defmap)
+        assert len(records) == 33, f"expected 33 records, got {len(records)}"
+        n_true = sum(1 for r in records if r["production_selectable"] is True)
+        selectability = {
+            "schema": "spot.stage01_selectability_v3.v2",
+            "method_version": method_version,
+            "derivation": "Deterministically derived from the immutable T7b validation (bound by raw sha below) via stage1_t8_derive. No retuning; a false hard-gate is never reinterpreted as advisory. failed_or_undefined_hard_gates is a MULTISET (a gate failing in two strata appears twice).",
+            "production_selectable_default": False,
+            "n_records": len(records),
+            "n_production_selectable_true": n_true,
+            "n_selectable_program_conditions": n_true,
+            "portability_disclaimer": "stage2_base_portability is a SEPARATE necessary condition and DOES NOT confer stage-1 production selectability. No current program-condition pair cleared the frozen production gate.",
+            "not_a_biological_invalidity_claim": "This records only that no current program-condition pair cleared the frozen production gate; it does not assert any program is biologically invalid.",
+            "bound_hashes": {"validation_raw_sha256": bind[VALIDATION]["raw_sha256"],
+                             "gate_spec_sha256": gate_spec_sha,
+                             "input_manifest_raw_sha256": bind["stage01_input_manifest.json"]["raw_sha256"],
+                             "control_method_raw_sha256": bind["stage01_control_method.json"]["raw_sha256"],
+                             "v2_registry_raw_sha256": bind["stage01_program_registry.json"]["raw_sha256"]},
+            "no_p_q_fdr": True, "no_categorical_cell_labels": True,
+            "records": records,
+        }
+        sel_canon, sel_raw = write_canon("stage01_selectability_v3.json", selectability)
 
-    # ---- 3) validation semantics adapter: one ROW-IDENTIFIABLE row per result, two dimensions ----
-    sem_rows = D8.derive_semantics_rows(v, row_canon_sha256, defmap)
-    semantics = {
-        "schema": "spot.stage01_validation_semantics.v3",
-        "method_version": method_version,
-        "semantics_amendment": "stage1-validation-semantics-definedness-v1",
-        "amendment_note": "CP3c definedness amendment: per-metric definedness is read from the hash-bound constituent-evidence tables (aggregate defined iff every expected constituent defined), replacing the deleted zero-value/name heuristic. The immutable stage01_validation.json (raw sha below) is UNCHANGED; only this interpretation layer is amended, so this artifact's raw/canonical hash changes while the source stays frozen.",
-        "supersedes_semantics_raw_sha256": "68872d882ce7e7af30de4636a20ccb0c3f96cc34a1053febeed3739994980ce8",
-        "binds_validation_raw_sha256": bind[VALIDATION]["raw_sha256"],
-        "constituent_evidence": constituent_evidence,
-        "purpose": "Hash-bound, row-identifiable interpretation over the immutable validation. Every source result gets source_result_index + source_row_canonical_sha256, and TWO preserved dimensions: metric_predicate_met/metric_defined/undefined_reason (metric level) and gate_outcome/flagged (gate level). Definedness comes from the hash-bound constituent evidence, NEVER a numeric zero or metric name; a false hard-gate is never reinterpreted as advisory; undefinedness is preserved even when the gate outcome is False.",
-        "term_definitions": {
-            "raw_pass": "the frozen results[*].pass = the original ALL-constituents subcheck outcome",
-            "source_worst_defined_value": "the frozen observed_value = lossy extremum over DEFINED constituents (never the sole evaluator)",
-            "metric_defined": "aggregate-level: every expected constituent stratum is defined (n_undefined_constituents == 0)",
-            "metric_predicate_met": "completeness AND every constituent defined AND every defined constituent meets its comparator (reproduces raw_pass for hard rows)",
-        },
-        "gate_taxonomy": {"hard_selectability": sorted(D8.HARD_SELECTABILITY_GATES), "structural_selection": sorted(D8.STRUCTURAL_GATE),
-                          "portability_not_selectability": sorted(D8.PORTABILITY_GATE), "overlay_release": sorted(D8.OVERLAY_RELEASE_GATES),
-                          "advisory_flag": sorted(D8.ADVISORY_GATES), "descriptive_undefined": sorted(D8.DESCRIPTIVE_GATES)},
-        "dimension_note": "metric_predicate_met and gate_outcome are SEPARATE. Per-metric portability/overlay rows carry gate_outcome only (NOT relabelled as aggregate gates). metric_defined can be false while gate_outcome is False; a real zero-numerator (positive denominator) is DEFINED.",
-        "n_results": len(sem_rows),
-        "results_semantics": sem_rows,
-    }
-    sem_canon, sem_raw = write_canon("stage01_validation_semantics.json", semantics)
+        # ---- 3) validation semantics adapter: one ROW-IDENTIFIABLE row per result, two dimensions ----
+        sem_rows = D8.derive_semantics_rows(v, row_canon_sha256, defmap)
+        semantics = {
+            "schema": "spot.stage01_validation_semantics.v3",
+            "method_version": method_version,
+            "semantics_amendment": "stage1-validation-semantics-definedness-v1",
+            "amendment_note": "CP3c definedness amendment: per-metric definedness is read from the hash-bound constituent-evidence tables (aggregate defined iff every expected constituent defined), replacing the deleted zero-value/name heuristic. The immutable stage01_validation.json (raw sha below) is UNCHANGED; only this interpretation layer is amended, so this artifact's raw/canonical hash changes while the source stays frozen.",
+            "supersedes_semantics_raw_sha256": "68872d882ce7e7af30de4636a20ccb0c3f96cc34a1053febeed3739994980ce8",
+            "binds_validation_raw_sha256": bind[VALIDATION]["raw_sha256"],
+            "constituent_evidence": constituent_evidence,
+            "purpose": "Hash-bound, row-identifiable interpretation over the immutable validation. Every source result gets source_result_index + source_row_canonical_sha256, and TWO preserved dimensions: metric_predicate_met/metric_defined/undefined_reason (metric level) and gate_outcome/flagged (gate level). Definedness comes from the hash-bound constituent evidence, NEVER a numeric zero or metric name; a false hard-gate is never reinterpreted as advisory; undefinedness is preserved even when the gate outcome is False.",
+            "term_definitions": {
+                "raw_pass": "the frozen results[*].pass = the original ALL-constituents subcheck outcome",
+                "source_worst_defined_value": "the frozen observed_value = lossy extremum over DEFINED constituents (never the sole evaluator)",
+                "metric_defined": "aggregate-level: every expected constituent stratum is defined (n_undefined_constituents == 0)",
+                "metric_predicate_met": "completeness AND every constituent defined AND every defined constituent meets its comparator (reproduces raw_pass for hard rows)",
+            },
+            "gate_taxonomy": {"hard_selectability": sorted(D8.HARD_SELECTABILITY_GATES), "structural_selection": sorted(D8.STRUCTURAL_GATE),
+                              "portability_not_selectability": sorted(D8.PORTABILITY_GATE), "overlay_release": sorted(D8.OVERLAY_RELEASE_GATES),
+                              "advisory_flag": sorted(D8.ADVISORY_GATES), "descriptive_undefined": sorted(D8.DESCRIPTIVE_GATES)},
+            "dimension_note": "metric_predicate_met and gate_outcome are SEPARATE. Per-metric portability/overlay rows carry gate_outcome only (NOT relabelled as aggregate gates). metric_defined can be false while gate_outcome is False; a real zero-numerator (positive denominator) is DEFINED.",
+            "n_results": len(sem_rows),
+            "results_semantics": sem_rows,
+        }
+        sem_canon, sem_raw = write_canon("stage01_validation_semantics.json", semantics)
+    else:
+        # served-checkout reseal: REUSE the committed hash-bound upstream unchanged (guarded), so the
+        # readiness pointer + manifest regenerate from the verified v3 artifacts without the raw staging
+        # tables. The immutable validation-derived selectability/semantics do not change here.
+        selectability = json.load(open(P("stage01_selectability_v3.json")))
+        semantics = json.load(open(P("stage01_validation_semantics.json")))
+        assert selectability.get("self_canonical_sha256") == canon_sha256(selectability), "committed selectability self-hash mismatch"
+        assert semantics.get("self_canonical_sha256") == canon_sha256(semantics), "committed semantics self-hash mismatch"
+        assert semantics.get("binds_validation_raw_sha256") == bind[VALIDATION]["raw_sha256"], "committed semantics not bound to the current immutable validation"
+        assert selectability.get("bound_hashes", {}).get("validation_raw_sha256") == bind[VALIDATION]["raw_sha256"], "committed selectability not bound to the current immutable validation"
+        records = selectability.get("records", [])
+        assert len(records) == 33, f"committed selectability has {len(records)} records, expected 33"
+        n_true = selectability.get("n_production_selectable_true", sum(1 for r in records if r.get("production_selectable") is True))
+        constituent_evidence = semantics.get("constituent_evidence")
+        sem_rows = semantics.get("results_semantics", [])
+        sel_raw = raw_sha256(P("stage01_selectability_v3.json")); sel_canon = selectability.get("self_canonical_sha256")
+        sem_raw = raw_sha256(P("stage01_validation_semantics.json")); sem_canon = semantics.get("self_canonical_sha256")
+        print("REUSE: staging tables absent — committed selectability/semantics reused (hash-verified); regenerating readiness pointer + manifest only")
 
     # ---- recovered/built v3 artifacts (non-served staging), hash-bound into the manifest ----
     v3 = {
-        "stage01_program_registry_v3.json": staged("stage01_program_registry_v3.candidate.json"),
-        "stage01_scores_full.parquet": staged("stage01_scores_full.candidate.parquet"),
-        "stage01_summary.json": staged("stage01_summary.v3.json"),
-        "stage01_umap_coordinates.json": staged("stage01_umap_coordinates.json"),
-        "stage01_umap_overlay.json": staged("stage01_umap_overlay_v3.json"),
+        "stage01_program_registry_v3.json": staged("stage01_program_registry_v3.candidate.json", _committed_manifest),
+        "stage01_scores_full.parquet": staged("stage01_scores_full.candidate.parquet", _committed_manifest),
+        "stage01_summary.json": staged("stage01_summary.v3.json", _committed_manifest),
+        "stage01_umap_coordinates.json": staged("stage01_umap_coordinates.json", _committed_manifest),
+        "stage01_umap_overlay.json": staged("stage01_umap_overlay_v3.json", _committed_manifest),
     }
     # verification receipt produced by the independent D-compute (committed provenance in analysis/)
     v3_verify = analysis_file("stage01_v3_recovery_verification.json")
-    receipt_all_pass = False
+    recovery_receipt = None
     if v3_verify["present"]:
         try:
-            receipt_all_pass = bool(json.load(open(os.path.join(os.path.dirname(__file__),
-                                    "stage01_v3_recovery_verification.json"))).get("all_pass") is True)
+            recovery_receipt = json.load(open(os.path.join(os.path.dirname(__file__),
+                                                "stage01_v3_recovery_verification.json")))
         except Exception:
-            receipt_all_pass = False
+            recovery_receipt = None
+    receipt_all_pass = bool((recovery_receipt or {}).get("all_pass") is True)
 
-    overlay_release_ok = bool(v.get("overlay_release", {}).get("overlay_release_ok", False))
+    # ---- app/overlay DEPLOYMENT READINESS: DERIVED from verified served-artifact integrity + overlay
+    #      fidelity (overlay==full), DECOUPLED from the historical 0/33 within-condition selectability
+    #      (never an input). Fails closed if any served display artifact is missing/hash-mismatched. ----
+    def _served_art(name, extra_keys=()):
+        p = P(name); present = os.path.exists(p)
+        rec = {"present": present, "raw_sha256": raw_sha256(p)}
+        if present and extra_keys:
+            try:
+                obj = json.load(open(p))
+                for k in extra_keys: rec[k] = obj.get(k)
+            except Exception:
+                for k in extra_keys: rec[k] = None
+        return rec
+    served_display = {
+        "stage01_program_registry_v3.json": _served_art("stage01_program_registry_v3.json"),
+        "stage01_umap_overlay_v3.json": _served_art("stage01_umap_overlay_v3.json",
+                                                    ("scores_canonical_content_sha256", "coordinates_sha256")),
+        "stage01_summary_v3.json": _served_art("stage01_summary_v3.json"),
+    }
+    readiness = DR.derive_deployment_readiness(served_display, recovery_receipt)
+    overlay_release_ok = readiness["overlay_release_ok"]
+    app_deployment_ready = readiness["app_deployment_ready"]
+    app_deployment_reason_codes = readiness["integrity_reason_codes"] + readiness["fidelity_reason_codes"]
+    # descriptive, NON-BLOCKING overlay representativeness gate (validation-level composition/distributions/
+    # correlations); separate from overlay==full fidelity and never a deployment input.
+    overlay_representativeness_gate = {
+        "ok": bool(v.get("overlay_release", {}).get("overlay_release_ok", False)),
+        "n_gate_failures": int(v.get("overlay_release", {}).get("n_overlay_gate_failures", 0) or 0),
+        "gate_ids": sorted(D8.OVERLAY_RELEASE_GATES),
+        "role": "descriptive_visualization_representativeness",
+        "blocks_deployment": False,
+        "note": "overlay composition/distributions/correlations representativeness; separate from the overlay==full fidelity that gates deployment, and never blocks continuous scores or generic Stage-2 selection",
+    }
+
     measurement_inputs_present = all(v3[k]["present"] for k in
                                      ["stage01_program_registry_v3.json", "stage01_scores_full.parquet", "stage01_summary.json"])
     measurement_verified = bool(v3_verify["present"] and receipt_all_pass)
@@ -172,9 +254,14 @@ def main():
             (None if solver_lock["present"] else "solver_lock_absent"),
         ] if b],
         "panel_provenance_status": "PRIMARY_LOCATORS_VERIFIED_BOUNDED",
+        "served_artifact_integrity_ok": readiness["served_artifact_integrity_ok"],
+        "overlay_release_fidelity_ok": readiness["overlay_release_fidelity_ok"],
         "overlay_release_ok": overlay_release_ok,
         "overlay_deployment_status": ("deployable" if overlay_release_ok else "blocked_overlay_gate_false"),
-        "app_deployment_ready": False,
+        "app_deployment_ready": app_deployment_ready,
+        "app_deployment_reason_codes": app_deployment_reason_codes,
+        "app_deployment_derivation": readiness["derivation"],
+        "overlay_representativeness_gate": overlay_representativeness_gate,
     }
     # ---- v3.0.1 measurement/display release bindings (served copies the UI joins/binds to) ----
     regv3_p, ovl3_p, sum3_p = P("stage01_program_registry_v3.json"), P("stage01_umap_overlay_v3.json"), P("stage01_summary_v3.json")
@@ -282,8 +369,26 @@ def main():
         "release_gates": {
             "measurement_bundle_lockable": measurement_bundle_lockable,
             "panel_provenance_status": current["release_statuses"]["panel_provenance_status"],
+            "served_artifact_integrity_ok": readiness["served_artifact_integrity_ok"],
+            "overlay_release_fidelity_ok": readiness["overlay_release_fidelity_ok"],
             "overlay_release_ok": overlay_release_ok,
-            "app_deployment_ready": current["release_statuses"]["app_deployment_ready"],
+            "app_deployment_ready": app_deployment_ready,
+        },
+        # app_deployment_ready is DERIVED (stage1_deployment_readiness) from verified served-artifact
+        # integrity + overlay==full fidelity — NOT from the historical 0/33 selectability, which is
+        # preserved as descriptive validation metadata and blocks nothing served.
+        "deployment_readiness": {
+            "app_deployment_ready": app_deployment_ready,
+            "served_artifact_integrity_ok": readiness["served_artifact_integrity_ok"],
+            "overlay_release_fidelity_ok": readiness["overlay_release_fidelity_ok"],
+            "reason_codes": app_deployment_reason_codes,
+            "derivation": readiness["derivation"],
+            "overlay_representativeness_gate": overlay_representativeness_gate,
+            "historical_within_condition_validation": {
+                "artifact": "stage01_selectability_v3.json", "raw_sha256": sel_raw,
+                "n_production_selectable_true": n_true, "of_total": len(records), "active_gate": False,
+                "role": "frozen_descriptive_historical_validation_not_a_deployment_input",
+            },
         },
         "not_lockable_reason_codes": [r for r in [
             ("required_artifacts_missing" if missing else None),
