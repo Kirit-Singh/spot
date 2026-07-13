@@ -24,15 +24,31 @@ REPORT_SCHEMA = "spot.stage02_direct_arm_bundle_verification.v1"
 SPEC_SHA256 = "c477356278c5b7d2842659f5354792c9db7203ee774f8dd70653921124477a9f"
 
 BUNDLE_FILE = "arm_bundle.json"
-PROVENANCE_FILE = "arm_bundle_provenance.json"
+PROVENANCE_FILE = "provenance.json"
 ROWS_FILE = "arms.parquet"
-EXPECTED_FILES = {BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE}
+MASKS_FILE = "masks.parquet"
+CONTRIB_FILE = "contributing_guides.parquet"
+GUIDE_SUPPORT_FILE = "guide_support.parquet"
+DONOR_SUPPORT_FILE = "donor_support.parquet"
+INPUTS_FILE = "input_manifest.json"
+UNIVERSE_FILE = "gene_universe.json"
+VERIFICATION_FILE = "verification.json"
+
+EXPECTED_FILES = {BUNDLE_FILE, PROVENANCE_FILE, ROWS_FILE, MASKS_FILE, CONTRIB_FILE,
+                  GUIDE_SUPPORT_FILE, DONOR_SUPPORT_FILE, INPUTS_FILE, UNIVERSE_FILE,
+                  VERIFICATION_FILE}
 
 BUNDLE_SCHEMA = "spot.stage02_direct_arm_bundle.v1"
 REQUEST_SCHEMA = "spot.stage02_arm_bundle_request.v1"
 PROVENANCE_SCHEMA = "spot.stage02_arm_bundle_provenance.v1"
+VERIFICATION_SCHEMA = "spot.stage02_arm_bundle_verification.v1"
 RUNNER_ID = "spot.stage02.direct.all_arm_runner.v1"
 BUNDLE_RUN_ID_LEN = 16
+
+# The verdict the PRODUCER writes into verification.json. It is not a verdict — it is the
+# slot this verifier fills. A bundle that arrived already admitting itself is refused: a
+# generator that signs its own homework is the same process asserting twice.
+VERDICT_PENDING = "pending_independent_verification"
 
 LANES = ("production", "research_only", "synthetic")
 RELEASE_LANES = ("production", "research_only")
@@ -43,7 +59,8 @@ INFERENCE_STATUS = "not_calibrated"
 # off as this one.
 VERIFIER_MODULES = ("verify_arm_bundle.py", "verify_arm_gates.py",
                     "verify_arm_report.py", "verify_arm_rules.py",
-                    "verify_arm_view.py", "verify_arm_recompute.py")
+                    "verify_arm_science.py", "verify_arm_view.py",
+                    "verify_arm_recompute.py", "verify_direct_release.py")
 # The producer modules this verifier may never import. ASSERTED against its own source at
 # run time (see verify_arm_gates.gate_independence), never merely promised here.
 FORBIDDEN_IMPORTS = ("direct.arm_bundle", "direct.run_arms", "direct.scorer_view",

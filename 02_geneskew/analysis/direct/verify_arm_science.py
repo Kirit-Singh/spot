@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -20,6 +20,50 @@ if _HERE not in sys.path:
 import verify_arm_rules as AR  # noqa: E402
 import verify_arm_view as AV  # noqa: E402
 from verify_arm_report import RELEASE_LANES, Report  # noqa: E402
+
+MASK_ROW_SORT = ("estimate_type", "estimate_id", "target_id", "masked_gene_ensembl",
+                 "mask_reason", "guide_id")
+# The ids stamped ONTO the mask rows, never hashed INTO them.
+MASK_ROW_IDS = ("run_id", "arm_bundle_run_id")
+
+
+def _canonical_mask_rows(rows: list[dict]) -> list[dict]:
+    """The mask rows in the ONE shape and ORDER their hash can be taken over by a reader."""
+    out = [{k: _native(v) for k, v in sorted(r.items()) if k not in MASK_ROW_IDS}
+           for r in rows]
+    out.sort(key=lambda r: tuple("" if r.get(k) is None else str(r.get(k))
+                                 for k in MASK_ROW_SORT))
+    return out
+
+
+def _native(v: Any) -> Any:
+    """A parquet scalar as the plain Python value the hash was taken over.
+
+    Parquet hands back numpy scalars and NaN where the producer held ints, floats, bools and
+    None. Hashing what pandas happens to return would bind a number nobody reading the file
+    could reproduce — the "count nobody can recount" defect, one layer down.
+    """
+    if v is None:
+        return None
+    if isinstance(v, (bool,)):
+        return bool(v)
+    try:
+        import numpy as np
+
+        if isinstance(v, np.bool_):
+            return bool(v)
+        if isinstance(v, np.integer):
+            return int(v)
+        if isinstance(v, np.floating):
+            f = float(v)
+            return None if f != f else f
+        if isinstance(v, np.str_):
+            return str(v)
+    except ImportError:                                          # pragma: no cover
+        pass
+    if isinstance(v, float) and v != v:                          # NaN is not a value
+        return None
+    return v
 
 
 def gate_admitted_set(doc: dict, binding: dict, release: Optional[dict],
@@ -276,25 +320,75 @@ def gate_recompute(rows: list[dict], recomputed: dict, mode: str, rep: Report) -
 
 
 def gate_evidence_bindings(binding: dict, recomputed: dict, manifest_doc: Optional[dict],
-                           universe_sha: str, rep: Report) -> None:
-    """The H5AD, the effect universe, the contributor manifest and the mask — BOUND."""
+                           manifest_path: Optional[str], universe_sha: str,
+                           mask_rows: list[dict], rep: Report) -> None:
+    """The H5AD, the effect universe, the contributor manifest and the mask — BOUND.
+
+    The mask is what every base delta stands on, and it is a function of the contributor
+    manifest. So both are bound, and both are re-derived here: the manifest's canonical
+    identity from its own rows, and the mask hash from the SHIPPED masks.parquet — not from
+    the number the producer wrote down beside it.
+    """
+    import verify_rules as R
+
     rep.gate("the effect-gene universe RE-DERIVES from the bound H5AD's own gene axis",
              binding.get("gene_universe_sha256") == universe_sha,
              f"declared={binding.get('gene_universe_sha256')!r} derived={universe_sha!r}")
 
-    # The mask is what every base delta stands on. It is a function of the contributor
-    # manifest, so a bundle that binds neither cannot say which evidence it used.
-    gm = binding.get("guide_manifest") or {}
-    canon = None
-    if manifest_doc is not None:
-        import verify_rules as R
-        canon = R.canonical_manifest_sha256(manifest_doc)
-    rep.gate("the CONTRIBUTOR MANIFEST's identity is bound into the run — the mask, and "
-             "therefore every base delta, is a function of it",
-             bool(gm) and gm.get("canonical_sha256") == canon,
-             f"bound={gm.get('canonical_sha256')!r} derived={canon!r}")
+    cm = binding.get("contributor_manifest") or {}
+    canon = R.canonical_manifest_sha256(manifest_doc) if manifest_doc else None
+    rep.gate("the CONTRIBUTOR MANIFEST's canonical identity is bound into the run — the "
+             "mask, and therefore every base delta, is a function of it",
+             bool(cm) and cm.get("canonical_sha256") == canon,
+             f"bound={cm.get('canonical_sha256')!r} derived={canon!r}")
 
-    rep.gate("the MASK's identity is bound into the run",
-             binding.get("mask_sha256") == recomputed["mask_sha256"],
-             f"bound={binding.get('mask_sha256')!r} "
-             f"derived={recomputed['mask_sha256']!r}")
+    raw = R.sha256_file(manifest_path) if manifest_path else None
+    rep.gate("the contributor manifest's RAW BYTES are bound — a reordered manifest is the "
+             "same manifest, but different bytes are different evidence",
+             cm.get("raw_sha256") == raw,
+             f"bound={cm.get('raw_sha256')!r} actual={raw!r}")
+
+    # THE MASK HASH, re-derived from the rows the bundle SHIPS. Binding the hash of bytes
+    # nobody can hold would be the same defect as citing a gene set that only exists on the
+    # producer's disk — and so is binding the hash of an ORDER nobody can hold.
+    #
+    # Both ids are excluded: `run_id` because a mask is a fact about an estimate and not
+    # about the run that happened to read it, and `arm_bundle_run_id` because the bundle id
+    # is a FUNCTION of this hash, so a hash containing it could never be recomputed.
+    #
+    # The rows are SORTED before hashing. A mask is a SET of facts, not a sequence: the
+    # parquet is written in sort order, so a hash taken over the producer's in-memory
+    # accumulation order is a number nobody reading the shipped file can reproduce. That is
+    # the same "count nobody can recount" defect the arm rows already fixed
+    # (their canonical projection sorts first); a hash that is re-derivable only by the
+    # process that happened to hold the list in memory is not an identity.
+    canonical = _canonical_mask_rows(mask_rows)
+    shipped = AR.content_sha256(canonical)
+    rep.gate("the MASK's identity is bound into the run and RE-DERIVES from the shipped "
+             "masks.parquet",
+             binding.get("mask_sha256") == shipped,
+             f"bound={binding.get('mask_sha256')!r} derived={shipped!r} — the bound hash "
+             "is not a function of the shipped bytes. The mask rows are hashed in the "
+             "producer's in-memory accumulation order, but masks.parquet is written SORTED, "
+             "so no reader of the file can reproduce the number bound beside it. Hash the "
+             "rows in their canonical sorted order, as the arm rows already are.")
+    rep.gate("the bound mask row count matches the shipped mask table",
+             binding.get("n_mask_rows") == len(mask_rows),
+             f"bound={binding.get('n_mask_rows')!r} shipped={len(mask_rows)}")
+
+    # ...and the shipped masks are the ones the verifier INDEPENDENTLY derives from the
+    # contributor manifest and the library. A bundle whose mask table is internally
+    # consistent but describes a masking nobody performed is a bundle that cites itself.
+    ev = recomputed["evidence_by_target"]
+    by_target: dict[str, set] = {}
+    for r in mask_rows:
+        gene = r.get("masked_gene_ensembl")
+        if gene:
+            by_target.setdefault(str(r["target_id"]), set()).add(str(gene))
+    drifted = sorted(
+        t for t, e in ev.items()
+        if e["mask_resolved"]
+        and AR.content_sha256(sorted(by_target.get(t, set()))) != e["mask_sha256"])
+    rep.gate("every SHIPPED mask is the one the verifier independently derives from the "
+             "contributor manifest and the sgRNA library",
+             not drifted, f"{len(drifted)} target(s), first: {drifted[:3]}")

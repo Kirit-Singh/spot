@@ -264,9 +264,23 @@ def _verify_component(name: str, entry: Any, release_root: str) -> dict[str, Any
     a component nobody pinned. The pinned path is repo-relative and may not escape the
     root — a release cannot point the verifier at a file outside the tree it staged.
     """
-    if not isinstance(entry, dict) or not entry.get("path"):
+    if not isinstance(entry, dict):
         _refuse(REFUSE_COMPONENT_MISSING,
-                f"release component {name!r} is missing or carries no path")
+                f"release component {name!r} is malformed")
+    if not entry.get("path"):
+        # A component the release STAGES but does not SERVE (the 396k-row scores parquet is
+        # gitignored and regenerated). There are no bytes here to hash, and pretending
+        # otherwise would be worse than saying so: what is recorded is that it was not
+        # served, so a reader can see the gap rather than infer a check that never ran.
+        # It is accepted only because it declares itself — a component that simply forgot
+        # its path would look identical, so it must say WHERE it is instead.
+        if not (entry.get("location") or entry.get("raw_sha256_staged")):
+            _refuse(REFUSE_COMPONENT_MISSING,
+                    f"release component {name!r} carries no path and does not say where "
+                    "it is; a component with neither bytes nor a location is a citation "
+                    "with no referent")
+        return {"path": None, "raw_sha256": None, "doc": None,
+                "served": False, "location": entry.get("location")}
     rel = str(entry["path"])
     if os.path.isabs(rel) or ".." in rel.replace("\\", "/").split("/"):
         _refuse(REFUSE_COMPONENT_PATH_ESCAPES_ROOT,
@@ -300,7 +314,8 @@ def _verify_component(name: str, entry: Any, release_root: str) -> dict[str, Any
                     f"release component {name!r}: canonical content does not match the "
                     f"pinned canonical_content_sha256 (declared {declared_canon}, actual "
                     f"{actual_canon})")
-    return {"path": path, "raw_sha256": raw, "doc": doc}
+    return {"path": path, "raw_sha256": raw, "doc": doc, "served": True,
+            "location": entry.get("location")}
 
 
 def load_v3_release(path: str, release_root: Optional[str] = None) -> dict[str, Any]:
@@ -406,8 +421,11 @@ def load_v3_release(path: str, release_root: Optional[str] = None) -> dict[str, 
         "registry_scorer_projection_sha256": release.get(
             "registry_scorer_projection_sha256"),
         "stage1_scorer_view_doc": view_doc,
-        "components": {n: {"path": v["path"], "raw_sha256": v["raw_sha256"]}
+        "components": {n: {"path": v["path"], "raw_sha256": v["raw_sha256"],
+                           "served": v["served"]}
                        for n, v in verified.items()},
+        "components_not_served": sorted(n for n, v in verified.items()
+                                        if not v["served"]),
         "programs": programs_from_doc(view_doc),
         "stage2_arm_view": view,
         "admitted_program_ids": admitted,

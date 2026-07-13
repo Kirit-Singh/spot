@@ -64,9 +64,11 @@ from verify_arm_report import (  # noqa: E402,F401
     BUNDLE_FILE,
     BUNDLE_RUN_ID_LEN,
     EXPECTED_FILES,
+    MASKS_FILE,
     PROVENANCE_FILE,
     ROWS_FILE,
     SPEC_SHA256,
+    VERIFICATION_FILE,
     VERIFIER_ID,
     Report,
     verifier_code_sha256,
@@ -110,10 +112,13 @@ def verify(args) -> Report:
 
     doc = _load_json(paths[BUNDLE_FILE])
     prov = _load_json(paths[PROVENANCE_FILE])
+    verification = _load_json(paths[VERIFICATION_FILE])
     binding = prov.get("run_binding") or {}
     rows, columns = _read_parquet_rows(paths[ROWS_FILE])
+    mask_rows, _ = _read_parquet_rows(paths[MASKS_FILE])
 
     file_shas = G.gate_on_disk(paths, doc, prov, rep)
+    G.gate_not_self_admitted(verification, rep)
     G.gate_schemas(doc, prov, rep)
     G.gate_no_display_fields(doc, prov, columns, rep)
 
@@ -145,13 +150,22 @@ def verify(args) -> Report:
     S.gate_arm_values_and_ranks(doc, rows, rep)
     S.gate_arm_bytes(doc, rows, rep)
 
+    # The pinned Stage-2 inputs by their STABLE RELEASE NAMES, restated here rather than
+    # imported: a name the checker borrowed from the producer is a name nobody checked. The
+    # pair selection is deliberately NOT among them — an all-arm bundle has no such input,
+    # and gate_inputs refuses one if it ever appears.
     named = {
         "GWCD4i.DE_stats.h5ad": args.de_main,
         "GWCD4i.DE_stats.by_guide.h5mu": args.by_guide,
         "GWCD4i.DE_stats.by_donors.h5mu": args.by_donors,
         "sgrna_library_metadata.suppl_table.csv": args.sgrna,
+        "guide_contributor_manifest.json": args.guide_manifest,
+        "source_registry.json": args.source_registry,
+        "target_identity_map.json": args.target_identity_map,
+        "donor_crosswalk.json": args.donor_crosswalk,
+        "strict_replay_raw_source": args.strict_replay_source,
+        "pseudobulk_source": args.pseudobulk,
         "stage01_program_registry.json": args.registry,
-        "stage01_selection_contract.json": args.selection,
     }
     G.gate_inputs(binding, named, rep)
     G.gate_consumed_inputs_bound(binding, rep)
@@ -176,8 +190,8 @@ def verify(args) -> Report:
         universe=genes, targets=targets)
 
     S.gate_recompute(rows, recomputed, args.recompute, rep)
-    S.gate_evidence_bindings(binding, recomputed, manifest_doc,
-                           recomputed["gene_universe_sha256"], rep)
+    S.gate_evidence_bindings(binding, recomputed, manifest_doc, args.guide_manifest,
+                             recomputed["gene_universe_sha256"], mask_rows, rep)
 
     rep.bound = {
         "arm_bundle_run_id": prov.get("arm_bundle_run_id"),
@@ -218,6 +232,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--by-guide", default=None)
     ap.add_argument("--by-donors", default=None)
     ap.add_argument("--guide-manifest", default=None)
+    ap.add_argument("--source-registry", default=None)
+    ap.add_argument("--target-identity-map", default=None)
+    ap.add_argument("--donor-crosswalk", default=None)
+    ap.add_argument("--strict-replay-source", default=None)
+    ap.add_argument("--pseudobulk", default=None)
     ap.add_argument("--registry", default=None,
                     help="the v3 program registry (the synthetic fixture lane's program "
                          "source; a release-grade lane must bind --stage1-v3-release)")
