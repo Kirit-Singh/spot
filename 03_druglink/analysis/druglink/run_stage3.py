@@ -313,7 +313,8 @@ def run(*, artifact_class: str, direct_run_dir: str, direct_inputs_root: str,
 
 
 V2_REQUIRED = ("--stage2-manifest", "--stage2-report", "--bundles-root", "--stage1-release",
-               "--universe-store", "--stage2-bridge", "--stage2-bridge-report")
+               "--universe-store", "--stage2-bridge", "--stage2-bridge-report",
+               "--stage2-bridge-receipt")
 
 # The bridge CONSUMER is not implemented yet. The flags exist (the contract is published to W3
 # and they are generating against it), but nothing in this module reads them.
@@ -459,6 +460,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--stage2-bridge-report", default=None,
                     help="v2: stage3_bridge_verification.json — the SEPARATE bridge verifier's "
                          "report. Stage 3 admits the bridge from THIS, never from the bridge.")
+    ap.add_argument("--stage2-bridge-receipt", default=None,
+                    help="v2: stage2_stage3_receipt.json — THE JOIN. It binds the immutable "
+                         "aggregate manifest/report AND the bridge/report by raw + canonical "
+                         "bytes. The bridge report alone names no bridge bytes, so an ADMIT "
+                         "without the receipt is a verdict about nothing in particular.")
     ap.add_argument("--artifact-class", required=True,
                     choices=list(ac.ARTIFACT_CLASSES),
                     help="analysis (a real computation) or fixture (synthetic; never "

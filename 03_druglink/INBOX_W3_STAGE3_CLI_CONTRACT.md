@@ -21,6 +21,7 @@ python -m druglink.run_stage3 --v2 \
   --stage1-release        <the authoritative Stage-1 v3 release FILE> \
   --stage2-bridge         OUT/stage3_bridge.json \
   --stage2-bridge-report  OUT/stage3_bridge_verification.json \
+  --stage2-bridge-receipt OUT/stage2_stage3_receipt.json \
   --universe-store        <admitted universe store dir> \
   --artifact-class        analysis \
   --output-root           OUT_STAGE3/
@@ -36,8 +37,30 @@ missing input is a named refusal (exit 2), and **nothing is written**.
 | aggregate manifest | `spot.stage02_run_manifest.v3_topology_only` | **recomputes** the semantic self-hash (content_sha256 excluding `created_at`, `manifest_sha256`, `path`). Never reads the claim. |
 | aggregate report | `spot.stage02_run_manifest_verification.v1` | binds `verdict=="admit"`, `n_failed==0`, `generator_is_not_verifier==true`, `topology_complete`, `release_admissible`, `admission.status=="admitted"`, `manifest_sha256 == manifest_sha256_recomputed` |
 | native bundles + ranking files | `records:[{target_id, arm_value, evaluable, rank}]` | reads `arm_value` **from here** — the authoritative value |
+
+**Native-shape corrections we have taken on board** (from your replay — thank you, these would
+have cost us a round):
+- **temporal ranked rows carry NO `arm_key` per row** — it is **top-level on the arm bundle**. We
+  read it from the bundle, not the row.
+- **pathway uses `target_source_coverage`.**
+- We are **not** implementing against the older invented fixtures. We wait for your corrected
+  clean bridge contract and replay against those exact bytes.
 | **bridge** | `spot.stage02_stage3_bridge.v1` | *(to be implemented)* re-hash `bridge_sha256`; take **identity + modality** from here |
 | **bridge report** | (your separate bridge verifier) | *(to be implemented)* admit the bridge from **this**, never from the bridge itself |
+| **receipt** | `spot.stage02_stage3_receipt.v1` | *(to be implemented)* **THE JOIN** — reopen and re-derive it; require it to bind the immutable aggregate manifest/report AND the bridge/report by **raw + canonical** bytes, before a single row is consumed |
+
+### Why the receipt is REQUIRED, not optional
+
+Your bridge report returns a verdict and counts but **no `bridge_sha256`** — so on its own it is
+an ADMIT that names no bytes. Only the receipt binds aggregate *and* bridge raw+canonical. A
+bridge presented with a report but no receipt is a verdict about nothing in particular, and it
+would let an ADMIT travel with an artifact it was never about. (Stage-3 shipped exactly that
+defect earlier this round — an admission carrying a verifier's name and verdict but never
+hashing the bundle it admitted — and had to fix it.) We require all three files.
+
+**Root/filenames:** invoking with `--bridge-root OUT` places all three at `OUT/`, which is what
+we assume. A subdirectory is equally fine — we take every path explicitly, so nothing is
+inferred from layout.
 
 ### The rule that makes the bridge safe
 

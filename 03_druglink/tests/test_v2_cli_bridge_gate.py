@@ -26,6 +26,14 @@ def test_the_bridge_is_REQUIRED_on_the_v2_path():
     assert "--stage2-bridge-report" in run_stage3.V2_REQUIRED
 
 
+def test_the_RECEIPT_is_required_too():
+    """W3 emits THREE files, and the receipt is the JOIN. The bridge report binds no bridge
+    bytes — only the receipt binds the aggregate AND the bridge by raw + canonical hash. A
+    bridge presented with a report but no receipt is an ADMIT about nothing in particular, and
+    it would let a verdict travel with an artifact it was never about."""
+    assert "--stage2-bridge-receipt" in run_stage3.V2_REQUIRED
+
+
 def test_the_readiness_check_reports_whether_the_ADMITTER_EXISTS():
     """It must be a fact about the code, not a hand-set Boolean. A hand-set flag is exactly the
     `DETACHED_CLONE_MATRIX_GREEN` defect: a constant in Stage-3's own source that no artifact
@@ -47,6 +55,7 @@ def test_the_v2_path_refuses_by_name_while_the_consumer_is_absent(tmp_path, caps
         "--stage1-release", str(tmp_path / "rel.json"),
         "--stage2-bridge", str(tmp_path / "bridge.json"),
         "--stage2-bridge-report", str(tmp_path / "bridge_report.json"),
+        "--stage2-bridge-receipt", str(tmp_path / "receipt.json"),
     ])
     assert code == 3, "a run that cannot honour the bridge must refuse, not proceed"
 
@@ -67,7 +76,8 @@ def test_the_refusal_says_WHY_rather_than_only_that(capsys, tmp_path):
         "--stage2-report", str(tmp_path / "r.json"), "--bundles-root", str(tmp_path),
         "--stage1-release", str(tmp_path / "rel.json"),
         "--stage2-bridge", str(tmp_path / "b.json"),
-        "--stage2-bridge-report", str(tmp_path / "br.json")])
+        "--stage2-bridge-report", str(tmp_path / "br.json"),
+        "--stage2-bridge-receipt", str(tmp_path / "rcpt.json")])
     printed = capsys.readouterr().out.lower()
     # the two facts that only the bridge carries — the reason a bridge-less run is impossible
     assert "namespace" in printed and "modality" in printed
