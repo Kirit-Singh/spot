@@ -130,6 +130,8 @@ def safety_rows_from_label(
                     labeled_section_code=f.labeled_section_code,
                     labeled_section_name=f.labeled_section_name,
                     code_system=f.code_system,
+                    labeled_subsection_code=f.labeled_subsection_code,
+                    labeled_subsection_name=f.labeled_subsection_name,
                 ),
                 provenance=Provenance(
                     source_record_id=source_record_id,

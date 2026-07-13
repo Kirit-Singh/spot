@@ -159,6 +159,11 @@ SAFETY_SCHEMA = pa.schema(
         ("labeled_section_code", _STR),
         ("labeled_section_name", _STR),
         ("code_system", _STR),
+        # WHERE inside the labeled section the sentence was read from. A real label nests its
+        # warnings in subsections; without this a finding cannot be traced back to the one it
+        # came from.
+        ("labeled_subsection_code", _STR),
+        ("labeled_subsection_name", _STR),
         ("searched_sources", _LIST_STR),
         # The manifest behind a `no_evidence_found` row. Emitted so the independent verifier
         # can insist the negative search actually exists in the release, rather than taking

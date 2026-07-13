@@ -52,6 +52,12 @@ class ParsedFinding:
     labeled_section_code: str
     labeled_section_name: str
     code_system: str
+    # WHERE inside the labeled section the sentence actually came from. A real label puts its
+    # warnings in nested subsections (see `_collect_findings`), so the safety TYPE comes from
+    # the ancestor LOINC section while the provenance names the subsection that was read.
+    # None when the finding came from the coded section's own direct <text>.
+    labeled_subsection_code: Optional[str] = None
+    labeled_subsection_name: Optional[str] = None
 
 
 LabelSource = Literal["dailymed_spl", "openfda_label", "ema_label"]
@@ -80,6 +86,10 @@ def _section_text_blocks(section: ET.Element) -> list[str]:
     """One block per labeled paragraph/list item — the unit the brief calls a finding.
 
     A boxed warning with three bullets is three findings, not one wall of text.
+
+    DIRECT <text> children only. `<excerpt>` is deliberately out of reach: it holds the SPL
+    "Highlights" RESTATEMENT of the same section, so collecting it would double-count every
+    finding — and a highlights summary is not the labeled section.
     """
     blocks: list[str] = []
     for text_el in section.findall(f"{{{HL7}}}text"):
@@ -99,6 +109,79 @@ def _section_text_blocks(section: ET.Element) -> list[str]:
             if t:
                 blocks.append(t)
     return blocks
+
+
+def _subsection_identity(section: ET.Element) -> tuple[Optional[str], Optional[str]]:
+    """(code, title) of a nested subsection — its own coded identity, carried verbatim."""
+    code_el = section.find(f"{{{HL7}}}code")
+    code = code_el.get("code") if code_el is not None else None
+    title_el = section.find(f"{{{HL7}}}title")
+    title = _norm("".join(title_el.itertext())) if title_el is not None else None
+    return code, (title or None)
+
+
+def _collect_findings(section: ET.Element, code: str, section_name: str) -> list[ParsedFinding]:
+    """Every finding under one LOINC-coded safety section, INCLUDING nested subsections.
+
+    A real innovator label carries no text at all on the coded section: TEMODAR's six Warnings
+    and Precautions each live in a `<component><section>` coded 42229-5 (SPL UNCLASSIFIED),
+    and its Adverse Reactions substance lives in 90374-0 / 90375-7. Reading only the coded
+    section's own <text> collected ZERO warnings and reported it silently — so this descends.
+
+    Two rules keep the descent honest:
+      * walk ONLY `component/section`, so `<excerpt>` (the Highlights restatement) is never
+        collected and cannot double-count a finding;
+      * do NOT descend into a subsection that is itself one of the five safety sections — it
+        gets its own attribution at the top level, and would otherwise be counted twice under
+        the wrong type.
+
+    The finding_type stays the ANCESTOR's (a warning nested under 43685-7 is a warning); the
+    subsection's own code/title travel with it as provenance.
+    """
+    out: list[ParsedFinding] = []
+
+    def emit(el: ET.Element, sub_code: Optional[str], sub_name: Optional[str]) -> None:
+        for block in _section_text_blocks(el):
+            out.append(ParsedFinding(
+                finding_type=SECTION_CODES[code],
+                finding_text=block,
+                labeled_section_code=code,
+                labeled_section_name=section_name,
+                code_system=LOINC_SYSTEM,
+                labeled_subsection_code=sub_code,
+                labeled_subsection_name=sub_name,
+            ))
+
+    def walk(el: ET.Element, sub_code: Optional[str], sub_name: Optional[str]) -> None:
+        emit(el, sub_code, sub_name)
+        for component in el.findall(f"{{{HL7}}}component"):
+            for child in component.findall(f"{{{HL7}}}section"):
+                child_code, child_title = _subsection_identity(child)
+                if child_code in SECTION_CODES:
+                    continue  # its own safety section — attributed at the top level
+                walk(child, child_code, child_title)
+
+    walk(section, None, None)
+    return out
+
+
+def _dedupe(findings: list[ParsedFinding]) -> list[ParsedFinding]:
+    """Collapse a repeated sentence to its FIRST occurrence, in document order.
+
+    Real labels cross-repeat: TEMODAR restates a myelosuppression sentence in more than one
+    place. Emitting it twice would double-count the same labeled claim; dropping it at random
+    would make the parse non-reproducible. Keyed on (finding_type, finding_text) so the SAME
+    sentence under a DIFFERENT labeled section stays distinct evidence.
+    """
+    seen: set[tuple[str, str]] = set()
+    out: list[ParsedFinding] = []
+    for f in findings:
+        key = (f.finding_type, f.finding_text)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+    return out
 
 
 def parse_dailymed_spl(raw: bytes) -> ParsedLabel:
@@ -142,16 +225,9 @@ def parse_dailymed_spl(raw: bytes) -> ParsedLabel:
         code = code_el.get("code")
         if code is None or code not in SECTION_CODES or code_el.get("codeSystem") != LOINC_SYSTEM:
             continue
-        for block in _section_text_blocks(section):
-            findings.append(
-                ParsedFinding(
-                    finding_type=SECTION_CODES[code],
-                    finding_text=block,
-                    labeled_section_code=code,
-                    labeled_section_name=code_el.get("displayName") or SECTION_NAMES[code],
-                    code_system=LOINC_SYSTEM,
-                )
-            )
+        section_name = code_el.get("displayName") or SECTION_NAMES[code]
+        findings.extend(_collect_findings(section, code, section_name))
+    findings = _dedupe(findings)
 
     if not setid:
         raise LabelParseError("SPL has no setId — label identity cannot be bound")

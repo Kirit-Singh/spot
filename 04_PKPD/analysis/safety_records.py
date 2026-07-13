@@ -65,6 +65,12 @@ class LabelIdentity(Strict):
     labeled_section_code: Optional[str] = None
     labeled_section_name: Optional[str] = None
     code_system: Optional[str] = None
+    # The nested subsection the sentence was actually read from (a real label puts its warnings
+    # in `<component><section>` subsections, not on the coded section itself). The safety TYPE
+    # still comes from the ancestor LOINC section; this says WHERE inside it. None for a
+    # finding taken from the coded section's own direct text.
+    labeled_subsection_code: Optional[str] = None
+    labeled_subsection_name: Optional[str] = None
 
 
 class SafetyEvidenceRecord(Strict):

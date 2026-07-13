@@ -1219,6 +1219,30 @@
               "default": null,
               "title": "Labeled Section Name"
             },
+            "labeled_subsection_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Labeled Subsection Code"
+            },
+            "labeled_subsection_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Labeled Subsection Name"
+            },
             "product_identity": {
               "title": "Product Identity",
               "type": "string"

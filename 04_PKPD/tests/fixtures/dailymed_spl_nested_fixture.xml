@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE. Synthetic HL7 v3 SPL. The DRUG AND ALL CONTENT ARE INVENTED and describe no real
+  product; only the STRUCTURE is real.
+
+  This fixture reproduces the nesting of a real innovator oncology label (verified live against
+  DailyMed setid 046a9011-3911-4d3f-a15f-fbb56d5aad56, TEMODAR, spl_version 40, on 2026-07-13).
+  The defect it pins:
+
+    * WARNINGS AND PRECAUTIONS (43685-7) carries NO direct <text>. Every warning lives in a
+      <component><section> subsection coded 42229-5 (SPL UNCLASSIFIED SECTION). A parser that
+      reads only a coded section's direct <text> collects ZERO warnings and says so silently —
+      a drug with six labeled warnings presents as having none.
+    * ADVERSE REACTIONS (34084-4) carries a short direct preamble and puts the substance in
+      subsections 90374-0 (Clinical Trials Experience) and 90375-7 (Postmarketing Experience).
+    * <excerpt> holds the SPL "Highlights" RESTATEMENT of the same warnings. It must NOT be
+      collected: it would double-count every finding.
+
+  Also pinned here: absence-of-evidence (no boxed warning, no drug-interactions section — a
+  genuinely absent section must stay 0 and never be invented) and deterministic de-duplication
+  (5.6 repeats 5.1's sentence verbatim, as real labels do).
+-->
+<document xmlns="urn:hl7-org:v3">
+  <id root="00000000-0000-4000-8000-fixture00002"/>
+  <code code="34391-3" codeSystem="2.16.840.1.113883.6.1" displayName="HUMAN PRESCRIPTION DRUG LABEL"/>
+  <title>NESTIB CAPSULE [SPOT FIXTURE LABORATORIES] — FIXTURE, NOT A REAL PRODUCT</title>
+  <effectiveTime value="20260220"/>
+  <setId root="ffffffff-0000-4000-8000-fixturespl002"/>
+  <versionNumber value="40"/>
+  <component>
+    <structuredBody>
+
+      <!-- CONTRAINDICATIONS: flat, direct <text>. Must keep working exactly as before. -->
+      <component>
+        <section>
+          <code code="34070-3" codeSystem="2.16.840.1.113883.6.1" displayName="CONTRAINDICATIONS SECTION"/>
+          <title>4 CONTRAINDICATIONS</title>
+          <text>
+            <paragraph>FIXTURE: NESTIB is contraindicated in fixture patients with known hypersensitivity to nestib.</paragraph>
+          </text>
+        </section>
+      </component>
+
+      <!-- WARNINGS AND PRECAUTIONS: NO direct <text>. Six warnings, each in a nested
+           component/section coded 42229-5. Plus an <excerpt> highlights duplicate. -->
+      <component>
+        <section>
+          <code code="43685-7" codeSystem="2.16.840.1.113883.6.1" displayName="WARNINGS AND PRECAUTIONS SECTION"/>
+          <title>5 WARNINGS AND PRECAUTIONS</title>
+          <excerpt>
+            <highlight>
+              <text>
+                <paragraph>FIXTURE HIGHLIGHTS RESTATEMENT: Fixture myelosuppression — monitor fixture blood counts. Fixture hepatotoxicity — monitor fixture liver tests.</paragraph>
+              </text>
+            </highlight>
+          </excerpt>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.1 Fixture Myelosuppression</title>
+              <text>
+                <paragraph>FIXTURE: Severe fixture myelosuppression occurred. Monitor fixture blood counts prior to each cycle.</paragraph>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.2 Fixture Hepatotoxicity</title>
+              <text>
+                <paragraph>FIXTURE: Fatal fixture hepatotoxicity occurred. Monitor fixture liver tests before and during treatment.</paragraph>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.3 Fixture Pneumocystis Pneumonia</title>
+              <text>
+                <paragraph>FIXTURE: Fixture pneumocystis pneumonia occurred. Consider fixture prophylaxis.</paragraph>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.4 Fixture Secondary Malignancies</title>
+              <text>
+                <paragraph>FIXTURE: Fixture secondary malignancies were reported.</paragraph>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.5 Fixture Embryo-Fetal Toxicity</title>
+              <text>
+                <paragraph>FIXTURE: NESTIB can cause fixture fetal harm. Advise fixture contraception.</paragraph>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="42229-5" codeSystem="2.16.840.1.113883.6.1" displayName="SPL UNCLASSIFIED SECTION"/>
+              <title>5.6 Fixture Exposure to Opened Capsules</title>
+              <text>
+                <!-- deliberately repeats 5.1's sentence verbatim: real labels cross-repeat. -->
+                <paragraph>FIXTURE: Severe fixture myelosuppression occurred. Monitor fixture blood counts prior to each cycle.</paragraph>
+                <paragraph>FIXTURE: Avoid fixture inhalation or contact with opened fixture capsules.</paragraph>
+              </text>
+            </section>
+          </component>
+        </section>
+      </component>
+
+      <!-- ADVERSE REACTIONS: short direct preamble + the substance nested in 6.1 / 6.2. -->
+      <component>
+        <section>
+          <code code="34084-4" codeSystem="2.16.840.1.113883.6.1" displayName="ADVERSE REACTIONS SECTION"/>
+          <title>6 ADVERSE REACTIONS</title>
+          <text>
+            <paragraph>FIXTURE: The following fixture reactions are described elsewhere in the labeling.</paragraph>
+          </text>
+          <component>
+            <section>
+              <code code="90374-0" codeSystem="2.16.840.1.113883.6.1" displayName="CLINICAL TRIALS EXPERIENCE SECTION"/>
+              <title>6.1 Fixture Clinical Trials Experience</title>
+              <text>
+                <list listType="unordered">
+                  <item>FIXTURE: Fixture fatigue was the most common fixture reaction.</item>
+                  <item>FIXTURE: Fixture nausea and fixture vomiting were reported.</item>
+                </list>
+              </text>
+            </section>
+          </component>
+          <component>
+            <section>
+              <code code="90375-7" codeSystem="2.16.840.1.113883.6.1" displayName="POSTMARKETING EXPERIENCE SECTION"/>
+              <title>6.2 Fixture Postmarketing Experience</title>
+              <text>
+                <paragraph>FIXTURE: Fixture interstitial pneumonitis was identified during fixture postapproval use.</paragraph>
+              </text>
+            </section>
+          </component>
+        </section>
+      </component>
+
+      <!-- NO 34066-1 boxed warning and NO 34073-7 drug-interactions section exist in this
+           label. Absence of a section is absence of evidence — it must stay 0 findings. -->
+
+      <component>
+        <section>
+          <code code="48780-1" codeSystem="2.16.840.1.113883.6.1" displayName="SPL PRODUCT DATA ELEMENTS SECTION"/>
+          <subject>
+            <manufacturedProduct>
+              <manufacturedProduct>
+                <name>NESTIB</name>
+                <ingredient classCode="ACTIB">
+                  <ingredientSubstance>
+                    <code code="YYYYYYYY88" codeSystem="2.16.840.1.113883.4.9"/>
+                    <name>NESTIB</name>
+                    <activeMoiety>
+                      <activeMoiety>
+                        <code code="YYYYYYYY88" codeSystem="2.16.840.1.113883.4.9"/>
+                        <name>NESTIB</name>
+                      </activeMoiety>
+                    </activeMoiety>
+                  </ingredientSubstance>
+                </ingredient>
+              </manufacturedProduct>
+            </manufacturedProduct>
+          </subject>
+        </section>
+      </component>
+
+    </structuredBody>
+  </component>
+</document>

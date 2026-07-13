@@ -91,7 +91,8 @@ INPUT_COLUMNS: dict[str, tuple[str, ...]] = {
         "evidence_id", "candidate_id", "active_moiety_id", "evidence_state", "finding_type",
         "finding_text", "gbm_scenario", "interaction_type", "label_source", "setid",
         "application_number", "product_identity", "label_version", "effective_date",
-        "labeled_section_code", "labeled_section_name", "code_system", "searched_sources",
+        "labeled_section_code", "labeled_section_name", "code_system",
+        "labeled_subsection_code", "labeled_subsection_name", "searched_sources",
         "search_id",
         "source_record_id", "source_url", "access_date", "release_version",
         "raw_response_sha256", "extraction_transform",
@@ -283,6 +284,10 @@ def evidence_input_rows(inputs: Any) -> dict[str, list[dict[str, Any]]]:
              "labeled_section_name": (s.label_identity.labeled_section_name
                                       if s.label_identity else None),
              "code_system": s.label_identity.code_system if s.label_identity else None,
+             "labeled_subsection_code": (s.label_identity.labeled_subsection_code
+                                         if s.label_identity else None),
+             "labeled_subsection_name": (s.label_identity.labeled_subsection_name
+                                         if s.label_identity else None),
              "searched_sources": list(s.searched_sources), "search_id": s.search_id,
              **(_prov(s.provenance) if s.provenance else _empty_prov())}
             for s in inputs.safety_records
