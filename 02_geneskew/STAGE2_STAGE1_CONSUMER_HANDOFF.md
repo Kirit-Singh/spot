@@ -1,6 +1,6 @@
 # Stage-2 ← Stage-1 consumer repair (W-consumer-v3)
 
-**Branch** `agent/stage2-stage1-consumer-v3` · **commits** `b4981cd` (consumer repair) · `2044da8` (method identity + tuple space)
+**Branch** `agent/stage2-stage1-consumer-v3` · **commits** `b4981cd` (consumer repair) · `2044da8` (method identity + tuple space) · `e55c595` (identity split)
 · **base** `9bd5895` · **Stage-1 contract** `539431dd8d87a3d763fb69ab44ed44bc98631d5a`
 (branch `stage1-temporal-estimator-repair`). Coordinated by the orchestrator.
 
@@ -70,11 +70,11 @@ own module docstring.
 
 ## Test counts
 
-Full Stage-2: **1870 passed, 4 skipped, 0 failed** (baseline at `9bd5895`: 1770 / 4 / 0).
-**+100 tests, no regressions, and no pre-existing failures** — the 4 skips are the same
+Full Stage-2: **1872 passed, 4 skipped, 0 failed** (baseline at `9bd5895`: 1770 / 4 / 0).
+**+102 tests, no regressions, and no pre-existing failures** — the 4 skips are the same
 pre-existing opt-in ones (`test_manifest_build`, `test_release_integration`). `ruff` clean.
 
-Focused: `test_stage1_v3` 49 · `test_stage1_question_id` 37 · `test_stage1_tuple_space` 31 ·
+Focused: `test_stage1_v3` 51 · `test_stage1_question_id` 37 · `test_stage1_tuple_space` 31 ·
 `test_stage1_method_identity` 16 · `test_verify_identity_v3` 11 · `test_stage1_v3_selection_id` 10 ·
 `test_v3_axis_identity` 15 · `test_stage1_release_v3` 25 · `test_temporal_v3` 13 · `test_cli_v3` 19 ·
 `test_preflight_v3_parity` 17 · `test_stage1_interop` 15.
@@ -158,7 +158,7 @@ there) — so that is asserted where the check actually lives, not where it woul
 `stage1_v3.py` was 1092 lines against the ≤500 rule. The identity derivations — `question_id`,
 `selection_id`, the pole/endpoint identities, the declared method identity, the biology key, and
 their published rule ids — now live in **`analysis/direct/stage1_v3_ids.py`** (300 lines).
-`stage1_v3.py` is **859**. **This module GATES; that one DERIVES.**
+`stage1_v3.py` is **866**. **This module GATES; that one DERIVES.**
 
 Behaviour is preserved exactly: all 29 identity names are **re-exported** from `stage1_v3` and
 resolve to the *same objects* (asserted, not assumed — a shadowing copy would drift in silence),
@@ -168,7 +168,7 @@ that quietly changed its import path would be an identity that changed.
 `stage1_v3_ids` imports **nothing but `hashing.content_hash`** (asserted by AST): identity must
 not be able to move because a config, a policy or a release moved.
 
-`stage1_v3.py` at 859 lines is still over the 500-line rule. What remains is genuinely the gate
+`stage1_v3.py` at 866 lines is still over the 500-line rule. What remains is genuinely the gate
 (the refusal ladder in `validate`) plus the release/axis binding and the run-id block; the next
 natural cut is `bind_axis` + `stage2_run_binding`/`stage2_run_id`. Not done here — it is a
 different seam, and CLAUDE.md says never reorganize silently.
