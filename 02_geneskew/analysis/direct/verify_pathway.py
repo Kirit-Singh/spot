@@ -20,6 +20,9 @@ Fail-closed: any failed check REJECTS the artifact.
 """
 from __future__ import annotations
 
+import argparse
+import hashlib
+import json
 import os
 import sys
 from typing import Any, Optional
@@ -587,3 +590,68 @@ def _report(provenance: dict[str, Any], identity: dict[str, Any],
         "n_failed": len(failures),
         "verdict": ADMIT if not failures else REJECT,
     }
+
+
+# --------------------------------------------------------------------------- #
+# A MINIMAL DETERMINISTIC CLI. Explicit inputs, an explicit persisted report, nonzero exit on
+# any refusal. The persisted report is CONTENT-ADDRESSED: verdict + per-gate pass/fail only, no
+# absolute paths or timestamps, so the runbook can bind report_sha256.
+# --------------------------------------------------------------------------- #
+def _cli_report(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": result.get("schema_version"),
+        "verifier_id": result.get("verifier_id"),
+        "generator_is_not_verifier": True,
+        "fail_closed": True,
+        "pathway_run_id": result.get("pathway_run_id"),
+        "n_records": result.get("n_records"),
+        "verdict": result.get("verdict"),
+        "n_failed": result.get("n_failed"),
+        "gates": [{"check": c["check"], "status": c["status"]}
+                  for c in result.get("checks", [])],
+    }
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="python -m direct.verify_pathway",
+        description="Independent Stage-2 pathway (pathway.json) verifier: RE-DERIVES every "
+                    "count from the pinned gene-set bundle, the bound universes, the arm "
+                    "rankings and the masked signatures shipped in the bundle. Imports no "
+                    "producer module. Exit 0 = ADMIT, nonzero = REJECT.")
+    ap.add_argument("--out-dir", required=True,
+                    help="the pathway bundle dir (pathway.json + pathway_provenance.json)")
+    ap.add_argument("--gene-sets", default=None,
+                    help="the pinned gene-set bundle to anchor the recount against (the "
+                         "auditor's own copy of the release; a second opinion)")
+    ap.add_argument("--out", required=True,
+                    help="path to write the deterministic, content-addressed report JSON")
+    args = ap.parse_args(argv)
+
+    try:
+        result = verify(out_dir=args.out_dir, gene_sets_path=args.gene_sets)
+    except Exception as exc:                       # a crash IS a verification failure
+        result = {"schema_version": "spot.stage02_pathway_verification.v1",
+                  "verifier_id": VERIFIER_ID, "verdict": REJECT, "n_failed": 1,
+                  "checks": [{"check": "verifier_completed_without_error", "status": FAIL,
+                              "detail": f"{type(exc).__name__}: {exc}"}]}
+
+    report = _cli_report(result)
+    report_bytes = json.dumps(report, sort_keys=True, separators=(",", ":")).encode()
+    report_sha256 = hashlib.sha256(report_bytes).hexdigest()
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    with open(args.out, "w") as fh:
+        json.dump(dict(report, report_sha256=report_sha256), fh, indent=2, sort_keys=True)
+        fh.write("\n")
+
+    print(json.dumps({"verdict": report["verdict"], "n_failed": report["n_failed"],
+                      "report": args.out, "report_sha256": report_sha256}, indent=2))
+    if report["verdict"] != ADMIT:
+        for c in result.get("checks", []):
+            if c["status"] != PASS:
+                print(f"  REFUSE [{c['check']}] {c.get('detail', '')}", file=sys.stderr)
+    return 0 if report["verdict"] == ADMIT else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

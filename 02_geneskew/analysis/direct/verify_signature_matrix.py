@@ -38,17 +38,24 @@ into the run identity, which this verifier re-derives. W18's producer does not a
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
+import sys
 from typing import Any
 
 import numpy as np
 
-from . import verify_reconstruct as VR
-from . import verify_rules as R
-from . import verify_run
-from .temporal import admission
+# The verifier-side modules do bare imports (``import verify_rules``); put this dir on the path
+# so the module runs standalone as ``python -m direct.verify_signature_matrix``, matching the
+# house pattern in verify_pathway/verify_run.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from . import verify_reconstruct as VR  # noqa: E402
+from . import verify_rules as R  # noqa: E402
+from . import verify_run  # noqa: E402
+from .temporal import admission  # noqa: E402
 
 MATRIX_SCHEMA = "spot.stage02_signature_matrix.v1"
 GENE_AXIS_FILE = "gene_axis.arrow"
@@ -609,3 +616,85 @@ def _verify_external_mask(ref, rr, args):
         problems.append("the Direct bundle + W10 report were not supplied for independent "
                         "re-derivation; the anchor is bound but not re-checked from outside")
     return (not problems), "; ".join(problems[:4])
+
+
+# --------------------------------------------------------------------------- #
+# A MINIMAL DETERMINISTIC CLI. Explicit inputs, an explicit persisted report, nonzero exit on
+# any refusal. The persisted report is CONTENT-ADDRESSED: it carries only the verdict and the
+# per-gate pass/fail — no absolute paths, no timestamps — so the runbook can bind report_sha256.
+# See STAGE2_SOLVER_LOCK_GATE_SPEC.md / the W18 coordination note for the producer output shape.
+# --------------------------------------------------------------------------- #
+def _deterministic_report(result: dict[str, Any]) -> dict[str, Any]:
+    """The bound report: verdict + per-gate status, with all free-text detail stripped.
+
+    Details name absolute bundle paths, which would make the report machine-specific; the
+    binding is over the VERDICT and the gate results, which depend only on the shipped bytes.
+    """
+    return {
+        "schema_version": result.get("schema_version"),
+        "verifier_id": result.get("verifier_id"),
+        "generator_is_not_verifier": True,
+        "fail_closed": True,
+        "n_bundles": result.get("n_bundles"),
+        "n_conditions": result.get("n_conditions"),
+        "verdict": result.get("verdict"),
+        "n_failed": result.get("n_failed"),
+        "gates": [{"check": c["check"], "status": c["status"]}
+                  for c in result.get("checks", [])],
+    }
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="python -m direct.verify_signature_matrix",
+        description="Independent Stage-2 pathway signature-matrix verifier (V1-V10 + the "
+                    "cross-lane Direct mask anchor + the solver-lock binding). Reads the "
+                    "SHIPPED bytes and re-derives every claim; imports no producer module. "
+                    "Exit 0 = ADMIT, nonzero = REJECT.")
+    ap.add_argument("--signature-matrix-root", required=True,
+                    help="the shared Step-0 artifacts: gene_axis.arrow + <condition>/ dirs")
+    ap.add_argument("--bundle", required=True, action="append", dest="bundles",
+                    metavar="DIR", help="a pathway bundle dir (repeatable) — carries "
+                    "signature_ref.json, convergence.json, pathway_provenance.json, "
+                    "gene_sets.source.json")
+    ap.add_argument("--de-main", required=True,
+                    help="the pinned DE h5ad the producer read (values/axis re-derivation)")
+    ap.add_argument("--direct-bundle", default=None,
+                    help="the admitted Direct arm bundle (masks.parquet + provenance.json) "
+                         "for the independent cross-lane mask re-derivation")
+    ap.add_argument("--direct-mask-report", default=None,
+                    help="the per-run W10 Direct mask verification report")
+    ap.add_argument("--out", required=True,
+                    help="path to write the deterministic, content-addressed report JSON")
+    args = ap.parse_args(argv)
+
+    try:
+        result = verify(matrix_root=args.signature_matrix_root,
+                        bundle_dirs=list(args.bundles), args=args)
+    except Exception as exc:                       # a crash IS a verification failure
+        result = {"schema_version": "spot.stage02_signature_matrix_verification.v1",
+                  "verifier_id": "spot.stage02.signature_matrix.verifier.v1",
+                  "verdict": REJECT, "n_failed": 1,
+                  "checks": [{"check": "verifier_completed_without_error",
+                              "status": FAIL,
+                              "detail": f"{type(exc).__name__}: {exc}"}]}
+
+    report = _deterministic_report(result)
+    report_bytes = json.dumps(report, sort_keys=True, separators=(",", ":")).encode()
+    report_sha256 = hashlib.sha256(report_bytes).hexdigest()
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    with open(args.out, "w") as fh:
+        json.dump(dict(report, report_sha256=report_sha256), fh, indent=2, sort_keys=True)
+        fh.write("\n")
+
+    print(json.dumps({"verdict": report["verdict"], "n_failed": report["n_failed"],
+                      "report": args.out, "report_sha256": report_sha256}, indent=2))
+    if report["verdict"] != ADMIT:
+        for c in result.get("checks", []):
+            if c["status"] != PASS:
+                print(f"  REFUSE [{c['check']}] {c.get('detail', '')}", file=sys.stderr)
+    return 0 if report["verdict"] == ADMIT else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
