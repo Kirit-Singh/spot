@@ -556,7 +556,7 @@ def lane_temporal(cfg):
     dargs = []
     for cond in CONDITIONS:
         dargs += ["--direct-bundle", f"{cond}:{direct_bundle_for(cfg, cond)}",
-                  "--w10-report", f"{cond}:{w10_binding_path(cfg, cond)}"]
+                  "--w10-report", f"{cond}:{native_report_path(cfg, cond)}"]
     run("temporal:all-pairs",
         _py("temporal.arms.run_temporal_arms", "--stage1-view", cfg.stage1_view,
             "--stage1-release", cfg.stage1_release, *dargs, "--env-lock", cfg.env_lock,
@@ -676,6 +676,8 @@ def _expect_pins(cfg):
 def lane_aggregate(cfg):
     _phase("F aggregate (run_release --out FILE --verify + separate admission report)")
     require_admitted_direct(cfg)
+    if not DRY:
+        verify_receipt(cfg, "E.lane_admissions")   # aggregate IMPOSSIBLE before Phase E receipts exist
     p = ({"env": "<id>", "release": "<id>", "gene_sets": "<id>", "verifiers": "<id>", "code": "<id>"}
          if DRY else _expect_pins(cfg))
     manifest = os.path.join(cfg.out, "stage2_run_manifest.json")
