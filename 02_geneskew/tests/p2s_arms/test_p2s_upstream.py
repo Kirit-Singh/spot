@@ -9,11 +9,13 @@ from __future__ import annotations
 import pytest
 from p2s_arms import config, upstream
 
+# The tree hash is MANDATORY now, and it defaults to the pin — an optional integrity check is
+# an integrity check nobody passes. So a "good" observation must carry the REAL pinned tree.
 GOOD = {
     "commit": config.UPSTREAM_COMMIT,
     "dirty": False,
     "version": config.UPSTREAM_VERSION,
-    "tree_sha256": "a" * 64,
+    "tree_sha256": config.UPSTREAM_TREE_SHA256,
     "_source_root": "/somewhere",
 }
 
@@ -45,10 +47,16 @@ def test_MUTATION_an_EDITED_FILE_under_the_pinned_commit_is_caught_by_the_TREE_H
     nobody committed.
     """
     with pytest.raises(upstream.UpstreamDriftError) as e:
-        upstream.identity(dict(GOOD, tree_sha256="b" * 64),
-                          expect_tree_sha256="a" * 64)
+        upstream.identity(dict(GOOD, tree_sha256="b" * 64))     # pin applies by DEFAULT
     assert e.value.reason == "upstream_tree_content_drift"
     assert "BYTES DO NOT" in str(e.value)
+
+
+def test_the_TREE_PIN_is_MANDATORY_not_opt_in():
+    """An optional integrity check is an integrity check nobody passes."""
+    assert config.UPSTREAM_TREE_SHA256.startswith("623b24ff")
+    with pytest.raises(upstream.UpstreamDriftError):
+        upstream.identity(dict(GOOD, tree_sha256=None))          # no explicit expect_ arg
 
 
 def test_MUTATION_a_DIRTY_upstream_checkout_is_refused():

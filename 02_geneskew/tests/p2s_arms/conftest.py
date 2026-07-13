@@ -55,7 +55,7 @@ def inputs(tmp_path) -> dict[str, str]:
     d.mkdir()
     return {
         "cells": fx.make_cells(str(d / "cells.npz")),
-        "effects": fx.make_effects(str(d / "effects.parquet")),
+        "effects": fx.make_effects(str(d / "effects.npz")),
         "masks": fx.make_masks(str(d / "masks.parquet")),
         "eligible": fx.make_eligible(str(d / "eligible.parquet")),
     }

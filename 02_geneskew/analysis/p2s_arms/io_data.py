@@ -75,31 +75,39 @@ def load_cells(path: str) -> dict[str, Any]:
 
 
 def load_effects(path: str) -> dict[str, Any]:
-    """The per-target effect vectors, long-format: target_id, gene_id, <layer...>."""
-    df = pd.read_parquet(path)
-    for col in ("target_id", "gene_id"):
-        if col not in df.columns:
-            raise InputError("effects_missing_column",
-                             f"the effect table has no {col!r} column")
-    layers = [c for c in df.columns if c not in ("target_id", "gene_id")]
-    if not layers:
-        raise InputError("effects_carry_no_layer",
-                         "the effect table carries no effect layer column")
+    """The per-target effect layers, as a MATRIX container (targets x genes), not long rows.
 
-    gene_ids = sorted(df["gene_id"].astype(str).unique())
-    row_of = {g: i for i, g in enumerate(gene_ids)}
-    by_layer: dict[str, dict[str, np.ndarray]] = {}
-    for layer in layers:
-        per_target: dict[str, np.ndarray] = {}
-        for t, g in df.groupby("target_id"):
-            v = np.zeros(len(gene_ids), dtype=float)
-            v[[row_of[str(x)] for x in g["gene_id"]]] = g[layer].to_numpy(dtype=float)
-            per_target[str(t)] = v
-        by_layer[str(layer)] = per_target
+    WHY NOT LONG FORMAT. One condition of the real readout is ~11,300 eligible targets x
+    10,282 readout genes = ~116 MILLION cells. As a long parquet that is ~116M rows of
+    (target_id, gene_id, zscore, log_fc) — gigabytes of repeated string keys to express a
+    dense rectangle, and a groupby over it to get back the rectangle we started with.
 
-    return {"gene_ids": gene_ids, "by_layer": by_layer, "layers": sorted(by_layer),
-            "targets": sorted(df["target_id"].astype(str).unique()),
-            "sha256": file_sha256(path)}
+    So the container IS the rectangle: two float32 (targets x genes) planes plus their axes.
+    """
+    if not os.path.exists(path):
+        raise InputError("effects_not_found", f"the effect matrix {path!r} is missing")
+
+    z = np.load(path, allow_pickle=False)
+    for req in ("target_ids", "gene_ids", "zscore", "log_fc"):
+        if req not in z:
+            raise InputError(
+                "effects_missing_array",
+                f"the effect matrix has no {req!r} array; it carries {sorted(z.files)}")
+
+    targets = [str(t) for t in z["target_ids"]]
+    gene_ids = [str(g) for g in z["gene_ids"]]
+    layers: dict[str, dict[str, np.ndarray]] = {}
+    for layer in ("zscore", "log_fc"):
+        m = z[layer]
+        if m.shape != (len(targets), len(gene_ids)):
+            raise InputError(
+                "effects_shape_disagreement",
+                f"layer {layer!r} is {m.shape}, not "
+                f"({len(targets)}, {len(gene_ids)}) = (targets, genes)")
+        layers[layer] = {t: m[i] for i, t in enumerate(targets)}
+
+    return {"gene_ids": gene_ids, "by_layer": layers, "layers": sorted(layers),
+            "targets": targets, "sha256": file_sha256(path)}
 
 
 def load_masks(path: str) -> dict[str, Any]:

@@ -31,6 +31,8 @@ from . import config
 
 VERIFIER_ID = "spot.stage02.p2s_arms.upstream_pin.v1"
 
+_SENTINEL = object()
+
 INCLUDE_SUFFIXES = (".py", ".toml")
 EXCLUDE_DIR_NAMES = frozenset({
     "__pycache__", ".git", ".pytest_cache", ".ruff_cache", ".mypy_cache", "build", "dist",
@@ -112,13 +114,18 @@ def probe() -> dict[str, Any]:
 
 
 def identity(observed: Optional[dict[str, Any]] = None, *,
-             expect_tree_sha256: Optional[str] = None) -> dict[str, Any]:
+             expect_tree_sha256: Optional[str] = _SENTINEL) -> dict[str, Any]:
     """Verify the observed software against the pin, and return the EMITTABLE identity.
 
     ``expect_tree_sha256`` is optional: it is pinned once the tree hash has been recorded
     from a verified checkout. Until then the commit and the version carry the pin, and the
     observed tree hash is RECORDED so it can be pinned — recorded, not asserted.
     """
+    # THE TREE HASH IS MANDATORY. It defaults to the pin rather than to None: an optional
+    # integrity check is an integrity check nobody passes.
+    if expect_tree_sha256 is _SENTINEL:
+        expect_tree_sha256 = config.UPSTREAM_TREE_SHA256
+
     obs = observed if observed is not None else probe()
 
     commit = obs.get("commit")
