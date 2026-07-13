@@ -35,8 +35,8 @@ describe('compact Stage-2 route rendering', () => {
     expect(within(canvas).getAllByText('rank')).toHaveLength(2);
     expect(within(canvas).getAllByText('symbol')).toHaveLength(2);
     expect(within(canvas).getAllByText('ensembl')).toHaveLength(2);
-    expect(within(canvas).getAllByText('2 shown')).toHaveLength(2);
-    expect(within(canvas).getAllByText('2 ranked')).toHaveLength(2);
+    // the arm's context carries the size of the ranking its rows are drawn from
+    expect(within(canvas).getAllByText('Stim48hr (2 ranked)')).toHaveLength(2);
     expect(canvas.querySelectorAll('section[aria-label$="effect-rank facet"]')).toHaveLength(2);
     expect(within(canvas).getAllByText('Signed program shift')).toHaveLength(2);
     expect(within(canvas).getAllByText('Rank evidence −log10(rank/N)')).toHaveLength(2);
@@ -140,6 +140,16 @@ describe('compact Stage-2 route rendering', () => {
 
     fireEvent.click(within(canvas).getAllByRole('button', { name: /^all/ })[0]);
     expect(bodyRows()).toHaveLength(24); // every emitted row still reachable
+
+    // columns are laid out fixed, not sized to whichever rows happen to be shown, so switching
+    // modes (and gaining a scrollbar) cannot reflow them
+    for (const table of canvas.querySelectorAll('table')) {
+      expect(table.className).toContain('table-fixed');
+      expect(table.querySelector('colgroup')).toBeTruthy();
+    }
+    for (const scroller of canvas.querySelectorAll('table')) {
+      expect(scroller.parentElement?.className).toContain('scrollbar-gutter:stable');
+    }
   });
 
   it('binds every displayed row to its typed Ensembl HPA page and keeps the exact producer value', async () => {

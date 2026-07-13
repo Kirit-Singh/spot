@@ -18,8 +18,8 @@ export interface PlotPoint {
 }
 
 const W = 640;
-const H = 412;
-const M = { left: 46, right: 16, top: 18, bottom: 58 };
+const H = 406;
+const M = { left: 52, right: 18, top: 18, bottom: 56 };
 const plotW = W - M.left - M.right;
 const plotH = H - M.top - M.bottom;
 
@@ -65,7 +65,7 @@ const isTopFive = (p: PlotPoint): boolean => p.rank <= 5;
 
 function Legend({ bothCount }: { bothCount: number }) {
   return (
-    <span className="flex items-center gap-2.5 font-mono text-[9.5px] text-muted">
+    <span className="flex items-center gap-3 font-mono text-[10.5px] text-muted">
       <span className="flex items-center gap-1">
         <svg width="7" height="7" aria-hidden="true"><circle cx="3.5" cy="3.5" r="3.5" fill={DECREASE} /></svg>
         desired decrease
@@ -100,7 +100,7 @@ function DetailCard({ point: p, pinned, inBoth }: { point: PlotPoint | null; pin
   const href = p ? hpaUrl(p.id) : null;
   return (
     <div
-      className={`min-h-[52px] px-3 py-2 font-mono text-[10px] ${p ? 'border-t border-line' : ''}`}
+      className={`px-3 font-mono text-[10.5px] ${p ? 'border-t border-line py-2' : ''}`}
       aria-live="polite"
     >
       {!p ? null : (
@@ -188,13 +188,13 @@ export function EffectRankPlot({
       className="flex min-w-0 flex-col rounded-lg border border-line bg-surface"
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
-        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-muted">
+        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted">
           program {facet.role}
         </span>
         {programLabel && programLabel !== facet.program_id && (
-          <span className="text-[12.5px] font-semibold text-ink">{programLabel}</span>
+          <span className="text-[13.5px] font-semibold text-ink">{programLabel}</span>
         )}
-        <span className="font-mono text-[10.5px] text-ink-2">{facet.program_id}</span>
+        <span className="font-mono text-[11px] text-ink-2">{facet.program_id}</span>
         <span className="ml-auto">
           <Legend bothCount={bothArmIds.size} />
         </span>
@@ -210,7 +210,7 @@ export function EffectRankPlot({
           {ticksFrom(yAxis).map((tick) => (
             <g key={`y${tick}`}>
               <line x1={M.left} y1={y(tick)} x2={W - M.right} y2={y(tick)} stroke="#EFECE6" />
-              <text x={M.left - 7} y={y(tick) + 3} textAnchor="end" className="fill-muted font-mono text-[9px]">
+              <text x={M.left - 7} y={y(tick) + 4} textAnchor="end" className="fill-muted font-mono text-[11px]">
                 {fmt(tick)}
               </text>
             </g>
@@ -224,38 +224,38 @@ export function EffectRankPlot({
             <text
               key={`x${tick}`}
               x={x(tick)}
-              y={H - 42}
+              y={H - 38}
               textAnchor="middle"
-              className="fill-muted font-mono text-[9px]"
+              className="fill-muted font-mono text-[11px]"
             >
               {fmt(tick)}
             </text>
           ))}
 
-          <text x={M.left + plotW / 2} y={H - 25} textAnchor="middle" className="fill-ink-2 font-mono text-[9.5px]">
+          <text x={M.left + plotW / 2} y={H - 21} textAnchor="middle" className="fill-ink-2 font-mono text-[12px]">
             Signed program shift
           </text>
           {/* which way each half of the axis runs — the reconstructed sign, spelled out */}
           <text
             x={x(-xAxis.bound / 2)}
-            y={H - 9}
+            y={H - 5}
             textAnchor="middle"
-            className="fill-muted font-mono text-[9px]"
+            className="fill-muted font-mono text-[11px]"
           >
             ← decreasing
           </text>
           <text
             x={x(xAxis.bound / 2)}
-            y={H - 9}
+            y={H - 5}
             textAnchor="middle"
-            className="fill-muted font-mono text-[9px]"
+            className="fill-muted font-mono text-[11px]"
           >
             increasing →
           </text>
           <text
-            transform={`translate(11 ${M.top + plotH / 2}) rotate(-90)`}
+            transform={`translate(13 ${M.top + plotH / 2}) rotate(-90)`}
             textAnchor="middle"
-            className="fill-ink-2 font-mono text-[9.5px]"
+            className="fill-ink-2 font-mono text-[12px]"
           >
             Rank evidence −log10(rank/N)
           </text>
@@ -328,7 +328,7 @@ export function EffectRankPlot({
               x={l.x}
               y={l.y}
               textAnchor={l.anchor}
-              className={`font-mono text-[8.5px] ${l.id === activeId ? 'fill-accent' : 'fill-ink'}`}
+              className={`font-mono text-[11px] ${l.id === activeId ? 'fill-accent' : 'fill-ink'}`}
               pointerEvents="none"
             >
               {l.text}

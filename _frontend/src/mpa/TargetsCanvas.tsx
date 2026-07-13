@@ -12,7 +12,6 @@ import type {
   CompactTargetArm,
   CompactTargetRow,
 } from '../domain/compactStage2Projection';
-import { StatePill } from '../shell/chips';
 import { EffectRankPlot } from './EffectRankPlot';
 
 const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
@@ -111,16 +110,10 @@ function RowModeControl({
   );
 }
 
-function PrefixMeta({ arm }: { arm: CompactTargetArm }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <StatePill label={`${shown(arm.n_emitted)} shown`} tone="muted" />
-      <StatePill label={`${shown(arm.n_ranked)} ranked`} tone="muted" />
-      <StatePill label={`${shown(arm.n_evaluable)} evaluable`} tone="muted" />
-      <StatePill label={`${shown(arm.n_rows_total)} total`} tone="muted" />
-      {arm.is_a_prefix && <StatePill label={`first ${shown(arm.cap)}`} tone="muted" />}
-    </div>
-  );
+/** "Rest (6,815 ranked)" / "Rest → Stim8hr (6,815 ranked)" — the arm's context and the size of the
+ *  ranking its rows are drawn from, in one line instead of a row of pills. */
+function armContext(arm: CompactTargetArm): string {
+  return `${contextLabel(arm)} (${shown(arm.n_ranked)} ranked)`;
 }
 
 interface ArmTableProps {
@@ -163,23 +156,28 @@ function GeneArmTable({
   return (
     <section aria-label="Gene arm" className="min-w-0 rounded-lg border border-line bg-surface">
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
-        {program && <span className="text-[12.5px] font-semibold text-ink">{program}</span>}
+        {program && <span className="text-[13.5px] font-semibold text-ink">{program}</span>}
         {dir && (
-          <span className="font-mono text-[10.5px] text-ink-2">
+          <span className="font-mono text-[11px] text-ink-2">
             {ARROW[dir]} desired {dir}
           </span>
         )}
-        <span className="font-mono text-[10.5px] text-muted">{contextLabel(arm)}</span>
+        <span className="font-mono text-[11px] text-muted">{armContext(arm)}</span>
         <span className="ml-auto">
           <RowModeControl mode={mode} bothCount={bothArmIds.size} cap={arm.n_emitted} onMode={onMode} />
         </span>
-        <span className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
-          <PrefixMeta arm={arm} />
-          <span className="break-all font-mono text-[9.5px] text-muted">{arm.arm_key}</span>
-        </span>
       </header>
-      <div className="max-h-[420px] overflow-auto">
-        <table className="w-full border-collapse">
+      {/* Stable columns: a fixed layout (not content-sized) plus a reserved scrollbar gutter, so
+          switching row modes — 10 rows to 100, scrollbar or none — never reflows the columns. */}
+      <div className="max-h-[420px] overflow-auto [scrollbar-gutter:stable]">
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[10%]" />
+            <col className={showValue ? 'w-[28%]' : 'w-[34%]'} />
+            <col className={showValue ? 'w-[30%]' : 'w-[40%]'} />
+            {showValue && <col className="w-[20%]" />}
+            <col className={showValue ? 'w-[12%]' : 'w-[16%]'} />
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-surface">
             <tr>
               <th className={TH}>rank</th>

@@ -84,9 +84,9 @@ export interface LabelBounds {
   bottom: number;
 }
 
-const CHAR_W = 5.1; // ~8.5px mono advance width
-const GAP = 10.5; // minimum vertical distance between two labels on the same side
-const OFFSET = 5; // horizontal distance from the point to its text
+const CHAR_W = 6.7; // ~11px mono advance width — keep in step with the label font size
+const GAP = 13; // minimum vertical distance between two labels on the same side
+const OFFSET = 6; // horizontal distance from the point to its text
 
 /**
  * Place the top-ranked labels so they neither overlap each other nor leave the plot frame.
