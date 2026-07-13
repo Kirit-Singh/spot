@@ -1,0 +1,355 @@
+// The Targets canvas: a selection summary, one effect–rank facet per selected program, and the two
+// producer arm tables. Facets and tables are coordinated by ONE hovered/pinned target id, so the same
+// gene lights up everywhere it appears — including in BOTH facets when a program pair ranks it twice.
+//
+// The two programs remain two independent objectives with their own arms, their own ranks, and their
+// own axes. Nothing here merges them into a single score, and no row is displayed without the frozen
+// symbol its producer emitted.
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  CompactStage2SelectionView,
+  CompactTargetArm,
+  CompactTargetRow,
+} from '../domain/compactStage2Projection';
+import { StatePill } from '../shell/chips';
+import { EffectRankPlot } from './EffectRankPlot';
+
+const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
+const TD = 'px-2 py-1 font-mono text-[10.5px] text-ink-2';
+
+function shown(n: number): string {
+  return new Intl.NumberFormat('en-US').format(n);
+}
+
+/** Display precision only — the producer's exact value is preserved in the cell's title. */
+function armValue(n: number | null): string {
+  if (n === null) return '';
+  const abs = Math.abs(n);
+  if (abs !== 0 && (abs < 1e-3 || abs >= 1e5)) return n.toExponential(2);
+  return String(Number(n.toPrecision(4)));
+}
+
+function hpaUrl(id: string): string | null {
+  return /^ENSG\d{11}$/.test(id) ? `https://www.proteinatlas.org/${encodeURIComponent(id)}` : null;
+}
+
+/** The arm's desired direction, by EXACT arm_key identity against the facets — never parsed from the id. */
+function armDirection(view: CompactStage2SelectionView, arm: CompactTargetArm): 'increase' | 'decrease' | null {
+  for (const facet of view.effectRankFacets) {
+    if (facet.increase.arm_key === arm.arm_key) return 'increase';
+    if (facet.decrease.arm_key === arm.arm_key) return 'decrease';
+  }
+  return null;
+}
+
+/** The program this arm belongs to, again by exact arm_key identity. */
+function armProgramId(view: CompactStage2SelectionView, arm: CompactTargetArm): string | null {
+  for (const facet of view.effectRankFacets) {
+    if (facet.increase.arm_key === arm.arm_key || facet.decrease.arm_key === arm.arm_key) {
+      return facet.program_id;
+    }
+  }
+  return null;
+}
+
+function contextLabel(arm: CompactTargetArm): string {
+  return 'condition' in arm.context
+    ? arm.context.condition
+    : `${arm.context.from_condition} → ${arm.context.to_condition}`;
+}
+
+const ARROW: Record<'increase' | 'decrease', string> = { increase: '↑', decrease: '↓' };
+
+/** How many producer rows a table shows. The arm itself is untouched: this is a display filter. */
+export type RowMode = 'top10' | 'both' | 'all';
+
+const TOP_N = 10;
+
+function rowsFor(arm: CompactTargetArm, mode: RowMode, bothArmIds: ReadonlySet<string>): CompactTargetRow[] {
+  if (mode === 'both') return arm.rows.filter((row) => bothArmIds.has(row.target_id));
+  if (mode === 'top10') return arm.rows.filter((row) => row.rank <= TOP_N);
+  return arm.rows;
+}
+
+function RowModeControl({
+  mode,
+  bothCount,
+  cap,
+  onMode,
+}: {
+  mode: RowMode;
+  bothCount: number;
+  cap: number;
+  onMode: (mode: RowMode) => void;
+}) {
+  const options: { key: RowMode; label: string }[] = [
+    { key: 'top10', label: `top ${TOP_N}` },
+    ...(bothCount > 0 ? [{ key: 'both' as const, label: `in both arms · ${shown(bothCount)}` }] : []),
+    { key: 'all', label: `all ${shown(cap)}` },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Rows shown"
+      className="flex items-center overflow-hidden rounded-md border border-line"
+    >
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          aria-pressed={mode === option.key}
+          onClick={() => onMode(option.key)}
+          className={`px-2 py-0.5 font-mono text-[9.5px] ${
+            mode === option.key ? 'bg-accent text-white' : 'text-ink-2 hover:text-accent'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PrefixMeta({ arm }: { arm: CompactTargetArm }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <StatePill label={`${shown(arm.n_emitted)} shown`} tone="muted" />
+      <StatePill label={`${shown(arm.n_ranked)} ranked`} tone="muted" />
+      <StatePill label={`${shown(arm.n_evaluable)} evaluable`} tone="muted" />
+      <StatePill label={`${shown(arm.n_rows_total)} total`} tone="muted" />
+      {arm.is_a_prefix && <StatePill label={`first ${shown(arm.cap)}`} tone="muted" />}
+    </div>
+  );
+}
+
+interface ArmTableProps {
+  view: CompactStage2SelectionView;
+  arm: CompactTargetArm;
+  labels: Map<string, string>;
+  activeId: string | null;
+  pinnedId: string | null;
+  bothArmIds: ReadonlySet<string>;
+  mode: RowMode;
+  onMode: (mode: RowMode) => void;
+  onHover: (id: string | null) => void;
+  onPin: (id: string | null) => void;
+}
+
+function GeneArmTable({
+  view,
+  arm,
+  labels,
+  activeId,
+  pinnedId,
+  bothArmIds,
+  mode,
+  onMode,
+  onHover,
+  onPin,
+}: ArmTableProps) {
+  const rows = rowsFor(arm, mode, bothArmIds);
+  const showValue = rows.some((row) => row.arm_value !== null);
+  const dir = armDirection(view, arm);
+  const programId = armProgramId(view, arm);
+  const program = programId ? (labels.get(programId) ?? programId) : null;
+  const pinnedRow = useRef<HTMLTableRowElement | null>(null);
+
+  // Follow a gene pinned from the plot into view; 'nearest' keeps the page from jumping.
+  useEffect(() => {
+    if (pinnedId && pinnedRow.current) pinnedRow.current.scrollIntoView({ block: 'nearest' });
+  }, [pinnedId]);
+
+  return (
+    <section aria-label="Gene arm" className="min-w-0 rounded-lg border border-line bg-surface">
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2">
+        {program && <span className="text-[12.5px] font-semibold text-ink">{program}</span>}
+        {dir && (
+          <span className="font-mono text-[10.5px] text-ink-2">
+            {ARROW[dir]} desired {dir}
+          </span>
+        )}
+        <span className="font-mono text-[10.5px] text-muted">{contextLabel(arm)}</span>
+        <span className="ml-auto">
+          <RowModeControl mode={mode} bothCount={bothArmIds.size} cap={arm.n_emitted} onMode={onMode} />
+        </span>
+        <span className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
+          <PrefixMeta arm={arm} />
+          <span className="break-all font-mono text-[9.5px] text-muted">{arm.arm_key}</span>
+        </span>
+      </header>
+      <div className="max-h-[420px] overflow-auto">
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 z-10 bg-surface">
+            <tr>
+              <th className={TH}>rank</th>
+              <th className={TH}>symbol</th>
+              <th className={TH}>ensembl</th>
+              {showValue && <th className={TH}>arm value</th>}
+              <th className={TH}>hpa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row: CompactTargetRow) => {
+              const on = row.target_id === activeId;
+              const isPinned = row.target_id === pinnedId;
+              const both = bothArmIds.has(row.target_id);
+              const href = hpaUrl(row.target_id);
+              return (
+                <tr
+                  key={`${row.target_id}:${row.rank}`}
+                  ref={isPinned ? pinnedRow : undefined}
+                  onMouseEnter={() => onHover(row.target_id)}
+                  onMouseLeave={() => onHover(null)}
+                  onClick={() => onPin(isPinned ? null : row.target_id)}
+                  aria-selected={isPinned}
+                  data-active={on ? 'true' : 'false'}
+                  className={`cursor-pointer border-t border-line ${
+                    on ? 'bg-sunken' : 'hover:bg-sunken/60'
+                  } ${isPinned ? 'shadow-[inset_2px_0_0_0_#3E7D8C]' : ''}`}
+                >
+                  <td className={TD}>{row.rank}</td>
+                  <td className={`${TD} ${on ? 'font-semibold text-ink' : ''}`}>
+                    <span className="flex items-center gap-1.5">
+                      {row.target_symbol}
+                      {both && (
+                        <span
+                          title="ranked in both selected arms"
+                          className="rounded-full border border-ink/70 bg-ink/10 px-1 text-[8.5px] leading-[13px] text-ink-2"
+                        >
+                          both
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className={TD}>{row.target_id}</td>
+                  {showValue && (
+                    <td className={TD} title={row.arm_value === null ? undefined : String(row.arm_value)}>
+                      {armValue(row.arm_value)}
+                    </td>
+                  )}
+                  <td className={TD}>
+                    {href && (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${row.target_symbol} on the Human Protein Atlas`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-accent underline underline-offset-2"
+                      >
+                        HPA ↗
+                      </a>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/** The selected arm belonging to a facet's program, by EXACT arm_key identity. */
+function selectedArmFor(
+  view: CompactStage2SelectionView,
+  facet: CompactStage2SelectionView['effectRankFacets'][number],
+): CompactTargetArm {
+  const keys = [facet.increase.arm_key, facet.decrease.arm_key];
+  return keys.includes(view.geneArmA.arm_key) ? view.geneArmA : view.geneArmB;
+}
+
+/**
+ * Targets ranked in BOTH selected arms — e.g. a gene whose knockdown moves one program down while
+ * the other moves up. Pure co-membership of two independently produced rankings: it reorders nothing,
+ * scores nothing, and merges nothing. Each arm keeps its own rank and its own value.
+ */
+function bothArmTargets(view: CompactStage2SelectionView): ReadonlySet<string> {
+  const inB = new Set(view.geneArmB.rows.map((row) => row.target_id));
+  return new Set(view.geneArmA.rows.map((row) => row.target_id).filter((id) => inB.has(id)));
+}
+
+/** The A → B transition the selection describes, shown once between the two facets. */
+function TransitionArrow({ from, to }: { from: string; to: string }) {
+  return (
+    <span
+      aria-label={`from ${from} to ${to}`}
+      className="pointer-events-none z-10 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-[12px] text-ink-2 shadow-sm"
+    >
+      →
+    </span>
+  );
+}
+
+export function TargetsCanvas({
+  view,
+  labels = new Map<string, string>(),
+}: {
+  view: CompactStage2SelectionView;
+  labels?: Map<string, string>;
+}) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [mode, setMode] = useState<RowMode>('top10');
+  const activeId = hovered ?? pinned;
+  const bothArmIds = useMemo(() => bothArmTargets(view), [view]);
+
+  const [a, b] = view.effectRankFacets;
+  const name = (id: string) => labels.get(id) ?? id;
+
+  return (
+    <div
+      data-real-canvas
+      data-route="targets"
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
+    >
+      <div className="font-mono text-[9.5px] text-muted">
+        Hover a target for detail · click to pin it across both facets
+      </div>
+
+      {/* One column per program: its facet, and directly beneath it the arm that facet's objective
+          selected. The two columns never share an axis or a score — only a hovered/pinned gene. */}
+      <div className="grid min-w-0 grid-cols-1 items-start gap-3 xl:grid-cols-2">
+        {view.effectRankFacets.map((facet, index) => (
+          <div key={facet.role} className="flex min-w-0 flex-col gap-3">
+            <div className="relative min-w-0">
+              <EffectRankPlot
+                facet={facet}
+                programLabel={name(facet.program_id)}
+                activeId={activeId}
+                pinnedId={pinned}
+                bothArmIds={bothArmIds}
+                onHover={setHovered}
+                onPin={setPinned}
+              />
+              {index === 0 && (
+                <span className="absolute -right-[18px] top-1/2 hidden -translate-y-1/2 xl:flex">
+                  <TransitionArrow from={name(a.program_id)} to={name(b.program_id)} />
+                </span>
+              )}
+            </div>
+            <GeneArmTable
+              view={view}
+              arm={selectedArmFor(view, facet)}
+              labels={labels}
+              activeId={activeId}
+              pinnedId={pinned}
+              bothArmIds={bothArmIds}
+              mode={mode}
+              onMode={setMode}
+              onHover={setHovered}
+              onPin={setPinned}
+            />
+            {index === 0 && (
+              <span className="flex justify-center xl:hidden">
+                <TransitionArrow from={name(a.program_id)} to={name(b.program_id)} />
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

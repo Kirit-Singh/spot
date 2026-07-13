@@ -369,11 +369,15 @@ function Field({ label, value }: { label: string; value: string }) {
 // Route dispatch — the ONE place a resolution is turned into a canvas. Each route uses its OWN
 // renderer; Stage 3/4 never fall through to the Stage-2 tables.
 // ─────────────────────────────────────────────────────────────────────────────
-export function renderRouteReal(res: RealRouteResolution): React.ReactNode {
+export function renderRouteReal(
+  res: RealRouteResolution,
+  /** Tier-2 program display labels (display-only; a program the registry does not name keeps its id). */
+  labels?: Map<string, string>,
+): React.ReactNode {
   switch (res.route) {
     case 'targets':
       return isCompactStage2(res.view)
-        ? renderCompactTargets(res.view)
+        ? renderCompactTargets(res.view, labels)
         : renderTargets(res.view, res.bundles ?? {});
     case 'pathways':
       return isCompactStage2(res.view) ? renderCompactPathways(res.view) : renderPathways(res.view);

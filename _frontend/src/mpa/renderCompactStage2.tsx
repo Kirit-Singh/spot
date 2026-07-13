@@ -6,10 +6,9 @@ import type {
   CompactPathwayArm,
   CompactPathwayRow,
   CompactStage2SelectionView,
-  CompactTargetArm,
 } from '../domain/compactStage2Projection';
 import { StatePill } from '../shell/chips';
-import { EffectRankPlot } from './EffectRankPlot';
+import { TargetsCanvas } from './TargetsCanvas';
 
 const TH = 'px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
 const TD = 'px-2 py-1 font-mono text-[10.5px] text-ink-2';
@@ -29,53 +28,6 @@ function ReleaseStrip({ view }: { view: CompactStage2SelectionView }) {
       <StatePill label={view.mode === 'within_condition' ? 'direct' : 'temporal'} tone="muted" />
       <StatePill label={view.pathway_source} tone="muted" />
     </div>
-  );
-}
-
-function PrefixMeta({ arm }: { arm: CompactTargetArm }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <StatePill label={`${shown(arm.n_emitted)} shown`} tone="muted" />
-      <StatePill label={`${shown(arm.n_ranked)} ranked`} tone="muted" />
-      <StatePill label={`${shown(arm.n_evaluable)} evaluable`} tone="muted" />
-      <StatePill label={`${shown(arm.n_rows_total)} total`} tone="muted" />
-      {arm.is_a_prefix && <StatePill label={`first ${shown(arm.cap)}`} tone="muted" />}
-    </div>
-  );
-}
-
-function GeneArmTable({ arm }: { arm: CompactTargetArm }) {
-  const showValue = arm.rows.some((row) => row.arm_value !== null);
-  return (
-    <section aria-label="Gene arm" className="rounded-lg border border-line bg-surface">
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-        <StatePill label={`${arm.lane} gene arm`} tone="muted" />
-        <span className="break-all font-mono text-[10.5px] text-ink-2">{arm.arm_key}</span>
-        <span className="ml-auto"><PrefixMeta arm={arm} /></span>
-      </header>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className={TH}>rank</th>
-              <th className={TH}>symbol</th>
-              <th className={TH}>ensembl</th>
-              {showValue && <th className={TH}>arm value</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {arm.rows.map((row) => (
-              <tr key={`${row.target_id}:${row.rank}`} className="border-t border-line">
-                <td className={TD}>{row.rank}</td>
-                <td className={TD}>{row.target_symbol}</td>
-                <td className={TD}>{row.target_id}</td>
-                {showValue && <td className={TD}>{value(row.arm_value)}</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
 
@@ -137,17 +89,11 @@ function PathwayArmTable({ arm, context }: { arm: CompactPathwayArm; context: st
   );
 }
 
-export function renderCompactTargets(view: CompactStage2SelectionView): React.ReactNode {
-  return (
-    <div data-real-canvas data-route="targets" className={CANVAS}>
-      <ReleaseStrip view={view} />
-      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2">
-        {view.effectRankFacets.map((facet) => <EffectRankPlot key={facet.role} facet={facet} />)}
-      </div>
-      <GeneArmTable arm={view.geneArmA} />
-      <GeneArmTable arm={view.geneArmB} />
-    </div>
-  );
+export function renderCompactTargets(
+  view: CompactStage2SelectionView,
+  labels?: Map<string, string>,
+): React.ReactNode {
+  return <TargetsCanvas view={view} labels={labels} />;
 }
 
 export function renderCompactPathways(view: CompactStage2SelectionView): React.ReactNode {

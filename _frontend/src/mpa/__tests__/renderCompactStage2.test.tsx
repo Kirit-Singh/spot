@@ -49,7 +49,7 @@ describe('compact Stage-2 route rendering', () => {
     const v = await view();
     render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
     const canvas = screen.getByTestId('canvas');
-    const point = within(canvas).getByRole('link', { name: /PROG_ALPHA_INCREASE_1, increase/ });
+    const point = within(canvas).getByRole('img', { name: /PROG_ALPHA_INCREASE_1, increase/ });
     fireEvent.focus(point);
     expect(canvas.textContent).toContain('signed shift 0.5');
     expect(canvas.textContent).toContain('rank 1/2');
@@ -58,6 +58,103 @@ describe('compact Stage-2 route rendering', () => {
     expect(hpa).toHaveAttribute('href', 'https://www.proteinatlas.org/ENSG10000000111');
     expect(hpa).toHaveAttribute('target', '_blank');
     expect(hpa).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
+  it('coordinates facet and table: hovering a point marks its row, clicking pins the gene', async () => {
+    const v = await view();
+    render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
+    const canvas = screen.getByTestId('canvas');
+    const point = within(canvas).getByRole('img', { name: /PROG_ALPHA_DECREASE_1, decrease/ });
+    const rowOf = (symbol: string) =>
+      [...canvas.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes(symbol));
+
+    const row = rowOf('PROG_ALPHA_DECREASE_1');
+    expect(row?.getAttribute('data-active')).toBe('false');
+    expect(row?.getAttribute('aria-selected')).toBe('false');
+
+    fireEvent.mouseEnter(point); // hover the plot → the producer row for that gene is emphasised
+    expect(rowOf('PROG_ALPHA_DECREASE_1')?.getAttribute('data-active')).toBe('true');
+    // and ONLY that row — a coordinated highlight, not a blanket one
+    expect(canvas.querySelectorAll('tbody tr[data-active="true"]')).toHaveLength(1);
+
+    fireEvent.mouseLeave(point);
+    expect(canvas.querySelectorAll('tbody tr[data-active="true"]')).toHaveLength(0);
+
+    fireEvent.click(point); // click → the gene stays pinned across facets and tables
+    expect(rowOf('PROG_ALPHA_DECREASE_1')?.getAttribute('aria-selected')).toBe('true');
+    expect(rowOf('PROG_ALPHA_DECREASE_1')?.getAttribute('data-active')).toBe('true');
+  });
+
+  it('marks a target carried by BOTH selected arms without merging their ranks or values', async () => {
+    const v = await view();
+    // the same gene ranked in each arm: down in one program, up in the other
+    const shared = { target_id: 'ENSG10000000999', target_symbol: 'SHARED_TARGET', rank: 2, arm_value: 0.4 };
+    v.geneArmA.rows = [...v.geneArmA.rows, shared];
+    v.geneArmB.rows = [...v.geneArmB.rows, { ...shared, rank: 7, arm_value: 0.9 }];
+    render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
+    const canvas = screen.getByTestId('canvas');
+
+    // flagged in both tables, and counted once on the summary
+    const marked = [...canvas.querySelectorAll('tbody tr')].filter((tr) =>
+      tr.textContent?.includes('SHARED_TARGET'),
+    );
+    expect(marked).toHaveLength(2);
+    for (const row of marked) expect(row.textContent).toContain('both');
+    expect(canvas.textContent).toContain('in both arms · 1');
+
+    // …and each arm still reports ITS OWN rank and value — nothing is combined
+    expect(marked[0].textContent).toContain('2');
+    expect(marked[1].textContent).toContain('7');
+    expect(canvas.textContent).not.toMatch(/combined|balanced|overall|merged score/i);
+  });
+
+  it('shows the top ten by default and switches BOTH tables to the both-arms subset on toggle', async () => {
+    const v = await view();
+    // 12 ranked rows per arm on DISJOINT ids, then exactly one gene deliberately carried by both
+    const rows = (prefix: string, label: string) =>
+      Array.from({ length: 12 }, (_, i) => ({
+        target_id: `ENSG${prefix}${String(i).padStart(4, '0')}`,
+        target_symbol: `${label}_${i + 1}`,
+        rank: i + 1,
+        arm_value: 1 - i * 0.05,
+      }));
+    const SHARED = 'ENSG99999999999';
+    v.geneArmA.rows = rows('3000000', 'A_DEC');
+    v.geneArmB.rows = rows('4000000', 'B_INC');
+    v.geneArmA.rows[1] = { ...v.geneArmA.rows[1], target_id: SHARED }; // rank 2 in arm A
+    v.geneArmB.rows[3] = { ...v.geneArmB.rows[3], target_id: SHARED }; // rank 4 in arm B
+
+    render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
+    const canvas = screen.getByTestId('canvas');
+    const bodyRows = () => canvas.querySelectorAll('tbody tr');
+    const bodyText = () => [...bodyRows()].map((tr) => tr.textContent).join(' ');
+
+    // default: the top ten of each arm — the producer's 12 rows are filtered for display only
+    expect(bodyRows()).toHaveLength(20);
+    expect(bodyText()).not.toContain('A_DEC_11');
+
+    fireEvent.click(within(canvas).getAllByRole('button', { name: /in both arms/ })[0]);
+    // one control drives both tables, so the columns stay comparable
+    expect(bodyRows()).toHaveLength(2);
+    for (const row of bodyRows()) expect(row.textContent).toContain('both');
+
+    fireEvent.click(within(canvas).getAllByRole('button', { name: /^all/ })[0]);
+    expect(bodyRows()).toHaveLength(24); // every emitted row still reachable
+  });
+
+  it('binds every displayed row to its typed Ensembl HPA page and keeps the exact producer value', async () => {
+    const v = await view();
+    render(<div data-testid="canvas">{renderRouteReal({ route: 'targets', view: v, admission: 'admitted' })}</div>);
+    const canvas = screen.getByTestId('canvas');
+    const row = [...canvas.querySelectorAll('tbody tr')].find((tr) =>
+      tr.textContent?.includes('PROG_ALPHA_DECREASE_1'),
+    );
+    const link = row?.querySelector('a[href^="https://www.proteinatlas.org/"]');
+    expect(link).toHaveAttribute('href', 'https://www.proteinatlas.org/ENSG10000000121');
+    expect(link?.getAttribute('rel')).toContain('noopener');
+    // the cell shows a legible value, but the producer's exact number stays retrievable
+    const valueCell = [...(row?.querySelectorAll('td') ?? [])].find((td) => td.hasAttribute('title'));
+    expect(valueCell?.getAttribute('title')).toBe('0.5');
   });
 
   it('omits the optional arm-value column when the producer supplied no values', async () => {

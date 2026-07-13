@@ -212,8 +212,9 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
     >
       {prod.real ? (
         // prod.real is only set when admission === 'admitted' (gated above); each route renders its
-        // OWN native path — Stage 3/4 never fall through to the Stage-2 tables.
-        renderRouteReal(prod.real)
+        // OWN native path — Stage 3/4 never fall through to the Stage-2 tables. The label map is
+        // display-only (same registry the header uses); it never reaches an artifact or a hash.
+        renderRouteReal(prod.real, prod.labels)
       ) : (
         <PendingArtifact resolving={prod.loading} />
       )}
