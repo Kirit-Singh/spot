@@ -2,6 +2,7 @@
   "_note": "Frozen pre-change baseline. Every value here MUST be reproduced at verification; a mismatch means a protected scorer/numeric artifact moved.",
   "_schema": "spot.stage2_bridge.protected_baseline.v1",
   "raw_sha256": {
+    "activation_association": "fd1d9bb0a53ad7ecbde1d9999ccc9bdf8be1cc765f6ff4ef4619a662c4a63c22",
     "bins_v3_csv": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
     "control_eligible_pool": "70072addb7c8c323eda8b110d1efe6d2670f8a00dfe6138e36a5ea7f79db541a",
     "control_method": "02a94b07a19901ec41e9e26c25ce156b80c0cf67b35a17f00cf8ca6087699971",

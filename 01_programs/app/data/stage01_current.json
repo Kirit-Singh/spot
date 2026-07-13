@@ -109,5 +109,12 @@
     "base_portability_source_field": "stage2_base_portability.stage2_base_portable",
     "frozen_coordinate_shell": "stage01_umap_seed.json"
   },
-  "self_canonical_sha256": "0778433d41e91568a41e566a273d4064477fb6dd6796720b309ffc811f9df719"
+  "activation_association_source": {
+    "artifact": "stage01_activation_association_v1.json",
+    "raw_sha256": "fd1d9bb0a53ad7ecbde1d9999ccc9bdf8be1cc765f6ff4ef4619a662c4a63c22",
+    "kind": "descriptive_activation_association_per_program_condition_donor",
+    "inference_status": "descriptive_only_no_p_q_fdr",
+    "active_gate": false
+  },
+  "self_canonical_sha256": "f9566f797db947c89e4eab03f1ddbdda7056d736621a93f661c681da8a5f0ea4"
 }

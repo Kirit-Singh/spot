@@ -37,6 +37,7 @@ PROTECTED_RAW = {
     "scores_parquet_staged": (os.path.join(ANALYSIS, "_t8_staging"), "stage01_scores_full.candidate.parquet"),
     "umap_coordinates_staged": (os.path.join(ANALYSIS, "_t8_staging"), "stage01_umap_coordinates.json"),
     "stage2_registry_view": (DATA, "stage01_stage2_registry_view.json"),   # the executable projection selection_id binds (S1-M1)
+    "activation_association": (DATA, "stage01_activation_association_v1.json"),   # descriptive activation artifact (S1-M4)
 }
 
 

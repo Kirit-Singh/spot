@@ -49,6 +49,7 @@ PROTECTED_RAW = {
     "umap_coordinates_staged": (os.path.join(ANALYSIS, "_t8_staging"), "stage01_umap_coordinates.json"),
     # The Stage-2 scorer VIEW is the executable projection selection_id binds — protect it directly (S1-M1).
     "stage2_registry_view": (DATA, "stage01_stage2_registry_view.json"),
+    "activation_association": (DATA, "stage01_activation_association_v1.json"),   # descriptive activation artifact (S1-M4)
 }
 
 

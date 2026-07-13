@@ -232,6 +232,11 @@ def main():
                         "method_version": "stage1-continuous-v2",
                         "status": "HISTORICAL_NOT_CURRENT", "status_reason_code": "superseded_by_v3_measurement_provenance"},
         "measurement_display_release": measurement_display_release,
+        # S1-M4: bind the descriptive activation-association artifact so it cannot be silently swapped
+        "activation_association_source": {"artifact": "stage01_activation_association_v1.json",
+                                          "raw_sha256": raw_sha256(P("stage01_activation_association_v1.json")),
+                                          "kind": "descriptive_activation_association_per_program_condition_donor",
+                                          "inference_status": "descriptive_only_no_p_q_fdr", "active_gate": False},
     }
     cur_canon, cur_raw = write_canon("stage01_current.json", current)
 
@@ -240,7 +245,7 @@ def main():
         VALIDATION, "stage01_validation_semantics.json", "stage01_selectability_v3.json", "stage01_current.json",
         "stage01_gate_spec.json", "stage01_input_manifest.json", "stage01_control_method.json",
         "stage01_controls_v3.csv", "stage01_bins_v3.csv", "stage01_control_eligible_pool.json",
-        "stage01_validation_independent_check.json",
+        "stage01_validation_independent_check.json", "stage01_activation_association_v1.json",
     ]
     code_required = ["gen_stage1_t8.py", "stage1_t8_derive.py", "verify_stage1_t8.py", "stage1_t8_preflight.py",
                      "test_stage1_t8.py", "requirements.txt",

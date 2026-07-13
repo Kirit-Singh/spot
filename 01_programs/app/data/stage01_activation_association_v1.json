@@ -280,6 +280,39 @@
    },
    "max_abs_donor_rho_any_condition": 0.337267
   },
+  "diff_activated_score": {
+   "pooled_rho": 1.0,
+   "by_condition": {
+    "Rest": {
+     "donor_rho": {
+      "D1": 1.0,
+      "D2": 1.0,
+      "D3": 1.0,
+      "D4": 1.0
+     },
+     "max_abs_donor_rho": 1.0
+    },
+    "Stim48hr": {
+     "donor_rho": {
+      "D1": 1.0,
+      "D2": 1.0,
+      "D3": 1.0,
+      "D4": 1.0
+     },
+     "max_abs_donor_rho": 1.0
+    },
+    "Stim8hr": {
+     "donor_rho": {
+      "D1": 1.0,
+      "D2": 1.0,
+      "D3": 1.0,
+      "D4": 1.0
+     },
+     "max_abs_donor_rho": 1.0
+    }
+   },
+   "max_abs_donor_rho_any_condition": 1.0
+  },
   "diff_memory_score": {
    "pooled_rho": -0.502767,
    "by_condition": {
@@ -381,6 +414,10 @@
   }
  },
  "pooled_ranking": [
+  [
+   "diff_activated_score",
+   1.0
+  ],
   [
    "diff_naive_score",
    -0.566503

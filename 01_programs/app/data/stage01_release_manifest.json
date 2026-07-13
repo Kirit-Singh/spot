@@ -53,7 +53,7 @@
       "location": "served"
     },
     "stage01_current.json": {
-      "raw_sha256": "887c239e892fcc243aad8d7193fc1b385f92beafe64d9f29cec617ca4c7a33a5",
+      "raw_sha256": "e5914918a6eb827e8a6fa4514323d7f26b34b5403c8c16efd90bbe9dbce432d1",
       "present": true,
       "location": "served"
     },
@@ -92,8 +92,13 @@
       "present": true,
       "location": "served"
     },
+    "stage01_activation_association_v1.json": {
+      "raw_sha256": "fd1d9bb0a53ad7ecbde1d9999ccc9bdf8be1cc765f6ff4ef4619a662c4a63c22",
+      "present": true,
+      "location": "served"
+    },
     "gen_stage1_t8.py": {
-      "raw_sha256": "8a7d74e19f7f1de4fbf6f25dee3ec0052f28505fde4208ac5b47c1a233b762c4",
+      "raw_sha256": "0d8ad04bb43390e7e1c63e30dc5566f74ba4adf474c2f192afac5e505ea8023b",
       "present": true,
       "location": "analysis"
     },
@@ -128,12 +133,12 @@
       "location": "analysis"
     },
     "verify_stage1_provenance.py": {
-      "raw_sha256": "52aeea040f2e89e698d4e1db49502f142eba6ec48ca81b3dd767ecbaa2ced3fd",
+      "raw_sha256": "75229254c13a1801ed83d9ef5d3094bd8d262bd6de43cd4890f40c6d347784a9",
       "present": true,
       "location": "analysis"
     },
     "test_stage1_provenance.py": {
-      "raw_sha256": "ab7ee5cc9c9893a5211355a33d89cf8e5e0bf9c179d729256613bf07343771c7",
+      "raw_sha256": "62fb4d1ed1a7248cbefa91ce705ae2ac4d530941d88c09eb2201b5beb9aaad0a",
       "present": true,
       "location": "analysis"
     },
@@ -180,5 +185,5 @@
       "present": true
     }
   },
-  "self_canonical_sha256": "d902f78d0944d80832fd975cb9e26bcdc46a32620cd174361ffaeb5f535bc488"
+  "self_canonical_sha256": "a057f1e505cbb196e0c3730702cec5c1712efc8bd59abae8585e611aa42e200e"
 }

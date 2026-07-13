@@ -5,9 +5,9 @@ External review S1-M4: the UI named activation as a confound only for Treg-like 
 association is broader (checkpoint is in fact the strongest). This computes, from the frozen 396k v3 score
 parquet, the Spearman rho of every program score against ``diff_activated_score`` — pooled, and per
 condition x donor (the within-stratum association that pooled timepoint structure can mask). It is purely
-DESCRIPTIVE: no p, q, FDR or calibrated null (consistent with the Stage-1 firewall). The pooled CD4-CTL
-activation-adjusted residual (``cd4_ctl_like_score_actadj``) IS included; the activation axis
-``diff_activated_score`` is the reference and is not self-correlated.
+DESCRIPTIVE: no p, q, FDR or calibrated null (consistent with the Stage-1 firewall). All 11 primary axes
+are reported PLUS the pooled CD4-CTL activation-adjusted residual (``cd4_ctl_like_score_actadj``); the
+activation axis ``diff_activated_score`` is included with its trivial self-association (≡1) for completeness.
 
 Emits ``stage01_activation_association_v1.json`` (schema spot.stage01_activation_association.v1).
 Run on tcefold (has the parquet + pyarrow):
@@ -35,10 +35,11 @@ def _rho(x, y):
 
 def compute(df: pd.DataFrame) -> dict:
     meta = {"barcode", "donor", "condition"}
-    # every program score + the CD4-CTL activation-adjusted residual (…_actadj), excluding the activation
-    # axis itself (ACT) and the id/metadata columns. NB: the residual ends in `_actadj`, not `_score`, so a
-    # `_score` suffix filter would silently drop it (external review S1-M4 re-audit).
-    fields = [c for c in df.columns if c not in meta and c != ACT]
+    # ALL 11 primary program-score axes + the CD4-CTL activation-adjusted residual (…_actadj) — i.e. every
+    # non-metadata column, INCLUDING diff_activated_score itself (its self-association is ≡1, reported for
+    # completeness). NB: the residual ends in `_actadj`, not `_score`, so a `_score` suffix filter would
+    # silently drop it (external review S1-M4 re-audit).
+    fields = [c for c in df.columns if c not in meta]
     conds = sorted(map(str, df["condition"].unique()))
     donors = sorted(map(str, df["donor"].unique()))
     a_all = df[ACT].to_numpy()
