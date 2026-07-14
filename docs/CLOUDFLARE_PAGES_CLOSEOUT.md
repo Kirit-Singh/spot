@@ -17,9 +17,9 @@ The only publishable directory is `dist/cloudflare-pages`, assembled by:
 bash deploy/cloudflare/build_pages.sh
 ```
 
-The assembler runs `npm ci`, typecheck, lint, tests, and the Vite MPA build; copies the frozen landing, admitted pages, exact 22-file Stage-1 allowlist, and optional content-addressed downstream results; then writes `site_release_manifest.json`. It never mutates `01_programs/app` and never recursively publishes the repository. On `main`, absence of `public_release/results/current.json` fails the build.
+The assembler runs `npm ci`, typecheck, lint, tests, and the Vite MPA build; copies the frozen landing, the canonical `programs.html` page, the remaining admitted pages, exact 22-file Stage-1 allowlist, and optional content-addressed downstream results; then writes `site_release_manifest.json`. It never emits `01_page.html`: authenticated legacy requests are redirected by middleware rather than served from duplicate bytes. It never mutates `01_programs/app` and never recursively publishes the repository. On `main`, absence of `public_release/results/current.json` fails the build.
 
-At scaffold verification, the unbound output is 42 files / 59,940,014 bytes. The largest asset is `data/stage01_umap_seed.json` at 21,422,364 bytes, leaving 4,792,036 bytes below Pages' 25 MiB single-file limit. Every build hard-refuses a file over 25 MiB, more than 20,000 files, symlinks, unapproved extensions, dotpaths, or machine-local/private tokens. Re-check after final downstream results are added. Cloudflare's current limits are documented at <https://developers.cloudflare.com/pages/platform/limits/>.
+At scaffold verification, the unbound output is 42 files / 59,947,763 bytes. The largest asset is `data/stage01_umap_seed.json` at 21,422,364 bytes, leaving 4,792,036 bytes below Pages' 25 MiB single-file limit. Every build hard-refuses a file over 25 MiB, more than 20,000 files, symlinks, unapproved extensions, dotpaths, or machine-local/private tokens. Re-check after final downstream results are added. Cloudflare's current limits are documented at <https://developers.cloudflare.com/pages/platform/limits/>.
 
 ## Pages project configuration
 
@@ -51,7 +51,7 @@ Never place either value in Git, build variables, a URL, a command checked into 
 
 The exact public surface is `GET/HEAD /` and `POST /auth`. `functions/_middleware.ts` runs on `/*`, with `_routes.json` containing no exclusions. Every HTML page, JS/CSS asset, Stage-1 data file, result, manifest, and unknown path is checked before static bytes are served. Set Pages **Settings → Runtime → Fail open / closed → Fail closed**; otherwise quota exhaustion could bypass an authentication Function and expose static assets. See <https://developers.cloudflare.com/pages/functions/routing/#fail-open--closed>.
 
-`POST /auth` accepts one small `application/x-www-form-urlencoded` `code` field from the same origin. The server compares it in constant time and never logs or echoes it. Success returns `303 /01_page.html` with a four-hour HMAC-signed opaque cookie:
+`POST /auth` accepts one small `application/x-www-form-urlencoded` `code` field from the same origin. The expected value comes only from the encrypted server-side `ACCESS_CODE` binding; the landing carries no value. The server compares it in constant time and never logs or echoes it. Success returns `303 /programs.html` with a four-hour HMAC-signed opaque cookie:
 
 ```text
 __Host-spot-review=<opaque>; Path=/; Max-Age=14400; HttpOnly; Secure; SameSite=Lax
@@ -65,7 +65,9 @@ All Function responses set `Cache-Control: private, no-store, max-age=0`, CSP, H
 
 ## Canonical domains
 
-The canonical origin is `https://spotpathways.com`. `spotpathway.com` is redirect-only. The middleware performs canonicalization before auth or cookie parsing and permanently redirects to the plural host with path and safe query parameters preserved; credential-like query keys are stripped. It never sets a cookie on the singular response. Production `*.pages.dev` requests also redirect to the canonical host.
+The canonical origin is `https://spotpathways.com`. `spotpathway.com` is redirect-only. The middleware performs canonicalization before auth or cookie parsing and permanently redirects to the plural host with path and safe query parameters preserved; credential-like query keys are stripped. It never sets a cookie on the singular response. The stable production `spotpathways.pages.dev` alias redirects to the canonical host; unique deployment/branch subdomains are refused.
+
+`/programs.html` is the canonical Programs route. `/01_page.html` and `/01_page` remain gated compatibility routes: an unauthenticated request returns to `/`, while an authenticated request receives a query-safe `308` to `/programs.html`. The old HTML file is not packaged.
 
 As checked on 2026-07-13, both zones are delegated to `bart.ns.cloudflare.com` and `heather.ns.cloudflare.com`, with no public A, AAAA, or CAA record. At closeout:
 
@@ -98,7 +100,7 @@ Production checks must cover:
 - Root is the frozen `spot` + clickable dot landing and makes no third-party request.
 - Singular domain and production `pages.dev` redirect before auth; alias POST `/auth` returns a redirect and no cookie.
 - Wrong, missing, duplicated, oversized, wrong-content-type, and cross-origin codes all produce the same generic invalid state and never echo input.
-- Correct access produces only the host-only cookie above and a 303 to `/01_page.html`.
+- Correct access produces only the host-only cookie above and a 303 to `/programs.html`; an authenticated `/01_page.html` request 308s to that canonical route.
 - Without a cookie, direct HTML, asset, `data/`, `results/`, and manifest requests return no protected bytes. With a valid cookie, every file in `site_release_manifest.json` loads and hashes correctly.
 - Tampered, expired, wrong-host, and old-signing-key cookies fail closed. Every response is `no-store`.
 - Stage 1–4 browser acceptance passes at desktop and 320-pixel mobile widths, including keyboard, reduced motion, and forced colors.

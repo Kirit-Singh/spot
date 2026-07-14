@@ -5,10 +5,11 @@ This is a closeout-only surface. It must not be merged into or deployed over the
 ## Canonical host and routes
 
 - Canonical origin: `https://spotpathways.com`.
-- `https://spotpathway.com/<path>?<query>` permanently redirects to the same path and query on `https://spotpathways.com` before authentication or cookie handling.
+- `https://spotpathway.com/<path>?<query>` permanently redirects to the same path and safe query on `https://spotpathways.com` before authentication or cookie handling; credential-like query keys are stripped.
 - Public routes: `/` and `POST /auth` only. The landing **issues no third-party request**: nothing that fetches — script, stylesheet, font, image, iframe, form action — may be off-origin. Outbound `<a href>` links in the About dialog are permitted, because an anchor issues no request until the reviewer chooses to follow it; the tests enforce exactly this distinction rather than banning every external URL.
-- Reviewer routes: `/01_page.html` and every other shipped app page, asset, manifest, and data artifact. An unauthenticated deep link returns to `/`; it must never expose app bytes first.
-- Successful access always returns `303 Location: /01_page.html`.
+- Reviewer routes: `/programs.html` and every other shipped app page, asset, manifest, and data artifact. An unauthenticated deep link returns to `/`; it must never expose app bytes first.
+- Successful access always returns `303 Location: /programs.html`.
+- `/01_page.html` (and Pages' extensionless `/01_page` form) is a permanent compatibility route. It remains behind the reviewer gate and returns `308 Location: /programs.html` only after authentication; no duplicate legacy page is shipped.
 
 ## Visual contract
 
@@ -40,13 +41,13 @@ The mark must read as **pressable, not decorative**: a raised shadow at rest, an
 
 ## Authentication boundary
 
-The reviewer code is provisioned as a Cloudflare encrypted secret and is never emitted into HTML, JavaScript, Git, a URL, or an analytics/log field. The static form posts `application/x-www-form-urlencoded` data to the exact endpoint `/auth`; the Pages Function performs a constant-time comparison and rate limiting and must never log the request body.
+The reviewer code is provisioned only through the server-side Cloudflare `ACCESS_CODE` encrypted secret and is never emitted into HTML, JavaScript, Git, a URL, or an analytics/log field. The static form posts `application/x-www-form-urlencoded` data to the exact endpoint `/auth`; the Pages Function performs a constant-time comparison and rate limiting and must never log the request body. Changing the reviewer value, including the current reviewer-approved value, is an environment-secret operation rather than a landing-page edit.
 
 The code is a **shared deployment secret, not a saved site credential**. The field stays `type="password"` so it is masked on screen, but it must not invite password-manager autofill: it declares `autocomplete="one-time-code"` and opts out of the major managers (`data-1p-ignore`, `data-lpignore="true"`, `data-bwignore`, `data-form-type="other"`). With `autocomplete="current-password"` a manager silently overwrites the typed code with a saved password for the host, which surfaces to the reviewer as the generic “Code not recognized.” and is indistinguishable from a wrong code.
 
 Because a pasted code routinely carries a leading/trailing space or newline, the Function bounds the raw body length and then compares the **trimmed** submitted value against the **trimmed** configured secret (a secret provisioned via `echo code | … secret put` carries a trailing newline). Trimming is confined to surrounding whitespace; an internally altered code is still rejected.
 
-On success, issue a signed, opaque session in a host-only cookie named with a `__Host-` prefix and attributes `Secure; HttpOnly; SameSite=Lax; Path=/`. Do not place the access code or session in `localStorage` or `sessionStorage`. The session middleware must run before serving every reviewer page and artifact, not only `/01_page.html`.
+On success, issue a signed, opaque session in a host-only cookie named with a `__Host-` prefix and attributes `Secure; HttpOnly; SameSite=Lax; Path=/`. Do not place the access code or session in `localStorage` or `sessionStorage`. The session middleware must run before serving every reviewer page and artifact, including `/programs.html` and the legacy compatibility route.
 
 Wrong, missing, or malformed codes receive the same generic redirect and visible response. The POST response and protected responses use `Cache-Control: no-store`. Requests from the singular domain never receive a reviewer cookie; they redirect to the plural canonical host first.
 
@@ -55,9 +56,9 @@ Wrong, missing, or malformed codes receive the same generic redirect and visible
 1. Static contract: `python3 deploy/test_landing_contract.py`.
 2. Distribution: build to a temporary directory and byte-compare its `index.html` with `01_programs/app/index.html`; verify there is no meta refresh and `/` returns 200.
 3. Browser, desktop and 320-pixel mobile: initial page contains only `spot` + dot; dot click and keyboard activation reveal one field; focus moves correctly; Escape closes; there is no horizontal overflow; reduced-motion and forced-colors modes remain operable.
-4. Authentication integration: wrong/missing/malformed codes return to a generic invalid state; the provisioned reviewer code produces a host-only cookie and `303 /01_page.html`; the code never appears in URLs or response bodies.
+4. Authentication integration: wrong/missing/malformed codes return to a generic invalid state; the provisioned reviewer code produces a host-only cookie and `303 /programs.html`; the code never appears in URLs or response bodies. With that cookie, `/01_page.html` returns a query-safe permanent redirect to `/programs.html`.
 5. Boundary: without the cookie, direct GETs of every HTML/JS/CSS/data/manifest route do not return protected bytes. With the cookie, all admitted files load and Stage 1–4 smoke tests pass.
-6. Canonicalization: every singular-domain route redirects to the byte-equivalent plural-domain URL; no cookie is set on the singular response; query strings are preserved; redirect loops are absent.
+6. Canonicalization: every singular-domain route redirects to the byte-equivalent plural-domain URL; no cookie is set on the singular response; safe query parameters are preserved, credential-like keys are stripped, and redirect loops are absent.
 7. Session: tampered, expired, and cross-host cookies fail closed. Sign-out/session expiry returns the browser to `/` without leaking protected cached content.
 
 The access endpoint and middleware are deliberately outside this UI-only prototype and belong to the Cloudflare closeout lane.

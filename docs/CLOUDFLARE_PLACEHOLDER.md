@@ -16,7 +16,7 @@ bash deploy/cloudflare/build_placeholder.sh        # -> dist/cloudflare-placehol
 ```
 
 Deterministic. It copies only the frozen landing (`01_programs/app/index.html`), the
-placeholder page (`deploy/cloudflare/static/placeholder.html` -> `01_page.html`), and
+placeholder page (`deploy/cloudflare/static/placeholder.html` -> `programs.html`), and
 the static control files, then runs the shared, hardened `finalize_pages_dist.mjs`
 (unchanged) and asserts the exact six-file inventory. It never runs the Vite build,
 never copies `data/` / `results/` / hashed assets, and hard-refuses any drift.
@@ -26,14 +26,14 @@ files + a self-excluded manifest; content hashes are commit-independent:
 
 | path | bytes | sha256 |
 |------|------:|--------|
-| index.html | 6289 | 29adcdac190630b311e37c0ad9a3d7f8342026ebd2de9ca81de8cd447c9d03ab | (frozen landing, byte-identical)
-| 01_page.html | 2661 | ce4dff4508a88e35a5174c806ce9018453f17065128ffa381d537f313603d5c0 | (placeholder)
+| landing.html | 14036 | 95914e81945b7bd05da374bd4fa4a52034877b27ce7f6412b4c41dfd90706c25 | (frozen landing, byte-identical)
+| programs.html | 3206 | a62e97bab3d96b5d0e0631a3cde833b37deee6acf63e843f59e7e401f80fcd9c | (placeholder)
 | 404.html | 312 | cfaad9a8a6e9b142e5ee531b301133493a38f1e7e2757f570dba31d3349105ac |
 | _routes.json | 57 | cd85544e6e0aaaee95f1e480ba45c72388ae8db8a09ac23cbe103e9eb0bc16b7 |
 | _headers | 152 | e6c5d0a13755e2463c43d884f592b3e267912d75434d34c09b0b8cb7d28657e3 |
 | site_release_manifest.json | — | — | (sha256 inventory; `source_commit` set at build time; self-excluded)
 
-Total 6 files / 10,434 bytes; largest single file 6,289 bytes — far under Pages' 25 MiB
+Total 6 files / 18,730 bytes; largest single file 14,036 bytes — far under Pages' 25 MiB
 limit. `_routes.json` is `{"version":1,"include":["/*"],"exclude":[]}`, so every asset
 routes through the fail-closed Function.
 
@@ -48,7 +48,10 @@ runs the same application access-code / HMAC-cookie flow as `production`:
 - `GET /` and `POST /auth` are the only public surface; every other asset requires a
   valid `__Host-spot-review` session. `POST /auth` requires a same-origin
   `https://spotpathways.pages.dev` submission, compares the code in constant time, and
-  issues a 4-hour host-only `Secure; HttpOnly; SameSite=Lax; Path=/` cookie (no `Domain`).
+  issues a 4-hour host-only `Secure; HttpOnly; SameSite=Lax; Path=/` cookie (no `Domain`),
+  then redirects to `/programs.html`.
+- `/01_page.html` is retained only as a gated permanent compatibility redirect to
+  `/programs.html`; the placeholder output contains no duplicate legacy HTML file.
 - Missing/short secrets or a missing/unknown `SITE_MODE` fail closed with `503`.
 
 This mode does **not** change `SITE_MODE='production'` canonical-host behavior (production

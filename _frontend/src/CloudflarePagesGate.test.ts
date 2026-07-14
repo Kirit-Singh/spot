@@ -3,6 +3,8 @@ import { onRequest as auth } from '../../functions/auth';
 import { onRequest as middleware } from '../../functions/_middleware';
 import {
   CANONICAL_HOST,
+  LEGACY_PROGRAMS_PATH,
+  PROGRAMS_PATH,
   REVIEW_COOKIE,
   SESSION_TTL_SECONDS,
   issueSession,
@@ -63,7 +65,7 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     expect(await landing.text()).toBe('landing');
     expect(landing.headers.get('Cache-Control')).toContain('no-store');
 
-    const document = await middleware(context(new Request(`https://${CANONICAL_HOST}/01_page.html`, {
+    const document = await middleware(context(new Request(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html' },
     }), production));
     expect(document.status).toBe(303);
@@ -79,7 +81,7 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
   it('issues a short-lived host-only signed cookie and admits protected bytes', async () => {
     const authResponse = await auth(context(postAuth(ACCESS_CODE), production));
     expect(authResponse.status).toBe(303);
-    expect(authResponse.headers.get('Location')).toBe('/01_page.html');
+    expect(authResponse.headers.get('Location')).toBe(PROGRAMS_PATH);
     const setCookie = authResponse.headers.get('Set-Cookie') ?? '';
     expect(setCookie).toContain(`${REVIEW_COOKIE}=`);
     expect(setCookie).toContain(`Max-Age=${SESSION_TTL_SECONDS}`);
@@ -157,14 +159,14 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
   it('uses Access-only previews without issuing an application cookie', async () => {
     const preview: Env = { SITE_MODE: 'preview' };
     const next = vi.fn(async () => new Response('Access already admitted'));
-    const response = await middleware(context(new Request('https://abc123.spotpathways.pages.dev/01_page.html'), preview, next));
+    const response = await middleware(context(new Request(`https://abc123.spotpathways.pages.dev${PROGRAMS_PATH}`), preview, next));
     expect(response.status).toBe(200);
     expect(response.headers.has('Set-Cookie')).toBe(false);
     expect(next).toHaveBeenCalledOnce();
 
     const form = await auth(context(new Request('https://abc123.spotpathways.pages.dev/auth', { method: 'POST' }), preview));
     expect(form.status).toBe(303);
-    expect(form.headers.get('Location')).toBe('/01_page.html');
+    expect(form.headers.get('Location')).toBe(PROGRAMS_PATH);
     expect(form.headers.has('Set-Cookie')).toBe(false);
 
     const unexpectedHost = await middleware(context(new Request('https://preview.example.org/'), preview, next));
@@ -192,7 +194,7 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
   it('admits a real browser form POST that carries an opaque Origin: null', async () => {
     const response = await auth(context(browserFormPost(ACCESS_CODE), production));
     expect(response.status).toBe(303);
-    expect(response.headers.get('Location')).toBe('/01_page.html');
+    expect(response.headers.get('Location')).toBe(PROGRAMS_PATH);
     expect(response.headers.get('Set-Cookie') ?? '').toContain(`${REVIEW_COOKIE}=`);
   });
 
@@ -216,7 +218,7 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     for (const submitted of [` ${ACCESS_CODE}`, `${ACCESS_CODE} `, `  ${ACCESS_CODE}  `, `\t${ACCESS_CODE}\r\n`]) {
       const response = await auth(context(postAuth(submitted), production));
       expect(response.status, JSON.stringify(submitted)).toBe(303);
-      expect(response.headers.get('Location'), JSON.stringify(submitted)).toBe('/01_page.html');
+      expect(response.headers.get('Location'), JSON.stringify(submitted)).toBe(PROGRAMS_PATH);
       expect(response.headers.get('Set-Cookie') ?? '', JSON.stringify(submitted)).toContain(`${REVIEW_COOKIE}=`);
     }
   });
@@ -225,7 +227,7 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     const padded: Env = { SITE_MODE: 'production', ACCESS_CODE: `${ACCESS_CODE}\n`, SESSION_SIGNING_KEY: SIGNING_KEY };
     const response = await auth(context(postAuth(ACCESS_CODE), padded));
     expect(response.status).toBe(303);
-    expect(response.headers.get('Location')).toBe('/01_page.html');
+    expect(response.headers.get('Location')).toBe(PROGRAMS_PATH);
   });
 
   it('still rejects a wrong, internally-altered, or blank code after trimming', async () => {
@@ -239,7 +241,7 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
 
   it('serves "/" from the landing control surface, not from the admitted index.html', async () => {
     // In the full release index.html is an admitted, hash-bound meta-refresh stub into
-    // /01_page.html. Serving the landing by overwriting it would destroy an admitted byte AND
+    // /programs.html. Serving the landing by overwriting it would destroy an admitted byte AND
     // publish an app entry point, so the root route forwards to its own control asset instead.
     const next = vi.fn(async (input?: Request | string) => new Response(
       input instanceof Request ? new URL(input.url).pathname : 'no-rewrite',
@@ -263,6 +265,38 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     }), production, next));
     expect(admitted.status).toBe(200);
     expect(await admitted.text()).toBe('admitted index stub');
+  });
+
+  it('permanently redirects the legacy Programs URL only after reviewer authentication', async () => {
+    const unauthenticated = await middleware(context(new Request(`https://${CANONICAL_HOST}${LEGACY_PROGRAMS_PATH}`, {
+      headers: { Accept: 'text/html' },
+    }), production));
+    expect(unauthenticated.status).toBe(303);
+    expect(unauthenticated.headers.get('Location')).toBe('/');
+
+    const token = await issueSession(SIGNING_KEY);
+    for (const legacyPath of [LEGACY_PROGRAMS_PATH, '/01_page']) {
+      const next = vi.fn(async () => new Response('legacy bytes must not be served'));
+      const admitted = await middleware(context(new Request(
+        `https://${CANONICAL_HOST}${legacyPath}?view=targets&code=must-not-forward`,
+        { headers: { Accept: 'text/html', Cookie: `${REVIEW_COOKIE}=${token}` } },
+      ), production, next));
+      expect(admitted.status, legacyPath).toBe(308);
+      expect(admitted.headers.get('Location'), legacyPath).toBe(`${PROGRAMS_PATH}?view=targets`);
+      expect(admitted.headers.has('Set-Cookie'), legacyPath).toBe(false);
+      expect(next, legacyPath).not.toHaveBeenCalled();
+    }
+  });
+
+  it('redirects the legacy Programs URL after upstream Access on previews', async () => {
+    const preview: Env = { SITE_MODE: 'preview' };
+    const next = vi.fn(async () => new Response('legacy bytes must not be served'));
+    const response = await middleware(context(new Request(
+      `https://abc123.spotpathways.pages.dev${LEGACY_PROGRAMS_PATH}?view=targets`,
+    ), preview, next));
+    expect(response.status).toBe(308);
+    expect(response.headers.get('Location')).toBe(`${PROGRAMS_PATH}?view=targets`);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('sets security headers in Functions rather than relying on _headers', async () => {

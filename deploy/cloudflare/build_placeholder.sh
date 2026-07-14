@@ -4,7 +4,7 @@
 # data, downstream results, or the reviewer secret: it copies only the frozen
 # landing, the deliberately-labelled placeholder page, and the static control
 # files, then reuses the hardened finalize_pages_dist.mjs. The full-site
-# assembler in build_pages.sh is separate and left unchanged.
+# assembler in build_pages.sh remains a separate build lane.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,7 +43,7 @@ mkdir -p "$OUT"
 # admitted, hash-bound app artifact, and the placeholder uses the same serving model so the
 # two builds never diverge. No app bundle, no Stage-1 data, no downstream results are copied.
 cp -p "$APP/index.html" "$OUT/landing.html"
-cp -p "$STATIC/placeholder.html" "$OUT/01_page.html"
+cp -p "$STATIC/placeholder.html" "$OUT/programs.html"
 cp -p "$STATIC/_routes.json" "$OUT/_routes.json"
 cp -p "$STATIC/_headers" "$OUT/_headers"
 cp -p "$STATIC/404.html" "$OUT/404.html"
@@ -54,6 +54,6 @@ node "$HERE/finalize_pages_dist.mjs" "$OUT" "$commit"
 
 # Fail closed: the served tree must be exactly the approved placeholder set.
 expected="$(printf '%s\n' \
-  01_page.html 404.html _headers _routes.json landing.html site_release_manifest.json | sort)"
+  404.html _headers _routes.json landing.html programs.html site_release_manifest.json | sort)"
 actual="$(cd "$OUT" && find . -type f | sed 's|^\./||' | sort)"
 [ "$expected" = "$actual" ] || die "unexpected files in placeholder output: $actual"

@@ -46,8 +46,8 @@ class ReleaseBindingTest(unittest.TestCase):
         # index.html is the ADMITTED app index (a meta-refresh stub), manifest-bound. It must
         # survive packaging byte-for-byte; the reviewer landing ships as landing.html.
         self.app = {
-            "index.html": '<meta http-equiv="refresh" content="0; url=/01_page.html">',
-            "01_page.html": "<h1>stage one</h1>",
+            "index.html": '<meta http-equiv="refresh" content="0; url=/programs.html">',
+            "programs.html": "<h1>stage one</h1>",
             "assets/app-abc123.js": "export const a=1",
             "results/current.json": json.dumps(
                 {"verifier_status": "admitted", "generator_status": "generated",
@@ -102,12 +102,16 @@ class ReleaseBindingTest(unittest.TestCase):
 
     def test_refuses_a_drifted_byte(self) -> None:
         self.write_dist()
-        (self.dist / "01_page.html").write_text("<h1>rebuilt</h1>", encoding="utf-8")
-        self.assertRegex(self.run_gate()[0], r"^DRIFT: 01_page\.html")
+        (self.dist / "programs.html").write_text("<h1>rebuilt</h1>", encoding="utf-8")
+        self.assertRegex(self.run_gate()[0], r"^DRIFT: programs\.html")
 
     def test_refuses_a_file_absent_from_the_approved_manifest(self) -> None:
         self.write_dist({"assets/sneaky-x1.js": "1"})
         self.assertRegex(self.run_gate()[0], r"^UNLISTED: assets/sneaky-x1\.js")
+
+    def test_refuses_a_duplicate_legacy_programs_page(self) -> None:
+        self.write_dist({"01_page.html": "<h1>legacy duplicate</h1>"})
+        self.assertIn("UNLISTED: 01_page.html is packaged but not in the approved release manifest", self.run_gate())
 
     def test_refuses_a_silently_dropped_admitted_artifact(self) -> None:
         self.write_dist()
@@ -136,18 +140,18 @@ class ReleaseBindingTest(unittest.TestCase):
         self.assertRegex(self.run_gate()[0], r"^FIXTURE: assets/app-abc123\.js")
 
     def test_refuses_a_placeholder_route(self) -> None:
-        self.app["01_page.html"] = '<html data-placeholder="true"><p>hello</p></html>'
+        self.app["programs.html"] = '<html data-placeholder="true"><p>hello</p></html>'
         self.write_dist()
-        self.assertRegex(self.run_gate()[0], r"^PLACEHOLDER: 01_page\.html")
+        self.assertRegex(self.run_gate()[0], r"^PLACEHOLDER: programs\.html")
 
     def test_refuses_interim_copy_separately_from_a_placeholder_route(self) -> None:
         # Prose is not a route. The landing's About copy says the workbench is "being
         # assembled", which is true today and false at full release — report it as its own
         # finding rather than mislabelling the page a placeholder.
-        self.app["01_page.html"] = "<html><p>The full workbench is being assembled.</p></html>"
+        self.app["programs.html"] = "<html><p>The full workbench is being assembled.</p></html>"
         self.write_dist()
         findings = self.run_gate()
-        self.assertRegex(findings[0], r"^INTERIM_COPY: 01_page\.html")
+        self.assertRegex(findings[0], r"^INTERIM_COPY: programs\.html")
         self.assertFalse([f for f in findings if f.startswith("PLACEHOLDER:")])
 
     def test_refuses_a_stage1_gate_that_has_not_admitted_deployment(self) -> None:
@@ -240,7 +244,7 @@ class ReleaseBindingTest(unittest.TestCase):
     def test_refuses_an_unbound_approved_manifest(self) -> None:
         self.write_dist()
         bad = self.root / "bad.json"
-        bad.write_text(json.dumps({"files": [{"path": "01_page.html"}]}), encoding="utf-8")
+        bad.write_text(json.dumps({"files": [{"path": "programs.html"}]}), encoding="utf-8")
         with self.assertRaisesRegex(Refusal, "not hash-bound"):
             verify(self.dist, bad, None, self.parked())
 

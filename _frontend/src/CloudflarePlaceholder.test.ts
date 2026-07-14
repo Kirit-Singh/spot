@@ -7,6 +7,7 @@ import {
   CANONICAL_HOST,
   PLACEHOLDER_HOST,
   PLACEHOLDER_ORIGIN,
+  PROGRAMS_PATH,
   REVIEW_COOKIE,
   SESSION_TTL_SECONDS,
   issueSession,
@@ -92,7 +93,7 @@ describe('Cloudflare placeholder auth routing', () => {
     expect(landing.status).toBe(200);
     expect(landingNext).toHaveBeenCalledOnce();
 
-    const guarded = await middleware(ctx(new Request(`https://${CANONICAL_HOST}/01_page.html`, {
+    const guarded = await middleware(ctx(new Request(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html' },
     }), production));
     expect(guarded.status).toBe(303);
@@ -105,7 +106,7 @@ describe('Cloudflare placeholder auth routing', () => {
   it('admits the placeholder page only with a valid reviewer cookie', async () => {
     const token = await issueSession(SIGNING_KEY);
     const next = vi.fn(async () => new Response('placeholder body'));
-    const admitted = await middleware(ctx(new Request(`https://${CANONICAL_HOST}/01_page.html`, {
+    const admitted = await middleware(ctx(new Request(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html', Cookie: `${REVIEW_COOKIE}=${token}` },
     }), production, next));
     expect(admitted.status).toBe(200);
@@ -126,13 +127,13 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
     expect(landing.status).toBe(200);
     expect(landingNext).toHaveBeenCalledOnce();
 
-    const page = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page.html`, {
+    const page = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html' },
     }), placeholderEnv));
     expect(page.status).toBe(303);
     expect(page.headers.get('Location')).toBe('/');
 
-    for (const path of ['/01_page', '/site_release_manifest.json', '/404.html', '/data/stage01_current.json']) {
+    for (const path of [PROGRAMS_PATH, '/site_release_manifest.json', '/404.html', '/data/stage01_current.json']) {
       const res = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${path}`), placeholderEnv));
       expect([303, 401], path).toContain(res.status);
       expect(res.headers.has('Set-Cookie'), path).toBe(false);
@@ -141,7 +142,7 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
 
   it('refuses any host other than exactly spotpathways.pages.dev', async () => {
     for (const host of ['evil.pages.dev', 'abc.spotpathways.pages.dev', 'spotpathways.com', 'spotpathways.pages.dev.evil.com']) {
-      const res = await middleware(ctx(new Request(`https://${host}/01_page.html`), placeholderEnv));
+      const res = await middleware(ctx(new Request(`https://${host}${PROGRAMS_PATH}`), placeholderEnv));
       expect(res.status, host).toBe(503);
       expect(res.headers.has('Set-Cookie'), host).toBe(false);
     }
@@ -150,7 +151,7 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
   it('authenticates a same-origin reviewer with a short-lived host-only Secure cookie', async () => {
     const authed = await auth(ctx(form(`https://${PLACEHOLDER_HOST}/auth`, PLACEHOLDER_ORIGIN, ACCESS_CODE), placeholderEnv));
     expect(authed.status).toBe(303);
-    expect(authed.headers.get('Location')).toBe('/01_page.html');
+    expect(authed.headers.get('Location')).toBe(PROGRAMS_PATH);
     const cookie = authed.headers.get('Set-Cookie') ?? '';
     expect(cookie).toContain(`${REVIEW_COOKIE}=`);
     expect(cookie).toContain('Secure');
@@ -162,7 +163,7 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
     // The issued cookie admits protected placeholder bytes on the same host.
     const pair = cookie.split(';', 1)[0];
     const next = vi.fn(async () => new Response('placeholder body'));
-    const admitted = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page`, {
+    const admitted = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${PROGRAMS_PATH}`, {
       headers: { Cookie: pair },
     }), placeholderEnv, next));
     expect(admitted.status).toBe(200);
@@ -202,7 +203,7 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
     const parts = good.split('.');
     parts[3] = `${parts[3][0] === 'A' ? 'B' : 'A'}${parts[3].slice(1)}`;
     const tamperedToken = parts.join('.');
-    const tampered = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page.html`, {
+    const tampered = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html', Cookie: `${REVIEW_COOKIE}=${tamperedToken}` },
     }), placeholderEnv));
     expect(tampered.status).toBe(303);
@@ -222,16 +223,16 @@ describe('Cloudflare placeholder SITE_MODE gate', () => {
 
     // and is admitted after switching to production on the canonical host,
     const prodNext = vi.fn(async () => new Response('admitted'));
-    const admitted = await middleware(ctx(new Request(`https://${CANONICAL_HOST}/01_page`, {
+    const admitted = await middleware(ctx(new Request(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`, {
       headers: { Cookie: `${REVIEW_COOKIE}=${token}` },
     }), production, prodNext));
     expect(admitted.status).toBe(200);
     expect(prodNext).toHaveBeenCalledOnce();
 
     // while production still enforces the canonical host, redirecting the interim pages.dev host.
-    const redirected = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page`), production));
+    const redirected = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${PROGRAMS_PATH}`), production));
     expect(redirected.status).toBe(308);
-    expect(redirected.headers.get('Location')).toBe(`https://${CANONICAL_HOST}/01_page`);
+    expect(redirected.headers.get('Location')).toBe(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`);
     expect(redirected.headers.has('Set-Cookie')).toBe(false);
   });
 });

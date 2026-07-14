@@ -7,12 +7,13 @@ The release is **atomic**: a Pages deployment is immutable and all-or-nothing, s
 host flips from placeholder to full app in a single direct upload, with the placeholder retained
 as the rollback floor.
 
-## What must NOT change
+## Gate invariants
 
-The reviewer gate and host policy are already live and verified; the release reuses them untouched:
+The canonical Programs route changes, but the verified reviewer-gate and host-policy invariants remain:
 
 - `functions/` — access-code / HMAC-cookie flow, constant-time compare, host-only
-  `__Host-spot-review` cookie, `Sec-Fetch-Site` same-origin handling.
+  `__Host-spot-review` cookie, `Sec-Fetch-Site` same-origin handling; successful auth now lands on
+  `/programs.html`, and authenticated `/01_page.html` requests permanently redirect there.
 - Security headers + CSP from `withSecurityHeaders` (`script-src 'self' 'unsafe-inline'`,
   `connect-src 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, HSTS, noindex, no-store).
 - `SITE_MODE=production`; canonical `spotpathways.com`; `spotpathways.pages.dev` → 308 canonical;
@@ -39,7 +40,8 @@ The approved artifact is **external staging**:
 
 The final build takes these **explicitly**; the gate hard-refuses an `--approved` path under
 `01_programs/app`, so a repo tree cannot be bound by accident. The root and manifest are supplied by
-the **post-GO-BP** staging, not `9f53aeb` (see B3).
+the **post-GO-BP** staging, not `9f53aeb` (see B3). That recut must name `programs.html`, omit a static
+`01_page.html`, and point its admitted index stub at the canonical Programs route.
 
 `deploy/cloudflare/build_pages.sh` **cannot** produce the admitted artifact: it re-runs Vite, which
 re-mints chunk names/hashes and the HTML referencing them. Production packaging **mirrors** the
@@ -48,7 +50,7 @@ release build.
 
 ## Root serving: the admitted index.html is preserved, the landing is a control surface
 
-The admitted `index.html` is a hash-bound **meta-refresh stub** into `/01_page.html`. Overwriting it
+The admitted `index.html` is a hash-bound **meta-refresh stub** into `/programs.html`. Overwriting it
 with the reviewer landing would destroy an admitted byte *and* publish an app entry point.
 
 So the landing ships as its own control surface, `landing.html`, and the root Function forwards `/`
@@ -58,7 +60,8 @@ to it. `index.html` stays a gated app artifact. Verified on the real Pages runti
 GET /                     200   the reviewer landing
 GET /index.html no cookie 303 -> /       (admitted artifact, GATED)
 GET /landing  no cookie   303            (reachable only via /)
-POST /auth  correct       303 -> /01_page.html + host-only cookie
+POST /auth  correct       303 -> /programs.html + host-only cookie
+GET /01_page.html authed  308 -> /programs.html (compatibility; no duplicate file)
 ```
 
 `LANDING_ASSET` is **extensionless** (`/landing`) on purpose: Pages canonicalises `.html` URLs, so
@@ -127,7 +130,7 @@ python3 deploy/cloudflare/verify_release_binding.py dist/cloudflare-release \
 
 Against the accepted `9f53aeb` staging it REFUSES with exactly `2 REACTOME · 1 CLAIMS · 5 CONTROL`
 and zero binding findings — GO-BP is the only substantive blocker.
-Contract: `python3 deploy/cloudflare/test_verify_release_binding.py` (23 tests, each drives a refusal).
+Contract: `python3 deploy/cloudflare/test_verify_release_binding.py` (24 tests, including exact-admission and fail-closed refusal cases).
 
 ## Files and scripts
 
@@ -135,12 +138,12 @@ Contract: `python3 deploy/cloudflare/test_verify_release_binding.py` (23 tests, 
 |------|------|
 | `deploy/cloudflare/verify_release_binding.py` | **NEW** the release-binding gate |
 | `deploy/cloudflare/reactome_parked.allowlist` | **NEW** parked licence/history exemptions (empty) |
-| `deploy/cloudflare/test_verify_release_binding.py` | **NEW** 12 refusal tests |
+| `deploy/cloudflare/test_verify_release_binding.py` | **NEW** 24 exact-admission / fail-closed contract tests |
 | `deploy/cloudflare/build_release.sh` | **TO WRITE at execution** — mirrors the admitted tree; see contract below |
 | `deploy/cloudflare/finalize_pages_dist.mjs` | reuse unchanged — size/symlink/dotpath/private-token validator + `site_release_manifest.json` |
 | `deploy/cloudflare/static/{_routes.json,_headers,404.html}` | reuse unchanged |
 | `01_programs/analysis/verify_served_manifests.py` | reuse — refuses a contradictory served/gate manifest pair |
-| `functions/**` | **unchanged** — access flow, CSP, host policy |
+| `functions/**` | access flow, CSP, host policy, canonical Programs route + authenticated legacy redirect |
 | `wrangler.jsonc` | at execution only: `pages_build_output_dir` → `./dist/cloudflare-release` |
 
 `build_release.sh` contract (deliberately not written until B3/B4 clear, so it cannot be run early):
@@ -165,8 +168,8 @@ atomically. Record the new deployment id immediately.
 
 ## Rollback
 
-- **Floor:** `dd9bd15b` — the current placeholder, already verified live (canonical 200, `/01_page`
-  303 fail-closed, manifest 401, alias 308, singular 308, deployment subdomain 503).
+- **Floor:** `dd9bd15b` — the current placeholder, already verified live (canonical 200, Programs
+  route 303 fail-closed, manifest 401, alias 308, singular 308, deployment subdomain 503).
 - Pages rolls production back only to a previous **successful production** deployment; preview
   deployments are not rollback targets. Never roll back below `dd9bd15b`.
 - **Trigger:** any failure in the post-deploy smoke → immediate rollback to `dd9bd15b`.
@@ -182,7 +185,8 @@ and exhaustive, and the production step is a canary with instant rollback:
 1. **Local edge run** (proven technique): `wrangler pages dev dist/cloudflare-release`, driving the
    real Functions runtime with `Host`/`Origin` spoofed to `spotpathways.com`. Verify:
    - full access flow: browser-shaped native form POST (`Origin: null` + `Sec-Fetch-Site: same-origin`)
-     → 303 `/01_page.html` + host-only cookie; wrong / cross-site / foreign-origin → invalid, no cookie.
+     → 303 `/programs.html` + host-only cookie; authenticated `/01_page.html` → 308 `/programs.html`;
+     wrong / cross-site / foreign-origin → invalid, no cookie.
    - every one of the 38 admitted artifacts is gated without a cookie and served with one, and each
      served byte re-hashes to the approved manifest.
    - `spotpathway.com` → 308 canonical preserving path + query; alias → 308; deployment subdomain → 503.

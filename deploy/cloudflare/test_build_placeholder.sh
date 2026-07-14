@@ -19,11 +19,11 @@ cmp "$A/site_release_manifest.json" "$B/site_release_manifest.json"
 
 # Exact publish inventory — nothing more, nothing less.
 expected="$(printf '%s\n' \
-  01_page.html \
   404.html \
   _headers \
   _routes.json \
   landing.html \
+  programs.html \
   site_release_manifest.json | sort)"
 actual="$(cd "$A" && find . -type f | sed 's|^\./||' | sort)"
 if [ "$expected" != "$actual" ]; then
@@ -36,12 +36,13 @@ fi
 # ships as landing.html (a control surface served at "/"), never as index.html — in the full
 # release index.html is an admitted, hash-bound app artifact that must not be overwritten.
 cmp "$REPO/01_programs/app/index.html" "$A/landing.html"
-cmp "$REPO/deploy/cloudflare/static/placeholder.html" "$A/01_page.html"
+cmp "$REPO/deploy/cloudflare/static/placeholder.html" "$A/programs.html"
 [ ! -e "$A/index.html" ] || { echo 'landing must not be shipped as index.html' >&2; exit 1; }
+[ ! -e "$A/01_page.html" ] || { echo 'legacy Programs page must be a middleware redirect, not a static copy' >&2; exit 1; }
 
 # The post-auth page is deliberately labelled and claims nothing scientific.
-grep -q 'being assembled' "$A/01_page.html"
-grep -qi 'placeholder' "$A/01_page.html"
+grep -q 'being assembled' "$A/programs.html"
+grep -qi 'placeholder' "$A/programs.html"
 
 # No Stage-1..4 data, results, hashed assets, or scientific pages are ever present.
 for forbidden in data results assets targets.html pathways.html drugs.html \

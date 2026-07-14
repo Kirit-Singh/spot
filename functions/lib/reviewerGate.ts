@@ -13,6 +13,8 @@ export const REDIRECT_HOSTS: ReadonlySet<string> = new Set([
 ]);
 export const REVIEW_COOKIE = '__Host-spot-review';
 export const SESSION_TTL_SECONDS = 4 * 60 * 60;
+export const PROGRAMS_PATH = '/programs.html';
+export const LEGACY_PROGRAMS_PATH = '/01_page.html';
 
 export interface Env {
   ACCESS_CODE?: string;
@@ -48,7 +50,7 @@ export interface PagesContext {
 
 // The reviewer landing is served at "/" from this control surface. It is deliberately NOT
 // index.html: in the full release index.html is an admitted, hash-bound meta-refresh stub to
-// /01_page.html, and overwriting it would both destroy an admitted byte and serve an app
+// /programs.html, and overwriting it would both destroy an admitted byte and serve an app
 // entry point publicly.
 //
 // EXTENSIONLESS on purpose. Pages canonicalises ".html" URLs, so forwarding to
@@ -165,6 +167,21 @@ export function canonicalRedirectTarget(requestUrl: string): string {
     if (sensitiveQueryKey.test(key)) target.searchParams.delete(key);
   }
   return target.toString();
+}
+
+export function isLegacyProgramsPath(pathname: string): boolean {
+  // Pages may expose an HTML asset at either spelling depending on its HTML URL
+  // normalisation. Both historic forms permanently converge on the named route.
+  return pathname === LEGACY_PROGRAMS_PATH || pathname === '/01_page';
+}
+
+export function programsCompatibilityTarget(requestUrl: string): string {
+  const incoming = new URL(requestUrl);
+  incoming.pathname = PROGRAMS_PATH;
+  for (const key of [...incoming.searchParams.keys()]) {
+    if (sensitiveQueryKey.test(key)) incoming.searchParams.delete(key);
+  }
+  return `${incoming.pathname}${incoming.search}`;
 }
 
 export function redirect(location: string, status: 303 | 308, cookie?: string): Response {

@@ -4,6 +4,7 @@ import { onRequest as middleware } from '../../functions/_middleware';
 import {
   CANONICAL_HOST,
   PLACEHOLDER_HOST,
+  PROGRAMS_PATH,
   REVIEW_COOKIE,
   issueSession,
   productionHostDecision,
@@ -64,7 +65,7 @@ describe('canonical host gate', () => {
     expect(landing.status).toBe(200);
     expect(landingNext).toHaveBeenCalledOnce();
 
-    const guarded = await middleware(ctx(new Request(`https://${CANONICAL_HOST}/01_page`, {
+    const guarded = await middleware(ctx(new Request(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html' },
     }), canonical));
     expect(guarded.status).toBe(303);
@@ -72,7 +73,7 @@ describe('canonical host gate', () => {
 
     const token = await issueSession(SIGNING_KEY);
     const next = vi.fn(async () => new Response('placeholder body'));
-    const admitted = await middleware(ctx(new Request(`https://${CANONICAL_HOST}/01_page`, {
+    const admitted = await middleware(ctx(new Request(`https://${CANONICAL_HOST}${PROGRAMS_PATH}`, {
       headers: { Cookie: `${REVIEW_COOKIE}=${token}` },
     }), canonical, next));
     expect(admitted.status).toBe(200);
@@ -82,7 +83,7 @@ describe('canonical host gate', () => {
   it('authenticates a same-origin reviewer on the canonical host', async () => {
     const res = await auth(ctx(post(`https://${CANONICAL_HOST}/auth`, `https://${CANONICAL_HOST}`), canonical));
     expect(res.status).toBe(303);
-    expect(res.headers.get('Location')).toBe('/01_page.html');
+    expect(res.headers.get('Location')).toBe(PROGRAMS_PATH);
     const cookie = res.headers.get('Set-Cookie') ?? '';
     expect(cookie).toContain(`${REVIEW_COOKIE}=`);
     expect(cookie).toContain('Secure');
@@ -99,9 +100,9 @@ describe('canonical host gate', () => {
 describe('spotpathway.com permanent redirect', () => {
   it('308s to the canonical host before auth, preserving path and query', async () => {
     const next = vi.fn(async () => new Response('must not run'));
-    const res = await middleware(ctx(new Request('https://spotpathway.com/01_page?view=targets&page=2'), canonical, next));
+    const res = await middleware(ctx(new Request(`https://spotpathway.com${PROGRAMS_PATH}?view=targets&page=2`), canonical, next));
     expect(res.status).toBe(308);
-    expect(res.headers.get('Location')).toBe('https://spotpathways.com/01_page?view=targets&page=2');
+    expect(res.headers.get('Location')).toBe(`https://spotpathways.com${PROGRAMS_PATH}?view=targets&page=2`);
     expect(res.headers.has('Set-Cookie')).toBe(false);
     expect(next).not.toHaveBeenCalled();
   });
@@ -138,7 +139,7 @@ describe('pages.dev alias during certificate provisioning', () => {
     expect(landing.status).toBe(200);
     expect(landingNext).toHaveBeenCalledOnce();
 
-    const guarded = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page`, {
+    const guarded = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${PROGRAMS_PATH}`, {
       headers: { Accept: 'text/html' },
     }), provisioning));
     expect(guarded.status).toBe(303);
@@ -152,9 +153,9 @@ describe('pages.dev alias during certificate provisioning', () => {
 
   it('redirects the alias to the canonical host once the flag is removed', async () => {
     const next = vi.fn(async () => new Response('must not run'));
-    const res = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}/01_page?a=1`), canonical, next));
+    const res = await middleware(ctx(new Request(`https://${PLACEHOLDER_HOST}${PROGRAMS_PATH}?a=1`), canonical, next));
     expect(res.status).toBe(308);
-    expect(res.headers.get('Location')).toBe('https://spotpathways.com/01_page?a=1');
+    expect(res.headers.get('Location')).toBe(`https://spotpathways.com${PROGRAMS_PATH}?a=1`);
     expect(res.headers.has('Set-Cookie')).toBe(false);
     expect(next).not.toHaveBeenCalled();
 
@@ -169,7 +170,7 @@ describe('refused hosts', () => {
     for (const env of [provisioning, canonical]) {
       for (const host of DEPLOYMENT_SUBDOMAINS) {
         const next = vi.fn(async () => new Response('must not run'));
-        const res = await middleware(ctx(new Request(`https://${host}/01_page`), env, next));
+        const res = await middleware(ctx(new Request(`https://${host}${PROGRAMS_PATH}`), env, next));
         expect(res.status, host).toBe(503);
         expect(res.headers.has('Set-Cookie'), host).toBe(false);
         expect(next, host).not.toHaveBeenCalled();
@@ -191,7 +192,7 @@ describe('refused hosts', () => {
   it('refuses a valid cookie presented on a refused host', async () => {
     const token = await issueSession(SIGNING_KEY);
     const next = vi.fn(async () => new Response('must not run'));
-    const res = await middleware(ctx(new Request('https://release.spotpathways.pages.dev/01_page', {
+    const res = await middleware(ctx(new Request(`https://release.spotpathways.pages.dev${PROGRAMS_PATH}`, {
       headers: { Cookie: `${REVIEW_COOKIE}=${token}` },
     }), provisioning, next));
     expect(res.status).toBe(503);

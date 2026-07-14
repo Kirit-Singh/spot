@@ -145,6 +145,11 @@ class LandingContractTest(unittest.TestCase):
         self.assertIn("prefers-reduced-motion:reduce", self.html)
         self.assertIn("forced-colors:active", self.html)
 
+    def test_access_panel_starts_at_wordmark_left_edge(self) -> None:
+        self.assertRegex(self.html, re.compile(r"\.panel\s*\{[^}]*\bleft:0;", re.S))
+        self.assertIn("width:min(316px,calc(50vw + 50% - 20px))", self.html)
+        self.assertNotIn("transform:translateX(-50%)", self.html)
+
     def test_build_copies_reviewed_landing_without_regenerating_redirect(self) -> None:
         build = BUILD.read_text(encoding="utf-8")
         self.assertIn('cp "$APP/index.html"', build)

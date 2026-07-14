@@ -57,6 +57,14 @@ describe('reviewer landing interaction', () => {
     expect(landingHtml).toContain('summary:focus-visible .mark')
   })
 
+  it('aligns the access field to the left edge of the spot wordmark', () => {
+    mountLanding()
+    const panel = document.querySelector('.panel') as HTMLElement
+    expect(getComputedStyle(panel).left).toBe('0px')
+    expect(landingHtml).toContain('width:min(316px,calc(50vw + 50% - 20px))')
+    expect(landingHtml).not.toContain('transform:translateX(-50%)')
+  })
+
   it('opens, focuses the password field, and returns focus on Escape', async () => {
     mountLanding()
     const details = document.querySelector('details') as HTMLDetailsElement

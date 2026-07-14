@@ -30,7 +30,7 @@ from pathlib import Path
 #
 # landing.html is the reviewer landing, served at "/" by the root Function. It is a control
 # surface precisely so that the admitted app index.html — which is a manifest-bound meta-refresh
-# stub to /01_page.html — is never overwritten or omitted to make room for it.
+# stub to /programs.html — is never overwritten or omitted to make room for it.
 CONTROL_FILES = frozenset({"_headers", "_routes.json", "404.html", "landing.html", "site_release_manifest.json"})
 
 # The approved manifest NON-RECURSIVELY SELF-EXCLUDES: release_manifest.json is deliberately absent

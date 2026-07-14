@@ -33,17 +33,29 @@ if [ "${SPOT_SKIP_FRONTEND_GATES:-0}" != "1" ]; then
 fi
 npm run build --prefix "$FRONTEND"
 
-for file in 01_page.html targets.html pathways.html drugs.html pksafety.html favicon.svg icons.svg; do
+for file in targets.html pathways.html drugs.html pksafety.html favicon.svg icons.svg; do
   [ -f "$UI_DIST/$file" ] || die "Vite output missing $file"
 done
 [ -d "$UI_DIST/assets" ] || die "Vite output missing assets/"
+
+# Programs is canonical at /programs.html. Prefer the renamed UI entry when the
+# UI-route change is integrated; until then, adapt the admitted legacy Vite entry
+# at the packaging boundary. The historical URL is handled by authenticated
+# middleware and is deliberately not emitted as a second static page.
+if [ -f "$UI_DIST/programs.html" ]; then
+  PROGRAMS_SOURCE="$UI_DIST/programs.html"
+elif [ -f "$UI_DIST/01_page.html" ]; then
+  PROGRAMS_SOURCE="$UI_DIST/01_page.html"
+else
+  die "Vite output missing programs.html"
+fi
 
 rm -rf "$OUT"
 mkdir -p "$OUT/data" "$OUT/assets"
 
 # Public landing + admitted pages. The Vite index is intentionally never copied.
 cp -p "$APP/index.html" "$OUT/index.html"
-cp -p "$UI_DIST/01_page.html" "$OUT/01_page.html"
+cp -p "$PROGRAMS_SOURCE" "$OUT/programs.html"
 cp -p "$APP/01_notebook.html" "$OUT/01_notebook.html"
 cp -p "$APP/01_trace.html" "$OUT/01_trace.html"
 for file in targets.html pathways.html drugs.html pksafety.html favicon.svg icons.svg; do

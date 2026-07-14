@@ -3,8 +3,10 @@ import {
   PLACEHOLDER_HOST,
   canonicalRedirectTarget,
   expiredSessionCookie,
+  isLegacyProgramsPath,
   localHostAllowed,
   operationalFailure,
+  programsCompatibilityTarget,
   productionHostDecision,
   readCookie,
   redirect,
@@ -35,6 +37,11 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   // They never issue or accept this application's shared-reviewer cookie.
   if (env.SITE_MODE === 'preview') {
     if (!url.hostname.endsWith('.pages.dev')) return operationalFailure();
+    // Cloudflare Access has already authenticated preview requests. Keep the old
+    // Programs URL as a permanent compatibility redirect, never a second app copy.
+    if (isLegacyProgramsPath(url.pathname)) {
+      return redirect(programsCompatibilityTarget(request.url), 308);
+    }
     return withSecurityHeaders(await context.next());
   }
 
@@ -53,7 +60,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
 
   // "/" is the only public app surface, and it serves the reviewer landing from its own
   // control asset. index.html is NOT the landing: in the full release it is an admitted,
-  // hash-bound meta-refresh stub into /01_page.html, so it stays a gated app artifact and is
+  // hash-bound meta-refresh stub into /programs.html, so it stays a gated app artifact and is
   // never overwritten. Requesting it directly therefore falls through to the cookie check.
   if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
     const landing = new Request(new URL(LANDING_ASSET, url), request);
@@ -73,6 +80,12 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const response = withSecurityHeaders(new Response('Unauthorized', { status: 401 }));
     if (clear) response.headers.set('Set-Cookie', clear);
     return response;
+  }
+
+  // Resolve the historical route only after the same reviewer gate as every other
+  // protected document. This keeps old bookmarks working without making the alias public.
+  if (isLegacyProgramsPath(url.pathname)) {
+    return redirect(programsCompatibilityTarget(request.url), 308);
   }
 
   return withSecurityHeaders(await context.next());

@@ -96,9 +96,10 @@
   .panel{
     position:absolute;
     top:calc(100% + 22px);
-    left:50%;
-    width:min(316px,calc(100vw - 40px));
-    transform:translateX(-50%);
+    /* Start exactly at the wordmark's left edge. The field grows to the right,
+       while the max width keeps it inside a narrow viewport. */
+    left:0;
+    width:min(316px,calc(50vw + 50% - 20px));
     animation:reveal 140ms ease-out both;
   }
   .access-form{margin:0}
@@ -262,8 +263,8 @@
     outline-offset:2px;
   }
   @keyframes reveal{
-    from{opacity:0;transform:translate(-50%,-5px)}
-    to{opacity:1;transform:translate(-50%,0)}
+    from{opacity:0;transform:translateY(-5px)}
+    to{opacity:1;transform:translateY(0)}
   }
   @media (prefers-reduced-motion:reduce){
     .mark{transition:none}

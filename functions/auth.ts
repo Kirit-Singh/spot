@@ -1,5 +1,6 @@
 import {
   PLACEHOLDER_HOST,
+  PROGRAMS_PATH,
   canonicalRedirectTarget,
   constantTimeSecretEqual,
   issueSession,
@@ -112,7 +113,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
 
   // Preview access is handled exclusively by Cloudflare Access. The landing form
   // remains usable for authorized preview reviewers but sets no application cookie.
-  if (env.SITE_MODE === 'preview') return redirect('/01_page.html', 303);
+  if (env.SITE_MODE === 'preview') return redirect(PROGRAMS_PATH, 303);
 
   // The interim placeholder auth is served only at the project's pages.dev alias.
   if (env.SITE_MODE === 'placeholder' && url.hostname !== PLACEHOLDER_HOST) {
@@ -141,5 +142,5 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   if (candidate === null || !await constantTimeSecretEqual(candidate, env.ACCESS_CODE.trim())) return invalidAccess();
 
   const token = await issueSession(env.SESSION_SIGNING_KEY);
-  return redirect('/01_page.html', 303, sessionCookie(token));
+  return redirect(PROGRAMS_PATH, 303, sessionCookie(token));
 }
