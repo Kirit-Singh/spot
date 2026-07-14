@@ -399,7 +399,7 @@ function pksafetyRaw(): RawManifest {
         'The compact preview is not a drug ranking and does not emit organ-system safety groups.',
         'Candidates without acquired public evidence remain reported as unacquired or not prefetched rather than dropped.',
       ],
-      method_id: 'spot.stage04.pk_safety_compact_writer.v1 · spot.stage04_pk_safety_compact.v1',
+      method_id: 'spot.stage04.pk_safety_compact_writer.v2 · spot.stage04_pk_safety_compact.v1',
       // UNAVAILABLE: no admitted Stage-4 scorecard/result bundle is bound to this page. The real
       // engine is analysis.run_stage4 (valid --help), but a generic invocation does not reproduce a
       // bound admitted artifact — it stays "unavailable" until a concrete admitted bundle is bound.
@@ -459,7 +459,7 @@ export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pk
   // GO-BP-only Pathways manifest (Reactome removed from data_input / limitations / source_chain).
   pathways: 'f2fd05dbd362ef03db516b5543df61d247fe36bb415ec300cee2fa5abdfcd29e',
   drugs: 'a2705f02676576e92f1fbbc567c388f993440874639412d3ff084d64ffcee310',
-  pksafety: '2e3bbb5acd366dc656fa14329a557f8067b8bb6ae8d8d1f9a95ddf1516538d61',
+  pksafety: '366cdef961d4f0d06ecfb4995aa36622af08c5680191f85a90893faf73b5ef8c',
 };
 
 function keyFor(page: PageKey): keyof typeof STAGE_METHODS_HASHES {

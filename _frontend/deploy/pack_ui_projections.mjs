@@ -67,7 +67,7 @@ const ROUTES = {
   },
   pksafety: {
     stage_label: 'PK & Safety',
-    method_id: 'spot.stage04.pk_safety_compact_writer.v1 · spot.stage04_pk_safety_compact.v1',
+    method_id: 'spot.stage04.pk_safety_compact_writer.v2 · spot.stage04_pk_safety_compact.v1',
     projection_path: 'stage04/pksafety.ui.json',
     projection_schema: 'spot.ui_projection.stage2.v1', // overwritten per-route below (drugs/pksafety differ)
   },
