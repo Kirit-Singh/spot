@@ -1,0 +1,38 @@
+{
+  "_fixture_notice": "FIXTURE. Synthetic response shaped like openFDA /drug/label.json. The drug, the application number and every string are invented and describe no real product. Used only to exercise analysis/label_adapters.py::parse_openfda_label.",
+  "meta": {
+    "disclaimer": "FIXTURE — not an openFDA response.",
+    "last_updated": "2026-04-01",
+    "results": {"skip": 0, "limit": 1, "total": 1}
+  },
+  "results": [
+    {
+      "id": "fixture-0000-0000-0000-000000000002",
+      "set_id": "ffffffff-0000-4000-8000-fixturespl002",
+      "version": "3",
+      "effective_time": "20260315",
+      "boxed_warning": [
+        "FIXTURE BOXED WARNING: Fatal fixture hepatotoxicity has occurred in fixture subjects receiving FIXTURIMAB."
+      ],
+      "contraindications": [
+        "FIXTURE: FIXTURIMAB is contraindicated in fixture patients with active fixture autoimmune disease."
+      ],
+      "warnings_and_cautions": [
+        "FIXTURE: Immune-mediated fixture pneumonitis has been reported.",
+        "FIXTURE: Systemic corticosteroids may blunt the fixture pharmacodynamic effect of FIXTURIMAB."
+      ],
+      "drug_interactions": [
+        "FIXTURE: No formal fixture drug-interaction studies have been conducted."
+      ],
+      "adverse_reactions": [
+        "FIXTURE: The most common fixture adverse reactions were fatigue, rash and diarrhoea."
+      ],
+      "openfda": {
+        "brand_name": ["FIXTURIMAB"],
+        "generic_name": ["FIXTURIMAB"],
+        "application_number": ["BLA999999"],
+        "unii": ["YYYYYYYY88"]
+      }
+    }
+  ]
+}

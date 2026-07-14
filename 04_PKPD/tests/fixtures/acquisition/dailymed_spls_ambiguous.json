@@ -1,0 +1,8 @@
+{
+  "_fixture_notice": "FIXTURE. Two products for one drug name. Stage 4 refuses to pick one.",
+  "metadata": {"total_elements": 2, "current_page": 1, "total_pages": 1},
+  "data": [
+    {"spl_version": 40, "published_date": "Feb 20, 2026", "title": "FIXTUROMIDE CAPSULE [SPOT FIXTURE LABORATORIES]", "setid": "ffffffff-0000-4000-8000-fixtureacq01"},
+    {"spl_version": 3, "published_date": "Jan 05, 2026", "title": "FIXTUROMIDE TABLET [OTHER FIXTURE LABS]", "setid": "ffffffff-0000-4000-8000-fixtureacq02"}
+  ]
+}

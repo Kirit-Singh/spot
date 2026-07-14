@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spot.stage01_selection.v3",
+  "title": "Stage-1 generic research selection contract (v3)",
+  "description": "Emitted by stage2_bridge/emit_selection_contract.py for any supported (A program/direction, B program/direction, condition/mode). No production/research split and no 0-of-33 gating. Poles are ordered + separate; there is no combined objective (that is Stage-2's). The frozen selectability appears only as historical provenance (active_gate:false).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "selection_origin", "execution_status", "analysis_mode", "estimator_id",
+               "estimator_status", "estimator", "selection_id", "selection_full_sha256", "question_id",
+               "canonical_content", "poles", "arms",
+               "trust_bindings", "provenance_bindings", "historical_validation_provenance",
+               "full_contract_content_sha256"],
+  "allOf": [
+    {"$comment": "ready requires an available estimator; a not_implemented estimator can never be ready",
+     "if": {"required": ["execution_status"], "properties": {"execution_status": {"const": "ready"}}},
+     "then": {"properties": {"estimator_status": {"const": "available"}}}},
+    {"$comment": "temporal_cross_condition + not_implemented must be awaiting_estimator",
+     "if": {"required": ["analysis_mode", "estimator_status"],
+            "properties": {"analysis_mode": {"const": "temporal_cross_condition"}, "estimator_status": {"const": "not_implemented"}}},
+     "then": {"properties": {"execution_status": {"const": "awaiting_estimator"}}}},
+    {"$comment": "the estimator must match the mode — a temporal mode may never borrow the within-condition estimator",
+     "if": {"required": ["analysis_mode"], "properties": {"analysis_mode": {"const": "within_condition"}}},
+     "then": {"properties": {"estimator_id": {"const": "within_condition_v1"}}}},
+    {"if": {"required": ["analysis_mode"], "properties": {"analysis_mode": {"const": "temporal_cross_condition"}}},
+     "then": {"properties": {"estimator_id": {"const": "temporal_cross_condition_v1"}}}}
+  ],
+  "properties": {
+    "schema_version": {"const": "spot.stage01_selection.v3"},
+    "selection_origin": {"enum": ["user_selected", "fixture"]},
+    "execution_status": {"enum": ["ready", "refused", "awaiting_estimator"]},
+    "analysis_mode": {"enum": ["within_condition", "temporal_cross_condition"]},
+    "estimator_id": {"enum": ["within_condition_v1", "temporal_cross_condition_v1"]},
+    "estimator_status": {"enum": ["available", "not_implemented"]},
+    "estimator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimator_id", "analysis_mode", "n_conditions", "status"],
+      "properties": {
+        "estimator_id": {"enum": ["within_condition_v1", "temporal_cross_condition_v1"]},
+        "analysis_mode": {"enum": ["within_condition", "temporal_cross_condition"]},
+        "n_conditions": {"type": "integer", "minimum": 1, "maximum": 2},
+        "status": {"enum": ["available", "not_implemented"]},
+        "method_id": {"type": "string"},
+        "method_version": {"type": "string"},
+        "method_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "estimand_id": {"type": "string"},
+        "estimand_level": {"enum": ["population"]},
+        "estimand_is_per_cell_fate": {"const": false},
+        "inference_status": {"enum": ["not_calibrated"]}
+      }
+    },
+    "selection_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "selection_full_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "question_id": {"$comment": "biology-only ordered-question identity = sha256(canonical_json({A:{program_id,direction,condition:from}, B:{program_id,direction,condition:to}, analysis_mode}))[:16]; NO method/input binding, so it is stable across method/registry/source revisions (unlike selection_id).", "type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "full_contract_content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "canonical_content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "analysis_mode", "combined_objective", "conditions", "dataset_id",
+                   "donor_scope", "effect_universe_id", "poles_separate", "registry_scorer_view_sha256",
+                   "source_h5ad_sha256", "source_hf_revision", "stage1_method_version"],
+      "properties": {
+        "A": {"$ref": "#/$defs/canonical_pole"},
+        "B": {"$ref": "#/$defs/canonical_pole"},
+        "analysis_mode": {"enum": ["within_condition", "temporal_cross_condition"]},
+        "combined_objective": {"type": "null"},
+        "conditions": {"type": "array", "minItems": 1, "maxItems": 2,
+                       "items": {"enum": ["Rest", "Stim8hr", "Stim48hr"]}},
+        "dataset_id": {"type": "string"},
+        "donor_scope": {"type": "string"},
+        "effect_universe_id": {"type": "string"},
+        "poles_separate": {"const": true},
+        "registry_scorer_view_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_h5ad_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_hf_revision": {"type": "string"},
+        "stage1_method_version": {"const": "stage1-continuous-v3.0.1"}
+      }
+    },
+    "poles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B"],
+      "properties": {"A": {"$ref": "#/$defs/pole"}, "B": {"$ref": "#/$defs/pole"}}
+    },
+    "arms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["away_from_A", "toward_B"],
+      "properties": {"away_from_A": {"$ref": "#/$defs/arm_ref"}, "toward_B": {"$ref": "#/$defs/arm_ref"}}
+    },
+    "trust_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validation_raw_sha256", "validation_semantics_raw_sha256",
+                   "validation_semantics_self_canonical_sha256", "gate_spec_raw_sha256",
+                   "constituent_main_content_canonical_sha256", "constituent_overlay_donor_content_canonical_sha256",
+                   "marker_diagnostics_content_sha256", "scoring_view_raw_sha256", "scoring_view_canonical_sha256"],
+      "patternProperties": {"^[a-z0-9_]+$": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "provenance_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_registry_v3_raw_sha256"],
+      "properties": {"primary_registry_v3_raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+    },
+    "historical_validation_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "selectability_v3_raw_sha256", "active_gate"],
+      "properties": {
+        "kind": {"type": "string"},
+        "selectability_v3_raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "active_gate": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "arm_ref": {
+      "$comment": "One independent reusable per-program arm (ROUND4_ADDENDUM c4773562). Keyed by desired_change (increase|decrease), NEVER pole_direction/role. pole_direction is selection metadata only. Keys: direct (program, desired_change, condition), pathway base (+ '|<source>'), temporal (program, desired_change, from, to) in temporal mode.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "program_id", "pole_direction", "desired_change", "condition", "direct_arm_key", "pathway_arm_key_base"],
+      "properties": {
+        "role": {"enum": ["away_from_A", "toward_B"]},
+        "program_id": {"type": "string"},
+        "pole_direction": {"enum": ["high", "low"]},
+        "desired_change": {"enum": ["increase", "decrease"]},
+        "condition": {"enum": ["Rest", "Stim8hr", "Stim48hr"]},
+        "direct_arm_key": {"type": "string"},
+        "pathway_arm_key_base": {"type": "string"},
+        "temporal_arm_key": {"type": "string"}
+      }
+    },
+    "canonical_pole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program_id", "score_field", "direction"],
+      "properties": {
+        "program_id": {"type": "string"},
+        "score_field": {"type": "string"},
+        "direction": {"enum": ["high", "low"]}
+      }
+    },
+    "pole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program_id", "direction", "effect_projection_status", "n_measured",
+                   "n_panel_in_effect_universe", "n_control_in_effect_universe", "reason_codes"],
+      "properties": {
+        "program_id": {"type": "string"},
+        "direction": {"enum": ["high", "low"]},
+        "effect_projection_status": {"enum": ["available", "unavailable"]},
+        "n_measured": {"type": "integer", "minimum": 0},
+        "n_panel_in_effect_universe": {"type": "integer", "minimum": 0},
+        "n_control_in_effect_universe": {"type": "integer", "minimum": 0},
+        "reason_codes": {"type": "array",
+                         "items": {"enum": ["panel_below_effect_universe_min", "control_below_effect_universe_min"]}}
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_note": "Claude Science independent verification metrics (frame d95a7a3a), 2026-07-11. Reproduced spot metric verbatim.",
+  "corr_pearson": 0.52,
+  "corr_spearman": 0.511,
+  "within8_2v2_reliability": 0.227,
+  "within48_2v2_reliability": 0.227,
+  "reliability_ceiling_8_spearman_brown": 0.363,
+  "reliability_ceiling_48_spearman_brown": 0.414,
+  "cross_time_same_donor": 0.484,
+  "cross_time_independent_donor": 0.169,
+  "top50_hit_overlap_frac": 0.16,
+  "tbx21_arms_48_away_th1_toward_treg": [2.157, -0.076],
+  "tbx21_own_kd_logfc_8hr": -4.471,
+  "tbx21_own_kd_logfc_48hr": -4.039
+}

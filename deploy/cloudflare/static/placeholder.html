@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" data-placeholder="true">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>spot · placeholder</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23FAF9F7'/%3E%3Ccircle cx='8' cy='8' r='4.6' fill='%233E7D8C'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#FAF9F7;
+    --surface:#FFFFFF;
+    --line:#E7E3DC;
+    --ink:#1E1B16;
+    --muted:#8A8172;
+    --accent:#3E7D8C;
+    --serif:'Newsreader','Iowan Old Style','Palatino Linotype',Georgia,serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --wordmark:clamp(52px,12vw,76px);
+    --mark:calc(var(--wordmark) * .572);
+  }
+  *{box-sizing:border-box}
+  html{height:100%;color-scheme:light}
+  body{
+    min-height:100%;
+    min-height:100dvh;
+    margin:0;
+    display:grid;
+    place-items:center;
+    padding:max(24px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter Tight',system-ui,-apple-system,sans-serif;
+  }
+  main{width:min(420px,100%);display:grid;justify-items:center;gap:18px;text-align:center}
+  .eyebrow{
+    margin:0;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .lockup{display:flex;align-items:flex-end;justify-content:center}
+  h1{
+    margin:0;
+    font-family:var(--serif);
+    font-size:var(--wordmark);
+    font-weight:500;
+    line-height:.82;
+    letter-spacing:-.045em;
+  }
+  /* Same tab-icon lockup as the landing: a rounded square (rx 4/16 = 25%) spanning the
+     wordmark's ascender band, dropped .014em so the dot's centre rides the horizontal
+     centre-line of the "o". Static here — nothing to click. */
+  .mark{
+    width:var(--mark);
+    height:var(--mark);
+    display:block;
+    border:1px solid var(--line);
+    border-radius:25%;
+    background:var(--surface);
+    box-shadow:0 2px 6px rgba(30,27,22,.10),0 1px 2px rgba(30,27,22,.05);
+    margin:0 0 calc(var(--wordmark) * .012) calc(var(--wordmark) * .1);
+  }
+  .mark svg{width:100%;height:100%;display:block}
+  .lede{
+    margin:0;
+    max-width:30ch;
+    font-family:var(--serif);
+    font-size:clamp(18px,4.6vw,21px);
+    line-height:1.35;
+    color:var(--ink);
+  }
+  .note{
+    margin:0;
+    font-family:var(--mono);
+    font-size:12px;
+    line-height:1.5;
+    color:var(--muted);
+  }
+  @media (forced-colors:active){
+    .mark{border-color:CanvasText;box-shadow:none}
+    .mark circle{fill:ButtonText}
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Placeholder</p>
+  <div class="lockup">
+    <h1>spot</h1>
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 16 16" focusable="false">
+        <circle cx="8" cy="8" r="4.6" fill="#3E7D8C"/>
+      </svg>
+    </span>
+  </div>
+  <p class="lede">The full workbench is being assembled.</p>
+  <p class="note">Check back soon.</p>
+</main>
+</body>
+</html>

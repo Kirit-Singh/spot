@@ -1,0 +1,4 @@
+{
+  "_fixture_notice": "FIXTURE. Two CIDs for one name — Stage 4 refuses rather than taking the first.",
+  "IdentifierList": {"CID": [999999901, 999999902]}
+}

@@ -1,0 +1,32 @@
+{
+  "_note": "Frozen pre-change baseline. Every value here MUST be reproduced at verification; a mismatch means a protected scorer/numeric artifact moved.",
+  "_schema": "spot.stage2_bridge.protected_baseline.v1",
+  "raw_sha256": {
+    "activation_association": "fd1d9bb0a53ad7ecbde1d9999ccc9bdf8be1cc765f6ff4ef4619a662c4a63c22",
+    "bins_v3_csv": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
+    "control_eligible_pool": "70072addb7c8c323eda8b110d1efe6d2670f8a00dfe6138e36a5ea7f79db541a",
+    "control_method": "02a94b07a19901ec41e9e26c25ce156b80c0cf67b35a17f00cf8ca6087699971",
+    "controls_v3_csv": "79764283a3429a103ed87a41b88a0c094fac84a7f46eebcb034d156e8573de75",
+    "effect_universe": "d27bc749b5137346f799e00f65ca88e429672babe2f5c8357c97b01c1615764b",
+    "gate_spec": "0bafcc1cac9f1666b8bb4b1dfb3e17341bcd6562da2fa732e48af6d11f4c78b3",
+    "input_manifest": "3b13488716a366676813bff567da91f216a426c94bd1fe43c22824f73b26d521",
+    "registry_v3": "bcb536d06d373ab8f2c8e33d73096bd2dc66a62f23a2124a733c1c361c38e664",
+    "requirements": "3b630c2c0f1ded6d527d6d3aedd62c7ea519705f337dbf6ca3fec305a21bfc8c",
+    "scores_parquet_staged": "de63b496e8121c77babe380e0c3b5ddfd66f9ce67d0d4e80f55645d177e27e5f",
+    "selectability_v3": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+    "solver_lock": "d394692d839e248a3823e6bb5f16acd9bbad9cc876b713820b68f126195dc7e3",
+    "stage2_registry_view": "d37c19273435ff09d1705de4f64f9f185dcf4192a2bad5259cbd15d39e24915f",
+    "summary_v3": "5e4153bdfa83cc0e77cd2980db024675006124b521b18de4fa970a8ff8bd2b13",
+    "umap_coordinates_staged": "a7164168aaf61466ca699e1b00633c37ecef88705db443fb7fb0d00a86ccbbf6",
+    "umap_overlay_v3": "1fe05f33112c12af970ab5269ad64b1e0211f09143c991c2be982493c002366b",
+    "validation": "1c14cd2884117f03bd26b56ff32d5575d92caa53c5391fa0e7e0ed4f3c815371",
+    "validation_semantics": "25aee5c5b4e4f216cb204574034a5cffc5e6c994359ede292b522321e1cca026"
+  },
+  "registry_direct_canonical_content_sha256": "17eaea374b86d78268c06cfd7d54efa4f47adc2d4a418db1bd7e1e8258834dd5",
+  "registry_scorer_projection_sha256": "008c1da121a1ea3b08871f1bc0339b120d5dc9b46d01619768eebd046331bd85",
+  "registry_self_declared_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
+  "registry_selfrule_recomputed_sha256": "d287e332289e3400b6d6abdfcfab018c0486854c4028878371e367cce5e8bbb2",
+  "selectability_direct_canonical_content_sha256": "520c904003015af7a6074cf4311e654b259c638d22384e45ef5bad3ea6657edc",
+  "stage2_view_canonical_sha256": "5d1d8c362ee55dba048c8b5d6718cffe4525acbcda230d503f4899433c052a0c",
+  "validation_direct_canonical_content_sha256": "1ab6c0e0dc7537ca06d94e66d8067581a2690d2653bb7f7354907d1d23ed7dbf"
+}

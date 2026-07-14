@@ -1,0 +1,16 @@
+# Stage-1 scoring-tier requirements — TESTED LOCK.
+# This exact set reproduced the frozen per-barcode hashes
+#   canonical_table_sha256 = 6e1665d1…ed2755   barcode_set_sha256 = 1224312e…435a93
+# on host tcefold (conda env scvi_gpu), 2026-07-11. CPU is sufficient for the scoring tier;
+# peak RAM ~21–25 GB (loads the full 396k × 18,130 matrix).
+#
+# NOTE: pandas 2.2.3 and numpy 2.3.x coexist fine here — the earlier "numpy<2 required"
+# note was incorrect. Scores are deterministic on this set (SEED=12345, sorted control
+# indices, PYTHONHASHSEED=0).
+python==3.11.15
+anndata==0.12.19
+scanpy==1.11.5
+numpy==2.3.3
+scipy==1.15.2
+pandas==2.2.3
+huggingface_hub==1.23.0

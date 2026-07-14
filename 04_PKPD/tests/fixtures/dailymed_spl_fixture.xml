@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FIXTURE. Synthetic HL7 v3 SPL, shaped like a DailyMed /services/v2/spls/{setid}.xml
+  response. The element paths, LOINC section codes and UNII coding system were verified
+  against live DailyMed responses (see 04_PKPD/method/sources.json ::
+  dailymed_spl_structure_probe). The DRUG AND ALL CONTENT ARE INVENTED and describe no
+  real product. It exists to exercise the parser, not to make a claim.
+-->
+<document xmlns="urn:hl7-org:v3">
+  <id root="00000000-0000-4000-8000-fixture00001"/>
+  <code code="34391-3" codeSystem="2.16.840.1.113883.6.1" displayName="HUMAN PRESCRIPTION DRUG LABEL"/>
+  <title>FIXTURIB TABLET [SPOT FIXTURE LABORATORIES] — FIXTURE, NOT A REAL PRODUCT</title>
+  <effectiveTime value="20260401"/>
+  <setId root="ffffffff-0000-4000-8000-fixturespl001"/>
+  <versionNumber value="7"/>
+  <component>
+    <structuredBody>
+      <component>
+        <section>
+          <id root="00000000-0000-4000-8000-fixturesec01"/>
+          <code code="34066-1" codeSystem="2.16.840.1.113883.6.1" displayName="Boxed Warning section"/>
+          <title>WARNING: FIXTURE MYELOSUPPRESSION</title>
+          <text>
+            <list listType="unordered">
+              <item>FIXTURE: Severe myelosuppression, including neutropenia and thrombocytopenia, has occurred in fixture subjects receiving FIXTURIB.</item>
+              <item>FIXTURE: Monitor fixture blood counts prior to each cycle.</item>
+            </list>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="34070-3" codeSystem="2.16.840.1.113883.6.1" displayName="CONTRAINDICATIONS SECTION"/>
+          <title>4 CONTRAINDICATIONS</title>
+          <text>
+            <paragraph>FIXTURE: FIXTURIB is contraindicated in fixture patients with known hypersensitivity to fixturib.</paragraph>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="43685-7" codeSystem="2.16.840.1.113883.6.1" displayName="WARNINGS AND PRECAUTIONS SECTION"/>
+          <title>5 WARNINGS AND PRECAUTIONS</title>
+          <text>
+            <paragraph>FIXTURE: Serious fixture infections have been reported. Consider fixture antimicrobial prophylaxis.</paragraph>
+            <paragraph>FIXTURE: Immune-mediated fixture adverse reactions have been observed.</paragraph>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="34073-7" codeSystem="2.16.840.1.113883.6.1" displayName="DRUG INTERACTIONS SECTION"/>
+          <title>7 DRUG INTERACTIONS</title>
+          <text>
+            <paragraph>FIXTURE: Concomitant use with strong fixture CYP3A4 inducers decreases fixturib exposure.</paragraph>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="34084-4" codeSystem="2.16.840.1.113883.6.1" displayName="ADVERSE REACTIONS SECTION"/>
+          <title>6 ADVERSE REACTIONS</title>
+          <text>
+            <paragraph>FIXTURE: The most common fixture adverse reactions were fatigue and nausea.</paragraph>
+          </text>
+        </section>
+      </component>
+      <component>
+        <section>
+          <code code="48780-1" codeSystem="2.16.840.1.113883.6.1" displayName="SPL PRODUCT DATA ELEMENTS SECTION"/>
+          <subject>
+            <manufacturedProduct>
+              <manufacturedProduct>
+                <name>FIXTURIB</name>
+                <ingredient classCode="ACTIB">
+                  <ingredientSubstance>
+                    <code code="ZZZZZZZZ99" codeSystem="2.16.840.1.113883.4.9"/>
+                    <name>FIXTURIB</name>
+                    <activeMoiety>
+                      <activeMoiety>
+                        <code code="ZZZZZZZZ99" codeSystem="2.16.840.1.113883.4.9"/>
+                        <name>FIXTURIB</name>
+                      </activeMoiety>
+                    </activeMoiety>
+                  </ingredientSubstance>
+                </ingredient>
+              </manufacturedProduct>
+            </manufacturedProduct>
+          </subject>
+        </section>
+      </component>
+    </structuredBody>
+  </component>
+</document>

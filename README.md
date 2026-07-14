@@ -11,13 +11,16 @@ Each stage locks a choice that feeds the next; the header breadcrumb builds as y
 **Status:** re-orienting (WIP) · **MIT** licensed
 
 ## The five stages
-1. **CD4 programs (UMAP)** — score CD4 cells into transcriptional programs (Treg,
-   Th1, …) from the Marson Perturb-seq screen, anchored on the T-cell nomenclature
-   guidelines and complemented by on-data analysis. Interactive phenotype UMAP.
-2. **Skewing genes (heatmap + GO)** — the reproducible gene levers that push cells
-   toward/away from a program (v1: knockdowns that *reduce* the Treg program),
-   robustness-scored, with GO enrichment.
-3. **Drug link** — find drugs that perturb the immune program (reduce the Treg module)
+1. **CD4 programs (UMAP)** — score CD4 cells into **continuous transcriptional-program
+   compatibility scores** (Treg-**like**, Th1-**like**, …) from the Marson Perturb-seq NTC
+   cells, scored against curated canonical-marker panels named per the T-cell
+   nomenclature guidelines. **Exploratory — not
+   cell-type calls; RNA compatibility ≠ lineage/protein/function** (see
+   `01_programs/REMEDIATION_STATEMENT.md`). Interactive score UMAP.
+2. **Skewing genes** — the reproducible gene levers that shift a program (v1 primary:
+   knockdowns that *reduce* the Treg-**like** program); robustness-scored. (GO enrichment
+   is unresolved — specified/pinned or omitted, not promised; see the Stage-2 plan.)
+3. **Drug link** — find drugs that perturb the immune program (reduce the regulatory-like program)
    via target→drug (DGIdb/Open Targets/ChEMBL) + LINCS signature mimicry. (Glioma-cell
    dependency deferred; brain-penetrance/exposure is the filter, next stage.)
 4. **PK/PD & brain penetrance** — CNS-MPO / NEBPI (ABTC–FDA neuro-oncology framework)
@@ -37,7 +40,9 @@ Conventions in `CLAUDE.md`.
 
 ## Data
 Public datasets only — Marson CD4 Perturb-seq, DepMap/CCLE (expression, DEMETER2,
-PRISM), LINCS, Open Targets/ChEMBL/DrugBank. No data bundled in this repo.
+PRISM), LINCS, Open Targets/ChEMBL/DrugBank. **Source matrices are not bundled** in this
+repo; the small **derived display artifacts** that the workbench renders are tracked
+(~47 MB of JSON under `01_programs/app/data/`).
 
 ## License
 Code: **MIT** (`LICENSE`). Third-party data & reference sources: **`DATA_LICENSES.md`**.

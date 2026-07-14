@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>spot · source-access &amp; scoring reproduction trace</title>
+<style>
+:root{--bg:#FAF9F7;--surface:#fff;--ink:#1E1B16;--ink2:#4A443B;--muted:#8A8172;--line:#E7E2D9;--sunken:#F0ECE4;--treg:#9A3E9C;--code:#F6F3EC;--ok:#3E7A5A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,-apple-system,Segoe UI,sans-serif;font-size:14px;line-height:1.55}
+.wrap{max-width:880px;margin:0 auto;padding:40px 24px 90px}
+.hd{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:10px}
+.hd h1{font-size:22px;margin:0 0 6px}
+.hd .sub{color:var(--muted);font-size:13px;line-height:1.55}.hd a{color:var(--treg);text-decoration:none}
+h2{font-size:15.5px;margin:26px 0 6px;padding-top:16px;border-top:1px solid var(--sunken)}
+p{margin:6px 0;color:var(--ink2)}
+b{color:var(--ink)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--sunken);border-radius:4px;padding:1px 5px}
+pre{background:var(--code);border:1px solid var(--line);border-left:3px solid var(--treg);border-radius:8px;padding:11px 14px;overflow-x:auto;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.5;color:#2B2620;white-space:pre}
+ul{margin:6px 0;padding-left:20px;color:var(--ink2)}li{margin:3px 0}
+table{border-collapse:collapse;font-size:12px;margin:8px 0;width:100%}
+th,td{text-align:left;padding:5px 10px;border-bottom:1px solid var(--sunken)}
+th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+td.mono{font-family:ui-monospace,Menlo,monospace}
+.ok{color:var(--ok);font-weight:600}.warn{color:#B45309}
+.note{background:var(--sunken);border-radius:8px;padding:10px 13px;font-size:12.5px;color:var(--ink2);margin:10px 0}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1714;--surface:#221e1a;--ink:#efe9df;--ink2:#c9c1b4;--muted:#8f8779;--line:#332d26;--sunken:#2a251f;--code:#201c18}pre{color:#d9d2c6}}
+</style></head><body><div class="wrap">
+<div class="hd">
+<h1>Source-access &amp; scoring reproduction trace</h1>
+<div class="sub">A recorded record of two things: (1) that the cells behind the <a href="/programs.html">spot · Stage-1 CD4 map</a> originate in the public <a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" target="_blank" rel="noopener">CZI Virtual Cells Platform</a> dataset, verified by resolving the dataset and range-reading one split; and (2) that the continuous per-cell scoring is deterministic and reproduces per-barcode. This is <b>not</b> an end-to-end dataset reconstruction — it does not rebuild the 396,000-cell embedded object across all twelve splits; that object is fetched, pinned, from Hugging Face. <b>Recorded run — 2026-07.</b></div>
+</div>
+
+<h2>1 · Install</h2>
+<p><code>pip install vcp-cli</code> then <code>pip install 'vcp-cli[data]'</code> → <b>vcp-cli 0.54.1</b>. <code>vcp --help</code> and <code>vcp version</code> run; the <code>data</code> command group activates with the <code>[data]</code> extra (boto3/s3transfer).</p>
+
+<h2>2 · Locate the dataset</h2>
+<p><code>vcp data search "Primary Human CD4+ T Cell Perturb-seq"</code> resolves it under namespace <code>billion-cell-project</code>, published as <b>12 per-donor × per-condition AnnData splits</b> (D1–D4 × Rest/Stim8hr/Stim48hr), each with its own dataset ID. <code>vcp data describe … --full</code> confirms provenance:</p>
+<pre>external_id : marson_D1_Rest.assigned_guide      (D1 Rest id 6946b5261d32b0e84ba87057)
+assay       : 10x Flex
+asset       : s3://genome-scale-tcell-perturb-seq/marson2025_data/D1_Rest.assigned_guide.h5ad</pre>
+<p>Two domains were allowlisted (both approved during the run): the data API <code>cosmic-shepherd.prod-vcp.prod.czi.team</code> and the public S3 bucket.</p>
+
+<h2>3 · Confirm the NTC pool (one split, range-read — not a full fetch)</h2>
+<p class="note"><b>The full dataset is 1.84 TB across 32 files</b>; each per-split h5ad is <b>118–173 GB</b> (all cells for that split — targeting + NTC). Nothing at that scale was downloaded. Only a metadata check and a single-split range-read were performed:</p>
+<ul>
+<li><b>Downloaded (real, with md5):</b> <code>data_sharing_readme.md</code>, the sample_metadata + sgRNA_library_metadata + DE_stats supplementary CSVs, and the D1 Rest <code>.jsonld</code> record → <code>vcp_dl/</code>.</li>
+<li><b>Remote range-read (no full download), ONE split only:</b> opened the 142 GB <code>D1_Rest.assigned_guide.h5ad</code> over s3fs + h5py and read only <code>.obs/guide_type</code> (~73 s, a few MB of range requests): <b>3,074,496 total cells, of which 76,634 (2.5%) are non-targeting</b> — confirming the public NTC pool the workbench draws from. The other eleven splits were not read; the 396,000-cell object is not reconstructed here.</li>
+</ul>
+
+<h2>4 · Scoring reproducibility (continuous, per-barcode)</h2>
+<p><b>What is scored.</b> The pinned, HF-published <code>ntc_clustered.h5ad</code> (a balanced NTC subsample — <b>33,000 cells per donor×condition = 396,000</b>, all non-targeting) is scored against the panels with <code>score_genes</code> (panel mean minus expression-bin-matched control mean). The outputs are <b>12 continuous program scores per cell</b> — no permutation, no p/q, no FDR, no categorical call.</p>
+<p><b>Determinism.</b> <code>SEED=12345</code>, control-gene indices sorted before summation, <code>PYTHONHASHSEED=0</code>. Run twice, the emitted 40,000-cell display overlay hashes identically at the per-barcode level.</p>
+<p><b>Frozen per-barcode gate</b> (<code>verify_reproduce.py</code>) — a canonical sorted table of <code>barcode, cluster, condition, donor</code> and the 12 rounded scores:</p>
+<table>
+<tr><th>quantity</th><th>value</th><th></th></tr>
+<tr><td>cells (display overlay)</td><td class="mono">40,000</td><td class="ok">exact</td></tr>
+<tr><td>canonical_table_sha256</td><td class="mono">6e1665d1…ed2755</td><td class="ok">frozen</td></tr>
+<tr><td>barcode_set_sha256</td><td class="mono">1224312e…435a93</td><td class="ok">frozen</td></tr>
+</table>
+<p class="note"><b>Input pin.</b> <code>ntc_clustered.h5ad</code> is fetched from Hugging Face <code>KiritSingh/spot-CD4-Marson</code> at the immutable revision <code>e5fcf98b…</code> and its SHA-256 (<code>2edc6d31…50e43</code>) is verified before scoring. <code>reproduce.sh</code> fetches that pinned object and verifies the hash — it does not reconstruct the dataset through VCP. <b>Not run here:</b> no scVI re-embedding (the embedding/Leiden are loaded from the cached object); no download of any full split matrix.</p>
+
+<h2>5 · Trace artifacts</h2>
+<p>The source-access step emitted a self-contained record: each <code>vcp</code> command with its real output, the 32 files with sizes, the five downloaded files with md5s, and the single-split remote-read NTC counts. The scoring step is gated by <code>verify_reproduce.py</code> (the per-barcode canonical + schema-contract check) and the frozen hashes above. See <a href="/01_notebook.html">methods and reproducibility</a> for the scoring formula and emitted schema.</p>
+
+</div></body></html>
