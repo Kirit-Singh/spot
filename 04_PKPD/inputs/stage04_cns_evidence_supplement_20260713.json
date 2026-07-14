@@ -1,0 +1,151 @@
+{
+  "schema_id": "spot.stage04_evidence_supplement.v1",
+  "method_id": "spot.stage04.targeted_cns_evidence_supplement.v1",
+  "content_sha256": "83bf19dff53f41d7180baf67969962ce88e973ccf235d0fe02ad277243324d28",
+  "accessed_at_utc": "2026-07-13T00:00:00Z",
+  "scope": {
+    "description": "Targeted public-source check of calculator-field availability and direct human CNS evidence for the five acquired compact-lane candidates.",
+    "not_systematic_review": true,
+    "absence_interpretation": "A not_evaluated status describes this supplement only and is not evidence that no CNS study exists.",
+    "candidate_identity_key": "molecule_chembl_id"
+  },
+  "source_releases": {
+    "chembl": {
+      "release": "ChEMBL_37",
+      "release_date": "2026-05-01",
+      "status_url": "https://www.ebi.ac.uk/chembl/api/data/status.json",
+      "status_raw_sha256": "29dc1fb09487a8d2962253a4d0d92c4ded0aa0d831effab42445d0c3483d4740",
+      "status_raw_bytes": 212
+    },
+    "pubmed": {
+      "service": "NCBI E-utilities EFetch",
+      "terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/"
+    }
+  },
+  "candidates": {
+    "CHEMBL2216870": {
+      "candidate_name": "IDELALISIB",
+      "chembl_molecule": {
+        "source_url": "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL2216870.json",
+        "raw_sha256": "f9cf55f9b995303ad750af2422871fd34fbf47dc5a7d4776414de64747656f5c",
+        "raw_bytes": 6265,
+        "release": "ChEMBL_37",
+        "molecule_properties": {
+          "clogp": {"state": "proxy_only_not_accepted", "source_field": "alogp", "value": 3.75, "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output"},
+          "clogd_74": {"state": "not_found_in_endpoint", "source_field": "cx_logd", "value": null},
+          "pka_most_basic": {"state": "not_found_in_endpoint", "source_fields": ["cx_most_apka", "cx_most_bpka"], "value": null}
+        }
+      },
+      "direct_human_cns_evidence": {
+        "status": "not_evaluated_in_this_supplement",
+        "measurements": [],
+        "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim."
+      },
+      "nonhuman_cns_evidence": []
+    },
+    "CHEMBL259571": {
+      "candidate_name": "TAPINAROF",
+      "chembl_molecule": {
+        "source_url": "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL259571.json",
+        "raw_sha256": "62567f2d304bc7fd0928ac58d3f43230d47889164505f73479fe630179849f32",
+        "raw_bytes": 4183,
+        "release": "ChEMBL_37",
+        "molecule_properties": {
+          "clogp": {"state": "proxy_only_not_accepted", "source_field": "alogp", "value": 4.39, "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output"},
+          "clogd_74": {"state": "not_found_in_endpoint", "source_field": "cx_logd", "value": null},
+          "pka_most_basic": {"state": "not_found_in_endpoint", "source_fields": ["cx_most_apka", "cx_most_bpka"], "value": null}
+        }
+      },
+      "direct_human_cns_evidence": {
+        "status": "not_evaluated_in_this_supplement",
+        "measurements": [],
+        "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim."
+      },
+      "nonhuman_cns_evidence": []
+    },
+    "CHEMBL3643413": {
+      "candidate_name": "LENIOLISIB",
+      "chembl_molecule": {
+        "source_url": "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL3643413.json",
+        "raw_sha256": "54b68bd9a7a633d549fceac39d19dd12db0bb641791c722f9cfd49cccba69fc1",
+        "raw_bytes": 5882,
+        "release": "ChEMBL_37",
+        "molecule_properties": {
+          "clogp": {"state": "proxy_only_not_accepted", "source_field": "alogp", "value": 2.88, "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output"},
+          "clogd_74": {"state": "not_found_in_endpoint", "source_field": "cx_logd", "value": null},
+          "pka_most_basic": {"state": "not_found_in_endpoint", "source_fields": ["cx_most_apka", "cx_most_bpka"], "value": null}
+        }
+      },
+      "direct_human_cns_evidence": {
+        "status": "not_evaluated_in_this_supplement",
+        "measurements": [],
+        "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim."
+      },
+      "nonhuman_cns_evidence": []
+    },
+    "CHEMBL3646221": {
+      "candidate_name": "VADADUSTAT",
+      "chembl_molecule": {
+        "source_url": "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL3646221.json",
+        "raw_sha256": "60cc1cc7709cd4d87ff3c15df7f160646792831817d09abb12e647fc7d29dbaf",
+        "raw_bytes": 4642,
+        "release": "ChEMBL_37",
+        "molecule_properties": {
+          "clogp": {"state": "proxy_only_not_accepted", "source_field": "alogp", "value": 1.92, "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output"},
+          "clogd_74": {"state": "not_found_in_endpoint", "source_field": "cx_logd", "value": null},
+          "pka_most_basic": {"state": "not_found_in_endpoint", "source_fields": ["cx_most_apka", "cx_most_bpka"], "value": null}
+        }
+      },
+      "direct_human_cns_evidence": {
+        "status": "not_evaluated_in_this_supplement",
+        "measurements": [],
+        "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim."
+      },
+      "nonhuman_cns_evidence": []
+    },
+    "CHEMBL431770": {
+      "candidate_name": "ISTRADEFYLLINE",
+      "chembl_molecule": {
+        "source_url": "https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL431770.json",
+        "raw_sha256": "a62ab55aa898bbcb1814f167b3db5db9adc745b58dd08d97f49134bde3578206",
+        "raw_bytes": 5140,
+        "release": "ChEMBL_37",
+        "molecule_properties": {
+          "clogp": {"state": "proxy_only_not_accepted", "source_field": "alogp", "value": 2.12, "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output"},
+          "clogd_74": {"state": "not_found_in_endpoint", "source_field": "cx_logd", "value": null},
+          "pka_most_basic": {"state": "not_found_in_endpoint", "source_fields": ["cx_most_apka", "cx_most_bpka"], "value": null}
+        }
+      },
+      "direct_human_cns_evidence": {
+        "status": "observed",
+        "measurements": [
+          {
+            "evidence_type": "human_brain_pet_target_engagement",
+            "population": "healthy human volunteers",
+            "intervention": "oral cold KW-6002 (istradefylline)",
+            "brain_region": "striatum",
+            "endpoint": "adenosine A2A receptor occupancy",
+            "values": [
+              {"quantity": "ED50", "value": 0.5, "units": "mg"},
+              {"quantity": "receptor_occupancy", "operator": ">", "value": 90, "units": "%", "dose_context": "daily oral dose >5 mg"}
+            ],
+            "source": {
+              "title": "Positron emission tomography analysis of [11C]KW-6002 binding to human and rat adenosine A2A receptors in the brain.",
+              "journal": "Synapse",
+              "year": 2008,
+              "pages": "671-81",
+              "pmid": "18566974",
+              "doi": "10.1002/syn.20539",
+              "source_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=18566974&retmode=xml",
+              "raw_sha256": "2217081c5c226e32aae44bd56e145029eb209d535fe0b2d66de2de5f86ad0c16",
+              "raw_bytes": 8887,
+              "locator": "PubMed abstract"
+            },
+            "claim_boundary": "Direct human brain entry and central target engagement are observed. This is not a CSF concentration, unbound brain concentration, Kp,uu, brain:plasma ratio, tumor exposure measurement, efficacy result or safety result."
+          }
+        ]
+      },
+      "nonhuman_cns_evidence": []
+    }
+  }
+}

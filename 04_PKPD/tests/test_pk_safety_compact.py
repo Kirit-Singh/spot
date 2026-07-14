@@ -9,17 +9,23 @@ measured CNS exposure existed — a claim about the entire literature, which Sta
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
 from analysis.emit_pk_safety import (
     RETIRED_STAGE3_FIELDS,
+    _evidence_supplement,
     assert_servable,
     canonical_json,
     content_sha256,
     verify_stage3_content_hash,
 )
-from analysis.pk_safety_compact import CNS_MPO_MISSING_INPUTS, MEASURED_EXPOSURE_FIELDS
+from analysis.pk_safety_compact import (
+    CNS_MPO_MISSING_INPUTS,
+    MEASURED_EXPOSURE_FIELDS,
+    _cns_mpo_availability,
+)
 
 
 def _doc(**over):
@@ -137,9 +143,62 @@ def test_the_proxies_are_never_an_assessment():
 
 
 def test_CNS_MPO_names_the_inputs_it_is_MISSING():
-    """A composite from four of six inputs is not CNS-MPO with two fields missing — it is a
+    """A composite from three of six inputs is not CNS-MPO with three fields missing — it is a
     different score wearing CNS-MPO's name, and it would read as a brain-penetrance result."""
-    assert set(CNS_MPO_MISSING_INPUTS) == {"clogd_7_4", "pka_most_basic"}
+    assert set(CNS_MPO_MISSING_INPUTS) == {"clogp", "clogd_74", "pka_most_basic"}
+
+
+def test_CNS_MPO_accepts_only_three_inputs_and_never_emits_a_partial_total():
+    pk = {
+        "molecular_weight": {"value": 400.0, "state": "observed", "provenance": {"x": 1}},
+        "tpsa": {"value": 80.0, "state": "observed", "provenance": {"x": 2}},
+        "hbd": {"value": 1, "state": "observed", "provenance": {"x": 3}},
+        # Both are deliberately proxies, never accepted CNS-MPO inputs.
+        "xlogp": {"value": 3.0, "state": "observed", "provenance": {"x": 4}},
+        "hba": {"value": 6, "state": "observed", "provenance": {"x": 5}},
+    }
+    result = _cns_mpo_availability(pk, None)
+    assert result["component_coverage"] == {
+        "n_accepted": 3,
+        "n_required": 6,
+        "accepted_inputs": ["mw", "tpsa", "hbd"],
+    }
+    assert result["components"]["clogp"] is None
+    assert result["components"]["clogd_74"] is None
+    assert result["components"]["pka_most_basic"] is None
+    assert result["total_raw"] is None
+    assert result["total_published"] is None
+    assert result["possible_total_range"]["not_a_cns_mpo_score"] is True
+    assert result["possible_total_range"]["non_rankable"] is True
+    assert result["non_rankable"] is True
+    assert set(result["proxy_only_not_mpo_inputs"]) == {"xlogp", "hba"}
+
+
+def test_direct_human_PET_is_typed_but_not_promoted_to_measured_exposure():
+    from analysis.pk_safety_compact import _brain_penetrance
+
+    evidence = {"direct_human_cns_evidence": {
+        "status": "observed",
+        "measurements": [{"evidence_type": "human_brain_pet_target_engagement"}],
+    }}
+    block = _brain_penetrance({}, evidence)
+    assert block["assessment_state"] == "human_brain_target_engagement_observed"
+    assert block["basis"] == "direct_human_brain_pet_target_engagement_primary_source"
+    assert "not a CSF concentration" in block["reason"]
+    for field in MEASURED_EXPOSURE_FIELDS:
+        assert block["measured_exposure"][field]["value"] is None
+
+
+def test_the_committed_evidence_supplement_recomputes_and_binds():
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "inputs", "stage04_cns_evidence_supplement_20260713.json")
+    supplement, source = _evidence_supplement(path)
+    assert supplement is not None and source is not None
+    assert source["content_sha256_recomputed_by_stage4"] is True
+    assert source["n_candidates"] == 5
+    evidence = supplement["candidates"]["CHEMBL431770"]["direct_human_cns_evidence"]
+    assert evidence["status"] == "observed"
+    assert evidence["measurements"][0]["source"]["pmid"] == "18566974"
 
 
 # --------------------------------------------------------------------- the real served files
@@ -166,4 +225,4 @@ def test_the_REAL_served_document_passes_every_gate():
 
     for row in doc["candidates"]:
         assert row["brain_penetrance"]["assessment"] == "unknown"
-        assert row["cns_mpo"]["state"] == "not_evaluated"
+        assert row["cns_mpo"]["state"] in {"not_evaluated", "incomplete"}

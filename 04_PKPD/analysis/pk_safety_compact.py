@@ -11,19 +11,19 @@ WHAT IS AND IS NOT AVAILABLE, and why the distinction is the whole point:
     pharmacokinetics (narrative)              openFDA label section       -> REAL, sourced
     boxed_warning / warnings / contraindications / adverse_reactions
                                               openFDA label sections      -> REAL, sourced
-    clogd, pka_most_basic                     IN NO CACHED SOURCE         -> null, not_evaluated
-    CNS-MPO composite                         needs clogd + pka           -> not_evaluated
+    clogp, clogd, pka_most_basic              IN NO ACCEPTED SOURCE       -> null, incomplete
+    CNS-MPO total                             needs all six inputs        -> null, incomplete
     brain exposure (Kp,uu / CSF)              NOT EXTRACTED FROM THESE    -> null, not_evaluated
 
 `not_extracted_not_available_in_current_sources` is deliberately narrow. Stage 4 has not read the
 literature and cannot say a measurement does not exist; it can only say what it extracted from the
 responses cached in this run. Those are different claims and only the second one is ours to make.
 
-CNS-MPO IS NOT REPORTED. Two of its six inputs (cLogD7.4 and the most-basic pKa) are in none of the
-cached public sources. A composite computed from four of six is not a CNS-MPO score with two fields
-missing — it is a different score wearing CNS-MPO's name, and it would read as a brain-penetrance
-result. The sub-properties that ARE sourced are published individually; the composite says
-`not_evaluated` and names exactly which inputs are absent.
+CNS-MPO IS INCOMPLETE. Only three of its six inputs are accepted here: molecular weight, TPSA and
+HBD. PubChem XLogP is not the BioByte ClogP used by the published method, and HBA is not a CNS-MPO
+input. ClogP, ClogD7.4 and most-basic pKa therefore remain missing. The three observed component
+transforms are emitted, but the CNS-MPO total remains null. A mathematical range over the three
+unknown T0 values is explicitly non-rankable and is not a CNS-MPO score.
 
 Absence of a boxed warning is `boxed_warning_present: false` ONLY when the label was actually read.
 A label that could not be fetched leaves it `null` — "we looked and there was none" and "we never
@@ -36,6 +36,8 @@ import hashlib
 import json
 import os
 from typing import Any, Optional
+
+from .cnsmpo import desirability
 
 COMPACT_SCHEMA = "spot.stage04_pk_safety_compact.v1"
 
@@ -65,8 +67,20 @@ LABEL_SECTIONS: dict[str, str] = {
     "nonclinical_toxicology": "nonclinical_toxicology",
 }
 
-# Inputs CNS-MPO needs that NO cached public source carries. Named, not silently omitted.
-CNS_MPO_MISSING_INPUTS: tuple[str, ...] = ("clogd_7_4", "pka_most_basic")
+# The six published inputs and the three this compact public-data lane can accept. PubChem XLogP is
+# deliberately not mapped to ClogP; HBA is deliberately absent because it is not an MPO component.
+CNS_MPO_REQUIRED_INPUTS: tuple[str, ...] = (
+    "clogp", "clogd_74", "mw", "tpsa", "hbd", "pka_most_basic",
+)
+CNS_MPO_ACCEPTED_PUBCHEM: dict[str, str] = {
+    "mw": "molecular_weight",
+    "tpsa": "tpsa",
+    "hbd": "hbd",
+}
+CNS_MPO_MISSING_INPUTS: tuple[str, ...] = ("clogp", "clogd_74", "pka_most_basic")
+_METHOD_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(__file__), "..", "method", "cns_mpo_wager2010_v1.json",
+))
 
 
 def _sha256_file(path: str) -> str:
@@ -215,7 +229,73 @@ MEASURED_EXPOSURE_FIELDS: tuple[str, ...] = (
 PROXY_FIELDS: tuple[str, ...] = ("molecular_weight", "xlogp", "tpsa", "hbd", "hba")
 
 
-def _brain_penetrance(pk: dict[str, Any]) -> dict[str, Any]:
+def _load_cns_mpo_method() -> dict[str, Any]:
+    with open(_METHOD_PATH, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _cns_mpo_availability(pk: dict[str, Any], evidence: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Emit observed components and bounds without inventing a partial CNS-MPO total."""
+    method = _load_cns_mpo_method()
+    components: dict[str, Optional[float]] = {key: None for key in CNS_MPO_REQUIRED_INPUTS}
+    values: dict[str, Optional[float]] = {key: None for key in CNS_MPO_REQUIRED_INPUTS}
+    component_provenance: dict[str, Any] = {}
+    for property_id, compact_field in CNS_MPO_ACCEPTED_PUBCHEM.items():
+        cell = pk.get(compact_field)
+        if not isinstance(cell, dict) or cell.get("state") != "observed":
+            continue
+        value = float(cell["value"])
+        values[property_id] = value
+        components[property_id] = desirability(property_id, value, method)
+        component_provenance[property_id] = cell.get("provenance")
+
+    accepted = [p for p, value in components.items() if value is not None]
+    missing = [p for p, value in components.items() if value is None]
+    observed_sum = sum(float(components[p]) for p in accepted)
+    chembl = (evidence or {}).get("chembl_molecule") or {}
+    chembl_properties = chembl.get("molecule_properties") or {}
+    return {
+        "state": "incomplete",
+        "method_id": method["method_id"],
+        "method_version": method["method_version"],
+        "total_raw": None,
+        "total_published": None,
+        "components": components,
+        "property_values": values,
+        "component_provenance": component_provenance,
+        "component_coverage": {
+            "n_accepted": len(accepted),
+            "n_required": len(CNS_MPO_REQUIRED_INPUTS),
+            "accepted_inputs": accepted,
+        },
+        "missing_inputs": [
+            {
+                "property_id": prop,
+                "state": "not_available_under_frozen_calculator_policy",
+                "chembl_source_observation": chembl_properties.get(prop),
+            }
+            for prop in missing
+        ],
+        "possible_total_range": {
+            "min": observed_sum,
+            "max": observed_sum + len(missing),
+            "derivation": "each missing transformed component T0 is bounded in [0,1]",
+            "not_a_cns_mpo_score": True,
+            "non_rankable": True,
+        },
+        "non_rankable": True,
+        "proxy_only_not_mpo_inputs": {
+            key: pk[key] for key in ("xlogp", "hba") if isinstance(pk.get(key), dict)
+        },
+        "reason": (
+            "Only molecular weight, TPSA and HBD are accepted. PubChem XLogP is not the "
+            "published BioByte ClogP input, and HBA is not a CNS-MPO component. ClogP, "
+            "ClogD7.4 and most-basic pKa remain missing, so no CNS-MPO total is computed."
+        ),
+    }
+
+
+def _brain_penetrance(pk: dict[str, Any], evidence: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """MEASURED exposure over proxies. With no measurement, the assessment is UNKNOWN.
 
     The failure this is shaped to prevent: reading MW / XLogP / TPSA off PubChem, seeing they look
@@ -229,32 +309,56 @@ def _brain_penetrance(pk: dict[str, Any]) -> dict[str, Any]:
                 "provenance": pk[field]["provenance"]}
         for field in PROXY_FIELDS if isinstance(pk.get(field), dict)
     }
+    direct = (evidence or {}).get("direct_human_cns_evidence") or {
+        "status": "not_evaluated",
+        "measurements": [],
+    }
+    observed = direct.get("status") == "observed" and bool(direct.get("measurements"))
+    if observed:
+        basis = "direct_human_brain_pet_target_engagement_primary_source"
+        reason = (
+            "A primary human PET study reports central target engagement for this candidate. "
+            "That establishes human brain entry for the studied dose/context, but it is not a "
+            "CSF concentration, unbound brain concentration, Kp,uu, brain:plasma ratio, tumor "
+            "exposure measurement, efficacy result or safety result."
+        )
+    else:
+        basis = "not_extracted_not_available_in_current_sources"
+        reason = (
+            "no structured human CSF concentration, unbound brain concentration, Kp,uu or "
+            "brain:plasma ratio was extracted from the sources cached in this run. This is a "
+            "statement about what was extracted here, NOT a claim that no such measurement "
+            "exists. Physicochemical properties are properties of the molecule, not observations "
+            "of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment "
+            "is derived from them."
+        )
     return {
-        "assessment": "unknown",
-        "assessment_state": "not_evaluated",
+        "assessment": (
+            "direct human brain target engagement observed" if observed else "unknown"
+        ),
+        "assessment_state": (
+            "human_brain_target_engagement_observed" if observed else "not_evaluated"
+        ),
         # WHAT WE DID, not a claim about the world. "No source reports this" would be an assertion
         # about the whole literature, which Stage 4 has not read and cannot make. What is true is
         # narrower and checkable: no such structured value was EXTRACTED from the sources cached in
         # this run. A measured Kp,uu may well exist in a paper nobody here fetched.
-        "basis": "not_extracted_not_available_in_current_sources",
-        "reason": ("no structured human CSF concentration, unbound brain concentration, Kp,uu or "
-                   "brain:plasma ratio was extracted from the sources cached in this run "
-                   "(PubChem properties, openFDA label, DailyMed SPL, RxNorm). This is a statement "
-                   "about what was extracted here, NOT a claim that no such measurement exists. "
-                   "Physicochemical properties are properties of the molecule, not observations of "
-                   "the brain: they may SUGGEST penetrance and can never confirm it, and no "
-                   "assessment is derived from them."),
+        "basis": basis,
+        "reason": reason,
         "measured_exposure": {
             field: {"value": None, "state": "not_evaluated",
                     "reason": "not_extracted_from_the_sources_cached_in_this_run"}
             for field in MEASURED_EXPOSURE_FIELDS},
+        "direct_human_cns_evidence": direct,
+        "nonhuman_cns_evidence": (evidence or {}).get("nonhuman_cns_evidence") or [],
         "physicochemical_proxies": proxies,
         "proxies_are_suggestive_never_confirmatory": True,
         "assessment_is_not_derived_from_proxies": True,
     }
 
 
-def candidate_row(root: str, candidate: dict[str, Any]) -> dict[str, Any]:
+def candidate_row(root: str, candidate: dict[str, Any],
+                  evidence: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """One drug: real PK properties, real label safety, explicit absence everywhere else."""
     by_source = _requests_by_source(candidate)
     pk = _pk_properties(root, by_source.get("pubchem") or [])
@@ -266,26 +370,22 @@ def candidate_row(root: str, candidate: dict[str, Any]) -> dict[str, Any]:
         "acquisition_status": candidate.get("status"),
         "pk_properties": pk or {"state": "not_evaluated",
                                 "reason": "no PubChem property response is cached for this moiety"},
-        # NOT a CNS-MPO score. Two of its six inputs are in no cached public source, and a composite
-        # computed from four of six is a different score wearing CNS-MPO's name.
-        "cns_mpo": {
-            "value": None,
-            "state": "not_evaluated",
-            "missing_inputs": list(CNS_MPO_MISSING_INPUTS),
-            "reason": ("CNS-MPO requires cLogD7.4 and the most-basic pKa; neither is present in any "
-                       "cached public source. The sourced sub-properties are published individually "
-                       "above. A partial composite would read as a brain-penetrance result."),
-        },
+        # NOT a CNS-MPO score. Only three of six published inputs are accepted. Observed component
+        # transforms and the mathematically possible total range are emitted for audit, explicitly
+        # non-rankable; the total itself remains null.
+        "cns_mpo": _cns_mpo_availability(pk, evidence),
         # NEBPI-ALIGNED. Measured human exposure OUTRANKS physicochemical proxies, always. The
         # proxies are shown because they are real sourced numbers — but an assessment is NEVER
         # derived from them, and with no measured exposure the assessment is UNKNOWN, not favorable.
-        "brain_penetrance": _brain_penetrance(pk),
+        "brain_penetrance": _brain_penetrance(pk, evidence),
         "safety": _safety(label, label_prov),
     }
 
 
 def build(prefetch_root: str, stage3_source: Optional[dict[str, Any]] = None,
-          only: Optional[set[str]] = None) -> dict[str, Any]:
+          only: Optional[set[str]] = None,
+          evidence_supplement: Optional[dict[str, Any]] = None,
+          evidence_supplement_source: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The compact document. `only` restricts to a Stage-3 selection's candidates."""
     receipt_path = os.path.join(prefetch_root, "prefetch_receipt.json")
     with open(receipt_path, encoding="utf-8") as fh:
@@ -306,7 +406,8 @@ def build(prefetch_root: str, stage3_source: Optional[dict[str, Any]] = None,
                                               "reason": "no public evidence was acquired"},
                             "safety": {"label_state": "not_evaluated"}})
             continue
-        rows.append(candidate_row(prefetch_root, candidate))
+        evidence = ((evidence_supplement or {}).get("candidates") or {}).get(cid)
+        rows.append(candidate_row(prefetch_root, candidate, evidence))
 
     doc: dict[str, Any] = {
         "schema_id": COMPACT_SCHEMA,
@@ -318,6 +419,10 @@ def build(prefetch_root: str, stage3_source: Optional[dict[str, Any]] = None,
             "content_sha256": receipt.get("content_sha256"),
             "bound_to": receipt.get("bound_to"),
             "artifact_class": "prefetch_only",
+        },
+        "evidence_supplement_source": evidence_supplement_source or {
+            "state": "not_bound",
+            "reason": "no typed CNS evidence supplement was supplied",
         },
         "stage3_source": stage3_source or {
             "state": "not_bound",

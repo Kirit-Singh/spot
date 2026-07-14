@@ -20,7 +20,7 @@ from typing import Any, Optional
 
 from .pk_safety_compact import build
 
-WRITER_ID = "spot.stage04.pk_safety_compact_writer.v1"
+WRITER_ID = "spot.stage04.pk_safety_compact_writer.v2"
 
 # Vocabulary Stage 3 RETIRED. `direction_compatible` and `observed_sign_state` allowed an AGONIST to
 # be carried as a CRISPRi phenocopy while its action OPPOSED the desired direction. If either
@@ -65,6 +65,35 @@ def verify_stage3_content_hash(doc: dict[str, Any], name: str) -> str:
             "from its bytes. A hash the document asserts about itself proves only that the document "
             "can hash; this one does not describe these bytes.")
     return declared
+
+
+def _evidence_supplement(path: Optional[str]) -> tuple[
+        Optional[dict[str, Any]], Optional[dict[str, Any]]]:
+    """Load and independently bind the typed CNS-evidence supplement."""
+    if not path:
+        return None, None
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    doc = json.loads(raw)
+    if doc.get("schema_id") != "spot.stage04_evidence_supplement.v1":
+        raise ValueError("evidence supplement has an unsupported schema_id")
+    declared = str(doc.get("content_sha256") or "")
+    actual = content_sha256(doc)
+    if declared != actual:
+        raise ValueError(
+            f"evidence supplement declares content_sha256={declared[:16]}… but Stage 4 "
+            f"recomputes {actual[:16]}…")
+    source = {
+        "artifact_role": "stage4_typed_cns_evidence_supplement",
+        "artifact_name": os.path.basename(path),
+        "schema_id": doc["schema_id"],
+        "method_id": doc.get("method_id"),
+        "raw_sha256": hashlib.sha256(raw).hexdigest(),
+        "content_sha256": declared,
+        "content_sha256_recomputed_by_stage4": True,
+        "n_candidates": len(doc.get("candidates") or {}),
+    }
+    return doc, source
 
 
 def assert_servable(doc: dict[str, Any]) -> None:
@@ -182,10 +211,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--stage3-drugs", help="the Stage-3 compact drug JSON for this selection")
     ap.add_argument("--selection", help="rest | stim8 — a label, carried into the output")
+    ap.add_argument(
+        "--evidence-supplement",
+        help="typed, content-addressed public CNS-evidence supplement for acquired candidates",
+    )
     args = ap.parse_args(argv)
 
     source, ids, arms_by_drug = _stage3_source(args.stage3_drugs)
-    doc = build(args.prefetch, stage3_source=source, only=ids)
+    supplement, supplement_source = _evidence_supplement(args.evidence_supplement)
+    doc = build(
+        args.prefetch,
+        stage3_source=source,
+        only=ids,
+        evidence_supplement=supplement,
+        evidence_supplement_source=supplement_source,
+    )
     doc["selection"] = args.selection
 
     # Carry each drug's Stage-3 arm context onto its row, and REPORT the named candidates that have
@@ -234,6 +274,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         "stage3_drugs_path": os.path.abspath(args.stage3_drugs) if args.stage3_drugs else None,
         "stage3_raw_sha256": source["raw_sha256"] if source else None,
         "stage3_content_sha256": source.get("content_sha256") if source else None,
+        "evidence_supplement_path": (
+            os.path.abspath(args.evidence_supplement) if args.evidence_supplement else None),
+        "evidence_supplement_raw_sha256": (
+            supplement_source.get("raw_sha256") if supplement_source else None),
+        "evidence_supplement_content_sha256": (
+            supplement_source.get("content_sha256") if supplement_source else None),
         "prefetch_root": os.path.abspath(args.prefetch),
         "prefetch_receipt": os.path.join(os.path.abspath(args.prefetch), "prefetch_receipt.json"),
     }
