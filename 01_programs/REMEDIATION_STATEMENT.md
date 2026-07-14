@@ -53,9 +53,10 @@ are different object types (calls vs scores); the categorical calls are withdraw
 - **Code:** github.com/Kirit-Singh/spot, branch `stage1-remediation` (draft PR). Key commits:
   `3ce7491` (Stage-1 continuous-score remediation), `6c06a33` (Stage-2 plan corrections), plus the
   HF-revision pin. Method frozen in `analysis/STAGE1_REMEDIATION_METHOD.md`.
-- **Hugging Face (superseding revision):**
-  `KiritSingh/spot-CD4-Marson` @ **`e5fcf98b56a9302921d402e97fc5a190bd88f9a6`** (the prior revision
-  remains in the immutable HF history; it is not being erased).
+- **Hugging Face (superseding v3.0.1 release):**
+  `KiritSingh/spot-CD4-Marson` @ **`8bf04b6c503aa6c6dd2ed8447a2cec55fd56bb6c`**. Historical v2 is
+  preserved at tag `stage1-continuous-v2` / revision
+  `e5fcf98b56a9302921d402e97fc5a190bd88f9a6`; the source H5AD is byte-unchanged.
 - **Hashes:** `ntc_clustered.h5ad` SHA-256 `2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43`;
   per-barcode `canonical_table_sha256` `6e1665d13eab1781407b43d232d089fb5fb6a6b9df5acd83cbbfb8fe3aed2755`;
   `barcode_set_sha256` `1224312e52231f4b2e07c192b39c6f9c69dd6e2d5b8bd64d936c17a9b2435a93`; n = 40,000.

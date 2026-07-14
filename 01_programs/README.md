@@ -65,10 +65,13 @@ export SPOT_DATA=./spot_scvi
 hf download KiritSingh/spot-CD4-Marson ntc_clustered.h5ad \
     --repo-type dataset --revision e5fcf98b56a9302921d402e97fc5a190bd88f9a6 --local-dir "$SPOT_DATA"
 ```
-> The current published revision still carries the **historical Stage-1 v2** manifest/display seed. A
-> **superseding, history-preserving v3 revision** (current registry/score/selection-contract identities,
-> reproduce + verifier receipt, v2 marked historical) is prepared and pending owner-reviewed upload — the
-> source `ntc_clustered.h5ad` above is unchanged.
+> The **current public release** is `stage1-continuous-v3.0.1` at immutable HF revision
+> [`8bf04b6c503aa6c6dd2ed8447a2cec55fd56bb6c`](https://huggingface.co/datasets/KiritSingh/spot-CD4-Marson/tree/8bf04b6c503aa6c6dd2ed8447a2cec55fd56bb6c)
+> and tag `stage1-continuous-v3.0.1`. Historical v2 is preserved at tag
+> `stage1-continuous-v2` / revision `e5fcf98b…`. The scoring source H5AD is byte-unchanged, so
+> reproduction intentionally continues to fetch its original immutable input revision above.
+> The candidate and final anonymous re-download checks are recorded in
+> [`analysis/HF_PUBLICATION_RECEIPT.json`](analysis/HF_PUBLICATION_RECEIPT.json).
 
 ### Run the scoring tier
 ```bash
