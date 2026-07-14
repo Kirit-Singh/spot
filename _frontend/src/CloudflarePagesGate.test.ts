@@ -288,6 +288,20 @@ describe('Cloudflare Pages canonical and reviewer gate', () => {
     }
   });
 
+  it('serves canonical stage .html URLs without the Pages pretty-URL redirect', async () => {
+    const token = await issueSession(SIGNING_KEY);
+    for (const pathname of ['/programs.html', '/targets.html', '/pathways.html', '/drugs.html', '/pksafety.html']) {
+      const next = vi.fn(async (input?: Request | string) => new Response(
+        input instanceof Request ? new URL(input.url).pathname : 'missing-rewrite',
+      ));
+      const response = await middleware(context(new Request(`https://${CANONICAL_HOST}${pathname}?from=Rest&to=Stim8hr`, {
+        headers: { Accept: 'text/html', Cookie: `${REVIEW_COOKIE}=${token}` },
+      }), production, next));
+      expect(response.status, pathname).toBe(200);
+      expect(await response.text(), pathname).toBe(pathname.slice(0, -'.html'.length));
+    }
+  });
+
   it('redirects the legacy Programs URL after upstream Access on previews', async () => {
     const preview: Env = { SITE_MODE: 'preview' };
     const next = vi.fn(async () => new Response('legacy bytes must not be served'));
