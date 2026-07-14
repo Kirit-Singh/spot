@@ -1,0 +1,29 @@
+{
+  "schema": "spot.hf_stage1_publication_receipt.v1",
+  "repo_id": "KiritSingh/spot-CD4-Marson",
+  "historical_v2_revision": "e5fcf98b56a9302921d402e97fc5a190bd88f9a6",
+  "historical_v2_tag": "stage1-continuous-v2",
+  "candidate_commit": "0325fe8453cf6ddf4a9a66d5f8894f349867abc4",
+  "candidate_verification": {
+    "revision": "0325fe8453cf6ddf4a9a66d5f8894f349867abc4",
+    "n_files": 31,
+    "n_redownloaded_and_hashed": 30,
+    "h5ad_lfs_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43",
+    "manifest_sha256": "bcc0bdfd7b1d05e4144a36010263e896ff8abd354fb2157b2e411cc7e4a86f02",
+    "result": "PASS"
+  },
+  "main_lfs_preparation_commit": "84ef06c0dadb1b6f9ee2925960a91765da2d3bec",
+  "release_commit": "8bf04b6c503aa6c6dd2ed8447a2cec55fd56bb6c",
+  "release_tag": "stage1-continuous-v3.0.1",
+  "main_verification": {
+    "revision": "8bf04b6c503aa6c6dd2ed8447a2cec55fd56bb6c",
+    "n_files": 31,
+    "n_redownloaded_and_hashed": 30,
+    "h5ad_lfs_sha256": "2edc6d318415c8b0ee779d707ab86e26ddb6f0274db51ab4a12f21ebfda50e43",
+    "manifest_sha256": "bcc0bdfd7b1d05e4144a36010263e896ff8abd354fb2157b2e411cc7e4a86f02",
+    "result": "PASS"
+  },
+  "local_manifest_sha256": "bcc0bdfd7b1d05e4144a36010263e896ff8abd354fb2157b2e411cc7e4a86f02",
+  "candidate_branch_deleted": true,
+  "result": "PASS"
+}

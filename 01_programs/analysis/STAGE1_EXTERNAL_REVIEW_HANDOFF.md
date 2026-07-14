@@ -86,5 +86,6 @@ from **document-as-limitation**.
 
 ## Exact identifiers
 PR: https://github.com/Kirit-Singh/spot/pull/16 · branch `stage1-remediation`.
-HF superseding revision `e5fcf98b…` (prior revision retained in HF history).
+HF v3.0.1 release revision `8bf04b6c…`; historical v2 is retained at tag
+`stage1-continuous-v2` / revision `e5fcf98b…`.
 Hashes as above. Code `MIT`; data licenses in `DATA_LICENSES.md`.
