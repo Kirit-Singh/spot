@@ -179,9 +179,11 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
           display_label: programLabel(prod.labels, prod.real.context.programB),
           direction: 'high',
         },
-        condition_a: prod.real.context.condition,
-        condition_b: prod.real.context.condition,
-        analysis_condition: prod.real.context.condition,
+        condition_a: prod.real.context.conditionA,
+        condition_b: prod.real.context.conditionB,
+        analysis_condition: prod.real.context.conditionA === prod.real.context.conditionB
+          ? prod.real.context.conditionA
+          : undefined,
       })
     : null;
   const selectionDisplay = displaySelection
@@ -227,8 +229,8 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
       page={page}
       subtitle={headerTitle}
       subtitleNode={headerNode}
-      onClearSelection={onClearSelection}
-      selectionV3={selectionDisplay}
+      onClearSelection={prod.real?.admission === 'development' ? undefined : onClearSelection}
+      selectionV3={prod.real?.admission === 'development' ? null : selectionDisplay}
       methodsManifest={methodsManifest}
     >
       {prod.real ? (

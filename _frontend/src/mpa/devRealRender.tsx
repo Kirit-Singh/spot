@@ -1,4 +1,5 @@
 import { StatePill } from '../shell/chips';
+import { conditionLabel } from './contrastTitle';
 import type {
   DevelopmentRealResolution,
   DevDrugArm,
@@ -33,11 +34,12 @@ function armLabel(program: string, desired: string, labels: Map<string, string>)
   return `${labels.get(program) ?? program.replaceAll('_', ' ')} ${desired}`;
 }
 
-function PathwayArm({ arm, labels }: { arm: DevPathwayArm; labels: Map<string, string> }) {
+function PathwayArm({ arm, labels, condition }: { arm: DevPathwayArm; labels: Map<string, string>; condition: string }) {
   return (
     <section className="min-w-0 rounded-lg border border-line bg-surface" aria-label={armLabel(arm.program_id, arm.desired_change, labels)}>
       <header className="flex items-center gap-2 border-b border-line px-3 py-2">
         <StatePill label={arm.selection_role === 'away_from_A' ? 'from' : 'to'} tone="accent" />
+        <StatePill label={conditionLabel(condition)} tone="muted" />
         <span className="text-[12px] font-semibold text-ink">{armLabel(arm.program_id, arm.desired_change, labels)}</span>
         <span className="ml-auto font-mono text-[9.5px] text-muted">GO-BP · {arm.terms.length} of {arm.n_headline_rankable}</span>
       </header>
@@ -74,7 +76,14 @@ function renderPathways(resolution: Extract<DevelopmentRealResolution, { route: 
   return (
     <div data-real-canvas data-development-real data-route="pathways" className={CANVAS}>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {resolution.artifact.arms.map((arm) => <PathwayArm key={arm.arm_key} arm={arm} labels={labels} />)}
+        {resolution.artifact.arms.map((arm, index) => (
+          <PathwayArm
+            key={arm.arm_key}
+            arm={arm}
+            labels={labels}
+            condition={index === 0 ? resolution.context.conditionA : resolution.context.conditionB}
+          />
+        ))}
       </div>
     </div>
   );
@@ -91,12 +100,13 @@ function drugRows(arm: DevDrugArm): DrugRow[] {
     });
 }
 
-function DrugArm({ arm, labels, release }: { arm: DevDrugArm; labels: Map<string, string>; release: string }) {
+function DrugArm({ arm, labels, release, condition }: { arm: DevDrugArm; labels: Map<string, string>; release: string; condition: string }) {
   const rows = drugRows(arm);
   return (
     <section className="min-w-0 rounded-lg border border-line bg-surface" aria-label={armLabel(arm.program_id, arm.desired_change, labels)}>
       <header className="flex items-center gap-2 border-b border-line px-3 py-2">
         <StatePill label={arm.role === 'away_from_A' ? 'from' : 'to'} tone="accent" />
+        <StatePill label={conditionLabel(condition)} tone="muted" />
         <span className="text-[12px] font-semibold text-ink">{armLabel(arm.program_id, arm.desired_change, labels)}</span>
         <span className="ml-auto font-mono text-[9.5px] text-muted">{rows.length} links · {release}</span>
       </header>
@@ -129,7 +139,15 @@ function renderDrugs(resolution: Extract<DevelopmentRealResolution, { route: 'dr
   return (
     <div data-real-canvas data-development-real data-route="drugs" className={CANVAS}>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {resolution.artifact.arms.map((arm) => <DrugArm key={arm.arm_key} arm={arm} labels={labels} release={release} />)}
+        {resolution.artifact.arms.map((arm, index) => (
+          <DrugArm
+            key={arm.arm_key}
+            arm={arm}
+            labels={labels}
+            release={release}
+            condition={index === 0 ? resolution.context.conditionA : resolution.context.conditionB}
+          />
+        ))}
       </div>
     </div>
   );
@@ -164,7 +182,10 @@ function Scorecard({ candidate }: { candidate: DevPkCandidate }) {
         <Value label="boxed warning" value={typeof safety.boxed_warning_present === 'boolean' ? (safety.boxed_warning_present ? 'present' : 'not present') : '—'} />
       </div>
       <div className="flex flex-wrap gap-1.5 border-t border-line px-3 py-2">
-        {arms.map((arm, i) => <StatePill key={`${text(arm.arm_key)}:${i}`} label={`${text(arm.target_symbol)} · ${text(arm.directional_evidence_status)}`} tone={arm.observed_perturbation_support === true ? 'ok' : 'amber'} />)}
+        {arms.map((arm, i) => {
+          const condition = text(arm.arm_key).split('|').at(-1) ?? '';
+          return <StatePill key={`${text(arm.arm_key)}:${i}`} label={`${text(arm.target_symbol)} · ${conditionLabel(condition)} · ${text(arm.directional_evidence_status)}`} tone={arm.observed_perturbation_support === true ? 'ok' : 'amber'} />;
+        })}
       </div>
     </section>
   );
@@ -180,8 +201,8 @@ function renderPkSafety(resolution: Extract<DevelopmentRealResolution, { route: 
     <div data-real-canvas data-development-real data-route="pksafety" className={CANVAS}>
       <div className="flex flex-wrap gap-3 font-mono text-[9.5px] text-muted">
         <span>{scalar(counts.n_rows)} acquired</span>
-        <span>{scalar(counts.n_unacquired_reported)} unacquired</span>
-        <span>{scalar(counts.n_named_but_not_prefetched)} not prefetched</span>
+        {counts.n_unacquired_reported !== null && <span>{scalar(counts.n_unacquired_reported)} unacquired</span>}
+        {counts.n_named_but_not_prefetched !== null && <span>{scalar(counts.n_named_but_not_prefetched)} not prefetched</span>}
       </div>
       {resolution.artifact.candidates.map((candidate) => <Scorecard key={candidate.candidate_id} candidate={candidate} />)}
     </div>

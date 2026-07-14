@@ -23,7 +23,7 @@ function selection(condition: string, mode: SelectionV3['analysis_mode'] = 'with
     estimator_id: 'e', estimator_status: 'available',
     A: { program_id: 'treg_like', direction: 'high' },
     B: { program_id: 'th1_like', direction: 'high' },
-    conditions: mode === 'within_condition' ? [condition] : ['Stim8hr', 'Rest'],
+    conditions: mode === 'within_condition' ? [condition] : [condition, condition === 'Rest' ? 'Stim8hr' : 'Rest'],
     registry_scorer_view_sha256: '', source_h5ad_sha256: '', selection_full_sha256: '',
     full_contract_content_sha256: '', raw: {},
   };
@@ -61,15 +61,33 @@ describe('direct real Rest/Stim8 loader', () => {
     }
   });
 
-  it('loads Stim8 but refuses temporal, Stim48, and a different program pair', async () => {
+  it('loads Stim8 and pairs supported temporal endpoints, but refuses Stim48 and another program pair', async () => {
     state.selection = selection('Stim8hr');
     expect((await resolveDevelopmentRealArtifact('pathways'))?.route).toBe('pathways');
-    state.selection = selection('Stim8hr', 'temporal_cross_condition');
-    expect(await resolveDevelopmentRealArtifact('pathways')).toBeNull();
+    state.selection = selection('Rest', 'temporal_cross_condition');
+    const temporal = await resolveDevelopmentRealArtifact('pathways');
+    expect(temporal?.route).toBe('pathways');
+    expect(temporal?.context).toMatchObject({ conditionA: 'Rest', conditionB: 'Stim8hr', analysisMode: 'endpoint_comparison' });
+    if (!temporal || temporal.route !== 'pathways') throw new Error('temporal endpoints did not resolve');
+    expect(temporal.artifact.arms.map((arm) => arm.arm_key)).toEqual([
+      'pathway|treg_like|decrease|Rest|go_bp',
+      'pathway|th1_like|increase|Stim8hr|go_bp',
+    ]);
     state.selection = selection('Stim48hr');
     expect(await resolveDevelopmentRealArtifact('drugs')).toBeNull();
     state.selection = { ...selection('Rest'), A: { program_id: 'naive_like', direction: 'high' } };
     expect(await resolveDevelopmentRealArtifact('drugs')).toBeNull();
+  });
+
+  it('shows the Rest to Stim8 endpoint comparison when review storage is empty', async () => {
+    state.selection = null;
+    const pathways = await resolveDevelopmentRealArtifact('pathways');
+    expect(pathways?.context).toMatchObject({ conditionA: 'Rest', conditionB: 'Stim8hr', analysisMode: 'endpoint_comparison' });
+    const pk = await resolveDevelopmentRealArtifact('pksafety');
+    if (!pk || pk.route !== 'pksafety') throw new Error('PK endpoints did not resolve');
+    expect(pk.artifact.candidates.map((candidate) => candidate.moiety_name)).toEqual([
+      'IDELALISIB', 'LENIOLISIB', 'VADADUSTAT', 'ISTRADEFYLLINE',
+    ]);
   });
 
   it('renders independent pathway columns with explicit truncation', async () => {
