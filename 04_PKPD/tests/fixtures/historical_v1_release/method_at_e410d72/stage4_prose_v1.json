@@ -1,0 +1,184 @@
+{
+  "schema_id": "spot.stage04_method_prose.v1",
+  "method_id": "stage4_prose_v1",
+  "method_version": "1.0.0",
+  "description": "Every SENTENCE Stage 4 emits into scorecards.json, declared as method data rather than typed into the code that emits it. Method files are hashed into method_file_sha256 and therefore into scorecard_set_id, so a sentence declared here cannot be rewritten in a release without moving the identity of that release. A sentence that lives only in the emitter is bound by nothing: a resealed scorecards.json could invert 'CNS MPO >= 4 does not mean the drug is brain-penetrant' and every hash would still agree. That is the hole this file closes.",
+  "cns_mpo": {
+    "interpretation_guard": "CNS-MPO is a physicochemical design-space desirability score (Wager 2010). It is not measured brain permeability, not a probability of CNS exposure, and not an NEBPI class. It cannot satisfy any NEBPI Part-II branch.",
+    "status_values": [
+      "complete",
+      "incomplete"
+    ],
+    "missing_input_reason_codes": [
+      "absent",
+      "disallowed_calculator",
+      "ambiguous_multiple_sources",
+      "requirements_unmet",
+      "unlisted",
+      "forbidden"
+    ]
+  },
+  "transporters": {
+    "interpretation_guard": "Efflux liability is suggestive of restricted CNS exposure; it is not a measurement of brain exposure and cannot satisfy an NEBPI branch. Transporter observations are reported per assay, species and biological system, and are never collapsed into a boolean.",
+    "unqualified_boolean_note": "Deliberately null. A transporter interaction is qualified by assay, species and biological system; 'is a P-gp substrate: true' discards exactly the qualifications that make the observation interpretable.",
+    "required_transporters": [
+      "ABCB1_Pgp",
+      "ABCG2_BCRP"
+    ],
+    "_required_note": "The transporters Stage 4 expects an observation for. Declared as method data: when NO transporter evidence exists, these names are the only thing the release says about them, and a name that lives only in the emitter is bound by nothing."
+  },
+  "set_level": {
+    "ordering_note": "Candidates are listed side by side in a non-evaluative order. Stage 4 does not rank.",
+    "lanes_are_independent": "delivery, cns_mpo, transporters, exposure, nebpi and safety are separate lanes. There is no combined score, and none is derivable from this document.",
+    "calculator_mixing_none": "All candidates used the same calculator for each property.",
+    "calculator_mixing_present": "Per-candidate scores remain valid. Cross-candidate comparison of the listed properties is explicitly disclaimed because the values come from different calculators."
+  },
+  "provenance_chain": {
+    "cns_mpo_total_note": "A transform of the six component rows above; it has no source of its own.",
+    "nebpi_class_note": "Derived from the NEBPI observation rows; each of those rows carries its own source hash.",
+    "safety_no_source_transform": "no source: state is about the search, not the drug"
+  },
+  "nebpi": {
+    "branch_requirements": {
+      "pk_therapeutic_in_neb": "PK with therapeutic levels in NEB (accounting for potency)",
+      "pd_in_neb": "Relevant PD effect in NEB",
+      "radiographic_response_in_neb": "Radiographic response in NEB",
+      "insufficiently_permeable::pk_low_in_neb": "Low PK levels in NEB (accounting for potency)",
+      "insufficiently_permeable::no_relevant_pd_in_neb": "No relevant PD in NEB (observed absent by an adequate assessment)",
+      "insufficiently_permeable::no_radiographic_response_in_neb": "No radiographic response in NEB (observed absent by an adequate assessment)",
+      "impermeable::pk_little_to_none_in_neb": "Little to no drug in NEB (accounting for potency)",
+      "impermeable::no_relevant_pd_in_neb": "No relevant PD in NEB (observed absent by an adequate assessment)",
+      "impermeable::no_radiographic_response_in_neb": "No radiographic response in NEB (observed absent by an adequate assessment)"
+    },
+    "counterfactual": {
+      "hard_rule": "Absent or unknown evidence is never 'impermeable'.",
+      "would_lose_class_if": "the qualifying positive branch (therapeutic PK in NEB, relevant PD in NEB, or radiographic response in NEB) were retracted",
+      "to_reach_sufficiently_permeable_any_one_of": [
+        "observe therapeutic PK in NEB with a bound MEC/potency context",
+        "observe a relevant PD effect in NEB",
+        "observe a radiographic response in NEB"
+      ],
+      "to_reach_insufficiently_permeable_all_of": [
+        "observe LOW PK in NEB (below MEC, with potency context)",
+        "adequately assess PD in NEB and observe none",
+        "adequately assess radiographic response in NEB and observe none"
+      ],
+      "to_reach_impermeable_all_of": [
+        "observe LITTLE-TO-NO drug in NEB (with potency context)",
+        "adequately assess PD in NEB and observe none",
+        "adequately assess radiographic response in NEB and observe none"
+      ]
+    },
+    "_codes_not_prose": "Everything below is a CODE, not a sentence. The interpolated explanations Stage 4 used to emit here (blocking_reason, negative_classes_blocked_because, context_caveats) were free prose that nothing could reconstruct and nothing could bind — a resealed release could rewrite the reason a branch failed while the machine state beside it stayed honest. They are typed codes now, and the sentence for each lives in METHODS.md.",
+    "branch_blocking_codes": {
+      "pk_level_is_not_the_required_level": "the derived PK level is not the level this branch requires",
+      "pk_not_derivable": "no PK level could be derived (see pk_blocked_code)",
+      "pk_has_no_potency_context": "PK was measured but no MEC/potency context binds it (Table 2 footnote a)",
+      "context_incomplete": "the evidence context is incomplete (route/formulation/dose/schedule/tumour)",
+      "state_is_not_observed_present": "the criterion was not observed present",
+      "state_is_not_observed_absent": "the criterion was not observed absent by an adequate assessment",
+      "absence_claim_inadequate": "an absence was claimed but no adequate assessment looked for it",
+      "conflicting_observations": "two distinct observations of this criterion disagree"
+    },
+    "context_caveat_codes": {
+      "context_incomplete": "NEBPI is context-dependent; part of the route/formulation/dose/schedule/tumour context is missing",
+      "no_potency_context": "no MEC/potency record binds the PK observations in this context"
+    },
+    "negative_class_blocker_codes": {
+      "pk_not_measured_in_neb": "no PK was measured in non-enhancing brain",
+      "pd_absence_not_established": "'No relevant PD in NEB' is not established",
+      "radiographic_absence_not_established": "'No radiographic response in NEB' is not established"
+    },
+    "status_values": [
+      "classified",
+      "not_classifiable"
+    ],
+    "reason_codes": [
+      "no_complete_part_ii_logic",
+      "context_incomplete",
+      "pk_not_derivable",
+      "conflicting_observations"
+    ]
+  },
+  "eligibility": {
+    "_codes_not_prose": "production_eligible carries a reason_code only. The sentence it used to carry was free prose bound by nothing; the code IS reconstructed by the independent verifier (rebuild_eligibility), and the sentence for each code is in METHODS.md.",
+    "reason_codes": [
+      "eligible",
+      "fixture_namespace",
+      "research_only_namespace",
+      "direction_incompatible",
+      "direction_unknown",
+      "non_public_source_in_evidence",
+      "not_evaluated"
+    ]
+  },
+  "stage3_contract_status": {
+    "status": "consumes_spot.stage03_drug_annotation.v1_via_adapter",
+    "adapter": "analysis/stage3_annotation.py (spot.stage34_annotation_adapter.v1)",
+    "internal_form_note": "Stage3DrugCandidateSet is the Stage-4-internal normalized form, NOT Stage 3's wire format. Stage 3's real schema is spot.stage03_drug_annotation.v1.",
+    "admission_signal": "stage4_assessment_status=queued",
+    "assessment_is_not_promotion": "A Stage-4 assessment computes PK/safety properties. It is not biological promotion and not a recommendation.",
+    "stage3_frozen": false,
+    "stage3_freeze_note": "Stage 3 is schema-corrected but NOT frozen. Stage 4 is pinned to the r5 contract and refuses anything else."
+  },
+  "schema_ids": {
+    "_note": "The schema_id Stage 4 stamps on each document. Declared here so the id a reader sees is bound into the release's identity like everything else.",
+    "scorecard_set": "spot.stage04_scorecard_set.v1",
+    "selection": "spot.stage04_selection.v1",
+    "manifest": "spot.stage04_manifest.v1",
+    "verification": "spot.stage04_verification.v2",
+    "admission_receipt": "spot.stage04_admission_receipt.v1"
+  },
+  "selection": {
+    "selection_status_no_selection": "no_selection_emitted",
+    "reason_fixture_pass": "Fixture pass. Stage 4 is an evidence engine, not a ranker: a selection would require real, independently reviewed public-source evidence, and none of the evidence in this run is real. No drug is asserted to be safe, brain-permeable, NEBPI-classified or clinically suitable.",
+    "basis_when_enabled": "explicit human review of the separate evidence lanes",
+    "not_basis_when_enabled": "any composite or automated score — Stage 4 does not compute one"
+  },
+  "safety": {
+    "_note": "The text a reader sees beside a safety finding. Rewriting `no_evidence_found` to read like a clean bill of health is the most dangerous edit available on a release, so it is method data, hashed into the id, and re-read cell-for-cell by verifier/derived.py.",
+    "evidence_state_display": {
+      "label_supported": "Stated in the cited section of the cited label version.",
+      "literature_supported": "Stated in the cited publication.",
+      "signal_only": "Spontaneous-report / disproportionality signal only. Hypothesis-generating. Cannot establish incidence, causality, safety or a contraindication.",
+      "no_evidence_found": "The named sources were searched and returned nothing for this item. This is a statement about the search, NOT a finding of safety. Absence of evidence is not evidence of absence.",
+      "not_evaluated": "Not searched in any source. Nothing is known either way."
+    }
+  },
+  "exposure": {
+    "_codes_not_prose": "The margin caveats are CODES. The sentence for each is here and in METHODS.md; a sentence emitted from the engine would be bound by nothing, and a resealed release could rewrite 'CSF is not non-enhancing brain' into its opposite.",
+    "caveat_codes": {
+      "csf_is_not_non_enhancing_brain": "CSF is not non-enhancing brain: the blood-CSF barrier is more permeable than the BBB (Grossman 2026). A CSF margin says nothing about NEB exposure and cannot satisfy an NEBPI branch.",
+      "measured_in_enhancing_tissue": "Measured in contrast-enhancing tissue, where the BBB is disrupted. Not NEB evidence.",
+      "potency_applied_via_sourced_relevance_link": "The potency was measured in a different tumour context and applied here via a sourced relevance link."
+    },
+    "margin_reason_codes": [
+      "context_disagreement",
+      "no_potency_record",
+      "active_moiety_mismatch",
+      "candidate_mismatch",
+      "potency_metric_not_a_target_concentration",
+      "binding_state_unspecified",
+      "free_total_mismatch",
+      "dosing_context_unknown",
+      "potency_context_not_relevant",
+      "no_quantified_concentration",
+      "unit_family_mismatch",
+      "margin_undefined",
+      "ambiguous_potency_records"
+    ]
+  },
+  "delivery": {
+    "_codes_not_prose": "A delivery decision Stage 4 GENERATED carries a reason_code and no sentence. A rationale that IS present came from the input assignment and is bound by the evidence-input digest.",
+    "reason_codes": [
+      "assigned",
+      "no_assignment",
+      "conflicting_assignments",
+      "explicitly_uncertain",
+      "assigner_not_accepted",
+      "immune_target_is_not_evidence_of_systemic_priming",
+      "no_evidence_binding",
+      "unknown_delivery_requirement"
+    ]
+  }
+}

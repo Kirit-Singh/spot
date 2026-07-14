@@ -1,0 +1,255 @@
+{
+  "schema_id": "spot.stage04_method_cns_mpo.v1",
+  "method_id": "cns_mpo_wager2010_v1",
+  "method_version": "1.0.0",
+  "description": "CNS MPO desirability score, exactly as published in Wager et al. 2010 (v1). Six equally weighted physicochemical properties, each transformed to a desirability value T0 in [0,1]; the total is the SUM of the six T0 values and ranges 0-6.",
+  "primary_source": "wager2010_cnsmpo_pmc_web",
+  "corroborating_source": "wager2010_cnsmpo_jats",
+  "source_anchors": {
+    "six_properties_and_scale": {
+      "source_id": "wager2010_cnsmpo_jats",
+      "quote": "Using a set of six physicochemical parameters ((a) lipophilicity, calculated partition coefficient (ClogP); (b) calculated distribution coefficient at pH = 7.4 (ClogD); (c) molecular weight (MW); (d) topological polar surface area (TPSA); (e) number of hydrogen bond donors (HBD); (f) most basic center (pKa)), a druglikeness central nervous system multiparameter optimization (CNS MPO) algorithm was built ... (MPO desirability score >= 4, using a scale of 0-6)",
+      "location": "Abstract"
+    },
+    "function_shapes_and_summation": {
+      "source_id": "wager2010_cnsmpo_pmc_web",
+      "quote": "A monotonic decreasing function was used for ClogP, ClogD, MW, HBD, and pKa, and a hump function was used for TPSA. All physicochemical properties were weighted equally with a desirability score ranging from 0.0 to 1.0 for each property. ... Transformed values (T0) of the six properties were determined for each compound, and the summation of the transformed component score yielded the final “CNS MPO” desirability score, which can range from zero (0) to six (6).",
+      "location": "Results and Discussion, 'A CNS Multiparameter Optimization and Desirability Score'"
+    },
+    "linear_interpolation": {
+      "source_id": "wager2010_cnsmpo_pmc_web",
+      "quote": "a monotonic decreasing function is defined by a desirable region if the property x <= x1 and an undesirable region for x > x2. A linear transformation is applied between the two inflection points (x1 < x <= x2). Similarly, a hump function is defined by two undesirable regions and one desirable region, with linear transformation between the inflection points",
+      "location": "Results and Discussion + Figure 3 caption"
+    },
+    "calculators_used_by_the_authors": {
+      "source_id": "wager2010_cnsmpo_pmc_web",
+      "quote": "For the work herein, calculated physicochemical properties were obtained using standard commercial packages: Biobyte for ClogP calculations, ACD/Laboratories for ClogD at pH 7.4, and ACD/Laboratories for pKa. For calculation of TPSA, see ref (8).",
+      "location": "Methods",
+      "consequence": "Defines the published method for each property input; see calculator_policy_v1.json. RDKit implements neither ClogD(7.4) nor most-basic pKa and must never be substituted for them."
+    },
+    "score_is_not_a_measurement": {
+      "source_id": "wager2010_cnsmpo_pmc_web",
+      "quote": "This analysis suggests that this algorithm could potentially be used to identify compounds with a higher probability of successfully testing hypotheses in the clinic.",
+      "location": "Abstract",
+      "consequence": "CNS MPO is a design-space desirability score. It is NOT a measured brain concentration, NOT a probability of CNS exposure, and NOT an NEBPI class. Stage 4 never promotes it to any of those."
+    }
+  },
+  "properties": [
+    {
+      "property_id": "clogp",
+      "display": "ClogP",
+      "units": "dimensionless_log10",
+      "transform": "monotonic_decreasing",
+      "weight": 1.0,
+      "inflection_points": {
+        "x1": 3.0,
+        "x2": 5.0
+      },
+      "published_more_desirable_range": "ClogP <= 3",
+      "published_less_desirable_range": "ClogP > 5"
+    },
+    {
+      "property_id": "clogd_74",
+      "display": "ClogD (pH 7.4)",
+      "units": "dimensionless_log10",
+      "transform": "monotonic_decreasing",
+      "weight": 1.0,
+      "inflection_points": {
+        "x1": 2.0,
+        "x2": 4.0
+      },
+      "published_more_desirable_range": "ClogD <= 2",
+      "published_less_desirable_range": "ClogD > 4"
+    },
+    {
+      "property_id": "mw",
+      "display": "Molecular weight",
+      "units": "g_per_mol",
+      "transform": "monotonic_decreasing",
+      "weight": 1.0,
+      "inflection_points": {
+        "x1": 360.0,
+        "x2": 500.0
+      },
+      "published_more_desirable_range": "MW <= 360",
+      "published_less_desirable_range": "MW > 500"
+    },
+    {
+      "property_id": "tpsa",
+      "display": "TPSA",
+      "units": "angstrom_squared",
+      "transform": "hump",
+      "weight": 1.0,
+      "inflection_points": {
+        "x1": 20.0,
+        "x2": 40.0,
+        "x3": 90.0,
+        "x4": 120.0
+      },
+      "published_more_desirable_range": "40 < TPSA <= 90",
+      "published_less_desirable_range": "TPSA <= 20; TPSA > 120"
+    },
+    {
+      "property_id": "hbd",
+      "display": "Hydrogen bond donors",
+      "units": "count",
+      "transform": "monotonic_decreasing",
+      "weight": 1.0,
+      "inflection_points": {
+        "x1": 0.5,
+        "x2": 3.5
+      },
+      "published_more_desirable_range": "HBD <= 0.5",
+      "published_less_desirable_range": "HBD > 3.5"
+    },
+    {
+      "property_id": "pka_most_basic",
+      "display": "Most basic pKa",
+      "units": "pka_units",
+      "transform": "monotonic_decreasing",
+      "weight": 1.0,
+      "inflection_points": {
+        "x1": 8.0,
+        "x2": 10.0
+      },
+      "published_more_desirable_range": "pKa <= 8",
+      "published_less_desirable_range": "pKa > 10"
+    }
+  ],
+  "table1_provenance": {
+    "source_id": "wager2010_cnsmpo_pmc_web",
+    "table": "Table 1. The CNS MPO Properties, Functions, Weighting, Value Range and Parameter Ranges.",
+    "transcription": "properties | transformation (T0) | weight | more desirable range (T0 = 1.0) | less desirable range (T0 = 0.0) :: ClogP | monotonic decreasing | 1.0 | ClogP <= 3 | ClogP > 5 :: ClogD | monotonic decreasing | 1.0 | ClogD <= 2 | ClogD > 4 :: MW | monotonic decreasing | 1.0 | MW <= 360 | MW > 500 :: TPSA | hump function | 1.0 | 40 < TPSA <= 90 | TPSA <= 20; TPSA > 120 :: HBD | monotonic decreasing | 1.0 | HBD <= 0.5 | HBD > 3.5 :: pKa | monotonic decreasing | 1.0 | pKa <= 8 | pKa > 10"
+  },
+  "total": {
+    "aggregation": "sum_of_six_T0",
+    "min": 0.0,
+    "max": 6.0,
+    "publication_rounding": {
+      "decimals": 1,
+      "mode": "round_half_up"
+    },
+    "note": "total_raw is the exact sum. total_published is total_raw rounded to 1 decimal (ROUND_HALF_UP) to match the precision reported in Wager Table 2. Neither is a probability, a measured concentration or an NEBPI class."
+  },
+  "golden_examples": {
+    "provenance": {
+      "source_id": "wager2010_cnsmpo_pmc_web",
+      "table": "Table 2. CNS MPO Scores and Individual Transformed Scores (T0) for Selected Drugs.",
+      "columns": [
+        "drugs",
+        "T0_ClogP",
+        "T0_ClogD",
+        "T0_TPSA",
+        "T0_MW",
+        "T0_HBD",
+        "T0_pKa",
+        "CNS MPO"
+      ]
+    },
+    "scope_limitation": "Wager Table 2 publishes the six TRANSFORMED component values (T0) and the total, but NOT the six raw property values (ClogP/ClogD/MW/TPSA/HBD/pKa) that produced them. The Supporting Information that holds the raw values for the full drug set is behind the ACS paywall (https://pubs.acs.org/doi/suppl/10.1021/cn100008c returned HTTP 403 on 2026-07-11). Therefore these goldens can validate equal weighting, the 0-6 summation and the published rounding, but they CANNOT validate the raw-property -> T0 transforms end-to-end. The transforms are validated separately against the published Table 1 inflection points. An end-to-end compound golden requires raw published property values and remains DEFERRED to independent review: Stage 4 holds no primary-source bytes for one. See unverified_derived_regression_example, which is an internal regression fixture and is explicitly NOT such a golden.",
+    "rows": [
+      {
+        "drug": "alprazolam",
+        "T0_clogp": 1.0,
+        "T0_clogd_74": 0.75,
+        "T0_tpsa": 1.0,
+        "T0_mw": 1.0,
+        "T0_hbd": 1.0,
+        "T0_pka_most_basic": 1.0,
+        "cns_mpo_published": 5.8
+      },
+      {
+        "drug": "zolpidem",
+        "T0_clogp": 0.99,
+        "T0_clogd_74": 0.57,
+        "T0_tpsa": 0.88,
+        "T0_mw": 1.0,
+        "T0_hbd": 1.0,
+        "T0_pka_most_basic": 1.0,
+        "cns_mpo_published": 5.4
+      },
+      {
+        "drug": "paroxetine",
+        "T0_clogp": 0.38,
+        "T0_clogd_74": 1.0,
+        "T0_tpsa": 0.99,
+        "T0_mw": 1.0,
+        "T0_hbd": 0.83,
+        "T0_pka_most_basic": 0.0,
+        "cns_mpo_published": 4.2
+      },
+      {
+        "drug": "risperidone",
+        "T0_clogp": 1.0,
+        "T0_clogd_74": 0.86,
+        "T0_tpsa": 1.0,
+        "T0_mw": 0.64,
+        "T0_hbd": 1.0,
+        "T0_pka_most_basic": 1.0,
+        "cns_mpo_published": 5.5
+      },
+      {
+        "drug": "methylphenidate",
+        "T0_clogp": 1.0,
+        "T0_clogd_74": 1.0,
+        "T0_tpsa": 0.92,
+        "T0_mw": 1.0,
+        "T0_hbd": 0.83,
+        "T0_pka_most_basic": 0.0,
+        "cns_mpo_published": 4.8
+      }
+    ],
+    "not_a_spot_claim": "These rows are Wager et al.'s published values for those compounds. They are used ONLY as arithmetic goldens for the scoring engine. Spot makes no brain-permeability, safety or suitability claim about any of these drugs."
+  },
+  "prohibited_interpretations": [
+    "CNS MPO >= 4 does not mean the drug is brain-penetrant.",
+    "CNS MPO is not a measured brain concentration and not Kp,uu,brain.",
+    "CNS MPO is not a probability.",
+    "CNS MPO alone can never produce an NEBPI Part-II class (see nebpi_grossman2026_v1.json; physicochemical characteristics are a Part-I input, not a Part-II branch).",
+    "No imputation: if any of the six inputs is absent, non-finite, or sourced from a disallowed calculator, the score is incomplete and the total is null."
+  ],
+  "unverified_derived_regression_example": {
+    "status": "UNVERIFIED_DERIVED_REGRESSION_EXAMPLE",
+    "is_a_published_golden": false,
+    "is_primary_source_validation": false,
+    "is_a_validated_cutoff": false,
+    "counts_toward_source_verified_goldens": false,
+    "what_this_is": "An internal regression fixture: six raw property values pushed through THIS implementation's Wager-2010 Table-1 transforms, whose expected outputs were recorded from that same implementation. It pins the arithmetic against future edits. That is all it does.",
+    "what_this_is_NOT": "It is NOT a published golden, NOT primary-source validation, and NOT a validated or universal 4.5 cutoff. 4.5 is the TOTAL of this one worked example on the 0-6 desirability scale; it is not a threshold of any kind. Nothing in Stage 4 may cite this row as evidence that the implementation reproduces a published result.",
+    "attributed_to": {
+      "source_id": "wager2016_cnsmpo_desirability",
+      "doi": "10.1021/acschemneuro.6b00029",
+      "claimed_table": "Wager et al. 2016, Table 2 (worked CNS-MPO desirability example)",
+      "document_acquired": false,
+      "why_unverified": "No 2016 article or table bytes were ever acquired or hashed: pubs.acs.org returned HTTP 403 and the DOI is not in PMC. These six values were copied from a prior audit report, not transcribed from primary-source bytes. Because they are then pushed through the very transforms they are supposed to check, agreement proves only that this implementation is self-consistent — it is circular, and it cannot corroborate itself.",
+      "how_to_promote_it": "Acquire the lawful public 2016 article/table bytes, record the retrieval locator and raw SHA-256 in method/sources.json, transcribe the row independently FROM those bytes, and only then may this become a published end-to-end golden."
+    },
+    "row": {
+      "clogp": {
+        "value": 3.7,
+        "t0": 0.65
+      },
+      "clogd_74": {
+        "value": 2.7,
+        "t0": 0.65
+      },
+      "tpsa": {
+        "value": 90.0,
+        "t0": 1.0
+      },
+      "mw": {
+        "value": 375.0,
+        "t0": 0.89
+      },
+      "hbd": {
+        "value": 1.0,
+        "t0": 0.83
+      },
+      "pka_most_basic": {
+        "value": 9.0,
+        "t0": 0.5
+      },
+      "expected_total_from_this_implementation": 4.5
+    }
+  }
+}

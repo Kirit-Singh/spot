@@ -1,0 +1,79 @@
+{
+  "schema": "spot.stage01_control_method.v1",
+  "method_version": "stage1-continuous-v3.0.1",
+  "scoring_method": "deterministic expression-bin-matched panel-minus-control score",
+  "score_formula": "score(c,p) = mean(.X over panel_genes_measured) - mean(.X over matched controls)",
+  "not_an_exact_scanpy_output": true,
+  "binning": {
+    "universe": "all 18130 finite assay-present genes (var_names), before pruning",
+    "statistic": "per-gene mean of .X over all 396000 cells (chunked float64 streaming column-sum)",
+    "rank": "scipy.stats.rankdata(mean_X, method='average'), 1-based",
+    "bin_formula": "floor((rank - 1) * 25 / n_finite), n_finite = 18130",
+    "range": [0, 24],
+    "n_bins": 25,
+    "n_mean_zero_genes_in_bin0": 174,
+    "bins_artifact": "stage01_bins_v3.csv",
+    "bins_artifact_raw_sha256": "5cf42fcdd6db26119ebde96f172dae12c8d5fe34b1202e34db1b586478a96fd8",
+    "bins_content_sha256": "32f926cace9322752aba10557b1bafe3e0c8f9d8f285551fcd2d3648bd335f78",
+    "bins_content_sha256_def": "sha256 of newline-joined 'var_index,gene,bin' rows in var_names order",
+    "bins_are_loaded_not_recomputed": "validation and the 20-seed sensitivity LOAD stage01_bins_v3.csv; the per-gene bins are NOT re-derived (the mean is float-order fragile on non-marker borderline genes)",
+    "superseded_intermediate": {
+      "bins_sha256": "0e8423df26d73c81751609f2e7041dada15db4c32938c40be77661c88f0d56d6",
+      "status": "unrecoverable — the Phase-1 kernel state that produced it is gone; the checkpoint stored only marker_bins/candidate_counts/hash, not the 18130 per-gene bins. NO per-gene diff can be claimed against it."
+    }
+  },
+  "bins_amendment": {
+    "revision": "stage1-continuous-v3.0.1",
+    "kind": "prospective equivalent-method amendment (NOT recovery of the original intermediate)",
+    "reason": "T7b self-check found bins_sha256=0e8423df not reproducible (float summation order); materialize the bins as an explicit committed artifact loaded (not recomputed) by validation.",
+    "scores_unchanged": "scorer coefficients and all 396k scores are byte-unchanged; no 396k re-run",
+    "acceptance_met": {
+      "marker_bins_match_checkpoint": true,
+      "occupied_bin_candidate_counts_match_checkpoint": true,
+      "all_2100_controls_reconstruct_byte_for_byte": true,
+      "note": "reproducing only the primary controls is necessary but not sufficient; (1)+(2)+(3) together prove equivalence on the occupied marker bins, so alt-seed draws reproduce"
+    },
+    "independent_verification": "lead loaded the emitted bins and confirmed all three acceptance checks with own code (marker_bins 0 mismatches, candidate_counts 0 mismatches, 2100 controls 0 mismatches; detected 17956, eligible 17903)",
+    "aborted_t7b_attempt": "the first T7b run correctly aborted (EXIT=1) on the bins_sha256 self-check; that abort triggered this amendment and is preserved in provenance (not silently replaced)"
+  },
+  "pool": {
+    "assay_present": 18130,
+    "detected_in_396k": 17956,
+    "control_eligible_pool": 17903,
+    "definition": "detected_in_396k minus the 53 present program/activation marker genes",
+    "activation_predictor_markers": ["CD69", "CD38", "MKI67", "TNFRSF9", "IL2RA"],
+    "pool_sha256": "72b4648c96588eae57eb6ff25ca9d8717f19c14549c9f1f93640dc2aaa11b5db"
+  },
+  "draw": {
+    "scheme": "keyed_sha256",
+    "key": "12345|{program_id}|{bin}|{gene}",
+    "encoding": "utf-8",
+    "select": "50 lowest hex digests per occupied marker bin, no replacement",
+    "digest_tie": "digest_hex ascending, then var_name index ascending",
+    "ctrl_size": 50,
+    "occupied_bin_definition": "bins containing the program's detected (measured) panel genes"
+  },
+  "activation_predictor_draw": {
+    "program_id": "activation_predictor",
+    "panel": ["CD69", "CD38", "MKI67", "TNFRSF9", "IL2RA"],
+    "occupied_bins": [18, 22, 24],
+    "n_controls": 150,
+    "leakage": 0,
+    "materialized": true,
+    "independently_verified": "lead reproduced these 150 rows with the frozen algorithm (key 12345|activation_predictor|{bin}|{gene}); occupied bins {18,22,24}, zero leakage",
+    "note": "controls for the activation-adjusted CD4 CTL-like sensitivity lane; display/sensitivity-only; never a Stage-2 pole. Rows are in stage01_controls_v3.csv (program_id=activation_predictor)."
+  },
+  "present_but_undetected_panel_genes": [],
+  "intended_only_absent": [
+    {"symbol": "HLA-DRA", "ensembl": "ENSG00000204287", "program": "diff_activated", "note": "absent from var; recorded intended-only; never scored"}
+  ],
+  "controls_table": "stage01_controls_v3.csv",
+  "cross_program_overlap": {"max_shared": 13, "max_pair": ["treg_like", "th2_like"], "mean_shared": 2.33, "distinct_control_genes": 1828, "total_draws": 1950},
+  "residual_correlation_note": "program-order-invariant draws remove DIRECT cross-panel leakage; they do NOT make programs biologically or statistically independent. Shared controls and genuine co-expression can still correlate programs; residual correlation is measured and reported in validation, never asserted away.",
+  "independent_verification": {
+    "verifier": "lead (generator != verifier)",
+    "method": "independent code: chunked float64 CSR column-means -> divN bins -> detected pool -> own keyed-hash draws",
+    "result": "11/11 primary programs byte-identical control sets (1950 rows, 0 mismatches on (program_id,bin,rank_in_bin)) + activation_predictor 150 rows independently reproduced (bins {18,22,24}, 0 leakage); total 2100 control rows; reproduced detected=17956, control_eligible_pool=17903, bin24_eligible=715, bin0_eligible=552, marker union 54 present 53 absent [HLA-DRA]"
+  },
+  "no_p_or_fdr": true
+}

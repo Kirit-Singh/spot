@@ -1,0 +1,211 @@
+{
+  "artifact_class": "W16's exported view/receipt are `fixture` \u2014 real shape, NOT production. Do not report their contents as results.",
+  "consumed_by": [
+    "UI",
+    "packer"
+  ],
+  "consumer_entry_point": {
+    "args": [
+      "scorecards",
+      "store_candidates",
+      "stage3_selection_view",
+      "row_kind",
+      "stage3_receipt_path",
+      "stage3_bundle_dir",
+      "stage3_store_dir",
+      "arm_summaries"
+    ],
+    "emits": [
+      "schema_id",
+      "stage3_v2_selection",
+      "stage3_v2_membership_contract",
+      "stage3_receipt",
+      "typed_arm_placements_corroborated",
+      "candidates",
+      "counts",
+      "store_is_global_and_was_not_filtered"
+    ],
+    "function": "build_v2_projection",
+    "join_rules": [
+      "stage3 candidate_ids unique",
+      "stage4 scorecard candidate_ids unique",
+      "every scorecard candidate resolves exactly once to an admitted stage3 candidate",
+      "out_of_view permitted ONLY for an existing stage3 candidate",
+      "displayed + out_of_view == scorecards in, exactly"
+    ],
+    "module": "analysis/projection.py"
+  },
+  "counts": {
+    "n_stage3_view_candidates": "rows in the selection view (already filtered by Stage 3)",
+    "source_is_selection_view": true,
+    "store_is_global_and_was_not_filtered": "false unless the global store is loaded and hashed"
+  },
+  "handoff": "spot.stage04.v2_membership_interface.v1",
+  "membership": {
+    "arm_keys_are_matched_by": "exact full-string equality; never prefix, never display name",
+    "contract_id": "spot.stage04.stage3_v2_membership.v1",
+    "exact_match_rule": "arm_keys_are_matched_by_exact_string_equality_never_by_prefix",
+    "membership_sha256": {
+      "over": [
+        "contract",
+        "candidate_id",
+        "selection.identity()",
+        "arm_keys_by_column",
+        "exact_match_rule"
+      ],
+      "selection_identity_fields": [
+        "selection_id",
+        "selection_full_sha256",
+        "full_contract_content_sha256",
+        "question_id",
+        "selection_canonical_sha256",
+        "analysis_mode",
+        "conditions (ORDERED)",
+        "selected_arm_keys (set)",
+        "role_arms (ORDERED, per-slot)",
+        "view_id",
+        "view_content_sha256"
+      ],
+      "why_role_arms": "a SET of arm keys is symmetric: an A/B swap or a role swap leaves it identical while inverting the question"
+    },
+    "row_kinds": {
+      "store": "global store row; makes no view claim",
+      "view": "emitted view row; MUST carry view_arm_keys_by_origin"
+    },
+    "store_arm_key_columns": [
+      "observed_perturbation_arm_keys",
+      "inverse_direction_hypothesis_arm_keys",
+      "pathway_hypothesis_arm_keys",
+      "opposed_arm_keys",
+      "unresolved_arm_keys"
+    ],
+    "store_union_column": "arm_keys",
+    "union_semantics": "arm_keys == union(typed columns), EXACT both directions",
+    "view_claim_column": "view_arm_keys_by_origin"
+  },
+  "produced_by": "Stage 4 (04_PKPD)",
+  "projection_source": {
+    "caller_copies": "permitted ONLY if canonically identical to the bound bytes; else refused",
+    "everything_projected_comes_from": "the receipt-loaded view document",
+    "refusal_code": "stage4_caller_copy_is_not_the_hash_bound_artifact"
+  },
+  "receipt": {
+    "bundle_dir_required": true,
+    "canonical_json": "json.dumps(sort_keys=True, separators=(',',':'), ensure_ascii=True, allow_nan=False); floats rejected",
+    "corroborating_tables": [
+      "candidates",
+      "arm_summaries"
+    ],
+    "corroborating_tables_travel_inside_the_hash_bound_view": true,
+    "emitted_fields": [
+      "schema_version",
+      "receipt_sha256",
+      "receipt_raw_sha256",
+      "verdict",
+      "artifact_class",
+      "generator_id",
+      "verifier_id",
+      "code_commit",
+      "producer_tree_is_clean"
+    ],
+    "every_reference_must_be": "a regular, bundle-relative file (absolute/traversal refused; missing refused)",
+    "generator_must_differ_from_verifier": true,
+    "membership_in_force": {
+      "rule_id": "spot.stage03.candidate_membership.evidence_rederived.v2",
+      "schema": "spot.stage03_candidate_membership.v2",
+      "verifier_id": "spot.stage03.candidate_membership.verifier.v2"
+    },
+    "must_be_read_from": "disk (a caller dict is REFUSED)",
+    "owner": "W16 (Stage 3) \u2014 Stage 4 consumes, does not coin",
+    "producer_tree_must_be_clean": true,
+    "receipt_alone_is_not_admission": "admission = this receipt PLUS the full hash-bound view it names",
+    "required_membership_fields": [
+      "schema",
+      "rule_id",
+      "verifier_id",
+      "vocabulary_digest_in_force"
+    ],
+    "required_top_fields": [
+      "schema_version",
+      "receipt_sha256",
+      "verdict",
+      "verifier_id",
+      "generator_id",
+      "producer_tree_is_clean",
+      "code_commit",
+      "artifact_class",
+      "membership",
+      "store",
+      "view"
+    ],
+    "required_view_fields": [
+      "path",
+      "raw_sha256",
+      "canonical_sha256",
+      "view_content_sha256",
+      "view_id"
+    ],
+    "schema": "spot.stage03_membership_receipt.v1",
+    "self_hash_field": "receipt_sha256",
+    "self_hash_rule": "sha256(canonical_json(receipt - receipt_sha256))",
+    "verdict_must_be": "admit",
+    "view_hash_rules": {
+      "canonical_sha256": "sha256(canonical_json(view))",
+      "raw_sha256": "sha256 of the view file BYTES at bundle-relative view.path",
+      "view_content_sha256": "sha256(canonical_json(view - view_id - view_content_sha256))",
+      "view_id": "view_content_sha256[:16]"
+    }
+  },
+  "selected_arms": {
+    "arm_key_grammar": "lane|program_id|desired_change|condition[|to_condition]",
+    "context_arity_by_analysis_mode": {
+      "direct_within_condition": 1,
+      "temporal_cross_condition": 2
+    },
+    "desired_change_is_derived_from": {
+      "away|high": "decrease",
+      "away|low": "increase",
+      "toward|high": "increase",
+      "toward|low": "decrease"
+    },
+    "pole_A_sits_at": "conditions[0]",
+    "pole_B_sits_at": "conditions[-1]",
+    "required_blocks_exact_slots": [
+      "selected_arms.arms",
+      "selection.roles",
+      "selection.poles"
+    ],
+    "role_by_slot": {
+      "A": "away_from_A",
+      "B": "toward_B"
+    },
+    "slots": [
+      "A",
+      "B"
+    ]
+  },
+  "status": "NATIVE_V2_ADMISSION_CLOSED",
+  "still_owed_by_W16": [
+    "method.schemas_sha256 (v2 schema-set identity, from a clean committed producer)",
+    "verifier.verify_stage3_v2 entry point + exact required inputs (gate 2, out-of-process)",
+    "an artifact_class=analysis bundle (every bundle here is a fixture and is refused by name)",
+    "a selection view emitted with the bundle (current fixture: selection_roles_assigned=false)",
+    "the canonicalization rule behind content_sha256 (else canonical hashes are cross-checked only)"
+  ],
+  "typed_evidence": {
+    "conflicting_is_refused_never_skipped": true,
+    "rule": "each ACTIVE arm is in EXACTLY the column its arm_evidence_state maps to, and in none of the other four",
+    "scope": "the SELECTED ACTIVE arms only",
+    "state_to_column": {
+      "inverse_direction_hypothesis": "inverse_direction_hypothesis_arm_keys",
+      "observed_perturbation": "observed_perturbation_arm_keys",
+      "opposed": "opposed_arm_keys",
+      "pathway_hypothesis": "pathway_hypothesis_arm_keys",
+      "unresolved": "unresolved_arm_keys"
+    },
+    "states_with_no_column": [
+      "conflicting",
+      "not_annotated"
+    ]
+  }
+}

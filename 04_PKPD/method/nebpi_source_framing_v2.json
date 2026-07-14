@@ -1,0 +1,53 @@
+{
+  "schema_id": "spot.stage04_method_nebpi_source_framing.v2",
+  "method_id": "nebpi_source_framing_v2",
+  "method_version": "2.0.0",
+  "description": "WHAT KIND of source Grossman et al. 2026 is, stated explicitly so that nothing downstream can quietly upgrade it. This is a NEW v2 method file, not an edit of nebpi_grossman2026_v1.json: that file is bound by hash into every release ever emitted, and editing it would make all of them unverifiable.",
+
+  "primary_source": {
+    "source_id": "grossman2026_nebpi",
+    "title": "Evaluating 'brain permeability': A critical issue for the development of therapeutic agents for primary and metastatic brain tumors",
+    "authors_note": "Stuart A. Grossman, Amy Barone, Roy E. Strowd, et al.",
+    "container": "Neuro-Oncology",
+    "citation": "Neuro-Oncology. 2026;28(7):1599-1611",
+    "published_online": "2026-03-12",
+    "doi": "10.1093/neuonc/noag051",
+    "pmid": "41818680",
+    "pmcid": "PMC13338342",
+    "license": "CC BY 4.0",
+    "article_content_sha256": "90ffdf2a07f742f58128bdafeeebedb3d3779640884142783152113fc6473937",
+    "article_content_hash_rule": "sha256 over the PMC BioC response with the envelope's <date> element (the RETRIEVAL date, not the article) blanked. The raw bytes of an unchanged paper differ every day the endpoint is re-fetched; the content hash does not."
+  },
+
+  "source_kind": "peer_reviewed_expert_consensus_review",
+  "source_kind_detail": "A peer-reviewed expert-consensus review arising from an Adult Brain Tumor Consortium (ABTC) / FDA workshop. Calling it the '2026 NEBPI framework' or 'ABTC/FDA workshop consensus' is accurate.",
+
+  "not_source_kind": [
+    "FDA_guidance",
+    "FDA_guideline",
+    "regulation",
+    "regulatory_requirement",
+    "validated_numeric_predictor",
+    "universal_numeric_BBB_cutoffs"
+  ],
+  "not_source_kind_statement": "Grossman et al. 2026 is NOT an FDA guidance document, NOT a regulation, NOT a validated predictive model, and NOT a set of universal numeric BBB cutoffs. Calling it an FDA guideline would overstate its status. It is a criterion-level evidence framework: it tells you what evidence a permeability claim needs, not what number a drug scores.",
+
+  "consequences_for_stage4": [
+    "NEBPI is a CRITERION-LEVEL evidence model, never a score. Stage 4 emits no NEBPI number.",
+    "An NEBPI class is a property of an evidence CONTEXT (active moiety x route x formulation x dose x schedule x population x tumour context), never of a drug.",
+    "The framework may not be cited as a regulatory requirement, and a drug that fails it has not failed an FDA standard.",
+    "Physicochemical descriptors and CNS-MPO are design benchmarks in this source, not proof of delivery, and cannot establish a permeability class alone or in combination."
+  ],
+
+  "cns_mpo_completeness_policy": {
+    "id": "cns_mpo_incomplete_never_blocks_measured_evidence",
+    "statement": "CNS-MPO may be INCOMPLETE, and an incomplete CNS-MPO never blocks, downgrades or gates a measured-evidence lane. Under the project's public-data-only rule a valid logD7.4 and most-basic pKa are frequently unavailable (PubChem computes neither; RDKit implements neither, and any 'RDKit ClogD' or 'RDKit pKa' would be fabricated). The correct outcome is status='incomplete' with total=null.",
+    "must_not": [
+      "fabricate or impute logD7.4 or most-basic pKa",
+      "substitute logP for logD7.4",
+      "sum the available components into a partial total",
+      "make CNS-MPO completeness a prerequisite for the measured exposure, transporter, label-safety or NEBPI lanes"
+    ],
+    "rationale": "A compound whose sixth property is simply unknown would otherwise score lower than one whose sixth property is bad, and a descriptor gap would silently suppress real measured brain exposure. The descriptor lane is optional; the measured lanes are the evidence."
+  }
+}

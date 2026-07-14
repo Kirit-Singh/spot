@@ -1,0 +1,19 @@
+{
+  "_fixture_notice": "FIXTURE. Synthetic PubChem property table. No logD7.4 and no pKa: PubChem does not compute them, and Stage 4 does not fabricate them.",
+  "PropertyTable": {
+    "Properties": [
+      {
+        "CID": 999999901,
+        "MolecularFormula": "C6H6N6O2",
+        "MolecularWeight": "194.15",
+        "InChIKey": "FIXTUREKEYAAAA-BBBBBBBBBB-N",
+        "InChI": "InChI=1S/FIXTURE/synthetic",
+        "IUPACName": "fixture-compound (invented)",
+        "TPSA": "106",
+        "HBondDonorCount": 1,
+        "HBondAcceptorCount": 4,
+        "XLogP": "-0.3"
+      }
+    ]
+  }
+}

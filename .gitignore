@@ -12,6 +12,7 @@ venv/
 node_modules/
 dist/
 .vite/
+.wrangler/
 
 # Data / scratch / outputs — NEVER commit data
 .scratch/
@@ -22,6 +23,8 @@ outputs/
 
 # Secrets / local (infra.env is tracked and non-secret; .env is NOT)
 .env
+.dev.vars*
+!.dev.vars.example
 *.local
 
 # OS
@@ -32,3 +35,6 @@ pipeline/datasets/
 
 # e2e run outputs
 pipeline/tests/e2e/work/
+01_programs/analysis/_t8_staging/
+# Stage-1 -> Stage-2 bridge: generated/large release bundle (projections + hardlinked parquet)
+01_programs/analysis/stage2_bridge/_release_staging/

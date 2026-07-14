@@ -1,0 +1,12 @@
+# Explicitly PARKED paths that may mention Reactome in a GO-BP-only release.
+#
+# The canonical release is GO-BP-only. Reactome release metadata, coverage statistics, and
+# download provenance must NOT ship in any served app byte. The ONLY permitted mentions are
+# a parked LICENSE or HISTORY record — i.e. the fact that Reactome was evaluated and is not
+# part of this release, and the licence terms under which its bytes were once fetched.
+#
+# One served path per line, relative to the distribution root. A path listed here is exempt
+# from the Reactome refusal in verify_release_binding.py and NOTHING ELSE is.
+#
+# Empty by design: no app artifact is parked today, so every Reactome mention in the served
+# bundle is currently a release blocker. Adding a line here is a deliberate, reviewable act.

@@ -1,586 +1,451 @@
-# spot Stage-2 — primary architecture: gene-skew scoring for a Stage-1-selected A→B contrast
+# spot Stage-2 — gene-lever screen for a Stage-1-selected transcriptional-program contrast
 
-_Shipped default contrast: induced-Treg(48h) → inflammatory Th1(8h)._
-
-_Consolidated design memo — the single primary architecture for Stage-2. Supersedes
-the earlier `STAGE2_PLAN.md` + `STAGE2_ADDENDUM.md`: folds in the perturbation-defines-
-states layer (former addendum Part A), incorporates the Claude Science review
-(`STAGE2_REVIEW.md`, 2026-07-10), and scopes the tumor-context / druggability /
-brain-penetrance evidence out to Stages 3–4 (former addendum Part B, deferred below).
-No heavy compute run. Grounded in the Stage-1 chain (`stage1_pipeline.py`,
-`cluster_scores.py`, `label_clusters.py`, `verify_reproduce.py`, `reproduce.sh`), the
-Stage-1 review (`REVIEW_MEMO.md`), and the Marson dataset under
-`/mnt/tcenas/datasets/raw/public/marson2025_gwcd4_perturbseq/`._
+_Design/planning memo. Not implemented. Rewritten 2026-07-10 after verifying every retained
+number against the released `GWCD4i.DE_stats.h5ad`, the authors' pinned code, and the scLDM-CD4
+model card. Supersedes the prior consolidated plan and both prior Claude reviews
+(`STAGE2_REVIEW.md`, `STAGE2_REVIEW_R2.md`), whose load-bearing claims — a `3,341`-knockdown
+screen, an NTC-guide null from `DE_stats`, an in-project `CEGv2.txt`, a scLDM lane "conditioned
+on A", and a cross-timepoint Treg→Th1 "transition" default — were found factually wrong (§18
+disposition table)._
 
 ---
 
-## 0. What Stage-2 is — and where it stops
-
-**The states Stage-2 skews between are not hardcoded — they are chosen in Stage-1.**
-The Stage-1 workbench's two population pickers (source *"cells…"* = **A**, target
-*"state…"* = **B**) plus the **"identify genes"** action define an **A→B contrast**,
-and that selected contrast — the two population definitions, keyed on `obs['L0.8']` /
-`obs['barcode']` — is the **locked artifact Stage-1 hands to Stage-2**. Stage-2 is the
-general engine that, for *whatever* A→B the selector picks, finds the **perturbations
-(gene knockdowns) that drive that transition**. The **shipped default** — the
-biologically motivated contrast for GBM — is **induced-Treg(48h) → inflammatory
-Th1(8h)**, the worked example throughout; substitute the selected A/B for any other.
-
-That default came out of Stage-1: the "Treg" cluster is **activation-induced FOXP3⁺
-regulatory-like cells at 48 h**, not natural Tregs (FOXP3⁺CTLA4⁺ rises ~26× Rest→48 h
-while Helios/IKZF2 stays flat — Follow-up 1 in `REVIEW_MEMO.md`), and the only coherent
-inflammatory effector skew in the reference is **Th1, best expressed in the 8 h-activated
-compartment** (32.2% of it). Stage-2 turns to the **perturbation** arm — ~3,341 gene
-knockdowns (CRISPRi), across Rest/Stim8hr/Stim48hr, 4 donors — and asks, for the selected
-contrast: *which knockdowns push cells off state A toward state B?* For the default:
-*which knockdowns de-repress the inflammatory Th1 program and reverse induced-FOXP3?*
-
-**Scope boundary (hard).** Stage-2's deliverable is a **ranked, gated candidate-gene
-table** — genes whose knockdown skews the selected contrast, with direction, specificity,
-power, reproducibility, and significance. **Stage-2 stops there.** Whether a candidate is
-a glioma dependency, where it sits in the tumor (malignant cell vs immune
-microenvironment), how it changes at recurrence, whether it is druggable, brain-penetrant,
-or safe in normal brain — all of that is **downstream (Stages 3–4)**, designed in §4 so
-the Stage-2 output is shaped for the handoff, but **not computed here**.
-
-The engine rests on one directional object — a signed **A→B program axis** in gene space
-(default induced-Treg → Th1) — and one cheap primary metric: the **projection of each
-perturbation's genome-wide DE vector onto that axis**. Everything else is axis-quality
-gating, de-confounding, power gating, and reproducibility scaffolding around those two.
-
----
-
-## 1. Defining the selected A→B axis (and letting perturbations sharpen it)
-
-### 1.1 What a "program" is, so it is reusable across stages
-
-A **program** is a named, signed, weighted vector over a fixed gene universe, plus its
-provenance. Nothing more. Stage-1's marker panels are the degenerate case (binary,
-hand-curated); Stage-2 generalizes to data-derived continuous weights but keeps the same
-primitive, so any stage can load a program and **project new data onto it** by a dot
-product. Registry entry (schema in §5):
-
-```
-program_id, display_name, method, gene_universe_id,
-weights: { gene_symbol: signed_weight },   # sign convention explicit
-provenance: { source_cells, contrast, params, seed, code_hash },
-sign_convention: "positive = <state B>, negative = <state A>"   # recorded from the selection
-```
-
-The primitive is already parameterized — the sign convention is filled from *which*
-population was picked as A vs B, not hardcoded. This is what makes a program reusable and
-portable across the embedding, the cell set, and (in §4) the tumor boundary.
-
-### 1.2 Defining the axis — methods and recommendation
-
-**The central design question is how to define the selected A→B axis** (default
-induced-Treg → Th1). Four primitives, with tradeoffs:
-
-1. **Marker panels (Masopust et al.), Stage-1 style.** Interpretable, cross-stage stable,
-   tiny — but sparse and 3′-dropout-sensitive (FOXP3 detected in only 27.5% of
-   cluster-Tregs). Good as an **anchor / sanity readout**, too thin to be the sole axis.
-2. **NMF on the reference.** Unsupervised, coherent additive co-expression programs — but
-   factors need not align with the A↔B contrast and drift with k/initialization. Best to
-   **discover and register reusable programs**, not to define the directional metric.
-3. **scVI/scANVI Bayesian DE.** The Stage-1 scVI model exists (`/mnt/tcenas/models/spot_scvi`);
-   DE between the A and B cell groups gives a **batch-corrected, donor-aware** signed
-   effect per gene. Strong (handles the 4-donor structure as the embedding did), but
-   model-tied and less transparent than a plain contrast.
-4. **Pseudobulk cluster-contrast DE (DESeq2/edgeR, donor covariate).** Signed logFC
-   between the two states on the reference cells, donor-controlled. Most transparent and
-   most directly "the axis we want"; costs a heavy cell-level load.
-
-**Recommendation — layered: primary axis + anchors + discovery.**
-
-- **Primary axis** = the signed **state-A vs state-B** contrast (default induced-Treg-48h
-  vs Th1-8h), computed on the reference cells, **donor-controlled**. Compute two ways —
-  scVI DE (3) and pseudobulk DESeq2 (4) — and keep the axis only on genes where the two
-  **agree in sign** (a cheap robustness gate + an honest weight vector). Sign:
-  **positive = state B (default Th1-inflammatory), negative = state A (default
-  induced-Treg)** — set per-run from the selection.
-- **Anchor programs** = interpretable panels reused verbatim: *induced-Treg* {FOXP3,
-  CTLA4, CCR8, TNFRSF18, IKZF2} and *Th1-inflammatory* {TBX21, CXCR3, IFNG, IL12RB2,
-  STAT1/IFN-response}. Orthogonal, human-readable; lets us report "reverse-FOXP3"
-  separately from "de-repress-Th1."
-- **Discovery programs (optional)** = NMF factors, registered by id, to interpret *what
-  else* moves and seed later stages.
-
-**Why the axis lives in the DE gene universe.** The perturbation scoring (§2) works in the
-`DE_stats` 10,282-gene space, so the axis must be **restricted to the intersection** of
-the reference universe (18,130) and the DE universe (10,282), and the load-bearing genes
-(FOXP3, CTLA4, CXCR3, TBX21, IFNG) must survive that intersection with measurable baseline
-(risk R3).
-
-**A confound baked into the default poles (do not leave implicit — CS review).** The
-default poles live at **different timepoints**: A = induced-Treg at **48h**, B = Th1 at
-**8h**. So the axis conflates a *fate* difference (Treg vs Th1) with an *activation-
-duration* difference (48h vs 8h) — and perturbations are then scored on their **Stim48hr**
-DE. A knockdown that merely makes 48h cells look transcriptionally *younger* (more
-8h-like, less activation-matured) will project positive with no real Th1 skew.
-Mitigations, in preference order: (a) define both poles at a **common timepoint** where
-the states co-exist — **but this may not be available**: whether induced-Treg and Th1
-co-occur in usable numbers at a single timepoint is an empirical question, and if they do
-not, only the partial fixes below remain; (b) regress an explicit **activation-duration /
-kinetics axis** out of the primary axis `w` — **note this direction is largely collinear
-with G4's proliferation/translation axis for this default** (8h→48h activation *is*
-substantially a proliferation/metabolic ramp), so project **one combined nuisance
-direction, not two**: R2b and G4 are near-duplicate operations here, and running both
-risks over-projecting away the real Treg-vs-Th1 signal; (c) at minimum, verify top hits
-are not merely shifting cells along the 8h↔48h activation trajectory. Tracked as risk R2b.
-
-### 1.3 Axis-level gates — what makes the engine *general*, not just general-shaped (CS review)
-
-The projection δ·ŵ is always computable, but its *meaning* is contrast-dependent. The
-Stage-1-tuned validators do not automatically transfer to an arbitrary user-picked A/B.
-**Before any perturbation is scored, gate the axis itself** — the axis-level analogue of
-the per-perturbation power tiers in §2.3:
-
-- **G1 · Separability.** Number of genes significantly separating A from B; cross-validated
-  A-vs-B classifier accuracy on **held-out reference cells**; how many genes survive the
-  two-method (scVI ∩ DESeq2) sign-agreement filter. If A and B are barely separable, `w`
-  is noise — emit **"contrast underpowered as an axis"** and refuse the screen, rather
-  than silently ranking against a poorly-conditioned direction. (The default is a large,
-  well-separated contrast and passes trivially; a user picking two nearby substates is the
-  failure mode this catches.)
-- **G2 · Proxy quality = the A and B fractions (generalizes R1).** The cheap screen
-  measures a *whole-condition* shift as a proxy for the A→B skew; the proxy is only as
-  good as how represented A and B each are in the **scored condition**. Compute and report
-  the **A fraction and the B fraction separately, over the named condition(s) they are
-  scored in** — not a single merged A∪B number; **warn (or refuse the cheap lane)** when
-  either is low. This matters acutely for the default: the screen scores **Stim48hr**,
-  where A (induced-Treg) is ~6.3% but B (Th1, best expressed at 8h) is **barely present**
-  — so a single "A∪B ≈ 6.3%" number is really just the A fraction, and the B side of the
-  A→B skew is under-represented exactly where the perturbation effect is measured (this is
-  the G2×R2b interaction). R1 bites hard here, and the compositional confirmation (§2.7)
-  is not optional for the shortlist.
-- **G3 · Sign-validation state.** The default has a beautiful sign anchor (FOXP3-KD →
-  strongly positive, §2.6). An arbitrary contrast may have **no canonical master-regulator
-  knockdown** to orient it — the sign is then mathematically fixed by the A/B labeling but
-  its *behavioral validation* is absent. Carry an explicit **`sign_validated: true|false`**
-  per contrast; when false, say so wherever a hit is reported. The default earns a
-  validated sign; a generic contrast often will not, and that changes how much trust the
-  ranking earns.
-- **G4 · Broad-axis warning for cosine-specificity.** §2.2's cosine defense assumes the
-  axis is a *focused* effector direction largely orthogonal to housekeeping/ribosomal/
-  cell-cycle space. For a broad, metabolically-loaded contrast (the obvious example:
-  anything resembling Rest vs Stim), `w` loads on exactly the genes a pan-essential
-  knockdown moves — so a sledgehammer scores **high** cosine and the specificity guard
-  **inverts into a confound**. Flag when the axis has large overlap with a proliferation/
-  translation reference direction, and project that direction out of `w` (or report it
-  alongside) so the sledgehammer signal has somewhere to go that isn't `w`. **For the
-  shipped default this proliferation direction is largely collinear with R2b's kinetics
-  axis** — project **one combined** nuisance direction, not both, or you over-project.
-
-### 1.4 Letting perturbations *define/sharpen* the states (former addendum Part A)
-
-Stage-1 defines states by **co-expression covariance in unperturbed cells** (what varies
-together naturally). The screen offers a second, independent notion — **causal/regulatory
-covariance** (what changes together when you push the system) — which separates
-co-expressed-but-independently-regulated modules from genuinely co-controlled ones, and
-can adjudicate a state *boundary* by regulatory coherence. Value is real but bounded by
-two facts about *this* screen: `DE_stats` is **whole-condition pseudobulk** (R1) and the
-substrate is a **Th0 polyclonal** context where ~82% of NTC cells make no functional call.
-Add a **three-tier** perturbation-informed layer to `define_programs.py`, each on its
-correct footing:
-
-1. **Discovery** — cluster genes by how they co-respond across knockdowns (the
-   Replogle-style perturbation-covariance construction) on the **powered subset**
-   (`ontarget_significant`, meaningful `n_downstream`). Nominates the *regulators*
-   maintaining the state A program (find the module containing FOXP3/CTLA4/CCR8; read off
-   which KDs perturb it coherently). Registered as `method="perturbation_covariance"`.
-2. **Anchoring (validate, don't define)** — a small, pre-specified set of master-regulator
-   KDs (FOXP3 for the induced-Treg pole; TBX21/STAT1 for Th1) must **agree in sign** with
-   the NTC-derived axis. Concordance = confidence; discordance = flag. **Axis geometry
-   stays on the reference contrast** — the sharpest circularity risk in this memo is
-   defining the axis from the perturbations you then score, so don't.
-3. **Coherence test** — cell-level, for anchors + abundant KDs: does the master-regulator
-   KD *selectively* move the state-A cluster? This is the **causal test of the cluster's
-   reality** (Stage-1's biggest open question — is the "Treg" cluster a regulatory state or
-   just an activation-timepoint compartment?), and it is the least circular use because it
-   tests a co-expression definition with an orthogonal causal axis. Underpowered
-   screen-wide (thin per-KD×cluster×condition counts for a 6.3% cluster) — report the
-   anchors, declare "insufficient power" for the rest.
-
-**New program-registry fields:** `regulator_anchors`, `anchor_sign_concordance`,
-`cluster_coherence_verdict`, each with its power tier. Entirely internal data
-(`DE_stats.h5ad`, `by_guide`/`by_donors`, cell-level guide-assigned files for tier 3);
-the Marson paper's own perturbation clustering is a free external cross-check.
-
----
-
-## 2. Scoring the skew induced by each knockdown
-
-### 2.1 Primary metric — a directional program-shift on the DE vector
-
-For each perturbation *X* in a condition, `DE_stats` gives a genome-wide signed effect
-vector **δ_X** (`zscore` = logFC/lfcSE default; logFC as sensitivity) over the shared gene
-universe. With unit-normalized axis **ŵ** (§1.2):
-
-- **SkewScore(X) = δ_X · ŵ** — projection onto the A→B axis. **Positive = the knockdown
-  pushes the transcriptome toward state B / away from state A** (default: toward
-  Th1-inflammatory, away from induced-Treg).
-- **Decompose** into a **B-up component** (projection onto the B anchor) and an **A-down
-  component** (projection onto the A anchor, sign-flipped; plus, called out separately, the
-  **FOXP3 and CTLA4 logFC** for the default). Distinguishes a knockdown that only
-  de-represses B from one that actually reverses the A program.
-
-Primary screen runs in the condition where state A exists (default **Stim48hr**); other
-conditions are scored as specificity context (a real hit should act where A is present).
-
-### 2.2 Specific program-shifters vs essential-gene sledgehammers
-
-- **Cosine, not just dot product.** A pan-essential KD produces a huge broad δ_X that
-  projects onto everything. Report **specificity = cos(δ_X, ŵ) = SkewScore / ‖δ_X‖**. A
-  specific shifter has high cosine; a sledgehammer has high ‖δ_X‖ but low cosine — *for a
-  focused axis*. **Caveat (G4):** this discriminator weakens or inverts as the axis
-  broadens; carry the G4 flag and the proliferation-axis projection so cosine is not
-  trusted blindly for broad contrasts.
-- **Breadth covariate.** Carry `n_total_de_genes`, `n_downstream`, `n_up/n_down` as an
-  explicit breadth flag; broad-footprint KDs get a **"broad-DE-footprint" tag**.
-- **Housekeeping/essential annotation (in Stage-2, no grant needed).** Tag
-  ribosomal/spliceosomal targets, and flag **core-essential** membership against the **Hart
-  Core Essential Genes v2 list (`CEGv2.txt`, 684 genes, already in-project — static, no
-  DepMap grant or network access)** — emitted as a `core_essential` flag. This is an
-  independent, always-available backstop to the cosine/breadth filter, and it is
-  load-bearing precisely because **G4 shows the cosine guard can invert** for broad axes.
-  Only the quantitative, glioma-**selective** Chronos dependency is deferred to Stage-3
-  (§4) — the flat common-essential separation, which the project's principles make a
-  first-class Stage-2 duty, is done here.
-
-### 2.3 Power gating — say "insufficient power" out loud
-
-Never rank a knockdown the data cannot support. Gate on `DE_stats.obs`:
-
-- `ontarget_significant == False` / `ontarget_effect_category == "no on-target KD"` → **the
-  gene wasn't knocked down**; excluded, reported as "no on-target KD," not a null result.
-- `low_target_gex == True`, small `n_cells_target`, `single_guide_estimate == True` →
-  **insufficient power** tier, reported separately, never mixed into ranked hits.
-
-Mirrors the Stage-1 discipline (the permutation-FDR floor that killed the Th2 artifact).
-
-### 2.4 Reproducibility of a hit (built into the dataset)
-
-- **Cross-guide agreement** — the skew must hold for both guides (`guide_correlation_signif`,
-  or recompute SkewScore on `by_guide` and require concordant sign).
-- **Cross-donor agreement** — replicate across donor pairs (`donor_correlation_hits_*`, or
-  SkewScore on `by_donors`). A one-donor hit is demoted.
-
-### 2.5 Significance, not just ranking (3,341-way multiplicity)
-
-Build an **empirical null** for SkewScore from the **NTC guides**: their projection
-distribution is the "no real perturbation" null. Per-perturbation empirical p = tail
-probability against the NTC null, BH-adjusted. Two constraints from the review: the null
-must be **recomputed per contrast** (its variance depends on ŵ's direction — you cannot
-cache one null across selections), and the achievable BH-adjusted tail is bounded by the
-number of NTC pseudobulks — **check n_NTC actually supports the 3,341-way multiplicity**,
-and fall back to a **parametric fit** of the NTC projection if the pure empirical tail is
-too coarse.
-
-### 2.6 Sign bookkeeping and positive controls
-
-These are **CRISPRi knockdowns** (target repressed), so a top positive hit is a gene that
-**normally maintains state A / represses state B**. For the default:
-
-- **FOXP3 knockdown** should score strongly positive (reverses induced-FOXP3) — the
-  canonical positive control that fixes the sign. **First gate before any ranking is
-  trusted.**
-- Knockdowns of the induction axis (TGFβ/SMAD, IL2–STAT5 nodes) are expected supporting
-  positives; **NTC guides** score ≈ 0 (negative control; also the §2.5 null).
-
-**General case (G3):** for a non-default A/B, pick the control whose KD is expected to
-drive B; if none exists, set `sign_validated=false` and report the sign as
-mathematically-determined-but-behaviorally-unvalidated. Do not paper over the absence.
-
-### 2.7 Two scoring views — cheap primary, expensive confirmatory
-
-1. **Transcriptional-shift (primary, cheap):** the §2.1 projection on `DE_stats`. All 3,341
-   perturbations in minutes, no cell load. This is the screen.
-2. **Compositional-shift (confirmatory, expensive, shortlist only):** for top hits, go to
-   the cell-level guide-assigned files and test whether KD of *X* actually **moves cells
-   out of the state-A cluster** toward the state-B region in the scVI embedding (a change
-   in neighborhood composition, not just mean expression). The direct phenotype, but a
-   heavy load (12 × ~150 GB) — reserved for a shortlist (the "run heavy once" discipline).
-   **Given G2 (low A∪B fraction for the default), this confirmation is load-bearing, not
-   optional.**
-
-### 2.8 Lane C — scLDM-CD4 in-silico skew (parameterized prioritizer, generator-not-evaluator)
-
-A model-based lane runs the **same A→B selection** through a generative model of this exact
-system: **scLDM-CD4 v0.1** (CZ Biohub Chicago) — a transformer autoencoder (15.2M params)
-that learns a latent CD4 cell-state representation, plus a conditional flow-matching
-Diffusion Transformer (44.3M params) that generates perturbed latent profiles conditioned
-on perturbation identity + context (donor, timepoint) with classifier-free guidance.
-Trained — per the **scLDM-CD4 model card** (the source of the figures below, not the Zhu
-preprint itself) — on **~14.5M cells** on a fixed **3,699-HVG** panel, derived from the
-Marson Perturb-seq raw data of **Zhu et al. 2025** (bioRxiv 2025.12.23.696273; the
-*training-data* source). The released checkpoint's **15.2M-param autoencoder / 44.3M-param
-flow-matching** sizes are likewise the model card's. Model = Dibaeinia et al. 2026,
-building on scLDM (Palla et al. 2025, arXiv 2511.02986). **License: MIT** (code
-`github.com/czbiohub-chi/scldm_cd4`, weights `hf.co/biohub/scldm_cd4` — LICENSE verified),
-so usable/redistributable under the public-only rule.
-
-**How the flow actually works (corrected — CS review).** The OT coupling is
-**noise→data**, *not* control→perturbed and *not* A→B. The model gives **conditional
-distributions**; it does **not** "transport A into B." So an in-silico A→B skew must be
-**constructed as a counterfactual difference**: **condition on the A/source context** (its
-donor/timepoint), **generate under knockdown vs under control, take the difference vector,
-and project it onto the A→B axis.** There is no "B-context conditional" in this operation
-— the model is conditioned on the *source*, and B enters only as the axis the difference
-is projected onto. This is **conditional counterfactual generation**, and the resulting
-in-silico skew is a **difference of two generated conditionals** — i.e. it retains a
-mean-shift character and does not magically transcend the measured lane's limits.
-
-**How it plugs into the parameterized axis.** A documented use case is *in-silico ranking
-of candidate perturbations toward a desired transcriptomic effect*; here the desired
-outcome is the selected target B, so the model is parameterized by the **same A→B
-selection** as the measured lanes:
-
-- **In-silico SkewScore.** For each knockdown, generate KD-vs-control **conditioned on the
-  A/source context**, take the difference vector, and **project it onto the A→B axis** —
-  the same signed, directional object as the measured lane. (Ranking by "closeness to B"
-  alone is a *different, one-sided* quantity, so don't; match the measured score.)
-- **Concordance is a QC gate, not a hit signal (reframed — CS review).** Concordance with
-  the measured DE on single-gene KDs is *largely circular* as evidence (R9), but *very*
-  useful as **model validation**: before trusting scLDM as a prioritizer at all, confirm
-  it reproduces the measured positive control (does model-generated FOXP3-KD move toward
-  loss-of-induced-Treg?) and a held-out set of measured KDs. Passing that gate is a
-  *precondition for use*; it is not evidence harvested from the model.
-- **Where it legitimately adds reach (bounded).** The vendor-claimed reach is **donor /
-  timepoint interpolation** where empirical data are thin, and prioritization ahead of the
-  expensive §2.7 confirmation. Combination-KD generation *is* a listed capability but is
-  squarely the **out-of-distribution regime** the model itself flags as least reliable —
-  use only with the firewall and label as **untested extrapolation**, never as a strength.
-- **Give the lane its own null.** Generate under NTC/scrambled conditioning (or label
-  permutation) so a `model_only` call means "beyond the model's own noise," not merely
-  "high on an unnormalized list" — restoring symmetry with Lane A's §2.5 null.
-
-**Firewall (load-bearing).** scLDM is **not independent evidence** — a learned compression
-of the *same* measurements, so it **inherits the same confounds** (R1 whole-condition
-structure, R2 mean-shift assumption, the R2b activation confound, and the 6.3%-subset
-sparsity) — it cannot supply resolution the training data did not contain, and is weakest
-exactly on the rare induced-Treg subset we most care about. **Measured DE stays ground
-truth; scLDM proposes and prioritizes.** Honor its constraints: **flow-matching** model for
-generation (autoencoder is inference/encoding only); **HVG-coverage check** — verify the
-load-bearing axis genes (FOXP3, CTLA4, IFNG…) are in the model's 3,699-HVG panel, or the
-lane literally cannot represent the contrast (R3 redux, R9b); **no CPU inference** (tested
-on A100/H100/A6000) → a **remote-GPU job** to provision (§7 step 2b). Kept strictly
-`suggestive` / `CS-complement`, **never in the confirmed set**.
-
----
-
-## 3. What Stage-2 outputs — the handoff
-
-Stage-2's deliverable, and the boundary of its responsibility:
-
-- **`stage02_programs.json`** — the program registry (§1.1 schema): the A→B axis + anchors
-  + NMF/perturbation-covariance discovery programs, each a signed weight vector over the
-  named gene universe, with provenance. *The cross-stage-reusable artifact.*
-- **`stage02_perturbation_scores.json`** — one record per perturbation × condition:
-  `{target_gene, ensembl_id, condition, skew_score, b_up, a_down, foxp3_logfc, ctla4_logfc,
-  cosine_specificity, breadth (n_total_de_genes), power_tier, ontarget_effect,
-  guide_concordance, donor_concordance, emp_p, q, rank, insilico_skew, insilico_rank,
-  insilico_null_p (Lane C, §2.8; null if not run), flags:[sledgehammer | core_essential |
-  underpowered | no_ontarget_kd | broad_axis | sign_unvalidated | model_only]}`.
-- **Axis-quality record** (§1.3) — per contrast: `separability`, `a_union_b_fraction`,
-  `sign_validated`, `broad_axis_flag`. Ships with the scores so a consumer knows how much
-  the ranking earned.
-- **Overlay JSON** for the frontend — mirrors `stage01_umap_seed.json`: ranked knockdowns
-  with the two-axis (skew vs specificity) coordinates, decomposition, flags, `nomen_counts`-
-  style summaries, `emitted_at`.
-
-**The ranked candidate-gene table is the input to Stage-3.** Nothing tumor-, drug-, or
-brain-related is computed in Stage-2.
-
----
-
-## 4. Deferred downstream — Stages 3–4 (former addendum Part B, scoped)
-
-A Stage-2 candidate is gene **X** whose KD skews the selected contrast. The GBM question —
-*is X a druggable driver of transcriptional/fate changes, tumor-intrinsic or in the
-microenvironment?* — is answered by a **per-gene, multi-axis scorecard** (an
-*intersection*, not one collapsed score, because targets win on different axes). The six
-evidence types and **where each lives**:
-
-| # | Evidence axis | Resource(s) | Stage |
-|---|---|---|---|
-| 1 | **Glioma dependency** — *selective*, not pan-essential (the flat core-essential tag is done in Stage-2 via CEGv2, §2.2) | DepMap glioma-lineage Chronos | **03** |
-| 2 | **Tumor expression + malignant-state / TME compartment** (cancer cell vs immune microenv.) | TCGA-GBM/LGG + CGGA (bulk); Neftel malignant states + GBmap TME (single-cell); HPA Pathology | **03** |
-| 3 | **Longitudinal change at recurrence** | GLASS paired primary→recurrent | **03** |
-| 4 | **Druggability / tractability + known drugs** | Open Targets tractability, ChEMBL MoA | **03 (druglink)** |
-| 5 | **Brain penetrance** (CNS-MPO / BBB) | PubChem/BindingDB physchem → CNS-MPO heuristic | **04 (PK/PD)** |
-| 6 | **Normal-brain safety window** | GTEx brain + HPA | **04 (PK/PD)** |
-| 7 | **Peripheral-tolerance / autoimmune risk** — reversing Treg / de-repressing Th1 is *mechanistically the direction of autoimmune liability* (the checkpoint-inhibitor irAE neighbor) | literature + immune-branch reasoning (qualitative) | **04 (safety)** |
-
-**Stage mapping (per user direction — druggable = 03, brain-penetrant = 04).** Axes 1–3
-are **tumor-context target validation** and axis 4 is **druggability** → **Stage-3
-(`03_druglink`)**; axes 5–7 are **exposure + safety** → **Stage-4 (`04_PKPD`)**. **Within
-Stage-3, the tumor-context relevance filter (axes 1–3) runs and *gates before* tractability
-scoring (axis 4)** — a candidate cannot survive on druggability alone. This preserves the
-former addendum's "relevance before chemistry" discipline as an explicit **intra-stage
-ordering**, now that tumor-context is folded into druglink rather than a separate stage
-(the addendum floated a separate `03_tumor_context`; folded into `03_druglink`'s front half
-rather than renumber the locked 01→05 architecture). Keeping 03 ahead of 04 likewise
-prevents a brain-penetrant-but-GBM-irrelevant target from surviving, and a GBM-critical-
-but-not-yet-drugged target from being dropped prematurely.
-
-**Two mechanistic branches, tagged on every candidate:** **tumor-intrinsic** (X drives a
-malignant state, e.g. MES-like — DepMap dependency + malignant-cell expression + GLASS
-progression) vs **microenvironment/immune** (X shapes the immunosuppressive TME — TAMs,
-tumor Tregs, endothelium — *where the T-cell funnel and tumor context converge*; DepMap is
-uninformative here, the single-cell atlases carry it). The **autoimmune-risk axis (7)** is
-tied to this immune branch: the Stage-2 mechanism (reverse Treg / de-repress Th1) is the
-systemic direction of broken peripheral tolerance, so a candidate strong on the immune
-branch must carry that liability flag forward.
-
-**Program-level bridge (pays off the reusable-program design).** Because Stage-2 programs
-are portable signed vectors, Stage-3 can project the **A→B axis itself** onto GBM data
-(GBmap/Neftel: does the induced-Treg program mark tumor Tregs? does the inflammatory
-program mark a TME/malignant state?; TCGA/CGGA: does the axis track subtype/survival?) —
-testing whether the *program*, not just individual genes, is GBM-relevant, reusing the §2.1
-projection primitive across the tumor boundary.
-
-**Access map (settle before Stage-3 executes).** Reachable **now via CS connectors**:
-TCGA/LGG (cBioPortal `mcp-cancer-models`), Open Targets (`mcp-clinical-genomics`), ChEMBL,
-HPA/STRING (`mcp-protein-annotation`), GTEx (`mcp-expression`), PubChem/BindingDB
-(`mcp-chemistry`), ClinicalTrials, BioMart/MyGene/Reactome. **Allowlisted:** GBmap
-(CELLxGENE census), Neftel GSE131928 (GEO). **Need a network grant (no connector):**
-**DepMap** (central dependency axis — `depmap.org`/figshare, load once + cache), GLASS
-(Synapse), CGGA, Ivy GAP. **NAS:** only the perturb-seq dir is mounted today — a
-`request_host_access` to the GBM NAS path is prerequisite to loading the big static atlases
-locally. Recommended division: NAS for big static matrices; connectors for live queryable
-knowledge; the network grant reserved for DepMap + anything not on NAS. **This is a hard
-Stage-3 dependency (risk carried forward), not a Stage-2 blocker.**
-
-_Full Stage-3/4 detail (the scorecard columns, provenance-per-cell, subtype stratification,
-CNS-MPO formulation) is developed in those stages' own plans; captured here only enough to
-shape the Stage-2 handoff._
-
----
-
-## 5. Reusable-artifact chain — mirroring Stage-1
-
-### 5.1 The chain, one file per role
-
-| Stage-1 file | Stage-2 analogue | role |
-|---|---|---|
-| `run_scvi_embedding.py` (heavy, cached) | *(reused as-is — Stage-2 does not re-embed)* | GPU embedding, run once |
-| `cluster_scores.py` (one 14 GB load → JSON) | `define_programs.py` (one heavy load → `stage02_programs.json`) | build axis + anchors + discovery/perturbation-covariance programs; run axis-quality gates (§1.3); the single expensive load |
-| `label_clusters.py` (no load → JSON) | `score_perturbations.py` (no cell load; programs + `DE_stats` → `stage02_perturbation_scores.json`) | fixed scoring/gating rule; ranked table |
-| *(new, optional)* | `score_perturbations_insilico.py` (Lane C, §2.8) | scLDM in-silico skew + own null + concordance-QC gate; remote GPU |
-| `stage1_pipeline.py` (`# %%` notebook) | `stage2_pipeline.py` (`# %%` notebook, emits overlay) | narrative provenance notebook + emit |
-| `verify_reproduce.py` (gate on counts) | `verify_reproduce_stage2.py` (gate on top-N hits + positive-control score + axis-quality record) | reproducibility gate |
-| `reproduce.sh` | extend with `[6..]` Stage-2 steps | one-command regeneration |
-| `render_notebook.py` | reused as-is | notebook → HTML |
-
-**Determinism, reused verbatim:** a fixed `SEED` for the NTC-null and any sampling; a
-committed `REFERENCE` block in `verify_reproduce_stage2.py` (top-N hit ids, FOXP3-KD rank,
-NTC≈0 check, axis-quality numbers) that the pipeline's emitted values must match, exiting
-nonzero on drift — the gate philosophy that caught the Stage-1 Th2 artifact.
-
-### 5.2 Shared vs Stage-2-specific
-
-**Shared → a small `spotlib` common module:** the vectorized `score_genes` +
-permutation-FDR machinery; gene-ID/symbol harmonization (GRCh38; MyGene `mcp-genes-
-ontologies`); the program registry read/write + **projection** helpers; `render_notebook.py`,
-the `reproduce.sh` skeleton, the `verify_reproduce` gate pattern; and the scVI embedding +
-Stage-1 `cluster_labels.json` (consumed, not recomputed).
-
-**Stage-2-specific:** the selection-parameterized **A→B axis definition** + **axis-quality
-gates**; the perturbation-covariance / define-states layer (§1.4); the **projection +
-de-confounding + power gating** rule; the **NTC-guide null**; the optional **scLDM lane**;
-and all Stage-2 emitted JSON.
-
-### 5.3 The explicit cross-stage dependency
-
-Stage-2's most important input is **the A→B contrast selected in the Stage-1 workbench**
-(the two population pickers → "identify genes"). The population definitions — for the
-default, the induced-Treg-48h cluster and the Th1-8h region — are defined in Stage-1
-(`cluster_labels.json` + `stage01_umap_seed.json`, keyed on `obs['L0.8']`/`obs['barcode']`);
-Stage-2 reads that **selected (A, B) pair** (two population masks + a sign convention) as
-an explicit serialized artifact, so both the measured lanes and the scLDM lane are
-parameterized by the *identical* contrast. A hard, version-pinned dependency in
-`reproduce.sh` (Stage-2 runs *after* the Stage-1 gate), so the chain tells one story end to
-end and the handoff is explicit and gated.
-
----
-
-## 6. Risks and assumptions (ordered by bite)
-
-**R1 — `DE_stats` is whole-condition pseudobulk, not cell-state-resolved. (Largest.)** Each
-KD's Stim48hr DE is across *all* cells in the condition, dominated by the bulk activated
-population, not the induced-Treg subset (~6.3%). The primary metric is a proxy;
-**quantified per contrast by G2 (A∪B fraction)** and confirmed on the shortlist by §2.7.
-State it wherever a hit is reported.
-
-**R2 — axis defined on reference cells, applied to perturbed-cell DE.** Projecting δ onto a
-reference-derived axis assumes the co-expression structure is stable under perturbation —
-fine for a mean-shift reading, mis-scored for a KD that *reshapes* the program (sharper near
-strong regulatory hubs). The anchor decomposition (§2.1) partly guards it.
-
-**R2b — the default poles are at different timepoints (48h vs 8h).** The axis conflates fate
-with activation-duration; a KD that just makes cells "younger/8h-like" scores positive
-spuriously. Mitigations in §1.2 — but note two traps: the preferred common-timepoint fix
-**may not exist in the data** (do Treg and Th1 co-occur at one timepoint?), and the
-kinetics-axis fix is **collinear with G4's proliferation projection for this default**, so
-project one combined nuisance direction, not two. Also interacts with G2 (the B side is
-barely present in the scored 48h condition).
-
-**R3 — gene-space mismatch and FOXP3 dropout.** The axis must be restricted to the 10,282-gene
-DE universe with the load-bearing genes surviving at measurable baseline; FOXP3 has real 3′
-dropout, so verify presence + baseMean before trusting the FOXP3-down component.
-
-**R4 — CRISPRi knockdown is partial/variable.** Many rows have no on-target KD (A1BG). The
-§2.3 power gate is load-bearing, not optional.
-
-**R5 — essential-gene sledgehammers.** Three guards: §2.2 cosine + breadth, the **in-Stage-2
-CEGv2 core-essential flag** (§2.2, static, no grant), and Stage-3 glioma-*selective* DepMap.
-**Cosine can invert for broad axes (G4)** — do not trust it alone; the CEGv2 flag is the
-always-available backstop. Residual risk for genes both essential *and* genuinely regulatory.
-
-**R6 — multiplicity across 3,341 perturbations.** The NTC-guide null + BH (§2.5), recomputed
-per contrast, with a parametric fallback if n_NTC can't support the tail.
-
-**R7 — sign bookkeeping / general sign-validation.** FOXP3-KD-positive + NTC≈0 fix the sign
-for the default; an arbitrary contrast may have no such anchor → `sign_validated=false`,
-reported (G3).
-
-**R8 — circularity in the define-states layer (§1.4).** Defining the axis from the
-perturbations you then score is trivially circular; keep axis geometry on the reference
-contrast and use master-regulator KDs only to validate the sign.
-
-**R9 — scLDM is not independent (Lane C).** Trained on the same data → concordance is partly
-tautological (a QC gate, not confirmation), and it **inherits R1/R2/R2b + subset-sparsity**,
-weakest exactly on the rare subset. Kept `suggestive`/`CS-complement`, never confirmed.
-
-**R9b — scLDM gene-space + OOD.** The model lives in a 3,699-HVG panel ≠ the 10,282 DE
-universe — verify axis genes survive its HVGs, or the lane can't represent the contrast.
-Combination-KD generation is OOD (least reliable); use only flagged as extrapolation.
-
-**R10 (carried to Stage-3) — DepMap access + context gap.** No DepMap connector (network
-grant needed); glioma cell lines ≠ GBM in situ. A hard Stage-3 dependency, not a Stage-2
-blocker.
-
----
-
-## 7. Suggested execution order (when we run)
-
-1. **`define_programs.py`** — build the axis (scVI DE ∩ pseudobulk DESeq2) for the selected
-   A/B; run **axis-quality gates G1–G4** (separability, A∪B fraction, sign-validation,
-   broad-axis) and refuse/flag as needed; build anchors + the perturbation-covariance /
-   define-states layer (§1.4); emit `stage02_programs.json` + the axis-quality record.
-   Verify load-bearing genes present + powered (R3).
-2. **`score_perturbations.py`** — project every `DE_stats` vector; gate power (R4); tag
-   sledgehammers with the G4 broad-axis caveat + the **CEGv2 core-essential flag** (§2.2,
-   R5); NTC-null p/q recomputed per contrast (R6); check positive-control sign + NTC≈0 or
-   set `sign_validated=false` (R7); emit `stage02_perturbation_scores.json`.
-   - **2b (optional, Lane C, §2.8):** `score_perturbations_insilico.py` — remote GPU; first
-     pass the **model-QC gate** (reproduce FOXP3-KD + held-out KDs) and the **HVG-coverage
-     check** (R9b); then in-silico skew anchored on A, with its own null; model-only
-     surfaces tagged `model_only`/`CS-complement` (R9).
-3. **`stage2_pipeline.py`** — narrative notebook, emit overlay; `verify_reproduce_stage2.py`
-   gate; extend `reproduce.sh`; render HTML.
-4. **Shortlist → compositional confirmation** on cell-level files (R1/§2.7) — load-bearing
-   for the default given the low A∪B fraction.
-5. **Hand the ranked candidate-gene table to Stage-3** (§3/§4) — tumor-context +
-   druggability (03) then brain-penetrance + safety (04); settle DepMap/NAS access first
-   (R10).
+## 1. Executive decision and scope
+
+Stage-2 takes an ordered **A→B transcriptional-program contrast** chosen by a human in Stage-1
+and produces a **ranked table of gene levers** — knockdowns whose *measured* transcriptional
+effect aligns with the A→B program direction — surrounded by power, off-target, replication,
+and cell-level gates. It is exploratory decision-support that **nominates** levers for
+downstream evaluation. It does **not** confirm a biological transition, and it stops at the
+ranked hypothesis: drug, GBM, PK and safety evidence are Stages 3–4.
+
+**Sound core retained (implementation corrected):** (1) a human selects an ordered A→B contrast;
+(2) Stage-2 represents it as a signed, versioned program vector; (3) a cheap primary screen
+projects *measured* perturbation effects onto that program; (4) results decompose into
+movement away-from-A and toward-B; (5) power/off-target/breadth/guide/donor/cell-level gates
+surround the ranking; (6) every result carries provenance and stays decision-support; (7)
+model-based evidence may suggest, never confirm; (8) Stage-2 ends at a ranked gene-lever
+hypothesis.
+
+**Data substrate (verified this session).** The authors' released `GWCD4i.DE_stats.h5ad`
+(10,282-gene universe) holds **33,983 target×condition DE summary rows** across **11,526
+unique targets**. The effect vectors are the DESeq2 knockdown-vs-pooled-NTC contrast per
+target — but **`X` is empty (`encoding-type: null`); the vectors live in `layers/`**:
+`log_fc` (the primary `d_{X,g}`), `lfcSE` (the **standard error** of `log_fc`), `zscore`
+(`log_fc/lfcSE`, the z-score sensitivity), plus `p_value`, `adj_p_value`, `baseMean`,
+each 33,983×10,282. (The contrast is *against* the pooled NTC, so there is no
+NTC self-vs-self row — hence §9's null construction.) `GWCD4i.DE_stats.by_guide.h5mu` holds
+per-guide matrices; `GWCD4i.DE_stats.by_donors.h5mu` holds **six leave-two-in donor-pair
+matrices over the 4 donors** (~4,880×10,273 each; note the 10,273 vs 10,282 gene mismatch,
+§13), not per-donor vectors. The cell-level substrate is the twelve
+`Dx_<cond>.assigned_guide.h5ad` files (~1.7 TB total).
+
+## 2. What Stage-2 can and cannot claim
+
+**Allowed wording:** *aligns with*, *shifts the measured program*, *regulatory-down*,
+*inflammatory-up*, *population redistribution*, *within-dataset replicated*, *cell-level
+supported*, *suggestive candidate*, *requires external validation*.
+
+**Forbidden from this one cross-sectional in-vitro dataset:** *proves transition*, *causes
+Treg-to-Th1 conversion*, *bona fide / natural / tumor Treg target*, *confirmed target*,
+*validated drug target*, *GBM efficacy*, *independent confirmation from scLDM or Perturb2State*.
+
+This is one 4-donor, cross-sectional, in-vitro Perturb-seq dataset with no protein, suppression,
+cytotoxicity, or external-cohort measurement in scope. It cannot establish natural-Treg identity,
+suppressive function, prevalence, GBM relevance, or generalizability.
+
+## 3. Stage-1 selection contract (unimplemented prerequisite)
+
+**Current reality:** the Stage-1 workbench's population pickers + "identify genes" button only
+change tabs; they **serialize nothing**. There is no selection artifact today. Stage-2 depends
+on one, so building it is a **Stage-1 prerequisite**, not an existing input.
+
+Specify a versioned **`stage01_selection.json`** carrying at least: schema version;
+`contrast_id`; dataset identifier + immutable artifact hash; Stage-1 method/code hash; ordered
+A and B population definitions; direction/sign convention; the named condition/timepoint for
+each population; **full-population membership hashes or barcodes** (over the frozen full-cell
+universe, not the 40k display sample); counts by donor and condition; overlap count + overlap
+policy; current donor/condition filters; creation timestamp (noncanonical metadata);
+`validation_status` + refusal reasons.
+
+**Reject or explicitly handle:** A == B; overlapping A/B; empty populations; populations that
+exist only in the 40,000-cell display sample; inadequate donor representation; timepoints
+incompatible with a causal/skew reading (§4). Stage-2 must **not** consume per-cell functional
+calls unless those calls exist over the frozen full-cell universe.
+
+## 4. Valid contrast, and axis gates (all start `not_evaluated`)
+
+**Primary default is same-timepoint (Stim48):**
+- **A** = activation-induced **FOXP3⁺ regulatory-like** cells/program at Stim48 (never "natural
+  Treg", "bona fide Treg", or "tumor Treg" — Stage-1 established induced FOXP3⁺CTLA4⁺ at 48 h,
+  not natural Tregs).
+- **B** = inflammatory / **Th1-like** cells/program at Stim48.
+
+**One-sided is the HEADLINE, not a fallback (CS review R3).** B's sparsity/donor-stability at
+Stim48 is **not measurable from the released files** — the `Dx_Stim48hr.assigned_guide.h5ad`
+obs carry no cluster/leiden/celltype/program label, so B cannot be counted until Stage-1
+actually clusters the cells (`not_evaluated`). B is also anchored on a *weak pole* — these are
+in-vitro anti-CD3/CD28 activations with no Th1-polarizing cytokines, so a canonical Th1 program
+is a *prior* to be minority/poorly-polarized at 48 h (a prior, not a measurement — but it
+points the same way as the missing labels), and the two-pole `total_skew` inherits that noise.
+So: **run both unconditionally, report the one-sided "regulatory-program reduction at Stim48"
+as the headline statistic, and let `total_skew` drive ranking only when the G-sep and G-frac
+gates on B actually pass.** Stage-2 must not manufacture a two-pole transition when B is
+unrepresented.
+
+**Batch structure (verified in `sample_metadata.suppl_table.csv`).** All four Stim48 samples
+are in run **R2**, so within Stim48 there is **no run/donor confound** — good for `~ donor +
+state`. By contrast the cross-timepoint **48h→8h** comparison is **batch-confounded** (donors
+have their 8 h in R1 but their 48 h in R2), so it may be retained **only** as an explicitly
+descriptive, batch-confounded sensitivity analysis; it cannot support "transition", "fate
+conversion", or causal Treg→Th1 wording.
+
+**Axis gates (evaluated at run time; until then `not_evaluated` — do not pre-declare
+"passes"):** (G-sep) A/B separability — significant separating genes; held-out-donor A-vs-B
+classifier; count surviving the axis-construction stability rule (§5). (G-frac) **separate A
+and B fractions** of the scored condition, each with a named denominator (see §13 — there is no
+single `a_union_b_fraction`). (G-sign) sign-validation state per contrast — the sign is
+mathematically fixed by the A/B labeling; whether it is *behaviorally* validated depends on an
+executed positive control, which most contrasts will not have. (G-breadth) broad-axis flag —
+whether the axis overlaps a proliferation/translation direction such that specificity heuristics
+degrade. Every gate value is `not_evaluated` until an executed result fills it.
+
+## 5. Same-timepoint program construction (the A→B axis)
+
+**Primary method: donor-paired raw-count pseudobulk.** Do **not** depend on a saved Stage-1
+scVI checkpoint — none exists in the repo (`run_scvi_embedding.py` is absent; the shipped h5ad
+has empty `.uns`/`.obsm`).
+
+1. NTC reference cells from one common condition (default Stim48).
+2. Define high-confidence A and B populations symmetrically.
+3. Aggregate **raw integer counts** by donor×state.
+4. Fit a paired donor-aware DE design, e.g. `~ donor + state`.
+5. Use **shrunk log-fold-change** as the biological weight: `w_g = shrunk logFC(B vs A)`
+   (positive `w_g` = B-associated; negative = A-associated).
+6. Require adequate expression + directional stability under **leave-one-donor-out (LODO)**.
+7. Remove unstable / near-zero genes by preregistered rules.
+8. L2-normalize the final vector.
+9. Save stable Ensembl IDs, display symbols, annotation release, gene universe, preprocessing,
+   software versions, and input hashes.
+
+**Circularity control.** If markers define A/B, separate: **anchor genes** (used to select
+high-confidence cells), **readout genes** (used to estimate/validate the broader axis), and
+**anchor-only explanatory scores**. Do **not** present scVI-vs-DESeq2 sign agreement *on the
+same cells* as independent replication; scVI may be a sensitivity analysis only if an audited,
+saved, pinned model later exists.
+
+## 6. Primary target-masked measured-effect screen
+
+For perturbation X, use its **measured** effect vector in the condition where A exists —
+the **`layers['log_fc']`** row (`d_{X,g}`; `X` is empty). Use **`layers['zscore']`**
+(`log_fc/lfcSE`) **only** as a sensitivity analysis — it mixes effect magnitude with
+precision/sample size (`lfcSE` alone is the standard error, not a score).
+
+**Target mask (before any projection).** Define `M_X` = the intended target X **plus its
+guides' off-target genes**. Note the DE_stats `neighboring_gene_KD` (2,619 True) and
+`distal_offtarget_flag` (433 True) obs fields are **booleans** — they flag *that* a row has
+such an effect, **not which genes** to mask. The off-target gene identities live in
+`sgrna_library_metadata.suppl_table.csv` (`nearby_gene_within_2/10/20/30kb`,
+`nearest_within2kb_nontarget_gene_id/name`, `nearest_nontarget_gene_id/name`), so `M_X` is
+built by **joining the sgRNA library to X's guides** — the neighborhood window (2/10/20/30 kb)
+is a prospectively-frozen choice. Compute scores **only on genes not in `M_X`**; because the
+"unmasked score is self-fulfilling" safeguard rests entirely on masking the right genes, this
+join is load-bearing, not cosmetic. For **FOXP3 KD, FOXP3 itself is masked** — direct FOXP3
+repression is QC only, not skew evidence.
+
+**Primary endpoint — `a_down` only.** To avoid three adaptively-selectable outcomes, the **sole
+primary endpoint is `a_down`** (reduction of the A / Treg-like program — the measurable pole).
+`b_up` (B / Th1-like increase) and `total_skew` (full A→B alignment) are **secondary /
+descriptive**: B may be sparse and is not well estimated until it is measured, so they never drive
+ranking on their own.
+
+**Score equations (target-masked, coverage-gated).** With the frozen axis weight vector `w`:
+(i) split into `w_full`, `w_Adown` (A-associated / negative-`w` coordinates), `w_Bup`
+(B-associated); (ii) **remove `M_X`** (target + off-target genes) from each; (iii) **renormalize
+each retained vector to unit L2 *separately***; (iv) `a_down(X) = ŵ_Adown · d_X`,
+`b_up(X) = ŵ_Bup · d_X`, `total_skew(X) = ŵ_full · d_X`. Report the **retained squared-weight
+coverage** (`Σw²_retained / Σw²_total`) for each and **refuse a score whose coverage falls below a
+prospectively-frozen threshold** (mask removed too much of the axis). The pseudo-NTC null (§9) is
+computed with the **identical target-specific mask and renormalization**, so observed and null
+share the same transformation. Report the descriptive class per row (*A-down* · *A-down + B-up* ·
+*B-up only* · *broad/non-specific* · *unsupported/underpowered*) — but rank on `a_down`.
+
+**Composition confound is present at the screen stage (say so here, not only in §10).** Even
+with a correct target mask, `total_skew` is computed on **whole-condition bulk** KD-vs-NTC
+vectors, so a KD that shifts *population composition* (kills activated cells, stalls
+proliferation) moves the bulk vector along the axis with **zero cell-intrinsic reprogramming**.
+The primary ranked table therefore mixes intrinsic reprogramming with composition shift;
+`screen_only` hits **must not** be read as intrinsic until §10 (viability/UMI/cycle) separates
+them. §10 is doing load-bearing deconfounding that the ranked table's framing must advertise.
+
+**FOXP3-KD caveat (verified) — sign control stays `not_evaluated` until the projection is run.**
+The released FOXP3 Stim48 row has `ontarget_significant = True` with **n_total_de_genes = 4,
+n_downstream = 3** (n_cells = 1,360) — but that is a *whole-transcriptome* DE count, **not** its
+target-masked projection onto the A→B axis, which has not been computed. So **do not pre-conclude
+FOXP3-KD is "too quiet"**: its sign-control status is `not_evaluated` until the masked projection
+exists. When (and only when) that projection is computed and found underpowered, the sign is
+reported as mathematically-fixed-but-unvalidated (`sign_validated = false`), surfaced wherever a
+hit is reported, with no substitute control invented to manufacture validation. FOXP3-KD is
+QC context, **not** an
+automatic pass/fail gate.
+
+## 7. Eligibility and power gates (pre-outcome only)
+
+**Do not describe `3,341` as the number of gene knockdowns or the multiplicity family.**
+Verified counts in `DE_stats`: 33,983 target×condition rows; 11,526 unique targets; **11,281
+Stim48 rows**; the `3,341` figure is the count of rows that *already* passed the authors'
+**outcome** filter (`n_total_de_genes > 75` and `n_cells_target > 50`), representing **1,860
+genes** — an ascertainment on effect size, not an eligibility criterion.
+
+**Eligibility uses only pre-outcome criteria:** target measurable; adequate target-cell count;
+adequate donor coverage; preferably ≥2 guides; detectable on-target repression; no disqualifying
+off-target evidence. **Never** select targets because they already produced many DE genes. Emit
+the **actual tested family size at run time** and correct multiplicity over that family (§9).
+**Neither 11,281 nor 7,195 is "the correction family."** In Stim48, the *source's* observed
+`ontarget_significant == True` holds for **7,195** rows (`low_target_gex` for 2,431;
+`n_cells_target > 50` for 11,146) — but 7,195 is just *the source's own observed on-target test
+count*, **not** the pre-outcome eligible family. The **actual tested family only exists after all
+frozen Stage-2 design filters run** (target measurable + adequate cells/donors + guides +
+detectable repression + no disqualifying off-target), and its size is emitted at run time. And in
+the **default no-p/q lane there is no multiplicity correction at all**, so no "correction family"
+is claimed; the family size is reported for transparency only. 11,281 must never read as a
+multiplicity denominator anywhere.
+
+Gate on `DE_stats.obs`: `ontarget_significant == False` → "**no statistically detectable
+on-target repression under the source analysis**" (not "the gene wasn't knocked down");
+`low_target_gex`, small `n_cells_target`, `single_guide_estimate` → **insufficient-power tier**,
+reported separately, never mixed into ranked hits.
+
+## 8. Guide and donor replication (direct, along the axis)
+
+Generic whole-transcriptome guide/donor correlations (`guide_correlation_*`,
+`donor_correlation_*`) are **supplementary QC**, not replication. Require **direct target-masked
+projections** onto the A→B axis computed on: guide 1; guide 2 (`by_guide.h5mu`); the donor-pair
+effect matrices (`by_donors.h5mu`).
+
+**Be honest about the released granularity (CS review R3):** `by_donors.h5mu` ships **six
+leave-two-in donor-*pair* matrices over 4 donors total** (~4,880×10,273 each), **not** per-donor
+vectors — true leave-one-donor-out on the DE side is **not** in the released files (it would
+require recomputing from cells). The six pair matrices **overlap** (each donor appears in several
+pairs), so they are **not six independent replicates**: analyze the **three complementary
+2-vs-2 splits** and retain **effective donor n = 4**. Report **donor-pair *discordance*** (sign
+disagreement across the complementary splits), not a "donor-reversal flag" that implies
+independent donor votes, and do not present this as higher-resolution LODO than the release
+supports.
+
+Record: guide-specific `a_down` (+ secondary `b_up`/`total_skew`); guide sign agreement; the
+three complementary split scores; **donor-pair discordance**; pair-level rank stability;
+missingness and effective replicate count (n = 4).
+
+## 9. Significance / null policy
+
+This is the null for the **skew/axis-projection statistic** — a weighted sum across genes.
+`DE_stats` already ships **per-gene** DE significance (`layers['p_value']`, `layers['adj_p_value']`,
+both 33,983×10,282), but **those per-gene q-values do not calibrate the projection score**; §9
+concerns the skew statistic specifically, not the per-gene DE. `GWCD4i.DE_stats.h5ad` contains
+**no per-NTC-guide DE vectors** (verified — no NTC target in the table; the only control-string
+target `KNTC1` is a real kinetochore gene), so raw NTC expression **cannot** be projected as if
+it were a target-vs-NTC DE statistic. Choose **one honest state** and label it:
+
+- **(A) Calibrated inferential null:** construct many **pseudo-target groups from NTC guides**
+  (the cell-level `guide_type` field has a real `non-targeting` category, so this is available;
+  matched on guide count, cell count, donor/run, condition; pseudo-target guides removed from
+  the control pool). **Cross-fit the NTC cells: the NTC used to build the A→B axis must be a
+  *disjoint* split from the NTC used to build the pseudo-target null** — reusing the same NTC
+  cells for both makes the null optimistic even with a frozen axis. Then **rerun the identical
+  upstream DE model**; **project the pseudo-target vectors onto the *same frozen A→B axis*,
+  under the identical target-mask + renormalization (§6) — permute only the target vectors,
+  never re-estimate the axis per pseudo-target** (re-estimating conflates axis-estimation noise
+  into the null);
+  validate null-p calibration + tail behavior; freeze and hash the null artifact; account for
+  **all interactively attempted contrasts**.
+- **(B) Hackathon default:** report effect sizes, guide/donor stability, and uncertainty; **do
+  not emit p/q**; mark significance `not_calibrated`.
+
+**No undefined "parametric fallback."** Any parametric model requires a named distribution,
+fitting procedure, calibration diagnostics, and refusal rule fixed **before** inspecting
+attractive hits.
+
+## 10. Cell-level within-dataset support (before the Stage-3 handoff)
+
+Cell-level analysis happens **before** the final handoff, not after a count-only verifier. Using
+real **Stim48 guide-assigned cells**: (1) freeze the target-masked regulatory-like and
+inflammatory-like scorers; (2) score real perturbed cells; (3) aggregate by
+target×guide×donor×library; (4) compare with contemporaneous NTC guides; (5) model continuous
+regulatory and inflammatory scores; (6) separately model A-like / B-like population fractions;
+(7) report cell recovery, UMI depth, stress/apoptosis, and cell-cycle/proliferation outcomes.
+
+A lower A-like fraction may reflect death, proliferation, activation delay, or guide recovery —
+**do not call UMAP displacement a transition or fate conversion.** Status terms: `screen_only`,
+`within_dataset_replicated`, `cell_level_supported`, `underpowered`, `confounded`. **Never
+`confirmed`** — one in-vitro dataset cannot independently confirm the hypothesis. Emit separate
+artifacts: full measured-effect screen · within-dataset-replicated shortlist · cell-level-
+supported shortlist · explicit `external_validation_needed` state.
+
+## 11. Secondary lane — Perturb2State (cited upstream, secondary)
+
+Perturb2State is **pre-existing upstream MIT software** (authors' pinned repo
+`emdann/pert2state_model@2c2e309`; notebook `4_polarization_signatures/pert2state_polarization`).
+It solves approximately `desired_state_signature(gene) ≈ perturbation_effect_matrix(gene×target)
+· coefficients(target)`. Use it **separately** for a regulatory-down signature and an
+inflammatory-up signature, as a **stability** lane only.
+
+Safeguards: mask each KD's intended target + flagged off-target coordinates; repeat across guide
+matrices; repeat across LODO-derived state signatures; vary regularization within a preregistered
+range; report nonzero/sign-selection frequency + rank stability. **Do not** treat coefficient
+magnitude or SEM as a causal effect, inferential SE, p-value, or q-value; acknowledge that
+correlated KDs substitute for one another, and that gene-fold CV is not donor or external
+validation. Output is a `perturb2state_support` / stability field; it **cannot rescue** a target
+that fails direct measured guide/donor/cell evidence.
+
+**Hackathon provenance:** Perturb2State is upstream; spot's new work is the selected contrast,
+the primary target-masked screen, the stability application, the validation, the UI, and the
+analysis produced during the event. **Do not present the authors' existing Th1/Th2 result as a
+new spot finding.**
+
+## 12. Optional / deferred appendix — scLDM-CD4 (no training)
+
+**Remove scLDM training or fine-tuning from the executable v1 plan.** The released scLDM-CD4
+conditions **only** on `donor_id`, `guide_target_ensembl`, `experimental_perturbation_time_point`
+(verified in the pinned config) — it has **no Stage-1 regulatory-state condition**. Adding a
+post-KD state label would condition on the outcome and could not identify a transition from an
+unobserved pre-KD state.
+
+If retained at all, it is a **bounded model-QC appendix**: pin code/checkpoint/config hashes
+(`czbiohub-chi/scldm_cd4@cf9034a`, weights `biohub/scldm_cd4`); run only on a **preregistered set
+of measured held-out KDs and NTCs**; compare against a simple measured-effect / shrinkage
+baseline; use target-masked program effects; retain **only** if it adds held-out predictive
+value; **never** derive biological p-values from synthetic-cell counts; **never** promote a
+model-only candidate; do not use unseen condition combinations or multi-KD generation. An optional
+frozen-encoder linear readout may be mentioned, but must beat simple program scores on held-out
+donors to justify inclusion.
+
+## 13. Output schemas and Stage-3 handoff
+
+Organize all artifacts by immutable `contrast_id` / `run_id` — **static filenames must not
+overwrite different contrasts.** Schemas are contrast-parameterized and generic (no hard-coded
+`foxp3_logfc` / `ctla4_logfc`; use generic anchor-effect mappings). Use **separate A and B
+fractions with named conditions and denominators** — remove any singular `a_union_b_fraction`.
+
+**`stage02_programs/<contrast_id>.json`** — program/contrast/run IDs; immutable
+selection/input/method hashes; stable Ensembl IDs + annotation release; weights; sign convention;
+gene universe; preprocessing/scaling contract; reference means/SDs if portability requires;
+missing/duplicate-gene policy — **resolved on a named common gene set** (the main `DE_stats`
+universe is 10,282 genes but the `by_donors` pair matrices are 10,273; project everything on the
+explicit intersection, recorded by hash); gene-coverage threshold; anchor definitions; donor
+stability; axis gate results (`not_evaluated` until run); status fields.
+
+**`stage02_screen/<contrast_id>.parquet`** — one record per eligible target×condition: contrast +
+program IDs; target identifiers; condition; target-masked `a_down` / `b_up` / `total_skew`;
+effect-size + z-score sensitivity; guide-specific results; donor / donor-pair results; on-target
+evidence; source off-target flags; cells/guides/donors; breadth + essentiality flags; uncertainty;
+p/q **only if calibrated** with exact correction-family / null provenance; status + limitations;
+**desired pharmacological modulation** (e.g. inhibition when a CRISPRi-positive result implies
+inhibition is desired). Generic `anchor_effects: {anchor_gene: logFC}` replaces hard-coded FOXP3/
+CTLA4 fields.
+
+**`stage02_cell_support/<contrast_id>.parquet`** — continuous regulatory / inflammatory effects;
+abundance effects; guide/donor/library estimates; uncertainty; recovery/UMI/cycle/stress outcomes;
+power status; within-dataset support verdict; `external_validation_required` flag.
+
+**Handoff to Stage-3:** the ranked gene-lever table + the portable program vector. Everything
+tumor-context, druggability, brain-penetrance, and safety is Stage-3/4 (unchanged), designed only
+enough here to shape the handoff.
+
+## 14. Reproducibility and input manifest
+
+Specify: an **immutable input manifest** (public URL, S3/version identifier, content length,
+downloaded SHA-256 for each input h5ad/h5mu); **pinned upstream code commits**
+(`emdann/GWT_perturbseq_analysis_2025@848d62f`, `emdann/pert2state_model@2c2e309`,
+`czbiohub-chi/scldm_cd4@cf9034a`); a pinned environment/lockfile; deterministic seeds **only where
+sampling is actually used**; **canonical outputs excluding wall-clock timestamps**; **exact
+full-record verification** (not top-N) — full program-weight verification, schema validation,
+duplicate/missing-record checks, a numerical-tolerance policy; small fixture tests; a full-run
+integration verification.
+
+**Do not claim:** that a saved Stage-1 scVI model exists; that `run_scvi_embedding.py` exists; that
+the current renderer executes a notebook; that top-N / FOXP3-rank verification establishes full
+reproduction. A rendered static report is a **provenance report**, not an executed notebook, unless
+generated from a genuinely executed notebook/workflow.
+
+## 15. UI execution contract
+
+After the user clicks **"identify genes"**: (1) validate A/B (§3–4); (2) serialize
+`stage01_selection.json`; (3) compute/retrieve `contrast_id`; (4) load a pinned cached Stage-2
+result when available, else submit a **reproducible backend job**; (5) display the **full** screened
+table; (6) clearly distinguish `screen_only` vs `within_dataset_replicated` vs
+`cell_level_supported`; (7) preserve the selection across refresh/share; (8) **never show a gene as
+"identified" when only navigation changed.** For the hackathon, precomputing all valid
+same-timepoint picker combinations is acceptable **iff** every result maps to the identical locked
+contrast and reproducible pipeline.
+
+## 16. Risks and the external-validation boundary
+
+- **One dataset, cross-sectional, in-vitro, 4 donors.** Cannot establish natural-Treg identity,
+  suppressive function, prevalence, or GBM relevance. Every hit is a *suggestive lever requiring
+  external validation*.
+- **Whole-condition ascertainment (R1).** Effect vectors are the condition's bulk response; the
+  A-like subset is small — quantified per contrast by the separate A/B fractions (§4, §13) and
+  gated by §10 cell-level support.
+- **Off-target / masking (R2).** A KD's own on/near/off-target genes must be masked or the score is
+  self-fulfilling; relies on the source off-target flags being complete.
+- **No calibrated null by default (R3).** Without §9(A), significance is `not_calibrated`; ranking
+  is by effect size + stability, not p/q.
+- **Correlated regulators (R4).** In Perturb2State and in co-functional modules, correlated KDs
+  substitute for one another — coefficient selection is not causal attribution.
+- **GO / essentiality unresolved (R5).** See §17 unresolved decisions.
+
+## 17. Three-day execution order (engineering estimates, not measured runtimes)
+
+**Day 1:** selection schema + a valid same-timepoint default; NTC donor-paired axis; target-masked
+measured-effect screen over **all eligible Stim48 rows**; direct guide/donor projections;
+preliminary UI output.
+**Day 2:** cell-level narrow extraction + guide×donor×library aggregation; regulatory/inflammatory
+continuous-score and abundance models; recovery/cycle/stress checks; Perturb2State stability lane.
+**Day 3:** null calibration **if feasible**, else explicitly withhold q-values; LODO + axis
+sensitivity; exact artifact verifier; documentation, provenance, UI, demo.
+
+The **1.7-TB cell-level pass is I/O-bound** and may require a shortlist if a one-pass extraction
+cannot finish; if shortlist-only confirmation is used, acknowledge ascertainment and do **not**
+call the full screen cell-supported.
+
+## 18. Unresolved preregistration decisions, and the prior-defect disposition
+
+**Preregistration still required (record the choice before inspecting hits):** exact
+A/B high-confidence definitions + anchor/readout split; the axis stability thresholds and
+near-zero-gene rule; the eligibility thresholds (cell/donor/guide minima) and the multiplicity
+family; whether §9(A) or §9(B); the cell-level power thresholds and status cutoffs; the
+Perturb2State regularization range and stability cutoffs; whether the scLDM appendix runs at all;
+the GO input/background/database-version, or its removal; the essentiality-list source, license,
+version, and SHA-256, or its removal.
+
+**Disposition of prior defects** (verified against code/data this session):
+
+| Prior claim / defect | Disposition |
+|---|---|
+| Default `induced-Treg(48h) → Th1(8h)` sold as a transition | **plan corrected; impl. pending** — same-timepoint Stim48 default; 48→8h only as descriptive sensitivity |
+| "natural / tumor Treg" language | **plan corrected; impl. pending** — "activation-induced FOXP3⁺ regulatory-like" only |
+| `~3,341` gene knockdowns / screen family | **plan corrected; impl. pending** — 3,341 is a post-hoc outcome filter (1,860 genes); family is the 11,281 Stim48 rows under pre-outcome eligibility |
+| NTC-guide empirical null from `DE_stats` | **plan corrected; impl. pending** — DE_stats has no NTC-guide DE vectors; §9(A) rerun-the-model or §9(B) `not_calibrated`; no undefined parametric fallback |
+| Self-target contribution to KD score | **plan corrected; impl. pending** — target + off-target mask `M_X`; FOXP3 masked in its own KD |
+| FOXP3-KD as automatic sign gate | **plan corrected; impl. pending** — FOXP3 Stim48 has 4 DE / 3 downstream; QC only |
+| `condition on A` / scLDM state-conditioning | **plan corrected; impl. pending** — model conditions only on donor/guide/timepoint; scLDM demoted to optional QC appendix, no training |
+| `CEGv2.txt` "already in-project" | **plan corrected; impl. pending** — absent from repo; essentiality **unresolved** (§17) pending a pinned, licensed source |
+| `a_union_b_fraction` | **plan corrected; impl. pending** — separate A/B fractions with named denominators |
+| Hard-coded `foxp3_logfc`/`ctla4_logfc` in a "generic" schema | **plan corrected; impl. pending** — generic `anchor_effects` mapping |
+| Stage-1 selection "artifact" that doesn't exist | **plan corrected; impl. pending** — declared an unimplemented prerequisite (`stage01_selection.json`) |
+| Saved scVI checkpoint / `run_scvi_embedding.py` dependency | **plan corrected; impl. pending** — primary axis is donor-paired pseudobulk; no scVI dependency |
+| Cell-level support after the verifier | **plan corrected; impl. pending** — moved before the Stage-3 handoff |
+| GO enrichment promised in README | **deferred/unresolved** — specify (§13/§17) or remove from README |
+| Tumor-context / druggability / brain-penetrance | **deferred with explicit boundary** — Stages 3–4 |
+| External biological confirmation | **unresolved by design** — requires an independent dataset / protein / suppression / cytotoxicity assay |
+
+**Retained statistics, each with provenance (verified 2026-07-10 from
+`GWCD4i.DE_stats.h5ad` unless noted):** 33,983 target×condition rows; 11,526 unique targets;
+11,281 Stim48 rows (Rest 11,287 / Stim8hr 11,415); 3,341 rows pass `n_total_de_genes>75 &
+n_cells_target>50` = 1,860 genes; 10,282-gene DE universe; FOXP3 Stim48 = 4 total / 3 downstream
+DE genes (1,360 cells); Stim48 `ontarget_significant` = 7,195 (source's observed test, **not** an
+eligibility family, §7); off-target flags `neighboring_gene_KD` = 2,619 / `distal_offtarget_flag`
+= 433 (booleans, §6); `by_donors` = six 2-vs-2 pair matrices, 10,273 genes, n = 4 donors (§8); all
+four Stim48 samples in run R2 (from `sample_metadata.suppl_table.csv`, §4). Every figure above
+carries its source and denominator; no other quantitative claim is asserted as a Stage-2 result.

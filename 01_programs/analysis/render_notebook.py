@@ -168,20 +168,23 @@ for kind, lines in parse_cells(src):
         n += 1; body.append(render_code(lines, n))
 
 header = (
-    '<div class="hd"><h1>How this map was built — provenance notebook</h1>'
-    '<div class="sub">A single clean pass reproducing the '
-    '<a href="/01_page.html">spot · Stage-1 CD4 workbench</a> overlay end to end — '
-    'data fetched from the <a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" '
-    'target="_blank" rel="noopener">CZI Virtual Cell Platform</a> via the <code>vcp</code> CLI, then scVI/Leiden '
-    'clusters → a reproducible label rule → Masopust et al. per-cell calls → the permutation-FDR floor → two '
-    'validation checks. Deterministic (fixed seed): a re-run reproduces every value below.</div>'
-    f'<div class="sub" style="margin-top:9px;font-size:11.5px">Analysis built &amp; validated with '
-    f'<b style="color:var(--treg)">Claude Science</b> (Anthropic\'s science workbench, on the compute host) · '
-    f'auto-rendered from <code>stage1_pipeline.py</code> on <b>{now}</b>.</div></div>'
+    '<div class="hd"><h1>Methods &amp; reproducibility</h1>'
+    '<div class="sub"><b>This is a rendered report of <code>stage1_pipeline.py</code>, not an '
+    'executed notebook.</b> Code cells are shown as source; numeric results come from running the '
+    'pipeline itself (deterministic, fixed seed), not from this renderer. The map shows '
+    '<b>continuous transcriptional-program scores</b> — no categorical cell-type calls, no FDR/p/q, '
+    'no prevalence. The embedded object derives from the '
+    '<a href="https://virtualcellmodels.cziscience.com/dataset/genome-scale-tcell-perturb-seq" '
+    'target="_blank" rel="noopener">CZI Virtual Cells Platform</a> (Marson perturb-seq) and is '
+    'redistributed on Hugging Face (public, MIT); the clustering is spot-specific and paper-inspired, '
+    # scope disclaimer ("does not demonstrate lineage stability…") lives once, in the method body (stage1_pipeline.py)
+    'not a verbatim reproduction.</div>'
+    f'<div class="sub" style="margin-top:9px;font-size:11.5px">Rendered from '
+    f'<code>stage1_pipeline.py</code> on <b>{now}</b>.</div></div>'
 )
 doc = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-       '<title>spot · Stage-1 provenance notebook</title><style>' + CSS + '</style></head>'
+       '<title>spot · Stage-1 methods &amp; reproducibility</title><style>' + CSS + '</style></head>'
        '<body><div class="wrap">' + header + "".join(body) + "</div></body></html>")
 open(OUT, "w").write(doc)
 print(f"rendered {OUT} ({n} code cells) at {now}")

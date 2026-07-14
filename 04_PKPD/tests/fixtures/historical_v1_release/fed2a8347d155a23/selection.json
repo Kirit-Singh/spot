@@ -1,0 +1,50 @@
+{
+  "candidates_considered": [
+    {
+      "candidate_id": "FIXTURE-001",
+      "cns_mpo_status": "complete",
+      "eligibility_reason_code": "fixture_namespace",
+      "nebpi_statuses": [
+        "classified"
+      ],
+      "production_eligible": false
+    },
+    {
+      "candidate_id": "FIXTURE-002",
+      "cns_mpo_status": "incomplete",
+      "eligibility_reason_code": "fixture_namespace",
+      "nebpi_statuses": [
+        "not_classifiable"
+      ],
+      "production_eligible": false
+    },
+    {
+      "candidate_id": "FIXTURE-003",
+      "cns_mpo_status": "incomplete",
+      "eligibility_reason_code": "fixture_namespace",
+      "nebpi_statuses": [
+        "not_classifiable"
+      ],
+      "production_eligible": false
+    },
+    {
+      "candidate_id": "FIXTURE-004",
+      "cns_mpo_status": "incomplete",
+      "eligibility_reason_code": "research_only_namespace",
+      "nebpi_statuses": [
+        "not_classifiable"
+      ],
+      "production_eligible": false
+    }
+  ],
+  "is_fixture": true,
+  "reason": "Fixture pass. Stage 4 is an evidence engine, not a ranker: a selection would require real, independently reviewed public-source evidence, and none of the evidence in this run is real. No drug is asserted to be safe, brain-permeable, NEBPI-classified or clinically suitable.",
+  "schema_id": "spot.stage04_selection.v1",
+  "scorecard_set_id": "fed2a8347d155a23",
+  "selected": [],
+  "selection_basis_when_enabled": {
+    "basis": "explicit human review of the separate evidence lanes",
+    "not_basis": "any composite or automated score — Stage 4 does not compute one"
+  },
+  "selection_status": "no_selection_emitted"
+}

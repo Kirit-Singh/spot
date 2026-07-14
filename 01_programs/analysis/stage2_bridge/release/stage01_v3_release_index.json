@@ -1,0 +1,423 @@
+{
+  "schema": "spot.stage01_v3_release_index.v1",
+  "release_bundle": "01_programs/analysis/stage2_bridge/release/stage01_v3_release.json",
+  "release_self_release_sha256": "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11",
+  "selection_schema": "01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json",
+  "registry": "01_programs/app/data/stage01_program_registry_v3.json",
+  "materializer": "stage2_bridge/emit_selection_contract.build_contract",
+  "selector_is_generic": true,
+  "demo_default_selection": {
+    "role": "demo_default_only",
+    "note": "DEMO/DEFAULT fixture ONLY \u2014 NOT the release's canonical biology. The selector is generic (any program pair, independent directions, same or different timepoints); the owner confirms the real A/B at run time. Alternatives: B=cd4_ctl_like; direction variants; any registry pair.",
+    "A_away_from": {
+      "program_id": "treg_like",
+      "direction": "high"
+    },
+    "B_toward": {
+      "program_id": "th1_like",
+      "direction": "high"
+    },
+    "arms": [
+      "away_from_A",
+      "toward_B"
+    ]
+  },
+  "demo_selections": [
+    {
+      "matrix_var": "SEL_WITHIN_Rest",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_within_Rest.v3.json",
+      "analysis_mode": "within_condition",
+      "conditions": [
+        "Rest"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Rest",
+          "direct_arm_key": "direct|treg_like|decrease|Rest",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Rest"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Rest",
+          "direct_arm_key": "direct|th1_like|increase|Rest",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Rest"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "3b91b68db608787c",
+      "full_contract_content_sha256": "e8ffd7229885b98486846dc16e6acbb7b14c01a41c2fdbf71ef5a78506ddfb15"
+    },
+    {
+      "matrix_var": "SEL_WITHIN_Stim8hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_within_Stim8hr.v3.json",
+      "analysis_mode": "within_condition",
+      "conditions": [
+        "Stim8hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Stim8hr",
+          "direct_arm_key": "direct|treg_like|decrease|Stim8hr",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Stim8hr"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Stim8hr",
+          "direct_arm_key": "direct|th1_like|increase|Stim8hr",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Stim8hr"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "bebd3016a77f7ab7",
+      "full_contract_content_sha256": "e59f9bc4a93dbb0e5c140444c7445dc61cfc89bb5af61a531a0df2ad04ccfa1f"
+    },
+    {
+      "matrix_var": "SEL_WITHIN_Stim48hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_within_Stim48hr.v3.json",
+      "analysis_mode": "within_condition",
+      "conditions": [
+        "Stim48hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Stim48hr",
+          "direct_arm_key": "direct|treg_like|decrease|Stim48hr",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Stim48hr"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Stim48hr",
+          "direct_arm_key": "direct|th1_like|increase|Stim48hr",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Stim48hr"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "4af0fbbbd3f7dd04",
+      "full_contract_content_sha256": "94c33898a11712e79a23caae0a3a7ad8f997ad29cadae70db9d79ab4ee45566c"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Rest_Stim8hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Rest_Stim8hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Rest",
+        "Stim8hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Rest",
+          "direct_arm_key": "direct|treg_like|decrease|Rest",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Rest",
+          "temporal_arm_key": "temporal|treg_like|decrease|Rest|Stim8hr"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Stim8hr",
+          "direct_arm_key": "direct|th1_like|increase|Stim8hr",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Stim8hr",
+          "temporal_arm_key": "temporal|th1_like|increase|Rest|Stim8hr"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "2ae96d15809efdd0",
+      "full_contract_content_sha256": "f5987f73565a67f123415fa154a42b0cf5b16823c0b90ad0c49c05084bdbbd2d"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim8hr_Rest",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim8hr_Rest.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim8hr",
+        "Rest"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Stim8hr",
+          "direct_arm_key": "direct|treg_like|decrease|Stim8hr",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Stim8hr",
+          "temporal_arm_key": "temporal|treg_like|decrease|Stim8hr|Rest"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Rest",
+          "direct_arm_key": "direct|th1_like|increase|Rest",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Rest",
+          "temporal_arm_key": "temporal|th1_like|increase|Stim8hr|Rest"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "2115b577e03b8a02",
+      "full_contract_content_sha256": "8965553dbe7435f8e95aa8271ee44f66ef1ed935da6c2af117bb924856330ebb"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Rest_Stim48hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Rest_Stim48hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Rest",
+        "Stim48hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Rest",
+          "direct_arm_key": "direct|treg_like|decrease|Rest",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Rest",
+          "temporal_arm_key": "temporal|treg_like|decrease|Rest|Stim48hr"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Stim48hr",
+          "direct_arm_key": "direct|th1_like|increase|Stim48hr",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Stim48hr",
+          "temporal_arm_key": "temporal|th1_like|increase|Rest|Stim48hr"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "4c219f69ff07eb73",
+      "full_contract_content_sha256": "556d7fd098c45512cb20d149d983f839ef8cfd025f14b6e6bdb15153ad11f39d"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim48hr_Rest",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim48hr_Rest.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim48hr",
+        "Rest"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Stim48hr",
+          "direct_arm_key": "direct|treg_like|decrease|Stim48hr",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Stim48hr",
+          "temporal_arm_key": "temporal|treg_like|decrease|Stim48hr|Rest"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Rest",
+          "direct_arm_key": "direct|th1_like|increase|Rest",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Rest",
+          "temporal_arm_key": "temporal|th1_like|increase|Stim48hr|Rest"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "014a48a627b328c8",
+      "full_contract_content_sha256": "764e2f44ab888ca5899e46a575587802fc3f36763c9621ff422e5fde920264de"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim8hr_Stim48hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim8hr_Stim48hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim8hr",
+        "Stim48hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Stim8hr",
+          "direct_arm_key": "direct|treg_like|decrease|Stim8hr",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Stim8hr",
+          "temporal_arm_key": "temporal|treg_like|decrease|Stim8hr|Stim48hr"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Stim48hr",
+          "direct_arm_key": "direct|th1_like|increase|Stim48hr",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Stim48hr",
+          "temporal_arm_key": "temporal|th1_like|increase|Stim8hr|Stim48hr"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "7a77f6b314b9c0f3",
+      "full_contract_content_sha256": "e089049f9aaeace025c837fadc33769b638b5db48825bff045083835282b6d9e"
+    },
+    {
+      "matrix_var": "SEL_TEMPORAL_Stim48hr_Stim8hr",
+      "path": "01_programs/analysis/stage2_bridge/release/selections/stage01_selection_temporal_Stim48hr_Stim8hr.v3.json",
+      "analysis_mode": "temporal_cross_condition",
+      "conditions": [
+        "Stim48hr",
+        "Stim8hr"
+      ],
+      "A": {
+        "program_id": "treg_like",
+        "score_field": "treg_like_score",
+        "direction": "high"
+      },
+      "B": {
+        "program_id": "th1_like",
+        "score_field": "th1_like_score",
+        "direction": "high"
+      },
+      "arms": {
+        "away_from_A": {
+          "role": "away_from_A",
+          "program_id": "treg_like",
+          "pole_direction": "high",
+          "desired_change": "decrease",
+          "condition": "Stim48hr",
+          "direct_arm_key": "direct|treg_like|decrease|Stim48hr",
+          "pathway_arm_key_base": "pathway|treg_like|decrease|Stim48hr",
+          "temporal_arm_key": "temporal|treg_like|decrease|Stim48hr|Stim8hr"
+        },
+        "toward_B": {
+          "role": "toward_B",
+          "program_id": "th1_like",
+          "pole_direction": "high",
+          "desired_change": "increase",
+          "condition": "Stim8hr",
+          "direct_arm_key": "direct|th1_like|increase|Stim8hr",
+          "pathway_arm_key_base": "pathway|th1_like|increase|Stim8hr",
+          "temporal_arm_key": "temporal|th1_like|increase|Stim48hr|Stim8hr"
+        }
+      },
+      "execution_status": "ready",
+      "estimator_status": "available",
+      "selection_id": "ccf390b76f2f0d27",
+      "full_contract_content_sha256": "8d8ccf99904655d8034c328e8be6521d247d72b1786223b2bf95498ef7f83dbb"
+    }
+  ]
+}

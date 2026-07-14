@@ -1,0 +1,27 @@
+{
+  "name": "spotpathways",
+  // PLACEHOLDER PHASE: the only publishable directory is the placeholder distribution.
+  // Do NOT point this at ./dist/cloudflare-pages (the full Stage-1..4 app bundle) until
+  // that release is admitted — a bare `wrangler pages deploy` publishes whatever is here.
+  "pages_build_output_dir": "./dist/cloudflare-placeholder",
+  "compatibility_date": "2026-07-13",
+  "vars": {
+    "SITE_MODE": "local"
+  },
+  "env": {
+    "production": {
+      "vars": {
+        // Canonical host policy: spotpathways.com serves; spotpathway.com (+www) 308s to
+        // it; the spotpathways.pages.dev alias 308s to it; deployment subdomains and all
+        // other hosts are refused. ALLOW_PAGES_DEV_ALIAS was the provisioning-only escape
+        // hatch and is now removed — the canonical certificate is active.
+        "SITE_MODE": "production"
+      }
+    },
+    "preview": {
+      "vars": {
+        "SITE_MODE": "preview"
+      }
+    }
+  }
+}
