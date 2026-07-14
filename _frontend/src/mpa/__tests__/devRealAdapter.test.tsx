@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SelectionV3 } from '../../adapters/selectionV3Adapter';
 import { resolveDevelopmentRealArtifact } from '../devRealAdapter';
@@ -120,6 +120,28 @@ describe('direct real Rest/Stim8 loader', () => {
     expect(view.container.textContent).not.toContain('CNS-MPOunknown');
     expect(view.getByText(/^3 acquired$/)).toBeInTheDocument();
     expect(view.container.textContent).not.toMatch(/rank|score/i);
+  });
+
+  it('renders CNS evidence from the typed artifact without turning PET engagement into a concentration', async () => {
+    state.selection = selection('Stim8hr');
+    const result = await resolveDevelopmentRealArtifact('pksafety');
+    if (!result || result.route !== 'pksafety') throw new Error('PK did not resolve');
+    const view = render(renderDevelopmentReal(result));
+
+    const istradefylline = within(view.getByRole('region', { name: 'ISTRADEFYLLINE' }));
+    expect(istradefylline.getByText('Human PET brain target engagement observed')).toBeInTheDocument();
+    expect(istradefylline.getByText('not evaluated in this evidence set')).toBeInTheDocument();
+    expect(istradefylline.getByRole('link', { name: 'PMID 18566974' })).toHaveAttribute(
+      'href',
+      'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=18566974&retmode=xml',
+    );
+    expect(istradefylline.queryByText('human_brain_target_engagement_observed')).not.toBeInTheDocument();
+
+    const vadadustat = within(view.getByRole('region', { name: 'VADADUSTAT' }));
+    expect(vadadustat.getAllByText('Not evaluated in this evidence set').length).toBeGreaterThan(0);
+    expect(vadadustat.queryByRole('link')).not.toBeInTheDocument();
+    expect(view.container.textContent).not.toContain('No direct human brain measure in scoped sources');
+    expect(view.container.textContent).not.toContain('FDA rat distribution');
   });
 
   it('labels cross-condition endpoint comparisons and exposes the shared-molecule filter', async () => {

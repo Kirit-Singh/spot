@@ -74,7 +74,7 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(d.provenance.source_chain.some((s) => /UniProt/.test(s.label) && s.license === 'CC BY 4.0' && s.url)).toBe(true);
 
     const k = await buildStageMethodsManifest('pksafety');
-    expect(k.methods.method_id).toBe('spot.stage04.pk_safety_compact_writer.v1 · spot.stage04_pk_safety_compact.v1');
+    expect(k.methods.method_id).toBe('spot.stage04.pk_safety_compact_writer.v2 · spot.stage04_pk_safety_compact.v1');
     expect(k.provenance.source_chain.some((s) => /Grossman/.test(s.label) && s.license === 'CC BY 4.0' && s.canonical_sha256)).toBe(true);
   });
 

@@ -15,50 +15,6 @@ const CANVAS = 'flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4';
 const CELL = 'px-2 py-1.5 font-mono text-[10.5px] text-ink-2';
 const HEAD = 'px-2 py-1.5 text-left font-mono text-[9.5px] uppercase tracking-wide text-muted';
 
-interface BrainEvidenceLink {
-  humanStatus: string;
-  humanLabel: string;
-  humanUrl: string;
-  nonhumanLabel?: string;
-  nonhumanUrl?: string;
-}
-
-const BRAIN_EVIDENCE: Record<string, BrainEvidenceLink> = {
-  CHEMBL2216870: {
-    humanStatus: 'No direct human brain measure in scoped sources',
-    humanLabel: 'human plasma PK',
-    humanUrl: 'https://pubmed.ncbi.nlm.nih.gov/26645408/',
-    nonhumanLabel: 'FDA rat distribution',
-    nonhumanUrl: 'https://www.accessdata.fda.gov/drugsatfda_docs/nda/2014/205858Orig1s000PharmR.pdf',
-  },
-  CHEMBL259571: {
-    humanStatus: 'No direct human brain measure in scoped sources',
-    humanLabel: 'current DailyMed label',
-    humanUrl: 'https://dailymed.nlm.nih.gov/dailymed/lookup.cfm?setid=9309d20f-8cd4-4c96-93fa-7f730e83c7ab&version=4',
-    nonhumanLabel: 'FDA nonclinical review',
-    nonhumanUrl: 'https://www.accessdata.fda.gov/drugsatfda_docs/nda/2022/215272Orig1s000MultidisciplineR.pdf',
-  },
-  CHEMBL3643413: {
-    humanStatus: 'No direct human brain measure in scoped sources',
-    humanLabel: 'human ADME study',
-    humanUrl: 'https://pubmed.ncbi.nlm.nih.gov/30215545/',
-  },
-  CHEMBL3646221: {
-    humanStatus: 'No direct human brain measure in scoped sources',
-    humanLabel: 'FDA label',
-    humanUrl: 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2024/215192s000lbl.pdf',
-    nonhumanLabel: 'PMDA rat distribution',
-    nonhumanUrl: 'https://www.pmda.go.jp/files/000243933.pdf',
-  },
-  CHEMBL431770: {
-    humanStatus: 'Human PET brain target engagement observed',
-    humanLabel: 'human PET study',
-    humanUrl: 'https://pubmed.ncbi.nlm.nih.gov/18566974/',
-    nonhumanLabel: 'FDA rat distribution',
-    nonhumanUrl: 'https://www.accessdata.fda.gov/drugsatfda_docs/nda/2019/022075Orig1s000PharmR.pdf',
-  },
-};
-
 function text(value: unknown): string {
   return typeof value === 'string' && value.length > 0 ? value : '—';
 }
@@ -73,6 +29,65 @@ function scalar(value: unknown): string {
 
 function object(value: unknown): JsonRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function values(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+interface HumanCnsEvidenceView {
+  observed: boolean;
+  summary: string;
+  sourceLabel: string | null;
+  sourceUrl: string | null;
+}
+
+function humanCnsEvidence(brain: JsonRecord): HumanCnsEvidenceView {
+  const direct = object(brain.direct_human_cns_evidence);
+  const measurements = values(direct.measurements);
+  const observed = direct.status === 'observed' && measurements.length > 0;
+  if (!observed) {
+    return {
+      observed: false,
+      summary: 'Not evaluated in this evidence set',
+      sourceLabel: null,
+      sourceUrl: null,
+    };
+  }
+  const measurement = object(measurements[0]);
+  const source = object(measurement.source);
+  const evidenceType = text(measurement.evidence_type);
+  const summary = evidenceType === 'human_brain_pet_target_engagement'
+    ? 'Human PET brain target engagement observed'
+    : evidenceType.replaceAll('_', ' ');
+  const sourceUrl = typeof source.source_url === 'string' ? source.source_url : null;
+  const sourceLabel = typeof source.pmid === 'string'
+    ? `PMID ${source.pmid}`
+    : typeof source.doi === 'string' ? `DOI ${source.doi}` : sourceUrl ? 'primary source' : null;
+  return { observed: true, summary, sourceLabel, sourceUrl };
+}
+
+function measuredConcentration(brain: JsonRecord): string {
+  const exposure = object(brain.measured_exposure);
+  for (const key of ['human_csf_concentration', 'unbound_brain_concentration']) {
+    const field = object(exposure[key]);
+    if (field.state !== 'observed' || field.value === null || field.value === undefined) continue;
+    const unit = typeof field.units === 'string' ? ` ${field.units}` : '';
+    return `${scalar(field.value)}${unit}`;
+  }
+  return 'not evaluated in this evidence set';
+}
+
+function nonhumanEvidenceLinks(brain: JsonRecord): { label: string; url: string }[] {
+  return values(brain.nonhuman_cns_evidence).flatMap((raw) => {
+    const evidence = object(raw);
+    const source = object(evidence.source);
+    if (typeof source.source_url !== 'string') return [];
+    const label = typeof evidence.evidence_type === 'string'
+      ? evidence.evidence_type.replaceAll('_', ' ')
+      : 'nonhuman CNS evidence';
+    return [{ label, url: source.source_url }];
+  });
 }
 
 function armLabel(program: string, desired: string, labels: Map<string, string>): string {
@@ -246,17 +261,18 @@ function Scorecard({ candidate }: { candidate: DevPkCandidate }) {
   const brain = object(candidate.brain_penetrance);
   const safety = object(candidate.safety);
   const arms = candidate.stage3_arms.map((arm) => object(arm));
-  const evidence = BRAIN_EVIDENCE[candidate.candidate_id];
+  const humanEvidence = humanCnsEvidence(brain);
+  const nonhumanEvidence = nonhumanEvidenceLinks(brain);
   return (
     <section className="rounded-lg border border-line bg-surface" aria-label={candidate.moiety_name}>
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
         <span className="text-[12px] font-semibold text-ink">{candidate.moiety_name}</span>
         <span className="font-mono text-[9.5px] text-muted">{candidate.candidate_id}</span>
-        <StatePill label={candidate.candidate_id === 'CHEMBL431770' ? 'human CNS evidence' : 'brain PK not measured'} tone={candidate.candidate_id === 'CHEMBL431770' ? 'ok' : 'muted'} />
+        <StatePill label={humanEvidence.observed ? 'human CNS evidence' : 'CNS evidence not evaluated'} tone={humanEvidence.observed ? 'ok' : 'muted'} />
       </header>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-3 py-2 sm:grid-cols-4">
-        <Value label="brain evidence" value={evidence?.humanStatus ?? 'No direct human brain measure in scoped sources'} />
-        <Value label="measured concentration" value={brain.assessment_state === 'not_evaluated' ? 'not available in sourced set' : text(brain.assessment_state)} />
+        <Value label="human CNS evidence" value={humanEvidence.summary} />
+        <Value label="measured concentration" value={measuredConcentration(brain)} />
         <Value label="molecular weight" value={property(candidate, 'molecular_weight')} />
         <Value label="tPSA" value={property(candidate, 'tpsa')} />
         <Value label="xLogP" value={property(candidate, 'xlogp')} />
@@ -267,8 +283,8 @@ function Scorecard({ candidate }: { candidate: DevPkCandidate }) {
       </div>
       <div className="border-t border-line px-3 py-2 font-mono text-[9.5px] text-muted">
         <span>Missing for CNS-MPO: cLogP, cLogD7.4, most-basic pKa.</span>
-        {evidence && <a className="ml-2 text-accent underline-offset-2 hover:underline" href={evidence.humanUrl} target="_blank" rel="noreferrer noopener">{evidence.humanLabel}</a>}
-        {evidence?.nonhumanUrl && <a className="ml-2 text-accent underline-offset-2 hover:underline" href={evidence.nonhumanUrl} target="_blank" rel="noreferrer noopener">{evidence.nonhumanLabel}</a>}
+        {humanEvidence.sourceUrl && humanEvidence.sourceLabel && <a className="ml-2 text-accent underline-offset-2 hover:underline" href={humanEvidence.sourceUrl} target="_blank" rel="noreferrer noopener">{humanEvidence.sourceLabel}</a>}
+        {nonhumanEvidence.map((evidence) => <a key={evidence.url} className="ml-2 text-accent underline-offset-2 hover:underline" href={evidence.url} target="_blank" rel="noreferrer noopener">{evidence.label}</a>)}
       </div>
       <div className="flex flex-wrap gap-1.5 border-t border-line px-3 py-2">
         {arms.map((arm, i) => {
