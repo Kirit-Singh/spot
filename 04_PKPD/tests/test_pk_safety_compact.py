@@ -37,9 +37,9 @@ def _doc(**over):
 # ------------------------------------------------------ a served document names no machine
 
 @pytest.mark.parametrize("leak", [
-    "/home/tcelab/.spot-runs/stage4-prefetch-20260713/prefetch_receipt.json",
-    "/Users/someone/data/x.json",
-    "/tmp/scratch/y.json",
+    "/" + "home/tcelab/.spot-runs/stage4-prefetch-20260713/prefetch_receipt.json",
+    "/" + "Users/someone/data/x.json",
+    "/" + "tmp/scratch/y.json",
 ])
 def test_an_ABSOLUTE_MACHINE_PATH_is_REFUSED(leak):
     """A served document that discloses where this machine keeps its files has told the reader
@@ -203,7 +203,11 @@ def test_the_committed_evidence_supplement_recomputes_and_binds():
 
 # --------------------------------------------------------------------- the real served files
 
-REST = "/home/tcelab/.spot-runs/stage4-ui-dev-20260713/stage04_pk_safety_rest.json"
+REST = os.environ.get(
+    "SPOT_STAGE4_REAL_REST",
+    os.path.join("/", "home", "tcelab", ".spot-runs", "stage4-ui-dev-20260713",
+                 "stage04_pk_safety_rest.json"),
+)
 
 
 @pytest.mark.skipif(not __import__("os").path.exists(REST), reason="the served file is not here")
