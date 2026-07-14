@@ -33,7 +33,7 @@ if [ "${SPOT_SKIP_FRONTEND_GATES:-0}" != "1" ]; then
 fi
 npm run build --prefix "$FRONTEND"
 
-for file in targets.html pathways.html drugs.html pksafety.html favicon.svg icons.svg; do
+for file in 01_page.html targets.html pathways.html drugs.html pksafety.html favicon.svg icons.svg; do
   [ -f "$UI_DIST/$file" ] || die "Vite output missing $file"
 done
 [ -d "$UI_DIST/assets" ] || die "Vite output missing assets/"
@@ -53,8 +53,11 @@ fi
 rm -rf "$OUT"
 mkdir -p "$OUT/data" "$OUT/assets"
 
-# Public landing + admitted pages. The Vite index is intentionally never copied.
-cp -p "$APP/index.html" "$OUT/index.html"
+# The public reviewer landing is a separate control asset served at `/` by the
+# Pages Function. `index.html` remains behind the reviewer gate and is only a
+# compatibility redirect into the canonical Programs route.
+cp -p "$APP/index.html" "$OUT/landing.html"
+cp -p "$UI_DIST/01_page.html" "$OUT/index.html"
 cp -p "$PROGRAMS_SOURCE" "$OUT/programs.html"
 cp -p "$APP/01_notebook.html" "$OUT/01_notebook.html"
 cp -p "$APP/01_trace.html" "$OUT/01_trace.html"
@@ -97,7 +100,7 @@ fi
 cp -p "$STATIC/_routes.json" "$OUT/_routes.json"
 cp -p "$STATIC/_headers" "$OUT/_headers"
 cp -p "$STATIC/404.html" "$OUT/404.html"
-cmp -s "$APP/index.html" "$OUT/index.html" || die "landing changed during assembly"
+cmp -s "$APP/index.html" "$OUT/landing.html" || die "landing changed during assembly"
 
 commit="${CF_PAGES_COMMIT_SHA:-$(git -C "$REPO" rev-parse HEAD)}"
 node "$HERE/finalize_pages_dist.mjs" "$OUT" "$commit"
