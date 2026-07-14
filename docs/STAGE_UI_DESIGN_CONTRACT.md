@@ -1,5 +1,10 @@
 # Spot stage UI — design contract
 
+> **Historical baseline note.** The visual tokens below remain the design source, but the
+> `:8347` and `/02_page.html#/stage-*` route examples record the pre-release shell. Current
+> canonical pages are `/programs.html`, `/targets.html`, `/pathways.html`, `/drugs.html`,
+> and `/pksafety.html` on <https://spotpathways.com/>.
+
 Implementation contract extracted from the **approved live Stage-1 baseline** (`:8347/programs.html`,
 SHA-256 `c0a84e2f…`, snapshot `~/.spot-runs/20260712T021343Z/ui-baseline-8347/`). The Stage-2/3/4 shell
 (`/02_page.html`) must match these tokens and structural rules so the five stages read as one product.

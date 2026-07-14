@@ -19,13 +19,14 @@ regulatory or safety expertise.
 > | Engine + verifier implemented | **yes** — evidence contract v1 (frozen) and v2 (acquisition) |
 > | Stage-3 → Stage-4 admission wired | **yes** — two gates: Stage-4 restates the bundle byte-for-byte, *and* Stage-3's own `verifier.verify_stage3` must pass out-of-process. Schema-valid is not admitted |
 > | Public acquisition adapters | **yes** — PubChem, RxNorm, DailyMed, openFDA; offline unless `--allow-network` |
-> | Selection-specific real run | **NO** |
-> | Public release | **NO** |
+> | Selection-specific bounded evidence compacts | **yes** — Rest and Stim8hr display artifacts |
+> | Public display release | **yes** — evidence fields only; not a recommendation or ranking |
 >
-> **No real drug is characterised, ranked, or claimed to be safe, brain-permeable,
-> NEBPI-classified or clinically suitable.** Every candidate in the test corpus is a labelled
-> `FIXTURE-*`. A real Stage-4 result is gated on an externally admitted real Stage-3 v2 bundle;
-> the production-pointer and selection gates are fail-closed until then.
+> Five real molecules appear in the bounded release compacts. They are not ranked or claimed to
+> be safe, brain-permeable, NEBPI-classified or clinically suitable. Only istradefylline carries
+> a sourced human PET target-engagement record; that is not a CSF concentration, unbound brain
+> concentration, Kp,uu, brain:plasma ratio, tumor-exposure, efficacy or safety result. Other
+> unacquired measurements remain `not_evaluated` rather than being inferred.
 
 ## The six lanes
 

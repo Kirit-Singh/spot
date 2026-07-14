@@ -1,5 +1,9 @@
 # Cloudflare Pages closeout
 
+> **Completed release runbook.** The production project and canonical domains are now live.
+> Counts and pre-deployment wording below describe the scaffold at the time it was written;
+> the generated `site_release_manifest.json` is authoritative for the current deployment.
+
 This is a closeout lane. Do not attach domains or enable production deployment until the Stage 1–4 release and `public_release/results/` tree are admitted. The scaffold does not contain credentials and does not deploy anything.
 
 The interim `spotpathways.pages.dev` placeholder (served before this full release is admitted) is a separate build and mode, documented in `docs/CLOUDFLARE_PLACEHOLDER.md`.

@@ -6,11 +6,11 @@ links, and brain-exposure / safety evidence.
 
 **Live reviewer site:** [spotpathways.com](https://spotpathways.com/)
 
-**Reviewer access code:** `showmespot`
+Reviewer access is supplied with the submission.
 
 ## Current release
 
-The deployed app has four connected views:
+The deployed app has four connected stages across five pages:
 
 1. **Programs** — continuous transcriptional-program scores over the Marson
    GWCD4i CD4 Perturb-seq non-targeting-control cells. These are RNA-program
@@ -23,8 +23,8 @@ The deployed app has four connected views:
    perturbation direction, with molecules shared across the two arms visibly
    identified.
 4. **PK & Safety** — public physicochemical, human CNS, exposure, and safety
-   evidence shown as separate fields. Missing measurements stay unevaluated;
-   physicochemical properties do not confirm brain exposure.
+   evidence, where acquired, shown as separate fields. Missing measurements
+   stay unevaluated; physicochemical properties do not confirm brain exposure.
 
 The end-to-end review chain currently covers **Rest** and **Stim8hr**. GO-BP is
 the active pathway collection. Reactome and incomplete Stim48hr downstream

@@ -1,5 +1,9 @@
 # spot — external reviewer handover (Stages 1–2 complete)
 
+> **Archived 2026-07-11 snapshot.** This handover predates the merged Stage 1–4 release,
+> canonical routes, and Cloudflare deployment. It is retained only as review history. For
+> current status use the root `README.md` and <https://spotpathways.com/>.
+
 _Prepared 2026-07-11 by the lead implementation agent. This pack lets an independent
 reviewer check accuracy end-to-end. Scope of this handover: **Stage 1 fully built +
 live, Stage 2 (direct primary screen + Perturb2State secondary) complete + verified.**

@@ -3,20 +3,26 @@
 **spot's own code is MIT** (see `LICENSE`). **The data are not.** This file is the authoritative
 per-source ledger: what spot queries, under what terms, and what it may redistribute.
 
-**Third-party data ARE tracked in this repo** — a small amount, deliberately. Earlier versions of
-this file said the opposite; that was false, and a reader who believed it would have treated
-CC BY-SA 3.0 content as MIT. What is tracked, and under what license:
+**Third-party-derived data ARE tracked in this repo** — a bounded set of release artifacts and
+test fixtures, deliberately. Earlier versions of this file said the opposite; that was false,
+and a reader who believed it would have treated source-licensed data as MIT. What is tracked,
+and under what license:
 
 | Tracked bytes | Origin | License |
 |---|---|---|
+| `01_programs/app/data/**` and the Stage-1 copies packaged for the frontend — derived continuous scores, coordinates and provenance | Marson GWCD4i / CZI Virtual Cells Platform dataset | **MIT** dataset license; retain dataset/version/producer attribution |
+| `_frontend/public/results/dev-real/pathways.*.json` — derived GO-BP pathway display artifacts | Gene Ontology | **CC BY 4.0** — retain GOC attribution, copyright and disclaimer |
+| `_frontend/public/results/dev-real/drugs.*.json` — drug/target display facts | ChEMBL + UniProt | ChEMBL **CC BY-SA 3.0** and UniProt **CC BY 4.0**; retain attribution and ChEMBL share-alike terms |
+| `_frontend/public/results/dev-real/pksafety.*.json` — inherited drug facts, derived molecule properties and bounded public-evidence records | ChEMBL plus PubChem, openFDA / Drugs@FDA, DailyMed and RxNorm records where acquired, and the candidate-specific sources named in each record | Source-specific terms apply per record; the artifact retains locators, access metadata and hashes. It is **not MIT data** |
 | `04_PKPD/tests/fixtures/stage3*/**.parquet` — Stage-3 wire-bundle fixtures | **ChEMBL-derived** facts (ChEMBL target/molecule ids, target classes, mechanisms) | **CC BY-SA 3.0** — attribution + share-alike on redistributed derivatives. **Not MIT.** |
 | the same bundles' protein records | **UniProt-derived** accessions | **CC BY 4.0** — attribution. **Not MIT.** |
 
-Everything else is fetched at run time. **Raw public responses are never committed**: they are
-cached outside the working tree under the caller's run root, addressed by SHA-256, and only the
-*manifest* (locator + access time + raw hash + terms) enters Git. Stage 4's `RunRoot` refuses a
-cache inside the tree, and `04_PKPD/tests/test_release_hygiene_scan.py` fails the build if a
-response payload is ever tracked.
+The table lists the intended tracked third-party-derived release surface. **Raw public responses
+are never committed**: acquisition responses are cached outside the working tree under the
+caller's run root, addressed by SHA-256. Derived release records retain the relevant locator,
+access metadata, raw hash and terms instead of bundling the raw response. Stage 4's `RunRoot`
+refuses a cache inside the tree, and `04_PKPD/tests/test_release_hygiene_scan.py` fails the build
+if a response payload is ever tracked.
 
 **There is no project-wide use restriction, because there cannot be one.** Reuse follows **each
 row's own licence and terms**. They genuinely differ, and flattening them into a single blanket
@@ -44,9 +50,10 @@ and the code disagree, the per-source registry wins (see the boundary note at th
 |---|---|---|
 | ChEMBL | **CC BY-SA 3.0** | Redistributed **adaptations must stay share-alike and visibly attributed** — this covers the tracked Stage-3 bundle fixtures above, and any ChEMBL-derived data package |
 
-## Queried, but **no blanket license** — used without redistribution
-Public endpoints spot reads at run time whose terms do **not** grant blanket reuse. Nothing from
-them is bundled; only facts and short quotations are encoded, with locators and hashes.
+## Queried, but **no blanket license**
+Public endpoints spot reads at run time whose terms do **not** grant blanket reuse. Raw responses
+and full source documents are not bundled. Compact derived release artifacts may encode bounded
+facts and short quotations, with their locators, raw-response hashes and source-specific terms.
 
 | Source | Terms | Stage-4 use |
 |---|---|---|
@@ -63,17 +70,13 @@ them is bundled; only facts and short quotations are encoded, with locators and 
 | FAERS | If ever added, FAERS is **signal evidence only** — it cannot establish incidence, causality or safety | **no adapter** |
 | **DrugBank** | **No valid public license has been established for this project.** Not queried, not parsed, and **no `drugbank_id` is populated** on any public-only production path | **forbidden**, enforced in code (`04_PKPD/analysis/public_sources.py :: assert_fetch_permitted`). Use ChEMBL instead |
 
-## Carried in the Stage-3 → Stage-4 contract
-| Source | License | Note |
-|---|---|---|
-| LINCS L1000 / Connectivity Map | CC BY 4.0 | Broad Institute LINCS / CMap. The Stage-3 contract carries a `lincs_support` table that Stage 4 consumes; it is **suggestive evidence, never confirmatory** |
-
 ## Listed historically — not on the current implemented path
 Retained so a reader is not told they were silently dropped. **No current adapter queries these**,
 and none is a dependency of the current Stage-1→4 chain. Owning lanes should confirm removal.
 
 DepMap / CCLE / DEMETER2 / PRISM (CC BY 4.0) · Open Targets (CC0 1.0) · DGIdb (open) ·
-SIDER (CC BY-NC-SA 4.0) · DrugComb (CC BY-NC-SA 4.0)
+LINCS L1000 / Connectivity Map (CC BY 4.0) · SIDER (CC BY-NC-SA 4.0) ·
+DrugComb (CC BY-NC-SA 4.0)
 
 ---
 
