@@ -36,6 +36,8 @@ import { directionLabel } from './contrastTitle';
 import { StatePill } from '../shell/chips';
 import { renderRouteReal } from './renderReal';
 import type { RealRouteResolution } from './renderReal';
+import type { DevelopmentRealResolution } from './devRealAdapter';
+import { renderDevelopmentReal } from './devRealRender';
 import type { SelectionDisplayContext } from '../domain/selectionDisplay';
 
 export interface StageIslandProps {
@@ -46,7 +48,7 @@ export interface StageIslandProps {
    * or null when nothing is bound (→ pending state). The admission gate lives inside the loader;
    * StageIsland awaits it and renders pending until it resolves. NEVER demo/fixture.
    */
-  loadRealArtifact?: (page: PageKey) => Promise<RealRouteResolution | null> | RealRouteResolution | null;
+  loadRealArtifact?: (page: PageKey) => Promise<RealRouteResolution | DevelopmentRealResolution | null> | RealRouteResolution | DevelopmentRealResolution | null;
   // Deprecated demo-entry props — accepted (optional, unused) for test call-site compatibility only;
   // the demo route is retired and none of these are read. No fixture is imported here.
   purpose?: string;
@@ -127,7 +129,7 @@ interface ProdState {
   loading: boolean;
   selection: SelectionV3 | null; // verified v3 (null → prompt); NEVER an unverified/forged contract
   manifest: StageMethodsManifest | null; // real per-tab method-definition manifest
-  real: RealRouteResolution | null; // admitted route-discriminated artifact (admission-gated) or null
+  real: RealRouteResolution | DevelopmentRealResolution | null;
   labels: Map<string, string>; // program_id → Tier-2 display label (from the Stage-1 display registry)
 }
 
@@ -151,8 +153,9 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
         loadProgramLabels().catch(() => new Map<string, string>()), // Tier-2 display labels (display-only)
       ]);
       if (cancelled) return;
-      // ADMISSION gate: a temporal artifact renders ONLY when admission === 'admitted'.
-      const admitted = real && real.admission === 'admitted' ? real : null;
+      // Production remains admitted-only. The narrowly-scoped development resolver is separately
+      // typed and may render only its exact Rest/Stim8 real-data artifacts; it is never relabelled admitted.
+      const admitted = real && (real.admission === 'admitted' || real.admission === 'development') ? real : null;
       setProd({ loading: false, selection, manifest, real: admitted, labels });
     })();
     return () => {
@@ -200,7 +203,9 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
   //      run-status stays collapsed to the ONE-LINE unbound status row.
   //   3. the honest pre-resolution fallback (source-tissue only; other rows omitted; one status row).
   // Never blocks on result admission; never a synthetic fixture.
-  const methodsManifest = prod.real?.manifest ?? prod.manifest ?? unavailableManifest(subtitle);
+  const methodsManifest = (prod.real?.admission === 'admitted' ? prod.real.manifest : null)
+    ?? prod.manifest
+    ?? unavailableManifest(subtitle);
 
   return (
     <PageShell
@@ -219,7 +224,7 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
         // The canvas reads the SAME registry-gated displaySelection the header does: a selection whose
         // program axes the served registry does not name is refused everywhere, so it can never label a
         // pole on the map while the header has already reverted to the prompt.
-        renderRouteReal(prod.real, {
+        prod.real.admission === 'development' ? renderDevelopmentReal(prod.real, prod.labels) : renderRouteReal(prod.real, {
           labels: prod.labels,
           poleDirections: displaySelection
             ? { A: directionLabel(displaySelection.A.direction), B: directionLabel(displaySelection.B.direction) }
