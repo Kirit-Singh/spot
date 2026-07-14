@@ -169,11 +169,26 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
     ? prod.selection
     : null;
   const contrast = displaySelection ? contrastTitle(contrastFromV3(displaySelection, prod.labels)) : null;
+  const developmentContrast = prod.real?.admission === 'development'
+    ? contrastTitle({
+        program_a: {
+          display_label: programLabel(prod.labels, prod.real.context.programA),
+          direction: 'high',
+        },
+        program_b: {
+          display_label: programLabel(prod.labels, prod.real.context.programB),
+          direction: 'high',
+        },
+        condition_a: prod.real.context.condition,
+        condition_b: prod.real.context.condition,
+        analysis_condition: prod.real.context.condition,
+      })
+    : null;
   const selectionDisplay = displaySelection
     ? selectionDisplayFromV3(displaySelection, prod.labels)
     : null;
-  const headerTitle = contrast ?? NO_SELECTION_TITLE;
-  const headerNode = contrast ? undefined : (
+  const headerTitle = developmentContrast ?? contrast ?? NO_SELECTION_TITLE;
+  const headerNode = developmentContrast || contrast ? undefined : (
     <>
       Select populations in{' '}
       <a

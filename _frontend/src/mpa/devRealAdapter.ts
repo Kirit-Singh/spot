@@ -2,7 +2,7 @@ import type { PageKey } from './pages';
 import { readStage1SelectionV3 } from './contrastTitle';
 import { resolveProductionRealArtifact } from './resolveRouteArtifact';
 import type { RealRouteResolution } from './renderReal';
-import { desiredChange, directArmKey, pathwayArmKey } from '../repository/armKey';
+import { directArmKey, pathwayArmKey } from '../repository/armKey';
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -82,22 +82,20 @@ export interface DevPkArtifact extends JsonRecord {
   counts: JsonRecord;
 }
 
-export type DevelopmentRealResolution =
-  | { admission: 'development'; route: 'pathways'; artifact: DevPathwaysArtifact }
-  | { admission: 'development'; route: 'drugs'; artifact: DevDrugsArtifact }
-  | { admission: 'development'; route: 'pksafety'; artifact: DevPkArtifact };
-
-const conditions = new Set(['Rest', 'Stim8hr']);
-
-interface SelectionContext {
-  condition: string;
-  programA: string;
-  programB: string;
-  desiredA: 'increase' | 'decrease';
-  desiredB: 'increase' | 'decrease';
+export interface DevelopmentSelectionContext {
+  condition: 'Rest' | 'Stim8hr';
+  programA: 'treg_like';
+  programB: 'th1_like';
+  desiredA: 'decrease';
+  desiredB: 'increase';
   directArmKeys: [string, string];
   pathwayArmKeys: [string, string];
 }
+
+export type DevelopmentRealResolution =
+  | { admission: 'development'; route: 'pathways'; artifact: DevPathwaysArtifact; context: DevelopmentSelectionContext }
+  | { admission: 'development'; route: 'drugs'; artifact: DevDrugsArtifact; context: DevelopmentSelectionContext }
+  | { admission: 'development'; route: 'pksafety'; artifact: DevPkArtifact; context: DevelopmentSelectionContext };
 
 function record(value: unknown): JsonRecord | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -105,28 +103,46 @@ function record(value: unknown): JsonRecord | null {
     : null;
 }
 
-function selectionContext(value: Awaited<ReturnType<typeof readStage1SelectionV3>>): SelectionContext | null {
-  if (!value || value.analysis_mode !== 'within_condition' || value.conditions.length !== 1) return null;
-  const condition = value.conditions[0];
-  if (!conditions.has(condition)) return null;
-  const desiredA = desiredChange('away_from_A', value.A.direction);
-  const desiredB = desiredChange('toward_b', value.B.direction);
+function fixedReviewContext(condition: 'Rest' | 'Stim8hr'): DevelopmentSelectionContext {
+  const desiredA = 'decrease' as const;
+  const desiredB = 'increase' as const;
   const directArmKeys: [string, string] = [
-    directArmKey(value.A.program_id, desiredA, condition),
-    directArmKey(value.B.program_id, desiredB, condition),
+    directArmKey('treg_like', desiredA, condition),
+    directArmKey('th1_like', desiredB, condition),
   ];
   return {
     condition,
-    programA: value.A.program_id,
-    programB: value.B.program_id,
+    programA: 'treg_like',
+    programB: 'th1_like',
     desiredA,
     desiredB,
     directArmKeys,
     pathwayArmKeys: [
-      pathwayArmKey(value.A.program_id, desiredA, condition, 'go_bp'),
-      pathwayArmKey(value.B.program_id, desiredB, condition, 'go_bp'),
+      pathwayArmKey('treg_like', desiredA, condition, 'go_bp'),
+      pathwayArmKey('th1_like', desiredB, condition, 'go_bp'),
     ],
   };
+}
+
+/** Resolve an immediately-viewable real-data snapshot for the review build. */
+function reviewContext(value: Awaited<ReturnType<typeof readStage1SelectionV3>>): DevelopmentSelectionContext | null {
+  if (typeof window !== 'undefined') {
+    const query = new URLSearchParams(window.location.search).get('condition');
+    if (query === 'Rest' || query === 'Stim8hr') return fixedReviewContext(query);
+  }
+  if (!value) return fixedReviewContext('Rest');
+  if (
+    value.analysis_mode === 'within_condition'
+    && value.conditions.length === 1
+    && value.A.program_id === 'treg_like'
+    && value.A.direction === 'high'
+    && value.B.program_id === 'th1_like'
+    && value.B.direction === 'high'
+  ) {
+    const condition = value.conditions[0];
+    if (condition === 'Rest' || condition === 'Stim8hr') return fixedReviewContext(condition);
+  }
+  return null;
 }
 
 async function fetchJson(path: string): Promise<unknown> {
@@ -135,7 +151,7 @@ async function fetchJson(path: string): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }
 
-function validatePathways(raw: unknown, context: SelectionContext): DevPathwaysArtifact | null {
+function validatePathways(raw: unknown, context: DevelopmentSelectionContext): DevPathwaysArtifact | null {
   const value = record(raw);
   if (!value || value.schema_version !== 'spot.stage03_pathway_context_ui.v0' || value.condition !== context.condition) return null;
   if (value.status !== 'development_unadmitted' || value.admission_pending !== true || value.is_production_result !== false) return null;
@@ -146,7 +162,7 @@ function validatePathways(raw: unknown, context: SelectionContext): DevPathwaysA
   return value as unknown as DevPathwaysArtifact;
 }
 
-function validateDrugs(raw: unknown, context: SelectionContext): DevDrugsArtifact | null {
+function validateDrugs(raw: unknown, context: DevelopmentSelectionContext): DevDrugsArtifact | null {
   const value = record(raw);
   if (!value || value.schema_version !== 'spot.stage03_ui_drugs.v1' || value.condition !== context.condition) return null;
   if (value.analysis_mode !== 'within_condition' || record(value.admission)?.receipt_verified !== false) return null;
@@ -155,7 +171,7 @@ function validateDrugs(raw: unknown, context: SelectionContext): DevDrugsArtifac
   return value as unknown as DevDrugsArtifact;
 }
 
-function validatePk(raw: unknown, context: SelectionContext): DevPkArtifact | null {
+function validatePk(raw: unknown, context: DevelopmentSelectionContext): DevPkArtifact | null {
   const value = record(raw);
   if (!value || value.schema_id !== 'spot.stage04_pk_safety_compact.v1' || value.not_a_ranking !== true || !Array.isArray(value.candidates)) return null;
   if (value.selection !== context.condition.toLowerCase().replace('hr', '')) return null;
@@ -167,20 +183,20 @@ function validatePk(raw: unknown, context: SelectionContext): DevPkArtifact | nu
 
 export async function resolveDevelopmentRealArtifact(page: PageKey): Promise<DevelopmentRealResolution | null> {
   if (page !== 'pathways' && page !== 'drugs' && page !== 'pksafety') return null;
-  const context = selectionContext(await readStage1SelectionV3().catch(() => null));
+  const context = reviewContext(await readStage1SelectionV3().catch(() => null));
   if (!context) return null;
   const path = `results/dev-real/${page}.${context.condition}.json`;
   const raw = await fetchJson(path).catch(() => null);
   if (page === 'pathways') {
     const artifact = validatePathways(raw, context);
-    return artifact ? { admission: 'development', route: page, artifact } : null;
+    return artifact ? { admission: 'development', route: page, artifact, context } : null;
   }
   if (page === 'drugs') {
     const artifact = validateDrugs(raw, context);
-    return artifact ? { admission: 'development', route: page, artifact } : null;
+    return artifact ? { admission: 'development', route: page, artifact, context } : null;
   }
   const artifact = validatePk(raw, context);
-  return artifact ? { admission: 'development', route: page, artifact } : null;
+  return artifact ? { admission: 'development', route: page, artifact, context } : null;
 }
 
 /** Production has precedence; the direct real-data development seam is only the fallback. */
