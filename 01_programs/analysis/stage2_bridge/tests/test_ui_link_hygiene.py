@@ -1,4 +1,4 @@
-"""Regression scan for the Stage-1 canonical page (01_page.html): no VISIBLE link may target a retired
+"""Regression scan for the Stage-1 canonical page (programs.html): no VISIBLE link may target a retired
 methods / notebook / trace PAGE — the header "Methods & provenance" drawer is the sole primary methods
 surface — while the reproduce.sh script link is retained. Guards the nav + drawer consolidation cleanup.
 """
@@ -7,7 +7,7 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-PAGE = os.path.join(REPO, "01_programs", "app", "01_page.html")
+PAGE = os.path.join(REPO, "01_programs", "app", "programs.html")
 
 # <a href="X"> targets that must NOT appear: a separate notebook/trace/methods/provenance page.
 FORBIDDEN = re.compile(r"01_notebook|01_trace|(?:^|/)(?:methods|provenance)[._-]?\w*\.html", re.I)
@@ -24,7 +24,7 @@ def test_no_ui_link_targets_notebook_trace_or_methods_page():
 
 
 def test_reproduce_sh_link_retained():
-    assert any("reproduce.sh" in h for h in _hrefs()), "the reproduce.sh script link must remain in 01_page.html"
+    assert any("reproduce.sh" in h for h in _hrefs()), "the reproduce.sh script link must remain in programs.html"
 
 
 def test_five_route_nav_present():

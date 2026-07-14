@@ -8,7 +8,7 @@ Status: approved design; implementation pending. **No commit/push; no deploy to 
 Turn the fixtures-first Stage 2–4 preview into a **generic, data-driven workflow** that binds any
 supported program A/B directions + analysis condition/mode, renders verified artifacts when supplied,
 and — when none is bound — shows an **honest, visually useful workflow scaffold** that never
-masquerades as scientific output. Visual baseline: live `100.117.50.59:8347/01_page.html`
+masquerades as scientific output. Visual baseline: live `100.117.50.59:8347/programs.html`
 (SHA `c0a84e2f…`, byte-identical to the frozen snapshot). Preserve Stage-1 layout/tokens/interactions.
 
 ## Hard constraints (carried)

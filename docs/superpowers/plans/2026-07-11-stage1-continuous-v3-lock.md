@@ -359,7 +359,7 @@ condition** — do NOT retune markers, seeds, or thresholds afterward.
   directions, one shared condition, `combination_policy: deferred_to_stage2`, ids, hashes.
 
 ## Task 9: App data-plumbing + required behavior (no visual change)
-**Executor:** lead. **Files:** `01_programs/app/01_page.html` (JS only).
+**Executor:** lead. **Files:** `01_programs/app/programs.html` (JS only).
 - [ ] Loader consumes coordinates + overlay + summary + v3 registry (retire seed/cell_records reads).
 - [ ] **Remove `balanced_a_to_b`** from serialization; selection payload = two ordered axes + condition,
   materialized on "Identify genes" with `selection_id`.

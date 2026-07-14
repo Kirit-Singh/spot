@@ -69,12 +69,12 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(p.provenance.source_chain.some((s) => /reactome/i.test(s.label))).toBe(false);
 
     const d = await buildStageMethodsManifest('drugs');
-    expect(d.methods.method_id).toBe('stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2');
+    expect(d.methods.method_id).toBe('druglink.dev_emit_ui.build · spot.stage03_ui_drugs.v1 · stage3-modality-v2-observed-sign');
     expect(d.provenance.source_chain.some((s) => s.label === 'ChEMBL 37' && s.license === 'CC BY-SA 3.0' && s.url)).toBe(true);
     expect(d.provenance.source_chain.some((s) => /UniProt/.test(s.label) && s.license === 'CC BY 4.0' && s.url)).toBe(true);
 
     const k = await buildStageMethodsManifest('pksafety');
-    expect(k.methods.method_id).toBe('stage4-evidence-v2 · cns_mpo_wager2010_v1 · nebpi_source_framing_v2 · safety_taxonomy_v2');
+    expect(k.methods.method_id).toBe('spot.stage04.pk_safety_compact_writer.v1 · spot.stage04_pk_safety_compact.v1');
     expect(k.provenance.source_chain.some((s) => /Grossman/.test(s.label) && s.license === 'CC BY 4.0' && s.canonical_sha256)).toBe(true);
   });
 
@@ -152,28 +152,25 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     expect(p.provenance.source_chain.find((s) => /GO Biological/.test(s.label))?.canonical_sha256).toBe(GO_CANON);
   });
 
-  it('pksafety lists DailyMed + openFDA as method sources with W8 licensing and NO evidence before acquisition', async () => {
+  it('pksafety lists exactly the public sources consumed by the compact preview', async () => {
     const k = await buildStageMethodsManifest('pksafety');
     const dm = k.provenance.source_chain.find((s) => /DailyMed/.test(s.label));
     const of = k.provenance.source_chain.find((s) => /openFDA/i.test(s.label));
     expect(dm).toBeTruthy();
     expect(of).toBeTruthy();
-    // DailyMed: no verified blanket open-data licence; openFDA: CC0 with marked exceptions
-    expect(dm!.license).toMatch(/No blanket licence verified/i);
+    // openFDA: CC0 with marked exceptions; no response hash is claimed by the static definition.
     expect(of!.license).toMatch(/CC0/);
     expect(of!.license).toMatch(/exceptions/i);
-    // no response has been acquired → hashes + retrieval null (never implies supplied evidence)
-    for (const s of [dm!, of!]) {
-      expect(s.raw_sha256).toBeNull();
-      expect(s.canonical_sha256).toBeNull();
-      expect(s.retrieval_utc).toBeNull();
-    }
+    expect(of!.raw_sha256).toBeNull();
+    expect(of!.canonical_sha256).toBeNull();
+    expect(of!.retrieval_utc).toBeNull();
     // PK also declares its Stage-3 reuse-only + live-acquisition sources
     const labels = k.provenance.source_chain.map((s) => s.label).join(' | ');
     expect(labels).toMatch(/ChEMBL 37 \(reused from Stage 3; Stage-4 reuse-only\)/);
     expect(labels).toMatch(/UniProt 2026_02 \(reused from Stage 3; Stage-4 reuse-only\)/);
     expect(labels).toMatch(/PubChem PUG REST/);
     expect(labels).toMatch(/RxNorm/);
+    expect(labels).toMatch(/DailyMed/);
   });
 
   it('Methods↔References agree: Targets data_input names all five inputs; Pathways carries pseudobulk; PK names roles', async () => {
@@ -190,34 +187,27 @@ describe('buildStageMethodsManifest — real, method-def vs run-status', () => {
     // Pathways transitive chain includes pseudobulk (bound Direct producer requires it) — not partial
     const p = await buildStageMethodsManifest('pathways');
     expect(p.provenance.source_chain.some((s) => /pseudobulk_merged\.h5ad/.test(s.record_id))).toBe(true);
-    // PK data_input names roles matching its source chain, none implying an unacquired response
+    // PK data_input names the two parsed cached response types and exact upstream binding.
     const k = await buildStageMethodsManifest('pksafety');
-    expect(k.methods.data_input).toMatch(/PubChem \+ RxNorm/);
-    expect(k.methods.data_input).toMatch(/reused from Stage 3/);
-    expect(k.methods.data_input).toMatch(/label evidence/);
+    expect(k.methods.data_input).toMatch(/PubChem property responses/);
+    expect(k.methods.data_input).toMatch(/openFDA label responses/);
+    expect(k.methods.data_input).toMatch(/Stage-3 raw and canonical content hashes/);
   });
 
-  it('Stage-3 estimand names the typed inverse_direction_hypothesis (not observed gain-of-function)', async () => {
+  it('Stage-3 keeps inverse direction untested and never equates protein inhibition to knockdown', async () => {
     const d = await buildStageMethodsManifest('drugs');
-    expect(d.methods.estimand).toMatch(/inverse_direction_hypothesis/);
-    expect(d.methods.estimand).toMatch(/NOT an observed gain-of-function/);
-    expect(d.methods.estimand).toMatch(/never conflated with the observed direction/);
+    expect(d.methods.estimand).toMatch(/putative_crispri_phenocopy only when mechanism_phenocopies_modality=true/);
+    expect(d.methods.estimand).toMatch(/Agonism is never labelled a CRISPRi phenocopy/);
+    expect(d.methods.estimand).toMatch(/no combined drug score or drug ranking/i);
   });
 
-  it('Stage-4 states incomplete CNS-MPO (missing logD7.4 / pKa) + organ-system not_evaluated (source-backed only)', async () => {
+  it('Stage-4 states exact CNS-MPO completeness and emits no organ-system classification', async () => {
     const k = await buildStageMethodsManifest('pksafety');
-    const lims = k.methods.limitations.join(' ');
-    expect(lims).toMatch(/logD7\.4/);
-    expect(lims).toMatch(/most-basic pKa/);
-    expect(lims).toMatch(/full CNS-MPO score is incomplete/);
-    expect(lims).toMatch(/labels do not establish measured brain exposure/i);
-    expect(k.methods.masks_qc ?? '').toMatch(/unspecified \/ not_evaluated/);
-    expect(k.methods.masks_qc ?? '').toMatch(/never inferred from target, mechanism, class, or drug name/);
-    // source-tissue row is SOURCE-CONDITIONAL, not an unconditional "organ-system shown" claim;
-    // Marson has no tissue/organ axis, so nothing is inferred from target/mechanism/class/drug name.
-    expect(k.methods.source_tissue ?? '').toMatch(/emitted only from an admitted structured source field/);
-    expect(k.methods.source_tissue ?? '').toMatch(/never inferred from target, mechanism, class, or drug name/);
-    expect(k.methods.source_tissue ?? '').not.toMatch(/are shown only from source-backed label evidence/);
+    expect(k.methods.masks_qc ?? '').toMatch(/molecular weight, TPSA and HBD/);
+    expect(k.methods.masks_qc ?? '').toMatch(/cLogP, cLogD7\.4 and most-basic pKa remain missing/);
+    expect(k.methods.masks_qc ?? '').toMatch(/do not silently fill cLogP/);
+    expect(k.methods.limitations.join(' ')).toMatch(/No full CNS-MPO total/);
+    expect(k.methods.source_tissue ?? '').toMatch(/emits no tissue-specific or organ-system classification/);
   });
 
   it('GO/Wager/Grossman reference precision: derived-bundle labels, exact release URLs, dated raw snapshots', async () => {
@@ -351,7 +341,7 @@ describe('drawer renders verified source hashes; absent hash subfields are omitt
     expect(dialog.textContent ?? '').not.toMatch(/reactome/i);
   });
 
-  it('pksafety: DailyMed/openFDA appear WITHOUT any fabricated hash and without "unavailable" filler', async () => {
+  it('pksafety: only parsed openFDA label source appears, with no fabricated hash or filler', async () => {
     const m = await buildStageMethodsManifest('pksafety');
     render(<ProvenanceDrawer open title="PK & Safety" provenance={null} methods={m} onClose={() => {}} />);
     const dialog = screen.getByRole('dialog');
@@ -396,9 +386,9 @@ describe('CLEAN unbound state — one route status, exactly zero "unavailable" (
       cleanup();
     }
     // current authoritative identities
-    expect((await buildStageMethodsManifest('drugs')).methods.method_id).toContain('spot.stage03_drug_annotation.v2');
-    expect((await buildStageMethodsManifest('pksafety')).methods.method_id).toContain('stage4-evidence-v2');
-    expect((await buildStageMethodsManifest('pksafety')).methods.upstream_model).toContain('spot.stage03_drug_annotation.v2');
+    expect((await buildStageMethodsManifest('drugs')).methods.method_id).toContain('spot.stage03_ui_drugs.v1');
+    expect((await buildStageMethodsManifest('pksafety')).methods.method_id).toContain('spot.stage04_pk_safety_compact.v1');
+    expect((await buildStageMethodsManifest('pksafety')).methods.upstream_model).toContain('development Stage-3 UI-drug artifact');
     expect((await buildStageMethodsManifest('targets')).methods.method_id).toContain('masked_program_projection');
   });
 
@@ -553,7 +543,7 @@ describe('StageIsland production drawer — real method definition, run-status u
 
   it('pksafety drawer differs from targets (CNS-MPO / Grossman, Stage-4 id; clean unbound, no reproduce)', async () => {
     renderIsland('pksafety', 'PK & Safety');
-    const d = await openRealDrawer(/stage4-evidence-v2/);
+    const d = await openRealDrawer(/spot\.stage04_pk_safety_compact\.v1/);
     expect(d).toHaveTextContent(/CNS-MPO/);
     expect(within(d).getAllByText(/Grossman/).length).toBeGreaterThan(0);
     expect(within(d).getAllByText('No admitted Stage-4 bundle bound')).toHaveLength(1);

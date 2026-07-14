@@ -65,7 +65,7 @@ export function stageSourceTissue(stage_label: string): string | null {
     return 'Biological input is the Stage-2 program/perturbation result from the Marson primary-human-CD4 dataset; drug evidence comes from separately listed public sources.';
   }
   if (s.includes('pk') || s.includes('safety')) {
-    return 'Organ-system context is emitted only from an admitted structured source field; otherwise not_evaluated / unspecified — never inferred from target, mechanism, class, or drug name.';
+    return 'Candidate context originates from the Marson primary-human-CD4 perturbation analysis through Stage 3. The PK/safety evidence is molecule-level public evidence; the current compact artifact emits no tissue-specific or organ-system classification.';
   }
   return null;
 }

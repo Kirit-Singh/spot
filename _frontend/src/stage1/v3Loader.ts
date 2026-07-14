@@ -1,5 +1,5 @@
 // Stage-1 v3 browser-loader — migrated from the authoritative reference
-// (01_programs/analysis/test_v3_loader_mutation.mjs) and the real 01_page.html loader,
+// (01_programs/analysis/test_v3_loader_mutation.mjs) and the real programs.html loader,
 // fixed for the truthful v3 shape: current.schema === spot.stage01_current.v3 and the
 // binding block is `measurement_display_release` (was research_preview_v3). Every guard
 // rejects BEFORE any score is copied; there is no fallback to v2.

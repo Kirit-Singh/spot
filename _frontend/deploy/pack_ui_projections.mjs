@@ -61,13 +61,13 @@ const ROUTES = {
   },
   drugs: {
     stage_label: 'Drugs',
-    method_id: 'stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2',
+    method_id: 'druglink.dev_emit_ui.build · spot.stage03_ui_drugs.v1 · stage3-modality-v2-observed-sign',
     projection_path: 'stage03/drugs.ui.json',
     projection_schema: 'spot.ui_projection.drugs.v1',
   },
   pksafety: {
     stage_label: 'PK & Safety',
-    method_id: 'stage4-evidence-v2 · cns_mpo_wager2010_v1 · nebpi_source_framing_v2 · safety_taxonomy_v2',
+    method_id: 'spot.stage04.pk_safety_compact_writer.v1 · spot.stage04_pk_safety_compact.v1',
     projection_path: 'stage04/pksafety.ui.json',
     projection_schema: 'spot.ui_projection.stage2.v1', // overwritten per-route below (drugs/pksafety differ)
   },

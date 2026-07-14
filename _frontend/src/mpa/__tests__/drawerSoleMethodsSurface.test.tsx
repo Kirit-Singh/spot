@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { StageIsland } from '../StageIsland';
 import type { PageKey } from '../pages';
 // Vite `?raw` import (type-safe under the vite/client tsconfig) — the exact static Programs bytes.
-import html01 from '../../../public/01_page.html?raw';
+import html01 from '../../../public/programs.html?raw';
 
 const DOWNSTREAM: [PageKey, string][] = [
   ['targets', 'Targets'],

@@ -11,7 +11,7 @@ rm -rf "$DIST"
 mkdir -p "$DIST/data"
 
 # Allowlisted rendered pages
-cp "$APP/01_page.html"     "$DIST/01_page.html"
+cp "$APP/programs.html"     "$DIST/programs.html"
 cp "$APP/01_notebook.html" "$DIST/01_notebook.html"
 cp "$APP/01_trace.html"    "$DIST/01_trace.html"
 
@@ -22,9 +22,9 @@ cp "$APP/data/stage01_cell_records.json" "$DIST/data/stage01_cell_records.json"
 # Redirect landing page
 cat > "$DIST/index.html" <<'EOF'
 <!doctype html><meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=/01_page.html">
+<meta http-equiv="refresh" content="0; url=/programs.html">
 <title>spot · Stage-1 — CD4 transcriptional programs</title>
-<p>Redirecting to the <a href="/01_page.html">spot Stage-1 CD4 workbench</a>…</p>
+<p>Redirecting to the <a href="/programs.html">spot Stage-1 CD4 workbench</a>…</p>
 EOF
 
 echo "built dist at $DIST:"

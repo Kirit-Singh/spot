@@ -169,7 +169,10 @@ function reviewContext(value: Awaited<ReturnType<typeof readStage1SelectionV3>>)
       && (conditionB === 'Rest' || conditionB === 'Stim8hr')
     ) return fixedReviewContext(conditionA, conditionB);
   }
-  return null;
+  // The review build must remain inspectable even when the browser carries an older or
+  // unsupported Stage-1 selection. The development artifact is never relabelled to that
+  // selection: it falls back to its explicit, visible Rest -> Stim8 endpoint context.
+  return fixedReviewContext('Rest', 'Stim8hr');
 }
 
 async function fetchJson(path: string): Promise<unknown> {
@@ -289,7 +292,7 @@ export async function resolveDevelopmentRealArtifact(page: PageKey): Promise<Dev
   ];
   const artifact: DevPkArtifact = {
     schema_id: 'spot.stage04_pk_safety_compact.v1',
-    selection: 'rest_to_stim8',
+    selection: `${context.conditionA.toLowerCase().replace('hr', '')}_to_${context.conditionB.toLowerCase().replace('hr', '')}`,
     not_a_ranking: true,
     stage3_source: {
       analysis_mode: 'endpoint_comparison',

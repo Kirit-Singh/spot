@@ -27,7 +27,7 @@ import {
 
 const PW_PATH = '/Users/kiritsingh/.spot-orchestrator/node_modules/playwright-core/index.js';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const ROUTE_LABEL = { '01_page.html': 'Programs', 'targets.html': 'Targets', 'pathways.html': 'Pathways', 'drugs.html': 'Drugs', 'pksafety.html': 'PK & Safety' };
+const ROUTE_LABEL = { 'programs.html': 'Programs', 'targets.html': 'Targets', 'pathways.html': 'Pathways', 'drugs.html': 'Drugs', 'pksafety.html': 'PK & Safety' };
 
 export { DEFAULT_BASE, ROUTES, DOWNSTREAM, NAV_EXPECTED, STAGE_LABEL };
 
@@ -169,7 +169,7 @@ export async function checkU05U07(browser, base) {
   const v1blob = JSON.stringify({ schema_version: V1_KEY, program_a: { display_label: 'ATTACK-A', direction: 'high' }, program_b: { display_label: 'ATTACK-B', direction: 'low' }, analysis_condition: 'Rest' });
 
   await withPage(browser, async (page) => {
-    await gotoReady(page, base, '01_page.html');
+    await gotoReady(page, base, 'programs.html');
     await seedStorage(page, [{ key: V3_KEY, value: v1blob }, { key: V1_KEY, value: v1blob }]);
     await gotoReady(page, base, 'targets.html');
     const header = await page.evaluate(() => (document.querySelector('header')?.textContent || '').replace(/\s+/g, ' ').trim());
@@ -492,7 +492,7 @@ export async function checkU18(browser, base) {
     const sel = await makeSelection(page, base, { temporal: false });
     if (!sel.ok) return { gate: 'U18', pass: false, detail: `could not establish selection: ${sel.reason}` };
     const notes = [];
-    for (const r of ['targets.html', 'pathways.html', 'drugs.html', 'pksafety.html', '01_page.html', 'targets.html']) {
+    for (const r of ['targets.html', 'pathways.html', 'drugs.html', 'pksafety.html', 'programs.html', 'targets.html']) {
       await gotoReady(page, base, r);
       const v3 = await readStores(page, V3_KEY);
       const v1 = await readStores(page, V1_KEY);

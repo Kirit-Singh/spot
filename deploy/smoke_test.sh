@@ -22,10 +22,10 @@ for p in /serve.py /serve_static.py /stage1_pipeline.py /verify_reproduce.py \
   check GET "$p" 404,410
 done
 check POST /rerun 404,405,410
-check PUT  /01_page.html 404,405,410
+check PUT  /programs.html 404,405,410
 
 echo "== application pages + verified artifacts (must 200) =="
-for p in / /01_page.html /01_notebook.html /01_trace.html \
+for p in / /programs.html /01_notebook.html /01_trace.html \
          /data/stage01_umap_seed.json /data/stage01_cell_records.json; do
   check GET "$p" 200
 done

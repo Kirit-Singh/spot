@@ -194,7 +194,7 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
     <>
       Select populations in{' '}
       <a
-        href="01_page.html"
+        href="programs.html"
         className="underline decoration-ink underline-offset-[3px] hover:text-accent hover:decoration-accent"
       >
         Programs
@@ -207,7 +207,7 @@ export function StageIsland({ page, subtitle, loadRealArtifact }: StageIslandPro
   const onClearSelection = contrast
     ? () => {
         clearStage1Selection();
-        window.location.assign('01_page.html');
+        window.location.assign('programs.html');
       }
     : undefined;
 

@@ -4,7 +4,7 @@ _From the Stage-1 lane (branch `stage1-remediation`), 2026-07-12. The frozen-pag
 DONE on `stage1-remediation`; the TS twin below lives only in the W12 worktrees, so it is handed off._
 
 ## What was fixed here (frozen page)
-`01_programs/app/01_page.html` `preflight()` — the "identical From/To" refusal now also requires the same
+`01_programs/app/programs.html` `preflight()` — the "identical From/To" refusal now also requires the same
 condition, so **same program + same direction across DIFFERENT timepoints** is no longer mislabeled
 "identical". It falls through to the cross-condition branch → **`awaiting_estimator`** ("Cross-condition
 analysis feature in progress"), consistent with the temporal estimator (`temporal_cross_condition_v1`,

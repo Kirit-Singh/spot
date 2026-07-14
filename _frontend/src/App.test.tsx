@@ -46,7 +46,7 @@ describe('spot shell — navigation & modes', () => {
 
   it('links Stage 1 out to the built page without redrawing it', () => {
     render(<App />);
-    expect(screen.getByRole('link', { name: /CD4 programs/ })).toHaveAttribute('href', '/01_page.html');
+    expect(screen.getByRole('link', { name: /CD4 programs/ })).toHaveAttribute('href', '/programs.html');
   });
 
   it('navigates between stages 2, 3 and 4 (demo mode populated)', () => {

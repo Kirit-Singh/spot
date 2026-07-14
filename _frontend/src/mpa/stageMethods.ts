@@ -73,7 +73,7 @@ const SOURCE_TISSUE: Record<'targets' | 'pathways' | 'drugs' | 'pksafety', strin
   drugs:
     'Biological input is the Stage-2 program/perturbation result from the Marson primary-human-CD4 dataset; drug evidence comes from separately listed public sources.',
   pksafety:
-    'Organ-system context is emitted only from an admitted structured source field; otherwise not_evaluated / unspecified — never inferred from target, mechanism, class, or drug name.',
+    'Candidate context originates from the Marson primary-human-CD4 perturbation analysis through Stage 3. The PK/safety evidence is molecule-level public evidence; the current compact artifact emits no tissue-specific or organ-system classification.',
 };
 
 interface RawSource {
@@ -202,15 +202,14 @@ const PERTURB2STATE = src(
 // evidence before acquisition. Licensing verbatim from the W8 acquisition source
 // (agent/stage4-acquisition-core@b287f72): DailyMed carries NO verified blanket open-data licence;
 // openFDA is generally CC0 WITH marked third-party-rights exceptions.
-const DAILYMED_LABEL = src('DailyMed SPL v2 REST (NLM)', 'dailymed.nlm.nih.gov/dailymed/services/v2/spls/{setid}.xml', {
-  url: 'https://dailymed.nlm.nih.gov/dailymed/app-support-web-services.cfm',
-  license:
-    'No blanket licence verified — DailyMed publishes no blanket licence statement and some SPL content carries third-party copyright; in-use labelling may differ from FDA-approved labelling and is not NLM-reviewed.',
-});
 const OPENFDA_LABEL = src('openFDA drug/label (api.fda.gov)', 'api.fda.gov/drug/label.json', {
   url: 'https://open.fda.gov/terms/',
   license:
     'Generally CC0, with marked exceptions where third-party rights are asserted; data are unvalidated and the response disclaimer is retained.',
+});
+const DAILYMED_LABEL = src('DailyMed SPL v2 REST (NLM)', 'dailymed.nlm.nih.gov/dailymed/services/v2/spls/{setid}.xml', {
+  url: 'https://dailymed.nlm.nih.gov/dailymed/app-support-web-services.cfm',
+  license: 'No blanket licence verified — DailyMed publishes no blanket licence statement and some SPL content carries third-party copyright; in-use labelling may differ from FDA-approved labelling and is not NLM-reviewed.',
 });
 // Load-bearing CZI inputs the Direct/signature methods consume (same CZI dataset, MIT) — bound with
 // their raw file hashes so Targets/Pathways account for every input, not only DE + pseudobulk.
@@ -246,7 +245,7 @@ const PUBCHEM_PUG = src('PubChem PUG REST', 'pubchem.ncbi.nlm.nih.gov/rest/pug',
   license: 'NCBI usage policy — no NCBI restriction, but third-party rights may exist; terms: ncbi.nlm.nih.gov/home/about/policies/',
 });
 const RXNORM = src('RxNorm (NLM RxNav)', 'rxnav.nlm.nih.gov/REST', {
-  url: 'https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html', // official RxNorm API docs (200)
+  url: 'https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html',
   license: 'NLM RxNorm terms — source-vocabulary restrictions may apply; terms: nlm.nih.gov/research/umls/rxnorm/docs/termsofservice.html',
 });
 
@@ -345,18 +344,19 @@ function drugsRaw(): RawManifest {
     stage_label: STAGE_LABELS.drugs,
     methods: {
       data_input:
-        'Requires an admitted, re-hashed Stage-2 Direct run mapped to a frozen offline drug-evidence cache (top-25 targets per arm) from UniProt + ChEMBL; optional Stage-2 pathway-hypothesis document.',
+        'Within-condition Stage-2 arms.parquet and target_identity.json for the selected endpoint. The browser projection takes the first 200 evaluable targets from each arm in Stage-2 rank order, then joins exact typed target identities to the frozen UniProt 2026_02 / ChEMBL 37 universe store. Rest and Stim8hr bind separate Stage-2 source hashes. No pathway gene sets were read by the current drug artifacts.',
       source_tissue: SOURCE_TISSUE.drugs,
       estimand:
-        'Direction-aware target→drug link: each Stage-2 screen row becomes exactly two arm-lever rows; ENSG⟷UniProt⟷ChEMBL SINGLE PROTEIN identity join (complexes/families refused); action_type carried verbatim and max_phase carried, never recomputed by spot; no combined / headline / overall score; direct_target (observed_perturbation) and pathway_node (pathway_hypothesis) origins are never merged, and a separate typed inverse_direction_hypothesis state — distinct from observed_perturbation/direct_target and NOT an observed gain-of-function — is carried, never conflated with the observed direction. Offline join, no per-click API.',
+        'Two independent arm views. For each target, the artifact preserves the Stage-2 arm value and rank and attaches exact typed-target ChEMBL mechanisms. evidence_relation is putative_crispri_phenocopy only when mechanism_phenocopies_modality=true; directional_evidence_status separately records whether the measured CRISPRi knockdown supports or opposes the requested program change. Agonism is never labelled a CRISPRi phenocopy and may only appear as an untested inverse hypothesis. No combined drug score or drug ranking is computed.',
       masks_qc:
-        'Frozen identity join: human Ensembl ⟷ UniProt ⟷ ChEMBL at the SINGLE PROTEIN level only (complexes / families refused); action_type is carried verbatim and max_phase is carried, never recomputed by spot.',
-      upstream_model: 'Required upstream: an admitted Stage-2 Direct run — two independent arms (away_from_A / toward_B).',
+        'Exact typed-identity join to the frozen target universe. Only unambiguous human single-protein general assertions are usable; complexes, target families, non-human targets, ambiguous identities, symbol-only targets and variant-specific assertions do not become general drug evidence. ChEMBL action type, mechanism and max phase are carried from the source. The 200-target limit is display-only. Current artifacts declare receipt_verified=false and pathway_context_status=not_parsed_no_gene_sets_read.',
+      upstream_model: 'Development preview over source-hashed Stage-2 Direct arm and target-identity artifacts. The aggregate Stage-2 receipt was not verified for these artifacts, and no pathway bundle was consumed.',
       limitations: [
-        'Only UniProt identity + ChEMBL mechanism are wired; ChEMBL activity, Open Targets, DGIdb, DrugBank and DepMap-PRISM are not.',
-        'ChEMBL is CC BY-SA 3.0 (ShareAlike): redistributed ChEMBL-derived fields inherit attribution and ShareAlike obligations.',
+        'The current files are development-unadmitted browser projections.',
+        'Absence of a linked ChEMBL mechanism is not evidence that a target is undruggable.',
+        'A mechanism match does not establish potency in primary CD4 T cells, clinical efficacy or safety.',
       ],
-      method_id: 'stage3-druglink reusable-arm candidates · native schema spot.stage03_drug_annotation.v2 · browser projection spot.ui.stage03_candidates.v2',
+      method_id: 'druglink.dev_emit_ui.build · spot.stage03_ui_drugs.v1 · stage3-modality-v2-observed-sign',
       // UNAVAILABLE: a reproduce command may be shown ONLY when it reproduces the ADMITTED bound
       // artifact. No admitted Stage-3 candidate bundle is bound to this page, so a generic
       // druglink.run_stage3 invocation (valid --help notwithstanding) does not reproduce a bound
@@ -385,18 +385,21 @@ function pksafetyRaw(): RawManifest {
     stage_label: STAGE_LABELS.pksafety,
     methods: {
       data_input:
-        'Requires an admitted Stage-3 candidate binding. Sources by role: NEBPI review + CNS-MPO article (method framework); PubChem + RxNorm (compound identity / descriptors, live acquisition); ChEMBL + UniProt (mechanism / protein identity, reused from Stage 3); DailyMed + openFDA (regulatory label evidence). Every scientific number binds to a source-response hash; no response is implied before acquisition.',
+        'Condition-specific spot.stage03_ui_drugs.v1 bytes plus the cached spot.stage04_prefetch_receipt.v1. Stage 4 recomputes the Stage-3 raw and canonical content hashes. PubChem property responses and openFDA label responses supply the displayed acquired fields; RxNorm and DailyMed supply identity/product-resolution outcomes retained for unresolved candidates. ChEMBL and UniProt mechanism context is carried from Stage 3.',
       source_tissue: SOURCE_TISSUE.pksafety,
       estimand:
-        'CNS-MPO (Wager 2010) six-parameter physicochemical desirability (ClogP, ClogD7.4, MW, TPSA, HBD, most-basic pKa), an equal-weight 0–6 sum — a design heuristic, not measured brain permeability. NEBPI (Grossman 2026) criterion-level brain-penetrance classification keyed to (moiety × route × formulation × dose × schedule × tumour × potency): a class belongs to a context, never to a drug. Exposure / potency margins only from sourced measurements; label safety in five evidence states where no_evidence_found never renders as safe.',
+        'Separate evidence lanes, not a ranking: sourced physicochemical properties; CNS-MPO component availability; direct human or nonhuman CNS evidence with evidence type and locator; and verbatim regulatory-label safety sections. A full six-component CNS-MPO total is emitted only when all accepted inputs exist. NEBPI is an evidence framework; the compact preview does not infer a brain-penetrance class from physicochemical proxies or clinical indication.',
       masks_qc:
-        'Label adapters are pure parsers over cached bytes (no network); each row binds set-ID / application number, active moiety, label version, effective date, the LOINC-coded section, and the raw response hash. A label is never summarised from memory. Organ-system safety groups: with no admitted source supplying the organ-system field, the current adapters emit unspecified / not_evaluated — source-backed only, never inferred from target, mechanism, class, or drug name.',
-      upstream_model: 'Required upstream: an admitted Stage-3 drug-candidate bundle (spot.stage03_drug_annotation.v2; artifact_class analysis).',
+        'Cached response bytes are verified against their recorded raw SHA-256 before parsing. The current accepted CNS-MPO components are molecular weight, TPSA and HBD; cLogP, cLogD7.4 and most-basic pKa remain missing unless separately sourced under the frozen calculator policy. PubChem XLogP and ChEMBL ALogP remain named proxies and do not silently fill cLogP. Label rows bind label ID, effective time, SPL set ID, application number, brand name, raw response hash and source URL. No LOINC code, label-version field or organ-system field is emitted by this compact schema.',
+      upstream_model: 'Current preview: a development Stage-3 UI-drug artifact whose raw and canonical hashes are independently recomputed by Stage 4; the public-evidence receipt is prefetch_only (stage4_admissible=false).',
       limitations: [
-        'NEBPI (Grossman 2026) is an expert-consensus review, not FDA guidance; its transcription and interpretation calls need clinical / pharmacology review before any real use.',
-        'The current public acquisition lacks logD7.4 and most-basic pKa, so a full CNS-MPO score is incomplete unless those exact sourced values are acquired; drug labels do not establish measured brain exposure.',
+        'No full CNS-MPO total is available for the current candidates.',
+        'Only direct measured human CNS evidence may change the human brain-evidence status; animal total-radioactivity distribution remains separately typed.',
+        'Direct human brain evidence does not establish unbound tumour exposure or glioblastoma exposure.',
+        'The compact preview is not a drug ranking and does not emit organ-system safety groups.',
+        'Candidates without acquired public evidence remain reported as unacquired or not prefetched rather than dropped.',
       ],
-      method_id: 'stage4-evidence-v2 · cns_mpo_wager2010_v1 · nebpi_source_framing_v2 · safety_taxonomy_v2',
+      method_id: 'spot.stage04.pk_safety_compact_writer.v1 · spot.stage04_pk_safety_compact.v1',
       // UNAVAILABLE: no admitted Stage-4 scorecard/result bundle is bound to this page. The real
       // engine is analysis.run_stage4 (valid --help), but a generic invocation does not reproduce a
       // bound admitted artifact — it stays "unavailable" until a concrete admitted bundle is bound.
@@ -405,14 +408,14 @@ function pksafetyRaw(): RawManifest {
     },
     provenance: {
       source_chain: [
-        src('Grossman et al., Neuro-Oncology 2026 (NEBPI)', 'PMC13338342 · DOI 10.1093/neuonc/noag051 · raw is a dated 2026-07-11 response snapshot; canonical is reproducible', {
+        src('Grossman et al., Neuro-Oncology 2026 (NEBPI method framing; no class computed)', 'PMC13338342 · DOI 10.1093/neuonc/noag051 · raw is a dated 2026-07-11 response snapshot; canonical is reproducible', {
           url: 'https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_xml/PMC13338342/unicode',
           license: 'CC BY 4.0',
           retrieval_utc: '2026-07-11',
           raw_sha256: GROSSMAN_RAW,
           canonical_sha256: GROSSMAN_CANONICAL,
         }),
-        src('Wager et al., ACS Chem Neurosci 2010 (CNS-MPO)', 'PMC3368654 · DOI 10.1021/cn100008c · raw is a dated 2026-07-11 fetch snapshot (a live re-fetch may differ)', {
+        src('Wager et al., ACS Chem Neurosci 2010 (CNS-MPO method framing; no total computed)', 'PMC3368654 · DOI 10.1021/cn100008c · raw is a dated 2026-07-11 fetch snapshot (a live re-fetch may differ)', {
           url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3368654/',
           license: 'ACS copyright — numeric facts only, not redistributed',
           retrieval_utc: '2026-07-11',
@@ -455,8 +458,8 @@ export const STAGE_METHODS_HASHES: Record<'targets' | 'pathways' | 'drugs' | 'pk
   targets: '90c11e80a8338443e2550581f89330e2de44a38eafa071d5158d354d7c8adabb',
   // GO-BP-only Pathways manifest (Reactome removed from data_input / limitations / source_chain).
   pathways: 'f2fd05dbd362ef03db516b5543df61d247fe36bb415ec300cee2fa5abdfcd29e',
-  drugs: '9b4fea60d229dd04418ac67e0cf9ad48338fecb6d32814761e2934cf51f0c320',
-  pksafety: '1b8e6ab3631f949f57c7998d9366d7c060d47d3dbcd6605257a2d6ac85ef3c5a',
+  drugs: 'a2705f02676576e92f1fbbc567c388f993440874639412d3ff084d64ffcee310',
+  pksafety: '2e3bbb5acd366dc656fa14329a557f8067b8bb6ae8d8d1f9a95ddf1516538d61',
 };
 
 function keyFor(page: PageKey): keyof typeof STAGE_METHODS_HASHES {

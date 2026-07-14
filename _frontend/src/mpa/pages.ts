@@ -1,5 +1,5 @@
 // The five per-stage island pages. Each is a separate URL with a deterministic DOM,
-// all rendered from the one shared design-system bundle. Programs (01_page.html) is
+// all rendered from the one shared design-system bundle. Programs (programs.html) is
 // the migrated hand-written Stage-1 page; the other four are React entries.
 
 export type PageKey = 'programs' | 'targets' | 'pathways' | 'drugs' | 'pksafety';
@@ -15,7 +15,7 @@ export interface PageDef {
 // gene-perturbation stage, so both carry '02'. Drugs is 03, PK & Safety is 04. There is
 // no stage 05 in this pipeline. PageKey + href values are stable (routing depends on them).
 export const PAGES: PageDef[] = [
-  { key: 'programs', n: '01', label: 'Programs', href: '01_page.html' },
+  { key: 'programs', n: '01', label: 'Programs', href: 'programs.html' },
   { key: 'targets', n: '02', label: 'Targets', href: 'targets.html' },
   { key: 'pathways', n: '02', label: 'Pathways', href: 'pathways.html' },
   { key: 'drugs', n: '03', label: 'Drugs', href: 'drugs.html' },

@@ -42,7 +42,7 @@ describe('StageIsland — header selection context', () => {
     expect(within(header).getByText(/Select populations in/)).toBeInTheDocument();
     expect(within(header).getByRole('link', { name: 'Programs' })).toHaveAttribute(
       'href',
-      '01_page.html',
+      'programs.html',
     );
     expect(
       within(header).queryByRole('button', { name: /Clear selection and return to Programs/ }),

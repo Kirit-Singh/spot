@@ -1,5 +1,5 @@
 // Tiny hash-based router (no dependency added). Stages 2–4 live in this shell;
-// Stage 1 links out to the existing /01_page.html and is not redrawn here.
+// Stage 1 links out to the existing /programs.html and is not redrawn here.
 
 import { useEffect, useState } from 'react';
 

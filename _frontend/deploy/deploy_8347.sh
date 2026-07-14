@@ -3,7 +3,7 @@
 # deploy_8347.sh — deterministic, same-origin Stage-1..4 distribution deploy for :8347.
 #
 # Builds the four downstream React entries + hashed assets, lays them into the AUTHORITATIVE
-# Stage-1 app root (spot 01_programs/app) ALONGSIDE the nav-retargeted 01_page.html and the
+# Stage-1 app root (spot 01_programs/app) ALONGSIDE the nav-retargeted programs.html and the
 # git-clean, commit-pinned data/, then mirrors the whole tree to the tcedirector :8347 served
 # dir and proves the remote matches the pinned baseline byte-for-byte.
 #
@@ -13,7 +13,7 @@
 #   * UI worktree CLEAN — no modified AND no untracked paths — so the release identity is a real
 #     ui_commit; there is NO dirty/untracked override (a stash/tree digest would omit untracked files);
 #   * Stage-1 DATA baseline pinned: spot HEAD==9a2f6cf9 (stage1_commit), data git-clean, 22-file
-#     digest==edbc8da3, invariant file hashes match, 01_page.html differs from the pin only by
+#     digest==edbc8da3, invariant file hashes match, programs.html differs from the pin only by
 #     CLASSIFIED lines (nav retarget + citation-year fix + 0/33-retirement comments), byte-pinned;
 #   * typecheck + lint + full test suite green BEFORE build;
 #   * PROVENANCE-HYGIENE: no machine-local/private strings in any served text artifact;
@@ -51,13 +51,13 @@ REL_MANIFEST="$TARGET_ROOT/release_manifest.json"   # served; U01 verifies it
 # gen_stage1_t8 now DERIVES app_deployment_ready + overlay_release_ok from verified served-artifact
 # integrity + overlay==full fidelity (NOT the historical 0-of-33 selectability), so the regenerated
 # stage01_current.json + stage01_release_manifest.json move the 22-file digest to 5fe59f99. The four scorer
-# invariants + the immutable validation stay byte-identical; the canonical 01_page.html is unchanged.
+# invariants + the immutable validation stay byte-identical; the canonical programs.html is unchanged.
 # STAGE1_DATA_COMMIT must be set to the deployed release commit (release/spot-final HEAD) that carries this
 # regenerated data — it is no longer 539431d (data changed). Set it at deploy time from the served checkout.
 STAGE1_DATA_COMMIT="5eae9c9e1a28f7ebd949efad0b7873421943b541"
 STAGE1_PAGE_BASE_COMMIT="539431dd8d87a3d763fb69ab44ed44bc98631d5a"
 STAGE1_DATA_DIGEST="5fe59f99e33d1526e2ba4933dc210bd199917e306daf302f156b742926886cbb"
-STAGE1_PAGE_BASE_SHA="9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1"   # pin:01_page.html base @ 539431d (== import; question_id-emitting page keeps the classified UI + hash fallback)
+STAGE1_PAGE_BASE_SHA="9fb4f282b289db9a0642916a139b15a6eac5afb9761e3b5c1ad3a57d1fc57ed1"   # pin:programs.html base @ 539431d (== import; question_id-emitting page keeps the classified UI + hash fallback)
 STAGE1_PAGE_IMPORT_SHA="${STAGE1_PAGE_IMPORT_SHA:-62588187f25d2c76b65f900c78b89b7ac7723a7d1c5f3da6467ce1bdc0a34498}"  # nav-retargeted import + the CTA selection-id fragment removal (classified below)
 INVARIANTS=(
   "data/stage01_selectability_v3.json:7c326a86"
@@ -173,7 +173,7 @@ say "8347 (tce)   : $TCE_HOST:$TCE_8347_DIR   (SKIP_REMOTE=$SKIP_REMOTE)"
 say ""
 [ -d "$STAGE1_SOURCE_ROOT" ] || die "Stage-1 source root does not exist: $STAGE1_SOURCE_ROOT"
 [ -d "$STAGE1_SOURCE_ROOT/data" ] || die "Stage-1 source data/ does not exist"
-[ -f "$PUBLIC_DIR/01_page.html" ] || die "missing nav-retargeted import: $PUBLIC_DIR/01_page.html"
+[ -f "$PUBLIC_DIR/programs.html" ] || die "missing nav-retargeted import: $PUBLIC_DIR/programs.html"
 git -C "$REPO_DIR" ls-files --error-unmatch _frontend/public/data >/dev/null 2>&1 && die "_frontend/public/data is git-tracked — release must carry no bundled data" || true
 
 # The staging target must never be a source worktree or filesystem root. Recreate it from the
@@ -223,7 +223,7 @@ for inv in "${INVARIANTS[@]}"; do
   f="${inv%%:*}"; pre="${inv##*:}"; got="$(sha256_of "$TARGET_ROOT/$f")"
   [ "${got:0:8}" = "$pre" ] || die "invariant $f sha256 ${got:0:8}… != pinned ${pre}…"
 done
-# 01_page.html: base pin + import pin (the exact-byte guard) + a CLASSIFIED diff vs the pinned commit.
+# programs.html: base pin + import pin (the exact-byte guard) + a CLASSIFIED diff vs the pinned commit.
 # At 184211a the canonical base already IS the classified UI (== import, 570a6f07), so this diff is now
 # EMPTY; the classification below is retained as a defense that hard-refuses any FUTURE re-divergence.
 # The byte pin is authoritative; the diff classification proves the changes are ONLY the intended
@@ -237,25 +237,25 @@ done
 #                       not a UI destination). Only the exact "/01_notebook.html" anchor line.
 # Anything else is a NON-classified change and hard-refuses.
 BASE01="$(mktemp -t spot_base01.XXXXXX)"
-git -C "$SPOT_REPO" show "$STAGE1_PAGE_BASE_COMMIT:01_programs/app/01_page.html" > "$BASE01" || die "cannot read pinned 01_page.html"
-[ "$(sha256_of "$BASE01")" = "$STAGE1_PAGE_BASE_SHA" ] || die "pinned base 01_page.html sha != $STAGE1_PAGE_BASE_SHA"
-[ "$(sha256_of "$PUBLIC_DIR/01_page.html")" = "$STAGE1_PAGE_IMPORT_SHA" ] || die "import 01_page.html sha != pinned $STAGE1_PAGE_IMPORT_SHA (re-review + update STAGE1_PAGE_IMPORT_SHA)"
-NAV_ALLOW='(nstep|nsep|window\.location\.assign|href="(01_page|targets|pathways|drugs|pksafety)\.html"|/02_page\.html#/stage-)'
+git -C "$SPOT_REPO" show "$STAGE1_PAGE_BASE_COMMIT:01_programs/app/01_page.html" > "$BASE01" || die "cannot read historical pinned Stage-1 page"
+[ "$(sha256_of "$BASE01")" = "$STAGE1_PAGE_BASE_SHA" ] || die "pinned base programs.html sha != $STAGE1_PAGE_BASE_SHA"
+[ "$(sha256_of "$PUBLIC_DIR/programs.html")" = "$STAGE1_PAGE_IMPORT_SHA" ] || die "import programs.html sha != pinned $STAGE1_PAGE_IMPORT_SHA (re-review + update STAGE1_PAGE_IMPORT_SHA)"
+NAV_ALLOW='(nstep|nsep|window\.location\.assign|href="(programs|targets|pathways|drugs|pksafety)\.html"|/02_page\.html#/stage-)'
 # CLASSIFIED: the CTA selection-id fragment removal. The selection_id stays INTERNAL — it still drives
 # curContrastId, the v3 contract, routing and the provenance hashes — it is only no longer TYPESET beside
 # the "ID program skew genes" button or in the inline success status. The hashes remain accountable in the
 # Methods/provenance artifacts. These are the ONLY lines this touches (#idpend write + the two statuses);
 # anything else in that region is still a NON-classified diff and still a hard NO-GO.
 IDFRAG_ALLOW="(pend\.style\.display|pend\.textContent|st\.textContent='Contrast ready|st\.textContent='Selection ready|curContrastId=r\.selection_id|selection_id is INTERNAL|provenance hashes|accountable: the Methods|selection_id stays internal|button reads as a value)"
-OFFENDING="$(diff -u "$BASE01" "$PUBLIC_DIR/01_page.html" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
+OFFENDING="$(diff -u "$BASE01" "$PUBLIC_DIR/programs.html" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
   | grep -vE "$NAV_ALLOW" \
   | grep -vE 'class="cite"' \
   | grep -vE 'No production/research split|PRODUCTION-selectability flag' \
   | grep -vE 'href="/01_notebook\.html"' \
   | grep -vE "$IDFRAG_ALLOW" || true)"
 rm -f "$BASE01"
-[ -z "$OFFENDING" ] || { printf '%s\n' "$OFFENDING" | sed 's/^/         /' >&2; die "01_page.html diff vs $STAGE1_PAGE_BASE_COMMIT touches NON-classified lines (not nav/citation/0-33-retire)"; }
-say "       spot@$STAGE1_DATA_COMMIT · data digest $STAGE1_DATA_DIGEST · 22 invariants + classified 01_page diff OK"
+[ -z "$OFFENDING" ] || { printf '%s\n' "$OFFENDING" | sed 's/^/         /' >&2; die "programs.html diff vs $STAGE1_PAGE_BASE_COMMIT touches NON-classified lines (not nav/citation/0-33-retire)"; }
+say "       spot@$STAGE1_DATA_COMMIT · data digest $STAGE1_DATA_DIGEST · 22 invariants + classified Programs diff OK"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Quality gates: typecheck + lint + full test suite
@@ -276,11 +276,11 @@ say "[4/10] vite build → dist/"
 # 5. Provenance-hygiene scan over every served text artifact (before any copy)
 # ─────────────────────────────────────────────────────────────────────────────
 say "[5/10] provenance-hygiene scan"
-SCAN=("$PUBLIC_DIR/01_page.html")
+SCAN=("$PUBLIC_DIR/programs.html")
 for f in "${PAGES[@]}" "${STATIC_SVG[@]}"; do [ -f "$DIST_DIR/$f" ] || die "expected built file missing: dist/$f"; SCAN+=("$DIST_DIR/$f"); done
 while IFS= read -r -d '' a; do SCAN+=("$a"); done < <(find "$DIST_DIR/assets" -type f -print0)
 while IFS= read -r -d '' f; do
-  case "$(basename "$f")" in 01_page.html|targets.html|pathways.html|drugs.html|pksafety.html|favicon.svg|icons.svg|release_manifest.json) continue;; esac
+  case "$(basename "$f")" in programs.html|targets.html|pathways.html|drugs.html|pksafety.html|favicon.svg|icons.svg|release_manifest.json) continue;; esac
   SCAN+=("$f")   # preserved Stage-1 root files: 01_notebook.html / 01_trace.html / index.html
 done < <(find "$TARGET_ROOT" -maxdepth 1 -type f -print0)
 # Optional downstream results/: validate content-addressing, then hygiene-scan every result JSON too.
@@ -316,7 +316,7 @@ say "[6/10] resolving copy set"
 SRC_FILES=(); DST_RELS=(); DST_CLASS=()
 # add_pair SRC DST [CLASS] — CLASS defaults to `built`; downstream results are `downstream-data`.
 add_pair() { SRC_FILES+=("$1"); DST_RELS+=("$2"); DST_CLASS+=("${3:-built}"); }
-add_pair "$PUBLIC_DIR/01_page.html" "01_page.html"
+add_pair "$PUBLIC_DIR/programs.html" "programs.html"
 for f in "${PAGES[@]}" "${STATIC_SVG[@]}"; do add_pair "$DIST_DIR/$f" "$f"; done
 while IFS= read -r -d '' a; do add_pair "$a" "assets/${a#"$DIST_DIR/assets/"}"; done < <(find "$DIST_DIR/assets" -type f -print0)
 # Optional downstream results/ (validated above) → served under results/, classified downstream-data.
@@ -362,7 +362,7 @@ for i in "${!DST_RELS[@]}"; do
 done | LC_ALL=C sort >> "$REL_ENTRIES"
 while IFS= read -r -d '' f; do
   b="$(basename "$f")"
-  case "$b" in 01_page.html|targets.html|pathways.html|drugs.html|pksafety.html|favicon.svg|icons.svg|release_manifest.json) continue;; esac
+  case "$b" in programs.html|targets.html|pathways.html|drugs.html|pksafety.html|favicon.svg|icons.svg|release_manifest.json) continue;; esac
   printf '%s\t%s\tpreserved-stage1\n' "$b" "$(sha256_of "$f")" >> "$REL_ENTRIES"
 done < <(find "$TARGET_ROOT" -maxdepth 1 -type f -print0)
 while IFS= read -r line; do printf 'data/%s\t%s\tstage1-data\n' "${line#*  }" "${line%%  *}" >> "$REL_ENTRIES"; done < "$DATA_AFTER"

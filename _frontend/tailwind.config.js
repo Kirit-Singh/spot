@@ -9,7 +9,7 @@ export default {
         rail: '721px',
       },
       colors: {
-        // Stage-1 Spot design language (source of truth: 01_programs/app/01_page.html)
+        // Stage-1 Spot design language (source of truth: 01_programs/app/programs.html)
         bg: '#FAF9F7', surface: '#FFFFFF', sunken: '#F4F2EE',
         line: '#E7E3DC', 'line-strong': '#D6D0C6',
         ink: '#1E1B16', 'ink-2': '#5C564C', muted: '#8A8172',

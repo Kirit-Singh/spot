@@ -1,10 +1,10 @@
 // Stage-1 v3 browser-loader mutation tests — self-contained v3 loader (schema spot.stage01_current.v3).
 //
-// This test previously extracted strictLoadV3 verbatim from 01_page.html. Under the Stage-1 reset the
+// This test previously extracted strictLoadV3 verbatim from programs.html. Under the Stage-1 reset the
 // active current pointer is truthful v3 (spot.stage01_current.v3) with a neutral `measurement_display_release`
 // binding (was research_preview_v3). Since the served UI must not be edited in this lane, this test now
 // carries an INDEPENDENT v3 loader that DEFINES the UI-facing loader contract (see UI_CONTRACT.md in the
-// Stage-1 handoff dir). The UI owner migrates 01_page.html's strictLoadV3 to this shape and may re-bind
+// Stage-1 handoff dir). The UI owner migrates programs.html's strictLoadV3 to this shape and may re-bind
 // this test to the migrated source. Asserts: clean 40k load + join (12 score fields, seed identity
 // preserved) and rejection of tampered artifacts BEFORE any score is copied (incl. sha-rebound tampering
 // that only the method-version guard catches).
@@ -27,7 +27,7 @@ const sha256hex = async (t) => {
   return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
 };
 
-// ── the v3 loader contract (independent mirror; UI owner migrates 01_page.html to match) ──
+// ── the v3 loader contract (independent mirror; UI owner migrates programs.html to match) ──
 function makeEnv(files) {
   const fetchJson = async (key) => {
     if (!(key in files)) throw new Error('unexpected fetch: ' + key);

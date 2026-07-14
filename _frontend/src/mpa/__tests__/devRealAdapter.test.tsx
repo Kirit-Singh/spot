@@ -61,7 +61,7 @@ describe('direct real Rest/Stim8 loader', () => {
     }
   });
 
-  it('loads Stim8 and pairs supported temporal endpoints, but refuses Stim48 and another program pair', async () => {
+  it('loads Stim8 and pairs supported temporal endpoints; stale unsupported storage falls back to the visible review context', async () => {
     state.selection = selection('Stim8hr');
     expect((await resolveDevelopmentRealArtifact('pathways'))?.route).toBe('pathways');
     state.selection = selection('Rest', 'temporal_cross_condition');
@@ -74,9 +74,9 @@ describe('direct real Rest/Stim8 loader', () => {
       'pathway|th1_like|increase|Stim8hr|go_bp',
     ]);
     state.selection = selection('Stim48hr');
-    expect(await resolveDevelopmentRealArtifact('drugs')).toBeNull();
+    expect((await resolveDevelopmentRealArtifact('drugs'))?.context).toMatchObject({ conditionA: 'Rest', conditionB: 'Stim8hr' });
     state.selection = { ...selection('Rest'), A: { program_id: 'naive_like', direction: 'high' } };
-    expect(await resolveDevelopmentRealArtifact('drugs')).toBeNull();
+    expect((await resolveDevelopmentRealArtifact('drugs'))?.context).toMatchObject({ conditionA: 'Rest', conditionB: 'Stim8hr' });
   });
 
   it('shows the Rest to Stim8 endpoint comparison when review storage is empty', async () => {
@@ -111,13 +111,25 @@ describe('direct real Rest/Stim8 loader', () => {
     expect(body.indexOf('CRISPRi-aligned')).toBeLessThan(body.indexOf('opposed'));
   });
 
-  it('renders PK in source order with unknown measured CNS status and acquisition counts', async () => {
+  it('renders sourced PK properties, explicit CNS-MPO completeness, and acquisition counts', async () => {
     const result = await resolveDevelopmentRealArtifact('pksafety');
     if (!result || result.route !== 'pksafety') throw new Error('PK did not resolve');
     const view = render(renderDevelopmentReal(result));
-    expect(view.getAllByText('unknown').length).toBeGreaterThan(0);
+    expect(view.getAllByText('3/6 · MW, TPSA, HBD').length).toBe(3);
+    expect(view.getAllByText('not evaluated').length).toBe(3);
+    expect(view.container.textContent).not.toContain('CNS-MPOunknown');
     expect(view.getByText(/^3 acquired$/)).toBeInTheDocument();
     expect(view.container.textContent).not.toMatch(/rank|score/i);
+  });
+
+  it('labels cross-condition endpoint comparisons and exposes the shared-molecule filter', async () => {
+    state.selection = selection('Rest', 'temporal_cross_condition');
+    const result = await resolveDevelopmentRealArtifact('drugs');
+    if (!result || result.route !== 'drugs') throw new Error('drugs did not resolve');
+    const view = render(renderDevelopmentReal(result));
+    expect(view.getByText('Endpoint comparison')).toBeInTheDocument();
+    expect(view.getByRole('button', { name: 'In both · 0' })).toBeDisabled();
+    expect(view.getByRole('button', { name: 'All' })).toBeEnabled();
   });
 
   it('serves no machine-local paths or inferential keys', () => {

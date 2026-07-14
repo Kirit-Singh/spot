@@ -19,7 +19,7 @@ function. Stage-2 consumes a *candidate* program, not a confirmed identity.
 - `01_programs/analysis/{cluster_scores,label_clusters,stage1_pipeline,verify_reproduce}.py`,
   `reproduce.sh` — the deterministic chain.
 - `02_geneskew/STAGE2_PLAN.md` — the corrected Stage-2 plan (a_down-only primary; no q-family).
-- `01_programs/app/01_page.html` — the workbench UI (margin-gated display colouring; scores primary).
+- `01_programs/app/programs.html` — the workbench UI (margin-gated display colouring; scores primary).
 
 **Ignore `01_programs/analysis/REVIEW_MEMO.md` as a description of the current system** — it is the
 *prior* external review that reviewed the now-**withdrawn categorical pipeline** (FDR / functional

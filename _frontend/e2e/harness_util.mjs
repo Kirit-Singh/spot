@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 // ── Contract constants (mirror the app's source of truth) ──
 export const DEFAULT_BASE = 'http://100.117.50.59:8347';
 export const RELEASE_MANIFEST = 'release_manifest.json';
-export const ROUTES = ['01_page.html', 'targets.html', 'pathways.html', 'drugs.html', 'pksafety.html'];
+export const ROUTES = ['programs.html', 'targets.html', 'pathways.html', 'drugs.html', 'pksafety.html'];
 export const DOWNSTREAM = ['targets.html', 'pathways.html', 'drugs.html', 'pksafety.html'];
 
 // U03 — required data-stage-label per downstream route.
@@ -245,7 +245,7 @@ export async function openDrawer(page) {
 // Best-effort: drive the Programs contrast UI to a REAL v3 selection contract. Never injects
 // a forged contract — a dependent gate reports honestly if the UI cannot be driven.
 export async function makeSelection(page, base, { temporal = false } = {}) {
-  await gotoReady(page, base, '01_page.html');
+  await gotoReady(page, base, 'programs.html');
   await poll(async () => (await page.$('#idgenes')) !== null, 8000);
   // Stage-1 loads its selection data (stage01_bins_v3.csv / controls) asynchronously — up to ~12s.
   // WAIT until the program (and, for temporal, condition) <select>s are actually POPULATED before

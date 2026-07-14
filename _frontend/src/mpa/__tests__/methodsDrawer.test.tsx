@@ -107,7 +107,7 @@ describe('contextual Methods & Provenance drawer', () => {
     goto('/02_page.html');
     renderStage('pksafety', 'PK & Safety');
     expect(
-      within(openDrawer()).getByText(/emitted only from an admitted structured source field.*never inferred from target, mechanism, class, or drug name/i),
+      within(openDrawer()).getByText(/Candidate context originates from the Marson primary-human-CD4 perturbation analysis.*emits no tissue-specific or organ-system classification/i),
     ).toBeInTheDocument();
   });
 

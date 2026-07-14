@@ -33,7 +33,7 @@ describe('PAGES — conceptual stage numbering (gate U04)', () => {
     expect(PAGES.map((p) => p.label)).toEqual(['Programs', 'Targets', 'Pathways', 'Drugs', 'PK & Safety']);
     expect(PAGES.map((p) => p.key)).toEqual(['programs', 'targets', 'pathways', 'drugs', 'pksafety']);
     expect(PAGES.map((p) => p.href)).toEqual([
-      '01_page.html',
+      'programs.html',
       'targets.html',
       'pathways.html',
       'drugs.html',

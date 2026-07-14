@@ -33,7 +33,7 @@ export function MpaNav({ active }: { active: PageKey }) {
         // Every step is a link with a STABLE href on every page; the current page is marked with
         // aria-current="page" only (never by dropping the href). This keeps the nav MODEL identical
         // across all five routes (the harness compares n|label|href per step) while the active tab
-        // still resolves via aria-current — matching 01_page.html's nav exactly.
+        // still resolves via aria-current — matching programs.html's nav exactly.
         return (
           <div key={p.key} className="flex items-center gap-[3px]">
             <a

@@ -39,7 +39,7 @@ export function AwaitingArtifact({
     >
       <StatePill label="no selection" tone="muted" />
       <span className="font-mono text-[10.5px] text-ink-2">select programs in Stage 1</span>
-      <a href="01_page.html" className="ml-auto font-mono text-[10.5px] text-accent hover:underline">
+      <a href="programs.html" className="ml-auto font-mono text-[10.5px] text-accent hover:underline">
         ← Programs
       </a>
     </section>

@@ -20,7 +20,7 @@
 | Banners on canvas | none on 02/03/04 |
 
 ## Single flag — investigated, NOT a defect
-QA flagged one `role="alert"` on **01_page.html only**: a HIDDEN, empty ARIA live-region
+QA flagged one `role="alert"` on **programs.html only**: a HIDDEN, empty ARIA live-region
 (`div.cterr`, the contrast-error announcer) — `visible=false`, empty text. This is a standard
 accessibility live-region (populated only on a contrast error), not a visible editorial banner, and it
 lives on the frozen Stage-1 baseline (not to be altered). All downstream 02/03/04 routes have zero

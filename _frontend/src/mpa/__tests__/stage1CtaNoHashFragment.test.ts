@@ -10,11 +10,11 @@
 // the fragment is gone from the served bytes, and the internals that depend on it are intact — so a
 // future edit cannot "fix" the display by weakening the contract.
 //
-// Asserted on the SERVED artifact (public/01_page.html — the exact bytes the deploy pins and ships),
+// Asserted on the SERVED artifact (public/programs.html — the exact bytes the deploy pins and ships),
 // not on a copy, so it cannot pass against source that is never deployed.
 
 import { describe, expect, it } from 'vitest';
-import page from '../../../public/01_page.html?raw';
+import page from '../../../public/programs.html?raw';
 
 /** Every assignment to the #idpend chip inside the CTA button. */
 const PEND_WRITES = [...page.matchAll(/pend\.textContent\s*=\s*([^;]+);/g)].map((m) => m[1].trim());

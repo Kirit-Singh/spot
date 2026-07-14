@@ -1,5 +1,5 @@
 // Browser v3 selection-contract cross-check (external review S1-B2).
-// Extracts the REAL page JS (canonicalContent / computeContrast / sha) from 01_page.html, runs it against
+// Extracts the REAL page JS (canonicalContent / computeContrast / sha) from programs.html, runs it against
 // the served stage01_selection_bundle.json, and asserts the emitted spot.stage01_selection.v3 contract
 // byte-matches stage2_bridge/emit_selection_contract.build_contract (same selection_id + full-contract
 // hash + execution routing). Proves the live page emits the reviewed v3 contract, not the legacy v1.
@@ -8,7 +8,7 @@ import { webcrypto } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
 const REPO = new URL('.', import.meta.url).pathname.replace(/\/01_programs\/analysis\/$/, '');  // portable; no machine path
-const PAGE = REPO + '/01_programs/app/01_page.html';
+const PAGE = REPO + '/01_programs/app/programs.html';
 const DATA = REPO + '/01_programs/app/data';
 const BRIDGE = REPO + '/01_programs/analysis/stage2_bridge';
 // Hard guard: page + emitter MUST be this test's OWN git worktree, never a hardcoded primary checkout — else

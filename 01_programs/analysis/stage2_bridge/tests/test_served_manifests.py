@@ -30,7 +30,7 @@ def test_real_stage1_gate_declares_deployed_after_readiness_repair():
 def test_deployment_manifest_shape_declares_deployed():
     # the shape of app/release_manifest.json (a `release` id serving built app files)
     deployment = {"release": "spot-8347-same-origin",
-                  "files": [{"path": "01_page.html", "sha256": "0" * 64, "class": "built"}]}
+                  "files": [{"path": "programs.html", "sha256": "0" * 64, "class": "built"}]}
     assert vsm.declared_deployed(deployment) is True
 
 
@@ -39,7 +39,7 @@ def test_attack_contradictory_pair_refused():
     # release-state contradiction the verifier refuses — independent of the current real gate value.
     not_deployed_gate = {"release_gates": {"app_deployment_ready": False, "overlay_release_ok": False}}
     deployment = {"release": "spot-8347-same-origin",
-                  "files": [{"path": "01_page.html", "sha256": "0" * 64, "class": "built"}]}
+                  "files": [{"path": "programs.html", "sha256": "0" * 64, "class": "built"}]}
     reason = vsm.contradictory_served_manifests(not_deployed_gate, deployment)
     assert reason is not None and "contradiction" in reason           # the attack is caught
     ok, reasons = vsm.check_paths(GATE)                                # single manifest -> nothing to contradict
@@ -49,7 +49,7 @@ def test_attack_contradictory_pair_refused():
 def test_consistent_pair_ok():
     gate = json.load(open(GATE))                                       # now declares DEPLOYED (readiness repair)
     deployment = {"release": "spot-8347-same-origin",
-                  "files": [{"path": "01_page.html", "sha256": "0" * 64, "class": "built"}]}
+                  "files": [{"path": "programs.html", "sha256": "0" * 64, "class": "built"}]}
     # a deployed gate AGREES with a deployment manifest that serves built app files (promotion unblocked)
     assert vsm.contradictory_served_manifests(gate, deployment) is None
     assert vsm.contradictory_served_manifests(gate, {"release_gates": {"app_deployment_ready": True, "overlay_release_ok": True}}) is None

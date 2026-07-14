@@ -16,7 +16,7 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { n: '01', label: 'CD4 programs', route: null, href: '/01_page.html' },
+  { n: '01', label: 'CD4 programs', route: null, href: '/programs.html' },
   { n: '02', label: 'Skewing genes', route: 'stage-2' },
   { n: '03', label: 'Drug link', route: 'stage-3' },
   { n: '04', label: 'PK / PD · brain', route: 'stage-4' },

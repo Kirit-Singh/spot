@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 
 const HERE = new URL('.', import.meta.url).pathname;                 // 01_programs/analysis/ (portable; no machine path)
 const ROOT = HERE.replace(/\/01_programs\/analysis\/$/, '');
-const PAGE = ROOT + '/01_programs/app/01_page.html';
+const PAGE = ROOT + '/01_programs/app/programs.html';
 const DATA = ROOT + '/01_programs/app/data';
 const BRIDGE = ROOT + '/01_programs/analysis/stage2_bridge';
 const SELDIR = BRIDGE + '/release/selections';
