@@ -7,6 +7,11 @@
         "assessment_is_not_derived_from_proxies": true,
         "assessment_state": "not_evaluated",
         "basis": "not_extracted_not_available_in_current_sources",
+        "direct_human_cns_evidence": {
+          "measurements": [],
+          "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim.",
+          "status": "not_evaluated_in_this_supplement"
+        },
         "measured_exposure": {
           "brain_to_plasma_ratio": {
             "reason": "not_extracted_from_the_sources_cached_in_this_run",
@@ -29,6 +34,7 @@
             "value": null
           }
         },
+        "nonhuman_cns_evidence": [],
         "physicochemical_proxies": {
           "hba": {
             "provenance": {
@@ -107,17 +113,151 @@
           }
         },
         "proxies_are_suggestive_never_confirmatory": true,
-        "reason": "no structured human CSF concentration, unbound brain concentration, Kp,uu or brain:plasma ratio was extracted from the sources cached in this run (PubChem properties, openFDA label, DailyMed SPL, RxNorm). This is a statement about what was extracted here, NOT a claim that no such measurement exists. Physicochemical properties are properties of the molecule, not observations of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment is derived from them."
+        "reason": "no structured human CSF concentration, unbound brain concentration, Kp,uu or brain:plasma ratio was extracted from the sources cached in this run. This is a statement about what was extracted here, NOT a claim that no such measurement exists. Physicochemical properties are properties of the molecule, not observations of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment is derived from them."
       },
       "candidate_id": "CHEMBL2216870",
       "cns_mpo": {
+        "component_coverage": {
+          "accepted_inputs": [
+            "mw",
+            "tpsa",
+            "hbd"
+          ],
+          "n_accepted": 3,
+          "n_required": 6
+        },
+        "component_provenance": {
+          "hbd": {
+            "accessed_at_utc": "2026-07-13T22:08:08Z",
+            "cache_relpath": "raw/pubchem/06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e.json",
+            "canonical_query": "compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 616,
+            "raw_sha256": "06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          },
+          "mw": {
+            "accessed_at_utc": "2026-07-13T22:08:08Z",
+            "cache_relpath": "raw/pubchem/06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e.json",
+            "canonical_query": "compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 616,
+            "raw_sha256": "06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          },
+          "tpsa": {
+            "accessed_at_utc": "2026-07-13T22:08:08Z",
+            "cache_relpath": "raw/pubchem/06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e.json",
+            "canonical_query": "compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 616,
+            "raw_sha256": "06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          }
+        },
+        "components": {
+          "clogd_74": null,
+          "clogp": null,
+          "hbd": 0.5,
+          "mw": 0.6042857142857144,
+          "pka_most_basic": null,
+          "tpsa": 0.6933333333333332
+        },
+        "method_id": "cns_mpo_wager2010_v1",
+        "method_version": "1.0.0",
         "missing_inputs": [
-          "clogd_7_4",
-          "pka_most_basic"
+          {
+            "chembl_source_observation": {
+              "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output",
+              "source_field": "alogp",
+              "state": "proxy_only_not_accepted",
+              "value": 3.75
+            },
+            "property_id": "clogp",
+            "state": "not_available_under_frozen_calculator_policy"
+          },
+          {
+            "chembl_source_observation": {
+              "source_field": "cx_logd",
+              "state": "not_found_in_endpoint",
+              "value": null
+            },
+            "property_id": "clogd_74",
+            "state": "not_available_under_frozen_calculator_policy"
+          },
+          {
+            "chembl_source_observation": {
+              "source_fields": [
+                "cx_most_apka",
+                "cx_most_bpka"
+              ],
+              "state": "not_found_in_endpoint",
+              "value": null
+            },
+            "property_id": "pka_most_basic",
+            "state": "not_available_under_frozen_calculator_policy"
+          }
         ],
-        "reason": "CNS-MPO requires cLogD7.4 and the most-basic pKa; neither is present in any cached public source. The sourced sub-properties are published individually above. A partial composite would read as a brain-penetrance result.",
-        "state": "not_evaluated",
-        "value": null
+        "non_rankable": true,
+        "possible_total_range": {
+          "derivation": "each missing transformed component T0 is bounded in [0,1]",
+          "max": 4.7976190476190474,
+          "min": 1.7976190476190477,
+          "non_rankable": true,
+          "not_a_cns_mpo_score": true
+        },
+        "property_values": {
+          "clogd_74": null,
+          "clogp": null,
+          "hbd": 2.0,
+          "mw": 415.4,
+          "pka_most_basic": null,
+          "tpsa": 99.2
+        },
+        "proxy_only_not_mpo_inputs": {
+          "hba": {
+            "provenance": {
+              "accessed_at_utc": "2026-07-13T22:08:08Z",
+              "cache_relpath": "raw/pubchem/06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e.json",
+              "canonical_query": "compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+              "http_status": 200,
+              "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+              "raw_bytes": 616,
+              "raw_sha256": "06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e",
+              "release_or_last_updated": "not_reported_by_source",
+              "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+            },
+            "state": "observed",
+            "units": null,
+            "value": 7
+          },
+          "xlogp": {
+            "provenance": {
+              "accessed_at_utc": "2026-07-13T22:08:08Z",
+              "cache_relpath": "raw/pubchem/06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e.json",
+              "canonical_query": "compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+              "http_status": 200,
+              "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+              "raw_bytes": 616,
+              "raw_sha256": "06ea44d3edb189833920e4dabe795506d5c146fb7f508640ca8cad0e5c018c6e",
+              "release_or_last_updated": "not_reported_by_source",
+              "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/11625818/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+            },
+            "state": "observed",
+            "units": null,
+            "value": 3.7
+          }
+        },
+        "reason": "Only molecular weight, TPSA and HBD are accepted. PubChem XLogP is not the published BioByte ClogP input, and HBA is not a CNS-MPO component. ClogP, ClogD7.4 and most-basic pKa remain missing, so no CNS-MPO total is computed.",
+        "state": "incomplete",
+        "total_published": null,
+        "total_raw": null
       },
       "moiety_name": "IDELALISIB",
       "pk_properties": {
@@ -365,6 +505,11 @@
         "assessment_is_not_derived_from_proxies": true,
         "assessment_state": "not_evaluated",
         "basis": "not_extracted_not_available_in_current_sources",
+        "direct_human_cns_evidence": {
+          "measurements": [],
+          "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim.",
+          "status": "not_evaluated_in_this_supplement"
+        },
         "measured_exposure": {
           "brain_to_plasma_ratio": {
             "reason": "not_extracted_from_the_sources_cached_in_this_run",
@@ -387,6 +532,7 @@
             "value": null
           }
         },
+        "nonhuman_cns_evidence": [],
         "physicochemical_proxies": {
           "hba": {
             "provenance": {
@@ -465,17 +611,151 @@
           }
         },
         "proxies_are_suggestive_never_confirmatory": true,
-        "reason": "no structured human CSF concentration, unbound brain concentration, Kp,uu or brain:plasma ratio was extracted from the sources cached in this run (PubChem properties, openFDA label, DailyMed SPL, RxNorm). This is a statement about what was extracted here, NOT a claim that no such measurement exists. Physicochemical properties are properties of the molecule, not observations of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment is derived from them."
+        "reason": "no structured human CSF concentration, unbound brain concentration, Kp,uu or brain:plasma ratio was extracted from the sources cached in this run. This is a statement about what was extracted here, NOT a claim that no such measurement exists. Physicochemical properties are properties of the molecule, not observations of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment is derived from them."
       },
       "candidate_id": "CHEMBL259571",
       "cns_mpo": {
+        "component_coverage": {
+          "accepted_inputs": [
+            "mw",
+            "tpsa",
+            "hbd"
+          ],
+          "n_accepted": 3,
+          "n_required": 6
+        },
+        "component_provenance": {
+          "hbd": {
+            "accessed_at_utc": "2026-07-13T22:08:14Z",
+            "cache_relpath": "raw/pubchem/0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be.json",
+            "canonical_query": "compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 525,
+            "raw_sha256": "0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          },
+          "mw": {
+            "accessed_at_utc": "2026-07-13T22:08:14Z",
+            "cache_relpath": "raw/pubchem/0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be.json",
+            "canonical_query": "compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 525,
+            "raw_sha256": "0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          },
+          "tpsa": {
+            "accessed_at_utc": "2026-07-13T22:08:14Z",
+            "cache_relpath": "raw/pubchem/0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be.json",
+            "canonical_query": "compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 525,
+            "raw_sha256": "0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          }
+        },
+        "components": {
+          "clogd_74": null,
+          "clogp": null,
+          "hbd": 0.5,
+          "mw": 1.0,
+          "pka_most_basic": null,
+          "tpsa": 1.0
+        },
+        "method_id": "cns_mpo_wager2010_v1",
+        "method_version": "1.0.0",
         "missing_inputs": [
-          "clogd_7_4",
-          "pka_most_basic"
+          {
+            "chembl_source_observation": {
+              "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output",
+              "source_field": "alogp",
+              "state": "proxy_only_not_accepted",
+              "value": 4.39
+            },
+            "property_id": "clogp",
+            "state": "not_available_under_frozen_calculator_policy"
+          },
+          {
+            "chembl_source_observation": {
+              "source_field": "cx_logd",
+              "state": "not_found_in_endpoint",
+              "value": null
+            },
+            "property_id": "clogd_74",
+            "state": "not_available_under_frozen_calculator_policy"
+          },
+          {
+            "chembl_source_observation": {
+              "source_fields": [
+                "cx_most_apka",
+                "cx_most_bpka"
+              ],
+              "state": "not_found_in_endpoint",
+              "value": null
+            },
+            "property_id": "pka_most_basic",
+            "state": "not_available_under_frozen_calculator_policy"
+          }
         ],
-        "reason": "CNS-MPO requires cLogD7.4 and the most-basic pKa; neither is present in any cached public source. The sourced sub-properties are published individually above. A partial composite would read as a brain-penetrance result.",
-        "state": "not_evaluated",
-        "value": null
+        "non_rankable": true,
+        "possible_total_range": {
+          "derivation": "each missing transformed component T0 is bounded in [0,1]",
+          "max": 5.5,
+          "min": 2.5,
+          "non_rankable": true,
+          "not_a_cns_mpo_score": true
+        },
+        "property_values": {
+          "clogd_74": null,
+          "clogp": null,
+          "hbd": 2.0,
+          "mw": 254.32,
+          "pka_most_basic": null,
+          "tpsa": 40.5
+        },
+        "proxy_only_not_mpo_inputs": {
+          "hba": {
+            "provenance": {
+              "accessed_at_utc": "2026-07-13T22:08:14Z",
+              "cache_relpath": "raw/pubchem/0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be.json",
+              "canonical_query": "compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+              "http_status": 200,
+              "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+              "raw_bytes": 525,
+              "raw_sha256": "0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be",
+              "release_or_last_updated": "not_reported_by_source",
+              "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+            },
+            "state": "observed",
+            "units": null,
+            "value": 2
+          },
+          "xlogp": {
+            "provenance": {
+              "accessed_at_utc": "2026-07-13T22:08:14Z",
+              "cache_relpath": "raw/pubchem/0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be.json",
+              "canonical_query": "compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+              "http_status": 200,
+              "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+              "raw_bytes": 525,
+              "raw_sha256": "0ded98be079a64d9988d0d948fd6b18fe17b7b4df394999b202cfbc1846064be",
+              "release_or_last_updated": "not_reported_by_source",
+              "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/6439522/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+            },
+            "state": "observed",
+            "units": null,
+            "value": 4.6
+          }
+        },
+        "reason": "Only molecular weight, TPSA and HBD are accepted. PubChem XLogP is not the published BioByte ClogP input, and HBA is not a CNS-MPO component. ClogP, ClogD7.4 and most-basic pKa remain missing, so no CNS-MPO total is computed.",
+        "state": "incomplete",
+        "total_published": null,
+        "total_raw": null
       },
       "moiety_name": "TAPINAROF",
       "pk_properties": {
@@ -723,6 +1003,11 @@
         "assessment_is_not_derived_from_proxies": true,
         "assessment_state": "not_evaluated",
         "basis": "not_extracted_not_available_in_current_sources",
+        "direct_human_cns_evidence": {
+          "measurements": [],
+          "reason": "No candidate-specific primary human CNS measurement was incorporated in this targeted supplement; this is not a literature-absence claim.",
+          "status": "not_evaluated_in_this_supplement"
+        },
         "measured_exposure": {
           "brain_to_plasma_ratio": {
             "reason": "not_extracted_from_the_sources_cached_in_this_run",
@@ -745,6 +1030,7 @@
             "value": null
           }
         },
+        "nonhuman_cns_evidence": [],
         "physicochemical_proxies": {
           "hba": {
             "provenance": {
@@ -823,17 +1109,151 @@
           }
         },
         "proxies_are_suggestive_never_confirmatory": true,
-        "reason": "no structured human CSF concentration, unbound brain concentration, Kp,uu or brain:plasma ratio was extracted from the sources cached in this run (PubChem properties, openFDA label, DailyMed SPL, RxNorm). This is a statement about what was extracted here, NOT a claim that no such measurement exists. Physicochemical properties are properties of the molecule, not observations of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment is derived from them."
+        "reason": "no structured human CSF concentration, unbound brain concentration, Kp,uu or brain:plasma ratio was extracted from the sources cached in this run. This is a statement about what was extracted here, NOT a claim that no such measurement exists. Physicochemical properties are properties of the molecule, not observations of the brain: they may SUGGEST penetrance and can never confirm it, and no assessment is derived from them."
       },
       "candidate_id": "CHEMBL3643413",
       "cns_mpo": {
+        "component_coverage": {
+          "accepted_inputs": [
+            "mw",
+            "tpsa",
+            "hbd"
+          ],
+          "n_accepted": 3,
+          "n_required": 6
+        },
+        "component_provenance": {
+          "hbd": {
+            "accessed_at_utc": "2026-07-13T22:08:57Z",
+            "cache_relpath": "raw/pubchem/cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c.json",
+            "canonical_query": "compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 690,
+            "raw_sha256": "cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          },
+          "mw": {
+            "accessed_at_utc": "2026-07-13T22:08:57Z",
+            "cache_relpath": "raw/pubchem/cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c.json",
+            "canonical_query": "compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 690,
+            "raw_sha256": "cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          },
+          "tpsa": {
+            "accessed_at_utc": "2026-07-13T22:08:57Z",
+            "cache_relpath": "raw/pubchem/cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c.json",
+            "canonical_query": "compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+            "http_status": 200,
+            "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "raw_bytes": 690,
+            "raw_sha256": "cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c",
+            "release_or_last_updated": "not_reported_by_source",
+            "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+          }
+        },
+        "components": {
+          "clogd_74": null,
+          "clogp": null,
+          "hbd": 0.8333333333333334,
+          "mw": 0.3535714285714286,
+          "pka_most_basic": null,
+          "tpsa": 1.0
+        },
+        "method_id": "cns_mpo_wager2010_v1",
+        "method_version": "1.0.0",
         "missing_inputs": [
-          "clogd_7_4",
-          "pka_most_basic"
+          {
+            "chembl_source_observation": {
+              "reason": "ChEMBL alogp is not the frozen BioByte ClogP calculator output",
+              "source_field": "alogp",
+              "state": "proxy_only_not_accepted",
+              "value": 2.88
+            },
+            "property_id": "clogp",
+            "state": "not_available_under_frozen_calculator_policy"
+          },
+          {
+            "chembl_source_observation": {
+              "source_field": "cx_logd",
+              "state": "not_found_in_endpoint",
+              "value": null
+            },
+            "property_id": "clogd_74",
+            "state": "not_available_under_frozen_calculator_policy"
+          },
+          {
+            "chembl_source_observation": {
+              "source_fields": [
+                "cx_most_apka",
+                "cx_most_bpka"
+              ],
+              "state": "not_found_in_endpoint",
+              "value": null
+            },
+            "property_id": "pka_most_basic",
+            "state": "not_available_under_frozen_calculator_policy"
+          }
         ],
-        "reason": "CNS-MPO requires cLogD7.4 and the most-basic pKa; neither is present in any cached public source. The sourced sub-properties are published individually above. A partial composite would read as a brain-penetrance result.",
-        "state": "not_evaluated",
-        "value": null
+        "non_rankable": true,
+        "possible_total_range": {
+          "derivation": "each missing transformed component T0 is bounded in [0,1]",
+          "max": 5.186904761904762,
+          "min": 2.186904761904762,
+          "non_rankable": true,
+          "not_a_cns_mpo_score": true
+        },
+        "property_values": {
+          "clogd_74": null,
+          "clogp": null,
+          "hbd": 1.0,
+          "mw": 450.5,
+          "pka_most_basic": null,
+          "tpsa": 83.5
+        },
+        "proxy_only_not_mpo_inputs": {
+          "hba": {
+            "provenance": {
+              "accessed_at_utc": "2026-07-13T22:08:57Z",
+              "cache_relpath": "raw/pubchem/cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c.json",
+              "canonical_query": "compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+              "http_status": 200,
+              "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+              "raw_bytes": 690,
+              "raw_sha256": "cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c",
+              "release_or_last_updated": "not_reported_by_source",
+              "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+            },
+            "state": "observed",
+            "units": null,
+            "value": 10
+          },
+          "xlogp": {
+            "provenance": {
+              "accessed_at_utc": "2026-07-13T22:08:57Z",
+              "cache_relpath": "raw/pubchem/cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c.json",
+              "canonical_query": "compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON",
+              "http_status": 200,
+              "license_or_terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+              "raw_bytes": 690,
+              "raw_sha256": "cbfa66cca83d1cd5adb11681c30b0664d9b6e88a142e83d73a1fec5b84095a2c",
+              "release_or_last_updated": "not_reported_by_source",
+              "source_url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/57495353/property/HBondAcceptorCount,HBondDonorCount,InChI,InChIKey,IUPACName,MolecularFormula,MolecularWeight,TPSA,XLogP/JSON"
+            },
+            "state": "observed",
+            "units": null,
+            "value": 2.5
+          }
+        },
+        "reason": "Only molecular weight, TPSA and HBD are accepted. PubChem XLogP is not the published BioByte ClogP input, and HBA is not a CNS-MPO component. ClogP, ClogD7.4 and most-basic pKa remain missing, so no CNS-MPO total is computed.",
+        "state": "incomplete",
+        "total_published": null,
+        "total_raw": null
       },
       "moiety_name": "LENIOLISIB",
       "pk_properties": {
@@ -1075,7 +1495,7 @@
       ]
     }
   ],
-  "content_sha256": "aba5cf1f00fa7b112235195b325632dfb4561f63c9bac184719a1f240f65ed64",
+  "content_sha256": "5e79492a9a0aaf7d7aa3ab575f4236b221cdd57baca1f2539fd6ee3e95daa6c5",
   "counts": {
     "n_named_but_not_prefetched": 21,
     "n_named_by_stage3": 141,
@@ -1095,6 +1515,16 @@
       "schema_version": "spot.stage03_prefetch_manifest.v1"
     },
     "content_sha256": "6d090b45db06825ba4b1cdac78a9c8edb653e77e88459fdc2def5b7029b4d91d"
+  },
+  "evidence_supplement_source": {
+    "artifact_name": "stage04_cns_evidence_supplement_20260713.json",
+    "artifact_role": "stage4_typed_cns_evidence_supplement",
+    "content_sha256": "4a595934ac819a6105af1a4cac2bb9bf890ec4a226b8233e122553fd66e01ca3",
+    "content_sha256_recomputed_by_stage4": true,
+    "method_id": "spot.stage04.targeted_cns_evidence_supplement.v1",
+    "n_candidates": 5,
+    "raw_sha256": "827240efbe9d56bf739769ba3c27054db88ae26689a86c313917555c29730cf2",
+    "schema_id": "spot.stage04_evidence_supplement.v1"
   },
   "fields_absent_from_public_sources_are_null_and_stated": true,
   "named_by_stage3_but_absent_from_the_prefetch": {
@@ -6211,5 +6641,5 @@
       ]
     }
   ],
-  "writer_id": "spot.stage04.pk_safety_compact_writer.v1"
+  "writer_id": "spot.stage04.pk_safety_compact_writer.v2"
 }
