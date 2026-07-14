@@ -1,0 +1,126 @@
+{
+  "_fixture_notice": "FIXTURE. A synthetic Stage-3 DrugCandidateSet in the contract Stage 4 accepts (spot.stage03_drug_candidate_set.v1), used to exercise the engine lanes offline. Every drug, target and identifier is INVENTED. namespace=fixture, matching the namespace a real Stage-3 fixture bundle carries — a fixture must never sit in the production namespace. The REAL Stage-3 handoff is exercised separately, against real Stage-3 emissions committed under tests/fixtures/stage3/. No real drug is named, ranked or characterised here.",
+  "schema_id": "spot.stage03_drug_candidate_set.v1",
+  "stage3_run_id": "fixture-stage3-run-0001",
+  "candidate_set_id": "fixture-candset-0001",
+  "candidate_rows_sha256": "a1a0a22ffeae019370872aff3e1cb9ddb9e790221efe880f24e6c9079c301b8e",
+  "namespace": "fixture",
+  "stage3_method_version": "fixture-stage3-v0",
+  "upstream_contrast_id": "26b866f2ad813d71",
+  "upstream_gene_lever_set_sha256": null,
+  "is_fixture": true,
+  "candidates": [
+    {
+      "candidate_id": "FIXTURE-001",
+      "active_moiety": {
+        "active_moiety_id": "FXM-001",
+        "active_moiety_name": "fixturib",
+        "unii": "ZZZZZZZZ99",
+        "inchikey": null,
+        "administered_form": "active_moiety",
+        "administered_form_name": null,
+        "maps_to_active_moiety_id": null,
+        "mapping_source_record_id": null
+      },
+      "compound_ids": {
+        "chembl_id": "CHEMBL-FIXTURE-1",
+        "pubchem_cid": null,
+        "drugbank_id": null,
+        "rxcui": null
+      },
+      "target": "FIXTURE_KINASE_A",
+      "mechanism": "fixture small-molecule inhibitor",
+      "program_direction": "down",
+      "drug_effect_direction": "down",
+      "direction_compatibility": "compatible",
+      "namespace": "fixture",
+      "stage3_evidence_source_record_ids": [
+        "src.fixture.stage3"
+      ]
+    },
+    {
+      "candidate_id": "FIXTURE-002",
+      "active_moiety": {
+        "active_moiety_id": "FXM-002",
+        "active_moiety_name": "fixturimab",
+        "unii": "YYYYYYYY88",
+        "inchikey": null,
+        "administered_form": "active_moiety",
+        "administered_form_name": null,
+        "maps_to_active_moiety_id": null,
+        "mapping_source_record_id": null
+      },
+      "compound_ids": {
+        "chembl_id": "CHEMBL-FIXTURE-2",
+        "pubchem_cid": null,
+        "drugbank_id": null,
+        "rxcui": null
+      },
+      "target": "FIXTURE_IMMUNE_CHECKPOINT_B",
+      "mechanism": "fixture monoclonal antibody",
+      "program_direction": "up",
+      "drug_effect_direction": "up",
+      "direction_compatibility": "compatible",
+      "namespace": "fixture",
+      "stage3_evidence_source_record_ids": [
+        "src.fixture.stage3"
+      ]
+    },
+    {
+      "candidate_id": "FIXTURE-003",
+      "active_moiety": {
+        "active_moiety_id": "FXM-003",
+        "active_moiety_name": "fixturostat",
+        "unii": null,
+        "inchikey": null,
+        "administered_form": "active_moiety",
+        "administered_form_name": null,
+        "maps_to_active_moiety_id": null,
+        "mapping_source_record_id": null
+      },
+      "compound_ids": {
+        "chembl_id": "CHEMBL-FIXTURE-3",
+        "pubchem_cid": null,
+        "drugbank_id": null,
+        "rxcui": null
+      },
+      "target": "FIXTURE_IMMUNE_TARGET_C",
+      "mechanism": "fixture enzyme inhibitor",
+      "program_direction": "down",
+      "drug_effect_direction": "down",
+      "direction_compatibility": "compatible",
+      "namespace": "fixture",
+      "stage3_evidence_source_record_ids": [
+        "src.fixture.stage3"
+      ]
+    },
+    {
+      "candidate_id": "FIXTURE-004",
+      "active_moiety": {
+        "active_moiety_id": "FXM-004",
+        "active_moiety_name": "fixturazole",
+        "unii": null,
+        "inchikey": null,
+        "administered_form": "salt",
+        "administered_form_name": "fixturazole hydrochloride",
+        "maps_to_active_moiety_id": "FXM-004",
+        "mapping_source_record_id": "src.fixture.moiety_map"
+      },
+      "compound_ids": {
+        "chembl_id": "CHEMBL-FIXTURE-4",
+        "pubchem_cid": null,
+        "drugbank_id": null,
+        "rxcui": null
+      },
+      "target": "FIXTURE_TARGET_D",
+      "mechanism": "fixture receptor antagonist",
+      "program_direction": "down",
+      "drug_effect_direction": "down",
+      "direction_compatibility": "compatible",
+      "namespace": "research_only",
+      "stage3_evidence_source_record_ids": [
+        "src.fixture.stage3"
+      ]
+    }
+  ]
+}

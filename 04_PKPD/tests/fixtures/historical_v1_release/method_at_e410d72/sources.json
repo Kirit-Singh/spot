@@ -1,0 +1,114 @@
+{
+  "schema_id": "spot.stage04_source_registry.v1",
+  "description": "Public source records for every Stage-4 method assertion. Each scientific assertion in method/*.json cites a source_id here. Raw documents are NOT bundled in the repo (copyright + 'public data only, nothing bundled'). Each entry carries a public retrieval_url and a cache_filename — never a machine-local absolute path — plus raw_sha256, so any reviewer can re-fetch and re-verify the bytes for themselves with `python -m analysis.source_verify --cache-root DIR`.",
+  "sources": [
+    {
+      "source_id": "grossman2026_nebpi",
+      "source_type": "primary_literature",
+      "title": "Evaluating “brain permeability”: A critical issue for the development of therapeutic agents for primary and metastatic brain tumors",
+      "container": "Neuro-Oncology",
+      "year": 2026,
+      "doi": "10.1093/neuonc/noag051",
+      "pmcid": "PMC13338342",
+      "license": "CC BY 4.0",
+      "retrieved_representation": "BioC XML (PMC full text)",
+      "raw_sha256": "8bb0324def170ae1f9aa26e906c8b7327690b8c6eebcd3d3e29f5e5a88b23f47",
+      "access_date": "2026-07-11",
+      "volatility": "raw_bytes_volatile_daily__content_stable — the article is stable; the API envelope is not. Pin content_sha256.",
+      "role": "Authoritative source for the NEBPI Part I / Part II criteria. Tables 1 and 2 are parsed out of these bytes by analysis/nebpi_source.py and independently re-read cell-for-cell by verifier/nebpi_source.py.",
+      "cache_filename": "PMC13338342.bioc.xml",
+      "retrieval_url": "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_xml/PMC13338342/unicode",
+      "content_sha256": "90ffdf2a07f742f58128bdafeeebedb3d3779640884142783152113fc6473937",
+      "content_hash_rule": "sha256 over the response with the PMC BioC envelope's <date> element blanked (<date></date>). That element is the RETRIEVAL date, not the article: the endpoint stamps the day of the fetch into every response, so the raw bytes of an UNCHANGED paper differ by exactly one byte each day. Verified 2026-07-12: a live re-fetch gave raw_sha256=0862ac394a040ab9595dbd17f36e53dc2773ad873fd58d36658cdde6f8e5422d (different) with an IDENTICAL content_sha256 and byte-identical Table 1/Table 2 cells. content_sha256 is the scientific identity; raw_sha256 is a snapshot of one fetch and is NOT re-verifiable on a later day.",
+      "raw_sha256_snapshot_date": "2026-07-11"
+    },
+    {
+      "source_id": "wager2010_cnsmpo_jats",
+      "source_type": "primary_literature",
+      "title": "Moving beyond Rules: The Development of a Central Nervous System Multiparameter Optimization (CNS MPO) Approach To Enable Alignment of Druglike Properties",
+      "container": "ACS Chemical Neuroscience",
+      "year": 2010,
+      "doi": "10.1021/cn100008c",
+      "pmcid": "PMC3368654",
+      "pmid": "22778837",
+      "license": "ACS copyright (publisher-limited deposit)",
+      "retrieved_representation": "JATS XML — METADATA + ABSTRACT ONLY (publisher-limited; contains no tables or transformation functions)",
+      "raw_sha256": "cf3816cfeafedf5f13278875015116b05478fdca30a2335489dc3ce3debc7623",
+      "access_date": "2026-07-11",
+      "volatility": "stable",
+      "role": "Anchors only what the abstract states: six physicochemical parameters (ClogP, ClogD pH 7.4, MW, TPSA, HBD, most-basic pKa) and a desirability score on a 0–6 scale. It does NOT contain Table 1 or Table 2 and therefore cannot be used to encode the transformation functions.",
+      "cache_filename": "PMC3368654.jats.xml",
+      "retrieval_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pmc&id=PMC3368654"
+    },
+    {
+      "source_id": "wager2010_cnsmpo_pmc_web",
+      "source_type": "primary_literature",
+      "title": "Moving beyond Rules: ... (CNS MPO) ... — PMC rendered full text",
+      "container": "ACS Chemical Neuroscience 2010;1(6):435–449",
+      "year": 2010,
+      "doi": "10.1021/cn100008c",
+      "pmcid": "PMC3368654",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3368654/",
+      "license": "ACS copyright; not redistributed. Only numeric parameters (facts) and short quotations are encoded.",
+      "retrieved_representation": "text/html (PMC-rendered full text, includes Table 1, Table 2 and Methods)",
+      "raw_sha256": "731fe2b7f7ce435de88a19f77dbd5e3b5482a12036574d6f378fbbb816113133",
+      "raw_bytes": 192522,
+      "access_date": "2026-07-11",
+      "volatility": "volatile_html",
+      "volatility_note": "A rendered HTML page. The byte hash pins exactly what THIS build read; NLM may re-render the page, so a future re-fetch may hash differently while the underlying article (DOI/PMCID) is immutable. The extracted numeric parameters are pinned separately in cns_mpo_wager2010_v1.json and are the reviewable unit.",
+      "role": "The document from which the CNS-MPO Table 1 transformation parameters and the Table 2 golden component/total scores were read. This is the ONLY retrieved representation of the article that contains them.",
+      "supersedes_note": "The orchestrator flagged PMC3368654.pdf and PMC3368654.bioc.xml in the references directory as HTML error/challenge responses, not source documents. Neither is cited here; neither is present in that directory as of access.",
+      "cache_filename": "wager2010_PMC3368654.pmc-web.html",
+      "retrieval_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3368654/"
+    },
+    {
+      "source_id": "dailymed_spl_structure_probe",
+      "source_type": "structure_probe",
+      "title": "DailyMed SPL v2 REST responses used ONLY to verify document structure and LOINC section codes",
+      "url": "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/{setid}.xml",
+      "license": "Public domain (NLM DailyMed)",
+      "retrieved_representation": "HL7 v3 SPL XML",
+      "probes": [
+        {
+          "setid": "021b97cc-a76f-44b6-b7be-670d2ae83690",
+          "spl_version": 100,
+          "effective_time": "20260609",
+          "raw_sha256": "77a0754fa57e3c609aae01e5e1169898cee121f9028c5d7cdbbb44239c9b3184",
+          "cache_filename": "dailymed_structure_probe_021b97cc.xml",
+          "retrieval_url": "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/021b97cc-a76f-44b6-b7be-670d2ae83690.xml"
+        },
+        {
+          "setid": "883b5d43-0339-7dc1-f775-93791fb9b978",
+          "raw_sha256": "f3598d9e20bf0ff1d11ebf77b36d960cffc9e3b1f96726cde1e1d6163a77bba7",
+          "cache_filename": "dailymed_structure_probe_883b5d43.xml",
+          "retrieval_url": "https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/883b5d43-0339-7dc1-f775-93791fb9b978.xml"
+        }
+      ],
+      "access_date": "2026-07-11",
+      "volatility": "volatile_html",
+      "role": "Establishes the PARSER CONTRACT only (XML element paths, LOINC section codes, UNII active-moiety coding). NO drug-specific content from these probes is used as evidence anywhere in Stage 4, and none of it is bundled in the repo. Verified LOINC section codes (codeSystem 2.16.840.1.113883.6.1): 34066-1 Boxed Warning; 34070-3 Contraindications; 43685-7 Warnings and Precautions; 34073-7 Drug Interactions; 34084-4 Adverse Reactions.",
+      "not_evidence": true
+    },
+    {
+      "source_id": "wager2016_cnsmpo_desirability",
+      "source_type": "primary_literature",
+      "title": "Central Nervous System Multiparameter Optimization Desirability: Application in Drug Discovery",
+      "container": "ACS Chemical Neuroscience 2016;7(6):767-775",
+      "year": 2016,
+      "doi": "10.1021/acschemneuro.6b00029",
+      "license": "ACS copyright (AuthorChoice terms)",
+      "citation_verified_via": "Crossref REST API (api.crossref.org/works/10.1021/acschemneuro.6b00029), accessed 2026-07-12: title, container, volume 7, issue 6, pages 767-775 confirmed. This verifies that the ARTICLE EXISTS. It verifies nothing about its contents.",
+      "document_acquired": false,
+      "acquisition_blocked_by": "pubs.acs.org returned HTTP 403 (Cloudflare); the DOI is not in PMC (idconv: 'Identifier not found in PMC'). The article bytes could not be retrieved, so no raw_sha256 is recorded — a hash of bytes never held would be a fiction.",
+      "is_evidence": false,
+      "role": "NOT a source of validation. No bytes of this article or its Table 2 were ever acquired or hashed, so nothing in Stage 4 is validated against it. The 3.7/2.7/90/375/1/9 -> 4.5 row attributed to it is carried in cns_mpo_wager2010_v1.json as `unverified_derived_regression_example`: an internal regression fixture, not a published golden, not primary-source validation, and not a cutoff of any kind.",
+      "why_it_cannot_corroborate_itself": "The row's values were copied from a prior audit report and are then pushed through the very Wager-2010 transforms they would be checking. Agreement therefore demonstrates only that this implementation is self-consistent. That is circular, and it is not independent validation.",
+      "review_status": "unverified_pending_document_acquisition_not_counted_as_a_source_verified_golden"
+    }
+  ],
+  "cache_policy": {
+    "no_absolute_paths": "Source registry entries carry a cache_filename and a public retrieval_url, never a machine-local path. A committed absolute path is not reproducible on any other machine and is not a provenance record.",
+    "cache_root": "Set SPOT_SOURCE_CACHE, or pass --cache-root, to point the verifier at a directory holding the cached bytes. Raw documents are NOT bundled in this repo (copyright; 'public data only, nothing bundled').",
+    "verifier": "python -m analysis.source_verify [--cache-root DIR] -- re-hashes every cached document against raw_sha256 and reports acquired / not_acquired explicitly."
+  }
+}

@@ -1,0 +1,445 @@
+{
+  "acquisition": {
+    "acquisition_id": "0e3db03021f1a7f2a1ac31bc0ba0e29a",
+    "acquisition_manifest_sha256": "53ae75d14484558bc2f45765e4825cd6eb4fb5cb006f55b4cb8649e2cd00c381",
+    "acquisition_policy_version": "stage3-acquire-public-v1",
+    "adaptive_expansion_permitted": false,
+    "artifact_class": "analysis",
+    "chembl_activity_potency_state": "not_evaluated",
+    "deferred_sources": {
+      "depmap": "not_evaluated",
+      "lincs": "not_evaluated",
+      "open_targets": "not_evaluated",
+      "pubchem": "not_evaluated",
+      "rxnorm": "not_evaluated"
+    },
+    "direct_binding_sha256": "86b938789d3a47b0ab5b3dbf90694ac46385f751fa0ae8b52ca57b258cafc583",
+    "direct_run_id": "9dfad318cfdf3cfe",
+    "frozen_target_queue_sha256": "d2ae3e868747f603f0b1e89bbe096526dc837c3c95eaa2dffd5060583d26ff52",
+    "licenses": {
+      "chembl": "CC BY-SA 3.0",
+      "uniprot": "CC BY 4.0"
+    },
+    "n_acquired_public": 23,
+    "n_not_acquired": 6,
+    "n_pages": 23,
+    "n_query_genes": 12,
+    "n_query_targets": 22,
+    "n_request_groups": 23,
+    "n_synthetic_fixture": 0,
+    "per_arm_target_counts": {
+      "away_from_A": 11,
+      "toward_B": 11
+    },
+    "source_releases": {
+      "chembl": "ChEMBL_37",
+      "uniprot": "2026_02"
+    },
+    "sources": [
+      "chembl",
+      "uniprot"
+    ],
+    "top_per_arm": 25,
+    "verification": {
+      "all_pass": true,
+      "n_checks": 41,
+      "n_failed": 0,
+      "report_sha256": "cb10e1b9dd11761c43dd3eff20ff8e36eab5ae49a4b145a697a9924c5c5baf11",
+      "verifier": "druglink.verify_acquisition"
+    }
+  },
+  "artifact_class": "analysis",
+  "bundle_id": "s3_0b119088734643bf",
+  "canonical_content_sha256": "0b119088734643bfa6a236ebae0713e4a88a5b043227c1d45c1b3b18a3334853",
+  "counts": {
+    "disease_context_review": {
+      "completed": 0,
+      "not_required": 10,
+      "pending": 0
+    },
+    "disease_context_review_results": {
+      "contradictory": 0,
+      "insufficient": 0,
+      "mixed": 0,
+      "supportive": 0
+    },
+    "drug_mapping": {
+      "mapped": 4,
+      "refused": 0,
+      "unmapped": 32
+    },
+    "n_active_moieties": 10,
+    "n_arm_levers": 36,
+    "n_candidate_arm_summaries": 20,
+    "n_candidates": 10,
+    "n_dispositions": 46,
+    "n_edges": 20,
+    "n_forms": 10,
+    "n_mechanism_assertions": 10,
+    "n_pathway_nodes": 0,
+    "n_potency_rows": 0,
+    "n_screen_rows": 18,
+    "n_stage4_not_queued": 3,
+    "n_stage4_queued": 7,
+    "n_target_entities": 3,
+    "n_unique_immutable_keys": 36,
+    "per_arm": {
+      "away_from_A": {
+        "direct_target": {
+          "n_edges": 10,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 7,
+          "n_opposed": 0,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 3
+        },
+        "n_arm_direction_measured": 11,
+        "n_edges": 10,
+        "n_ensembl_mapped": 14,
+        "n_evaluable": 11,
+        "n_ranked": 11,
+        "n_rows": 18,
+        "pathway_node": {
+          "n_edges": 0,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 0,
+          "n_opposed": 0,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 0
+        }
+      },
+      "toward_B": {
+        "direct_target": {
+          "n_edges": 10,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 0,
+          "n_opposed": 1,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 9
+        },
+        "n_arm_direction_measured": 11,
+        "n_edges": 10,
+        "n_ensembl_mapped": 14,
+        "n_evaluable": 11,
+        "n_ranked": 11,
+        "n_rows": 18,
+        "pathway_node": {
+          "n_edges": 0,
+          "n_inverse_direction_hypothesis": 0,
+          "n_observed_perturbation": 0,
+          "n_opposed": 0,
+          "n_pathway_hypothesis": 0,
+          "n_unresolved": 0
+        }
+      }
+    }
+  },
+  "created_at": "2026-07-12T00:00:00+00:00",
+  "data_status": "acquired_public_responses",
+  "deferred_lanes": {
+    "depmap": "not_evaluated",
+    "gbm_context": "not_evaluated",
+    "lincs": "not_evaluated",
+    "open_targets": "not_evaluated",
+    "perturb2state": "not_evaluated",
+    "pubchem": "not_evaluated",
+    "rxnorm": "not_evaluated"
+  },
+  "document_file": "drug_annotation.json",
+  "document_sha256": "ec727aef9682fb61d263367e53adcf52c193a206abb80b79d20a00327ab94ea4",
+  "files": [
+    {
+      "content_sha256": "feacc33e0d79b7d30a55345eac52d6537bcc71019f84d3c9f3ed012d23b6e1a7",
+      "file": "active_moieties.parquet",
+      "file_sha256": "0ca98efdbcb4d04ad13ee62fdc4d848b9e38c70180ac4637e5c4d440afeac129",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "e722bf0de6137415b0c30e8721b12880c9fb80ca37b0a5d5d35a473de05e03d0",
+      "file": "arm_levers.parquet",
+      "file_sha256": "a337d087b1bf98c6bef9349c709235530f6ac441d074b68d940a21e6715f57fe",
+      "n_rows": 36
+    },
+    {
+      "content_sha256": "c2f4b3164f08886a6737872f13fd9e3ef456af8094dfe54b575ce00f016bef19",
+      "file": "candidate_arm_summaries.parquet",
+      "file_sha256": "f01d7a8da71d7ca3259c3d667065796fdeaedf18d061c111ad2977acd7de999e",
+      "n_rows": 20
+    },
+    {
+      "content_sha256": "d508335dc9f91c3f132c2e37ef70476110e876587d55f17578ca9664a9c0962b",
+      "file": "candidates.parquet",
+      "file_sha256": "f18a88fa58de4e42c1429979a917e5fa318606cec1ecc81d899d81593225ef26",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "8a292bb7fe9d5fcfd0f2b12e7cbc31a862a691948e2d125c50165c367b81e34f",
+      "file": "cross_arm.parquet",
+      "file_sha256": "cfad8a7efb80ed74664b203579ec6d760c2dba56d073adf93bfe092077caaaf1",
+      "n_rows": 18
+    },
+    {
+      "content_sha256": "a823b55fbff55f3fcb04117b67886e6e784ef6de80c18a095362521b203d0fb6",
+      "file": "dispositions.parquet",
+      "file_sha256": "902008bd0a5abcbbb4e208d9a5f542e48b4dd13ec73aaa84cc7a68ccce4ba1c8",
+      "n_rows": 46
+    },
+    {
+      "content_sha256": "0b119088734643bfa6a236ebae0713e4a88a5b043227c1d45c1b3b18a3334853",
+      "file": "drug_annotation.json",
+      "file_sha256": "57b489f0a87c0f1298416f70b5fec00e7410837da46acc2ff5fdaaa7d48bccb9",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "a8d5e1ff361d017bdbb3ff5f9adf9825da79a13387a70b382dcf5ac8c41725d1",
+      "file": "drug_form_relations.parquet",
+      "file_sha256": "90a7255b8d54295d521f7ecfc7ea220614b385fbcf6a5a22d12954ce9efc040a",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "02c73bee29f9511a0069162bdf7481fa84281f329d33aed8bc5d6a3d754993a1",
+      "file": "drug_forms.parquet",
+      "file_sha256": "d86c88d06cefcf00d07af00c450a20bef13c85c3560b2d010f791272f9bd49ea",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "4d51dc600f73fb7cb92b742f21cb887f5c9368f25919657db54bffad7286bb52",
+      "file": "drug_identifiers.parquet",
+      "file_sha256": "5633abfc3174dd21dab68ade0c1da7099327d4b0b0162c58eef0f2eae5e46eb3",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "5fc81c33e9c99c6f1c72bbcc80d3e197f9312d13e0083b3c25b164a806a5c801",
+      "file": "drug_mapping.parquet",
+      "file_sha256": "92e3107da30dcac63b1d4a632a0e6f64fd2f687dad62f71572edb24391821225",
+      "n_rows": 36
+    },
+    {
+      "content_sha256": "6e67054ac5d505481e03122ca78fe0de706f8bf6b0967a61077a560c292c0998",
+      "file": "mechanism_assertions.parquet",
+      "file_sha256": "692f255d92972fdcad94cb7bb772210a10f9d61eee38632596c4050a54922023",
+      "n_rows": 10
+    },
+    {
+      "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "file": "pathway_nodes.parquet",
+      "file_sha256": "a8ad18e5c251d2526470a2d744adf5cef33f2579be63b50ff3052596254ad5f1",
+      "n_rows": 0
+    },
+    {
+      "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "file": "pathways.parquet",
+      "file_sha256": "be10eeb4f1cb3c541183be0f00189630bbe2cca5bd537b026f4398848c6947b6",
+      "n_rows": 0
+    },
+    {
+      "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "file": "potency_evidence.parquet",
+      "file_sha256": "56202b2895b4060c6b3b811158b0c4b58ee64e068b3f6014bc8878b8d795bc6f",
+      "n_rows": 0
+    },
+    {
+      "content_sha256": "d08f14c96ae9815940b42a64788846b8ce9edd89308befd2726761ab3a174511",
+      "file": "source_records.parquet",
+      "file_sha256": "6390706c1276b37563c0fc1398c73f833f4ee178046ec11be94663e156b73429",
+      "n_rows": 29
+    },
+    {
+      "content_sha256": "f05994c4686a5a2639553bad7f5ea63bdbb4348669d3df8066190ef745892de5",
+      "file": "target_drug_edges.parquet",
+      "file_sha256": "26481a89d190370db09b24bf3297f707a00e2b7aceae6fe2555769fe551fdf17",
+      "n_rows": 20
+    },
+    {
+      "content_sha256": "b5c46ce59647927a9a11b65584c9c4dd9b880f1f68963f5982eddc453290c5bf",
+      "file": "target_entities.parquet",
+      "file_sha256": "34e72fbef143a7fe025d806b42f0377d0cae4c76f8ffb3179b408921eb08f79e",
+      "n_rows": 3
+    },
+    {
+      "content_sha256": "c7fa9930f04e1cc348c4f444d02e339749f57c96d233c5e1182de7a32bb976c6",
+      "file": "target_entity_components.parquet",
+      "file_sha256": "6d0036f0f9b23d3571d97a88cdc3d25236515862ef9f7f7004f3b0701f86835e",
+      "n_rows": 5
+    }
+  ],
+  "inference_status": "not_calibrated",
+  "manifest_sha256": "59dcbb99d1552a19ce081d4e2a591a4fd72cb709176614a3377d60b3c55869ac",
+  "method": {
+    "adapters_sha256": "aaa4935686c9c911c4f383b9b775c176ccfff21e6867c0b40937fecd4cc36304",
+    "armlever_policy_version": "stage3-armlever-v1-two-arm",
+    "candidate_rank_permitted": false,
+    "code_tree_sha256": "867245197b0c9b16b669b13c5578ce6c0a9788faff69f15c250a3f53e5f281de",
+    "combined_objective_permitted": false,
+    "direction_policy_version": "stage3-direction-v4-workflow-states",
+    "env_lock_sha256": "838ed43a1de01944c6f7bca28464c5bde7f774c409f759927755b22efb7edec9",
+    "headline_arm_permitted": false,
+    "identity_policy_version": "stage3-identity-v2",
+    "joint_context_policy_version": "stage3-joint-context-v2-typed-pareto-tier",
+    "pathway_node_is_never_a_measurement": true,
+    "pathway_policy_version": "stage3-pathways-v3-registry-resolved-science-and-hash-bound-enrichment",
+    "potency_policy_version": "stage3-potency-v2",
+    "promotion_and_eligibility_vocabulary_is_retired": true,
+    "schemas_sha256": "b7aef7677f64dcba7e7b876acf828efa0c21861989e4195e2435444cf4d58194",
+    "stage2_joint_context_never_infers_drug_direction": true,
+    "stage3_method_version": "stage3-druglink-v4-workflow-states",
+    "stage4_assessment_is_not_promotion_or_recommendation": true,
+    "target_policy_version": "stage3-targets-v1",
+    "vocabularies_sha256": "78c1e3d21b9b645fc24e9d1ff2adae510df409f3a86dd90f03bd56d38dee98e9",
+    "workflow_policy_version": "stage3-workflow-v1-states-not-promotion"
+  },
+  "pathway_hypotheses": {
+    "n_nodes": 0,
+    "n_pathways": 0,
+    "pathway_contract_status": "consumer_proposal_pending_stage2_owner_agreement",
+    "pathway_lane": "not_evaluated",
+    "reason": "no_stage2_pathway_document_supplied"
+  },
+  "schema_version": "spot.stage03_manifest.v1",
+  "stage2_joint_context": {
+    "joint_context_policy_version": "stage3-joint-context-v2-typed-pareto-tier",
+    "joint_ordering_method_id": "not_provided",
+    "joint_status": "not_provided",
+    "joint_status_values": [
+      "both_arms",
+      "away_from_A_only",
+      "toward_B_only",
+      "opposed",
+      "not_evaluable"
+    ],
+    "pareto_tier": "not_provided",
+    "pareto_tier_is_a_tier_label_not_a_score": true,
+    "pareto_tier_rule": "positive_integer_from_1_or_null_when_not_jointly_evaluable",
+    "rewritten_by_stage3": false,
+    "stage2_joint_context": "not_provided",
+    "used_to_infer_drug_direction": false,
+    "used_to_rank_or_filter_arms": false
+  },
+  "table_hashes": {
+    "active_moieties": "feacc33e0d79b7d30a55345eac52d6537bcc71019f84d3c9f3ed012d23b6e1a7",
+    "arm_levers": "e722bf0de6137415b0c30e8721b12880c9fb80ca37b0a5d5d35a473de05e03d0",
+    "candidate_arm_summaries": "c2f4b3164f08886a6737872f13fd9e3ef456af8094dfe54b575ce00f016bef19",
+    "candidates": "d508335dc9f91c3f132c2e37ef70476110e876587d55f17578ca9664a9c0962b",
+    "cross_arm": "8a292bb7fe9d5fcfd0f2b12e7cbc31a862a691948e2d125c50165c367b81e34f",
+    "dispositions": "a823b55fbff55f3fcb04117b67886e6e784ef6de80c18a095362521b203d0fb6",
+    "drug_form_relations": "a8d5e1ff361d017bdbb3ff5f9adf9825da79a13387a70b382dcf5ac8c41725d1",
+    "drug_forms": "02c73bee29f9511a0069162bdf7481fa84281f329d33aed8bc5d6a3d754993a1",
+    "drug_identifiers": "4d51dc600f73fb7cb92b742f21cb887f5c9368f25919657db54bffad7286bb52",
+    "drug_mapping": "5fc81c33e9c99c6f1c72bbcc80d3e197f9312d13e0083b3c25b164a806a5c801",
+    "mechanism_assertions": "6e67054ac5d505481e03122ca78fe0de706f8bf6b0967a61077a560c292c0998",
+    "pathway_nodes": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "pathways": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "potency_evidence": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "source_records": "d08f14c96ae9815940b42a64788846b8ce9edd89308befd2726761ab3a174511",
+    "target_drug_edges": "f05994c4686a5a2639553bad7f5ea63bdbb4348669d3df8066190ef745892de5",
+    "target_entities": "b5c46ce59647927a9a11b65584c9c4dd9b880f1f68963f5982eddc453290c5bf",
+    "target_entity_components": "c7fa9930f04e1cc348c4f444d02e339749f57c96d233c5e1182de7a32bb976c6"
+  },
+  "upstream": {
+    "direct_analysis_condition": "StimX",
+    "direct_file_sha256": {
+      "axis.json": "606f4453af2c3fc03005512f3b614f56fdcd9def4c341eec9ec1cd6e4dc7609e",
+      "contributing_guides.parquet": "6f73a9e345a631221099e936c73d02fd2277e23217c301b0d804b7f4b11d236a",
+      "donor_support.parquet": "2948ad74a40fecac230a8071269a27779d54071df981fba23af66aa9ee621a7d",
+      "gene_universe.json": "a69abec601b0a905a737aebbb8e59938d88a8117e0cbb328897c6197a7a70a4d",
+      "guide_support.parquet": "8ca95adb2274581d374f80ec123397d39960def4e52fda9c19d568d9e4e91847",
+      "input_manifest.json": "201459ab0b63ed4e21aba1ec19ccc9ca3470423e6d820765b1922f1c5ae653b3",
+      "masks.parquet": "c31d5c40f1e37af290bbc98bcb340c6db7735fe9fbdb63f87b8b4e76a02a97b5",
+      "provenance.json": "e9d5d600975e30a52cdeda9745aa77fc28ee7dc1dcf5a91f8f92a0d8e3053e5e",
+      "screen.parquet": "7e33a56f612a48e044bcd23a6997d477e054158f9b5325e268bc8bf671613ab8",
+      "verification.json": "5b5dbc45f5ddabda25848b9a735f804819611aeb236b133f68129c7297a0984f"
+    },
+    "direct_gene_universe_sha256": "5e0599fe94a85a03b878cf31bd91a150b59766ed496489d43202daadaa6ac8b0",
+    "direct_lane": "research_only",
+    "direct_lane_declared": "research_only",
+    "direct_mask_sha256": "1649f28a9e05ba22747092537cd6c1c7f1204bd4cbfaaed8428ec172b0d8c110",
+    "direct_question_id": "rq_b760ca49d4ab59bc8d2d668efc61e6de",
+    "direct_row_count": 18,
+    "direct_run_binding_sha256": "9dfad318cfdf3cfe25649b9f4e4a64538667bb9eb6f24ecc56c27db4b42e256d",
+    "direct_run_id": "9dfad318cfdf3cfe",
+    "direct_selection_id": "rq_43d32f0d13d6b71b1ec4e078b8955462",
+    "direct_source_target_count": 18,
+    "direct_stage2_method": {
+      "arm_evaluable_column": {
+        "away_from_A": "A_evaluable",
+        "toward_B": "B_evaluable"
+      },
+      "arm_formula": {
+        "away_from_A": "-sign_A * delta_A",
+        "toward_B": "sign_B * delta_B"
+      },
+      "arm_rank_column": {
+        "away_from_A": "rank_away_from_A",
+        "toward_B": "rank_toward_B"
+      },
+      "arms": [
+        "away_from_A",
+        "toward_B"
+      ],
+      "combined_objective_permitted": false,
+      "effect_layer_primary": "log_fc",
+      "effect_layer_sensitivity": "zscore",
+      "formula_id": "spot.stage02.direct.formula.masked_program_delta.v1",
+      "headline_arm_permitted": false,
+      "method_id": "spot.stage02.direct.masked_program_projection",
+      "method_version": "stage2-direct-v5-pooled-main-two-arm",
+      "rank_dtype": "Int64",
+      "rank_population": "arm_evaluable_and_non_null_canonical_score",
+      "rank_tie_break": "target_id_ascending"
+    },
+    "direct_verifier": {
+      "exit_code": 0,
+      "n_checks": 153,
+      "n_failed": 0,
+      "report_sha256": "6d71e59d43c92e38ab658d7f23784c584f39ea8c7bbc05163aa92be14094651a",
+      "verifier_argv": [
+        "python",
+        "-m",
+        "direct.verify_run",
+        "--run-dir",
+        "<run>",
+        "--inputs-root",
+        "<inputs>"
+      ],
+      "verifier_module": "direct.verify_run"
+    },
+    "stage1_release": {
+      "hashes": {
+        "code_canonical_sha256": "bac90579227fed0a18fc496e6be2cb38e5a7085284e979d422323b5fb81a123b",
+        "code_raw_sha256": "def5cbf734b7082b27755963bb9a96c5d48cc6a3ddc727aec6c84257a8144ca0",
+        "environment_canonical_sha256": "6db18ed83168e380b71141b7d2537af052110ff2dbbad20a69d8c56e7f5629ad",
+        "environment_raw_sha256": "6b9f0fffe632ca495a9b0e7d1b9dffe3800d7d0f931fd020020b0c6a7db9a2fa",
+        "gate_spec_canonical_sha256": "921727148eb5c31c1a7d651bda03e551af0c8f342335f0b681da31ba09945f9e",
+        "gate_spec_raw_sha256": "ad2c0765158a48537d82c21e5fbb463368219d8f1068f45652e75b5502585032",
+        "input_manifest_canonical_sha256": "ee83bfa557d477ccf5f2844e736c410a5951456b74251d640a9e97c189d005cb",
+        "input_manifest_raw_sha256": "9ff67242c9477d2cfdc7a25ce1d66c9ed985726d44677ffa77460bcc0dba9dd6",
+        "method_version": "stage1-continuous-v3.0.1",
+        "registry_canonical_sha256": "e3e0cb96bc127bf8209596f20edad87c28af3bc63f7a4a2b4ef4c01830124ef3",
+        "registry_raw_sha256": "01745a0c8ae8ebc6e4f036b00f410774a1a45c99fff081cdd03bae885cea7472",
+        "release_manifest_raw_sha256": "bf2613c70061129bd57d1e9c24c93ab3e81100ba0f89eeb92c0cd75d9c1802cd",
+        "scores_canonical_sha256": "ccdabdda13489109de38afa38d5c85e5083f5d117e4fe829340a71a17391a99a",
+        "scores_raw_sha256": "9afd04b20ac630dfd24905bd556d9a77cf9a0aa4dcfe638157123c4d9674a82b",
+        "validation_canonical_sha256": "86344b8715b62891601fda36db87da372725e7722d5d85501966241d77229f12",
+        "validation_raw_sha256": "0b6be2481aae9311b44a0c641f196a59804183a3b52a0b9000786d7ea82eeace"
+      },
+      "kind": "research",
+      "method_version": "stage1-continuous-v3.0.1",
+      "n_production_selectable": 0
+    },
+    "stage1_selection": {
+      "contract_sha256": "5ac4efa16f76a291024bb1eaf116fff80a2ea4460e9b4ee8bcb9abd5f3ad55ee",
+      "question_id": "rq_b760ca49d4ab59bc8d2d668efc61e6de",
+      "selection_id": "rq_43d32f0d13d6b71b1ec4e078b8955462",
+      "stage1_method_version": "stage1-continuous-v3.0.1",
+      "stage1_validation_sha256": "0b6be2481aae9311b44a0c641f196a59804183a3b52a0b9000786d7ea82eeace",
+      "stage1_validation_status": "bound"
+    },
+    "stage3_artifact_class": "analysis",
+    "upstream_gate_context": {
+      "direct_lane": "research_only",
+      "note": "upstream context only; Stage 3 does not gate on it",
+      "stage1_gate_passed": false,
+      "stage1_n_selectable": 0
+    }
+  }
+}

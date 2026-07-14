@@ -1,0 +1,22 @@
+# Stage-4 (04_PKPD) direct dependencies. Linux / CPython 3.12.
+#
+# Compiled to requirements-stage4.lock with:
+#   pip-compile --generate-hashes --output-file=04_PKPD/requirements-stage4.lock \
+#               04_PKPD/requirements-stage4.in
+#
+# Versions are pinned to exactly what the Stage-4 test suite was run under, so the
+# declared lock and the observed runtime agree (manifest.json records both, and
+# verification flags any divergence).
+#
+# Why Stage 4 pins separately: the repo-wide lock (_requirements/base.lock) carries no
+# pandas/pyarrow, and this lane must not edit shared files. Folding pyarrow into
+# _requirements/base.in is a maintainer action — see 04_PKPD/METHODS.md, Follow-ups.
+#
+# NOT a dependency: rdkit. It is optional and, per method/calculator_policy_v1.json, may
+# never supply ClogD(7.4) or most-basic pKa. Stage 4 runs without it.
+
+numpy==2.4.2
+pandas==2.3.3
+pyarrow==23.0.0
+pydantic==2.12.5
+pytest==9.0.2

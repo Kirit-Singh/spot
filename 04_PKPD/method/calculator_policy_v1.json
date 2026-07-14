@@ -1,0 +1,79 @@
+{
+  "schema_id": "spot.stage04_method_calculator_policy.v1",
+  "method_id": "calculator_policy_v1",
+  "method_version": "1.0.0",
+  "description": "Which property sources may supply each of the six CNS-MPO inputs. Enforced mechanically: a property record whose calculator is not listed for its property is REJECTED (the property becomes a missing_input; the score becomes incomplete). Nothing is silently substituted or imputed.",
+  "rationale_source": {
+    "source_id": "wager2010_cnsmpo_pmc_web",
+    "quote": "For the work herein, calculated physicochemical properties were obtained using standard commercial packages: Biobyte for ClogP calculations, ACD/Laboratories for ClogD at pH 7.4, and ACD/Laboratories for pKa. For calculation of TPSA, see ref (8)."
+  },
+  "conformance_levels": {
+    "published_method": "The exact calculator used by Wager et al. 2010.",
+    "published_method_equivalent": "A different implementation of the SAME published algorithm (e.g. Ertl TPSA), recorded with its own version.",
+    "documented_deviation": "A different calculator for a property the tool genuinely implements. ALLOWED but always surfaced per property; never silent.",
+    "forbidden": "The tool does not implement this quantity at all. Using it would be fabrication."
+  },
+  "properties": {
+    "clogp": {
+      "allowed": [
+        {"calculator_id": "biobyte_clogp", "conformance": "published_method", "requires": ["software_version"]},
+        {"calculator_id": "experimental_logp", "conformance": "documented_deviation", "requires": ["source_record_id"], "note": "Measured logP is not ClogP; flagged."},
+        {"calculator_id": "rdkit_crippen_mollogp", "conformance": "documented_deviation", "requires": ["software_version"], "note": "RDKit implements the Crippen/Wildman logP estimator. It is NOT BioByte ClogP; substituting it changes the score and must be visible."}
+      ],
+      "forbidden": []
+    },
+    "clogd_74": {
+      "allowed": [
+        {"calculator_id": "acd_labs", "conformance": "published_method", "requires": ["software_version"]},
+        {"calculator_id": "chemaxon_logd", "conformance": "documented_deviation", "requires": ["software_version"]},
+        {"calculator_id": "experimental_logd_74", "conformance": "documented_deviation", "requires": ["source_record_id"]}
+      ],
+      "forbidden": [
+        {"calculator_id": "rdkit", "reason": "RDKit does not implement a pH-dependent distribution coefficient (logD 7.4). There is no RDKit ClogD; any such value would be fabricated or a silent logP substitution."}
+      ]
+    },
+    "pka_most_basic": {
+      "allowed": [
+        {"calculator_id": "acd_labs", "conformance": "published_method", "requires": ["software_version"]},
+        {"calculator_id": "chemaxon_pka", "conformance": "documented_deviation", "requires": ["software_version"]},
+        {"calculator_id": "experimental_pka", "conformance": "documented_deviation", "requires": ["source_record_id"]}
+      ],
+      "forbidden": [
+        {"calculator_id": "rdkit", "reason": "RDKit does not implement pKa prediction. Any 'RDKit pKa' would be fabricated."}
+      ]
+    },
+    "mw": {
+      "allowed": [
+        {"calculator_id": "rdkit_descriptors_molwt", "conformance": "published_method_equivalent", "requires": ["software_version"], "note": "Average molecular weight from the molecular formula — a deterministic quantity RDKit genuinely implements."},
+        {"calculator_id": "pubchem_molecular_weight", "conformance": "published_method_equivalent", "requires": ["source_record_id"]},
+        {"calculator_id": "chembl_full_mwt", "conformance": "published_method_equivalent", "requires": ["source_record_id"]}
+      ],
+      "forbidden": [],
+      "note": "MW must be the MW of the ACTIVE MOIETY, not of a salt form. Salt-form MW is a common silent error; the firewall requires explicit salt->active-moiety mapping."
+    },
+    "tpsa": {
+      "allowed": [
+        {"calculator_id": "rdkit_tpsa_ertl", "conformance": "published_method_equivalent", "requires": ["software_version"], "note": "RDKit's TPSA implements the Ertl topological PSA method, which is the method Wager et al. cite (their ref 8)."},
+        {"calculator_id": "pubchem_tpsa", "conformance": "published_method_equivalent", "requires": ["source_record_id"]}
+      ],
+      "forbidden": []
+    },
+    "hbd": {
+      "allowed": [
+        {"calculator_id": "rdkit_lipinski_numhdonors", "conformance": "published_method_equivalent", "requires": ["software_version"]},
+        {"calculator_id": "pubchem_hbond_donor_count", "conformance": "published_method_equivalent", "requires": ["source_record_id"]}
+      ],
+      "forbidden": [],
+      "note": "HBD definitions differ between tools (Lipinski N/O-H count vs. explicit donor SMARTS). The definition used is recorded in the property record's 'method' field."
+    }
+  },
+  "cross_candidate_rule": {
+    "id": "no_silent_calculator_mixing",
+    "statement": "If two candidates in the same scorecard set take the same property from different calculators, the set is flagged calculator_mixed_across_candidates=true, the affected property/calculator pairs are enumerated, and comparability across candidates for that property is marked not_comparable. The scores are still emitted (they are per-candidate valid) but the cross-candidate comparison is explicitly disclaimed."
+  },
+  "hard_rules": [
+    "No imputation. A missing, non-finite or disallowed input makes the CNS-MPO status 'incomplete' and the total null.",
+    "Every property record must carry: value, units, experimental|predicted, calculator id, method, software/database version, access date, source URL/record id, raw response sha256.",
+    "A property value with no source_record binding is rejected at the firewall."
+  ]
+}
