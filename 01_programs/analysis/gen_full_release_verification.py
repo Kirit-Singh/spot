@@ -126,16 +126,26 @@ def main():
             "measurement_bundle": "measurement_bundle_lockable is TRUE (inputs+registry+scores+summary+code+verifier+"
                                   "mutation suite+solver lock all present and independently verified). This does NOT imply "
                                   "any selectable pair, identity confirmation, or downstream availability.",
-            "production_stage2_ready": "FALSE — 0/33 program-condition pairs cleared the frozen production gate.",
+            "stage1_kind": "continuous_measurement_and_generic_selector — no production/research split and no 0-of-33 "
+                           "production gate exists in the ACTIVE contract; any supported (program A/direction, program "
+                           "B/direction, condition/mode) yields the same typed spot.stage01_selection.v3.",
+            "historical_within_condition_validation": "The frozen T7b within-condition LOMO validation "
+                           "(stage01_selectability_v3.json, raw 7c326a86…, active_gate:false) recorded 0 of 33 program-"
+                           "condition pairs clearing a pre-registered production gate. This is a FROZEN HISTORICAL "
+                           "validation outcome ONLY — it is NOT the current release/deployment state and does NOT gate the "
+                           "generic selector, any selection, or app/overlay deployment.",
             "panel_provenance": "PRIMARY_LOCATORS_VERIFIED_BOUNDED — all 53 measured marker-program pairs carry a "
                                 "bounded primary-source locator in the v3 registry marker_provenance/panel_provenance "
                                 "(18 prior-ledger + 14 lineage + 21 state/CTL completions; source SHAs pinned in "
                                 "registry panel_provenance.source_artifacts and enforced by verify_stage1_provenance.py). "
                                 "This is a bounded association/RNA-level provenance fact only: it does NOT change the "
-                                "scorer, any score, the 0/33 production result, overlay/app deployment, or the candidate "
-                                "pointer, and Masopust remains naming-only.",
+                                "scorer, any score, the frozen historical within-condition validation outcome, overlay/app "
+                                "deployment, or the candidate pointer, and Masopust remains naming-only.",
             "overlay_release": "overlay_release_ok is FALSE — the v3 overlay is built and proven overlay==full but is NOT "
-                               "deployed/served; overlay deployment is a separate gate.",
+                               "APPROVED for release by this Stage-1 gate (deployment is a separate gate; do not deploy on "
+                               "this gate alone). A served deployment manifest that declares the app/overlay deployed while "
+                               "this gate is false is a release-state CONTRADICTION the served-manifest consistency verifier "
+                               "(verify_served_manifests.py) refuses.",
             "coefficients_from_method": "Registry coefficients are checked for internal consistency here; recomputing them "
                                         "from the frozen method requires the pinned h5ad and is the scoring-tier reproduce's job.",
             "earlier_limited_observation": "stage01_validation_independent_check.json remains an intentionally LIMITED sampled "

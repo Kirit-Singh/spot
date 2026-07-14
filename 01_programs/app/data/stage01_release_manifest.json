@@ -29,12 +29,39 @@
   "release_gates": {
     "measurement_bundle_lockable": true,
     "panel_provenance_status": "PRIMARY_LOCATORS_VERIFIED_BOUNDED",
-    "overlay_release_ok": false,
-    "app_deployment_ready": false
+    "served_artifact_integrity_ok": true,
+    "overlay_release_fidelity_ok": true,
+    "overlay_release_ok": true,
+    "app_deployment_ready": true
   },
-  "not_lockable_reason_codes": [
-    "overlay_release_blocked"
-  ],
+  "deployment_readiness": {
+    "app_deployment_ready": true,
+    "served_artifact_integrity_ok": true,
+    "overlay_release_fidelity_ok": true,
+    "reason_codes": [],
+    "derivation": "app_deployment_ready = served_artifact_integrity_ok AND overlay_release_fidelity_ok; DECOUPLED from the frozen historical within-condition selectability outcome (never an input).",
+    "overlay_representativeness_gate": {
+      "ok": false,
+      "n_gate_failures": 1,
+      "gate_ids": [
+        "overlay_composition",
+        "overlay_correlations",
+        "overlay_distributions"
+      ],
+      "role": "descriptive_visualization_representativeness",
+      "blocks_deployment": false,
+      "note": "overlay composition/distributions/correlations representativeness; separate from the overlay==full fidelity that gates deployment, and never blocks continuous scores or generic Stage-2 selection"
+    },
+    "historical_within_condition_validation": {
+      "artifact": "stage01_selectability_v3.json",
+      "raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
+      "n_production_selectable_true": 0,
+      "of_total": 33,
+      "active_gate": false,
+      "role": "frozen_descriptive_historical_validation_not_a_deployment_input"
+    }
+  },
+  "not_lockable_reason_codes": [],
   "missing_required_artifacts": [],
   "artifacts": {
     "stage01_validation.json": {
@@ -53,7 +80,7 @@
       "location": "served"
     },
     "stage01_current.json": {
-      "raw_sha256": "a0b4369b8d6193b6721ebc6cbb24239d5f53fc278e7c2d636c97ead979a8b20c",
+      "raw_sha256": "c0783c13d72da60222d3e4d2fd7390f73b5358accea161397f4a31b81e989ba0",
       "present": true,
       "location": "served"
     },
@@ -98,7 +125,7 @@
       "location": "served"
     },
     "gen_stage1_t8.py": {
-      "raw_sha256": "0d8ad04bb43390e7e1c63e30dc5566f74ba4adf474c2f192afac5e505ea8023b",
+      "raw_sha256": "ba9fd8e9302f2715380908af1b7a274f9830069209866ff2bd89a201ad2fdae7",
       "present": true,
       "location": "analysis"
     },
@@ -185,5 +212,5 @@
       "present": true
     }
   },
-  "self_canonical_sha256": "9c8e72d141e8721fc3b45468f6eb89ccc1acc6ec17888fe394b81008d5096805"
+  "self_canonical_sha256": "096cfa7d245e3e7abc3b2dc79efa066333675994732df65bf1e9c275fc4fda90"
 }

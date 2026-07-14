@@ -23,7 +23,7 @@ closed; re-derives every marker record from pinned source artifacts and re-check
 ## `spot.stage01_selection.v3`
 Schema: `01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json`. Deterministic
 **materializer**: `01_programs/analysis/stage2_bridge/emit_selection_contract.py` `build_contract(...)`,
-mirrored byte-for-byte in the Stage-1 app `01_programs/app/01_page.html`. Independent semantic verifier:
+mirrored byte-for-byte in the Stage-1 app `01_programs/app/programs.html`. Independent semantic verifier:
 `01_programs/analysis/stage2_bridge/verify_selection_contract.py`.
 
 The generic selector emits the **same typed contract** for ANY (program A, direction A, program B,

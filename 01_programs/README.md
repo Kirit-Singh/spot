@@ -15,7 +15,7 @@ biological pair and **not** a confirmed cell identity. Treg-like → Th1-like is
 default only.
 
 ## Layout
-- `app/` — the workbench (`01_page.html`), the rendered methodology report (`01_notebook.html`),
+- `app/` — the workbench (`programs.html`), the rendered methodology report (`01_notebook.html`),
   and the vcp data-provenance trace (`01_trace.html`). `app/data/` holds the overlay + per-cell
   records the pages render.
 - `analysis/` — the reproducible pipeline chain (below), the frozen method spec

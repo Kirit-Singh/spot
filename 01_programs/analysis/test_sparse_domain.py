@@ -1,4 +1,4 @@
-"""Pure-python replication of the Stage-1 sparse-aware display transform (01_page.html).
+"""Pure-python replication of the Stage-1 sparse-aware display transform (programs.html).
 
 Mirrors `transformFor` / `normScore` exactly so the display-correction logic is testable
 off the browser. Anchors are read from the FROZEN per-score quantiles (p02..p99 computed

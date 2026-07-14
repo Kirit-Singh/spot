@@ -1,6 +1,6 @@
 """Pure-python replication of the spot.stage01_selection.v1 contrast_id derivation.
 
-Mirrors the in-browser canonicalization in 01_programs/app/01_page.html
+Mirrors the in-browser canonicalization in 01_programs/app/programs.html
 (canonicalJSON + SubtleCrypto SHA-256) and the reference implementation in
 02_geneskew/analysis/direct/{contrast,hashing}.py. The single source of truth is
 the shared schema in schemas/README.md.

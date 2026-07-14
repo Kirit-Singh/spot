@@ -54,7 +54,7 @@ STALE_STRINGS = ["N_PERM", "paper-exact", "reproduces Suppl", "Reproduces Suppl"
                  "treg_score", "func_margin", "low_conf", "nomen_counts", "empirical p", "q<0.05",
                  "permutation-FDR", "permutation FDR"]
 SERVED_TEXT_ARTIFACTS = ["data/stage01_umap_seed.json", "data/stage01_cell_records.json",
-                         "01_page.html", "01_trace.html", "01_notebook.html"]
+                         "programs.html", "01_trace.html", "01_notebook.html"]
 
 
 def canonical(cells, fields):

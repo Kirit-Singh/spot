@@ -251,7 +251,7 @@ hierarchy, `question_id`/biology-only `contrast_id` should remain stable, while 
 registry-bound `selection_id` and any downstream `stage2_run_id` should change.
 
 The current browser implementation does not preserve that separation:
-`01_programs/app/01_page.html` lines 741-759 include both registry hashes in
+`01_programs/app/programs.html` lines 741-759 include both registry hashes in
 `canonicalContent()`, and lines 823-825 derive `question_id`, `selection_id`, and
 `contrast_id` from the same full hash. Therefore, without a code correction, all three
 IDs will change after this metadata-only registry revision. Either:

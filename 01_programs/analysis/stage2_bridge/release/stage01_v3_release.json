@@ -112,8 +112,8 @@
     },
     "selection_schema_v3": {
       "path": "01_programs/analysis/stage2_bridge/schemas/spot.stage01_selection.v3.schema.json",
-      "raw_sha256": "647e7592fcd7bca5e2123dbd14001dd7684364bf5575c4d6809475b2732b600e",
-      "canonical_content_sha256": "40dcbb5cf7ff8398524557a307e565bda1265c840b7207b4bcb3efa50eaad730",
+      "raw_sha256": "f8104283d7139ed47059978751dbed33e8426c920ba0d8086082eda9c43f4c1d",
+      "canonical_content_sha256": "284adb1a504037b904f7ebef22ed564f920190ac9d1c73c30e10387837fd6c9e",
       "role": "selection_contract_schema"
     },
     "stage2_registry_view": {
@@ -145,5 +145,5 @@
       "active_gate": false
     }
   },
-  "self_release_sha256": "182510e37415f70d892a0f0cd8a66952fbbd344ed0207e6bb1bb711c0c8eb6f1"
+  "self_release_sha256": "2262430931707552f4414808be3d6734fa3c7287748ec23339ce3ef498224b11"
 }

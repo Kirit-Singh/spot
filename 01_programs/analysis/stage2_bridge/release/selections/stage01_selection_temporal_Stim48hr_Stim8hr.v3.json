@@ -15,11 +15,12 @@
     "estimand_level": "population",
     "estimand_is_per_cell_fate": false,
     "inference_status": "not_calibrated",
-    "method_sha256": "c05baa8f847f284a6cb187df24668ac0e5197dfdf2d238ced04c7847b7226e77",
+    "method_sha256": "343f20db53aed3f34f45f6c4adebc2cdf26985ab179b7df264dbd0d02587c4b5",
     "status": "available"
   },
   "selection_id": "ccf390b76f2f0d27",
   "selection_full_sha256": "ccf390b76f2f0d275123e017db655c6f2a555ec69d5b17e56338bd58a08e6983",
+  "question_id": "a98861893c47507b",
   "canonical_content": {
     "A": {
       "program_id": "treg_like",
@@ -107,5 +108,5 @@
     "selectability_v3_raw_sha256": "7c326a86d4586a851f5b91fb6f7e9796946e52eb41fe60123b41a6d3471d2420",
     "active_gate": false
   },
-  "full_contract_content_sha256": "ddad5e51a3f828219f0890bf19c2b41a318c392d0128d99fa6d5d825bd12d1e6"
+  "full_contract_content_sha256": "8d8ccf99904655d8034c328e8be6521d247d72b1786223b2bf95498ef7f83dbb"
 }

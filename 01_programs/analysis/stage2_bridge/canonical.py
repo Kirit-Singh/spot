@@ -3,7 +3,7 @@
 These reproduce, exactly:
   * Direct  `analysis/direct/hashing.py`  `canonical_json` / `content_hash` / `file_sha256`
   * Direct  `analysis/direct/trust.py`    `canonical_content_sha256` (self-hash-field strip)
-  * the browser `01_page.html` `canonicalJSON` / `sha256hex`
+  * the browser `programs.html` `canonicalJSON` / `sha256hex`
 
 Any drift here silently breaks the registry binding, so this module is deliberately
 tiny and has a dedicated equality test against known-frozen values.

@@ -23,7 +23,7 @@ overlay drives the UMAP.
 - **Repo / branch / PR:** github.com/Kirit-Singh/spot — `stage1-remediation`, PR #16.
 - **Live workbench:** http://100.117.50.59:8347/ (served by the hardened `deploy/serve_static.py`,
   GET/HEAD-only allowlist; the old `serve.py` with `POST /rerun` is retired).
-- **Key files:** `01_programs/app/01_page.html` (app), `01_programs/app/01_notebook.html` (methods
+- **Key files:** `01_programs/app/programs.html` (app), `01_programs/app/01_notebook.html` (methods
   report), `01_programs/analysis/stage1_pipeline.py` (pipeline), `.../verify_reproduce.py` (the gate),
   `01_programs/app/data/stage01_program_registry.json` (frozen registry), `docs/HANDOVER.md`.
 

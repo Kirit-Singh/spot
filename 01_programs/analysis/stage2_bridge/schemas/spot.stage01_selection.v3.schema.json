@@ -6,7 +6,8 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "selection_origin", "execution_status", "analysis_mode", "estimator_id",
-               "estimator_status", "estimator", "selection_id", "selection_full_sha256", "canonical_content", "poles", "arms",
+               "estimator_status", "estimator", "selection_id", "selection_full_sha256", "question_id",
+               "canonical_content", "poles", "arms",
                "trust_bindings", "provenance_bindings", "historical_validation_provenance",
                "full_contract_content_sha256"],
   "allOf": [
@@ -50,6 +51,7 @@
     },
     "selection_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
     "selection_full_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "question_id": {"$comment": "biology-only ordered-question identity = sha256(canonical_json({A:{program_id,direction,condition:from}, B:{program_id,direction,condition:to}, analysis_mode}))[:16]; NO method/input binding, so it is stable across method/registry/source revisions (unlike selection_id).", "type": "string", "pattern": "^[0-9a-f]{16}$"},
     "full_contract_content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "canonical_content": {
       "type": "object",
