@@ -2,6 +2,7 @@ import type { PageKey } from './pages';
 import { readStage1SelectionV3 } from './contrastTitle';
 import { resolveProductionRealArtifact } from './resolveRouteArtifact';
 import type { RealRouteResolution } from './renderReal';
+import { desiredChange, directArmKey, pathwayArmKey } from '../repository/armKey';
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -108,11 +109,11 @@ function selectionContext(value: Awaited<ReturnType<typeof readStage1SelectionV3
   if (!value || value.analysis_mode !== 'within_condition' || value.conditions.length !== 1) return null;
   const condition = value.conditions[0];
   if (!conditions.has(condition)) return null;
-  const desiredA = value.A.direction === 'high' ? 'decrease' : 'increase';
-  const desiredB = value.B.direction === 'high' ? 'increase' : 'decrease';
+  const desiredA = desiredChange('away_from_A', value.A.direction);
+  const desiredB = desiredChange('toward_b', value.B.direction);
   const directArmKeys: [string, string] = [
-    `direct|${value.A.program_id}|${desiredA}|${condition}`,
-    `direct|${value.B.program_id}|${desiredB}|${condition}`,
+    directArmKey(value.A.program_id, desiredA, condition),
+    directArmKey(value.B.program_id, desiredB, condition),
   ];
   return {
     condition,
@@ -121,7 +122,10 @@ function selectionContext(value: Awaited<ReturnType<typeof readStage1SelectionV3
     desiredA,
     desiredB,
     directArmKeys,
-    pathwayArmKeys: directArmKeys.map((key) => `pathway|${key.slice('direct|'.length)}|go_bp`) as [string, string],
+    pathwayArmKeys: [
+      pathwayArmKey(value.A.program_id, desiredA, condition, 'go_bp'),
+      pathwayArmKey(value.B.program_id, desiredB, condition, 'go_bp'),
+    ],
   };
 }
 
