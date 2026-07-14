@@ -1,27 +1,26 @@
-# 02_geneskew — gene levers for a Stage-1-selected program contrast
+# 02_geneskew — perturbation targets and pathway context
 
-Rank gene knockdowns by how much their **measured** transcriptional effect aligns with an
-ordered **A→B program contrast** selected in Stage-1 (**same-timepoint at Stim48**: A =
-activation-induced FOXP3⁺ **regulatory-like** program, B = inflammatory **Th1-like** program).
-Because B may be sparse and is unmeasurable from the release, the **primary endpoint is the
-one-sided A-program (regulatory-like) reduction (`a_down`)**; `b_up` / total A→B alignment are
-secondary/descriptive until B is measured. Target-masked (self + off-target), and gated on
-power, off-target, guide, donor-pair, and cell-level support.
+Stage 2 consumes a generic Stage-1 v3 selection: two ordered continuous programs, their desired
+directions, and either one shared condition or two temporal endpoints. It projects each measured
+CRISPRi knockdown onto the two program scorers and keeps the resulting arms separate. There is no
+combined, balanced or weighted objective.
 
-**Produces:** a ranked **gene-lever hypothesis** — a *suggestive* candidate set that **requires
-external validation**, not a confirmed target. Stage-2 stops here; drug / GBM / PK / safety
-evidence is Stages 3–4.
+The direct lane uses the authors' released `GWCD4i.DE_stats` effect estimates with the target,
+30-kb neighbouring genes and contributing-guide off-target alignments masked from each projection.
+The temporal lane compares perturbation effects between two population-level endpoints; it is not
+lineage tracing. GO Biological Process provides pathway context. Reactome is parked in the current
+release, and Perturb2State remains deferred rather than presented as a completed primary lane.
 
-Design decisions and schemas: `STAGE2_PLAN.md`. Runs as a Claude Science **specialist**
-(perturbation genomics) over the authors' released `GWCD4i.DE_stats` (+ `by_guide` / `by_donors`),
-and — for cell-level support — the Stim48 `assigned_guide` files (~1.7 TB, I/O-bound).
+**Produces:** ranked, suggestive target hypotheses, temporal endpoint comparisons and GO-BP
+context. These are not validated targets or causal mechanisms. Displayed outputs contain no
+calibrated p-values, q-values or FDR, and pathway convergence requires support from at least two
+in-pathway perturbations.
 
-- `inputs/`  — the Stage-1 **selection contract** `stage01_selection.json` (an *unimplemented
-  prerequisite* — the current picker serializes nothing); Marson `DE_stats` / `by_guide` /
-  `by_donors`
-- `analysis/` — donor-paired axis construction, target-masked measured-effect screen,
-  guide/donor replication, cell-level within-dataset support
-- `outputs/` (organized by immutable `contrast_id`) — `stage02_programs` (signed program vector) ·
-  `stage02_screen` (ranked, gated levers; p/q **only if calibrated**) · `stage02_cell_support`
-  (within-dataset support verdict). **GO enrichment and essentiality annotation are unresolved**
-  (STAGE2_PLAN §17) — to be either fully specified + pinned or omitted, never merely promised.
+- `inputs/` — Stage-1 v3 selection contracts plus the public Marson target-level release
+- `analysis/` — direct projections, temporal estimators, Pareto status, masks, pathway analysis
+  and independent verifiers
+- `outputs/` — content-addressed `screen.parquet`, `temporal.parquet`, `pathway.json` and their
+  provenance / verification records (generated outputs are not committed wholesale)
+
+Detailed design decisions, historical amendments and schemas remain in `STAGE2_PLAN.md` and the
+review documents in this directory.

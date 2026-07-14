@@ -1,23 +1,22 @@
 # CLAUDE.md
 
-**spot** — a five-stage workbench that turns a T-cell transcriptional program into a
-testable, brain-penetrant drug-repurposing hypothesis for glioblastoma:
-`Treg program › skewing genes › drug › brain-penetrance/exposure › trial design`.
-Each stage is a **Claude Science specialist** (a CS project with tailored agent-context
-+ database access), embedded in its tab; spot is the funnel shell that carries the
-locked artifact between stages. Design:
-`docs/superpowers/specs/2026-07-08-spot-v2-gbm-repurposing-design.md`.
+**spot** — a public-data decision-support workbench connecting continuous CD4
+transcriptional programs to perturbation targets, pathways, drug links, and PK/safety
+evidence. Four stages are implemented across five pages; Stage 5 remains an unimplemented
+placeholder. Claude Code / Claude Science sessions are part of the development workflow,
+not agents embedded in the deployed static app.
 
 ## Repo layout
-Five stage folders, each `inputs/ outputs/ analysis/ + README`:
+Stage folders and the shared frontend:
 - `01_programs/` — CD4 programs → interactive UMAP (single-cell immunology)
 - `02_geneskew/` — genes that skew toward/away a program + GO (perturbation genomics)
-- `03_druglink/` — genes → immune-perturbing drugs via target→drug + LINCS (drug repurposing)
-- `04_PKPD/` — brain-penetrance (CNS-MPO/NEBPI) + exposure + safety + synergy (neuro-onc)
-- `05_trial/` — trial-design synopsis (v1 placeholder; clinical decision-support)
+- `03_druglink/` — genes → public target-to-drug evidence
+- `04_PKPD/` — separate PK, CNS-exposure and safety evidence lanes
+- `05_trial/` — unimplemented placeholder
 
-`_frontend/` the 5-tab shell (React+Vite+TS+Tailwind). `_requirements/` repo envs.
-`CLAUDE.md LICENSE README.md` at root. `outputs/` is gitignored (generated artifacts).
+`_frontend/` is the five-page UI (React+Vite+TS+Tailwind). `_requirements/` contains
+repo environments. Generated analytical outputs remain outside Git unless deliberately
+packaged as a bounded, licensed display artifact.
 
 ## Compute
 - **Claude Science** runs on **tcedirector** (dev host) and is the per-stage analytical
@@ -30,27 +29,29 @@ Five stage folders, each `inputs/ outputs/ analysis/ + README`:
 - The Mac is a thin SSH client.
 
 ## Data rules
-- **Never invent a statistic** — every number comes from a real tool/DB (scanpy / DESeq2
-  / DepMap / LINCS / ChEMBL) with provenance (source + method + exact stat).
+- **Never invent a statistic** — every number comes from a real tool or registered public
+  source with provenance (source + method + exact value/statistic).
 - **Firewall:** predictive / druggable / brain-penetrance signals may *suggest* but never
   *confirm* — keep them flagged as suggestive.
 - **Adversarially falsify** before trusting — cross-condition/donor/guide reproducibility
   (the robustness composite).
-- **Public data only**; nothing bundled in the repo.
+- **Public data only**; raw source matrices/responses are not bundled. The repo does track a
+  bounded set of derived display artifacts under the source-specific terms in
+  `DATA_LICENSES.md`.
 - **Honest boundaries:** spot is decision-support — not a trial designer, a PK/tox oracle,
   or a substitute for clinical/regulatory/safety expertise. BBB scoring is a screen, not
-  proof of CNS exposure. One in-vitro CD4 dataset needs cross-confirmation.
+  proof of CNS exposure. One in vitro CD4 dataset needs cross-confirmation.
 
-## Claude Science specialists
-Each stage = one CS project with tailored agent-context (domain + permitted databases /
-skills). CS calls DBs where possible; heavy compute → tcefold via SSH. The paper is the
-*reference*, CS *complements* it (tag genes 'paper' vs 'CS-complement'). Each specialist
-writes its locked artifact + provenance to the stage `outputs/`.
+## Analytical development workflow
+Claude Science projects may be used as domain-specific development workers with permitted
+public databases and tcefold compute. Their output is never itself a scientific source:
+every claim must resolve to a public locator or a reproducible calculation and pass an
+independent verification gate before it can enter a release artifact.
 
 **Working method (token-efficient):** delegate the actual analytical work — data
 reads, DB calls, computation — to the CS specialists (their tokens are separate); the
-main session orchestrates, scaffolds `_frontend`, surfaces provenance, and reviews. Keep
-the main context lean.
+orchestrating session coordinates the frontend, provenance and independent review. Keep the
+orchestrating context lean.
 
 ## Engineering conventions
 - Small modules, one purpose each; **≤500 lines/file**.

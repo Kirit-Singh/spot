@@ -1,14 +1,18 @@
-# 03_druglink — link immune-program genes to drugs
+# 03_druglink — link perturbation targets to public drug evidence
 
-Find drugs that **perturb the immune program** — reduce the locked Treg module.
-Brain-penetrance + exposure are the filter (Stage 04), so this stage does NOT require
-glioma-cell activity. **Locks:** the drug.
+Stage 3 consumes the two independent Stage-2 target arms and links them to public drug/target
+evidence. The current release binds ChEMBL-derived drug facts and UniProt protein identities.
+DGIdb, Open Targets, LINCS and DepMap-family sources are historical or deferred; they are not
+advertised as evidence in the admitted release.
 
-Runs as a Claude Science **specialist** (project `spot · 03 druglink`): drug-repurposing —
-**target → drug** (DGIdb / Open Targets / ChEMBL) + **LINCS** signature mimicry of
-"Treg-down" (rank ↑ when both agree). DepMap/CCLE/PRISM glioma-selectivity is deferred as
-a later dual-mechanism bonus, never a filter.
+Direction is explicit: a drug mechanism is shown as CRISPRi-aligned, opposed or not evaluable for
+each arm. A molecule present in both arms may be highlighted as shared set membership, but the app
+does not collapse the two arms into a joint score or clinical ranking.
 
-- `inputs/`  — the locked gene set from 02
-- `analysis/` — CS workbook: target→drug + LINCS queries
-- `outputs/` — ranked candidate drugs (immune-perturbation) + provenance
+The result is a drug-link hypothesis, not evidence that pharmacology reproduces genetic
+knockdown, reaches the brain, benefits glioblastoma or is safe. Stage 4 displays those evidence
+questions separately where public records were acquired.
+
+- `inputs/` — admitted Stage-2 target/pathway artifacts
+- `analysis/` — target/drug identity, direction, evidence contracts and verifiers
+- release artifacts — bounded drug/target records with source releases and provenance
