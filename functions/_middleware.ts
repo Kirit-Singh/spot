@@ -21,6 +21,14 @@ function isDocumentRequest(request: Request, pathname: string): boolean {
     || pathname.endsWith('.html');
 }
 
+const APP_HTML_PATHS = new Set([
+  '/programs.html',
+  '/targets.html',
+  '/pathways.html',
+  '/drugs.html',
+  '/pksafety.html',
+]);
+
 export async function onRequest(context: PagesContext): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -86,6 +94,18 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   // protected document. This keeps old bookmarks working without making the alias public.
   if (isLegacyProgramsPath(url.pathname)) {
     return redirect(programsCompatibilityTarget(request.url), 308);
+  }
+
+  // Cloudflare Pages normally redirects `name.html` assets to extensionless pretty URLs.
+  // The application contract intentionally keeps the explicit stage filenames, so fetch the
+  // equivalent extensionless asset internally while preserving the reviewer's visible URL.
+  if (
+    APP_HTML_PATHS.has(url.pathname)
+    && (request.method === 'GET' || request.method === 'HEAD')
+  ) {
+    const assetUrl = new URL(request.url);
+    assetUrl.pathname = url.pathname.slice(0, -'.html'.length);
+    return withSecurityHeaders(await context.next(new Request(assetUrl, request)));
   }
 
   return withSecurityHeaders(await context.next());
