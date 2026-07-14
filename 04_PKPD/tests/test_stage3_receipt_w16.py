@@ -29,7 +29,10 @@ from analysis.stage3_receipt import (
     load_receipt,
 )
 
-W16_BUNDLE = "/home/tcelab/worktrees/spot-stage3-membership/03_druglink"
+W16_BUNDLE = os.environ.get(
+    "SPOT_STAGE3_MEMBERSHIP_BUNDLE",
+    os.path.join("/", "home", "tcelab", "worktrees", "spot-stage3-membership", "03_druglink"),
+)
 W16_RECEIPT = os.path.join(W16_BUNDLE, "membership_receipt.fixture.v1.json")
 W16_VIEW = os.path.join(W16_BUNDLE, "selection_view.fixture.v1.json")
 
