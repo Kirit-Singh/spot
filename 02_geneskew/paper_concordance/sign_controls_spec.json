@@ -1,0 +1,84 @@
+{
+  "spec_id": "spot.stage02.paper_concordance.sign_controls.v1",
+  "classification": "diagnostic_non_gating",
+  "never_alters_ranks": true,
+  "does_not_gate": true,
+  "does_not_claim_exact_replication": true,
+  "estimand_note": "spot's production estimand is a per-program base-delta projection over a reusable-arm system; the paper controls are per-cytokine DESeq2 knockdown effects. These are DIFFERENT estimands. This lane checks the paper's reported SIGN at a significant condition only; it is descriptive concordance, not a replication claim.",
+  "source": {
+    "preprint": {
+      "title": "Genome-scale perturb-seq in primary human CD4+ T cells maps context-specific regulators of T cell programs and human immune traits",
+      "authors": "Zhu R., Dann E. et al.",
+      "doi": "10.64898/2025.12.23.696273",
+      "version": "v1",
+      "posted": "2025-12-24",
+      "license": "CC-BY 4.0",
+      "local_primary_file": "2025.12.23.696273v1.full.pdf",
+      "results_section_pages": "8-9",
+      "figures": ["Figure 2A", "Figure 2B", "Figure 2C", "Figure 2D", "Supplementary Figure 10"],
+      "read_directly_no_secondary_summary": true
+    },
+    "authors_code_commit": "848d62fc2b7027f7218d6fc5f5b0c37255dc94af",
+    "de_object": {
+      "name": "GWCD4i.DE_stats.h5ad",
+      "sha256": "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62",
+      "bytes": 16786240107,
+      "shape_obs_x_var": [33983, 10282],
+      "obs_row_key": "{ENSG_target}_{condition}",
+      "target_symbol_field": "target_contrast_gene_name",
+      "target_ensembl_field": "target_contrast",
+      "cytokine_column_namespace": "var gene_name (symbol)",
+      "readout_layer": "log_fc"
+    }
+  },
+  "sign_convention": {
+    "readout": "log_fc layer value at (regulator perturbation row {ENSG}_{condition}, cytokine gene column)",
+    "definition": "log_fc = cytokine RNA log2 fold-change on regulator KNOCKDOWN (CRISPRi) vs non-targeting control",
+    "positive_regulator": "knockdown log2FC < 0 (KD lowers the cytokine; regulator PROMOTES it) => expected sign NEGATIVE",
+    "negative_regulator": "knockdown log2FC > 0 (KD raises the cytokine; regulator REPRESSES it) => expected sign POSITIVE",
+    "source_page": 9,
+    "source_quote": "negative regulators (knockdown log2FC > 0) were detected predominantly in the Rest condition ... positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation"
+  },
+  "conditions": ["Rest", "Stim8hr", "Stim48hr"],
+  "adj_p_diagnostic_threshold": 0.05,
+  "broad_min_cytokines": 5,
+  "cytokine_panel_paper_named": ["IFNG", "TNF", "IL4", "IL5", "IL13", "IL10", "TGFB1", "CCL3", "CCL4", "CCL5", "CXCL8", "IL2", "IL21", "IL16", "IL22"],
+  "cytokine_panel_note": "the cytokines NAMED in the Results (p8-9); the authors' full 30-cytokine panel derives from their code (metadata/immune_effector_genes.csv, Category=='Cytokine') and is authoritative but not restated in the Results prose. The broad-effect count uses this paper-named panel.",
+  "provenance_diagnostics_policy": {
+    "upstream_fdr_fields": ["adj_p_value", "p_value"],
+    "label": "authors_reported_upstream",
+    "used_for_gating_or_ranking": false,
+    "confined_to": "the per-observation provenance_diagnostics block of the diagnostic report ONLY; never a production output, never a rank/gate input"
+  },
+  "tissue_organ_axis": {
+    "present": false,
+    "rationale": "This is a genome-scale CRISPRi perturb-seq of primary human CD4+ T cells (a blood/immune cell in-vitro assay) across 4 donors x {Rest, Stim8hr, Stim48hr} x perturbation. It has donor, condition, and perturbation axes ONLY. There is NO tissue/organ axis. The HPA tissue-specificity annotation (Suppl. Figure 13) is EXTERNAL Human Protein Atlas annotation of regulator gene clusters, not a Marson tissue measurement, and is out of scope for this cytokine-sign lane."
+  },
+  "controls": [
+    {"id": "men1_il10_negative", "kind": "directional", "regulators": ["MEN1"], "cytokine": "IL10", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive", "condition_scope": "stimulation",
+     "source": {"page": 9, "figure": "Figure 2C", "quote": "MEN1, a component of the MLL1/2 complex known to repress IL10 expression [30], was among the top negative regulators of IL10"}},
+    {"id": "saga_il10_negative", "kind": "directional", "regulators": ["SGF29", "ATXN7L3", "USP22"], "cytokine": "IL10", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive", "condition_scope": "stimulation",
+     "source": {"page": 9, "figure": "Figure 2D", "quote": "negative regulation of IL10 by members of the SAGA complex (SGF29, ATXN7L3, USP22)"}},
+    {"id": "elob_il10_negative", "kind": "directional", "regulators": ["ELOB"], "cytokine": "IL10", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive", "condition_scope": "stimulation",
+     "source": {"page": 9, "figure": "Figure 2D", "quote": "ELOB, a regulatory subunit of the Elongin complex"}},
+    {"id": "cyb5r4_il21_positive", "kind": "directional", "regulators": ["CYB5R4"], "cytokine": "IL21", "expected_role": "positive_regulator", "expected_log_fc_sign": "negative", "condition_scope": "stimulation",
+     "source": {"page": 9, "figure": "Figure 2C-D", "quote": "perturb-seq identified oxidoreductase CYB5R4 as a positive regulator of IL21"}},
+    {"id": "calcium_il21_negative", "kind": "directional", "regulators": ["ATP2A2", "ORAI1"], "cytokine": "IL21", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive", "condition_scope": "stimulation",
+     "source": {"page": 9, "figure": "Figure 2C-D", "quote": "regulators of calcium homeostasis (ATP2A2, ORAI1) ... as negative regulators of IL21"}},
+    {"id": "elongator_il21_negative", "kind": "directional", "regulators": ["ELP2", "ELP3"], "cytokine": "IL21", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive", "condition_scope": "stimulation",
+     "source": {"page": 9, "figure": "Figure 2C-D", "quote": "the Elongator complex (ELP2, ELP3) as negative regulators of IL21"}},
+    {"id": "nfkb2_divergent_il10_il21", "kind": "directional", "regulators": ["NFKB2"], "condition_scope": "stimulation",
+     "divergent": [{"cytokine": "IL10", "expected_role": "positive_regulator", "expected_log_fc_sign": "negative"}, {"cytokine": "IL21", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive"}],
+     "source": {"page": 9, "figure": "Figure 2C-D", "quote": "NFKB2 ... as divergent regulators - acting as positive regulators for IL10 but negative regulators for IL21"}},
+    {"id": "kdm1a_divergent_il10_il21", "kind": "directional", "regulators": ["KDM1A"], "condition_scope": "stimulation",
+     "divergent": [{"cytokine": "IL10", "expected_role": "positive_regulator", "expected_log_fc_sign": "negative"}, {"cytokine": "IL21", "expected_role": "negative_regulator", "expected_log_fc_sign": "positive"}],
+     "source": {"page": 9, "figure": "Figure 2C-D", "quote": "the lysine-specific demethylase KDM1A as divergent regulators - acting as positive regulators for IL10 but negative regulators for IL21"}},
+    {"id": "cd3_lcp2_il2_positive", "kind": "directional", "regulators": ["CD3D", "CD3E", "CD3G", "LCP2"], "cytokine": "IL2", "expected_role": "positive_regulator", "expected_log_fc_sign": "negative", "condition_scope": "after_restimulation",
+     "source": {"page": 9, "figure": "Figure 2A", "quote": "positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation (e.g., CD3 and LCP2 for IL2 ...)"}},
+    {"id": "gata3_il13_positive", "kind": "directional", "regulators": ["GATA3"], "cytokine": "IL13", "expected_role": "positive_regulator", "expected_log_fc_sign": "negative", "condition_scope": "after_restimulation",
+     "source": {"page": 9, "figure": "Figure 2A", "quote": "positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation (e.g., ... GATA3 for IL13)"}},
+    {"id": "broad_tcr_mediator_saga", "kind": "broad_effect", "regulators": ["MED12", "MED24", "TAF6L", "TADA1", "TADA2B", "SUPT20H", "USP22"], "condition_scope": "stimulation_specific",
+     "expected": "control a LARGE set of cytokines (broad, stimulation-specific effects incl. TNF and IL-16)",
+     "source": {"page": 9, "figure": "Figure 2A-B", "quote": "regulators that controlled a large set of cytokines, including expected TCR signaling components and subunits of the ubiquitous transcriptional coactivator complexes Mediator (MED12, MED24) and SAGA (TAF6L, TADA1, TADA2B, SUPT20H, USP22) ... caused stimulation-specific effects on multiple cytokines, including TNF and IL-16"}}
+  ]
+}

@@ -1,0 +1,1237 @@
+{
+  "classification": "diagnostic_non_gating",
+  "inputs": {
+    "authors_code_commit": "848d62fc2b7027f7218d6fc5f5b0c37255dc94af",
+    "de_object_basename": "GWCD4i.DE_stats.h5ad",
+    "de_object_sha256": "c355f535ff32cf7ba1edc49cf9c6039fe84f2c9ebe4d005515cba75790cfbb62",
+    "matches_spec_pin": true,
+    "preprint_doi": "10.64898/2025.12.23.696273",
+    "spec_sha256": "6f5886e1b657abcc224720e9d1a270524224941506ef21b52bdac808cb7d4b96"
+  },
+  "policy_version": "spot.stage02.paper_concordance.sign_derivation.v1",
+  "provenance_diagnostics_policy": {
+    "confined_to": "the per-observation provenance_diagnostics block of the diagnostic report ONLY; never a production output, never a rank/gate input",
+    "label": "authors_reported_upstream",
+    "upstream_fdr_fields": [
+      "adj_p_value",
+      "p_value"
+    ],
+    "used_for_gating_or_ranking": false
+  },
+  "results": [
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "men1_il10_negative",
+      "cytokines": [
+        "IL10"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "-0.2647770357434542",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9933217403423452",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "MEN1"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "4.415138876950205",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "1.9899821232544547e-05",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "MEN1"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.0577937376904945",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.5329575570138485",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "MEN1"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL10": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2C",
+        "page": 9,
+        "quote": "MEN1, a component of the MLL1/2 complex known to repress IL10 expression [30], was among the top negative regulators of IL10"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "saga_il10_negative",
+      "cytokines": [
+        "IL10"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.6529655322872",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.3120020255240057",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "SGF29"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.3492899539667804",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0065039896176617",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "SGF29"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.88091732683658",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0480633814944718",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "SGF29"
+        },
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "0.7245693368917857",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "nan",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ATXN7L3"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.5135364271102083",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0088058373779929",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ATXN7L3"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "0.6046283052475407",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.7793451905802762",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ATXN7L3"
+        },
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "-0.3136384196317168",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.934316568271809",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "USP22"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.471360096355085",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0154751332163685",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "USP22"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.5162105558528611",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.2514072603547082",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "USP22"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL10": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2D",
+        "page": 9,
+        "quote": "negative regulation of IL10 by members of the SAGA complex (SGF29, ATXN7L3, USP22)"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "elob_il10_negative",
+      "cytokines": [
+        "IL10"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "0.3604868397946055",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9747365509329486",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELOB"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "3.230076215560832",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0001817294556616",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELOB"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "0.9973376547340091",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.53598415573747",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELOB"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL10": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2D",
+        "page": 9,
+        "quote": "ELOB, a regulatory subunit of the Elongin complex"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "cyb5r4_il21_positive",
+      "cytokines": [
+        "IL21"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-0.4821791769059007",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "nan",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CYB5R4"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-3.6334243657139687",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0026264425135141",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CYB5R4"
+        },
+        {
+          "concordant": false,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "0.4923485417631248",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.7420413830424553",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CYB5R4"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL21": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "perturb-seq identified oxidoreductase CYB5R4 as a positive regulator of IL21"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "calcium_il21_negative",
+      "cytokines": [
+        "IL21"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "5.418337380463736",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "1.0405749255020651e-05",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ATP2A2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.777356302976356",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "1.9621044729837825e-05",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ATP2A2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "3.975980267483432",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "1.3627915387410328e-10",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ATP2A2"
+        },
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "-0.4721006344050648",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9999994431618716",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ORAI1"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.1490822618622167",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.019908412878964",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ORAI1"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "0.5702366069931079",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9007995205631618",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ORAI1"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL21": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "regulators of calcium homeostasis (ATP2A2, ORAI1) ... as negative regulators of IL21"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "elongator_il21_negative",
+      "cytokines": [
+        "IL21"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "-0.3524207083868249",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "nan",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELP2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.834542356030453",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0002819839878226",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELP2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.5868271704065289",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.1060150071659666",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELP2"
+        },
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "-0.612547122601304",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "nan",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELP3"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "2.058639565812681",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0222000904505316",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELP3"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.8146079375176536",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "nan",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "ELP3"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL21": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "the Elongator complex (ELP2, ELP3) as negative regulators of IL21"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "nfkb2_divergent_il10_il21",
+      "cytokines": [
+        "IL10",
+        "IL21"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-1.487120998748186",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.7152727824438373",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "NFKB2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-2.1723326621019705",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0404592379036111",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "NFKB2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-0.6386201965134432",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.8051664625621128",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "NFKB2"
+        },
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "0.0600648126305138",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9948160309616956",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "NFKB2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.746564883917502",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0283267433127083",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "NFKB2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.6487455961210145",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0557379317252422",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "NFKB2"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL10": true,
+          "IL21": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "NFKB2 ... as divergent regulators - acting as positive regulators for IL10 but negative regulators for IL21"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "kdm1a_divergent_il10_il21",
+      "cytokines": [
+        "IL10",
+        "IL21"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-0.4983648546435574",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9066428942734316",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "KDM1A"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-2.701493970756013",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.004298132737348",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "KDM1A"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL10",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-4.803397091888962",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0011163413859184",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "KDM1A"
+        },
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "-0.6133554150141617",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.8836374277280545",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "KDM1A"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.50973744696466",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0488291048523068",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "KDM1A"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL21",
+          "expected_log_fc_sign": "positive",
+          "observed_log_fc_source_string": "1.0008158526141655",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.2137107156938666",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "KDM1A"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL10": true,
+          "IL21": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2C-D",
+        "page": 9,
+        "quote": "the lysine-specific demethylase KDM1A as divergent regulators - acting as positive regulators for IL10 but negative regulators for IL21"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "cd3_lcp2_il2_positive",
+      "cytokines": [
+        "IL2"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "0.0655658362050322",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9999962197927164",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3D"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-4.185157384249531",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "2.774931549681848e-07",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3D"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-3.463864272944933",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.29903582386212",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3D"
+        },
+        {
+          "concordant": false,
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "0.4578765018066081",
+          "observed_sign": "positive",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.999921486891268",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3E"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-2.7123715323748145",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.0030815475961677",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3E"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-4.5819748969664",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.1523166196947574",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3E"
+        },
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-0.6785631202829161",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.999992498343752",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3G"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-4.621385688403263",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "7.660989273604425e-10",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3G"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-3.6712495579710778",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.1588487350431378",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "CD3G"
+        },
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-0.4532008714353035",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.9999581509010812",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "LCP2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-4.333089224840253",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "7.664049111785996e-09",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "LCP2"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL2",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-9.246141751456731",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.7709003088669586",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "LCP2"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL2": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2A",
+        "page": 9,
+        "quote": "positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation (e.g., CD3 and LCP2 for IL2 ...)"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "gata3_il13_positive",
+      "cytokines": [
+        "IL13"
+      ],
+      "kind": "directional",
+      "observations": [
+        {
+          "concordant": true,
+          "condition": "Rest",
+          "cytokine": "IL13",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-1.2271336949246738",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "0.3864746447777329",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": false,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "GATA3"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim8hr",
+          "cytokine": "IL13",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-4.779840016928016",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "4.530748903512604e-18",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "GATA3"
+        },
+        {
+          "concordant": true,
+          "condition": "Stim48hr",
+          "cytokine": "IL13",
+          "expected_log_fc_sign": "negative",
+          "observed_log_fc_source_string": "-2.5323169208425136",
+          "observed_sign": "negative",
+          "present": true,
+          "provenance_diagnostics": {
+            "adj_p_value": "1.1911128060072212e-11",
+            "label": "authors_reported_upstream",
+            "significant_at_5pct": true,
+            "used_for_gating_or_ranking": false
+          },
+          "regulator": "GATA3"
+        }
+      ],
+      "outcome": {
+        "claims_exact_replication": false,
+        "concordant_significant": true,
+        "cytokine_satisfied": {
+          "IL13": true
+        }
+      },
+      "source": {
+        "figure": "Figure 2A",
+        "page": 9,
+        "quote": "positive regulators (knockdown log2FC < 0) were more readily identified following re-stimulation (e.g., ... GATA3 for IL13)"
+      }
+    },
+    {
+      "classification": "diagnostic_non_gating",
+      "control_id": "broad_tcr_mediator_saga",
+      "kind": "broad_effect",
+      "outcome": {
+        "broad": true,
+        "broad_min_cytokines": 5,
+        "claims_exact_replication": false
+      },
+      "per_regulator": {
+        "MED12": {
+          "max_n_significant_cytokines": 4,
+          "per_condition": {
+            "Rest": 2,
+            "Stim48hr": 4,
+            "Stim8hr": 4
+          }
+        },
+        "MED24": {
+          "max_n_significant_cytokines": 9,
+          "per_condition": {
+            "Rest": 2,
+            "Stim48hr": 9,
+            "Stim8hr": 9
+          }
+        },
+        "SUPT20H": {
+          "max_n_significant_cytokines": 5,
+          "per_condition": {
+            "Rest": 4,
+            "Stim48hr": 5,
+            "Stim8hr": 5
+          }
+        },
+        "TADA1": {
+          "max_n_significant_cytokines": 9,
+          "per_condition": {
+            "Rest": 5,
+            "Stim48hr": 9,
+            "Stim8hr": 4
+          }
+        },
+        "TADA2B": {
+          "max_n_significant_cytokines": 9,
+          "per_condition": {
+            "Rest": 5,
+            "Stim48hr": 9,
+            "Stim8hr": 5
+          }
+        },
+        "TAF6L": {
+          "max_n_significant_cytokines": 5,
+          "per_condition": {
+            "Rest": 5,
+            "Stim48hr": 5,
+            "Stim8hr": 5
+          }
+        },
+        "USP22": {
+          "max_n_significant_cytokines": 5,
+          "per_condition": {
+            "Rest": 1,
+            "Stim48hr": 5,
+            "Stim8hr": 3
+          }
+        }
+      },
+      "source": {
+        "figure": "Figure 2A-B",
+        "page": 9,
+        "quote": "regulators that controlled a large set of cytokines, including expected TCR signaling components and subunits of the ubiquitous transcriptional coactivator complexes Mediator (MED12, MED24) and SAGA (TAF6L, TADA1, TADA2B, SUPT20H, USP22) ... caused stimulation-specific effects on multiple cytokines, including TNF and IL-16"
+      }
+    }
+  ],
+  "spec_id": "spot.stage02.paper_concordance.sign_controls.v1",
+  "tissue_organ_axis": {
+    "present": false,
+    "rationale": "This is a genome-scale CRISPRi perturb-seq of primary human CD4+ T cells (a blood/immune cell in-vitro assay) across 4 donors x {Rest, Stim8hr, Stim48hr} x perturbation. It has donor, condition, and perturbation axes ONLY. There is NO tissue/organ axis. The HPA tissue-specificity annotation (Suppl. Figure 13) is EXTERNAL Human Protein Atlas annotation of regulator gene clusters, not a Marson tissue measurement, and is out of scope for this cytokine-sign lane."
+  }
+}
